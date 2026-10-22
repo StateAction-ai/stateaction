@@ -1,0 +1,166 @@
+{
+  "recorded_utc": "2026-10-22T04:39:23.961482+00:00",
+  "capture_geometry_version": "android_arcore_cpu_v2",
+  "status": "software_and_native_codec_tests_passed_pixel_installed_physical_validation_pending",
+  "app_base_commit": "fce8de1a44d3b4a8f0bea9bb5f025ea8e04dcc15",
+  "apk": {
+    "path": "artifacts/stera-pixel9proxl-geometry-v2-debug.apk",
+    "build_output": "stera-app/apps/mobile/build/app/outputs/flutter-apk/app-debug.apk",
+    "sha256": "75f5848adf7ad8e8f3157d83d61919f2d6d2c7d95b792f1cb61587c8e475fed0",
+    "size_bytes": 180393722,
+    "abis": [
+      "arm64-v8a",
+      "x86_64"
+    ],
+    "configuration": {
+      "NO_AUTH_MODE": true
+    },
+    "signature_verified": true,
+    "signature_verification": "apksigner v2 scheme verified by root agent"
+  },
+  "build": {
+    "command": "source scripts/env.sh; cd stera-app/apps/mobile; flutter build apk --debug --no-pub --target-platform android-arm64,android-x64 --dart-define=NO_AUTH_MODE=true",
+    "log": "/tmp/stera-android-v2-final-apk.log",
+    "result": "success"
+  },
+  "install": {
+    "adb_install_r": "Success",
+    "installed_on": "Pixel 9 Pro XL",
+    "application_started_by_agent": false,
+    "recording_started_by_agent": false,
+    "evidence": "Root agent reported explicit-device adb install -r success for this archived APK; transient wireless address not retained."
+  },
+  "validation": {
+    "android_jvm": {
+      "passed": 24,
+      "failed": 0,
+      "command": "./gradlew :stera_recorder:testDebugUnitTest --console=plain",
+      "working_directory": "stera-app/apps/mobile/android",
+      "build_log": "artifacts/android-capture-tests/20261022T043345Z/build.log",
+      "junit_report_sha256": {
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.data.MCAPFailureTest.xml": "1dfe58c83d02d8567fcfc6d62bfbb175e9927c55d1bee3217ba4dfa33288487d",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderAndroidTest.xml": "54a972fc93762d29319bd41dac81071f7022ad7f472c9e42651e43026eef5f8f",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometryTest.xml": "242cebfbc032e882fdaaaf23eb60ec09c18b8d397b870fcac9c69d72fae7e384",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureOutcomeTest.xml": "e1da7eb364b516a0ee9ed392b8bb3479aae437ad75c73231d8ec0360445c7a5c",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureSerializationTest.xml": "a8781776e49c26b551b29341d7ff5e111c66275e052934d11c7a3902cdd732f4",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.ImagePlanePackingTest.xml": "dda91f826db41ec3502cecba985e1a8c9c170859b4d8aab1f9509ae93c4ceece",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.RecordingActivityGateTest.xml": "c944e4fbac386995efb7ff1211086fe3007c18df1f20cb483cf8327b424bb5ad"
+      },
+      "coverage": "Pure geometry/packing, Robolectric image rejection and lifetime, producer lifecycle, actual MCAP writer disk/finalization failure. Robolectric does not implement real YuvImage JPEG encoding."
+    },
+    "android_native_instrumentation": {
+      "passed": 5,
+      "failed": 0,
+      "emulator_serial": "emulator-5580",
+      "script": "scripts/test_android_capture.sh emulator-5580",
+      "runner": "open.fpvlabs.stera.ar_recorder.test/androidx.test.runner.AndroidJUnitRunner",
+      "log": "artifacts/android-capture-tests/20261022T043345Z/instrumentation.log",
+      "log_sha256": "57fd9443373ed667476d414721cea889dca05bb9f4088bea8f60ceb33d6397e3",
+      "latest_producer_fixture": "artifacts/android-capture-tests/20261022T043345Z/geometry-fixtures/session_20261022_003358",
+      "coverage": "Real Android YuvImage JPEG codec with synthetic padded planes; dimensions/orientation, rejection diagnostics/lifetime, production Kotlin MCAP/CDR writer. No physical ARCore camera or depth acquisition.",
+      "tracked_log": "docs/validation/android-native-tests.log"
+    },
+    "dart_provider": {
+      "passed": 1,
+      "failed": 0,
+      "command": "flutter test --no-pub test/failed_capture_stop_test.dart",
+      "working_directory": "stera-app/packages/stera_recorder",
+      "log": "/tmp/stera-android-v2-dart-tests.log",
+      "coverage": "Native failed-stop response clears active/saved-output state and retains error."
+    },
+    "python": {
+      "passed": 65,
+      "failed": 0,
+      "command": ".venv-stera/bin/python -m unittest discover -s tests -v",
+      "log": "/tmp/stera-geometry-v2-python-tests.log",
+      "evidence": "Existing root-agent full-suite log inspected: Ran 65 tests; OK. No test rerun for documentation.",
+      "log_sha256": "aa197d53a3cc7bf0ca0780709984e19b0d1500f49ae3c25c634e745471f97c52",
+      "tracked_log": "docs/validation/python-tests.log"
+    },
+    "synthetic_android_to_python_pipeline": {
+      "receipt": "captures/synthetic_android_geometry_v2/receipt.json",
+      "receipt_sha256": "ad358a48e63d062cc3be699205036bf34c2a30cac7f1f4645af3617c4f65edad",
+      "status": "complete",
+      "frames": 3,
+      "detected_hands": 0,
+      "raw_unchanged": true,
+      "raw_sha256": "8b37ab8b7ea4fa0b53cfb79ac2640b8697960abd101001681e890968a78a5129",
+      "archived_fixture": "tests/fixtures/android_geometry_v2",
+      "fixture_provenance": "tests/fixtures/android_geometry_v2/provenance.json",
+      "generated_artifacts": [
+        "episode/annotation.hdf5",
+        "episode/visualization.rrd",
+        "evaluation.html",
+        "evaluation_metrics.json"
+      ],
+      "coverage": "Actual Android producer bytes decode through Python and export; preserves native versus frame clocks and distinct acquisition payloads despite repeated depth timestamps. Synthetic dimensions 32x16 RGB and 8x4 depth.",
+      "tracked_receipt": "docs/validation/synthetic-android-pipeline.json"
+    },
+    "live_arcore_emulator": {
+      "status": "camera_frames_received_tracking_not_initialized_no_live_mcap",
+      "receipt": "docs/linux-emulator-validation.json",
+      "not_covered_by_codec_tests": true
+    },
+    "physical_pixel": {
+      "status": "pending_new_user_capture",
+      "on_device_geometry_validated": false,
+      "metric_accuracy_validated": false,
+      "cross_stream_clock_verified": false
+    }
+  },
+  "historical_v1_failure": {
+    "session": "captures/session_20261022_001412",
+    "rgb_messages": 0,
+    "depth_messages": 0,
+    "pose_messages": 0,
+    "encoder_failures": 310,
+    "exact_exception_recoverable": false,
+    "explanation": "The earlier system log writer was not initialized. Invalid equality between Image.timestamp and Frame.timestamp was found by source/API inspection; it is not confirmed as the physical exception. V2 validates Image.timestamp against Frame.androidCameraTimestamp and persists diagnostics.",
+    "receipts_preserved": [
+      "docs/geometry-build-receipt.json",
+      "docs/geometry-validation-receipt.json"
+    ]
+  },
+  "remaining_validation": [
+    "Real Pixel camera acquisition and observed native timestamp contract",
+    "RGB/depth registration and calibrated target depth error",
+    "Hand evidence including visible/occluded fingers, independent of handedness confidence",
+    "Sustained CPU JPEG throughput and thermal behavior"
+  ],
+  "known_deployment_followup": "Authenticated orphan-session recovery does not yet reject capture_result_valid=false. Current NO_AUTH_MODE bypasses its sweeper; address before distributed uploads.",
+  "source_sha256": {
+    "stera-app/apps/mobile/android/app/build.gradle.kts": "1d1bac737a9eadd7ae77a3b9b6bfc041113ee5efbb3913be7c2faae0b5c126b4",
+    "stera-app/packages/stera_recorder/android/build.gradle": "a15f45f543df57324f7e880b23605f2f860feb13bf430fb1381ac76920dee86b",
+    "stera-app/packages/stera_recorder/android/src/androidTest/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoderInstrumentedTest.kt": "0960daf7f4e2291e973df3305874375d51b4973e5d379682295128de7f193c78",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/ArRecorderImpl.kt": "7c6643fa5d5661ef995c047d823b104eeaaf12c91caeb32c262d1960062ee8ee",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/MetadataAssembler.kt": "668a00b89f6e7747eaad4a29a3e3261079b9455016867e8df66b70ca843b23b0",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingActivityGate.kt": "4808261c01087512f5140d6d2e79bb12e735c72daca5820b345533d71316b46d",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingFrameOrchestrator.kt": "065c2246e2a934e68313734f8a162a9c7727de770f3b43021f9906f99d50d783",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingMetricsState.kt": "689ecf6d6b4896cd31e734d3b0f9e78958f22af405367d5cd543bf8bacb1b439",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/CDRSerializer.kt": "b5797998755a582a784be77cf6878656d302b12d48a4dd146999643133438890",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/DatasetWriter.kt": "b4245cbcc76b60f22d622a8a4875640b2ab888843ebca8f7be95161387259ece",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/DatasetWriterImpl.kt": "76510bb8bc24cc3e844973671cb3b97773b03f74c5bd50f9eed734c9fda46308",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt": "a7979e9ee84f283206dd9b024a49538fa29c1fba9943794485aaf6d341655258",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoder.kt": "a470a4c29be45c8c5bd93099fa20b7294f184336e5c41c99f0b0c7500fd2edd8",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometry.kt": "4af0171898431044bdd89b98ed72af3980f2fa5a06b2ec650fb60941bbce60da",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/ImagePlanePacking.kt": "d853bcbbadccbeb693f8502c64559501bf336e0a20a0a2b3affc13dc8b3739f6",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessor.kt": "a5511daf95dc8bff50e40da939e9d6d459317a2880e385bbbdec29865bc8e8a3",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessorImpl.kt": "42b168fd368c040bbd6dd398dfc1d2b1f54fd30ad4470798ca7372a74ec4d13f",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPFailureTest.kt": "b36762394658ee6f3767919ed1510d62668207ba98c6506497cabb0dcdf090f0",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoderAndroidTest.kt": "93965602565ce62d55f43d759ab3930f027a3017a811b6110caace3ee5c8c6a0",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometryTest.kt": "39fe44c63b21f906c828209ac020c8f2cc93bbbe68770012195b98937b406fbf",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureOutcomeTest.kt": "3d37fd0e50833864a61677be6d4aaf53b2c9f5ae24b01bc37810ffd183cf078f",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureSerializationTest.kt": "db74fb4626ac8e5ea0a5e54999bd3e25da7a869a846153b72c2947e09fa36c4c",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/ImagePlanePackingTest.kt": "c7cc4433e980250f70da6dac2b4847ae0be7f40482cfde14d7c616fa38773795",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/RecordingActivityGateTest.kt": "90f3416f790f7f05a0f143c24b97691cc394b0e7a7f9d38a669fc22fa92aa202",
+    "stera-app/packages/stera_recorder/lib/src/providers/ar_recorder_provider.dart": "1f3d2fcce8f47527115d3e6c63158f2484fa68052eff221cd119e8f3cb6a5110",
+    "stera-app/packages/stera_recorder/test/failed_capture_stop_test.dart": "3e6095da0b54b5186268acfc28401743af55724687d976aae4ade8183bb22eb2",
+    "scripts/test_android_capture.sh": "3191cb8e92f995f51419c6f49e3767960e99f55511c06af1e45a8eaa2707d86f",
+    "scripts/capture_geometry.py": "65cfd1ff3adf486c5f9c14ce810d8217d270aa185528f1fcfd20cbd1fec92b05",
+    "scripts/hand_geometry.py": "2ab8a7ddfb3a4d0fa0b1d306c121009baca2d89905d188c7387ba1cb192b5a0d",
+    "scripts/process_geometry_capture.py": "703109648940bdf2c3b451f181207d40e13717daa60d30fc989960891c6b0897",
+    "scripts/geometry_report.py": "a618a8767a154d4aee80a16c318f21f75648815d29eedf6e8056cab627bbd5c2",
+    "scripts/geometry_visualizer.py": "8bc7e781cadfc16224329ffdde88d03046416a37924e350c467c3af5089d7110"
+  },
+  "app_commit": "fdc967472b778a95bb3d64021b911296d7182732"
+}

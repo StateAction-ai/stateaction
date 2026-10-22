@@ -1,0 +1,7 @@
+# Lightweight local inspection only; no SDK model/runtime installation.
+mcap==1.6.0
+mcap-ros2-support==0.6.0
+numpy==2.5.4
+Pillow==13.0.0
+lz4==4.4.5
+zstandard==0.25.0

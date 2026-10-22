@@ -1,0 +1,38 @@
+{
+  "recorded_utc": "2026-10-22T04:43:27.417147+00:00",
+  "apk_sha256": "75f5848adf7ad8e8f3157d83d61919f2d6d2c7d95b792f1cb61587c8e475fed0",
+  "physical_camera_started": false,
+  "native_instrumented_tests": {
+    "passed": 5,
+    "avd": "stera_ar_api35",
+    "serial": "emulator-5580",
+    "log_directory": "artifacts/android-capture-tests/20261022T043345Z"
+  },
+  "live_arcore": {
+    "avd": "stera_ar_api33",
+    "serial": "emulator-5582",
+    "system_image": "system-images;android-33;google_apis;x86_64 revision17",
+    "emulator_version": "36.4.10 build15004761",
+    "arcore_version": "1.57.262640093",
+    "graphics": "swiftshader_indirect; Vulkan disabled",
+    "session_created": true,
+    "session_configured": true,
+    "session_resumed": true,
+    "camera_id": "0",
+    "camera_frames_received": true,
+    "tracking_initialized": false,
+    "saved_mcap": false,
+    "limitation": "Headless software GL; VIO logs around 2.5\u20133.1 Hz, initialization failure and frame gaps. Full app recording not verified.",
+    "depth_supported": false,
+    "logs": "artifacts/emulator-api33/app.log"
+  },
+  "api35_live_arcore": {
+    "status": "failed session creation",
+    "reason": "Rear camera HAL exposes10; ARCore requests0",
+    "abis_tested": [
+      "arm64-v8a",
+      "x86_64"
+    ]
+  },
+  "next_step": "Use the native encoder/writer fixture loop for repeatable tests; real Pixel capture remains required for physical depth and metric hand accuracy."
+}

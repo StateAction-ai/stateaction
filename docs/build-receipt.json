@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-21",
+  "source_url": "https://github.com/fpv-labs/stera-app",
+  "source_commit": "fce8de1a44d3b4a8f0bea9bb5f025ea8e04dcc15",
+  "branch": "local/pixel9pro-debug",
+  "local_changes": [
+    "Nullable release-keystore property reads allow debug configuration without a release keystore"
+  ],
+  "apk": "artifacts/stera-pixel9proxl-debug.apk",
+  "bytes": 112825870,
+  "sha256": "7388bdcb18b58038f88afa94c0d531f337986dead566a1f6cb6ea808a7d9a1d0",
+  "packaged_env": "NO_AUTH_MODE=true",
+  "apk_metadata": [
+    "package: name='open.fpvlabs.stera' versionCode='1' versionName='0.0.1' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+    "targetSdkVersion:'36'",
+    "launchable-activity: name='open.fpvlabs.stera.MainActivity'  label='' icon=''",
+    "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'"
+  ],
+  "build_result": "passed",
+  "installation": "passed_adb_install",
+  "capture_validation": "all_recorded_messages_decoded_payload_checks_passed_physical_accuracy_unmeasured",
+  "first_capture": {
+    "session": "captures/session_20261021_203504",
+    "phone_local_sha256_match": true,
+    "messages_decoded": 21508,
+    "decode_validation_errors": 0,
+    "rgb_frames": 230,
+    "depth_frames": 230,
+    "unique_depth_images": 1,
+    "depth_warning": "All depth images are pixel-identical; depth update behavior requires investigation",
+    "camera_poses": 230,
+    "imu_messages": 12273,
+    "imu_unique_timestamps": 6138,
+    "qa_report": "captures/session_20261021_203504/inspection/QA.md",
+    "preview": "captures/session_20261021_203504/inspection/preview.mp4",
+    "preview_timing": "retimed_constant_15_fps_inspection_only",
+    "physical_tracking_accuracy_validated": false,
+    "hand_tracking_performed": false
+  },
+  "processing_sdk": {
+    "source_url": "https://github.com/fpv-labs/stera-sdk",
+    "source_commit": "df6a5ec8919053c5cd448db83d4816e1faaaec62",
+    "usage": "ROS2 schema compatibility helper; direct local CPU MCAP inspection"
+  },
+  "device": {
+    "model": "Pixel 9 Pro XL",
+    "android_release": "17",
+    "api": 37,
+    "abi": "arm64-v8a"
+  },
+  "apk_signature_verified": true,
+  "launch": "passed_am_start_and_process_alive",
+  "recent_app_log_check": "no_matching_fatal_or_flutter_exception"
+}

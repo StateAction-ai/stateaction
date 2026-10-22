@@ -1,0 +1,38 @@
+{
+  "capture_geometry_version": "android_arcore_cpu_v2",
+  "capture_geometry": {
+    "version": "android_arcore_cpu_v2",
+    "rgb_source": "arcore_acquireCameraImage_YUV_420_888",
+    "rgb_orientation": "native_cpu_unrotated",
+    "rgb_resize_crop_applied": false,
+    "rgb_intrinsics": "camera.imageIntrinsics",
+    "pose": "camera.pose_physical_camera_to_world",
+    "camera_axes": "x_right_y_up_z_backward",
+    "optical_axes": "x_right_y_down_z_forward",
+    "optical_to_camera_quaternion_xyzw": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "depth_source": "arcore_acquireDepthImage16Bits",
+    "depth_orientation": "native_texture_unrotated",
+    "depth_intrinsics": "rgb_pixel_to_depth_pixel_times_rgb_K",
+    "depth_mapping": "frame.transformCoordinates2d_IMAGE_PIXELS_to_TEXTURE_NORMALIZED",
+    "timestamp_clock": "native_clocks_preserved_ARCore_frame_time_base_undefined",
+    "rgb_timestamp": "Image.timestamp_verified_equal_to_Frame.androidCameraTimestamp",
+    "rgb_mcap_log_time": "Frame.timestamp_acquisition_association",
+    "rgb_mcap_publish_time": "Image.timestamp_native_android_camera_clock",
+    "cross_stream_clock_verified": false,
+    "depth_timestamp": "Image.timestamp_not_replaced_with_rgb_timestamp",
+    "depth_mcap_log_time": "Frame.timestamp_acquisition_association",
+    "depth_mcap_publish_time": "Image.timestamp_native",
+    "frame_geometry_topic": "/capture/frame_geometry",
+    "distortion_coefficients": "not_exposed_by_arcore"
+  },
+  "capture_result_valid": true,
+  "device_model": "synthetic_android_fixture",
+  "android_version": "35",
+  "session_start_timestamp_ns": 1453692090999999,
+  "rgb_written_count": 3
+}

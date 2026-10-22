@@ -1,0 +1,23 @@
+{
+  "recorded_utc": "2026-10-22T04:12:23.704809+00:00",
+  "python_tests": {
+    "command": ".venv-stera/bin/python -m unittest discover -s tests -v",
+    "passed": 44,
+    "log": "/tmp/stera-geometry-python-tests.log"
+  },
+  "android_jvm_tests_passed": 15,
+  "source_sha256": {
+    "scripts/capture_geometry.py": "ba5c4e74cf6563c94db00da5e309512845e1a32f034a9447a4cc9ad1ad888bc5",
+    "scripts/hand_geometry.py": "2ab8a7ddfb3a4d0fa0b1d306c121009baca2d89905d188c7387ba1cb192b5a0d",
+    "scripts/geometry_visualizer.py": "8bc7e781cadfc16224329ffdde88d03046416a37924e350c467c3af5089d7110",
+    "scripts/process_geometry_capture.py": "9a7f201b9fa167482675d8ceb85cba4188b9356e3c8042dccd16dcfc879bdebe"
+  },
+  "legacy_replay": {
+    "receipt": "captures/session_20261021_210417/stera_processed_geometry_diagnostic_v3/receipt.json",
+    "rerun_headless_ingestion_exit_code": 0,
+    "source_and_artifact_hashes_verified": true,
+    "accepted_3d_labels": 0,
+    "original_raw_unchanged": true
+  },
+  "physical_capture_validation": "pending new user recording; synthetic tests and old-capture replay do not establish metric sensor accuracy"
+}

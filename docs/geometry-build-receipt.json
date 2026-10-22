@@ -1,0 +1,40 @@
+{
+  "recorded_utc": "2026-10-22T04:06:34Z",
+  "app_base_commit": "fce8de1a44d3b4a8f0bea9bb5f025ea8e04dcc15",
+  "source_sha256": {
+    "stera-app/apps/mobile/android/app/build.gradle.kts": "1d1bac737a9eadd7ae77a3b9b6bfc041113ee5efbb3913be7c2faae0b5c126b4",
+    "stera-app/packages/stera_recorder/android/CAPTURE_GEOMETRY.md": "ddf3fae0471bb10b41a0926f82687d3481b0ebed07b6fd14f309fcec8ec4aab9",
+    "stera-app/packages/stera_recorder/android/build.gradle": "d7cf02108aea8f64a2023ccd1e3442e96ef25b13a04457290133b138202e2f30",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/ArRecorderImpl.kt": "5a64fabf4eae9a0ba74c552486500e026487d9237e7fb0947d59bc3f955ba99a",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/MetadataAssembler.kt": "f1745425fb5a0355f8733780641036477f34ed1dfb3ac8ee1c8c7383a5ae4c8d",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingActivityGate.kt": "4808261c01087512f5140d6d2e79bb12e735c72daca5820b345533d71316b46d",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingFrameOrchestrator.kt": "9f46c8976901557afc2a8df088b3957d3a8041f7d7285d7a01483c6ab9f674e6",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/CDRSerializer.kt": "b5797998755a582a784be77cf6878656d302b12d48a4dd146999643133438890",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/DatasetWriter.kt": "a130417e99f84c8b785ac1782ea5496b2ca541df2c2a58941ba2e5b4c10b211b",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/DatasetWriterImpl.kt": "f780f56d051cf758439241757d946b0f12a4f2610fd0e9ccaa3d95cdc0d991ea",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt": "52d4d1fbc0854ae7d1ae909b4b3b99867ae1859c2ec22b11d2569c8c19a6227a",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoder.kt": "8418799e984aadcf83fa68cc5466abc78ccfd7969703b0514834f3b35312666d",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometry.kt": "1b259eaf1873fec8579c56deeb2334a245214fd0b543f3b739802804fc0b3cbc",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/ImagePlanePacking.kt": "d853bcbbadccbeb693f8502c64559501bf336e0a20a0a2b3affc13dc8b3739f6",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessor.kt": "a5511daf95dc8bff50e40da939e9d6d459317a2880e385bbbdec29865bc8e8a3",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessorImpl.kt": "42b168fd368c040bbd6dd398dfc1d2b1f54fd30ad4470798ca7372a74ec4d13f",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometryTest.kt": "f644ba906fe495caaa4349c4b9451db377946eff8b32a63f9436b1c46613c0a5",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureSerializationTest.kt": "db74fb4626ac8e5ea0a5e54999bd3e25da7a869a846153b72c2947e09fa36c4c",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/ImagePlanePackingTest.kt": "c7cc4433e980250f70da6dac2b4847ae0be7f40482cfde14d7c616fa38773795",
+    "stera-app/packages/stera_recorder/android/src/test/kotlin/open/fpvlabs/stera/ar_recorder/geometry/RecordingActivityGateTest.kt": "90f3416f790f7f05a0f143c24b97691cc394b0e7a7f9d38a669fc22fa92aa202"
+  },
+  "apk": {
+    "path": "/home/wearaway/projects/robotics-data-collection/artifacts/stera-pixel9proxl-geometry-v1-debug.apk",
+    "sha256": "5b4175381622ac937b53026e11cfade3e2b6f2da2fae7063eabf4d498f578733",
+    "size_bytes": 187425324,
+    "signature_verified": true
+  },
+  "install": {
+    "adb_install_r": "Success",
+    "installed_on": "Pixel 9 Pro XL",
+    "application_started_by_agent": false,
+    "recording_started_by_agent": false
+  },
+  "android_tests_passed": 15,
+  "on_device_geometry_validated": false
+}

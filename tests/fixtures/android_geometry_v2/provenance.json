@@ -1,0 +1,58 @@
+{
+  "description": "Synthetic Android framework JPEG and production Kotlin MCAP writer fixture; no physical camera or measured depth data.",
+  "captured_fixture_directory": "stera-app/apps/mobile/build/stera_recorder/exported-fixtures/geometry-fixtures/session_20261022_002554",
+  "generator_test": "open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest#actualAndroidEncoderAndMcapWriterExportCrossClockFixture",
+  "instrumentation_runner": "open.fpvlabs.stera.ar_recorder.test/androidx.test.runner.AndroidJUnitRunner",
+  "generated_on": "2026-10-22",
+  "artifact_files": {
+    "session_data_20261022_002554.mcap": {
+      "sha256": "8b37ab8b7ea4fa0b53cfb79ac2640b8697960abd101001681e890968a78a5129",
+      "size_bytes": 30554
+    },
+    "metadata.json": {
+      "sha256": "36f3768341d6822a0dbb96c52391b2d003b971bd9eab4b08adb8cb3638ce33aa",
+      "size_bytes": 1665
+    },
+    "thumbnail.jpg": {
+      "sha256": "9762c6b6c0daad15f4e2daf3d545eb04735a70874e6e2287957bb96b6cf99cfa",
+      "size_bytes": 641
+    }
+  },
+  "test_apk": {
+    "path": "stera-app/apps/mobile/build/stera_recorder/outputs/apk/androidTest/debug/stera_recorder-debug-androidTest.apk",
+    "sha256": "f72d1fd5a77ccedb9fb4a00a34fdfa5591bc85657e4d52744eef17ec990792ce",
+    "size_bytes": 6623766
+  },
+  "generator_sources": [
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/androidTest/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoderInstrumentedTest.kt",
+      "sha256": "0960daf7f4e2291e973df3305874375d51b4973e5d379682295128de7f193c78",
+      "size_bytes": 9268
+    },
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoder.kt",
+      "sha256": "a470a4c29be45c8c5bd93099fa20b7294f184336e5c41c99f0b0c7500fd2edd8",
+      "size_bytes": 4227
+    },
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/ImagePlanePacking.kt",
+      "sha256": "d853bcbbadccbeb693f8502c64559501bf336e0a20a0a2b3affc13dc8b3739f6",
+      "size_bytes": 2828
+    },
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometry.kt",
+      "sha256": "4af0171898431044bdd89b98ed72af3980f2fa5a06b2ec650fb60941bbce60da",
+      "size_bytes": 4646
+    },
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt",
+      "sha256": "b8aa89c26559dab3eae62f7e0578861e0dadd8f9d55291ff17c5587fb1da858f",
+      "size_bytes": 35326
+    },
+    {
+      "path": "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/CDRSerializer.kt",
+      "sha256": "b5797998755a582a784be77cf6878656d302b12d48a4dd146999643133438890",
+      "size_bytes": 17697
+    }
+  ]
+}

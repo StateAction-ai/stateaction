@@ -1,0 +1,14 @@
+# Private sensor captures and downloaded public samples stay local.
+/captures/
+/artifacts/
+/.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.keystore
+*.jks
+# Nested repositories are tracked as git submodules, never copied build trees.
