@@ -1,0 +1,26 @@
+{
+  "created_utc": "2026-10-22T19:53:47.183783+00:00",
+  "app_commit": "8044ad672dbf03cd6db8690f260c145b9acd51ea",
+  "capture_geometry_version": "android_arcore_cpu_v3",
+  "scope": "Recording-list thumbnail presentation uses the saved-playback orientation default. Native recorder unchanged. Existing recording thumbnails corrected in the local UI.",
+  "apk": {
+    "path": "artifacts/stera-pixel9proxl-thumbnail-orientation-debug.apk",
+    "sha256": "8e285cf131aacbb4fae318c50c32b048366d2accc701077472dc260004ac3145",
+    "size_bytes": 212363898,
+    "signature_v2_verified": true,
+    "installed": true,
+    "installed_hash_matches": true
+  },
+  "validation": {
+    "flutter_tests_passed": 10,
+    "includes_actual_latest_pixel_mcap_and_thumbnail_widget": true,
+    "flutter_tests_log": "docs/validation/thumbnail-orientation-tests.log",
+    "flutter_analyze": "No issues found",
+    "monorepo_bun_fix": "Unavailable: ultracite not installed; Dart format passed."
+  },
+  "physical_thumbnail_ui_verified": false,
+  "physical_ui_limitation": "Pixel locked during install; widget integration against the actual local recording passed.",
+  "raw_capture_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+  "raw_capture_hash_unchanged": true,
+  "training_accuracy_claim": false
+}

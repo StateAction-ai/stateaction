@@ -27,7 +27,8 @@
     "flutter_analyze": "No issues found",
     "monorepo_bun_fix": "Unavailable: ultracite not installed; changed Dart files formatted using dart format."
   },
-  "user_visible_pixel_playback_verified": false,
+  "user_visible_pixel_playback_verified": true,
   "view_rotation": "Fixed per playback, gravity-derived right-angle default for declared native Android geometry; manual rotate override.",
-  "training_accuracy_claim": false
+  "training_accuracy_claim": false,
+  "user_verification": "User confirmed video orientation is correct on 2026-10-22; recording thumbnail remained wrong and was fixed separately."
 }
