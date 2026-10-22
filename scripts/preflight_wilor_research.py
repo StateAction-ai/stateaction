@@ -82,6 +82,8 @@ def main():
     parser.add_argument("--frame", type=Path, default=Path("captures/session_20261022_152005/inspection/rgb_frames/000020.jpg"))
     parser.add_argument("--output", type=Path, default=Path("docs/validation/wilor-research-preflight.json"))
     parser.add_argument("--detector-overlay", type=Path, default=Path("artifacts/research-models/wilor-detector-preflight.jpg"))
+    parser.add_argument("--mano-asset", type=Path, help="Explicit local MANO_RIGHT.pkl; does not download or establish license rights")
+    parser.add_argument("--mano-source-receipt", type=Path, help="Optional provenance JSON; its SHA256 must match the supplied MANO asset")
     args = parser.parse_args()
     root = args.wilor.resolve(strict=True)
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
@@ -153,17 +155,28 @@ def main():
         report["hand_checkpoint"] = {"explicit_verified_deserialization": "pass", "weights_only": True,
             "top_level_keys": sorted(checkpoint), "state_dict_entries": len(state),
             "tensor_elements": sum(v.numel() for v in state.values() if torch.is_tensor(v))}
-        mano = root/"mano_data/MANO_RIGHT.pkl"
+        mano = args.mano_asset.resolve(strict=True) if args.mano_asset else root/"mano_data/MANO_RIGHT.pkl"
         if not mano.exists():
             report["status"] = "preflight_ready_awaiting_licensed_mano"
             report["full_hand_inference"] = "not run: licensed MANO_RIGHT.pkl is absent"
         else:
+            mano_digest = sha256(mano)
+            report["mano_asset"] = {"path": str(mano), "sha256": mano_digest,
+                                    "explicit_path": args.mano_asset is not None,
+                                    "license_rights_established_by_preflight": False,
+                                    "loading": "SMPL-X reconstructs this explicit trusted legacy MANO pickle; PyTorch weights_only applies to the separate hand checkpoint."}
+            if args.mano_source_receipt:
+                source = json.loads(args.mano_source_receipt.read_text())
+                if source.get("sha256") != mano_digest:
+                    raise RuntimeError("MANO asset does not match its provenance receipt")
+                report["mano_asset"]["provenance"] = source
+                report["mano_asset"]["provenance_receipt_sha256"] = sha256(args.mano_source_receipt)
             cfg = get_config(str(paths["pretrained_models/hf_pinned/model_config.yaml"]))
             cfg.defrost()
             cfg.MODEL.BACKBONE.pop("PRETRAINED_WEIGHTS", None)
             cfg.MODEL.BBOX_SHAPE = [192, 256]
-            cfg.MANO.DATA_DIR = str(root/"mano_data")
-            cfg.MANO.MODEL_PATH = str(root/"mano_data")
+            cfg.MANO.DATA_DIR = str(mano.parent)
+            cfg.MANO.MODEL_PATH = str(mano)
             cfg.MANO.MEAN_PARAMS = str(root/"mano_data/mano_mean_params.npz")
             cfg.freeze()
             model = WiLoR(cfg, init_renderer=False)
@@ -174,6 +187,7 @@ def main():
                 raise RuntimeError("Critical learned/model state is missing; refusing a partial random model")
             model = model.cuda().eval()
             report["mano_sha256"] = sha256(mano)
+            report["remaining_mano_asset"] = None
             if len(boxes):
                 dataset = ViTDetDataset(cfg, bgr, boxes[:1], detection.boxes.cls.cpu().numpy()[:1])
                 batch = next(iter(torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=0)))

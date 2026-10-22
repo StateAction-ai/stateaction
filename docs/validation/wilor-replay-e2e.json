@@ -1,0 +1,56 @@
+{
+  "checked_at_utc": "2026-10-22T21:00:11.281320+00:00",
+  "runs": [
+    {
+      "session": "session_20261022_152005",
+      "output": "captures/session_20261022_152005/stera_processed_wilor_research_v2",
+      "status": "complete",
+      "frames": 186,
+      "observations": 166,
+      "all_predictions_match_exact_decoded_mcap_pixels": true,
+      "raw_unchanged": true,
+      "raw_mcap_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+      "rrd_readback": "pass",
+      "hdf5_readback": "pass",
+      "video": {
+        "width": 1920,
+        "height": 1080,
+        "nb_read_frames": "186"
+      },
+      "training_valid_count": 0,
+      "geometry_consistent_observations": 0,
+      "receipt_sha256": "90bd7a336cf3f774be19dcd7c4afa7383fee0560b8edbd04717bb416f7154f76",
+      "script_sha256": "a954137dc788d2904d9d2029e121fef4667acf9525b5073d13a6b8109014cc46"
+    },
+    {
+      "session": "session_20261022_151917",
+      "output": "captures/session_20261022_151917/stera_processed_wilor_research_v1",
+      "status": "complete",
+      "frames": 245,
+      "observations": 179,
+      "all_predictions_match_exact_decoded_mcap_pixels": true,
+      "raw_unchanged": true,
+      "raw_mcap_sha256": "0e5fe83112c7641f4679936ed50d95ac0793f97312a496ca2d819bdb058c562b",
+      "rrd_readback": "pass",
+      "hdf5_readback": "pass",
+      "video": {
+        "width": 1920,
+        "height": 1080,
+        "nb_read_frames": "245"
+      },
+      "training_valid_count": 0,
+      "geometry_consistent_observations": 0,
+      "receipt_sha256": "dfc00d2ec3a6b8a16faabaa527d23e2000872b610d088b8f0ed9147c143d964a",
+      "script_sha256": "a954137dc788d2904d9d2029e121fef4667acf9525b5073d13a6b8109014cc46"
+    }
+  ],
+  "regression_tests": {
+    "command": ".venv-stera/bin/python -m unittest discover -s tests",
+    "passed": 92
+  },
+  "limits": [
+    "No Pixel anatomical 3D ground truth; learned-scale/surface-depth contradictions remain.",
+    "Readback and frame identity do not establish annotation accuracy.",
+    "Direct research model, not exact SDK wrapper; no change to default recorder/backend."
+  ]
+}

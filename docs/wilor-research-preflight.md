@@ -1,9 +1,23 @@
 # WiLoR research preflight
 
-The isolated local research baseline is ready up to the licensed MANO asset.
-The official detector has performed actual CUDA inference. The full hand
-checkpoint has been deserialized, but **no full hand forward pass or hand
-accuracy result is claimed** while `MANO_RIGHT.pkl` is absent.
+The full WiLoR model now completes an actual CUDA forward pass on the existing
+Pixel recording: all checkpoint keys match and the output is finite 21-joint
+geometry. The [full-model receipt](validation/wilor-full-hand-preflight.json)
+records the separate, explicit MANO source. Finite output is not an accuracy
+measurement; the hand-quality investigation remains open.
+
+On 2026-10-22 the official MANO login, registration and download endpoints all
+returned HTTP 502 while the homepage/license pages loaded. The
+[access-check receipt](validation/mano-official-access.json) preserves those
+observations. The official WiLoR README's
+[Quick Installation link](https://github.com/rolpotamias/WiLoR#quick-installation)
+recommends WiLoR-mini, whose
+[installer](https://github.com/warmshao/WiLoR-mini/blob/main/wilor_mini/pipelines/wilor_hand_pose3d_estimation_pipeline.py#L48-L52)
+downloads `MANO_RIGHT.pkl` from its Hugging Face repository. We used that
+author-linked research-demo route, pinned its revision and verified the file
+against its publisher's LFS SHA-256. This is third-party packager provenance,
+not an MPI registered download or evidence of commercial/redistribution rights.
+See the [source receipt](validation/mano-research-asset-source.json).
 
 The SDK's `HandTracker` defaults to WiLoR, whereas our local geometry runner
 explicitly selected MediaPipe. The preceding hand failures establish problems
@@ -23,11 +37,15 @@ backend is broken.
   `torch.amp.autocast("cuda", dtype=torch.float16)` pass on driver 580.178.04.
 - Official detector on existing native frame 20 finds one right hand at
   `[1089,322,1461,653]`, confidence 0.87793, using `cuda:0`.
-- Official hand state dictionary loads: 490 entries, 641,198,536 tensor elements.
+- Official hand state dictionary loads: 490 entries, 641,198,536 tensor elements;
+  full model construction has zero missing or unexpected keys.
+- Full CUDA hand inference on Pixel frame 20: shape `(1,21,3)`, all finite.
 - `uv pip check --python .venv-wilor/bin/python` passes.
 
-The complete SHA-256, source, runtime and frozen installed-package receipt is
+The initial, historical staged-readiness receipt is
 [validation/wilor-research-preflight.json](validation/wilor-research-preflight.json).
+The subsequent successful full forward pass is
+[validation/wilor-full-hand-preflight.json](validation/wilor-full-hand-preflight.json).
 The detector overlay is local:
 `artifacts/research-models/wilor-detector-preflight.jpg`.
 
@@ -42,9 +60,9 @@ inference can use raw image files and save predictions for evaluation elsewhere.
 The original README reports torch 2.0 / CUDA 11.7 testing. The matched modern pair
 above follows [PyTorch's official version matrix](https://pytorch.org/get-started/previous-versions/#v291),
 reuses the cached torch wheel, and supports the SDK's modern autocast API.
-Successful CUDA/detector checks do not prove complete hand-model compatibility;
-the actual forward pass awaits MANO. Rendering is disabled in the conditional
-hand path (`init_renderer=False`); upstream imports require some renderer Python
+The successful forward pass establishes runtime compatibility for this tested
+path; it does not establish hand accuracy. Rendering is disabled
+(`init_renderer=False`); upstream imports require some renderer Python
 packages, but no rendering context is created.
 
 ## Reproduce the environment
@@ -80,30 +98,43 @@ object reconstruction. `torch.load` itself is not replaced, no global safe
 classes are added, and no `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` override is set.
 This handles PyTorch's [documented loader-default change](https://github.com/pytorch/pytorch/blob/v2.9.1/docs/source/notes/serialization.rst).
 
-## Remaining asset and resume command
+## Explicit MANO asset and reproduction
 
-Obtain the licensed model through the [official MANO registration/download](https://mano.is.tue.mpg.de/)
-and place the right-hand file at:
+The preferred registered route is [MANO registration/download](https://mano.is.tue.mpg.de/),
+currently unavailable at its dynamic endpoints. Its project contact is
+`mano@tue.mpg.de`; the published commercial-license contact is
+`ps-license@tue.mpg.de`. No messages were sent or accounts created.
+
+The author-linked research-demo asset is stored separately from the pristine
+original WiLoR checkout:
 
 ```text
-/home/wearaway/projects/robotics-data-collection/artifacts/research-models/WiLoR/mano_data/MANO_RIGHT.pkl
+artifacts/research-models/wilor-mini-research-assets/MANO_RIGHT.pkl
 ```
 
 Then run from the project root:
 
 ```sh
-.venv-wilor/bin/python scripts/preflight_wilor_research.py
+.venv-wilor/bin/python scripts/preflight_wilor_research.py \
+  --mano-asset artifacts/research-models/wilor-mini-research-assets/MANO_RIGHT.pkl \
+  --mano-source-receipt docs/validation/mano-research-asset-source.json \
+  --output docs/validation/wilor-full-hand-preflight-repeat.json \
+  --detector-overlay artifacts/research-models/wilor-full-hand-detector-repeat.jpg
 ```
 
-The same command currently exits 0 with JSON status
-`preflight_ready_awaiting_licensed_mano`; this means staged readiness, not a
-completed hand test. With the asset present it constructs the actual model,
-loads checkpoint weights, and attempts one finite 21-joint CUDA forward pass
-on the detected crop. Critical missing model weights fail instead of allowing
-a partially random network. Runtime/hash errors exit nonzero and write a
-failed receipt. The future full-hand branch remains unverified until exercised.
+The script does not download MANO. Without an explicit path, it retains the
+original `mano_data/MANO_RIGHT.pkl` fallback and staged-readiness status if that
+file is absent. With an explicit asset it records its hash and provenance,
+constructs the actual model, loads checkpoint weights and executes one hand
+forward pass. A mismatched provenance hash or critical missing weights fails.
+The legacy MANO pickle is reconstructed by SMPL-X from this explicit trusted
+local source; the restricted PyTorch loader applies to the hand checkpoint,
+not to the separate MANO file. Runtime/hash errors exit nonzero and write a
+failed receipt.
 
 WiLoR weights are **CC-BY-NC-ND4.0 research only**, with separate MANO and
 Ultralytics terms. This is a research comparison, not a commercial default.
-No protected MANO file was obtained from unofficial sources. No paid compute
-was used; source/model downloads and this environment remain local and ignored.
+No paid compute was used. Source/model downloads and this environment remain
+local and ignored; no asset, personal recording or reference annotation is
+redistributed in Git. The author-linked asset route does not establish product
+or commercial-training rights.

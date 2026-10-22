@@ -1,0 +1,521 @@
+{
+  "finished_utc": "2026-10-22T20:55:54Z",
+  "source_commit": "fcb911312a38fa8badd30d9656a167485d61b8f9",
+  "hf_revision": "99fe3d7acff8104ecca1055df7467709506c2fa6",
+  "script_sha256": "df98737f984b1238518a5d40a32299a7a86a16d7cb794344dc15b1b6b9e3da38",
+  "hand_geometry_sha256": "dd80350556833bd46980b9a20ea3d4e6e336242d00f338674bb1c30796ef9066",
+  "model_assets": {
+    "pretrained_models/detector.pt": "5ef3df44e42d2db52d4ffe91f83a22ce9925e2acc9abebf453f2c5d22e380033",
+    "pretrained_models/wilor_final.ckpt": "3e97aafc7dd08d883a4cc5a027df61fdb6fda6136dbd1319405413862ada6bb2",
+    "pretrained_models/hf_pinned/model_config.yaml": "f69cb52704df88ef29a7cfe03f35a677a92c1ce08169b729ca7f5862f05d4297",
+    "pretrained_models/hf_pinned/dataset_config.yaml": "781da7fc454be8974a534ed7ed8ded38ba3af43c3b6f45b28bbf154a5a5aa77c"
+  },
+  "mano_asset_provenance": {
+    "retrieved_at": "2026-10-22T16:48:37.233713-04:00",
+    "source": "https://huggingface.co/warmshao/WiLoR-mini/resolve/b00adea9a6843bbb4c9042109c5eb29ab2a59dea/pretrained_models/MANO_RIGHT.pkl",
+    "hf_revision": "b00adea9a6843bbb4c9042109c5eb29ab2a59dea",
+    "sha256": "45d60aa3b27ef9107a7afd4e00808f307fd91111e1cfa35afd5c4a62de264767",
+    "bytes": 3821356,
+    "matches_publisher_lfs_sha256": true,
+    "path": "artifacts/research-models/wilor-mini-research-assets/MANO_RIGHT.pkl",
+    "authority": "Third-party WiLoR-mini packager linked under Quick Installation by the official WiLoR README; this is not an MPI registered-download provenance.",
+    "author_link_source": "https://github.com/rolpotamias/WiLoR#quick-installation",
+    "automatic_download_source": "https://github.com/warmshao/WiLoR-mini/blob/main/wilor_mini/pipelines/wilor_hand_pose3d_estimation_pipeline.py#L48-L52",
+    "license_source": "https://mano.is.tue.mpg.de/license.html",
+    "license_scope": "Personal noncommercial research comparison only; no assertion of redistribution or commercial rights. Asset and raw outputs remain ignored local files.",
+    "pickle_globals": [
+      "__builtin__ set",
+      "chumpy.ch Ch",
+      "chumpy.reordering Select",
+      "numpy dtype",
+      "numpy ndarray",
+      "numpy.core.multiarray _reconstruct",
+      "scipy.sparse.csc csc_matrix"
+    ],
+    "mpi_login_status": "HTTP502 verified2026-10-22",
+    "account_created": false,
+    "messages_sent": false
+  },
+  "raw_predictions": "artifacts/wilor-full-hand-benchmark-v2/predictions.json",
+  "raw_predictions_sha256": "d195cc1e956254a3bcc6843bd516d108e337bd070bddaa229233efe41f5f9d75",
+  "runtime": {
+    "torch": "2.9.1+cu128",
+    "torchvision": "0.24.1+cu128",
+    "numpy": "1.23.5",
+    "ultralytics": "8.1.34",
+    "smplx": "0.1.28"
+  },
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "settings": {
+    "detector_confidence": 0.3,
+    "detector_imgsz": 640,
+    "rescale_factor": 2.0,
+    "autocast": "float16",
+    "input": "Native OpenCV BGR, no raster rotation; official crop preprocessing/left flip",
+    "renderer": false
+  },
+  "coordinates": "Official MANO OpenPose21 order: wrist0, thumb1-4/index5-8/middle9-12/ring13-16/pinky17-20. Left x mirror restored per demo. Positive camera Z; wrist subtraction only for relative metric. No Procrustes/scale/reference rotation alignment.",
+  "camera_protocol": "Official crop/full projection with nominal F=cfgF/image_size*max(W,H). It is not calibrated camera depth. Diagnostic PnP uses measured K and the model's own predicted2D only; fit residual is circular consistency, not accuracy. GT is only for IoU assignment and error scoring.",
+  "controls": {
+    "official_camera_helper_vs_independent_algebra": "pass",
+    "native_crop_affine_roundtrip": "pass",
+    "known_reference_camera_recovery": "pass"
+  },
+  "crop_full_projection_difference_max_px": 14.008313523735993,
+  "hanco": {
+    "source": "https://lmbweb.informatik.uni-freiburg.de/resources/datasets/HanCo.en.html",
+    "selection_sha256": "1610025a99ed062aad9c16757b967679b3c588981744b6880b6f917c4c147af4",
+    "images": 24,
+    "detected_images": 24,
+    "summary": {
+      "landmark_error_mean_px": {
+        "count": 24,
+        "mean": 2.708636008248402,
+        "median": 2.6007568137867785,
+        "p90": 3.559893865110855,
+        "max": 5.3244341886311
+      },
+      "raw_relative_mpjpe_mm": {
+        "count": 24,
+        "mean": 11.568785680428922,
+        "median": 10.475403078646334,
+        "p90": 18.69068965470768,
+        "max": 20.242632004415373
+      },
+      "nominal_camera_absolute_mpjpe_mm": {
+        "count": 24,
+        "mean": 5723.054429720772,
+        "median": 6042.518245365285,
+        "p90": 6678.692299703983,
+        "max": 6701.562364413038
+      },
+      "calibrated_pnp_relative_mpjpe_mm": {
+        "count": 24,
+        "mean": 5.471151736594074,
+        "median": 5.566892601403901,
+        "p90": 6.299153463626749,
+        "max": 6.949082617099314
+      },
+      "calibrated_pnp_absolute_mpjpe_mm": {
+        "count": 24,
+        "mean": 19.824140829403273,
+        "median": 23.224090433732655,
+        "p90": 31.5076482030439,
+        "max": 37.58670189529442
+      },
+      "calibrated_pnp_wrist_error_mm": {
+        "count": 24,
+        "mean": 19.97852854501443,
+        "median": 24.009886487570235,
+        "p90": 32.900920145817025,
+        "max": 34.493144910769246
+      },
+      "calibrated_pnp_fit_mean_px": {
+        "count": 24,
+        "mean": 0.6870456849286213,
+        "median": 0.6493154938436494,
+        "p90": 0.9969595324501354,
+        "max": 1.1311195287731572
+      }
+    },
+    "per_image": [
+      {
+        "image": "rgb/0110/cam0/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 3.6435927611579784,
+        "raw_relative_mpjpe_mm": 18.55982769294639,
+        "nominal_camera_absolute_mpjpe_mm": 6668.21921812697,
+        "calibrated_pnp_relative_mpjpe_mm": 5.622896483987822,
+        "calibrated_pnp_absolute_mpjpe_mm": 32.518966808954886,
+        "calibrated_pnp_wrist_error_mm": 32.58227466572812,
+        "calibrated_pnp_fit_mean_px": 0.742587379379725
+      },
+      {
+        "image": "rgb/0110/cam1/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 4.126981404193368,
+        "raw_relative_mpjpe_mm": 10.460385951655788,
+        "nominal_camera_absolute_mpjpe_mm": 5367.289966685517,
+        "calibrated_pnp_relative_mpjpe_mm": 6.18308271537123,
+        "calibrated_pnp_absolute_mpjpe_mm": 7.1459551736163,
+        "calibrated_pnp_wrist_error_mm": 6.474891845646028,
+        "calibrated_pnp_fit_mean_px": 1.1311195287731572
+      },
+      {
+        "image": "rgb/0110/cam2/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.018032503764766,
+        "raw_relative_mpjpe_mm": 5.443426821637986,
+        "nominal_camera_absolute_mpjpe_mm": 6319.184183128962,
+        "calibrated_pnp_relative_mpjpe_mm": 5.018058306248297,
+        "calibrated_pnp_absolute_mpjpe_mm": 4.91072345019244,
+        "calibrated_pnp_wrist_error_mm": 2.9181833449955388,
+        "calibrated_pnp_fit_mean_px": 0.3825721696429402
+      },
+      {
+        "image": "rgb/0110/cam3/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.4433147722566138,
+        "raw_relative_mpjpe_mm": 18.746773352605373,
+        "nominal_camera_absolute_mpjpe_mm": 6205.901121562921,
+        "calibrated_pnp_relative_mpjpe_mm": 6.643790877593804,
+        "calibrated_pnp_absolute_mpjpe_mm": 9.3929965035863,
+        "calibrated_pnp_wrist_error_mm": 12.77138860821938,
+        "calibrated_pnp_fit_mean_px": 0.741121303199332
+      },
+      {
+        "image": "rgb/0110/cam4/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.0835390760822228,
+        "raw_relative_mpjpe_mm": 9.2854149066231,
+        "nominal_camera_absolute_mpjpe_mm": 6688.024610275953,
+        "calibrated_pnp_relative_mpjpe_mm": 5.611983102130519,
+        "calibrated_pnp_absolute_mpjpe_mm": 23.376193184899336,
+        "calibrated_pnp_wrist_error_mm": 25.507240048164416,
+        "calibrated_pnp_fit_mean_px": 0.4893371777550154
+      },
+      {
+        "image": "rgb/0110/cam5/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 3.0990945187592547,
+        "raw_relative_mpjpe_mm": 13.35562935757181,
+        "nominal_camera_absolute_mpjpe_mm": 6036.960641649847,
+        "calibrated_pnp_relative_mpjpe_mm": 5.5060995810977635,
+        "calibrated_pnp_absolute_mpjpe_mm": 14.45132437297217,
+        "calibrated_pnp_wrist_error_mm": 13.4808922740758,
+        "calibrated_pnp_fit_mean_px": 0.7032898368680626
+      },
+      {
+        "image": "rgb/0110/cam6/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 3.112966017638994,
+        "raw_relative_mpjpe_mm": 6.400063799259166,
+        "nominal_camera_absolute_mpjpe_mm": 6294.579039458661,
+        "calibrated_pnp_relative_mpjpe_mm": 5.573040522431894,
+        "calibrated_pnp_absolute_mpjpe_mm": 37.58670189529442,
+        "calibrated_pnp_wrist_error_mm": 34.493144910769246,
+        "calibrated_pnp_fit_mean_px": 0.8788868704832556
+      },
+      {
+        "image": "rgb/0110/cam7/00000012.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.56420631006151,
+        "raw_relative_mpjpe_mm": 10.235731698496735,
+        "nominal_camera_absolute_mpjpe_mm": 6528.051159929752,
+        "calibrated_pnp_relative_mpjpe_mm": 4.8437659345302135,
+        "calibrated_pnp_absolute_mpjpe_mm": 6.300570437534987,
+        "calibrated_pnp_wrist_error_mm": 6.813814479698152,
+        "calibrated_pnp_fit_mean_px": 0.464694369508358
+      },
+      {
+        "image": "rgb/0110/cam0/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 5.3244341886311,
+        "raw_relative_mpjpe_mm": 20.242632004415373,
+        "nominal_camera_absolute_mpjpe_mm": 3876.1838114573684,
+        "calibrated_pnp_relative_mpjpe_mm": 5.125280132897247,
+        "calibrated_pnp_absolute_mpjpe_mm": 28.436865777089466,
+        "calibrated_pnp_wrist_error_mm": 29.26125367848617,
+        "calibrated_pnp_fit_mean_px": 1.1062597395504294
+      },
+      {
+        "image": "rgb/0110/cam1/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.6649163780448233,
+        "raw_relative_mpjpe_mm": 15.010523583959177,
+        "nominal_camera_absolute_mpjpe_mm": 6213.30190476407,
+        "calibrated_pnp_relative_mpjpe_mm": 6.949082617099314,
+        "calibrated_pnp_absolute_mpjpe_mm": 5.719059583783951,
+        "calibrated_pnp_wrist_error_mm": 3.1633668971951057,
+        "calibrated_pnp_fit_mean_px": 0.9601890430429217
+      },
+      {
+        "image": "rgb/0110/cam2/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 1.812685295290623,
+        "raw_relative_mpjpe_mm": 6.410503409790977,
+        "nominal_camera_absolute_mpjpe_mm": 5778.3205380064355,
+        "calibrated_pnp_relative_mpjpe_mm": 6.227187265151151,
+        "calibrated_pnp_absolute_mpjpe_mm": 5.219294473269234,
+        "calibrated_pnp_wrist_error_mm": 4.634669924983196,
+        "calibrated_pnp_fit_mean_px": 0.3747667217664078
+      },
+      {
+        "image": "rgb/0110/cam3/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.6834293014309605,
+        "raw_relative_mpjpe_mm": 18.91343081578527,
+        "nominal_camera_absolute_mpjpe_mm": 5634.916120283425,
+        "calibrated_pnp_relative_mpjpe_mm": 5.918734750735732,
+        "calibrated_pnp_absolute_mpjpe_mm": 7.2327680674613255,
+        "calibrated_pnp_wrist_error_mm": 6.381769711576219,
+        "calibrated_pnp_fit_mean_px": 1.0071806729051955
+      },
+      {
+        "image": "rgb/0110/cam4/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 1.415168615063548,
+        "raw_relative_mpjpe_mm": 6.949074076308911,
+        "nominal_camera_absolute_mpjpe_mm": 6683.180763236988,
+        "calibrated_pnp_relative_mpjpe_mm": 4.3381408213978485,
+        "calibrated_pnp_absolute_mpjpe_mm": 28.354425960629154,
+        "calibrated_pnp_wrist_error_mm": 29.585738360068095,
+        "calibrated_pnp_fit_mean_px": 0.5009165027966789
+      },
+      {
+        "image": "rgb/0110/cam5/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 1.9479938075006826,
+        "raw_relative_mpjpe_mm": 11.85469240571672,
+        "nominal_camera_absolute_mpjpe_mm": 6293.969497238502,
+        "calibrated_pnp_relative_mpjpe_mm": 5.544371718337051,
+        "calibrated_pnp_absolute_mpjpe_mm": 33.00672978656494,
+        "calibrated_pnp_wrist_error_mm": 33.40157653631964,
+        "calibrated_pnp_fit_mean_px": 0.6353870610465487
+      },
+      {
+        "image": "rgb/0110/cam6/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.5262927260514925,
+        "raw_relative_mpjpe_mm": 7.74200446004969,
+        "nominal_camera_absolute_mpjpe_mm": 6048.075849080722,
+        "calibrated_pnp_relative_mpjpe_mm": 4.846881459576193,
+        "calibrated_pnp_absolute_mpjpe_mm": 29.14790478925161,
+        "calibrated_pnp_wrist_error_mm": 31.15535750031874,
+        "calibrated_pnp_fit_mean_px": 0.9298596760710156
+      },
+      {
+        "image": "rgb/0110/cam7/00000015.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 1.676325496457246,
+        "raw_relative_mpjpe_mm": 10.804792722792092,
+        "nominal_camera_absolute_mpjpe_mm": 6701.562364413038,
+        "calibrated_pnp_relative_mpjpe_mm": 5.560744680375908,
+        "calibrated_pnp_absolute_mpjpe_mm": 7.2311826944733,
+        "calibrated_pnp_wrist_error_mm": 3.46712908848906,
+        "calibrated_pnp_fit_mean_px": 0.5171359723747428
+      },
+      {
+        "image": "rgb/0110/cam0/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 3.3245700860403002,
+        "raw_relative_mpjpe_mm": 17.151058248814877,
+        "nominal_camera_absolute_mpjpe_mm": 4824.4177328791175,
+        "calibrated_pnp_relative_mpjpe_mm": 5.994867137237683,
+        "calibrated_pnp_absolute_mpjpe_mm": 27.8451454246441,
+        "calibrated_pnp_wrist_error_mm": 26.254202820767393,
+        "calibrated_pnp_fit_mean_px": 0.6327150401146094
+      },
+      {
+        "image": "rgb/0110/cam1/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.5649737822369025,
+        "raw_relative_mpjpe_mm": 10.490420205636882,
+        "nominal_camera_absolute_mpjpe_mm": 6358.873034443944,
+        "calibrated_pnp_relative_mpjpe_mm": 5.58826390047603,
+        "calibrated_pnp_absolute_mpjpe_mm": 23.07198768256597,
+        "calibrated_pnp_wrist_error_mm": 25.94394068577754,
+        "calibrated_pnp_fit_mean_px": 0.66324392664075
+      },
+      {
+        "image": "rgb/0110/cam2/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.6365398453366544,
+        "raw_relative_mpjpe_mm": 5.226119828031929,
+        "nominal_camera_absolute_mpjpe_mm": 4540.900448062767,
+        "calibrated_pnp_relative_mpjpe_mm": 5.030954181286861,
+        "calibrated_pnp_absolute_mpjpe_mm": 22.165923916201073,
+        "calibrated_pnp_wrist_error_mm": 23.81177221720735,
+        "calibrated_pnp_fit_mean_px": 0.5509693036195773
+      },
+      {
+        "image": "rgb/0110/cam3/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.6826386593616425,
+        "raw_relative_mpjpe_mm": 17.916932473640646,
+        "nominal_camera_absolute_mpjpe_mm": 3845.3086953964876,
+        "calibrated_pnp_relative_mpjpe_mm": 4.5189121683725,
+        "calibrated_pnp_absolute_mpjpe_mm": 23.382255325622182,
+        "calibrated_pnp_wrist_error_mm": 24.208000757933124,
+        "calibrated_pnp_fit_mean_px": 0.9731102047216615
+      },
+      {
+        "image": "rgb/0110/cam4/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.126871665264253,
+        "raw_relative_mpjpe_mm": 6.693217959857536,
+        "nominal_camera_absolute_mpjpe_mm": 5179.605657934148,
+        "calibrated_pnp_relative_mpjpe_mm": 4.26920205598708,
+        "calibrated_pnp_absolute_mpjpe_mm": 21.061843242187237,
+        "calibrated_pnp_wrist_error_mm": 19.96430337448112,
+        "calibrated_pnp_fit_mean_px": 0.4186704133644882
+      },
+      {
+        "image": "rgb/0110/cam5/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.410217026390341,
+        "raw_relative_mpjpe_mm": 9.961250186296628,
+        "nominal_camera_absolute_mpjpe_mm": 4806.907841845013,
+        "calibrated_pnp_relative_mpjpe_mm": 4.383890507393883,
+        "calibrated_pnp_absolute_mpjpe_mm": 23.391900729990052,
+        "calibrated_pnp_wrist_error_mm": 21.2114424731436,
+        "calibrated_pnp_fit_mean_px": 0.6639709919602461
+      },
+      {
+        "image": "rgb/0110/cam6/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 2.7538835199454668,
+        "raw_relative_mpjpe_mm": 7.911025087484838,
+        "nominal_camera_absolute_mpjpe_mm": 5018.746079615411,
+        "calibrated_pnp_relative_mpjpe_mm": 6.329996120116291,
+        "calibrated_pnp_absolute_mpjpe_mm": 28.787309946477016,
+        "calibrated_pnp_wrist_error_mm": 33.037482494426555,
+        "calibrated_pnp_fit_mean_px": 0.5492229785935392
+      },
+      {
+        "image": "rgb/0110/cam7/00000024.jpg",
+        "detected": true,
+        "detections": 1,
+        "reference_manually_validated": true,
+        "side": "right",
+        "landmark_error_mean_px": 3.364596441000902,
+        "raw_relative_mpjpe_mm": 11.88592528091626,
+        "nominal_camera_absolute_mpjpe_mm": 5440.826033822518,
+        "calibrated_pnp_relative_mpjpe_mm": 5.67841463842546,
+        "calibrated_pnp_absolute_mpjpe_mm": 26.041350678417185,
+        "calibrated_pnp_wrist_error_mm": 28.960848381876758,
+        "calibrated_pnp_fit_mean_px": 0.47188955410825056
+      }
+    ]
+  },
+  "pixel": [
+    {
+      "session": "session_20261022_152005",
+      "frames": 186,
+      "detected_frames": 163,
+      "observations": 166,
+      "finite_full_model_observations": 166,
+      "rgb_K_sha256": "553b5b0f7f67bf3e3507b296af0d354eea3aec84b64a270881f66eec05666824",
+      "calibrated_pnp_fit_mean_px": {
+        "count": 166,
+        "mean": 7.523587196276882,
+        "median": 6.715256695480693,
+        "p90": 11.82659909718783,
+        "max": 17.458318023440924
+      },
+      "known_negative_checks": [
+        {
+          "frame_index": 0,
+          "false_positive_detections": 0
+        },
+        {
+          "frame_index": 5,
+          "false_positive_detections": 0
+        },
+        {
+          "frame_index": 180,
+          "false_positive_detections": 0
+        },
+        {
+          "frame_index": 185,
+          "false_positive_detections": 0
+        }
+      ],
+      "training_qualified_observations": 0,
+      "visibility_labels": "unknown; not inferred from detector scores"
+    },
+    {
+      "session": "session_20261022_151917",
+      "frames": 245,
+      "detected_frames": 174,
+      "observations": 179,
+      "finite_full_model_observations": 179,
+      "rgb_K_sha256": "22cedc2660c8c742138e6708ec291135f0bcf678725bd6aae7afc553e0209011",
+      "calibrated_pnp_fit_mean_px": {
+        "count": 179,
+        "mean": 5.799952120740142,
+        "median": 5.843763773394778,
+        "p90": 7.827918311819949,
+        "max": 15.316583024572477
+      },
+      "known_negative_checks": [],
+      "training_qualified_observations": 0,
+      "visibility_labels": "unknown; not inferred from detector scores"
+    }
+  ],
+  "limitations": [
+    "Three correlated HanCo timesteps from one sequence; MANO-derived fits, not measured anatomical ground truth; training overlap unknown.",
+    "No 3D reference or exhaustive presence/visibility labels for Pixel; finite joints and fitted projection do not establish training quality.",
+    "Same detector hallucinations/duplicates are retained, with no silent deduplication or topology inference from detector keypoints.",
+    "WiLoR/MANO/HanCo assets are for research comparison; source access does not establish commercial rights. No raw assets, images or annotations redistributed."
+  ]
+}

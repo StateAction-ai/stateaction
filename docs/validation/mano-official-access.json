@@ -1,0 +1,44 @@
+{
+  "schema": "mano_official_access_check_v1",
+  "timezone": "America/Toronto",
+  "checks": [
+    {
+      "url": "https://mano.is.tue.mpg.de/",
+      "checked_at": "2026-10-22T16:46:00.262943-04:00",
+      "http_status": 200,
+      "final_url": "https://mano.is.tue.mpg.de/"
+    },
+    {
+      "url": "https://mano.is.tue.mpg.de/login.php",
+      "checked_at": "2026-10-22T16:46:00.962769-04:00",
+      "http_status": 502,
+      "reason": "Bad Gateway"
+    },
+    {
+      "url": "https://mano.is.tue.mpg.de/register.php",
+      "checked_at": "2026-10-22T16:46:01.480260-04:00",
+      "http_status": 502,
+      "reason": "Bad Gateway"
+    },
+    {
+      "url": "https://mano.is.tue.mpg.de/download.php",
+      "checked_at": "2026-10-22T16:46:02.034627-04:00",
+      "http_status": 502,
+      "reason": "Bad Gateway"
+    },
+    {
+      "url": "https://mano.is.tue.mpg.de/license.html",
+      "checked_at": "2026-10-22T16:46:02.499715-04:00",
+      "http_status": 200,
+      "final_url": "https://mano.is.tue.mpg.de/license.html"
+    }
+  ],
+  "finding": "Official login, registration, and download endpoints fail with HTTP502 while homepage and license HTML are reachable. This independently reproduces the user report; duration/cause of outage not established.",
+  "official_project_contact": "mano@tue.mpg.de",
+  "official_project_contact_source": "https://mano.is.tue.mpg.de/",
+  "official_commercial_contact": "ps-license@tue.mpg.de",
+  "official_commercial_contact_source": "https://mano.is.tue.mpg.de/license.html",
+  "protected_mano_asset_downloaded": false,
+  "messages_sent": false,
+  "independent_work": "Benchmark already downloaded official WiLoR detector keypoints; no full MANO hand inference or metric3Dclaim."
+}

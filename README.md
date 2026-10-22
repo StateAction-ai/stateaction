@@ -29,9 +29,13 @@ includes [external calibrated references](docs/hanco-hand-benchmark.md),
 [camera-reconstruction experiments](docs/hand-camera-reconstruction.md), and
 [temporal tracking and coverage comparisons](docs/hand-tracking-modes.md).
 More detections have not established accurate 3D labels. Our runner explicitly
-uses MediaPipe; the SDK defaults to WiLoR. An isolated
-[WiLoR GPU preflight](docs/wilor-research-preflight.md) passes detector inference
-and awaits the registered MANO asset for a full hand-model test.
+uses MediaPipe; the SDK defaults to WiLoR. The isolated
+[WiLoR GPU preflight](docs/wilor-research-preflight.md) now passes full hand
+inference through an explicitly sourced, author-linked research-demo MANO asset.
+The [full hand comparison and replay](docs/wilor-full-hand-benchmark.md) improves
+raw wrist-relative error from 36.26 to 11.57 mm against the small HanCo fitted
+reference set. Both Pixel recordings have complete offline WiLoR replays;
+metric accuracy, hidden-joint visibility and training qualification remain open.
 
 V1 and v2 both failed acquisition; do not use them for collection. V2 rejected all 291 attempts because of our invalid cross-clock timestamp equality requirement. V3 preserves the separate native clocks and acquiring Frame association. Historical receipts remain evidence of the earlier failures; [the regression record](docs/geometry-v3-capture-regression.md) explains the repair.
 

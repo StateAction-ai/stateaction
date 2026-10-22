@@ -1,0 +1,26 @@
+{
+  "retrieved_at": "2026-10-22T16:48:37.233713-04:00",
+  "source": "https://huggingface.co/warmshao/WiLoR-mini/resolve/b00adea9a6843bbb4c9042109c5eb29ab2a59dea/pretrained_models/MANO_RIGHT.pkl",
+  "hf_revision": "b00adea9a6843bbb4c9042109c5eb29ab2a59dea",
+  "sha256": "45d60aa3b27ef9107a7afd4e00808f307fd91111e1cfa35afd5c4a62de264767",
+  "bytes": 3821356,
+  "matches_publisher_lfs_sha256": true,
+  "path": "artifacts/research-models/wilor-mini-research-assets/MANO_RIGHT.pkl",
+  "authority": "Third-party WiLoR-mini packager linked under Quick Installation by the official WiLoR README; this is not an MPI registered-download provenance.",
+  "author_link_source": "https://github.com/rolpotamias/WiLoR#quick-installation",
+  "automatic_download_source": "https://github.com/warmshao/WiLoR-mini/blob/main/wilor_mini/pipelines/wilor_hand_pose3d_estimation_pipeline.py#L48-L52",
+  "license_source": "https://mano.is.tue.mpg.de/license.html",
+  "license_scope": "Personal noncommercial research comparison only; no assertion of redistribution or commercial rights. Asset and raw outputs remain ignored local files.",
+  "pickle_globals": [
+    "__builtin__ set",
+    "chumpy.ch Ch",
+    "chumpy.reordering Select",
+    "numpy dtype",
+    "numpy ndarray",
+    "numpy.core.multiarray _reconstruct",
+    "scipy.sparse.csc csc_matrix"
+  ],
+  "mpi_login_status": "HTTP502 verified2026-10-22",
+  "account_created": false,
+  "messages_sent": false
+}
