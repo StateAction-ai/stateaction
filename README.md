@@ -23,6 +23,16 @@ below describe the installed local tools; cloning alone does not install them.
 
 **Current status: v3 physical acquisition works in two Pixel recordings.** The captures contain 245 and 186 matched RGB/depth/tracked-pose events, zero encoder failures, and no message decode errors. The saved-playback orientation fix is installed and tested against the latest recording. See [physical results and remaining hand failures](docs/pixel-v3-physical-validation.md). Hand-pose accuracy, temporal accuracy and training qualification remain unverified.
 
+The user confirmed correct playback orientation. The separate thumbnail fix is
+installed, with ten Flutter regression checks passing. Hand investigation now
+includes [external calibrated references](docs/hanco-hand-benchmark.md),
+[camera-reconstruction experiments](docs/hand-camera-reconstruction.md), and
+[temporal tracking and coverage comparisons](docs/hand-tracking-modes.md).
+More detections have not established accurate 3D labels. Our runner explicitly
+uses MediaPipe; the SDK defaults to WiLoR. An isolated
+[WiLoR GPU preflight](docs/wilor-research-preflight.md) passes detector inference
+and awaits the registered MANO asset for a full hand-model test.
+
 V1 and v2 both failed acquisition; do not use them for collection. V2 rejected all 291 attempts because of our invalid cross-clock timestamp equality requirement. V3 preserves the separate native clocks and acquiring Frame association. Historical receipts remain evidence of the earlier failures; [the regression record](docs/geometry-v3-capture-regression.md) explains the repair.
 
 The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Earlier recordings and current model estimates have not qualified as metric hand supervision.
@@ -98,7 +108,7 @@ See the [v3 fixture](tests/fixtures/android_geometry_v3/README.md),
 
 ## Public egocentric video test
 
-Run the production hand model on clean RGB from the reviewed CC BY 4.0
+Run the selected MediaPipe baseline on clean RGB from the reviewed CC BY 4.0
 EgoViz-120 sample. This downloads 150 MB once; later runs reuse it. Choose a new
 output directory for each experiment:
 

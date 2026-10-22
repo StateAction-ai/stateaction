@@ -24,7 +24,7 @@ import numpy as np
 import rerun as rr
 
 from capture_geometry import GeometrySession, VERSION, VERSION_V2, V3_PROVENANCE
-from hand_geometry import detect_observations, reconstruct_hand
+from hand_geometry import detect_observations, reconstruct_hand, reconstruct_perspective_hand, use_video_mode
 from geometry_visualizer import GeometryVisualizer
 from geometry_report import write_geometry_report
 from process_capture import ROOT, SDK_COMMIT, adapt_rerun_022, seal_rerun_recording, command, sha256, write_json
@@ -75,6 +75,9 @@ def write_geometry_annotations(path, observations, geometry, timestamps):
             shape = np.full((count, 21, 3), np.nan)
             raw_world = shape.copy(); raw_image = shape.copy()
             candidates = shape.copy(); supported = shape.copy()
+            baseline_candidates = shape.copy()
+            camera_rotation = np.full((count, 3, 3), np.nan)
+            camera_translation = np.full((count, 3), np.nan)
             pixels = np.full((count, 21, 2), np.nan)
             score = np.full(count, np.nan)
             consistent = np.zeros(count, dtype=bool)
@@ -88,18 +91,27 @@ def write_geometry_annotations(path, observations, geometry, timestamps):
                 if "raw_image_landmarks_normalized" in ob: raw_image[i] = ob["raw_image_landmarks_normalized"]
                 pixels[i] = ob["landmarks_rgb_px"]; score[i] = ob["handedness_score"]
                 candidates[i] = result["candidate_joints_m"]; supported[i] = result["supported_joints_m"]
+                if "baseline_candidate_joints_m" in result:
+                    baseline_candidates[i] = result["baseline_candidate_joints_m"]
+                if result["quality"].get("camera_fit_valid"):
+                    camera_rotation[i] = result["quality"]["camera_fit_rotation"]
+                    camera_translation[i] = result["quality"]["camera_fit_translation_m"]
                 consistent[i] = result["quality"]["geometry_consistent"]
                 supported_mask[i] = result["joint_visibility_supported"]
             for name, data in {"detected": detected, "image_landmarks_px": pixels,
                                "predicted_relative_joints_m": shape, "candidate_joints_m": candidates,
+                               "baseline_translation_only_candidate_m": baseline_candidates,
+                               "camera_fit_rotation": camera_rotation,
+                               "camera_fit_translation_m": camera_translation,
                                "raw_world_landmarks_m": raw_world, "raw_image_landmarks_normalized": raw_image,
                                "handedness_score": score, "geometry_consistent": consistent,
                                "joint_visibility_supported": supported_mask}.items():
                 group.create_dataset(name, data=data)
+            group.attrs["candidate_semantics"] = "candidate reconstruction method in geometry_quality.json; learned shape scale; estimates are not verified training labels"
             accepted.create_dataset(f"{side}_joints", data=supported)
             accepted.create_dataset(f"{side}_valid", data=supported_mask.all(axis=1))
             accepted.create_dataset(f"{side}_kpts_2d_rgb", data=pixels)
-        h5.attrs["geometry_quality_schema"] = "local_geometry_v1"
+        h5.attrs["geometry_quality_schema"] = "local_geometry_v2"
 
 
 def main():
@@ -108,7 +120,16 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--legacy-geometry-hypothesis", action="store_true")
     parser.add_argument("--show-rejected-candidates", action="store_true", help="Display orange unverified candidates only in a diagnostic replay")
+    parser.add_argument("--hide-hand-estimates", action="store_true", help="Hide estimated 3D hands; training masks remain unchanged")
+    parser.add_argument("--hand-reconstruction", choices=("calibrated-pnp", "translation-depth"),
+                        default="translation-depth", help="Experimental fitted camera or historical depth anchor; neither establishes anatomical accuracy")
+    parser.add_argument("--hand-detection-mode", choices=("image", "video"), default="image",
+                        help="Independent images or temporal ROI tracking; neither verifies metric hand accuracy")
+    parser.add_argument("--hand-model-asset", type=Path,
+                        help="Reuse an exact local MediaPipe task asset for offline, reproducible processing")
     args = parser.parse_args()
+    if args.hand_model_asset is not None and not args.hand_model_asset.is_file():
+        parser.error("Hand model asset does not exist")
     raw = args.mcap.resolve(strict=True)
     output = (args.output or raw.parent / "stera_processed_geometry").resolve()
     if output.exists():
@@ -120,7 +141,7 @@ def main():
     episode = output / "episode"; episode.mkdir()
     models = output / "models"; models.mkdir()
     model_path = models / "hand_landmarker.task"
-    cached = raw.parent / "stera_processed/models/hand_landmarker.task"
+    cached = args.hand_model_asset or raw.parent / "stera_processed/models/hand_landmarker.task"
     if cached.exists(): shutil.copy2(cached, model_path)
     from stera.models import HandTracker
     from stera.models.mediapipe import tracker as mp_tracker
@@ -131,7 +152,12 @@ def main():
     receipt = {"status": "running", "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                "raw_mcap": {"path": str(raw), "sha256_before": sha256(raw)},
                "sdk_commit": SDK_COMMIT, "geometry": session.geometry_summary,
-               "pipeline": "per-frame calibrated association, independent raw model observations, conservative quality masks",
+               "pipeline": "per-frame calibrated association, explicit calibrated hand camera solve, separate surface-depth audit, conservative training masks",
+               "hand_reconstruction": args.hand_reconstruction,
+               "hand_detection_mode": args.hand_detection_mode,
+               "hand_model_asset_source": str(cached.resolve()) if cached.exists() else "SDK download",
+               "hand_reconstruction_experimental": True,
+               "estimated_hands_visible": not args.hide_hand_estimates,
                "body_estimation": "disabled: mount/torso pose not observed",
                "default_viewer_eligible": session.version == VERSION and not args.legacy_geometry_hypothesis and not args.show_rejected_candidates,
                "show_rejected_candidates": args.show_rejected_candidates,
@@ -141,13 +167,17 @@ def main():
     observations, geometries, timestamps, reports = [], [], [], []
     try:
         tracker = HandTracker(model="mediapipe")
+        if args.hand_detection_mode == "video":
+            use_video_mode(tracker._backend, model_path)
         viz = GeometryVisualizer(session, output=str(episode / "visualization.rrd"))
         for frame in session.frames():
             geometry = frame.geometry; geometries.append(geometry); timestamps.append(frame.timestamp)
             overlay_hands = []; frame_candidates = []
-            for observation in detect_observations(tracker._backend, frame.rgb):
+            event_ms = int(round(frame.timestamp * 1000)) if args.hand_detection_mode == "video" else None
+            for observation in detect_observations(tracker._backend, frame.rgb, timestamp_ms=event_ms):
                 side = observation["hand_side"]
-                result = reconstruct_hand(observation["relative_joints_m"], observation["landmarks_rgb_px"],
+                reconstruct = reconstruct_perspective_hand if args.hand_reconstruction == "calibrated-pnp" else reconstruct_hand
+                result = reconstruct(observation["relative_joints_m"], observation["landmarks_rgb_px"],
                     np.zeros((1, 1)) if frame.depth is None else frame.depth.astype(float) / 1000,
                     frame.rgb_K, rgb_size_wh=frame.rgb.shape[1::-1], rgb_to_depth=geometry["rgb_to_depth"],
                     calibration_verified=geometry["calibration_contract_verified"],
@@ -159,7 +189,7 @@ def main():
                 reports.append({"frame_index": frame.index, "side": side, **result["quality"]})
                 # Image landmarks are always separate from metric geometry.
                 overlay_hands.append(tracker._backend._to_hand_pose(side, None, observation["landmarks_rgb_px"], 0.0))
-                if result["quality"]["geometry_consistent"] or args.show_rejected_candidates:
+                if not args.hide_hand_estimates and (np.isfinite(result["candidate_joints_m"]).all() or args.show_rejected_candidates):
                     frame_candidates.append((side, result))
             viz.log_frame(frame, hands=overlay_hands, skeleton=None, enable_pointcloud=False)
             for side in ("left", "right"):
@@ -171,7 +201,7 @@ def main():
                 color = [255, 150, 40]
                 path = f"world/hand_candidates/{side}"
                 rr.log(path + "/bones", rr.LineStrips3D([[world[a], world[b]] for a, b in HAND_EDGES], colors=[color], radii=.003))
-                label = "UNVERIFIED ESTIMATE" if result["quality"]["geometry_consistent"] else "REJECTED GEOMETRY"
+                label = "ESTIMATE: NOT TRAINING-QUALIFIED"
                 rr.log(path + "/status", rr.Points3D(world[:1], labels=[label], show_labels=True, colors=[color], radii=.004))
             if (frame.index + 1) % 50 == 0: print(f"Processed {frame.index + 1}/{session.num_rgb_frames}", flush=True)
         manifest = session.export(str(episode), visualizer=viz)

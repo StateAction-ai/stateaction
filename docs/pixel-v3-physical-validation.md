@@ -41,8 +41,11 @@ the installed APK and source revision. Six Flutter tests include the actual
 latest Pixel MCAP; tests also render an asymmetric image at all four rotations
 and verify the displayed pixel order, layout dimensions and unchanged decoded
 image bytes. Flutter analysis passes. Recorder Kotlin and raw recordings were
-not modified by this UI change. Visual confirmation on the phone is pending
-reopening the saved recording.
+not modified by this UI change. The user subsequently confirmed correct video
+orientation. The separate recording-list thumbnail path still used the raw
+image; the [thumbnail update](thumbnail-orientation-build-receipt.json) now reuses
+the same playback orientation decision and is installed. Its ten regression
+checks include the real recording and thumbnail widget; Flutter analysis passes.
 
 ## Processing result and remaining hand problem
 
@@ -67,4 +70,6 @@ contradictions and independently establish accuracy before training claims.
 The [printed reference protocol](physical-calibration-validation.md) measures
 depth/camera-motion agreement; [training qualification requirements](training-qualification-requirements.md)
 describe the missing joint reference, temporal and downstream evidence. The
-overall goal remains incomplete.
+overall goal remains incomplete. The follow-up [external hand reference check](hanco-hand-benchmark.md)
+tests camera recovery against independently supplied reference annotations and
+shows why a lower fitted overlay residual alone cannot resolve training quality.

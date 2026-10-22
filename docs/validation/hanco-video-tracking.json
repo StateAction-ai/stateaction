@@ -1,0 +1,215 @@
+{
+  "summary": {
+    "images": 24,
+    "detected": 24,
+    "mean_uv_error_px": {
+      "mean": 8.081703966678909,
+      "median": 6.428708185714057
+    },
+    "raw_root_relative_mpjpe_mm": {
+      "mean": 39.02779895696947,
+      "median": 34.213436464523234
+    },
+    "pnp_root_relative_mpjpe_mm": {
+      "mean": 35.31312091666197,
+      "median": 27.955873172033165
+    }
+  },
+  "images": [
+    {
+      "frame": 12,
+      "camera": 0,
+      "detected": true,
+      "mean_uv_error_px": 15.769146096111927,
+      "raw_root_relative_mpjpe_mm": 49.11921588182178,
+      "pnp_root_relative_mpjpe_mm": 39.831420161676014
+    },
+    {
+      "frame": 15,
+      "camera": 0,
+      "detected": true,
+      "mean_uv_error_px": 24.789192881915337,
+      "raw_root_relative_mpjpe_mm": 47.69496390141626,
+      "pnp_root_relative_mpjpe_mm": 42.87272802408193
+    },
+    {
+      "frame": 24,
+      "camera": 0,
+      "detected": true,
+      "mean_uv_error_px": 16.05743147027735,
+      "raw_root_relative_mpjpe_mm": 52.48238011656978,
+      "pnp_root_relative_mpjpe_mm": 30.025017558430093
+    },
+    {
+      "frame": 12,
+      "camera": 1,
+      "detected": true,
+      "mean_uv_error_px": 16.82518620112904,
+      "raw_root_relative_mpjpe_mm": 91.58581418829333,
+      "pnp_root_relative_mpjpe_mm": 89.1559118621084
+    },
+    {
+      "frame": 15,
+      "camera": 1,
+      "detected": true,
+      "mean_uv_error_px": 13.36758057024578,
+      "raw_root_relative_mpjpe_mm": 87.04575308542364,
+      "pnp_root_relative_mpjpe_mm": 101.73422562900159
+    },
+    {
+      "frame": 24,
+      "camera": 1,
+      "detected": true,
+      "mean_uv_error_px": 8.291136681367963,
+      "raw_root_relative_mpjpe_mm": 49.907255688555175,
+      "pnp_root_relative_mpjpe_mm": 47.6193090817251
+    },
+    {
+      "frame": 12,
+      "camera": 2,
+      "detected": true,
+      "mean_uv_error_px": 3.6616493996675543,
+      "raw_root_relative_mpjpe_mm": 42.403485566098375,
+      "pnp_root_relative_mpjpe_mm": 42.04794174465057
+    },
+    {
+      "frame": 15,
+      "camera": 2,
+      "detected": true,
+      "mean_uv_error_px": 3.5760782926464922,
+      "raw_root_relative_mpjpe_mm": 26.163272872623907,
+      "pnp_root_relative_mpjpe_mm": 27.805444165266373
+    },
+    {
+      "frame": 24,
+      "camera": 2,
+      "detected": true,
+      "mean_uv_error_px": 4.714495082621893,
+      "raw_root_relative_mpjpe_mm": 24.97065070590363,
+      "pnp_root_relative_mpjpe_mm": 24.56767773664169
+    },
+    {
+      "frame": 12,
+      "camera": 3,
+      "detected": true,
+      "mean_uv_error_px": 4.180833647880119,
+      "raw_root_relative_mpjpe_mm": 32.12159733096845,
+      "pnp_root_relative_mpjpe_mm": 24.90480786085105
+    },
+    {
+      "frame": 15,
+      "camera": 3,
+      "detected": true,
+      "mean_uv_error_px": 4.164634658683485,
+      "raw_root_relative_mpjpe_mm": 36.30527559807802,
+      "pnp_root_relative_mpjpe_mm": 24.944403249506006
+    },
+    {
+      "frame": 24,
+      "camera": 3,
+      "detected": true,
+      "mean_uv_error_px": 6.633500365920756,
+      "raw_root_relative_mpjpe_mm": 46.26643802270514,
+      "pnp_root_relative_mpjpe_mm": 38.17219636438021
+    },
+    {
+      "frame": 12,
+      "camera": 4,
+      "detected": true,
+      "mean_uv_error_px": 3.3536914892127823,
+      "raw_root_relative_mpjpe_mm": 23.553533761232714,
+      "pnp_root_relative_mpjpe_mm": 21.75004701134759
+    },
+    {
+      "frame": 15,
+      "camera": 4,
+      "detected": true,
+      "mean_uv_error_px": 3.6988011935311698,
+      "raw_root_relative_mpjpe_mm": 25.83490324312646,
+      "pnp_root_relative_mpjpe_mm": 23.99659977263348
+    },
+    {
+      "frame": 24,
+      "camera": 4,
+      "detected": true,
+      "mean_uv_error_px": 4.25211333409088,
+      "raw_root_relative_mpjpe_mm": 27.220763103108606,
+      "pnp_root_relative_mpjpe_mm": 26.324559690380603
+    },
+    {
+      "frame": 12,
+      "camera": 5,
+      "detected": true,
+      "mean_uv_error_px": 4.7526058554877295,
+      "raw_root_relative_mpjpe_mm": 29.10190740303404,
+      "pnp_root_relative_mpjpe_mm": 28.106302178799954
+    },
+    {
+      "frame": 15,
+      "camera": 5,
+      "detected": true,
+      "mean_uv_error_px": 3.454394106995096,
+      "raw_root_relative_mpjpe_mm": 28.090242921043675,
+      "pnp_root_relative_mpjpe_mm": 24.81787387185089
+    },
+    {
+      "frame": 24,
+      "camera": 5,
+      "detected": true,
+      "mean_uv_error_px": 4.5159465503685015,
+      "raw_root_relative_mpjpe_mm": 23.077401083732962,
+      "pnp_root_relative_mpjpe_mm": 16.235138709306963
+    },
+    {
+      "frame": 12,
+      "camera": 6,
+      "detected": true,
+      "mean_uv_error_px": 8.72148063188641,
+      "raw_root_relative_mpjpe_mm": 15.100205551405196,
+      "pnp_root_relative_mpjpe_mm": 16.362654558853723
+    },
+    {
+      "frame": 15,
+      "camera": 6,
+      "detected": true,
+      "mean_uv_error_px": 9.062990332588727,
+      "raw_root_relative_mpjpe_mm": 22.49501713760354,
+      "pnp_root_relative_mpjpe_mm": 17.73962594237031
+    },
+    {
+      "frame": 24,
+      "camera": 6,
+      "detected": true,
+      "mean_uv_error_px": 9.679731200941116,
+      "raw_root_relative_mpjpe_mm": 26.02294196921005,
+      "pnp_root_relative_mpjpe_mm": 17.70765882107924
+    },
+    {
+      "frame": 12,
+      "camera": 7,
+      "detected": true,
+      "mean_uv_error_px": 6.223916005507358,
+      "raw_root_relative_mpjpe_mm": 37.53886843057412,
+      "pnp_root_relative_mpjpe_mm": 35.15638389939847
+    },
+    {
+      "frame": 15,
+      "camera": 7,
+      "detected": true,
+      "mean_uv_error_px": 6.933343205258126,
+      "raw_root_relative_mpjpe_mm": 40.934428976770555,
+      "pnp_root_relative_mpjpe_mm": 37.80864655043529
+    },
+    {
+      "frame": 24,
+      "camera": 7,
+      "detected": true,
+      "mean_uv_error_px": 7.281015945958215,
+      "raw_root_relative_mpjpe_mm": 51.63085842796801,
+      "pnp_root_relative_mpjpe_mm": 47.82832755511178
+    }
+  ],
+  "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "protocol": "Replay all 67 frames per camera at published 5Hz, evaluate only 3 manually validated timesteps, independent tracker per camera; same 0.3 thresholds/model as image mode.",
+  "limits": "24 correlated views, single performer, MANO-fitted reference, no Pixel metric accuracy claim; model training overlap unknown."
+}

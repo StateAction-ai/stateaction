@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from hand_geometry import reconstruct_hand, project_points, detect_observations
+from hand_geometry import (reconstruct_hand, project_points, detect_observations,
+                           fit_perspective_camera, reconstruct_perspective_hand)
 
 
 class HandGeometryTests(unittest.TestCase):
@@ -146,6 +147,130 @@ class HandGeometryTests(unittest.TestCase):
         self.assertEqual([x['handedness_score'] for x in raw], [.6, .95, .8])
         self.assertEqual(len(raw), 3)
         self.assertEqual(len(observed), 2)
+
+
+class VideoInferenceContractTests(unittest.TestCase):
+    def backend(self, calls):
+        empty = SimpleNamespace(hand_landmarks=[], handedness=[])
+        return SimpleNamespace(
+            load=lambda: None,
+            _mp=SimpleNamespace(Image=lambda **kw: kw["data"],
+                                ImageFormat=SimpleNamespace(SRGB="rgb")),
+            _landmarker=SimpleNamespace(
+                detect=lambda image: calls.append(("image", None)) or empty,
+                detect_for_video=lambda image, timestamp: calls.append(("video", timestamp)) or empty))
+
+    def test_recorded_event_timestamp_reaches_video_api_without_timeless_fallback(self):
+        calls = []
+        backend = self.backend(calls)
+        image = np.zeros((24, 32, 3), np.uint8)
+        self.assertEqual(detect_observations(backend, image, timestamp_ms=1519429847), [])
+        self.assertEqual(detect_observations(backend, image), [])
+        self.assertEqual(calls, [("video", 1519429847), ("image", None)])
+
+    def test_ambiguous_or_invalid_video_timestamps_fail_before_inference(self):
+        calls = []
+        for timestamp in (-1, True, 1.5, "42"):
+            with self.subTest(timestamp=timestamp), self.assertRaises(ValueError):
+                detect_observations(self.backend(calls), np.zeros((24, 32, 3), np.uint8),
+                                    timestamp_ms=timestamp)
+        self.assertEqual(calls, [])
+
+
+class PerspectiveCameraTests(unittest.TestCase):
+    """Independent synthetic camera truth tests the missing reconstruction step."""
+
+    def setUp(self):
+        HandGeometryTests.setUp(self)
+        import cv2
+        self.rotation = cv2.Rodrigues(np.array([.4, -.3, .35]))[0]
+        self.truth = self.relative @ self.rotation.T + self.wrist
+        self.uv = project_points(self.truth, self.K)
+        self.depth.fill(0)
+        for point, xyz in zip(self.uv, self.truth):
+            x, y = np.rint(point).astype(int)
+            self.depth[y-1:y+2, x-1:x+2] = xyz[2]
+
+    def perspective(self, **kwargs):
+        defaults = dict(rgb_size_wh=(640, 480), rgb_to_depth=np.eye(3),
+                        calibration_verified=True, depth_registered=True,
+                        depth_time_verified=True, visible_joints=np.ones(21, bool))
+        defaults.update(kwargs)
+        return reconstruct_perspective_hand(self.relative, self.uv, self.depth,
+                                             self.K, **defaults)
+
+    def test_calibrated_camera_recovers_known_rotated_shape(self):
+        fit = fit_perspective_camera(self.relative, self.uv, self.K)
+        self.assertIsNotNone(fit)
+        np.testing.assert_allclose(fit['candidate_joints_m'], self.truth, atol=1e-7)
+        np.testing.assert_allclose(fit['rotation'], self.rotation, atol=1e-7)
+        np.testing.assert_allclose(fit['translation_m'], self.wrist, atol=1e-7)
+        self.assertAlmostEqual(np.linalg.det(fit['rotation']), 1., places=9)
+        np.testing.assert_allclose(fit['rotation'] @ fit['rotation'].T, np.eye(3), atol=1e-9)
+
+    def test_corrected_candidate_preserves_bones_and_passes_known_depth(self):
+        result = self.perspective()
+        np.testing.assert_allclose(result['candidate_joints_m'], self.truth, atol=1e-7)
+        self.assertTrue(result['quality']['geometry_consistent'])
+        self.assertFalse(result['quality']['metric_accuracy_validated'])
+        self.assertGreater(result['quality']['baseline_translation_only']['nonwrist_reprojection_median_px'], 10)
+        np.testing.assert_allclose(np.linalg.norm(np.diff(result['candidate_joints_m'], axis=0), axis=1),
+                                   np.linalg.norm(np.diff(self.relative, axis=0), axis=1), atol=1e-12)
+
+    def test_learned_scale_ambiguity_is_detected_by_independent_depth(self):
+        original = self.relative.copy()
+        self.relative *= 2
+        result = self.perspective()
+        np.testing.assert_allclose(result['candidate_joints_m'], self.truth*2, atol=1e-7)
+        self.assertLess(result['quality']['nonwrist_reprojection_median_px'], 1e-5)
+        self.assertIn('model_scale_surface_depth_disagreement', result['quality']['rejection_reasons'])
+        self.assertFalse(result['quality']['geometry_consistent'])
+        self.assertTrue(np.isnan(result['supported_joints_m']).all())
+        np.testing.assert_array_equal(self.relative, original*2)
+
+    def test_wrong_focal_length_cannot_pass_depth_audit_by_fitting_pixels(self):
+        self.K[0, 0] *= 2
+        self.K[1, 1] *= 2
+        result = self.perspective()
+        self.assertGreater(result['quality']['model_scale_surface_depth_disagreement_m'], .3)
+        self.assertIn('model_scale_surface_depth_disagreement', result['quality']['rejection_reasons'])
+        self.assertFalse(result['quality']['geometry_consistent'])
+
+    def test_bad_joint_correspondence_is_not_accepted_after_pnp(self):
+        self.uv = self.uv[np.random.default_rng(17).permutation(21)]
+        result = self.perspective()
+        self.assertFalse(result['quality']['geometry_consistent'])
+        self.assertIn('model_image_projection_inconsistent', result['quality']['rejection_reasons'])
+        self.assertTrue(np.isnan(result['supported_joints_m']).all())
+
+    def test_degenerate_shape_cannot_create_a_camera_estimate(self):
+        self.relative.fill(0)
+        self.assertIsNone(fit_perspective_camera(self.relative, self.uv, self.K))
+        result = self.perspective()
+        self.assertFalse(result['quality']['camera_fit_valid'])
+        self.assertIn('perspective_camera_solve_failed', result['quality']['rejection_reasons'])
+        self.assertTrue(np.isnan(result['candidate_joints_m']).all())
+
+    def test_unknown_visibility_preserves_estimate_but_never_training_labels(self):
+        result = self.perspective(visible_joints=None)
+        self.assertTrue(np.isfinite(result['candidate_joints_m']).all())
+        self.assertTrue(np.isnan(result['supported_joints_m']).all())
+        self.assertEqual(result['quality']['visibility_status'], 'unknown')
+        self.assertFalse(result['quality']['fully_observed_consistent'])
+
+    def test_no_depth_keeps_image_based_estimate_with_explicit_rejection(self):
+        self.depth.fill(0)
+        result = self.perspective()
+        np.testing.assert_allclose(result['candidate_joints_m'], self.truth, atol=1e-7)
+        self.assertIn('insufficient_wrist_and_palm_depth', result['quality']['rejection_reasons'])
+        self.assertFalse(result['quality']['geometry_consistent'])
+
+    def test_camera_fit_never_mutates_inputs_and_has_positive_camera_depth(self):
+        before = [a.copy() for a in (self.relative, self.uv, self.depth, self.K)]
+        result = self.perspective()
+        for actual, original in zip((self.relative, self.uv, self.depth, self.K), before):
+            np.testing.assert_array_equal(actual, original)
+        self.assertTrue((result['candidate_joints_m'][:, 2] > 0).all())
 
 
 if __name__ == '__main__':

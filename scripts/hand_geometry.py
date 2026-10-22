@@ -1,9 +1,10 @@
-"""Conservative metric-hand reconstruction and evidence checks.
+"""Explicit hand camera reconstruction and conservative evidence checks.
 
 MediaPipe's separate 2D/world predictions are not a calibrated reconstruction.
-This module preserves the predicted shape, anchors it using registered depth,
-and reports contradictions instead of fitting them away. A passing consistency
-check is not ground truth. Unknown finger visibility remains unknown.
+This module preserves the predicted shape and compares a historical depth
+anchor with an explicit calibrated perspective camera estimate. Surface-depth
+and model contradictions remain reported. A fitted consistency score is not
+ground truth. Unknown finger visibility remains unknown.
 
 Depth must be camera-Z in meters. ``rgb_to_depth`` must be the recorded mapping
 from saved RGB pixels to depth pixels; dimensions alone cannot establish it.
@@ -45,7 +46,80 @@ def project_points(points_m, intrinsic):
         return p[:, :2] / p[:, 2:3]
 
 
-def detect_observations(backend, rgb, *, deduplicate_by_side=True):
+def fit_perspective_camera(relative_joints_m, landmarks_rgb_px, rgb_K,
+                           *, fit_indices=None):
+    """Recover a rigid calibrated camera, preserving the learned model shape.
+
+    MediaPipe's world-landmark graph rotates crop XYZ back into image axes;
+    it does not recover a perspective camera using the recording's intrinsics.
+    This solve supplies that missing step. The model's metric scale remains a
+    learned prior. Reprojection is a FIT residual, not an accuracy measurement.
+    ``fit_indices`` supports disjoint-joint diagnostic evaluation.
+    """
+    import cv2
+
+    shape = np.asarray(relative_joints_m, dtype=np.float64)
+    pixels = np.asarray(landmarks_rgb_px, dtype=np.float64)
+    K = np.asarray(rgb_K, dtype=np.float64)
+    if shape.shape != (21, 3) or pixels.shape != (21, 2) or K.shape != (3, 3):
+        raise ValueError("Expected 21x3 model, 21x2 pixels and 3x3 intrinsics")
+    if not np.isfinite(K).all() or abs(np.linalg.det(K)) < 1e-10:
+        raise ValueError("RGB intrinsics must be finite and invertible")
+    indices = np.arange(21) if fit_indices is None else np.asarray(fit_indices, dtype=int)
+    if indices.ndim != 1 or np.any(indices < 0) or np.any(indices >= 21):
+        raise ValueError("fit_indices must index the 21 hand joints")
+    finite = np.isfinite(shape[indices]).all(axis=1) & np.isfinite(pixels[indices]).all(axis=1)
+    indices = np.unique(indices[finite])
+    if len(indices) < 4 or np.linalg.matrix_rank(shape[indices]-shape[indices].mean(axis=0), tol=1e-8) < 2:
+        return None
+    try:
+        ok, r, t = cv2.solvePnP(shape[indices], pixels[indices], K, None,
+                              flags=cv2.SOLVEPNP_SQPNP)
+        if not ok:
+            return None
+        ok, r, t = cv2.solvePnP(shape[indices], pixels[indices], K, None,
+                              r, t, useExtrinsicGuess=True,
+                              flags=cv2.SOLVEPNP_ITERATIVE)
+        if not ok:
+            return None
+    except cv2.error:
+        return None
+    rotation = cv2.Rodrigues(r)[0]
+    candidate = shape @ rotation.T + t.ravel()
+    finite_points = np.isfinite(candidate).all(axis=1)
+    if not finite_points[indices].all() or np.any(candidate[finite_points, 2] <= 0):
+        return None
+    return {"candidate_joints_m": candidate, "rotation": rotation,
+            "translation_m": t.ravel(), "fit_joint_indices": indices,
+            "reprojection_error_px": np.linalg.norm(project_points(candidate, K)-pixels, axis=1)}
+
+
+def use_video_mode(backend, model_path):
+    """Use frame-to-frame ROI tracking with the same MediaPipe model/settings.
+
+    Local adapter only; the audited SDK checkout stays unchanged. Call once at
+    the start of a recording, then supply its monotonically increasing event
+    timestamps to ``detect_observations``. Never share state across recordings.
+    """
+    backend.load()
+    mp, cfg = backend._mp, backend.config
+    options = mp.tasks.vision.HandLandmarkerOptions(
+        base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+        running_mode=mp.tasks.vision.RunningMode.VIDEO,
+        num_hands=cfg.max_num_hands,
+        min_hand_detection_confidence=cfg.min_detection_confidence,
+        min_hand_presence_confidence=cfg.min_presence_confidence,
+        min_tracking_confidence=cfg.min_tracking_confidence)
+    replacement = mp.tasks.vision.HandLandmarker.create_from_options(options)
+    try:
+        backend._landmarker.close()
+    except Exception:
+        replacement.close()
+        raise
+    backend._landmarker = replacement
+
+
+def detect_observations(backend, rgb, *, deduplicate_by_side=True, timestamp_ms=None):
     """Read MediaPipe predictions before Stera's depth anchoring loses evidence.
 
     ``backend`` is the SDK MediaPipeHandTracker (not its HandTracker facade).
@@ -54,6 +128,7 @@ def detect_observations(backend, rgb, *, deduplicate_by_side=True):
     ``deduplicate_by_side=False`` for diagnostics that preserve every returned
     detection even when two hands receive the same side label. Handedness scores are
     deliberately named; they are never treated as pose confidence.
+    ``timestamp_ms`` selects VIDEO inference; call ``use_video_mode`` first.
     """
     backend.load()
     image = np.asarray(rgb)
@@ -61,7 +136,13 @@ def detect_observations(backend, rgb, *, deduplicate_by_side=True):
         raise ValueError("Expected HxWx3 RGB image")
     image = np.ascontiguousarray(image, dtype=np.uint8)
     mp = backend._mp
-    result = backend._landmarker.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=image))
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+    if timestamp_ms is None:
+        result = backend._landmarker.detect(mp_image)
+    else:
+        if isinstance(timestamp_ms, bool) or not isinstance(timestamp_ms, (int, np.integer)) or timestamp_ms < 0:
+            raise ValueError("Video inference requires a nonnegative integer event timestamp in milliseconds")
+        result = backend._landmarker.detect_for_video(mp_image, int(timestamp_ms))
     if not result.hand_landmarks or not result.handedness:
         return []
     if len(result.hand_landmarks) != len(result.handedness) or len(result.hand_landmarks) != len(result.hand_world_landmarks):
@@ -276,3 +357,124 @@ def reconstruct_hand(relative_joints_m, landmarks_rgb_px, depth_m, rgb_K, *,
             "joint_geometry_valid": joint_geometry_valid,
             "joint_visibility_supported": supported,
             "quality": report}
+
+
+def reconstruct_perspective_hand(relative_joints_m, landmarks_rgb_px, depth_m,
+                                 rgb_K, **kwargs):
+    """Recover the camera missing from crop-model XYZ, then audit depth.
+
+    The rigid shape is preserved. Surface depth is independent evidence and
+    does not force a wrong camera translation onto the learned shape. Raw
+    observations, the old depth-anchored candidate, and the fitted candidate
+    remain separate. Anatomical accuracy and learned scale are unvalidated.
+    """
+    baseline = reconstruct_hand(relative_joints_m, landmarks_rgb_px, depth_m,
+                                rgb_K, **kwargs)
+    model = np.asarray(relative_joints_m, dtype=float)
+    model = model-model[:1]
+    uv = np.asarray(landmarks_rgb_px, dtype=float)
+    K = np.asarray(rgb_K, dtype=float)
+    policy = kwargs.get("policy") or GeometryPolicy()
+    size = np.asarray(kwargs["rgb_size_wh"], dtype=float)
+    in_image = np.isfinite(uv).all(axis=1) & (uv >= 0).all(axis=1) & (uv < size).all(axis=1)
+    fit = fit_perspective_camera(model, uv, K, fit_indices=np.flatnonzero(in_image))
+    if fit is None:
+        baseline["baseline_candidate_joints_m"] = baseline["candidate_joints_m"].copy()
+        baseline["candidate_joints_m"] = np.full((21, 3), np.nan)
+        baseline["supported_joints_m"] = np.full((21, 3), np.nan)
+        baseline["joint_geometry_valid"] = np.zeros(21, dtype=bool)
+        baseline["joint_visibility_supported"] = np.zeros(21, dtype=bool)
+        q = baseline["quality"]
+        q.update({"schema_version": 2, "reconstruction_method": "calibrated_rigid_pnp",
+                  "camera_fit_valid": False, "geometry_consistent": False,
+                  "status": "camera_reconstruction_failed", "fully_observed_consistent": False,
+                  "joint_geometry_valid": [False]*21,
+                  "joint_visibility_supported": [False]*21})
+        q["rejection_reasons"].append("perspective_camera_solve_failed")
+        return baseline
+    # Rotate the shape into fitted camera axes before checking whether the
+    # independently observed palm surface depths imply a common wrist depth.
+    rotated = model @ fit["rotation"].T
+    rotated_audit = reconstruct_hand(rotated, uv, depth_m, K, **kwargs)
+    q = rotated_audit["quality"]
+    q["camera_rotated_model_sha256"] = q["input_hashes"]["model_joints"]
+    q["input_hashes"] = baseline["quality"]["input_hashes"]
+    q["baseline_translation_only"] = {
+        "nonwrist_reprojection_median_px": baseline["quality"]["nonwrist_reprojection_median_px"],
+        "nonwrist_reprojection_p90_px": baseline["quality"]["nonwrist_reprojection_p90_px"],
+        "wrist_depth_m": baseline["quality"]["wrist_depth_m"],
+        "rejection_reasons": baseline["quality"]["rejection_reasons"]}
+    candidate = fit["candidate_joints_m"]
+    residual = fit["reprojection_error_px"]
+    finite = np.isfinite(candidate).all(axis=1) & (candidate[:, 2] > 0) & in_image
+    nonwrist = finite.copy(); nonwrist[0] = False
+    median_px = float(np.median(residual[nonwrist])) if nonwrist.any() else None
+    p90_px = float(np.quantile(residual[nonwrist], .9)) if nonwrist.any() else None
+    reasons = [r for r in q["rejection_reasons"] if r not in (
+        "model_image_projection_inconsistent", "wrist_depth_out_of_range", "insufficient_projectable_joints")]
+    if nonwrist.sum() < 5:
+        reasons.append("insufficient_projectable_joints")
+    elif median_px > q["reprojection_threshold_px"] or p90_px > q["reprojection_threshold_px"]*2:
+        reasons.append("model_image_projection_inconsistent")
+    if not policy.min_depth_m <= candidate[0, 2] <= policy.max_depth_m:
+        reasons.append("wrist_depth_out_of_range")
+    z_residual = np.full(21, np.nan)
+    for i, sample in enumerate(q["depth_samples"]):
+        if sample is not None:
+            z_residual[i] = abs(candidate[i, 2]-sample["depth_m"])
+    anchor_z = q["wrist_depth_m"]
+    depth_disagreement = None if anchor_z is None else abs(float(candidate[0, 2])-anchor_z)
+    if depth_disagreement is not None and depth_disagreement > policy.max_anchor_disagreement_m:
+        reasons.append("model_scale_surface_depth_disagreement")
+    joint_consistent = finite & (residual <= q["reprojection_threshold_px"]) & np.isfinite(z_residual) & (z_residual <= policy.max_joint_depth_residual_m)
+    consistent = not reasons
+    joint_valid = joint_consistent & consistent
+    visibility = kwargs.get("visible_joints")
+    visible = np.zeros(21, bool) if visibility is None else np.asarray(visibility, bool)
+    supported = joint_valid & visible
+    masked = candidate.copy(); masked[~supported] = np.nan
+
+    def numbers(values):
+        return [float(v) if np.isfinite(v) else None for v in values]
+
+    # Evaluate a distinct subset of joints, still explicitly same-model
+    # consistency. This is not the fitted all-joint reprojection score.
+    palm = [j for j in (0, 5, 9, 13, 17) if in_image[j]]
+    holdout = [j for j in range(21) if j not in palm and in_image[j]]
+    palm_fit = fit_perspective_camera(model, uv, K, fit_indices=palm)
+    heldout_px = (float(np.median(palm_fit["reprojection_error_px"][holdout]))
+                  if palm_fit is not None and holdout else None)
+    q.update({"schema_version": 2, "reconstruction_method": "calibrated_rigid_pnp",
+              "camera_fit_valid": True,
+              "pose_solution_ambiguity_evaluated": False,
+              "geometry_consistent": consistent,
+              "status": "consistent_estimate" if consistent else "rejected_geometry",
+              "fully_observed_consistent": bool(supported.all()),
+              "rejection_reasons": reasons,
+              "reprojection_semantics": "fitted same-model 2D/world prediction consistency; not independent accuracy",
+              "fit_joint_indices": fit["fit_joint_indices"].tolist(),
+              "camera_fit_rotation": fit["rotation"].tolist(),
+              "camera_fit_translation_m": fit["translation_m"].tolist(),
+              "metric_scale_source": "learned model shape prior; not measured or independently validated",
+              "nonwrist_reprojection_median_px": median_px,
+              "nonwrist_reprojection_p90_px": p90_px,
+              "reprojection_error_px": numbers(residual),
+              "joint_depth_residual_m": numbers(z_residual),
+              "surface_depth_wrist_m": anchor_z,
+              "wrist_depth_m": float(candidate[0, 2]),
+              "model_scale_surface_depth_disagreement_m": depth_disagreement,
+              "palm_fit_finger_heldout_median_px": heldout_px,
+              "heldout_score_semantics": "disjoint joints from same model; not independent ground truth",
+              "joint_geometry_valid": joint_valid.tolist(),
+              "joint_visibility_supported": supported.tolist(),
+              "limitations": [
+                  "Camera fit preserves learned model shape and inherits its unverified metric scale.",
+                  "Fitted reprojection is not independent evidence of anatomical accuracy.",
+                  "Depth measures skin/object/background surfaces, not anatomical joint centres.",
+                  "Occluded-joint visibility remains unknown unless independently supplied."]})
+    return {"candidate_joints_m": candidate,
+            "baseline_candidate_joints_m": baseline["candidate_joints_m"],
+            "supported_joints_m": masked,
+            "joint_geometry_valid": joint_valid,
+            "joint_visibility_supported": supported,
+            "quality": q}

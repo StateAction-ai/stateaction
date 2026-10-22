@@ -1,0 +1,132 @@
+{
+  "schema": "hand_camera_recovery_diagnostics_v1",
+  "accuracy_claim": "No real-hand anatomical ground truth; these scores measure internal consistency, independent sensor disagreement, or temporal stability.",
+  "ray_lift_counterfactual": "Keep model relative Z, use ARCore-depth wrist anchor, compute calibrated X/Y on every predicted 2D ray. Zero fitted projection error follows by construction; bone-length distortion is reported rather than calling it accuracy.",
+  "temporal_semantics": "Only consecutive detected image-frame indices, no interpolation across missed detections. Wrist steps are stability diagnostics, not errors; actual hand motion is unknown.",
+  "captures": [
+    {
+      "raw_mcap": "captures/session_20261022_152005/session_data_20261022_152005.mcap",
+      "raw_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+      "cached_predictions_sha256": "02b08f531cd06e2c0cee86e45fd59f29014acb598ba4805439be2a7d7e8ad269",
+      "orientation_comparison": {
+        "0": {
+          "detected_observations": 68,
+          "frames_detected": 68,
+          "baseline_median_px": 97.4476329201893,
+          "pnp_median_px": 21.789177545421357,
+          "pnp_wrist_z_m": 0.3437557181126821,
+          "baseline_wrist_z_m": 0.5493961497620912,
+          "palm_fit_finger_heldout_median_px": 58.489314973818715
+        },
+        "2": {
+          "detected_observations": 71,
+          "frames_detected": 71,
+          "baseline_median_px": 99.52369885660848,
+          "pnp_median_px": 22.809454874888804,
+          "pnp_wrist_z_m": 0.3409528673232374,
+          "baseline_wrist_z_m": 0.548,
+          "palm_fit_finger_heldout_median_px": 56.72621361011704
+        }
+      },
+      "wrist_vs_native_surface_depth_abs_error_m": {
+        "n": 68,
+        "median": 0.15517600158192116,
+        "p90": 0.324715755370349,
+        "max": 0.3854831721583831
+      },
+      "fitted_bone_length_divided_by_raw_model_bone": {
+        "n": 1360,
+        "median": 1.0,
+        "p90": 1.0000000000000009,
+        "max": 1.0000000000000069
+      },
+      "ray_lift_bone_length_divided_by_raw_model_bone": {
+        "n": 1360,
+        "median": 1.2835891824239212,
+        "p90": 1.87770399686492,
+        "max": 6.38060844174748
+      },
+      "adjacent_detected_frame_pair_count": 62,
+      "estimated_wrist_step_m": {
+        "n": 62,
+        "median": 0.0238455637741967,
+        "p90": 0.07800325015444687,
+        "max": 0.1981452102943126
+      },
+      "baseline_depth_anchored_wrist_step_m": {
+        "n": 62,
+        "median": 0.01226757451617429,
+        "p90": 0.042778250784885,
+        "max": 0.1678024287342238
+      },
+      "camera_correction_rotation_step_degrees": {
+        "n": 62,
+        "median": 5.213054768391246,
+        "p90": 16.33704552757375,
+        "max": 44.282345610604466
+      }
+    },
+    {
+      "raw_mcap": "captures/session_20261022_151917/session_data_20261022_151917.mcap",
+      "raw_sha256": "0e5fe83112c7641f4679936ed50d95ac0793f97312a496ca2d819bdb058c562b",
+      "cached_predictions_sha256": "b87e6ec20b85cc03b1c1d9a8a6d10da1f73151bda03bd475a63db7c5bb334ff3",
+      "orientation_comparison": {
+        "0": {
+          "detected_observations": 100,
+          "frames_detected": 100,
+          "baseline_median_px": 90.02681921638955,
+          "pnp_median_px": 16.570359397387712,
+          "pnp_wrist_z_m": 0.42767176384823424,
+          "baseline_wrist_z_m": 0.6523181605227292,
+          "palm_fit_finger_heldout_median_px": 34.58298999206559
+        },
+        "2": {
+          "detected_observations": 96,
+          "frames_detected": 96,
+          "baseline_median_px": 90.42233331505034,
+          "pnp_median_px": 18.179528493966544,
+          "pnp_wrist_z_m": 0.42787951974287325,
+          "baseline_wrist_z_m": 0.6547100575272634,
+          "palm_fit_finger_heldout_median_px": 35.584807370839606
+        }
+      },
+      "wrist_vs_native_surface_depth_abs_error_m": {
+        "n": 96,
+        "median": 0.1781631999070335,
+        "p90": 0.28029140579183454,
+        "max": 0.326360866682254
+      },
+      "fitted_bone_length_divided_by_raw_model_bone": {
+        "n": 2000,
+        "median": 1.0,
+        "p90": 1.0000000000000007,
+        "max": 1.0000000000000036
+      },
+      "ray_lift_bone_length_divided_by_raw_model_bone": {
+        "n": 1900,
+        "median": 1.4184360869727481,
+        "p90": 1.9702471820445413,
+        "max": 5.211650150929395
+      },
+      "adjacent_detected_frame_pair_count": 94,
+      "estimated_wrist_step_m": {
+        "n": 94,
+        "median": 0.01894622023825116,
+        "p90": 0.05455771498753246,
+        "max": 0.1693185327656459
+      },
+      "baseline_depth_anchored_wrist_step_m": {
+        "n": 88,
+        "median": 0.017496468192232946,
+        "p90": 0.03717159810672075,
+        "max": 0.10012602218269036
+      },
+      "camera_correction_rotation_step_degrees": {
+        "n": 94,
+        "median": 3.850207032620348,
+        "p90": 10.55794264950935,
+        "max": 71.7309532059309
+      }
+    }
+  ]
+}

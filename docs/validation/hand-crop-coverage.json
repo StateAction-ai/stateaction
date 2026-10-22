@@ -1,0 +1,125 @@
+{
+  "raw_mcap_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+  "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "model_input_rotation_ccw": 0,
+  "limits": [
+    "Detection coverage is not recall; no full-clip manual hand-presence annotation exists.",
+    "Multiple crop observations may describe one hand; no multi-hand identity claim.",
+    "Hidden joints, 3D geometry, scale, temporal continuity and false positives are not validated.",
+    "Coordinates map to untouched native raster; raw recording and training pipeline unchanged."
+  ],
+  "source_result_sha256": "4616846c3744b7cc80db4d58fe83948d1a66a51f01d3c1fadb95702b883d2f87",
+  "manually_reviewed_hand_absent_sample": [
+    {
+      "frame_index": 0,
+      "full_frame_detected": false,
+      "any_view_detected": false
+    },
+    {
+      "frame_index": 5,
+      "full_frame_detected": false,
+      "any_view_detected": false
+    },
+    {
+      "frame_index": 180,
+      "full_frame_detected": false,
+      "any_view_detected": false
+    },
+    {
+      "frame_index": 185,
+      "full_frame_detected": false,
+      "any_view_detected": false
+    }
+  ],
+  "latest": {
+    "frames_examined": 186,
+    "full_frame_detected": 68,
+    "with_fixed_crop_fallback_detected": 100,
+    "recovered_frame_indices": [
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      59,
+      60,
+      61,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      83,
+      84,
+      85,
+      86,
+      89,
+      97,
+      100,
+      111,
+      112,
+      146
+    ],
+    "model_calls": 540,
+    "wall_seconds": 13.317792791000102
+  },
+  "raw_source_scope": "latest186framecapture; heldout sourcehash separately preserved below",
+  "heldout": {
+    "summary": {
+      "frames_examined": 245,
+      "full_frame_detected": 100,
+      "with_fixed_crop_fallback_detected": 127,
+      "recovered_frame_indices": [
+        28,
+        62,
+        63,
+        64,
+        68,
+        69,
+        71,
+        72,
+        75,
+        76,
+        160,
+        161,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        183
+      ],
+      "model_calls": 680,
+      "wall_seconds": 19.797790133000035
+    },
+    "raw_mcap_sha256": "0e5fe83112c7641f4679936ed50d95ac0793f97312a496ca2d819bdb058c562b",
+    "source_result_sha256": "abeb97b1ffcc58fde8d03747615d7bf1909676c7c51c7fbcb3ab60b5563b8c5c"
+  },
+  "visual_review_of_recovered_latest": {
+    "hand_present_frames": 32,
+    "obviously_suspect_partial_hand_skeleton_frames": [
+      111,
+      112
+    ],
+    "full_joint_accuracy_validated": false,
+    "occluded_finger_visibility": "unknown"
+  }
+}

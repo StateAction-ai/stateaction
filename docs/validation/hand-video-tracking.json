@@ -1,0 +1,59 @@
+{
+  "schema": "hand_video_tracking_diagnostics_v1",
+  "model_asset_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "captures": [
+    {
+      "capture": "session_20261022_152005",
+      "summary": {
+        "frames": 186,
+        "detected_frames": 135,
+        "hand_detections": 135,
+        "median_depth_anchor_reprojection_px": 72.11704598779639,
+        "wall_seconds": 7.756729177999659
+      },
+      "raw_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+      "local_observations_sha256": "6494df18693d261fa20f22f380964e861b4411b371f8c9631bd3badba589f7cd"
+    },
+    {
+      "capture": "session_20261022_151917",
+      "summary": {
+        "frames": 245,
+        "detected_frames": 167,
+        "hand_detections": 167,
+        "median_depth_anchor_reprojection_px": 72.21814939543606,
+        "wall_seconds": 9.594675691000248
+      },
+      "raw_sha256": "0e5fe83112c7641f4679936ed50d95ac0793f97312a496ca2d819bdb058c562b",
+      "local_observations_sha256": "74373c54372c1d41c2f4822b3a3adb70ef0105917c862c8cec2e47c1dd97ab07"
+    }
+  ],
+  "latest_pipeline": {
+    "status": "complete",
+    "processing": {
+      "frames": 186,
+      "detected_hands": 135,
+      "geometry_consistent_hands": 0,
+      "fully_observed_consistent_hands": 0,
+      "metric_accuracy_validated": false,
+      "rejection_reasons": {
+        "rgb_depth_timing_unverified": 135,
+        "inconsistent_palm_depth": 92,
+        "model_image_projection_inconsistent": 134,
+        "wrist_outside_image": 1,
+        "insufficient_wrist_and_palm_depth": 1,
+        "insufficient_projectable_joints": 1
+      }
+    },
+    "raw_hash_unchanged": true,
+    "local_receipt": "captures/session_20261022_152005/stera_processed_video_mode_v2/receipt.json",
+    "receipt_sha256": "748bed9cc370222e8ee79fe1b39dfc0ad474a3f60f3c7a6a9f66cabdff52c555",
+    "hdf5_and_rrd_readback_passed": true
+  },
+  "training_accuracy_validated": false,
+  "sample_negative_frames_latest": [
+    0,
+    5,
+    180,
+    185
+  ]
+}
