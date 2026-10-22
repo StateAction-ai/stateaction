@@ -43,13 +43,24 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     defaultConfig {
         // ARCore requires API 24.
         minSdk 24
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles 'consumer-rules.pro'
     }
 }
 
 dependencies {
     implementation 'com.google.ar:core:1.44.0'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'org.mockito:mockito-android:5.14.2'
 }

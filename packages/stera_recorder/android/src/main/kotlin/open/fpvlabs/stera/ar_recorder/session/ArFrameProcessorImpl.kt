@@ -1,6 +1,7 @@
 package open.fpvlabs.stera.ar_recorder.session
 
 import android.media.Image
+import open.fpvlabs.stera.ar_recorder.geometry.ImagePlanePacking
 import open.fpvlabs.stera.ar_recorder.ArTrackingState
 import com.google.ar.core.Camera
 import com.google.ar.core.Frame
@@ -228,8 +229,9 @@ class ArFrameProcessorImpl : ArFrameProcessor {
      */
     override fun extractDepthImage(frame: Frame): DepthFrameData? {
         var depthImage: Image? = null
+        var leasedBuffer: ByteArray? = null
         return try {
-            depthImage = frame.acquireDepthImage()
+            depthImage = frame.acquireDepthImage16Bits()
             depthImageAcquireCount++
 
             val planes = depthImage.planes
@@ -239,8 +241,10 @@ class ArFrameProcessorImpl : ArFrameProcessor {
 
             val width = depthImage.width
             val height = depthImage.height
+            val crop = depthImage.cropRect
+            ImagePlanePacking.requireFullCrop(width, height, crop.left, crop.top, crop.right, crop.bottom)
+            require(depthImage.timestamp > 0) { "Missing native depth timestamp" }
             val plane = planes[0]
-            val buffer = plane.buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
             val pixelStride = plane.pixelStride
             val rowStride = plane.rowStride
 
@@ -252,79 +256,34 @@ class ArFrameProcessorImpl : ArFrameProcessor {
                 return null
             }
 
-            // Depth16 is tightly-packed little-endian uint16 millimeters and our
-            // output uses the same byte layout, so when pixels aren't strided we can
-            // bulk-copy whole rows (or the entire image when there's no row padding)
-            // instead of two bounds-checked byte reads + writes per pixel.
-            val rowBytes = width * bytesPerPixel
-            if (pixelStride == bytesPerPixel) {
-                if (rowStride == rowBytes) {
-                    buffer.position(0)
-                    buffer.get(packedDepth, 0, expectedBytes)
-                } else {
-                    for (y in 0 until height) {
-                        buffer.position(y * rowStride)
-                        buffer.get(packedDepth, y * rowBytes, rowBytes)
-                    }
-                }
-            } else {
-                // Strided pixels (padding between samples): copy pixel by pixel.
-                for (y in 0 until height) {
-                    val srcRowOffset = y * rowStride
-                    val dstRowOffset = y * rowBytes
-                    for (x in 0 until width) {
-                        val srcPixelOffset = srcRowOffset + (x * pixelStride)
-                        val dstOffset = dstRowOffset + (x * bytesPerPixel)
-                        packedDepth[dstOffset] = buffer.get(srcPixelOffset)
-                        packedDepth[dstOffset + 1] = buffer.get(srcPixelOffset + 1)
-                    }
-                }
-            }
+            leasedBuffer = packedDepth
+            ImagePlanePacking.copyPlane(
+                ImagePlanePacking.Plane(plane.buffer, rowStride, pixelStride),
+                width, height, bytesPerPixel, packedDepth
+            )
 
             DepthFrameData(
                 bytes = packedDepth,
                 validSize = expectedBytes,
+                timestampNs = depthImage.timestamp,
                 width = width,
                 height = height,
                 bytesPerPixel = bytesPerPixel,
                 pixelStride = pixelStride,
                 rowStride = rowStride,
                 release = { releaseBuffer(depthPool, packedDepth) }
-            )
+            ).also { leasedBuffer = null }
         } catch (e: Exception) {
             println("❌ Failed to extract depth image: ${e.message}")
             e.printStackTrace()
             null
         } finally {
+            leasedBuffer?.let { releaseBuffer(depthPool, it) }
             if (depthImage != null) {
                 depthImage.close()
                 depthImageCloseCount++
             }
         }
-    }
-
-    /**
-     * Extracts depth camera intrinsics by scaling RGB intrinsics to depth resolution.
-     */
-    override fun extractDepthIntrinsics(camera: Camera, depthWidth: Int, depthHeight: Int): Map<String, Any>? {
-        if (depthWidth == 0 || depthHeight == 0) return null
-
-        val rgbIntrinsics = camera.imageIntrinsics
-        val rgbW = rgbIntrinsics.imageDimensions[0].toDouble()
-        val rgbH = rgbIntrinsics.imageDimensions[1].toDouble()
-        if (rgbW == 0.0 || rgbH == 0.0) return null
-
-        val scaleX = depthWidth.toDouble() / rgbW
-        val scaleY = depthHeight.toDouble() / rgbH
-
-        return mapOf(
-            "focalLengthX" to (rgbIntrinsics.focalLength[0].toDouble() * scaleX),
-            "focalLengthY" to (rgbIntrinsics.focalLength[1].toDouble() * scaleY),
-            "principalPointX" to (rgbIntrinsics.principalPoint[0].toDouble() * scaleX),
-            "principalPointY" to (rgbIntrinsics.principalPoint[1].toDouble() * scaleY),
-            "imageWidth" to depthWidth,
-            "imageHeight" to depthHeight
-        )
     }
 
     /**

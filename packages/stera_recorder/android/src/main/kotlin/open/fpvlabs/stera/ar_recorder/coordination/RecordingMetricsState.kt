@@ -128,6 +128,7 @@ class RecordingMetricsState {
     // ── RGB sampling / encoder failures ──────────────────────────────────
     var rgbSamplingSkippedCount: Int = 0
     var rgbEncoderFailureCount: Int = 0
+    var firstRgbCaptureError: String? = null
     var lastObservedArcoreTimestampNs: Long = Long.MIN_VALUE
     var driftResyncEventCount: Int = 0
     var pointCloudSoftSkipCount: Int = 0
@@ -149,6 +150,15 @@ class RecordingMetricsState {
 
     // ── Depth association threshold ──────────────────────────────────────
     var effectiveDepthAssociationThresholdNs: Long = 40_000_000L
+
+    fun captureFailureReason(writtenRgbFrameCount: Int, writeFailure: String? = null): String? =
+        when {
+            writeFailure != null -> "Recording failed: $writeFailure. Diagnostic files were preserved."
+            writtenRgbFrameCount <= 0 -> "Recording failed: no RGB frames were saved. " +
+                (firstRgbCaptureError ?: "Camera images were unavailable or the writer failed.") +
+                " Diagnostic files were preserved."
+            else -> null
+        }
 
     /** Adds a timestamp to the deque, evicting the oldest if at capacity. */
     fun addTimestampWithCap(store: ArrayDeque<Long>, timestampNs: Long) {
@@ -243,6 +253,7 @@ class RecordingMetricsState {
 
         rgbSamplingSkippedCount = 0
         rgbEncoderFailureCount = 0
+        firstRgbCaptureError = null
         lastObservedArcoreTimestampNs = Long.MIN_VALUE
         driftResyncEventCount = 0
         pointCloudSoftSkipCount = 0

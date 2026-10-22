@@ -13,6 +13,7 @@ data class PointCloudFrameData(
 data class DepthFrameData(
     val bytes: ByteArray,
     val validSize: Int,
+    val timestampNs: Long,
     val width: Int,
     val height: Int,
     val bytesPerPixel: Int,
@@ -54,6 +55,5 @@ interface ArFrameProcessor {
     fun extractPointCloudFrame(frame: Frame, timestampNs: Long): PointCloudFrameData?
     fun extractDepthImage(frame: Frame): DepthFrameData?
     fun extractIntrinsics(camera: Camera): Map<String, Any>
-    fun extractDepthIntrinsics(camera: Camera, depthWidth: Int, depthHeight: Int): Map<String, Any>?
     fun createIntrinsicsJson(intrinsics: Map<String, Any>): String
 }

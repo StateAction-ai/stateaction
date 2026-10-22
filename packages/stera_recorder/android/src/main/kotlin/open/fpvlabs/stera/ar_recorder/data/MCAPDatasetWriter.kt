@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
+import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
 import open.fpvlabs.stera.ar_recorder.sensors.ImuSample
 import open.fpvlabs.stera.ar_recorder.session.DepthFrameData
 import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
@@ -13,6 +14,7 @@ import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * MCAP-based dataset writer that writes spatial data as ROS2-compatible MCAP messages.
@@ -42,9 +44,9 @@ class MCAPDatasetWriter(
             tx = 0.0,
             ty = 0.0,
             tz = 0.0,
-            qx = -0.7071067811865476,
+            qx = CaptureGeometry.opticalToCameraQuaternion[0],
             qy = 0.0,
-            qz = -0.7071067811865476,
+            qz = 0.0,
             qw = 0.0
         )
     }
@@ -62,8 +64,10 @@ class MCAPDatasetWriter(
     private var systemLogWriter: BufferedWriter? = null
 
     private var isInitialized = false
+    private val firstWriteFailure = AtomicReference<String?>(null)
 
     // Channel IDs
+    private var captureGeometryChannelId = 0
     private var poseChannelId = 0
     private var imuChannelId = 0
     private var compressedRgbChannelId = 0
@@ -78,6 +82,7 @@ class MCAPDatasetWriter(
     private var deviceMetricsChannelId = 0
 
     // Counters
+    private var rgbFrameCount = 0
     private var poseCount = 0
     private var imuSampleCount = 0
     private var pointCloudCount = 0
@@ -136,7 +141,7 @@ class MCAPDatasetWriter(
             mcapWriter?.forceFlushChunk()
             frameLogWriter?.flush()
             systemLogWriter?.flush()
-        } catch (_: Exception) {}
+        } catch (e: Exception) { recordWriteFailure("Failed to flush paused MCAP writer", e) }
     }
 
     override fun resumeWriters() {
@@ -173,6 +178,8 @@ class MCAPDatasetWriter(
             }
             mcapWriter = writer
 
+            firstWriteFailure.set(null)
+            rgbFrameCount = 0
             trajectoryPoses.clear()
             lastTrajectoryWriteTimestampNs = 0L
             registerSchemasAndChannels()
@@ -193,6 +200,9 @@ class MCAPDatasetWriter(
         val writer = mcapWriter ?: return
         val enc = ROS2SchemaDefinitions.SCHEMA_ENCODING
         val msgEnc = ROS2SchemaDefinitions.MESSAGE_ENCODING
+
+        val geometrySchemaId = writer.addSchema("std_msgs/msg/String", enc, "string data")
+        captureGeometryChannelId = writer.addChannel("/capture/frame_geometry", msgEnc, geometrySchemaId)
 
         val poseSchemaId = writer.addSchema(
             ROS2SchemaDefinitions.POSE_STAMPED_NAME, enc, ROS2SchemaDefinitions.POSE_STAMPED_SCHEMA
@@ -288,6 +298,15 @@ class MCAPDatasetWriter(
         logSystem("ERROR: $message$suffix")
     }
 
+    override fun recordWriteFailure(message: String, throwable: Throwable?) {
+        val detail = throwable?.let { ": ${it.javaClass.simpleName}: ${it.message}" } ?: ""
+        firstWriteFailure.compareAndSet(null, message + detail)
+        android.util.Log.e("SteraCapture", message, throwable)
+        logError(message, throwable)
+    }
+
+    override fun getWriteFailure(): String? = firstWriteFailure.get()
+
     override fun writeDeviceMetrics(
         timestampNs: Long,
         batteryLevel: Float,
@@ -357,7 +376,7 @@ class MCAPDatasetWriter(
             trajectoryPoses.add(PoseEntry(timestamp, pose[0], pose[1], pose[2], pose[3], pose[4], pose[5], pose[6]))
             maybeWriteTrajectorySnapshot(timestamp)
         } catch (e: Exception) {
-            logError("Failed to write pose", e)
+            recordWriteFailure("Failed to write pose", e)
         } finally {
             recordWriterLatency(startNs)
         }
@@ -383,7 +402,7 @@ class MCAPDatasetWriter(
                 totalBytesWritten += data.size + 22
             }
         } catch (e: Exception) {
-            logError("Failed to write IMU samples", e)
+            recordWriteFailure("Failed to write IMU samples", e)
         } finally {
             recordWriterLatency(startNs)
         }
@@ -436,7 +455,7 @@ class MCAPDatasetWriter(
         }
     }
 
-    override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray) {
+    override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long) {
         if (!isInitialized || writersPaused) return
         // Save first JPEG frame as thumbnail
         if (!thumbnailSaved) {
@@ -458,12 +477,24 @@ class MCAPDatasetWriter(
                 format = "jpeg",
                 imageData = jpegData
             )
-            mcapWriter?.addMessage(compressedRgbChannelId, timestamp, timestamp, data)
+            checkNotNull(mcapWriter) { "RGB writer unavailable" }.addMessage(compressedRgbChannelId, associationTimestampNs, timestamp, data)
+            rgbFrameCount++
             totalBytesWritten += data.size + 22
         } catch (e: Exception) {
-            logError("Failed to write compressed RGB frame", e)
+            recordWriteFailure("Failed to write compressed RGB frame", e)
         } finally {
             recordWriterLatency(startNs)
+        }
+    }
+
+    override fun writeCaptureFrameInfo(timestampNs: Long, info: Map<String, Any?>) {
+        if (!isInitialized || writersPaused) return
+        try {
+            val data = CDRSerializer.serializeString(toJsonValue(info, 0))
+            checkNotNull(mcapWriter) { "Geometry writer unavailable" }.addMessage(captureGeometryChannelId, timestampNs, timestampNs, data)
+            totalBytesWritten += data.size + 22
+        } catch (e: Exception) {
+            recordWriteFailure("Failed to write frame geometry", e)
         }
     }
 
@@ -498,7 +529,11 @@ class MCAPDatasetWriter(
     }
 
     override fun writePointCloud(timestamp: Long, frameData: PointCloudFrameData?) {
-        if (!isInitialized || frameData == null) return
+        if (frameData == null) return
+        if (!isInitialized || writersPaused) {
+            frameData.release()
+            return
+        }
         val startNs = SystemClock.elapsedRealtimeNanos()
         try {
             // Binary format: [int64 timestamp][int32 pointCount][point data...]
@@ -528,15 +563,19 @@ class MCAPDatasetWriter(
                 logSystem("WARN: point cloud frame $timestamp has no points")
             }
         } catch (e: Exception) {
-            logError("Failed to write point cloud", e)
+            recordWriteFailure("Failed to write point cloud", e)
         } finally {
             recordWriterLatency(startNs)
             frameData.release()
         }
     }
 
-    override fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?): Boolean {
-        if (!isInitialized || frameData == null) return false
+    override fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?, associationTimestampNs: Long): Boolean {
+        if (frameData == null) return false
+        if (!isInitialized || writersPaused) {
+            frameData.release()
+            return false
+        }
         val startNs = SystemClock.elapsedRealtimeNanos()
         val expectedSize = frameData.width * frameData.height * frameData.bytesPerPixel
         if (frameData.validSize != expectedSize) {
@@ -547,6 +586,7 @@ class MCAPDatasetWriter(
         }
 
         return try {
+            require(timestamp == frameData.timestampNs) { "Depth timestamps must retain Image.timestamp" }
             val data = CDRSerializer.serializeImage(
                 timestampNs = timestamp,
                 frameId = CAMERA_OPTICAL_FRAME_ID,
@@ -558,12 +598,13 @@ class MCAPDatasetWriter(
                 imageData = frameData.bytes,
                 imageDataLength = frameData.validSize
             )
-            mcapWriter?.addMessage(depthChannelId, timestamp, timestamp, data)
+            // logTime identifies the acquisition frame, publishTime/header retain native sensor time.
+            mcapWriter?.addMessage(depthChannelId, associationTimestampNs, timestamp, data)
             depthFrameCount++
             totalBytesWritten += data.size + 22
             true
         } catch (e: Exception) {
-            logError("Failed to write depth frame", e)
+            recordWriteFailure("Failed to write depth frame", e)
             false
         } finally {
             recordWriterLatency(startNs)
@@ -594,7 +635,7 @@ class MCAPDatasetWriter(
 
             intrinsicsJsonWritten = true
         } catch (e: Exception) {
-            logError("Failed to write intrinsics", e)
+            recordWriteFailure("Failed to write intrinsics", e)
         }
     }
 
@@ -619,26 +660,33 @@ class MCAPDatasetWriter(
             mcapWriter?.addMessage(depthCameraInfoChannelId, timestampNs, timestampNs, data)
             totalBytesWritten += data.size + 22
         } catch (e: Exception) {
-            logError("Failed to write depth intrinsics", e)
+            recordWriteFailure("Failed to write depth intrinsics", e)
         }
     }
 
     override fun writeMetadata(metadata: Map<String, Any?>) {
-        if (!isInitialized) return
+        // A broken MCAP stream must not prevent correcting the independent status sidecar.
+        val session = sessionDir ?: return
         try {
-            // Write as MCAP metadata record
             val flat = mutableMapOf<String, String>()
             flattenMetadata(metadata, "", flat)
             mcapWriter?.addMetadata("session_metadata", flat)
-
-            // Write JSON to session root
-            val session = sessionDir ?: return
-            val json = toJsonValue(metadata, 0)
+        } catch (e: Exception) {
+            recordWriteFailure("Failed to write MCAP metadata", e)
+        }
+        try {
+            val persisted = metadata.toMutableMap()
+            getWriteFailure()?.let {
+                persisted["capture_result_valid"] = false
+                persisted["first_writer_error"] = it
+                persisted["finalization_complete"] = false
+            }
+            val json = toJsonValue(persisted, 0)
             File(session, "metadata.json").writeText(json)
             totalBytesWritten += json.toByteArray().size.toLong()
             logSystem("metadata.json written")
         } catch (e: Exception) {
-            logError("Failed to write metadata", e)
+            recordWriteFailure("Failed to write metadata sidecar", e)
         }
     }
 
@@ -650,7 +698,7 @@ class MCAPDatasetWriter(
             totalBytesWritten += summaryText.toByteArray().size.toLong()
             logSystem("session_summary.txt written")
         } catch (e: Exception) {
-            logError("Failed to write session summary", e)
+            recordWriteFailure("Failed to write session summary", e)
         }
     }
 
@@ -664,7 +712,7 @@ class MCAPDatasetWriter(
             logSystem("frame_drop_log.json written")
             file.name
         } catch (e: Exception) {
-            logError("Failed to write frame_drop_log.json", e)
+            recordWriteFailure("Failed to write frame_drop_log.json", e)
             null
         }
     }
@@ -678,6 +726,7 @@ class MCAPDatasetWriter(
     override fun getSessionDirectory(): String? = sessionDir?.absolutePath
 
     override fun getRecordingStats(): Map<String, Any> = mapOf(
+        "rgbFrameCount" to rgbFrameCount,
         "poseCount" to poseCount,
         "imuSampleCount" to imuSampleCount,
         "pointCloudCount" to pointCloudCount,
@@ -702,7 +751,8 @@ class MCAPDatasetWriter(
             mcapWriter?.forceFlushChunk()
             frameLogWriter?.flush()
             systemLogWriter?.flush()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            recordWriteFailure("Failed to flush MCAP data", e)
         }
     }
 
@@ -733,6 +783,7 @@ class MCAPDatasetWriter(
             println("session finalized at ${session.absolutePath}")
             Triple(true, session.absolutePath, null)
         } catch (e: Exception) {
+            recordWriteFailure("Failed to finalize session", e)
             println("Failed to finalize session: ${e.message}")
             e.printStackTrace()
             Triple(false, null, e.message)
@@ -749,6 +800,7 @@ class MCAPDatasetWriter(
             isInitialized = false
             println("MCAP dataset writers finalized")
         } catch (e: Exception) {
+            recordWriteFailure("Failed to finalize MCAP writers", e)
             println("Failed to finalize MCAP writers: ${e.message}")
         }
     }

@@ -3,14 +3,15 @@ package open.fpvlabs.stera.ar_recorder.coordination
 import android.os.Handler
 import android.os.SystemClock
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
-import open.fpvlabs.stera.ar_recorder.encoding.EglManager
+import open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoder
+import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
+import com.google.ar.core.Coordinates2d
 import open.fpvlabs.stera.ar_recorder.encoding.FrameSampler
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollector
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessor
 import open.fpvlabs.stera.ar_recorder.session.ArSessionManager
 import open.fpvlabs.stera.ar_recorder.session.FrameProcessingPipeline
 import com.google.ar.core.Frame
-import java.nio.FloatBuffer
 
 /**
  * Orchestrates per-frame recording logic that was previously inline in
@@ -34,7 +35,6 @@ class RecordingFrameOrchestrator(
     private val healthManager: RuntimeHealthManager,
     private val frameProcessingPipeline: FrameProcessingPipeline,
     private val frameProcessingCoordinator: FrameProcessingCoordinator,
-    private val eglManager: EglManager,
     private val frameProcessor: ArFrameProcessor,
     private val frameSampler: FrameSampler,
     private val imuCollector: ImuCollector,
@@ -42,6 +42,11 @@ class RecordingFrameOrchestrator(
     private val sessionManager: ArSessionManager,
     private val recordError: (String, Throwable?) -> Unit
 ) {
+    private val cpuImageEncoder = CpuImageEncoder()
+
+    private data class CapturedDepth(val timestampNs: Long, val width: Int, val height: Int,
+                                     val intrinsics: Map<String, Any>, val mapping: DoubleArray)
+
     companion object {
         private const val JPEG_QUALITY = 80
     }
@@ -54,9 +59,6 @@ class RecordingFrameOrchestrator(
      * @param camera the AR camera
      * @param isPaused whether recording is paused
      * @param writerHandler handler for async write operations (nullable)
-     * @param uvCoordsInBuffer UV input buffer for encoding
-     * @param uvCoordsOutBuffer UV output buffer for encoding
-     * @param transformedUvs UV float array for encoding
      * @param recordingStartTime recording start timestamp in millis
      * @param estimateProjectionBytes function to estimate projected dataset bytes
      */
@@ -65,9 +67,6 @@ class RecordingFrameOrchestrator(
         camera: com.google.ar.core.Camera,
         isPaused: Boolean,
         writerHandler: Handler?,
-        uvCoordsInBuffer: FloatBuffer,
-        uvCoordsOutBuffer: FloatBuffer,
-        transformedUvs: FloatArray,
         recordingStartTime: Long,
         estimateProjectionBytes: (Long) -> Long
     ) {
@@ -102,6 +101,10 @@ class RecordingFrameOrchestrator(
         var depthAvailable = false
         var pointCloudAvailable = false
         var encoded = false
+        var rgbImage: CpuImageEncoder.EncodedImage? = null
+        var rgbCaptureDiagnostics: Map<String, Any?>? = null
+        var rgbIntrinsics: Map<String, Any>? = null
+        var capturedDepth: CapturedDepth? = null
 
         val pose = if (isTracking) frameProcessor.extractPose(camera) else null
         val shouldSample = pose != null && frameSampler.shouldEncodeFrame(timestamp)
@@ -111,64 +114,77 @@ class RecordingFrameOrchestrator(
         }
 
         if (shouldSample && pose != null) {
-            // Extract intrinsics
             val intrinsics = frameProcessor.extractIntrinsics(camera)
-            writerHandler?.post {
-                datasetWriter.writeIntrinsics(timestamp, intrinsics)
-            }
-
-            // Write pose (extracted above for the distance gate)
-            metrics.poseFrameCount.incrementAndGet()
-            metrics.poseTimestampRange.record(timestamp)
-            writerHandler?.post {
-                datasetWriter.writePoseRow(timestamp, pose, trackingState)
-            }
-
-            // Extract point cloud
-            pointCloudAvailable = processPointCloud(frame, timestamp, globalFrameIndex, writerHandler)
-
-            // Extract depth
-            val depthDims = processDepth(frame, timestamp, globalFrameIndex, isTracking, writerHandler)
-            depthAvailable = depthDims != null
-
-            // Write depth intrinsics using dimensions from the already-extracted depth frame
-            if (depthDims != null) {
-                val depthIntrinsics = frameProcessor.extractDepthIntrinsics(camera, depthDims.first, depthDims.second)
-                if (depthIntrinsics != null) {
-                    writerHandler?.post {
-                        datasetWriter.writeDepthIntrinsics(timestamp, depthIntrinsics)
-                    }
+            rgbImage = try {
+                cpuImageEncoder.encode(frame, intrinsics, JPEG_QUALITY) { rgbCaptureDiagnostics = it }
+            } catch (error: Exception) {
+                if (metrics.firstRgbCaptureError == null) {
+                    metrics.firstRgbCaptureError = "${error.javaClass.simpleName}: ${error.message}"
                 }
+                recordError("CPU RGB capture rejected: ${error.message}", error)
+                null
             }
-
-            // JPEG capture
-            val jpegData = eglManager.renderCameraToJpeg(
-                viewportWidth = metrics.configuredVideoWidth,
-                viewportHeight = metrics.configuredVideoHeight,
-                uvCoords = transformedUvs,
-                jpegQuality = JPEG_QUALITY
-            )
-            if (jpegData != null) {
+            val image = rgbImage
+            val submitted = image != null && writerHandler != null && writerHandler.post {
+                datasetWriter.writeIntrinsics(image.timestampNs, intrinsics)
+                datasetWriter.writePoseRow(timestamp, pose, trackingState)
+                datasetWriter.writeCompressedRgbFrame(image.timestampNs, image.jpeg, associationTimestampNs = timestamp)
+            }
+            if (submitted && image != null) {
+                rgbIntrinsics = intrinsics
+                metrics.actualVideoWidth = image.width
+                metrics.actualVideoHeight = image.height
+                metrics.poseFrameCount.incrementAndGet()
+                metrics.poseTimestampRange.record(timestamp)
+                pointCloudAvailable = processPointCloud(frame, timestamp, globalFrameIndex, writerHandler)
+                capturedDepth = processDepth(frame, timestamp, globalFrameIndex, isTracking, intrinsics, writerHandler)
+                depthAvailable = capturedDepth != null
                 encoded = true
-                metrics.rgbTimestampRange.record(timestamp)
-                metrics.addTimestampWithCap(metrics.rgbFrameTimestamps, timestamp)
+                metrics.rgbTimestampRange.record(image.timestampNs)
+                metrics.addTimestampWithCap(metrics.rgbFrameTimestamps, image.timestampNs)
                 metrics.rgbEncodedFrameIndices.add(globalFrameIndex)
                 metrics.encodedVideoFrameCount.incrementAndGet()
                 metrics.submittedToEncoderFrameCount.incrementAndGet()
-                writerHandler?.post {
-                    datasetWriter.writeCompressedRgbFrame(timestamp, jpegData)
-                }
             } else {
+                if (image != null) {
+                    datasetWriter.recordWriteFailure("Writer queue rejected RGB capture")
+                    if (metrics.firstRgbCaptureError == null) metrics.firstRgbCaptureError = "Writer queue rejected RGB capture"
+                }
                 metrics.rgbEncoderFailureCount++
                 metrics.rgbEncoderFailureFrameIndices.add(globalFrameIndex)
                 metrics.droppedFrameCount.incrementAndGet()
             }
         }
 
+        // Snapshot values now: queued writer callbacks must not read a later frame's mutable state.
+        val frameInfo = linkedMapOf<String, Any?>(
+            "capture_geometry_version" to CaptureGeometry.VERSION,
+            "frame_timestamp_ns" to timestamp,
+            "android_camera_timestamp_ns" to frame.androidCameraTimestamp,
+            "cross_stream_clock_verified" to false,
+            "rgb_capture_diagnostics" to rgbCaptureDiagnostics,
+            "rgb_timestamp_ns" to if (encoded) rgbImage?.timestampNs else null,
+            "depth_timestamp_ns" to capturedDepth?.timestampNs,
+            "tracking_state" to trackingState,
+            "rgb_encoded" to encoded,
+            "depth_available" to depthAvailable,
+            "rgb_width" to if (encoded) rgbImage?.width else null,
+            "rgb_height" to if (encoded) rgbImage?.height else null,
+            "depth_width" to capturedDepth?.width,
+            "depth_height" to capturedDepth?.height,
+            "rgb_intrinsics" to rgbIntrinsics,
+            "depth_intrinsics" to capturedDepth?.intrinsics,
+            "rgb_pixel_to_depth_pixel" to capturedDepth?.mapping?.toList()
+        )
+        if (writerHandler == null || !writerHandler.post { datasetWriter.writeCaptureFrameInfo(timestamp, frameInfo) }) {
+            datasetWriter.recordWriteFailure("Writer queue rejected frame geometry")
+        }
+
         // Write frame log
+        val frameIndex = metrics.frameCount
         writerHandler?.post {
             datasetWriter.writeFrameLogRow(
-                frameIndex = metrics.frameCount,
+                frameIndex = frameIndex,
                 globalArFrameIndex = globalFrameIndex,
                 arcoreTimestampNs = timestamp,
                 trackingState = trackingState,
@@ -177,7 +193,7 @@ class RecordingFrameOrchestrator(
                 pointCloudAvailable = pointCloudAvailable
             )
         } ?: datasetWriter.writeFrameLogRow(
-            frameIndex = metrics.frameCount,
+            frameIndex = frameIndex,
             globalArFrameIndex = globalFrameIndex,
             arcoreTimestampNs = timestamp,
             trackingState = trackingState,
@@ -228,21 +244,21 @@ class RecordingFrameOrchestrator(
             return false
         } else {
             val pointCloudData = frameProcessor.extractPointCloudFrame(frame, timestamp)
-            if (pointCloudData != null) {
-                metrics.pointCloudTimestampRange.record(timestamp)
-                metrics.pointcloudFrameIndices.add(globalFrameIndex)
-                metrics.pointCloudFrameCount.incrementAndGet()
-            } else {
+            if (pointCloudData == null) {
                 metrics.pointcloudDroppedFrameIndices.add(globalFrameIndex)
+                return false
             }
-            if (writerHandler != null) {
-                writerHandler.post {
-                    datasetWriter.writePointCloud(timestamp, pointCloudData)
-                }
-            } else {
-                pointCloudData?.release?.invoke()
+            if (writerHandler == null || !writerHandler.post {
+                datasetWriter.writePointCloud(timestamp, pointCloudData)
+            }) {
+                pointCloudData.release()
+                metrics.pointcloudDroppedFrameIndices.add(globalFrameIndex)
+                return false
             }
-            return pointCloudData != null
+            metrics.pointCloudTimestampRange.record(timestamp)
+            metrics.pointcloudFrameIndices.add(globalFrameIndex)
+            metrics.pointCloudFrameCount.incrementAndGet()
+            return true
         }
     }
 
@@ -251,8 +267,9 @@ class RecordingFrameOrchestrator(
         timestamp: Long,
         globalFrameIndex: Int,
         isTracking: Boolean,
+        rgbIntrinsics: Map<String, Any>,
         writerHandler: Handler?
-    ): Pair<Int, Int>? {
+    ): CapturedDepth? {
         if (!sessionManager.isDepthSupported) return null
 
         if (!isTracking) {
@@ -272,30 +289,45 @@ class RecordingFrameOrchestrator(
             metrics.depthAcquisitionMaxLatencyNs = depthLatencyNs
         }
 
-        if (depthFrame != null) {
-            val depthWidth = depthFrame.width
-            val depthHeight = depthFrame.height
-            metrics.depthSuccessCount++
-            metrics.depthFrameIndices.add(globalFrameIndex)
-            if (writerHandler != null) {
-                writerHandler.post {
-                    val depthWritten = datasetWriter.writeDepthFrame(timestamp = timestamp, frameData = depthFrame)
-                    if (!depthWritten) {
-                        metrics.skippedDepthFrameCount.incrementAndGet()
-                    }
-                }
-            } else {
-                depthFrame.release()
-            }
-            metrics.depthTimestampRange.record(timestamp)
-            metrics.addTimestampWithCap(metrics.depthFrameTimestamps, timestamp)
-            metrics.depthFrameCount.incrementAndGet()
-            return Pair(depthWidth, depthHeight)
-        } else {
+        if (depthFrame == null) {
             metrics.skippedDepthFrameCount.incrementAndGet()
             metrics.depthDroppedFrameIndices.add(globalFrameIndex)
             return null
         }
+        val captured = try {
+            val rgbWidth = (rgbIntrinsics.getValue("imageWidth") as Number).toInt()
+            val rgbHeight = (rgbIntrinsics.getValue("imageHeight") as Number).toInt()
+            val corners = floatArrayOf(0f, 0f, rgbWidth.toFloat(), 0f, 0f, rgbHeight.toFloat(),
+                rgbWidth.toFloat(), rgbHeight.toFloat())
+            val textureCorners = FloatArray(8)
+            frame.transformCoordinates2d(Coordinates2d.IMAGE_PIXELS, corners,
+                Coordinates2d.TEXTURE_NORMALIZED, textureCorners)
+            val mapping = CaptureGeometry.rgbToDepthMatrix(rgbWidth, rgbHeight,
+                depthFrame.width, depthFrame.height, textureCorners)
+            val intrinsics = CaptureGeometry.depthIntrinsics(rgbIntrinsics, depthFrame.width, depthFrame.height, mapping)
+            CapturedDepth(depthFrame.timestampNs, depthFrame.width, depthFrame.height, intrinsics, mapping)
+        } catch (error: Exception) {
+            depthFrame.release()
+            metrics.skippedDepthFrameCount.incrementAndGet()
+            metrics.depthDroppedFrameIndices.add(globalFrameIndex)
+            recordError("Depth calibration rejected: ${error.message}", error)
+            return null
+        }
+        if (writerHandler == null || !writerHandler.post {
+            datasetWriter.writeDepthIntrinsics(captured.timestampNs, captured.intrinsics)
+            if (!datasetWriter.writeDepthFrame(timestamp = captured.timestampNs, frameData = depthFrame, associationTimestampNs = timestamp)) {
+                metrics.skippedDepthFrameCount.incrementAndGet()
+            }
+        }) {
+            depthFrame.release()
+            return null
+        }
+        metrics.depthSuccessCount++
+        metrics.depthFrameIndices.add(globalFrameIndex)
+        metrics.depthTimestampRange.record(captured.timestampNs)
+        metrics.addTimestampWithCap(metrics.depthFrameTimestamps, captured.timestampNs)
+        metrics.depthFrameCount.incrementAndGet()
+        return captured
     }
 
     private fun syncSamplerStats() {

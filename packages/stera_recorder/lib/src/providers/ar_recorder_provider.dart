@@ -413,6 +413,15 @@ class ArRecorderProvider extends ChangeNotifier {
       } else {
         _errorMessage =
             result["error"] as String? ?? "Failed to stop recording";
+        if (result["recordingStopped"] == true) {
+          _isRecording = false;
+          _outputDirectory = null;
+          _recordingStartTime = null;
+          _pausedStartedAt = null;
+          _pausedDuration = Duration.zero;
+          _recordingDuration = Duration.zero;
+          _lastFramesRecorded = 0;
+        }
         _state = ArRecorderState.ready;
         _isPaused = false;
         debugPrint("❌ ArRecorderProvider: ${result["error"]}");

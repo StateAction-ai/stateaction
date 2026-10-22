@@ -12,9 +12,12 @@ interface DatasetWriter {
     fun deleteSessionDirectory(): Boolean
     fun initializeWriters(): Boolean
     fun logSystem(message: String)
+    fun recordWriteFailure(message: String, throwable: Throwable? = null) { logError(message, throwable) }
+    fun getWriteFailure(): String? = null
     fun logError(message: String, throwable: Throwable? = null)
     fun writePoseRow(timestamp: Long, pose: FloatArray, trackingState: String)
     fun writeImuSamples(samples: List<ImuSample>)
+    fun writeCaptureFrameInfo(timestampNs: Long, info: Map<String, Any?>)
     fun writeFrameLogRow(
         frameIndex: Int,
         globalArFrameIndex: Int,
@@ -37,8 +40,8 @@ interface DatasetWriter {
     )
     fun logTrackingStateTransition(previousState: String, nextState: String, timestampNs: Long)
     fun writePointCloud(timestamp: Long, frameData: PointCloudFrameData?)
-    fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray)
-    fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?): Boolean
+    fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long = timestamp)
+    fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?, associationTimestampNs: Long = timestamp): Boolean
     fun writeIntrinsics(timestampNs: Long, intrinsics: Map<String, Any>)
     fun writeDepthIntrinsics(timestampNs: Long, intrinsics: Map<String, Any>)
     fun writeMetadata(metadata: Map<String, Any?>)

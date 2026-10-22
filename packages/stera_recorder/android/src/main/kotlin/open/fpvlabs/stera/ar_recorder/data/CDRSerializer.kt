@@ -21,6 +21,14 @@ object CDRSerializer {
         val qw: Double
     )
 
+    /** Serializes a std_msgs/msg/String, used for explicit per-frame geometry provenance. */
+    fun serializeString(value: String): ByteArray {
+        val buf = CDRBuffer()
+        buf.writeCDRHeader()
+        buf.writeString(value)
+        return buf.toByteArray()
+    }
+
     /** Serializes a `geometry_msgs/msg/PoseStamped` message. */
     fun serializePoseStamped(
         timestampNs: Long,

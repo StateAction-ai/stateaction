@@ -261,6 +261,12 @@ class DatasetWriterImpl(
         }
     }
 
+    override fun writeCaptureFrameInfo(timestampNs: Long, info: Map<String, Any?>) {
+        val directory = spatialDataDir ?: return
+        val geometryDirectory = File(directory, "capture_geometry").apply { mkdirs() }
+        File(geometryDirectory, "frame_$timestampNs.json").writeText(toJsonValue(info, 0))
+    }
+
     override fun writeFrameLogRow(
         frameIndex: Int,
         globalArFrameIndex: Int,
@@ -326,11 +332,11 @@ class DatasetWriterImpl(
         }
     }
 
-    override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray) {
+    override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long) {
         // No-op for legacy writer — RGB is handled as video file
     }
 
-    override fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?): Boolean {
+    override fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?, associationTimestampNs: Long): Boolean {
         if (!isInitialized || frameData == null) return false
         val startNs = SystemClock.elapsedRealtimeNanos()
 
@@ -355,7 +361,7 @@ class DatasetWriterImpl(
                 frameData.rowStride,
                 frameData.unit
             )
-            writeZipEntry("depth/frame_$timestamp.bin", frameData.bytes, 0, frameData.validSize)
+            writeZipEntry("depth/frame_$associationTimestampNs.bin", frameData.bytes, 0, frameData.validSize)
             depthFrameCount++
             totalBytesWritten += frameData.validSize
             return true

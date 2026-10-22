@@ -1,5 +1,7 @@
 package open.fpvlabs.stera.ar_recorder.coordination
 
+import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
+
 import android.os.Build
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.encoding.EglManager
@@ -204,17 +206,26 @@ class MetadataAssembler(
         } else 0.0
 
         val metadata = linkedMapOf<String, Any?>(
+            "capture_geometry_version" to CaptureGeometry.VERSION,
+            "capture_result_valid" to (m.captureFailureReason(
+                input.datasetWriter.getRecordingStats()["rgbFrameCount"] as? Int ?: m.encodedVideoFrameCount.get(),
+                dw.getWriteFailure()) == null),
+            "first_writer_error" to dw.getWriteFailure(),
+            "finalization_complete" to false,
+            "rgb_written_count" to (input.datasetWriter.getRecordingStats()["rgbFrameCount"] as? Int ?: m.encodedVideoFrameCount.get()),
+            "first_rgb_capture_error" to m.firstRgbCaptureError,
+            "capture_geometry" to CaptureGeometry.metadata(),
             "device_model" to Build.MODEL,
             "android_version" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             "app_version" to input.appVersion,
             "app_build" to input.appBuild,
             "arcore_version" to input.arcoreVersion,
-            "resolution" to input.recordingResolution,
+            "resolution" to "${m.actualVideoWidth}x${m.actualVideoHeight}",
             "camera_resolution" to input.cameraResolution,
-            "recording_resolution" to input.recordingResolution,
+            "recording_resolution" to "${m.actualVideoWidth}x${m.actualVideoHeight}",
             "preview_resolution" to "${input.previewWidth}x${input.previewHeight}",
             "video_profile" to "${videoProfileLabel(m.configuredVideoWidth, m.configuredVideoHeight)}_${m.targetEncodeFps}fps_landscape",
-            "target_orientation" to "landscape",
+            "target_orientation" to "native_cpu_unrotated",
             "fps" to encodedVideoFps,
             "bitrate" to bitrate,
             "encoder_mode" to "fixed_30fps_sampling",
@@ -324,7 +335,8 @@ class MetadataAssembler(
             "encoder_target_bitrate" to m.targetVideoBitrate,
             "fps_target_runtime" to m.targetEncodeFps,
             "resolution_fallback" to resolutionFallback,
-            "video_orientation_valid" to (m.actualVideoWidth >= m.actualVideoHeight),
+            "video_orientation_valid" to (m.actualVideoWidth > 0 && m.actualVideoHeight > 0),
+            "video_orientation_validation_basis" to "native_CPU_image_matches_intrinsics_not_physical_upright_or_head_mount",
             "arcore_fps" to arcoreFps,
             "encoded_video_fps" to encodedVideoFps,
             "depth_fps" to depthFps,

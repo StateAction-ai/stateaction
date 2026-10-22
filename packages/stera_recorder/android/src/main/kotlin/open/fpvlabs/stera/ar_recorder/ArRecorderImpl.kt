@@ -20,6 +20,7 @@ import open.fpvlabs.stera.ar_recorder.coordination.RecordingHealthMonitor
 import open.fpvlabs.stera.ar_recorder.coordination.RecordingLifecycleCoordinator
 import open.fpvlabs.stera.ar_recorder.coordination.RecordingMetricsState
 import open.fpvlabs.stera.ar_recorder.coordination.RecordingStateManager
+import open.fpvlabs.stera.ar_recorder.coordination.RecordingActivityGate
 import open.fpvlabs.stera.ar_recorder.coordination.RuntimeHealthManager
 import open.fpvlabs.stera.ar_recorder.coordination.VideoEncodingCoordinator
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
@@ -160,7 +161,6 @@ class ArRecorderImpl(
         healthManager = healthManager,
         frameProcessingPipeline = frameProcessingPipeline,
         frameProcessingCoordinator = frameProcessingCoordinator,
-        eglManager = eglManager,
         frameProcessor = frameProcessor,
         frameSampler = frameSampler,
         imuCollector = imuCollector,
@@ -178,8 +178,7 @@ class ArRecorderImpl(
     // ── Core state ───────────────────────────────────────────────────────
     @Volatile
     private var currentState = ArRecordingState.UNINITIALIZED
-    @Volatile
-    private var isRecording = AtomicBoolean(false)
+    private val isRecording = RecordingActivityGate()
     @Volatile
     private var isPaused = AtomicBoolean(false)
     @Volatile
@@ -402,15 +401,12 @@ class ArRecorderImpl(
 
                 renderFrame(frame, camera)
 
-                if (isRecording.get()) {
+                isRecording.withActiveRecording {
                     frameOrchestrator.processFrame(
                         frame = frame,
                         camera = camera,
                         isPaused = isPaused.get(),
                         writerHandler = writerHandler,
-                        uvCoordsInBuffer = uvCoordsInBuffer,
-                        uvCoordsOutBuffer = uvCoordsOutBuffer,
-                        transformedUvs = transformedUvs,
                         recordingStartTime = recordingStartTime,
                         estimateProjectionBytes = { elapsedMs -> estimateDatasetSizeProjectionBytes(elapsedMs) }
                     )
@@ -568,11 +564,11 @@ class ArRecorderImpl(
                 return createErrorResult("Not recording. Current state: ${currentState.name}")
             }
             val pauseResult = recordingLifecycleCoordinator.pauseRecording(System.currentTimeMillis())
-            isPaused.set(pauseResult.isPaused)
+            isRecording.withProducerPaused { isPaused.set(pauseResult.isPaused) }
             pauseStartedAtMs = pauseResult.pauseStartedAtMs
             currentState = pauseResult.nextState
             imuCollector.stop()
-            datasetWriter.pauseWriters()
+            drainWriterQueue { datasetWriter.pauseWriters() }
             createSuccessResult(
                 state = ArRecordingState.PAUSED.name,
                 outputDirectory = datasetWriter.getSessionDirectory(),
@@ -598,9 +594,9 @@ class ArRecorderImpl(
             )
             totalPausedDurationMs = resumeResult.totalPausedDurationMs
             pauseStartedAtMs = resumeResult.pauseStartedAtMs
-            isPaused.set(resumeResult.isPaused)
             datasetWriter.resumeWriters()
             imuCollector.start()
+            isRecording.withProducerPaused { isPaused.set(resumeResult.isPaused) }
             currentState = resumeResult.nextState
             createSuccessResult(
                 state = ArRecordingState.RECORDING.name,
@@ -629,6 +625,7 @@ class ArRecorderImpl(
 
             imuCollector.stop()
             abortVideoEncoder()
+            drainWriterQueue()
             val deleted = datasetWriter.deleteSessionDirectory()
             if (!deleted) {
                 currentState = ArRecordingState.ERROR
@@ -649,6 +646,18 @@ class ArRecorderImpl(
             currentState = ArRecordingState.ERROR
             createErrorResult("Failed to cancel recording: ${e.message}")
         }
+    }
+
+    private fun drainWriterQueue(tail: () -> Unit = {}) {
+        val handler = checkNotNull(writerHandler) { "Writer thread unavailable; refusing concurrent finalization" }
+        check(Looper.myLooper() != handler.looper) { "Cannot drain writer from its own thread" }
+        val latch = CountDownLatch(1)
+        var failure: Throwable? = null
+        check(handler.post {
+            try { tail() } catch (error: Throwable) { failure = error } finally { latch.countDown() }
+        }) { "Writer queue rejected the finalization barrier" }
+        check(latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) { "Writer drain timed out; recording not finalized" }
+        failure?.let { throw IllegalStateException("Writer finalization barrier failed", it) }
     }
 
     override fun stopRecording(): Map<String, Any?> {
@@ -676,7 +685,6 @@ class ArRecorderImpl(
             val remainingSamples = imuCollector.drainSamples()
             if (remainingSamples.isNotEmpty()) {
                 remainingSamples.forEach { metrics.imuTimestampRange.record(it.timestampNs) }
-                datasetWriter.writeImuSamples(remainingSamples)
             }
 
             // Compute core stats
@@ -705,13 +713,11 @@ class ArRecorderImpl(
                 metrics.maxEncoderQueueDepth = encoderQueueDepth
             }
 
-            // Drain writer thread
-            val writerLatch = CountDownLatch(1)
-            if (writerHandler != null) {
-                writerHandler?.post { writerLatch.countDown() }
-                writerLatch.await()
-            } else {
-                println("⚠️ Writer thread not available, skipping drain")
+            // isRecording.set(false) above waits for the in-flight producer. No new
+            // frame can enqueue after this barrier; tail IMU must also use the writer queue.
+            drainWriterQueue {
+                datasetWriter.resumeWriters()
+                if (remainingSamples.isNotEmpty()) datasetWriter.writeImuSamples(remainingSamples)
             }
 
             datasetWriter.captureFreeStorageAfterSnapshot()
@@ -788,6 +794,7 @@ class ArRecorderImpl(
 
             datasetWriter.finalize()
             if (!zipSuccess) {
+                datasetWriter.recordWriteFailure("Session finalization failed: ${zipError ?: "unknown error"}")
                 println("⚠️ Failed to create spatial_data.zip: $zipError")
             } else {
                 println("✅ spatial_data.zip created: $zipPath")
@@ -796,6 +803,21 @@ class ArRecorderImpl(
             val outputDir = datasetWriter.getSessionDirectory()
             currentState = ArRecordingState.READY
 
+            val writtenRgbFrames = (stats["rgbFrameCount"] as? Int) ?: metrics.encodedVideoFrameCount.get()
+            var captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
+            finalizationResult.metadata["capture_result_valid"] = captureFailure == null
+            finalizationResult.metadata["first_writer_error"] = datasetWriter.getWriteFailure()
+            finalizationResult.metadata["finalization_complete"] = zipSuccess && datasetWriter.getWriteFailure() == null
+            datasetWriter.writeMetadata(finalizationResult.metadata)
+            captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
+            if (captureFailure != null) {
+                return createErrorResult(captureFailure) + mapOf(
+                    "recordingStopped" to true,
+                    "diagnosticsDirectory" to outputDir,
+                    "framesRecorded" to 0,
+                    "durationSeconds" to durationSeconds
+                )
+            }
             println("✅ Recording stopped: $outputDir")
 
             mapOf(
@@ -805,7 +827,7 @@ class ArRecorderImpl(
                 "outputDirectory" to outputDir,
                 "sessionPath" to outputDir,
                 "durationSeconds" to durationSeconds,
-                "framesRecorded" to metrics.frameCount,
+                "framesRecorded" to writtenRgbFrames,
                 "imuSamples" to (stats["imuSampleCount"] ?: 0),
                 "galleryUri" to null,
                 "isLowQualityMode" to isLowQualityMode,
@@ -978,6 +1000,7 @@ class ArRecorderImpl(
 
     private fun recordError(message: String, throwable: Throwable? = null) {
         metrics.totalErrorsEncountered++
+        android.util.Log.e("SteraCapture", message, throwable)
         datasetWriter.logError(message, throwable)
     }
 
