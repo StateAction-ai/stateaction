@@ -78,6 +78,12 @@ Camera K is shared with the reference, and ARCore does not expose the distortion
 coefficients needed to prove intrinsic accuracy. Print/target uncertainty must
 also be considered before interpreting a small residual.
 
+Same-Frame acquisition does not itself certify temporal alignment:
+[ARCore explicitly allows returning an earlier depth image](https://developers.google.com/ar/reference/java/com/google/ar/core/Frame#acquireDepthImage16Bits())
+when current depth is unavailable. The auditor preserves native depth times,
+but neither it nor the hand exporter upgrades those times to measured RGB/depth
+synchronization. Motion tests and independent timing evidence are still needed.
+
 ## What remains after this test
 
 A board test does not measure hidden fingers or validate model-generated hand

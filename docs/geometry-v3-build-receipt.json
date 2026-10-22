@@ -23,7 +23,9 @@
     "device_model": "Pixel 9 Pro XL",
     "adb_install_r": "Success",
     "app_started_by_agent": false,
-    "recording_started_by_agent": false
+    "recording_started_by_agent": false,
+    "installed_apk_sha256_read_from_device": "be6670d0f09d614f1446478e5cee9ce77279bfc7c20f0ddb416110bfa4a573de",
+    "installed_apk_matches_archived_v3": true
   },
   "validation": {
     "android_jvm": {
@@ -65,7 +67,18 @@
   "physical_validation": {
     "status": "pending_user_recording",
     "metric_accuracy_validated": false,
-    "frontier_lab_training_qualified": false
+    "frontier_lab_training_qualified": false,
+    "latest_audit_utc": "2026-10-22T05:30:30.763815+00:00",
+    "v3_session_present_on_connected_device": false,
+    "latest_available_session": "session_20261022_010013",
+    "latest_available_session_version": "android_arcore_cpu_v2",
+    "latest_available_session_result": "failed: zero RGB/depth/pose, 291 rejected RGB attempts",
+    "unmet_evidence": [
+      "New v3 physical recording with decodable RGB, depth, tracked poses and successful finalization.",
+      "Independent physical registration, depth, camera-motion and temporal measurements.",
+      "Independent hand/joint reference annotations and measured model errors.",
+      "A named training-use contract, qualified delivered labels, and downstream evaluation evidence."
+    ]
   },
   "previous_v2_failure": {
     "session": "session_20261022_010013",
