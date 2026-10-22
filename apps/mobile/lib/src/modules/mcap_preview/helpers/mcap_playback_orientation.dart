@@ -53,6 +53,24 @@ class McapPlaybackOrientation {
     return votes[best] >= 3 && votes[best] / total >= 0.8 ? best : null;
   }
 
+  /// The recorder saves the native first RGB frame as thumbnail.jpg. Reuse the
+  /// playback default for that image, including recordings made before the fix.
+  /// Read only the MCAP summary/index and initial poses, never decode video.
+  static Future<int?> readRecordingQuarterTurns(String path) async {
+    if (!path.toLowerCase().endsWith(".mcap")) return null;
+    final reader = await McapReader.open(path);
+    try {
+      final rgb = reader.topics
+          .where((value) => value.topic == "/camera/rgb/compressed")
+          .firstOrNull;
+      if (rgb == null) return null;
+      final index = await reader.buildTopicIndex(rgb.channel.id);
+      return await readInitialQuarterTurns(reader, rgb, index);
+    } finally {
+      await reader.close();
+    }
+  }
+
   static Future<int?> readInitialQuarterTurns(
     McapReader reader,
     McapTopicInfo topic,

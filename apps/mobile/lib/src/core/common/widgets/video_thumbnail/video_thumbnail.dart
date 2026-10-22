@@ -21,6 +21,9 @@ class VideoThumbnail extends StatelessWidget {
   final bool showDuration;
   final Widget? overlay;
 
+  /// Presentation only; duration and action overlays retain their orientation.
+  final int imageQuarterTurns;
+
   const VideoThumbnail({
     super.key,
     this.imageUrl,
@@ -30,6 +33,7 @@ class VideoThumbnail extends StatelessWidget {
     this.height = 112,
     this.showDuration = true,
     this.overlay,
+    this.imageQuarterTurns = 0,
   });
 
   static final Map<String, Uint8List> _decodedBytesCache = {};
@@ -179,14 +183,20 @@ class VideoThumbnail extends StatelessWidget {
         children: [
           ClipRSuperellipse(
             borderRadius: BorderRadius.circular(AppRadii.sm),
-            child: _buildThumbnailImage(context),
+            child: RotatedBox(
+              quarterTurns: imageQuarterTurns,
+              child: _buildThumbnailImage(context),
+            ),
           ),
           if (showDuration)
             Positioned(
               bottom: 4,
               right: 4,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.xxs),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxs,
+                ),
                 decoration: BoxDecoration(
                   color: context.colors.surfacePrimary,
                   borderRadius: BorderRadius.circular(AppRadii.xs),

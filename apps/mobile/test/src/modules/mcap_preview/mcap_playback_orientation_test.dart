@@ -1,15 +1,18 @@
 import "dart:io";
+import "dart:convert";
 import "dart:math" as math;
 import "dart:ui" as ui;
 
 import "package:flutter/material.dart";
 import "package:flutter/rendering.dart";
 import "package:flutter_test/flutter_test.dart";
+import "package:stera/src/core/common/widgets/video_thumbnail/video_thumbnail.dart";
 import "package:stera/src/modules/mcap_preview/helpers/mcap_playback_orientation.dart";
 import "package:stera/src/modules/mcap_preview/providers/mcap_topic_player_provider.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/player/mcap_frame_view.dart";
 import "package:stera/src/services/mcap_reader/cdr/scene3d.dart";
 import "package:stera/src/services/mcap_reader/mcap_reader.dart";
+import "package:stera/src/modules/upload/ui/widgets/upload_file_tile/mcap_recording_thumbnail.dart";
 
 Pose3D roll(double radians) => Pose3D(
   x: 0,
@@ -143,6 +146,140 @@ void main() {
     },
   );
 
+  test(
+    "recording thumbnail uses the playback default and ignores plain videos",
+    () async {
+      expect(
+        await McapPlaybackOrientation.readRecordingQuarterTurns(
+          "test/fixtures/mcap/native_cpu_v3.mcap",
+        ),
+        0,
+      );
+      expect(
+        await McapPlaybackOrientation.readRecordingQuarterTurns("video.mp4"),
+        isNull,
+      );
+    },
+  );
+
+  testWidgets(
+    "thumbnail rotation preserves pixels and leaves overlays upright",
+    (tester) async {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      const colors = [Colors.red, Colors.green, Colors.blue, Colors.yellow];
+      for (var i = 0; i < 4; i++) {
+        canvas.drawRect(
+          Rect.fromLTWH((i % 2) * 40, (i ~/ 2) * 20, 40, 20),
+          Paint()..color = colors[i],
+        );
+      }
+      final picture = recorder.endRecording();
+      final original = (await tester.runAsync(() => picture.toImage(80, 40)))!;
+      picture.dispose();
+      final png = (await tester.runAsync(
+        () => original.toByteData(format: ui.ImageByteFormat.png),
+      ))!.buffer.asUint8List();
+      final encoded = base64Encode(png);
+      const order = [
+        [0, 1, 2, 3],
+        [2, 0, 3, 1],
+        [3, 2, 1, 0],
+        [1, 3, 0, 2],
+      ];
+      Offset? overlayPosition;
+      for (var turn = 0; turn < 4; turn++) {
+        final boundaryKey = GlobalKey();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Center(
+              child: RepaintBoundary(
+                key: boundaryKey,
+                child: VideoThumbnail(
+                  imageUrl: encoded,
+                  width: 80,
+                  height: 40,
+                  showDuration: false,
+                  imageQuarterTurns: turn,
+                  overlay: const Positioned(
+                    top: 0,
+                    left: 0,
+                    child: Text("UP", style: TextStyle(fontSize: 4)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final imageProvider = tester.widget<Image>(find.byType(Image)).image;
+        await tester.runAsync(
+          () =>
+              precacheImage(imageProvider, tester.element(find.byType(Image))),
+        );
+        await tester.pumpAndSettle();
+        overlayPosition ??= tester.getTopLeft(find.text("UP"));
+        expect(tester.getTopLeft(find.text("UP")), overlayPosition);
+        expect(
+          find.descendant(
+            of: find.byType(RotatedBox),
+            matching: find.text("UP"),
+          ),
+          findsNothing,
+        );
+        final boundary =
+            boundaryKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+        final rendered = (await tester.runAsync(() => boundary.toImage()))!;
+        final rgba = (await tester.runAsync(
+          () => rendered.toByteData(),
+        ))!.buffer.asUint8List();
+        const samples = [(20, 10), (60, 10), (20, 30), (60, 30)];
+        for (var i = 0; i < samples.length; i++) {
+          final offset = (samples[i].$2 * rendered.width + samples[i].$1) * 4;
+          final color = colors[order[turn][i]];
+          expect(rgba.sublist(offset, offset + 3), [
+            (color.r * 255).round(),
+            (color.g * 255).round(),
+            (color.b * 255).round(),
+          ]);
+        }
+        rendered.dispose();
+        final provider = tester.widget<Image>(find.byType(Image)).image;
+        final memory = provider is ResizeImage
+            ? provider.imageProvider
+            : provider;
+        expect(memory, isA<MemoryImage>());
+        expect((memory as MemoryImage).bytes, png);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      original.dispose();
+    },
+  );
+
+  testWidgets("missing MCAP thumbnail falls back without an unhandled error", (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: McapRecordingThumbnail(
+          recordingPath: "missing.mcap",
+          filePath: "missing.jpg",
+        ),
+      ),
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<VideoThumbnail>(find.byType(VideoThumbnail))
+          .imageQuarterTurns,
+      0,
+    );
+  });
+
   testWidgets(
     "quarter turns swap display bounds while retaining the same decoded pixels",
     (tester) async {
@@ -228,6 +365,10 @@ void main() {
     test(
       "local Pixel RGB and depth choose the same 180-degree presentation",
       () async {
+        expect(
+          await McapPlaybackOrientation.readRecordingQuarterTurns(local),
+          2,
+        );
         final reader = await McapReader.open(local);
         addTearDown(reader.close);
         for (final name in ["/camera/rgb/compressed", "/camera/depth"]) {
@@ -244,6 +385,38 @@ void main() {
             2,
           );
         }
+      },
+    );
+    testWidgets(
+      "actual Pixel recording thumbnail receives 180-degree rotation",
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: McapRecordingThumbnail(
+              recordingPath: local,
+              filePath: "${File(local).parent.path}/thumbnail.jpg",
+            ),
+          ),
+        );
+        for (var i = 0; i < 1000; i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump();
+          if (tester
+                  .widget<VideoThumbnail>(find.byType(VideoThumbnail))
+                  .imageQuarterTurns ==
+              2) {
+            break;
+          }
+        }
+        expect(tester.takeException(), isNull);
+        expect(
+          tester
+              .widget<VideoThumbnail>(find.byType(VideoThumbnail))
+              .imageQuarterTurns,
+          2,
+        );
       },
     );
   }

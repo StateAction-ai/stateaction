@@ -1,11 +1,11 @@
 import "package:stera/src/core/common/utils/extensions.dart";
 import "package:stera/src/core/common/widgets/app_popup_menu/app_popup_menu.dart";
 import "package:stera/src/core/common/widgets/pressable.dart";
-import "package:stera/src/core/common/widgets/video_thumbnail/video_thumbnail.dart";
 import "package:stera/src/modules/mcap_preview/ui/mcap_preview_page.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 import "package:stera/src/modules/upload/ui/widgets/cancel_queued_upload_confirmation_dialog.dart";
 import "package:stera/src/modules/upload/ui/widgets/remove_queued_upload_confirmation_dialog.dart";
+import "package:stera/src/modules/upload/ui/widgets/upload_file_tile/mcap_recording_thumbnail.dart";
 import "package:stera/src/services/db/db.dart";
 import "package:stera/src/services/db/schema/enums/upload_status.dart";
 import "package:stera/src/services/upload_service/utils/resolve_file_path.dart";
@@ -70,8 +70,9 @@ class UploadFileTileThumbnailPlaceholder extends StatelessWidget {
         if (!snapshot.hasData) {
           return _buildFallbackThumbnail(context, overlay: overlay);
         }
-        return VideoThumbnail(
-          filePath: snapshot.data,
+        return McapRecordingThumbnail(
+          recordingPath: upload.filepath,
+          filePath: snapshot.data!,
           durationMs: durationMs,
           overlay: overlay,
         );
