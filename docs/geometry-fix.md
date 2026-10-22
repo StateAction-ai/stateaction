@@ -1,17 +1,15 @@
 # Pixel capture geometry: causes, corrections and validation
 
-> **Current status: v2 passes software and native Android codec tests; Pixel validation is pending.**
-> The v1 physical test, `session_20261022_001412`, saved zero RGB, depth or pose
-> messages and reported 310 encoder failures. Do not use the v1 APK for
-> collection. Its exact exception was lost. The v2 replacement fixes an invalid
-> timestamp assumption, persists rejection diagnostics and refuses to report
-> empty or failed writes as successful recordings. Its **24 JVM, 5 native
-> Android, 1 Dart and 65 Python tests pass**. These results do not establish
-> physical tracking or depth accuracy. See the [v2 receipt](geometry-v2-build-receipt.json).
+> **Current status: both v1 and v2 failed physical acquisition. V3 is installed,
+> with physical validation pending.** V2 rejected all 291 attempts in
+> `session_20261022_010013` because it required equality between separate native
+> clock values. This was our regression. V3 removes the invalid requirement;
+> **26 JVM, 6 native Android and 73 Python tests pass**, including the exact
+> observed Pixel timestamp tuple. See the [failure and repair record](geometry-v3-capture-regression.md).
 
 **The original 3D hand/body annotations are not reliable training labels.** We
 found coordinate-contract defects in the Android recorder and missing geometric
-checks in the selected SDK hand pipeline. The v2 debug APK is installed on the
+checks in the selected SDK hand pipeline. The v3 debug APK is installed on the
 Pixel 9 Pro XL. Installation did not launch the app or start a recording; fresh
 physical capture validation is pending. A correct software contract alone does
 not establish accurate metric hand poses.
@@ -68,17 +66,18 @@ for source locations, images and ablations.
 
 ## What changed
 
-The Android recorder now labels new captures `android_arcore_cpu_v2` and saves
+The Android recorder now labels new captures `android_arcore_cpu_v3` and saves
 JPEGs directly from the native CPU image, with matching intrinsics and physical
 camera pose. GPU display transforms affect only the preview. Image packing
-handles row/pixel strides and validates image dimensions, crop and timestamp
-agreement. Saved RGB may consequently appear rotated relative to the preview.
+handles row/pixel strides and validates image dimensions and crop. Each native
+clock is preserved separately. Saved RGB may appear rotated relative to the preview.
 
 V1 incorrectly required the CPU image timestamp to equal `Frame.timestamp`.
-ARCore leaves that frame time base undefined. V2 validates `Image.timestamp`
-against `Frame.androidCameraTimestamp` and preserves both native image time and
-frame-event time. This is a demonstrated API-contract error, but the physical
-v1 exception cannot be reconstructed from its incomplete logs. Acquired image
+ARCore leaves that frame time base undefined. V2 instead required equality with
+`Frame.androidCameraTimestamp`; the Pixel recording proves that requirement
+also fails. V3 uses the `Frame.acquireCameraImage` association and preserves all
+three clocks without comparing their numeric values. The physical v1 exception
+cannot be reconstructed from its incomplete logs. Acquired image
 properties, validation stage and exception are now saved in the geometry stream
 and emitted to logcat. Zero saved RGB, rejected writer submission, stream-write
 failure or failed MCAP finalization produces an unsuccessful stop result and
@@ -110,14 +109,17 @@ outputs remain preserved.
 
 ## Validation status
 
-| Check | v2 result | Evidence boundary |
+The following table preserves the historical v2 checks and their physical failure.
+Current v3 evidence is recorded in the [v3 receipt](geometry-v3-build-receipt.json).
+
+| Check | Historical v2 result | Evidence boundary |
 |---|---|---|
 | JVM/Robolectric | 24 passed | Geometry, packing, image validation/lifetime, producer barriers, serialization and disk/finalization failures |
 | Native Android instrumentation | 5 passed on `emulator-5580` | Actual Android JPEG codec and Kotlin MCAP writer with synthetic images/depth |
 | Dart provider | 1 passed | Failed stopped recording clears recording/output state and preserves its error |
 | Python | 65 passed | Capture decoding, per-frame geometry, clock separation, quality masks, exports and reports |
 | Android fixture → complete Python pipeline | 3 frames completed | Real producer bytes decoded and exported; no physical camera/depth or hands |
-| Fresh Pixel capture | Pending | Must validate actual acquisition, RGB/depth registration, accuracy and performance |
+| Fresh Pixel capture | Failed: zero RGB/depth/pose | 291/291 attempts rejected by invalid Image/Android-camera timestamp equality |
 
 The [v2 build/validation receipt](geometry-v2-build-receipt.json) records artifact
 and source hashes, commands and logs. Its archived arm64/x86_64 APK is
@@ -157,16 +159,16 @@ Historical evidence is preserved:
   The raw capture is unchanged, and the replay remains an explicitly unvalidated
   legacy hypothesis excluded from automatic viewer selection.
 
-The next physical capture should include an asymmetric target and measured
-distances, followed by open palm, fist and tool grip. Check image acquisition,
-registration and depth error first; hidden finger positions require stronger
+First confirm acquisition with a short textured-tabletop recording. Subsequent
+accuracy tests should include an asymmetric target and measured distances,
+followed by open palm, fist and tool grip. Hidden finger positions require stronger
 evidence, such as a second synchronized view. Measure CPU JPEG frame rate and
 thermal behavior too. Do not treat a passing capture-health report as metric
 accuracy certification.
 
 ## Run the corrected pipeline
 
-For a **new recording from the v2 app after installation**, replace the path below
+For a **new recording from the v3 app after installation**, replace the path below
 with the copied MCAP. Its `metadata.json` must remain beside it. The runner
 requires a fresh output directory.
 

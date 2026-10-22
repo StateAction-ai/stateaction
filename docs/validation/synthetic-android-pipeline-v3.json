@@ -1,0 +1,120 @@
+{
+  "status": "complete",
+  "started_utc": "2026-10-22T05:09:26Z",
+  "raw_mcap": {
+    "path": "/home/wearaway/projects/robotics-data-collection/tests/fixtures/android_geometry_v3/session_data_20261022_010805.mcap",
+    "sha256_before": "61b06cdda3bbb67adf40fa8b7149166e0a1c4d1131cb949680bc1a825c55002a",
+    "sha256_after": "61b06cdda3bbb67adf40fa8b7149166e0a1c4d1131cb949680bc1a825c55002a",
+    "unchanged": true
+  },
+  "sdk_commit": "df6a5ec8919053c5cd448db83d4816e1faaaec62",
+  "geometry": {
+    "capture_geometry_version": "android_arcore_cpu_v3",
+    "legacy_hypothesis": false,
+    "metric_accuracy_validated": false,
+    "depth_max_dt_s": 0.033,
+    "cross_stream_clock_verified": false,
+    "depth_age_available": false,
+    "mapping_source": "recorded_per_frame"
+  },
+  "pipeline": "per-frame calibrated association, independent raw model observations, conservative quality masks",
+  "body_estimation": "disabled: mount/torso pose not observed",
+  "default_viewer_eligible": true,
+  "show_rejected_candidates": false,
+  "rerun_runtime_adapter": [
+    "rr.set_time(timeline, timestamp=s) -> rr.set_time_seconds(timeline, s)",
+    "rr.TimeColumn(timeline, timestamp=values) -> rr.TimeSecondsColumn(timeline, values)",
+    "rr.Scalars([v]) -> rr.Scalar(v); Scalars.columns(scalars=x) -> Scalar.columns(scalar=x)",
+    "rr.flush_blocking() -> active RecordingStream.flush(blocking=True)"
+  ],
+  "processing": {
+    "frames": 3,
+    "detected_hands": 0,
+    "geometry_consistent_hands": 0,
+    "fully_observed_consistent_hands": 0,
+    "metric_accuracy_validated": false,
+    "rejection_reasons": {}
+  },
+  "finished_utc": "2026-10-22T05:09:27Z",
+  "source_files": {
+    "scripts/process_geometry_capture.py": "c9753b4dbcdcecbb693e9e4ad1a9a4d2d7ec3238fd784f2c3b15e542133a89cc",
+    "scripts/capture_geometry.py": "16aba4fc7a8adfc8a8ca61a156345c41b4542e4d3702133c8c03644eda1ae8c6",
+    "scripts/hand_geometry.py": "caef5f5ed971575615b37d2226bf533dec396ecbd2921411663d2de6ad197eda",
+    "scripts/geometry_visualizer.py": "8bc7e781cadfc16224329ffdde88d03046416a37924e350c467c3af5089d7110",
+    "scripts/geometry_report.py": "47f725af2afca7d20ba95e8562eae2d098a52cd8d249c3a190562d2ee7a40486"
+  },
+  "artifacts": {
+    "frame_geometry.json": {
+      "bytes": 7281,
+      "sha256": "8855d86704c4b4c92103640b2e1f45f2f7d4a1eca41525a9500d66084c59adef"
+    },
+    "geometry_quality.json": {
+      "bytes": 226,
+      "sha256": "47c785e730487f9ae7945763eda13286107ed45f1133b77027f0cde9e58bbaec"
+    },
+    "evaluation.upstream.html": {
+      "bytes": 4919759,
+      "sha256": "0b911c52675a3b1744ef15f64dbf8b1650afc472720cad8d0c89b8f9979b5de5"
+    },
+    "evaluation_metrics.upstream.json": {
+      "bytes": 9755,
+      "sha256": "41257741b5035525d76058a70101cfa34a7aa1e02bec4804c04e63fc2f24b6f2"
+    },
+    "export_manifest.json": {
+      "bytes": 375,
+      "sha256": "e7c5f56bb5b6e7b6a8c5b67a68cfc1b08309c5db5932919fd4d3a5a73fc0b84c"
+    },
+    "evaluation.html": {
+      "bytes": 2801,
+      "sha256": "5bbf59ff4f36b3bec9698f9b81b7f1befab1b029b2b76743759593877a12154d"
+    },
+    "evaluation_metrics.json": {
+      "bytes": 3124,
+      "sha256": "60db34fa11af38de539d75f39a07443ffff45ea44e8abbe662df71f6125b1480"
+    },
+    "models/hand_landmarker.task": {
+      "bytes": 7819105,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+    },
+    "episode/rgb.mp4": {
+      "bytes": 1628,
+      "sha256": "70007986d44795fe07a107d608f4e0880cbcc735662d1cbba074c2db60452c32"
+    },
+    "episode/visualization.rrd": {
+      "bytes": 144744,
+      "sha256": "60b10dff837120ad9d5e7e5478a2034bde15be03eb21e4826d11bbeb8f33139d"
+    },
+    "episode/annotation.hdf5": {
+      "bytes": 62000,
+      "sha256": "3c6b005384a08495dc6bb86926afdf6ce5a15ed039ed10eafb1cf4412ca7cd9d"
+    },
+    "episode/thumbnail.jpg": {
+      "bytes": 639,
+      "sha256": "59cd4d6c05c80dada098500af238d25852ace0cf01639b0ef98dc47ba306031a"
+    },
+    "episode/calibrations/depth_K.npy": {
+      "bytes": 200,
+      "sha256": "6b9f41f934e4e6a756060d816a69a42f93489108c45f3795aebb60edc0721d5d"
+    },
+    "episode/calibrations/rgb_K.npy": {
+      "bytes": 200,
+      "sha256": "08d364ecf51de0fb297d44a943327324fe02dba282addfd5b44778435b8027a7"
+    },
+    "episode/calibrations/rgb_D.npy": {
+      "bytes": 128,
+      "sha256": "fdee2f2368bf2af9c942f32cce9d982e48dfc46889bf923e99bc9ac834a4ba46"
+    },
+    "episode/calibrations/meta.json": {
+      "bytes": 394,
+      "sha256": "fdc37ae1adbe30ed254012085472701e30aed0da26e6467f4d53854f60f92e12"
+    },
+    "episode/calibrations/depth_D.npy": {
+      "bytes": 128,
+      "sha256": "fdee2f2368bf2af9c942f32cce9d982e48dfc46889bf923e99bc9ac834a4ba46"
+    },
+    "episode/calibrations/R_optical_to_link.npy": {
+      "bytes": 200,
+      "sha256": "0abc7e4490487442eca4a070be61384d4347171e9c3370e68f74e93b2c6563a9"
+    }
+  }
+}

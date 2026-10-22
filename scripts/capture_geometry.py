@@ -15,8 +15,15 @@ from stera.data.mcap import MCAPReader, CameraIntrinsics
 from stera.data.mcap import _decoders as dec
 
 VERSION_V1 = "android_arcore_cpu_v1"
-VERSION = "android_arcore_cpu_v2"
-SUPPORTED_VERSIONS = frozenset((VERSION_V1, VERSION))
+VERSION_V2 = "android_arcore_cpu_v2"
+VERSION = "android_arcore_cpu_v3"
+SUPPORTED_VERSIONS = frozenset((VERSION_V1, VERSION_V2, VERSION))
+V3_PROVENANCE = {
+    "rgb_frame_association": "Frame.acquireCameraImage_same_frame",
+    "rgb_timestamp_clock": "ARCore_Image_timestamp_source_specific",
+    "frame_timestamp_clock": "ARCore_Frame_timestamp_timebase_undefined",
+    "android_camera_timestamp_clock": "Frame.getAndroidCameraTimestamp",
+}
 OPTICAL_TO_ARCORE = np.diag([1., -1., -1.])
 LEGACY_SHA256 = "8e508a5605ad01cf51de77e9d5600a8fcb5e65a4180dcc45a3261e63cb97c6bf"
 
@@ -44,12 +51,25 @@ def validate_record(row, rgb_shape, depth_shape=None, max_depth_dt=.033):
     rgb_timestamp = int(row["rgb_timestamp_ns"])
     if version == VERSION_V1 and frame_timestamp != rgb_timestamp:
         raise ValueError("CPU image and pose frame timestamps differ")
-    if version == VERSION:
+    if version == VERSION_V2:
+        # Retain the historical v2 contract for existing artifacts. This
+        # producer requirement was invalid on the Pixel and is removed in v3.
         android_camera_timestamp = row.get("android_camera_timestamp_ns")
         if android_camera_timestamp is None or int(android_camera_timestamp) != rgb_timestamp:
             raise ValueError("CPU image timestamp differs from Android camera timestamp")
+    if version in (VERSION_V2, VERSION):
         if row.get("cross_stream_clock_verified") is not False:
-            raise ValueError("v2 requires explicit unverified cross-stream clock semantics")
+            raise ValueError("Versioned capture requires explicit unverified cross-stream clock semantics")
+    if version == VERSION:
+        # Association comes from acquiring the image on this ARCore Frame,
+        # not from numerical equality of unrelated source-specific clocks.
+        for key, expected in V3_PROVENANCE.items():
+            if row.get(key) != expected:
+                raise ValueError(f"Missing/unsupported v3 capture provenance: {key}")
+        for key in ("frame_timestamp_ns", "rgb_timestamp_ns", "android_camera_timestamp_ns"):
+            value = row.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0 or (value == 0 and key != "android_camera_timestamp_ns"):
+                raise ValueError(f"Invalid native timestamp in {key}")
     width, height = rgb_shape[1], rgb_shape[0]
     if (row["rgb_width"], row["rgb_height"]) != (width, height):
         raise ValueError("Saved RGB dimensions disagree with geometry record")

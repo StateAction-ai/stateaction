@@ -21,7 +21,9 @@ below describe the installed local tools; cloning alone does not install them.
 
 ## Validation status
 
-**Current status:** geometry v2 is installed on the Pixel; verification includes **24 JVM, 5 native Android, 1 Dart and 66 Python tests**, plus a synthetic Android-producer → Python-pipeline run. The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Fresh Pixel validation is pending. The first geometry-fix build (v1) failed its physical test: `session_20261022_001412` saved zero RGB/depth/pose frames with 310 capture failures. Do not use v1 for collection. V2 corrects timestamp validation, preserves failure diagnostics, and refuses to save empty/failed recordings as successful. Earlier recordings lack the calibration needed to certify their 3D hand annotations. See [root causes and validation limits](docs/geometry-fix.md) and the [v2 build receipt](docs/geometry-v2-build-receipt.json); the [v1 receipt](docs/geometry-build-receipt.json) remains historical evidence.
+**Current status: v1 and v2 both failed physical acquisition; do not use them for collection.** V2 session `session_20261022_010013` saved zero RGB/depth/pose frames because an invalid cross-clock timestamp equality check rejected all 291 capture attempts. V3 removes that requirement and preserves the separate clocks with the acquiring ARCore Frame association. Its physical validation is pending. Historical passing synthetic tests did not exercise the Pixel's actual timestamp behavior. See [the failure and repair record](docs/geometry-v3-capture-regression.md) and [geometry validation limits](docs/geometry-fix.md). The [v2 build receipt](docs/geometry-v2-build-receipt.json) remains historical evidence, not proof of working physical capture.
+
+The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Earlier recordings and current model estimates have not qualified as metric hand supervision.
 
 Verified device: Pixel 9 Pro XL, Android 17 (API 37), `arm64-v8a`, paired and connected over Wi-Fi. Google Play Services for AR is installed. The original pre-geometry-fix APK built successfully on 2026-10-21, its signature passed verification, and its packaged configuration contains only `NO_AUTH_MODE=true`. Build details and SHA-256 are in [docs/build-receipt.json](docs/build-receipt.json). That original build's installation and activity launch on the Pixel passed; the app remained running without matching fatal/Flutter exceptions in the inspected recent app logs. The first recording was copied with matching phone/local hashes and all 21,508 messages decoded without validation errors. Physical tracking accuracy has not been measured.
 
@@ -64,14 +66,14 @@ cd "$ROBOTICS_CAPTURE_ROOT/stera-app/apps/mobile"
 flutter pub get
 flutter build apk --debug --target-platform android-arm64,android-x64 --dart-define=NO_AUTH_MODE=true
 install -m 644 build/app/outputs/flutter-apk/app-debug.apk \
-  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v2-debug.apk"
+  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v3-debug.apk"
 ```
 
 For this Android no-auth build, Bun and database code generation are unnecessary; generated Dart database code is committed upstream. The official Bun preparation additionally synchronizes Google client IDs (skipped in no-auth mode) and writes iOS configuration.
 
 ## Fast Android checks on Linux
 
-With the Android emulator already running, this repeats the JVM tests and five
+With the Android emulator already running, this repeats the JVM tests and six
 native codec/MCAP tests, then exports their synthetic fixtures and logs:
 
 ```bash
@@ -82,8 +84,8 @@ The script refuses physical devices and targets every ADB call explicitly. It
 installs only the instrumentation APK; it does not start a production camera
 recording. Robolectric covers validation/failure paths; the emulator runs Android's
 real JPEG codec. Synthetic tests do not measure ARCore tracking or real depth.
-See the [archived fixture](tests/fixtures/android_geometry_v2/README.md),
-[complete pipeline receipt](docs/validation/synthetic-android-pipeline.json), and
+See the [v3 fixture](tests/fixtures/android_geometry_v3/README.md),
+[v3 pipeline receipt](docs/validation/synthetic-android-pipeline-v3.json), and
 [Linux simulation guide](docs/linux-recording-test-loop.md).
 
 ## Public egocentric video test
@@ -116,7 +118,7 @@ adb devices -l
 export ROBOTICS_CAPTURE_DEVICE='device-identifier-from-adb-devices'
 adb -s "$ROBOTICS_CAPTURE_DEVICE" get-state
 adb -s "$ROBOTICS_CAPTURE_DEVICE" install -r \
-  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v2-debug.apk"
+  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v3-debug.apk"
 adb -s "$ROBOTICS_CAPTURE_DEVICE" shell am start \
   -n open.fpvlabs.stera/.MainActivity
 ```

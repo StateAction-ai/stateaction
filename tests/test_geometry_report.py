@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from geometry_report import write_geometry_report, VERSION
+from capture_geometry import VERSION_V2
 
 
 class GeometryReportTests(unittest.TestCase):
@@ -80,10 +81,24 @@ class GeometryReportTests(unittest.TestCase):
 
     def test_wrong_version_and_misaligned_frame_counts_rejected(self):
         self.geometry[0]['source']['capture_geometry_version'] = 'android_arcore_cpu_v1'
-        with self.assertRaisesRegex(ValueError, 'v2 capture contract'): self.write()
+        with self.assertRaisesRegex(ValueError, 'supported v2/v3 capture contract'): self.write()
         self.geometry[0]['source']['capture_geometry_version'] = VERSION
         self.timestamps.pop()
         with self.assertRaisesRegex(ValueError, 'frame counts'): self.write()
+
+    def test_v3_distinct_android_and_image_clocks_are_reported_without_equality_claim(self):
+        self.geometry[0]['source']['android_camera_timestamp_ns'] = 1467836019878654
+        self.geometry[0]['source']['rgb_timestamp_ns'] = 1467836033014624
+        result = self.write()
+        self.assertEqual(result['capture_geometry_version'], VERSION)
+        self.assertNotEqual(result['native_clocks']['android_camera']['maximum_ns'],
+                            result['native_clocks']['rgb_image']['maximum_ns'])
+        self.assertIn('need not be equal', ' '.join(result['limitations']))
+
+    def test_historical_v2_report_remains_supported(self):
+        for frame in self.geometry:
+            frame['source']['capture_geometry_version'] = VERSION_V2
+        self.assertEqual(self.write()['capture_geometry_version'], VERSION_V2)
 
 
 if __name__ == '__main__': unittest.main()

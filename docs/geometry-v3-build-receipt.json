@@ -1,0 +1,86 @@
+{
+  "recorded_utc": "2026-10-22T05:11:40.987598+00:00",
+  "capture_geometry_version": "android_arcore_cpu_v3",
+  "status": "software_and_native_fixture_passed_pixel_installed_physical_capture_pending",
+  "app_commit": "b34d8367e4a851e4dcb36ed75cf3235b191361b3",
+  "sdk_commit": "df6a5ec8919053c5cd448db83d4816e1faaaec62",
+  "apk": {
+    "path": "artifacts/stera-pixel9proxl-geometry-v3-debug.apk",
+    "sha256": "be6670d0f09d614f1446478e5cee9ce77279bfc7c20f0ddb416110bfa4a573de",
+    "size_bytes": 180393722,
+    "flutter_abis": [
+      "arm64-v8a",
+      "x86_64"
+    ],
+    "NO_AUTH_MODE": true,
+    "signature_v2_verified": true
+  },
+  "build": {
+    "command": "flutter build apk --debug --no-pub --target-platform android-arm64,android-x64 --dart-define=NO_AUTH_MODE=true",
+    "log": "/tmp/stera-v3-apk-build.log"
+  },
+  "install": {
+    "device_model": "Pixel 9 Pro XL",
+    "adb_install_r": "Success",
+    "app_started_by_agent": false,
+    "recording_started_by_agent": false
+  },
+  "validation": {
+    "android_jvm": {
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "report_sha256": {
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.data.MCAPFailureTest.xml": "e611d61db718d1b58a9c124da20332fd1594e586bebd92fec11a754df1eccb62",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderAndroidTest.xml": "9eb7d4aed7a18a2e11e7eab9461ae17d898159fd1b9eee2168e81721cfeca67b",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometryTest.xml": "bfac80c58c370e951dae60eeb58f5fda3fd000d34cca3370f932f70b3b0316e9",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureOutcomeTest.xml": "6039e5026c6f903db2d3855192c7f852859af2d3a45629a8850bc8d570f75f84",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.CaptureSerializationTest.xml": "7de80ecef0f397ecf91419018bfb6cce78a08189b8ccf2831bc5e5e854f47564",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.ImagePlanePackingTest.xml": "4c6eb61c97c244c585d469d1695e6dd909ecd3efeced1ebb22fc86f5e208ab5e",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.RecordingActivityGateTest.xml": "e96b3d57486612d07541024eb9ea86ac1eaad44f979d9c58604472dc73b665a4",
+        "stera-app/apps/mobile/build/stera_recorder/test-results/testDebugUnitTest/TEST-open.fpvlabs.stera.ar_recorder.geometry.RecordingMetricsStateTest.xml": "c6994610d58736ca0b320c96a9dddf8470635ec73599950fe03a7aa231dfb39f"
+      }
+    },
+    "android_native": {
+      "passed": 6,
+      "failed": 0,
+      "log": "docs/validation/android-native-v3-tests.log",
+      "log_sha256": "e4be04410278b7a67619026f062961378f70167e5a0caffb6b9a5b0bb8009cbc"
+    },
+    "python": {
+      "passed": 73,
+      "failed": 0,
+      "log": "docs/validation/python-v3-tests.log",
+      "log_sha256": "f1297556801afd3b46dcc8aff78baa12f98f69a6b9251d755c6aa6d498241ad9"
+    },
+    "synthetic_pipeline": {
+      "frames": 3,
+      "status": "complete",
+      "receipt": "docs/validation/synthetic-android-pipeline-v3.json",
+      "rerun_check_exit_code": 0
+    },
+    "review": "Independent read-only Android review found no additional confirmed capture blocker; all 291 saved v2 diagnostic records satisfy new metadata/plane predicates. This does not execute real sensor acquisition."
+  },
+  "physical_validation": {
+    "status": "pending_user_recording",
+    "metric_accuracy_validated": false,
+    "frontier_lab_training_qualified": false
+  },
+  "previous_v2_failure": {
+    "session": "session_20261022_010013",
+    "mcap_sha256": "acc18199f6732392c38a20bef3ea282b5e05f584d25da598193874c32bdee2a9",
+    "attempts": 291,
+    "failed_attempts": 291,
+    "rgb_frames": 0,
+    "depth_frames": 0,
+    "pose_messages": 0,
+    "root_cause": "Introduced equality gate across Image.timestamp and Frame.androidCameraTimestamp rejected every attempted CPU image before encoding."
+  },
+  "source_sha256": {
+    "scripts/capture_geometry.py": "16aba4fc7a8adfc8a8ca61a156345c41b4542e4d3702133c8c03644eda1ae8c6",
+    "scripts/geometry_report.py": "47f725af2afca7d20ba95e8562eae2d098a52cd8d249c3a190562d2ee7a40486",
+    "scripts/process_geometry_capture.py": "c9753b4dbcdcecbb693e9e4ad1a9a4d2d7ec3238fd784f2c3b15e542133a89cc",
+    "tests/test_capture_geometry_v3.py": "c425ab23b4a933320dd0a89c2dff49e9550cf94e2d80001fff412a7703aa5ac6"
+  }
+}

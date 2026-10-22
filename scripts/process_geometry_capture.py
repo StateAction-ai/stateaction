@@ -23,7 +23,7 @@ import h5py
 import numpy as np
 import rerun as rr
 
-from capture_geometry import GeometrySession, VERSION
+from capture_geometry import GeometrySession, VERSION, VERSION_V2, V3_PROVENANCE
 from hand_geometry import detect_observations, reconstruct_hand
 from geometry_visualizer import GeometryVisualizer
 from geometry_report import write_geometry_report
@@ -37,6 +37,9 @@ def write_geometry_annotations(path, observations, geometry, timestamps):
     with h5py.File(path, "a") as h5:
         cg = h5.create_group("capture-geometry")
         cg.attrs["metric_accuracy_validated"] = False
+        for key in ("capture_geometry_version", *V3_PROVENANCE):
+            cg.create_dataset(key, data=[g["source"].get(key, "unrecorded") for g in geometry],
+                              dtype=h5py.string_dtype(encoding="utf-8"))
         cg.create_dataset("rgb_K", data=np.asarray([g["rgb_K"] for g in geometry]))
         cg.create_dataset("depth_K", data=np.asarray([np.full((3, 3), np.nan) if g["depth_K"] is None else g["depth_K"] for g in geometry]))
         cg.create_dataset("rgb_to_depth", data=np.asarray([np.full((3, 3), np.nan) if g["rgb_to_depth"] is None else g["rgb_to_depth"] for g in geometry]))
@@ -184,7 +187,7 @@ def main():
         evaluation = Evaluate(session)
         write_json(output / "evaluation_metrics.upstream.json", evaluation.compute())
         evaluation.export(output / "evaluation.upstream.html")
-        if session.version == VERSION:
+        if session.version in (VERSION_V2, VERSION):
             write_geometry_report(output, geometries, timestamps, summary)
         else:
             apply_report_clock(output, raw.parent / "metadata.json")

@@ -11,7 +11,7 @@ import numpy as np
 from mcap_ros2.writer import Writer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from capture_geometry import GeometrySession, VERSION, VERSION_V1, OPTICAL_TO_ARCORE
+from capture_geometry import GeometrySession, VERSION_V2 as VERSION, VERSION_V1, OPTICAL_TO_ARCORE
 from stera.data.mcap import MCAPReader
 
 

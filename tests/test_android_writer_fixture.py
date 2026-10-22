@@ -17,7 +17,7 @@ from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from capture_geometry import GeometrySession, OPTICAL_TO_ARCORE, VERSION, header_ns
+from capture_geometry import GeometrySession, OPTICAL_TO_ARCORE, VERSION_V2 as VERSION, header_ns
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "android_geometry_v2"

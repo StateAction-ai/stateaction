@@ -1,0 +1,247 @@
+
+> Configure project :gradle
+WARNING: Unsupported Kotlin plugin version.
+The `embedded-kotlin` and `kotlin-dsl` plugins rely on features of Kotlin `2.0.21` that might work differently than in the requested version `2.2.20`.
+
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+> Task :battery_plus:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :battery_plus:preBuild UP-TO-DATE
+> Task :battery_plus:preDebugBuild UP-TO-DATE
+> Task :battery_plus:generateDebugResValues UP-TO-DATE
+> Task :battery_plus:generateDebugResources UP-TO-DATE
+> Task :battery_plus:packageDebugResources UP-TO-DATE
+> Task :battery_plus:parseDebugLocalResources UP-TO-DATE
+> Task :battery_plus:generateDebugRFile UP-TO-DATE
+> Task :battery_plus:compileDebugKotlin UP-TO-DATE
+> Task :battery_plus:javaPreCompileDebug UP-TO-DATE
+> Task :battery_plus:compileDebugJavaWithJavac NO-SOURCE
+> Task :battery_plus:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :battery_plus:processDebugJavaRes UP-TO-DATE
+> Task :speech_to_text:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :speech_to_text:preBuild UP-TO-DATE
+> Task :speech_to_text:preDebugBuild UP-TO-DATE
+> Task :speech_to_text:generateDebugResValues UP-TO-DATE
+> Task :speech_to_text:generateDebugResources UP-TO-DATE
+> Task :speech_to_text:packageDebugResources UP-TO-DATE
+> Task :speech_to_text:parseDebugLocalResources UP-TO-DATE
+> Task :speech_to_text:generateDebugRFile UP-TO-DATE
+> Task :speech_to_text:compileDebugKotlin UP-TO-DATE
+> Task :speech_to_text:javaPreCompileDebug UP-TO-DATE
+> Task :speech_to_text:compileDebugJavaWithJavac NO-SOURCE
+> Task :speech_to_text:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :speech_to_text:processDebugJavaRes UP-TO-DATE
+> Task :battery_plus:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :speech_to_text:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :stera_recorder:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :stera_recorder:preBuild UP-TO-DATE
+> Task :stera_recorder:preDebugBuild UP-TO-DATE
+> Task :stera_recorder:generateDebugResValues UP-TO-DATE
+> Task :stera_recorder:generateDebugResources UP-TO-DATE
+> Task :stera_recorder:packageDebugResources UP-TO-DATE
+> Task :stera_recorder:parseDebugLocalResources UP-TO-DATE
+> Task :stera_recorder:generateDebugRFile UP-TO-DATE
+> Task :stera_recorder:compileDebugKotlin UP-TO-DATE
+> Task :stera_recorder:javaPreCompileDebug UP-TO-DATE
+> Task :stera_recorder:compileDebugJavaWithJavac NO-SOURCE
+> Task :stera_recorder:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :stera_recorder:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :battery_plus:compileDebugLibraryResources UP-TO-DATE
+> Task :speech_to_text:compileDebugLibraryResources UP-TO-DATE
+> Task :battery_plus:writeDebugAarMetadata UP-TO-DATE
+> Task :speech_to_text:writeDebugAarMetadata UP-TO-DATE
+> Task :stera_recorder:preDebugUnitTestBuild UP-TO-DATE
+> Task :stera_recorder:writeDebugAarMetadata UP-TO-DATE
+> Task :stera_recorder:checkDebugUnitTestAarMetadata UP-TO-DATE
+> Task :stera_recorder:compileDebugLibraryResources UP-TO-DATE
+> Task :stera_recorder:generateDebugUnitTestResValues UP-TO-DATE
+> Task :stera_recorder:mapDebugUnitTestSourceSetPaths UP-TO-DATE
+> Task :stera_recorder:generateDebugUnitTestResources UP-TO-DATE
+> Task :stera_recorder:mergeDebugUnitTestResources UP-TO-DATE
+> Task :battery_plus:extractDeepLinksDebug UP-TO-DATE
+> Task :battery_plus:processDebugManifest UP-TO-DATE
+> Task :speech_to_text:extractDeepLinksDebug UP-TO-DATE
+> Task :speech_to_text:processDebugManifest UP-TO-DATE
+> Task :stera_recorder:extractDeepLinksDebug UP-TO-DATE
+> Task :stera_recorder:processDebugManifest UP-TO-DATE
+> Task :stera_recorder:processDebugUnitTestManifest UP-TO-DATE
+> Task :stera_recorder:processDebugUnitTestResources UP-TO-DATE
+> Task :stera_recorder:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :stera_recorder:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :stera_recorder:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :battery_plus:mergeDebugShaders UP-TO-DATE
+> Task :battery_plus:compileDebugShaders NO-SOURCE
+> Task :battery_plus:generateDebugAssets UP-TO-DATE
+> Task :battery_plus:mergeDebugAssets UP-TO-DATE
+> Task :speech_to_text:mergeDebugShaders UP-TO-DATE
+> Task :speech_to_text:compileDebugShaders NO-SOURCE
+> Task :speech_to_text:generateDebugAssets UP-TO-DATE
+> Task :speech_to_text:mergeDebugAssets UP-TO-DATE
+> Task :stera_recorder:generateDebugUnitTestAssets UP-TO-DATE
+> Task :stera_recorder:mergeDebugShaders UP-TO-DATE
+> Task :stera_recorder:compileDebugShaders NO-SOURCE
+> Task :stera_recorder:generateDebugAssets UP-TO-DATE
+> Task :stera_recorder:mergeDebugAssets UP-TO-DATE
+> Task :stera_recorder:mergeDebugUnitTestAssets UP-TO-DATE
+> Task :stera_recorder:packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :stera_recorder:generateDebugUnitTestConfig UP-TO-DATE
+> Task :stera_recorder:processDebugJavaRes UP-TO-DATE
+> Task :stera_recorder:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :stera_recorder:testDebugUnitTest UP-TO-DATE
+> Task :stera_recorder:preDebugAndroidTestBuild UP-TO-DATE
+> Task :stera_recorder:checkDebugAndroidTestAarMetadata UP-TO-DATE
+> Task :stera_recorder:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :stera_recorder:mapDebugAndroidTestSourceSetPaths UP-TO-DATE
+> Task :stera_recorder:generateDebugAndroidTestResources UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestResources UP-TO-DATE
+> Task :stera_recorder:processDebugAndroidTestManifest UP-TO-DATE
+> Task :stera_recorder:processDebugAndroidTestResources UP-TO-DATE
+> Task :stera_recorder:javaPreCompileDebugAndroidTest UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestShaders UP-TO-DATE
+> Task :stera_recorder:compileDebugAndroidTestShaders NO-SOURCE
+> Task :stera_recorder:generateDebugAndroidTestAssets UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestAssets UP-TO-DATE
+> Task :stera_recorder:compressDebugAndroidTestAssets UP-TO-DATE
+> Task :stera_recorder:checkDebugAndroidTestDuplicateClasses UP-TO-DATE
+> Task :stera_recorder:desugarDebugAndroidTestFileDependencies UP-TO-DATE
+> Task :stera_recorder:mergeExtDexDebugAndroidTest UP-TO-DATE
+> Task :stera_recorder:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :battery_plus:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :speech_to_text:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :battery_plus:mergeDebugJniLibFolders UP-TO-DATE
+> Task :stera_recorder:mergeLibDexDebugAndroidTest UP-TO-DATE
+> Task :battery_plus:mergeDebugNativeLibs NO-SOURCE
+> Task :battery_plus:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :speech_to_text:mergeDebugJniLibFolders UP-TO-DATE
+> Task :speech_to_text:mergeDebugNativeLibs NO-SOURCE
+> Task :speech_to_text:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :stera_recorder:mergeDebugJniLibFolders UP-TO-DATE
+> Task :stera_recorder:mergeDebugNativeLibs NO-SOURCE
+> Task :stera_recorder:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestJniLibFolders UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestNativeLibs UP-TO-DATE
+> Task :stera_recorder:stripDebugAndroidTestDebugSymbols UP-TO-DATE
+> Task :stera_recorder:validateSigningDebugAndroidTest UP-TO-DATE
+> Task :stera_recorder:writeDebugAndroidTestSigningConfigVersions UP-TO-DATE
+> Task :stera_recorder:compileDebugAndroidTestKotlin
+> Task :stera_recorder:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+> Task :stera_recorder:processDebugAndroidTestJavaRes UP-TO-DATE
+> Task :stera_recorder:mergeDebugAndroidTestJavaResource UP-TO-DATE
+> Task :stera_recorder:dexBuilderDebugAndroidTest
+> Task :stera_recorder:mergeProjectDexDebugAndroidTest
+> Task :stera_recorder:packageDebugAndroidTest
+> Task :stera_recorder:createDebugAndroidTestApkListingFileRedirect UP-TO-DATE
+> Task :stera_recorder:assembleDebugAndroidTest
+
+[Incubating] Problems report is available at: file:///home/wearaway/projects/robotics-data-collection/stera-app/apps/mobile/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2s
+102 actionable tasks: 4 executed, 98 up-to-date
+Performing Streamed Install
+Success
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest:
+INSTRUMENTATION_STATUS: test=staleNativeImageIsRejectedWithEvidenceAndClosed
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=staleNativeImageIsRejectedWithEvidenceAndClosed
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=sameWriterSecondSessionStartsCleanAndSavesItsOwnThumbnail
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=sameWriterSecondSessionStartsCleanAndSavesItsOwnThumbnail
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=truncatedNativePlaneIsRejectedWithEvidenceAndClosed
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=truncatedNativePlaneIsRejectedWithEvidenceAndClosed
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=imageCalibrationMismatchKeepsObservedDimensionsAndCloses
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=imageCalibrationMismatchKeepsObservedDimensionsAndCloses
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=actualAndroidEncoderAndMcapWriterExportCrossClockFixture
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=actualAndroidEncoderAndMcapWriterExportCrossClockFixture
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=actualAndroidJpegEncoderAcceptsObservedPixelThreeClockTupleAndPreservesPixels
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoderInstrumentedTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=6
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=actualAndroidJpegEncoderAcceptsObservedPixelThreeClockTupleAndPreservesPixels
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 0.784
+
+OK (6 tests)
+
+
+INSTRUMENTATION_CODE: -1
+Tests passed. Native producer fixtures and logs: /home/wearaway/projects/robotics-data-collection/artifacts/android-capture-tests/20261022T050801Z

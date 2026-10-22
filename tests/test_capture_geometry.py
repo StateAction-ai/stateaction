@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from capture_geometry import OPTICAL_TO_ARCORE, VERSION, VERSION_V1, validate_record, rotate_intrinsics_180
+from capture_geometry import OPTICAL_TO_ARCORE, VERSION_V2 as VERSION, VERSION_V1, validate_record, rotate_intrinsics_180
 from stera.data.mcap import CameraIntrinsics
 
 

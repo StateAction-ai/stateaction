@@ -1,4 +1,4 @@
-"""Report v2 capture evidence without combining unrelated native clocks.
+"""Report versioned capture evidence without combining unrelated native clocks.
 
 SDK evaluation files remain separate upstream diagnostics. No SDK health score
 is promoted into pose accuracy, and no native timestamp is interpreted as epoch.
@@ -10,12 +10,12 @@ import json
 from numbers import Integral
 from pathlib import Path
 
+from capture_geometry import VERSION, VERSION_V2
 
-VERSION = "android_arcore_cpu_v2"
 STREAM_CLOCKS = {
     "arcore_frame": ("frame_timestamp_ns", "ARCore frame native clock"),
     "android_camera": ("android_camera_timestamp_ns", "Android camera native clock"),
-    "rgb_image": ("rgb_timestamp_ns", "Android camera native clock"),
+    "rgb_image": ("rgb_timestamp_ns", "ARCore CPU image source-specific native clock"),
     "depth_image": ("depth_timestamp_ns", "Depth image native clock; relation to other clocks unverified"),
 }
 
@@ -55,8 +55,9 @@ def write_geometry_report(output, geometry, timestamps, summary):
     if len(geometry) != len(timestamps) or summary.get("frames", len(geometry)) != len(geometry):
         raise ValueError("Geometry, RGB timestamp and summary frame counts disagree")
     rows = [frame["source"] for frame in geometry]
-    if any(row.get("capture_geometry_version") != VERSION for row in rows):
-        raise ValueError("Standalone geometry report requires the v2 capture contract")
+    version = rows[0].get("capture_geometry_version") if rows else VERSION
+    if version not in (VERSION_V2, VERSION) or any(row.get("capture_geometry_version") != version for row in rows):
+        raise ValueError("Standalone geometry report requires one supported v2/v3 capture contract")
     clocks = {name: _clock_summary(rows, field, domain, allow_span=name == "rgb_image")
               for name, (field, domain) in STREAM_CLOCKS.items()}
     counts = {key: int(summary.get(key, 0)) for key in (
@@ -66,7 +67,7 @@ def write_geometry_report(output, geometry, timestamps, summary):
     count = len(rows)
     metrics = {
         "schema_version": "local_geometry_report_v2",
-        "capture_geometry_version": VERSION,
+        "capture_geometry_version": version,
         "status": "capture_evidence_report" if count else "no_encoded_rgb_frames",
         "summary": {"frames": count, **counts, "metric_accuracy_validated": False},
         "stream_counts": {
@@ -92,7 +93,7 @@ def write_geometry_report(output, geometry, timestamps, summary):
         },
         "limitations": [
             "Native clock bounds are separate; no minimum/maximum is combined across streams.",
-            "Android camera and RGB image timestamps identify the same acquired image; this does not synchronize depth or IMU.",
+            "RGB and camera pose are associated by the acquiring ARCore Frame; image and camera timestamp values need not be equal.",
             "Only RGB span is calculated, within its own clock; it is not a cross-stream recording duration.",
             "Calibration contract consistency is not independently measured metric accuracy.",
             "Model predictions and candidate joints remain estimates; unknown visibility cannot become accepted supervision.",

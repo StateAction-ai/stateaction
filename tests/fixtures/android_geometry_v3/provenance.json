@@ -1,0 +1,27 @@
+{
+  "synthetic": true,
+  "real_camera_or_depth": false,
+  "timestamp_origin": "First observed failed attempt in Pixel session_20261022_010013; later frame increments and all pixels/depth/poses are synthetic",
+  "generator_method": "actualAndroidEncoderAndMcapWriterExportCrossClockFixture",
+  "instrumentation_apk_sha256": "837b8f5a6d5d7794c4db3eee13d4beadbdc8b96e9ba1cb5af8e4e06d5b7a5dd2",
+  "artifact_files": {
+    "metadata.json": {
+      "size_bytes": 1939,
+      "sha256": "6e0be895309730d73b52f9ab2b565b0e1282cb275e0a95ae3185add1e6b1b5c6"
+    },
+    "session_data_20261022_010805.mcap": {
+      "size_bytes": 31708,
+      "sha256": "61b06cdda3bbb67adf40fa8b7149166e0a1c4d1131cb949680bc1a825c55002a"
+    },
+    "thumbnail.jpg": {
+      "size_bytes": 641,
+      "sha256": "9762c6b6c0daad15f4e2daf3d545eb04735a70874e6e2287957bb96b6cf99cfa"
+    }
+  },
+  "producer_source_sha256": {
+    "stera-app/packages/stera_recorder/android/src/androidTest/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoderInstrumentedTest.kt": "3680e9409d6751882ad221db659ca7666de6c9943f1a1b34917feba4fbacbb2e",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/encoding/CpuImageEncoder.kt": "e7d6d7153efc645b7a84778f9b5ff816cd2c7971045d20ea5f829339f3633c59",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt": "4ceb0fe9d9c5ae815b03db92b6395f31e55b57acd2163835be9a7af6c56de1b0",
+    "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/geometry/CaptureGeometry.kt": "83bf58f05510f77677bc69268912df3eef87c4dee534607621e7ee3201405c97"
+  }
+}
