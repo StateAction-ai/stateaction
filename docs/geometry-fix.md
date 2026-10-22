@@ -1,17 +1,18 @@
 # Pixel capture geometry: causes, corrections and validation
 
-> **Current status: both v1 and v2 failed physical acquisition. V3 is installed,
-> with physical validation pending.** V2 rejected all 291 attempts in
+> **Current status: v3 restores physical RGB/depth/pose acquisition in two Pixel
+> recordings; hand accuracy remains unvalidated.** V2 rejected all 291 attempts in
 > `session_20261022_010013` because it required equality between separate native
 > clock values. This was our regression. V3 removes the invalid requirement;
 > **26 JVM, 6 native Android and 73 Python tests pass**, including the exact
-> observed Pixel timestamp tuple. See the [failure and repair record](geometry-v3-capture-regression.md).
+> observed Pixel timestamp tuple. See [actual physical results](pixel-v3-physical-validation.md)
+> and the [failure and repair record](geometry-v3-capture-regression.md).
 
 **The original 3D hand/body annotations are not reliable training labels.** We
 found coordinate-contract defects in the Android recorder and missing geometric
 checks in the selected SDK hand pipeline. The v3 debug APK is installed on the
-Pixel 9 Pro XL. Installation did not launch the app or start a recording; fresh
-physical capture validation is pending. A correct software contract alone does
+Pixel 9 Pro XL. The user recorded two successful physical sessions; all saved RGB/depth/pose
+payloads decode, while independent physical accuracy measurements remain pending. A correct software contract alone does
 not establish accurate metric hand poses.
 
 Investigation date: 2026-10-22, Toronto. App base commit:

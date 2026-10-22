@@ -78,8 +78,10 @@ sensor measurements.
 5. Then resume independent registration, depth and hand-annotation accuracy
    measurements. Successful acquisition does not certify those measurements.
 
-Steps 1–2 pass: 26 JVM, 6 native Android and 73 Python tests, plus complete
-processing of the native three-frame fixture. The v3 APK is installed on the
-Pixel. Step 3 awaits a user-started recording, and steps 4–5 remain pending.
+Steps 1–4 now pass: native fixture tests and two user-started Pixel recordings
+with actual RGB/depth/tracked-pose data, complete decoding and clean finalization.
+The [physical results](pixel-v3-physical-validation.md) and
+[acquisition receipt](validation/pixel-v3-acquisition.json) record the evidence.
+Independent accuracy measurements in step 5 remain pending.
 The [build receipt](geometry-v3-build-receipt.json) records the exact revision,
 APK hash and completed checks. Installation alone is not proof of recovery.

@@ -1,0 +1,105 @@
+{
+  "schema": "physical_capture_acquisition_validation_v1",
+  "recorded_utc": "2026-10-22T19:31:14.950551+00:00",
+  "status": "v3_physical_rgb_depth_pose_acquisition_verified_in_two_sessions",
+  "capture_app_commit": "b34d8367e4a851e4dcb36ed75cf3235b191361b3",
+  "capture_apk_sha256": "be6670d0f09d614f1446478e5cee9ce77279bfc7c20f0ddb416110bfa4a573de",
+  "sessions": [
+    {
+      "session": "session_20261022_151917",
+      "version": "android_arcore_cpu_v3",
+      "counts": {
+        "rgb": 245,
+        "depth": 245,
+        "tracked_pose": 245
+      },
+      "calibration_contract_all": true,
+      "shapes": {
+        "rgb": [
+          1080,
+          1920,
+          3
+        ],
+        "depth": [
+          90,
+          160
+        ]
+      },
+      "unique_depth_payloads": 245,
+      "zero_depth_fraction_median": 0.0,
+      "nonzero_depth_mm": {
+        "min": 409,
+        "median_of_frame_medians": 636.0,
+        "max": 22270
+      },
+      "depth_time_verified": false,
+      "metric_accuracy_validated": false,
+      "mcap_sha256": "0e5fe83112c7641f4679936ed50d95ac0793f97312a496ca2d819bdb058c562b",
+      "decoded_messages": 16305,
+      "decode_errors": 0,
+      "crc_validation": "enabled for CRCs present in MCAP; no claim that every record has a checksum",
+      "populated_topics": 11,
+      "successful_finalization": true,
+      "encoder_attempts": 245,
+      "encoder_failures": 0,
+      "phone_local_file_hashes_match": true,
+      "pointcloud_nonfinite_messages": 243,
+      "metadata_sha256": "64a65acc7e1f996fdc48ff5c471707e0cc2297baf6d808644c444f1e7980bb65",
+      "nominal_recording_fps": 15,
+      "observed_recording_fps": 14.211961250652589
+    },
+    {
+      "session": "session_20261022_152005",
+      "version": "android_arcore_cpu_v3",
+      "counts": {
+        "rgb": 186,
+        "depth": 186,
+        "tracked_pose": 186
+      },
+      "calibration_contract_all": true,
+      "shapes": {
+        "rgb": [
+          1080,
+          1920,
+          3
+        ],
+        "depth": [
+          90,
+          160
+        ]
+      },
+      "unique_depth_payloads": 186,
+      "zero_depth_fraction_median": 0.0,
+      "nonzero_depth_mm": {
+        "min": 378,
+        "median_of_frame_medians": 600.0,
+        "max": 1056
+      },
+      "depth_time_verified": false,
+      "metric_accuracy_validated": false,
+      "mcap_sha256": "c71f38fa8d9eb1322e532a82991657715ef7099d17f041d1b2b306c4ca9abcb0",
+      "decoded_messages": 11888,
+      "decode_errors": 0,
+      "crc_validation": "enabled for CRCs present in MCAP; no claim that every record has a checksum",
+      "populated_topics": 11,
+      "successful_finalization": true,
+      "encoder_attempts": 186,
+      "encoder_failures": 0,
+      "phone_local_file_hashes_match": true,
+      "pointcloud_nonfinite_messages": 0,
+      "metadata_sha256": "548c0c4913a24aebc99ee0ad6f1c70cda95d8c8b85db8c3ec4ff49b8754979fb",
+      "nominal_recording_fps": 15,
+      "observed_recording_fps": 14.791252485089464
+    }
+  ],
+  "metric_accuracy_validated": false,
+  "cross_stream_clock_verified": false,
+  "frontier_lab_training_qualified": false,
+  "limits": [
+    "Two successful captures demonstrate this Pixel acquisition path, not all devices or operating conditions.",
+    "Camera poses are tracked and structurally valid; independent motion accuracy remains unmeasured.",
+    "RGB/depth native timestamps happen to match in these sessions; no independent synchronization measurement has been performed.",
+    "Depth is estimated at 160x90; positive values and variation do not establish surface or anatomical accuracy.",
+    "The earlier session contains nonfinite sparse point-cloud values, retained in raw data and reported as a quality issue."
+  ]
+}

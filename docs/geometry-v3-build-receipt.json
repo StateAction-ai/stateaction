@@ -1,7 +1,7 @@
 {
   "recorded_utc": "2026-10-22T05:11:40.987598+00:00",
   "capture_geometry_version": "android_arcore_cpu_v3",
-  "status": "software_and_native_fixture_passed_pixel_installed_physical_capture_pending",
+  "status": "physical_rgb_depth_pose_acquisition_verified_in_two_pixel_sessions",
   "app_commit": "b34d8367e4a851e4dcb36ed75cf3235b191361b3",
   "sdk_commit": "df6a5ec8919053c5cd448db83d4816e1faaaec62",
   "apk": {
@@ -65,20 +65,20 @@
     "review": "Independent read-only Android review found no additional confirmed capture blocker; all 291 saved v2 diagnostic records satisfy new metadata/plane predicates. This does not execute real sensor acquisition."
   },
   "physical_validation": {
-    "status": "pending_user_recording",
+    "status": "acquisition_passed_accuracy_pending",
     "metric_accuracy_validated": false,
     "frontier_lab_training_qualified": false,
-    "latest_audit_utc": "2026-10-22T05:30:30.763815+00:00",
-    "v3_session_present_on_connected_device": false,
-    "latest_available_session": "session_20261022_010013",
-    "latest_available_session_version": "android_arcore_cpu_v2",
-    "latest_available_session_result": "failed: zero RGB/depth/pose, 291 rejected RGB attempts",
+    "latest_audit_utc": "2026-10-22T19:34:20.513600+00:00",
+    "v3_session_present_on_connected_device": true,
+    "latest_available_session": "session_20261022_152005",
+    "latest_available_session_version": "android_arcore_cpu_v3",
+    "latest_available_session_result": "186 RGB/depth/tracked pose events; zero encoder failures; all 11888 messages decoded",
     "unmet_evidence": [
-      "New v3 physical recording with decodable RGB, depth, tracked poses and successful finalization.",
       "Independent physical registration, depth, camera-motion and temporal measurements.",
       "Independent hand/joint reference annotations and measured model errors.",
       "A named training-use contract, qualified delivered labels, and downstream evaluation evidence."
-    ]
+    ],
+    "acquisition_evidence": "docs/validation/pixel-v3-acquisition.json"
   },
   "previous_v2_failure": {
     "session": "session_20261022_010013",
@@ -95,5 +95,6 @@
     "scripts/geometry_report.py": "47f725af2afca7d20ba95e8562eae2d098a52cd8d249c3a190562d2ee7a40486",
     "scripts/process_geometry_capture.py": "c9753b4dbcdcecbb693e9e4ad1a9a4d2d7ec3238fd784f2c3b15e542133a89cc",
     "tests/test_capture_geometry_v3.py": "c425ab23b4a933320dd0a89c2dff49e9550cf94e2d80001fff412a7703aa5ac6"
-  }
+  },
+  "subsequent_playback_update": "docs/playback-orientation-build-receipt.json"
 }

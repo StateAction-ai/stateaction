@@ -1,0 +1,8 @@
+00:00 +0: loading /home/wearaway/projects/robotics-data-collection/stera-app/apps/mobile/test/src/modules/mcap_preview/mcap_playback_orientation_test.dart
+00:00 +0: known camera rolls produce all four display rotations
+00:00 +1: observed Pixel upside-down camera orientations need 180 degrees
+00:00 +2: ambiguous, vertical, invalid and inconsistent evidence leaves native view
+00:00 +3: actual native MCAP metadata and exact pose events select an upright default
+00:00 +4: quarter turns swap display bounds while retaining the same decoded pixels
+00:00 +5: local Pixel RGB and depth choose the same 180-degree presentation
+00:00 +6: All tests passed!

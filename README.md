@@ -21,7 +21,9 @@ below describe the installed local tools; cloning alone does not install them.
 
 ## Validation status
 
-**Current status: v1 and v2 both failed physical acquisition; do not use them for collection.** V2 session `session_20261022_010013` saved zero RGB/depth/pose frames because an invalid cross-clock timestamp equality check rejected all 291 capture attempts. V3 removes that requirement and preserves the separate clocks with the acquiring ARCore Frame association. Its physical validation is pending. Historical passing synthetic tests did not exercise the Pixel's actual timestamp behavior. See [the failure and repair record](docs/geometry-v3-capture-regression.md) and [geometry validation limits](docs/geometry-fix.md). The [v2 build receipt](docs/geometry-v2-build-receipt.json) remains historical evidence, not proof of working physical capture.
+**Current status: v3 physical acquisition works in two Pixel recordings.** The captures contain 245 and 186 matched RGB/depth/tracked-pose events, zero encoder failures, and no message decode errors. The saved-playback orientation fix is installed and tested against the latest recording. See [physical results and remaining hand failures](docs/pixel-v3-physical-validation.md). Hand-pose accuracy, temporal accuracy and training qualification remain unverified.
+
+V1 and v2 both failed acquisition; do not use them for collection. V2 rejected all 291 attempts because of our invalid cross-clock timestamp equality requirement. V3 preserves the separate native clocks and acquiring Frame association. Historical receipts remain evidence of the earlier failures; [the regression record](docs/geometry-v3-capture-regression.md) explains the repair.
 
 The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Earlier recordings and current model estimates have not qualified as metric hand supervision.
 
@@ -72,7 +74,7 @@ cd "$ROBOTICS_CAPTURE_ROOT/stera-app/apps/mobile"
 flutter pub get
 flutter build apk --debug --target-platform android-arm64,android-x64 --dart-define=NO_AUTH_MODE=true
 install -m 644 build/app/outputs/flutter-apk/app-debug.apk \
-  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v3-debug.apk"
+  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk"
 ```
 
 For this Android no-auth build, Bun and database code generation are unnecessary; generated Dart database code is committed upstream. The official Bun preparation additionally synchronizes Google client IDs (skipped in no-auth mode) and writes iOS configuration.
@@ -124,7 +126,7 @@ adb devices -l
 export ROBOTICS_CAPTURE_DEVICE='device-identifier-from-adb-devices'
 adb -s "$ROBOTICS_CAPTURE_DEVICE" get-state
 adb -s "$ROBOTICS_CAPTURE_DEVICE" install -r \
-  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-pixel9proxl-geometry-v3-debug.apk"
+  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk"
 adb -s "$ROBOTICS_CAPTURE_DEVICE" shell am start \
   -n open.fpvlabs.stera/.MainActivity
 ```

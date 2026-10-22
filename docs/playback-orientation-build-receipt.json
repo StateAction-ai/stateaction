@@ -1,0 +1,33 @@
+{
+  "created_utc": "2026-10-22T19:31:14.951181+00:00",
+  "app_commit": "c6614b32f7a33e7a087e908700af5ab632f21a5b",
+  "capture_geometry_version": "android_arcore_cpu_v3",
+  "scope": "Saved RGB/depth viewing orientation; native recorder and raw captures unchanged.",
+  "apk": {
+    "path": "artifacts/stera-pixel9proxl-playback-orientation-debug.apk",
+    "sha256": "7fc9303157852e4e50a27e4034584185f16ed6be35dd00ccb9c79217ed1ea6a2",
+    "size_bytes": 180393494,
+    "signature_v2_verified": true,
+    "installed": true,
+    "installed_hash_matches": true,
+    "NO_AUTH_MODE": true
+  },
+  "validation": {
+    "flutter_tests_passed": 6,
+    "flutter_tests_log": "docs/validation/playback-orientation-tests.log",
+    "includes_actual_latest_pixel_mcap": true,
+    "covers": [
+      "All quarter turns and rendered asymmetric quadrant pixel order",
+      "Native image byte identity under viewing rotation",
+      "Observed Pixel poses select 180 degrees",
+      "Ambiguous/vertical/invalid evidence fallback",
+      "Actual native MCAP version/pose association",
+      "Actual latest Pixel RGB and depth default to the same rotation"
+    ],
+    "flutter_analyze": "No issues found",
+    "monorepo_bun_fix": "Unavailable: ultracite not installed; changed Dart files formatted using dart format."
+  },
+  "user_visible_pixel_playback_verified": false,
+  "view_rotation": "Fixed per playback, gravity-derived right-angle default for declared native Android geometry; manual rotate override.",
+  "training_accuracy_claim": false
+}
