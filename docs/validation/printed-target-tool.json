@@ -1,0 +1,189 @@
+{
+  "schema": "printed_target_tool_validation_v1",
+  "created_utc": "2026-10-22T05:25:21.323287+00:00",
+  "scope": "Synthetic tool validation and digital PDF rendering; no physical sensor accuracy measurement",
+  "physical_pixel_capture_validated": false,
+  "frontier_lab_training_qualified": false,
+  "python_suite": {
+    "passed": 81,
+    "failed": 0,
+    "command": ".venv-stera/bin/python -m unittest discover -s tests -v",
+    "log": "docs/validation/python-calibration-tests.log"
+  },
+  "source_sha256": {
+    "scripts/validate_calibration_target.py": "8d94f9226188b4afc665fa75aba51ce9ed7ecbebb17a10d2bc0d544303796e3c",
+    "tests/test_calibration_target.py": "e7662002f3e9ea09e7a4a1be33f6aaeb8349c3e3e91522f75ff149849d005d6a"
+  },
+  "positive_mcap": {
+    "source_sha256": "5228a67f6b84da490b45ab2e16fb4accf99ed7a658354d4769fb669f9a7fb0fa",
+    "source_unchanged": true,
+    "summary": {
+      "sampled_frames": 2,
+      "usable_board_frames": 2,
+      "board_reasons": {
+        "image_reference_available": 2
+      },
+      "per_frame_median_absolute_depth_error_mm": {
+        "count": 2,
+        "median": 0.26958728314829816,
+        "p90": 0.2854798843942463,
+        "max": 0.28945303470573336
+      },
+      "relative_camera_translation_error_m": {
+        "count": 1,
+        "median": 0.004813598738801118,
+        "p90": 0.004813598738801118,
+        "max": 0.004813598738801118
+      },
+      "relative_camera_rotation_error_deg": {
+        "count": 1,
+        "median": 0.41403748914565175,
+        "p90": 0.41403748914565175,
+        "max": 0.41403748914565175
+      }
+    }
+  },
+  "wrong_pose_axes_negative_control": {
+    "source_sha256": "4f7001562ad3e311aaa495f8173c16173c7ae60e1c09a690dd7ff2abe61b6ede",
+    "source_unchanged": true,
+    "summary": {
+      "sampled_frames": 2,
+      "usable_board_frames": 2,
+      "board_reasons": {
+        "image_reference_available": 2
+      },
+      "per_frame_median_absolute_depth_error_mm": {
+        "count": 2,
+        "median": 0.26958728314829816,
+        "p90": 0.2854798843942463,
+        "max": 0.28945303470573336
+      },
+      "relative_camera_translation_error_m": {
+        "count": 1,
+        "median": 0.0466476573184776,
+        "p90": 0.0466476573184776,
+        "max": 0.0466476573184776
+      },
+      "relative_camera_rotation_error_deg": {
+        "count": 1,
+        "median": 1.519757517844806,
+        "p90": 1.519757517844806,
+        "max": 1.519757517844806
+      }
+    }
+  },
+  "slanted_plane_negative_controls": {
+    "correct": {
+      "interior_pixels": 1364,
+      "positive_depth_pixels": 1364,
+      "missing_or_invalid_fraction": 0.0,
+      "status": "comparison_available",
+      "median_signed_error_mm": -0.006272050176447941,
+      "absolute_error_mm": {
+        "count": 1364,
+        "median": 0.24568138195779632,
+        "p90": 0.45231499802134145,
+        "max": 0.4990343762070193
+      },
+      "absolute_relative_error": {
+        "count": 1364,
+        "median": 0.00031999999999996474,
+        "p90": 0.0005720000000000839,
+        "max": 0.0006459999999999864
+      },
+      "expected_z_m": {
+        "count": 1364,
+        "median": 0.7809449433814916,
+        "p90": 0.799041150619257,
+        "max": 0.8107012565869477
+      }
+    },
+    "wrong_units": {
+      "interior_pixels": 1364,
+      "positive_depth_pixels": 1364,
+      "missing_or_invalid_fraction": 0.0,
+      "status": "comparison_available",
+      "median_signed_error_mm": -780.1639433814915,
+      "absolute_error_mm": {
+        "count": 1364,
+        "median": 780.1639433814915,
+        "p90": 798.242150619257,
+        "max": 809.8902565869477
+      },
+      "absolute_relative_error": {
+        "count": 1364,
+        "median": 0.999000008,
+        "p90": 0.999000512,
+        "max": 0.999000646
+      },
+      "expected_z_m": {
+        "count": 1364,
+        "median": 0.7809449433814916,
+        "p90": 0.799041150619257,
+        "max": 0.8107012565869477
+      }
+    },
+    "flipped_depth": {
+      "interior_pixels": 1364,
+      "positive_depth_pixels": 1364,
+      "missing_or_invalid_fraction": 0.0,
+      "status": "comparison_available",
+      "median_signed_error_mm": 1019.0550566185084,
+      "absolute_error_mm": {
+        "count": 1364,
+        "median": 1019.0550566185084,
+        "p90": 1036.3497518136692,
+        "max": 1047.5545522949585
+      },
+      "absolute_relative_error": {
+        "count": 1364,
+        "median": 1.3049,
+        "p90": 1.3570999999999995,
+        "max": 1.3921999999999999
+      },
+      "expected_z_m": {
+        "count": 1364,
+        "median": 0.7809449433814916,
+        "p90": 0.799041150619257,
+        "max": 0.8107012565869477
+      }
+    },
+    "shifted_mapping": {
+      "interior_pixels": 1364,
+      "positive_depth_pixels": 1364,
+      "missing_or_invalid_fraction": 0.0,
+      "status": "comparison_available",
+      "median_signed_error_mm": 973.8950846757538,
+      "absolute_error_mm": {
+        "count": 1364,
+        "median": 973.8950846757538,
+        "p90": 993.2230738200888,
+        "max": 1005.7188244638602
+      },
+      "absolute_relative_error": {
+        "count": 1364,
+        "median": 1.1788999999999998,
+        "p90": 1.2311,
+        "max": 1.2661999999999998
+      },
+      "expected_z_m": {
+        "count": 1364,
+        "median": 0.8261049153242462,
+        "p90": 0.8463817181548878,
+        "max": 0.8594757198109153
+      }
+    }
+  },
+  "digital_pdf_check": {
+    "pdf_sha256": "28c37600f296e2ec7b3b1d223acb5c2371e2372ef1648fc5213fb2e86d94c8d6",
+    "page": "A4 (595.276 x 841.89 pt), verified by pdfinfo",
+    "render_dpi": 254,
+    "rendered_shape": [
+      2970,
+      2101
+    ],
+    "detected_corners": 54,
+    "max_corner_raster_offset_mm": 0.12563517481844372,
+    "scope": "PDF rasterization/localization error only; not physical printer accuracy"
+  }
+}

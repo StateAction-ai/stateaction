@@ -25,6 +25,12 @@ below describe the installed local tools; cloning alone does not install them.
 
 The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Earlier recordings and current model estimates have not qualified as metric hand supervision.
 
+After physical acquisition is confirmed, use the
+[printed-target protocol](docs/physical-calibration-validation.md) to measure
+depth and camera-motion disagreement. Its printable A4 target and auditor are
+tested with known synthetic geometry and deliberately corrupted units/axes;
+actual Pixel accuracy remains unmeasured.
+
 Verified device: Pixel 9 Pro XL, Android 17 (API 37), `arm64-v8a`, paired and connected over Wi-Fi. Google Play Services for AR is installed. The original pre-geometry-fix APK built successfully on 2026-10-21, its signature passed verification, and its packaged configuration contains only `NO_AUTH_MODE=true`. Build details and SHA-256 are in [docs/build-receipt.json](docs/build-receipt.json). That original build's installation and activity launch on the Pixel passed; the app remained running without matching fatal/Flutter exceptions in the inspected recent app logs. The first recording was copied with matching phone/local hashes and all 21,508 messages decoded without validation errors. Physical tracking accuracy has not been measured.
 
 ```text
