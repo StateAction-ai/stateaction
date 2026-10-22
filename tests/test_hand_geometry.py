@@ -140,6 +140,12 @@ class HandGeometryTests(unittest.TestCase):
         np.testing.assert_allclose(observed[0]['relative_joints_m'], self.relative, atol=1e-16)
         np.testing.assert_allclose(observed[0]['landmarks_rgb_px'], self.uv)
         np.testing.assert_array_equal(observed[0]['raw_world_landmarks_m'], self.truth)
+        raw = detect_observations(backend, np.zeros((480, 640, 3), np.uint8),
+                                  deduplicate_by_side=False)
+        self.assertEqual([x['hand_side'] for x in raw], ['right', 'right', 'left'])
+        self.assertEqual([x['handedness_score'] for x in raw], [.6, .95, .8])
+        self.assertEqual(len(raw), 3)
+        self.assertEqual(len(observed), 2)
 
 
 if __name__ == '__main__':

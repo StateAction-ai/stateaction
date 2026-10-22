@@ -1,0 +1,485 @@
+{
+  "status": "complete",
+  "started_utc": "2026-10-22T04:51:33.755661+00:00",
+  "finished_utc": "2026-10-22T04:52:06.236856+00:00",
+  "script_sha256": "b024376385357507f4ea8074ce8bf11d9c6f7633a65bbd57c49841dcadb0b2b1",
+  "source": "/home/wearaway/projects/robotics-data-collection/captures/public-egocentric/egoviz_c59801fe4172cf9b430cd9232dda3909/c59801fe4172cf9b430cd9232dda3909.mcap",
+  "source_sha256": "c86d1d69df71953b0b7fe1d61cfbc919743d1c108a2a0adc30b5c1a449e2e7d4",
+  "source_url": "https://huggingface.co/buckets/humaidtech/EgoViz-120/resolve/data/cleaning_restroom/c59801fe4172cf9b430cd9232dda3909/c59801fe4172cf9b430cd9232dda3909.mcap",
+  "dataset_card": "https://huggingface.co/datasets/humaidtech/EgoViz-120",
+  "license": "CC-BY-4.0",
+  "attribution": "Humaid Tech Inc., EgoViz-120 (2026)",
+  "changes": "Extracted clean ego-left stream; inferred MediaPipe landmarks; added overlays and exports.",
+  "source_frame_count": 449,
+  "processed_frames": 449,
+  "frames_with_hand": 71,
+  "frames_with_two_hand_predictions": 0,
+  "hand_observations": 71,
+  "detections_by_side": {
+    "left": 41,
+    "right": 30
+  },
+  "production_selected_hand_observations": 71,
+  "raw_observations_removed_by_production_side_deduplication": 0,
+  "out_of_image_predicted_joint_count": 0,
+  "frames_without_hand_prediction": 378,
+  "detection_coverage_is_accuracy": false,
+  "visibility": "unknown",
+  "accepted_metric_hand_count": 0,
+  "metric_3d_validated": false,
+  "publisher_hand_labels_used": false,
+  "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "observation_selection": "Same production model/config and detect_observations adapter, with deduplicate_by_side=False to preserve every raw detection. Production default keeps highest score per predicted side; its selected count is reported separately.",
+  "handedness_convention_validated": false,
+  "model_backend": "Stera MediaPipe HandTracker, detect_observations, IMAGE mode, default CPU delegate",
+  "model_config": {
+    "max_num_hands": 2,
+    "min_detection_confidence": 0.3,
+    "min_presence_confidence": 0.3,
+    "min_tracking_confidence": 0.3,
+    "depth_sample_radius": 7,
+    "depth_buffer_size": 15,
+    "max_joint_abs": 3.0,
+    "min_wrist_depth": 0.05
+  },
+  "library_versions": {
+    "mediapipe": "0.10.21",
+    "stera-sdk": "0.0.4",
+    "rerun-sdk": "0.22.1",
+    "opencv-python": "4.11.0.86"
+  },
+  "processing_wall_seconds": 31.008,
+  "comparison_decoded_frames": 449,
+  "rerun_ingestion_exit_code": 0,
+  "source_unchanged": true,
+  "calibration_used": false,
+  "source_streams": {
+    "source_topic": "/ego/zed_head/left/image/compressed",
+    "packet_count": 449,
+    "nominal_mp4_fps": 30.00030000300003,
+    "source_channels": [
+      {
+        "topic": "/wrist_left/imu/data",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/Imu",
+        "message_count": 3001
+      },
+      {
+        "topic": "/action",
+        "message_encoding": "cdr",
+        "schema": "tad_msgs/msg/ActionPhase",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/imu/data",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/Imu",
+        "message_count": 2993
+      },
+      {
+        "topic": "/wrist_right/imu/data",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/Imu",
+        "message_count": 2992
+      },
+      {
+        "topic": "/wrist_left/image/camera_info",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CameraInfo",
+        "message_count": 450
+      },
+      {
+        "topic": "/wrist_left/image/compressed",
+        "message_encoding": "protobuf",
+        "schema": "foxglove.CompressedVideo",
+        "message_count": 450
+      },
+      {
+        "topic": "/hands/left/detected",
+        "message_encoding": "cdr",
+        "schema": "std_msgs/msg/Bool",
+        "message_count": 449
+      },
+      {
+        "topic": "/hands/left/keypoints",
+        "message_encoding": "cdr",
+        "schema": "visualization_msgs/msg/MarkerArray",
+        "message_count": 449
+      },
+      {
+        "topic": "/hands/left/odom",
+        "message_encoding": "cdr",
+        "schema": "nav_msgs/msg/Odometry",
+        "message_count": 449
+      },
+      {
+        "topic": "/hands/right/detected",
+        "message_encoding": "cdr",
+        "schema": "std_msgs/msg/Bool",
+        "message_count": 449
+      },
+      {
+        "topic": "/hands/right/keypoints",
+        "message_encoding": "cdr",
+        "schema": "visualization_msgs/msg/MarkerArray",
+        "message_count": 449
+      },
+      {
+        "topic": "/hands/right/odom",
+        "message_encoding": "cdr",
+        "schema": "nav_msgs/msg/Odometry",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/depth/image/compressed",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CompressedImage",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/left/camera_info",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CameraInfo",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/right/camera_info",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CameraInfo",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/depth/camera_info",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CameraInfo",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/odom",
+        "message_encoding": "cdr",
+        "schema": "nav_msgs/msg/Odometry",
+        "message_count": 449
+      },
+      {
+        "topic": "/tf",
+        "message_encoding": "cdr",
+        "schema": "tf2_msgs/msg/TFMessage",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/left/image/compressed",
+        "message_encoding": "protobuf",
+        "schema": "foxglove.CompressedVideo",
+        "message_count": 449
+      },
+      {
+        "topic": "/ego/zed_head/right/image/compressed",
+        "message_encoding": "protobuf",
+        "schema": "foxglove.CompressedVideo",
+        "message_count": 449
+      },
+      {
+        "topic": "/wrist_right/image/camera_info",
+        "message_encoding": "cdr",
+        "schema": "sensor_msgs/msg/CameraInfo",
+        "message_count": 450
+      },
+      {
+        "topic": "/wrist_right/image/compressed",
+        "message_encoding": "protobuf",
+        "schema": "foxglove.CompressedVideo",
+        "message_count": 450
+      },
+      {
+        "topic": "/tf_static",
+        "message_encoding": "cdr",
+        "schema": "tf2_msgs/msg/TFMessage",
+        "message_count": 44
+      }
+    ],
+    "calibration_records": {
+      "/wrist_left/image/camera_info": {
+        "first": {
+          "width": 1920,
+          "height": 1200,
+          "K": [
+            340.22491455078125,
+            0.0,
+            990.19873046875,
+            0.0,
+            339.8897399902344,
+            602.2854614257812,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "D": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "R": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "P": [
+            340.22491455078125,
+            0.0,
+            990.19873046875,
+            0.0,
+            0.0,
+            339.8897399902344,
+            602.2854614257812,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "distortion_model": "plumb_bob",
+          "frame_id": "wrist_left_optical_frame"
+        },
+        "count": 450,
+        "all_equal_first": true
+      },
+      "/ego/zed_head/left/camera_info": {
+        "first": {
+          "width": 1920,
+          "height": 1200,
+          "K": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "D": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "R": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "P": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            0.0,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "distortion_model": "plumb_bob",
+          "frame_id": "zed_head_left_camera_optical_frame"
+        },
+        "count": 449,
+        "all_equal_first": true
+      },
+      "/ego/zed_head/right/camera_info": {
+        "first": {
+          "width": 1920,
+          "height": 1200,
+          "K": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "D": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "R": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "P": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            -87.78396311531216,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "distortion_model": "plumb_bob",
+          "frame_id": "zed_head_right_camera_optical_frame"
+        },
+        "count": 449,
+        "all_equal_first": true
+      },
+      "/ego/zed_head/depth/camera_info": {
+        "first": {
+          "width": 1920,
+          "height": 1200,
+          "K": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "D": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "R": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "P": [
+            731.6666259765625,
+            0.0,
+            931.1639404296875,
+            0.0,
+            0.0,
+            731.6666259765625,
+            626.6637573242188,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "distortion_model": "plumb_bob",
+          "frame_id": "zed_head_depth_camera_optical_frame"
+        },
+        "count": 449,
+        "all_equal_first": true
+      },
+      "/wrist_right/image/camera_info": {
+        "first": {
+          "width": 1920,
+          "height": 1200,
+          "K": [
+            339.7807312011719,
+            0.0,
+            970.92138671875,
+            0.0,
+            339.62591552734375,
+            612.0155029296875,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "D": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "R": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "P": [
+            339.7807312011719,
+            0.0,
+            970.92138671875,
+            0.0,
+            0.0,
+            339.62591552734375,
+            612.0155029296875,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "distortion_model": "plumb_bob",
+          "frame_id": "wrist_right_optical_frame"
+        },
+        "count": 450,
+        "all_equal_first": true
+      }
+    },
+    "calibration_used_for_hand_reconstruction": false,
+    "source_clock_relation_independently_validated": false,
+    "publisher_hand_labels_used": false,
+    "presentation_note": "MP4 uses nominal FPS; exact native RGB packet/header, log and publish times are preserved separately."
+  },
+  "limitations": [
+    "No independently labeled 2D or 3D ground truth; detection coverage is not accuracy.",
+    "No calibrated depth/pose/IMU integration in this RGB-only test.",
+    "Unknown occlusion, glove effects, and hidden-finger validity.",
+    "Model may miss hands or infer anatomically wrong joints."
+  ],
+  "output_sha256": {
+    "comparison.mp4": "085d001e6d9d0403a605368251d67b4c556f250bc67df15d6c4ece85eebfa094",
+    "contact_sheet.jpg": "297ecb2a6e9984a47afe52d22526650a122a55bca28c2dbd58a96770c5516eb0",
+    "observations.hdf5": "ce1f7e8d604e6281ce205e0232e1b5b6f0be38685e193f3f34eee755a8f3e28e",
+    "observations.jsonl": "f8bc46b777d0f7eb8ca41dd7cda7c568dfece5d867b5690ee165dde591572343",
+    "visualization.rrd": "ba21d49fb95f993ac7a1eb437b09bc14526bd870381e64fe81d1ab0e846148d9"
+  }
+}

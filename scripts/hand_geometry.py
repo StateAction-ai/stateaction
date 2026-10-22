@@ -45,12 +45,14 @@ def project_points(points_m, intrinsic):
         return p[:, :2] / p[:, 2:3]
 
 
-def detect_observations(backend, rgb):
+def detect_observations(backend, rgb, *, deduplicate_by_side=True):
     """Read MediaPipe predictions before Stera's depth anchoring loses evidence.
 
     ``backend`` is the SDK MediaPipeHandTracker (not its HandTracker facade).
     The backend's already configured landmarker/model is reused. Labels and
-    per-side best-handedness deduplication match Stera. Handedness scores are
+    per-side best-handedness deduplication match Stera by default. Set
+    ``deduplicate_by_side=False`` for diagnostics that preserve every returned
+    detection even when two hands receive the same side label. Handedness scores are
     deliberately named; they are never treated as pose confidence.
     """
     backend.load()
@@ -65,7 +67,7 @@ def detect_observations(backend, rgb):
     if len(result.hand_landmarks) != len(result.handedness) or len(result.hand_landmarks) != len(result.hand_world_landmarks):
         raise RuntimeError("MediaPipe returned inconsistent hand result counts")
     height, width = image.shape[:2]
-    best = {}
+    best, observations = {}, []
     for image_lm, world_lm, categories in zip(result.hand_landmarks, result.hand_world_landmarks, result.handedness):
         if not categories:
             continue
@@ -85,9 +87,10 @@ def detect_observations(backend, rgb):
             "raw_image_landmarks_normalized": normalized,
             "backend": "mediapipe",
         }
+        observations.append(observation)
         if side not in best or observation["handedness_score"] > best[side]["handedness_score"]:
             best[side] = observation
-    return list(best.values())
+    return list(best.values()) if deduplicate_by_side else observations
 
 
 def _sample(depth, pixel, policy):

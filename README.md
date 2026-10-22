@@ -21,7 +21,7 @@ below describe the installed local tools; cloning alone does not install them.
 
 ## Validation status
 
-**Current status:** geometry v2 is installed on the Pixel and passes **24 JVM, 5 native Android, 1 Dart and 65 Python tests**, plus a synthetic Android-producer → Python-pipeline run. Fresh Pixel validation is pending. The first geometry-fix build (v1) failed its physical test: `session_20261022_001412` saved zero RGB/depth/pose frames with 310 capture failures. Do not use v1 for collection. V2 corrects timestamp validation, preserves failure diagnostics, and refuses to save empty/failed recordings as successful. Earlier recordings lack the calibration needed to certify their 3D hand annotations. See [root causes and validation limits](docs/geometry-fix.md) and the [v2 build receipt](docs/geometry-v2-build-receipt.json); the [v1 receipt](docs/geometry-build-receipt.json) remains historical evidence.
+**Current status:** geometry v2 is installed on the Pixel; verification includes **24 JVM, 5 native Android, 1 Dart and 66 Python tests**, plus a synthetic Android-producer → Python-pipeline run. The public egocentric RGB test processed all 449 frames but detected hands in only 71; functional processing does not establish annotation accuracy. Fresh Pixel validation is pending. The first geometry-fix build (v1) failed its physical test: `session_20261022_001412` saved zero RGB/depth/pose frames with 310 capture failures. Do not use v1 for collection. V2 corrects timestamp validation, preserves failure diagnostics, and refuses to save empty/failed recordings as successful. Earlier recordings lack the calibration needed to certify their 3D hand annotations. See [root causes and validation limits](docs/geometry-fix.md) and the [v2 build receipt](docs/geometry-v2-build-receipt.json); the [v1 receipt](docs/geometry-build-receipt.json) remains historical evidence.
 
 Verified device: Pixel 9 Pro XL, Android 17 (API 37), `arm64-v8a`, paired and connected over Wi-Fi. Google Play Services for AR is installed. The original pre-geometry-fix APK built successfully on 2026-10-21, its signature passed verification, and its packaged configuration contains only `NO_AUTH_MODE=true`. Build details and SHA-256 are in [docs/build-receipt.json](docs/build-receipt.json). That original build's installation and activity launch on the Pixel passed; the app remained running without matching fatal/Flutter exceptions in the inspected recent app logs. The first recording was copied with matching phone/local hashes and all 21,508 messages decoded without validation errors. Physical tracking accuracy has not been measured.
 
@@ -85,6 +85,26 @@ real JPEG codec. Synthetic tests do not measure ARCore tracking or real depth.
 See the [archived fixture](tests/fixtures/android_geometry_v2/README.md),
 [complete pipeline receipt](docs/validation/synthetic-android-pipeline.json), and
 [Linux simulation guide](docs/linux-recording-test-loop.md).
+
+## Public egocentric video test
+
+Run the production hand model on clean RGB from the reviewed CC BY 4.0
+EgoViz-120 sample. This downloads 150 MB once; later runs reuse it. Choose a new
+output directory for each experiment:
+
+```bash
+.venv-stera/bin/python scripts/test_public_egocentric_video.py \
+  --download-default --output captures/public-egocentric/my_validation
+python3 scripts/view_capture.py captures/public-egocentric/my_validation/visualization.rrd
+```
+
+The [validation report](docs/public-egocentric-video-validation.md) explains the
+visible hand misses, exact test coverage and limitations. The
+[recorded result](docs/validation/public-egocentric-rgb.json) preserves hashes,
+model configuration and export checks. A small same-side export regression ensures
+two model predictions cannot overwrite each other merely because their predicted
+handedness labels match. Metric 3D, depth and physical camera accuracy remain
+separate validation tasks.
 
 ## Select the phone and install
 
