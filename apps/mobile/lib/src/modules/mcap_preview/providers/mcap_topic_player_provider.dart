@@ -3,6 +3,7 @@ import "dart:ui" as ui;
 
 import "package:flutter/foundation.dart";
 import "package:flutter/scheduler.dart";
+import "package:stera/src/modules/mcap_preview/helpers/mcap_playback_orientation.dart";
 import "package:stera/src/services/mcap_reader/cdr/ros2_message_decoder.dart";
 import "package:stera/src/services/mcap_reader/data/models/mcap_records.dart";
 import "package:stera/src/services/mcap_reader/mcap_reader.dart";
@@ -34,6 +35,16 @@ class McapTopicPlayerProvider extends ChangeNotifier {
 
   /// Decoded current visual frame (JPEG or depth colormap topics).
   ui.Image? frameImage;
+
+  /// View-only right-angle rotation, shared by every frame during this playback.
+  int viewQuarterTurns = 0;
+  bool _viewRotationOverridden = false;
+
+  void rotateViewClockwise() {
+    _viewRotationOverridden = true;
+    viewQuarterTurns = (viewQuarterTurns + 1) % 4;
+    notifyListeners();
+  }
 
   /// Display-resolution decode target (physical px). Set by the page from
   /// MediaQuery; frames are never upscaled past their native size.
@@ -72,8 +83,7 @@ class McapTopicPlayerProvider extends ChangeNotifier {
   int get _startNs => _index.isEmpty ? 0 : _index.first.logTimeNs;
   int get _endNs => _index.isEmpty ? 0 : _index.last.logTimeNs;
 
-  double get durationSeconds =>
-      _index.isEmpty ? 0 : (_endNs - _startNs) / 1e9;
+  double get durationSeconds => _index.isEmpty ? 0 : (_endNs - _startNs) / 1e9;
 
   double get positionSeconds =>
       _index.isEmpty ? 0 : (_playheadNs - _startNs) / 1e9;
@@ -93,6 +103,7 @@ class McapTopicPlayerProvider extends ChangeNotifier {
       } else {
         _playheadNs = _startNs;
         _requestLoad(0);
+        unawaited(_loadViewRotation());
         unawaited(_loadTrail());
       }
     } on McapReadException catch (e) {
@@ -102,6 +113,22 @@ class McapTopicPlayerProvider extends ChangeNotifier {
     }
     isLoading = false;
     if (!_disposed) notifyListeners();
+  }
+
+  Future<void> _loadViewRotation() async {
+    try {
+      final turns = await McapPlaybackOrientation.readInitialQuarterTurns(
+        reader,
+        topic,
+        _index,
+      );
+      if (!_disposed && !_viewRotationOverridden && turns != null) {
+        viewQuarterTurns = turns;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Missing/ambiguous pose evidence leaves native view with manual rotation.
+    }
   }
 
   void togglePlay() => isPlaying ? pause() : play();
@@ -143,8 +170,10 @@ class McapTopicPlayerProvider extends ChangeNotifier {
   void step(int delta) {
     if (_index.isEmpty) return;
     pause();
-    final target = (currentIndex < 0 ? 0 : currentIndex + delta)
-        .clamp(0, _index.length - 1);
+    final target = (currentIndex < 0 ? 0 : currentIndex + delta).clamp(
+      0,
+      _index.length - 1,
+    );
     _playheadNs = _index[target].logTimeNs;
     _anchorNs = _playheadNs;
     _clock.reset();
@@ -236,7 +265,10 @@ class McapTopicPlayerProvider extends ChangeNotifier {
     int? targetWidth,
   ) async {
     final message = await reader.readMessage(_index[index]);
-    final decoded = Ros2MessageDecoder.decode(topic.schemaName, message.payload);
+    final decoded = Ros2MessageDecoder.decode(
+      topic.schemaName,
+      message.payload,
+    );
     ui.Image? image;
     final jpeg = decoded.jpegBytes;
     if (jpeg != null) {
@@ -336,8 +368,10 @@ class McapTopicPlayerProvider extends ChangeNotifier {
       for (var i = 0; i < _index.length; i += step) {
         if (_disposed) return;
         final message = await reader.readMessage(_index[i]);
-        final decoded =
-            Ros2MessageDecoder.decode(topic.schemaName, message.payload);
+        final decoded = Ros2MessageDecoder.decode(
+          topic.schemaName,
+          message.payload,
+        );
         final pose = decoded.scene?.poses.firstOrNull;
         if (pose == null) continue;
         times.add(_index[i].logTimeNs);

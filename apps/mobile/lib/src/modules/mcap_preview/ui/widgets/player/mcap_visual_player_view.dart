@@ -1,5 +1,4 @@
 import "dart:async";
-import "dart:ui" as ui;
 
 import "package:flutter/material.dart";
 import "package:stera/src/core/common/utils/extensions.dart";
@@ -8,6 +7,7 @@ import "package:stera/src/modules/mcap_preview/providers/mcap_topic_player_provi
 import "package:stera/src/modules/mcap_preview/ui/widgets/mcap_error_state.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/mcap_loading_state.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/player/mcap_visual_controls.dart";
+import "package:stera/src/modules/mcap_preview/ui/widgets/player/mcap_frame_view.dart";
 import "package:stera/src/services/mcap_reader/data/models/mcap_records.dart";
 
 /// Fullscreen immersive player for image/depth topics (styled like
@@ -142,7 +142,10 @@ class _McapVisualPlayerViewState extends State<McapVisualPlayerView> {
                     child: Center(
                       child: InteractiveViewer(
                         maxScale: 8,
-                        child: _FrameView(image: _player.frameImage),
+                        child: McapFrameView(
+                          image: _player.frameImage,
+                          quarterTurns: _player.viewQuarterTurns,
+                        ),
                       ),
                     ),
                   ),
@@ -169,13 +172,28 @@ class _McapVisualPlayerViewState extends State<McapVisualPlayerView> {
                               Positioned(
                                 top: 12,
                                 left: 56,
-                                right: 16,
+                                right: 64,
                                 child: Text(
                                   widget.topic.topic,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: context.textTheme.bodySmMedium
-                                      .copyWith(color: context.colors.neutralWhite),
+                                      .copyWith(
+                                        color: context.colors.neutralWhite,
+                                      ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: IconButton(
+                                  tooltip: "Rotate view clockwise",
+                                  color: context.colors.neutralWhite,
+                                  icon: const Icon(Icons.rotate_right),
+                                  onPressed: () {
+                                    _player.rotateViewClockwise();
+                                    _scheduleHideControls();
+                                  },
                                 ),
                               ),
                               Positioned(
@@ -225,7 +243,10 @@ class _EdgeScrim extends StatelessWidget {
           gradient: LinearGradient(
             begin: top ? Alignment.topCenter : Alignment.bottomCenter,
             end: top ? Alignment.bottomCenter : Alignment.topCenter,
-            colors: [context.colors.neutralBlack.withValues(alpha: 0.55), Colors.transparent],
+            colors: [
+              context.colors.neutralBlack.withValues(alpha: 0.55),
+              Colors.transparent,
+            ],
           ),
         ),
       ),
@@ -251,28 +272,6 @@ class _CloseButton extends StatelessWidget {
         ),
         icon: const Icon(Icons.close),
         onPressed: () => Navigator.of(context).pop(),
-      ),
-    );
-  }
-}
-
-class _FrameView extends StatelessWidget {
-  final ui.Image? image;
-
-  const _FrameView({required this.image});
-
-  @override
-  Widget build(BuildContext context) {
-    final image = this.image;
-    if (image == null) return const SizedBox.shrink();
-    final width = image.width.toDouble();
-    final height = image.height.toDouble();
-    return FittedBox(
-      fit: BoxFit.contain,
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: RawImage(image: image, width: width, height: height),
       ),
     );
   }
