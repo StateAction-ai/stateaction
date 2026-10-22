@@ -19,18 +19,23 @@ import androidx.test.platform.app.InstrumentationRegistry
 
 @RunWith(AndroidJUnit4::class)
 class CpuImageEncoderInstrumentedTest {
-    private val nativeTimestamp = 1453692090123456L
-    private val frameTimestamp = 1453692090999999L
+    private val nativeTimestamp = 1467836033014624L
+    private val frameTimestamp = 1467836032984466L
+    private val androidCameraTimestamp = 1467836019878654L
     private val calibration = mapOf<String, Any>("imageWidth" to 32, "imageHeight" to 16)
 
-    @Test fun actualAndroidJpegEncoderAcceptsSeparateArcoreClockAndPreservesPixels() {
+    @Test fun actualAndroidJpegEncoderAcceptsObservedPixelThreeClockTupleAndPreservesPixels() {
         val source = TestImage(nativeTimestamp)
         var diagnostics: Map<String, Any?>? = null
-        val encoded = CpuImageEncoder().encodeImage(frameTimestamp, nativeTimestamp, { source.image }, calibration, 95) {
+        val encoded = CpuImageEncoder().encodeImage(frameTimestamp, androidCameraTimestamp, { source.image }, calibration, 95) {
             diagnostics = it
         }
         assertTrue(source.closed)
         assertEquals(nativeTimestamp, encoded.timestampNs)
+        assertEquals(nativeTimestamp, diagnostics?.get("image_timestamp_ns"))
+        assertEquals(frameTimestamp, diagnostics?.get("frame_timestamp_ns"))
+        assertEquals(androidCameraTimestamp, diagnostics?.get("android_camera_timestamp_ns"))
+        assertEquals("Frame.acquireCameraImage_same_frame", diagnostics?.get("rgb_frame_association"))
         assertEquals("complete", diagnostics?.get("stage"))
         assertTrue(encoded.jpeg.size > 100)
         val bitmap = BitmapFactory.decodeByteArray(encoded.jpeg, 0, encoded.jpeg.size)
@@ -49,12 +54,14 @@ class CpuImageEncoderInstrumentedTest {
         val source = TestImage(nativeTimestamp - 33_333_333)
         var diagnostics: Map<String, Any?>? = null
         assertThrows(IllegalArgumentException::class.java) {
-            CpuImageEncoder().encodeImage(frameTimestamp, nativeTimestamp, { source.image }, calibration, 80) { diagnostics = it }
+            CpuImageEncoder().encodeImage(frameTimestamp, 42L, { source.image }, calibration, 80,
+                previousRgbTimestampNs = nativeTimestamp) { diagnostics = it }
         }
         assertTrue(source.closed)
         assertEquals("validate_image_geometry", diagnostics?.get("stage"))
         assertEquals(source.timestampNs, diagnostics?.get("image_timestamp_ns"))
-        assertEquals(nativeTimestamp, diagnostics?.get("android_camera_timestamp_ns"))
+        assertEquals(42L, diagnostics?.get("android_camera_timestamp_ns"))
+        assertEquals(nativeTimestamp, diagnostics?.get("previous_rgb_timestamp_ns"))
         assertNotNull(diagnostics?.get("error_message"))
     }
 
@@ -97,9 +104,10 @@ class CpuImageEncoderInstrumentedTest {
             for (index in 0..2) {
                 val eventTime = frameTimestamp + index * 33_333_333L
                 val cameraTime = nativeTimestamp + index * 33_333_333L
+                val androidTime = androidCameraTimestamp + index * 33_333_333L
                 val depthTime = nativeTimestamp - 10_000_000L // repeated native time; distinct frame associations
                 val source = TestImage(cameraTime)
-                val encoded = CpuImageEncoder().encodeImage(eventTime, cameraTime, { source.image }, rgbK, 95)
+                val encoded = CpuImageEncoder().encodeImage(eventTime, androidTime, { source.image }, rgbK, 95)
                 assertTrue(source.closed)
                 writer.writeIntrinsics(cameraTime, rgbK)
                 writer.writePoseRow(eventTime, floatArrayOf(index * 0.01f, 0f, 0f, 0f, 0f, 0f, 1f), "TRACKING")
@@ -116,7 +124,11 @@ class CpuImageEncoderInstrumentedTest {
                         release = { releasedDepth++ }), eventTime))
                 writer.writeCaptureFrameInfo(eventTime, mapOf(
                     "capture_geometry_version" to CaptureGeometry.VERSION,
-                    "frame_timestamp_ns" to eventTime, "android_camera_timestamp_ns" to cameraTime,
+                    "frame_timestamp_ns" to eventTime, "android_camera_timestamp_ns" to androidTime,
+                    "rgb_frame_association" to "Frame.acquireCameraImage_same_frame",
+                    "rgb_timestamp_clock" to "ARCore_Image_timestamp_source_specific",
+                    "frame_timestamp_clock" to "ARCore_Frame_timestamp_timebase_undefined",
+                    "android_camera_timestamp_clock" to "Frame.getAndroidCameraTimestamp",
                     "rgb_timestamp_ns" to cameraTime, "depth_timestamp_ns" to depthTime,
                     "cross_stream_clock_verified" to false, "tracking_state" to "TRACKING",
                     "rgb_encoded" to true, "depth_available" to true,
@@ -133,6 +145,49 @@ class CpuImageEncoderInstrumentedTest {
         assertEquals(3, releasedDepth)
         assertTrue(directory.listFiles()!!.any { it.extension == "mcap" && it.length() > 0 })
         android.util.Log.i("SteraCaptureFixture", directory.absolutePath)
+    }
+
+    @Test fun sameWriterSecondSessionStartsCleanAndSavesItsOwnThumbnail() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val writer = MCAPDatasetWriter(context, "session_reset_test", "35")
+        val testBase = File(context.cacheDir, "writer-reset-${System.nanoTime()}")
+        var initializationBytes: Any? = null
+        try {
+            for (sessionIndex in 0..1) {
+                val directory = writer.createSessionDirectory(File(testBase, "recording-$sessionIndex"))!!
+                assertTrue(writer.initializeWriters())
+                val initial = writer.getRecordingStats()
+                for (key in listOf("rgbFrameCount", "poseCount", "depthFrameCount", "imuSampleCount",
+                    "pointCloudCount", "skippedDepthFrames")) assertEquals("$key leaked across sessions", 0, initial[key])
+                // Initialization log entries contribute a fixed byte count.
+                if (sessionIndex == 0) initializationBytes = initial["totalBytesWritten"]
+                assertEquals(initializationBytes, initial["totalBytesWritten"])
+                assertEquals(0.0, writer.getWriterAverageLatencyMs(), 0.0)
+                assertNull(writer.getWriteFailure())
+                assertEquals(null, writer.javaClass.getDeclaredField("lastPointCloudData").apply { isAccessible = true }.get(writer))
+                val count = sessionIndex + 1
+                for (index in 0 until count) {
+                    val image = TestImage(nativeTimestamp + index)
+                    val encoded = CpuImageEncoder().encodeImage(frameTimestamp + index, androidCameraTimestamp + index,
+                        { image.image }, calibration, 90)
+                    writer.writeCompressedRgbFrame(encoded.timestampNs, encoded.jpeg, frameTimestamp + index)
+                    writer.writePoseRow(frameTimestamp + index, floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 1f), "TRACKING")
+                    assertTrue(writer.writeDepthFrame(nativeTimestamp + index,
+                        DepthFrameData(ByteArray(4), 4, nativeTimestamp + index, 2, 1, 2, 2, 4, release = {}),
+                        frameTimestamp + index))
+                }
+                writer.finalize()
+                assertTrue("Second recording must get its own thumbnail", File(directory, "thumbnail.jpg").length() > 0)
+                assertEquals(count, writer.getRecordingStats()["rgbFrameCount"])
+                assertEquals(count, writer.getRecordingStats()["poseCount"])
+                assertEquals(count, writer.getRecordingStats()["depthFrameCount"])
+                // Include a sticky error between sessions; initialize must clear it only for the new session.
+                if (sessionIndex == 0) writer.recordWriteFailure("previous session only")
+            }
+        } finally {
+            writer.release()
+            testBase.deleteRecursively()
+        }
     }
 
     private class TestImage(val timestampNs: Long, truncateY: Boolean = false) {

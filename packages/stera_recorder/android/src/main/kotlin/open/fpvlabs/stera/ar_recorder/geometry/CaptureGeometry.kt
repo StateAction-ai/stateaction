@@ -4,7 +4,7 @@ import kotlin.math.abs
 
 /** Contract for saved pixels. Preview rotation never enters this coordinate chain. */
 object CaptureGeometry {
-    const val VERSION = "android_arcore_cpu_v2"
+    const val VERSION = "android_arcore_cpu_v3"
     val opticalToCameraQuaternion: DoubleArray get() = doubleArrayOf(1.0, 0.0, 0.0, 0.0)
 
     fun metadata(): Map<String, Any> = mapOf(
@@ -22,9 +22,13 @@ object CaptureGeometry {
         "depth_intrinsics" to "rgb_pixel_to_depth_pixel_times_rgb_K",
         "depth_mapping" to "frame.transformCoordinates2d_IMAGE_PIXELS_to_TEXTURE_NORMALIZED",
         "timestamp_clock" to "native_clocks_preserved_ARCore_frame_time_base_undefined",
-        "rgb_timestamp" to "Image.timestamp_verified_equal_to_Frame.androidCameraTimestamp",
+        "rgb_timestamp" to "Image.timestamp_source_specific_no_cross_clock_equality_required",
+        "rgb_frame_association" to "Frame.acquireCameraImage_same_frame",
+        "rgb_timestamp_clock" to "ARCore_Image_timestamp_source_specific",
+        "frame_timestamp_clock" to "ARCore_Frame_timestamp_timebase_undefined",
+        "android_camera_timestamp_clock" to "Frame.getAndroidCameraTimestamp",
         "rgb_mcap_log_time" to "Frame.timestamp_acquisition_association",
-        "rgb_mcap_publish_time" to "Image.timestamp_native_android_camera_clock",
+        "rgb_mcap_publish_time" to "Image.timestamp_source_specific",
         "cross_stream_clock_verified" to false,
         "depth_timestamp" to "Image.timestamp_not_replaced_with_rgb_timestamp",
         "depth_mcap_log_time" to "Frame.timestamp_acquisition_association",
@@ -34,12 +38,16 @@ object CaptureGeometry {
     )
 
     fun requireRgbContract(width: Int, height: Int, calibrationWidth: Int, calibrationHeight: Int,
-                           imageTimestampNs: Long, frameTimestampNs: Long, androidCameraTimestampNs: Long) {
+                           imageTimestampNs: Long, frameTimestampNs: Long, androidCameraTimestampNs: Long,
+                           previousRgbTimestampNs: Long? = null) {
         require(width > 0 && height > 0 && width == calibrationWidth && height == calibrationHeight) {
             "CPU image dimensions ${width}x${height} do not match imageIntrinsics ${calibrationWidth}x${calibrationHeight}"
         }
-        require(frameTimestampNs > 0 && androidCameraTimestampNs > 0 && imageTimestampNs == androidCameraTimestampNs) {
-            "CPU image timestamp $imageTimestampNs does not match Android camera timestamp $androidCameraTimestampNs (ARCore frame $frameTimestampNs)"
+        // acquireCameraImage associates the image with this Frame. ARCore does not
+        // promise equality between its source-specific Image, Frame, and Android clocks.
+        require(frameTimestampNs > 0 && imageTimestampNs > 0) { "Missing CPU image or ARCore frame timestamp" }
+        require(previousRgbTimestampNs == null || imageTimestampNs > previousRgbTimestampNs) {
+            "Duplicate or nonmonotonic native RGB timestamp $imageTimestampNs after $previousRgbTimestampNs"
         }
     }
 

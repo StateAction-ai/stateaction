@@ -13,18 +13,22 @@ import java.io.ByteArrayOutputStream
 class CpuImageEncoder {
     data class EncodedImage(val jpeg: ByteArray, val timestampNs: Long, val width: Int, val height: Int)
 
-    fun encode(frame: Frame, intrinsics: Map<String, Any>, quality: Int,
+    fun encode(frame: Frame, intrinsics: Map<String, Any>, quality: Int, previousRgbTimestampNs: Long? = null,
                onDiagnostics: (Map<String, Any?>) -> Unit = {}): EncodedImage =
         encodeImage(frame.timestamp, frame.androidCameraTimestamp, { frame.acquireCameraImage() },
-            intrinsics, quality, onDiagnostics)
+            intrinsics, quality, previousRgbTimestampNs, onDiagnostics)
 
     /** The injected acquisition boundary enables a Linux JVM test of the actual Android JPEG path. */
     internal fun encodeImage(frameTimestampNs: Long, androidCameraTimestampNs: Long,
                              acquireImage: () -> Image, intrinsics: Map<String, Any>, quality: Int,
+                             previousRgbTimestampNs: Long? = null,
                              onDiagnostics: (Map<String, Any?>) -> Unit = {}): EncodedImage {
         val observed = linkedMapOf<String, Any?>(
             "frame_timestamp_ns" to frameTimestampNs,
             "android_camera_timestamp_ns" to androidCameraTimestampNs,
+            "previous_rgb_timestamp_ns" to previousRgbTimestampNs,
+            "rgb_frame_association" to "Frame.acquireCameraImage_same_frame",
+            "cross_stream_clock_verified" to false,
             "rgb_intrinsics" to intrinsics,
             "stage" to "acquire_image"
         )
@@ -49,7 +53,7 @@ class CpuImageEncoder {
                 CaptureGeometry.requireRgbContract(image.width, image.height,
                     (intrinsics.getValue("imageWidth") as Number).toInt(),
                     (intrinsics.getValue("imageHeight") as Number).toInt(), image.timestamp,
-                    frameTimestampNs, androidCameraTimestampNs)
+                    frameTimestampNs, androidCameraTimestampNs, previousRgbTimestampNs)
                 observed["stage"] = "pack_yuv_planes"
                 val packed = ImagePlanePacking.yuv420ToNv21(image.width, image.height,
                     ImagePlanePacking.Plane(planes[0].buffer, planes[0].rowStride, planes[0].pixelStride),

@@ -45,13 +45,22 @@ class CaptureGeometryTest {
         CaptureGeometry.requireRgbContract(1280, 720, 1920, 1080, 1_000_000L, 1_000_000L, 1_000_000L)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun imageTimestampMustMatchAndroidCameraTimestamp() {
-        CaptureGeometry.requireRgbContract(640, 480, 640, 480, 1_000_000L, 2_000_000L, 1_000_001L)
+    @Test fun observedPixelClocksDoNotNeedNumericalEquality() {
+        CaptureGeometry.requireRgbContract(640, 480, 640, 480,
+            1467836033014624L, 1467836032984466L, 1467836019878654L)
+        // The Android camera clock is provenance, never a substitute for Image.timestamp.
+        CaptureGeometry.requireRgbContract(640, 480, 640, 480, 1_000_000L, 9_999_999L, 42L)
     }
 
-    @Test fun separateArcoreClockIsAcceptedOnlyWithExactNativeCameraMatch() {
-        CaptureGeometry.requireRgbContract(640, 480, 640, 480, 1_000_000L, 9_999_999L, 1_000_000L)
+    @Test fun duplicateAndOlderNativeRgbImagesAreRejectedWithinTheirOwnStream() {
+        for (nativeTime in listOf(1_000_000L, 999_999L)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                CaptureGeometry.requireRgbContract(640, 480, 640, 480,
+                    nativeTime, 9_999_999L, 42L, previousRgbTimestampNs = 1_000_000L)
+            }
+        }
+        CaptureGeometry.requireRgbContract(640, 480, 640, 480,
+            1_000_001L, 9_999_999L, 42L, previousRgbTimestampNs = 1_000_000L)
     }
 
     @Test fun validRgbContractAndMetadataAreExplicit() {

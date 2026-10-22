@@ -127,7 +127,11 @@ class RecordingMetricsState {
 
     // ── RGB sampling / encoder failures ──────────────────────────────────
     var rgbSamplingSkippedCount: Int = 0
+    var rgbEncodeAttemptCount: Int = 0
     var rgbEncoderFailureCount: Int = 0
+    var lastCapturedRgbTimestampNs: Long? = null
+    var recordingFrameLoopCount: Long = 0
+    var repeatedArcoreFrameCount: Long = 0
     var firstRgbCaptureError: String? = null
     var lastObservedArcoreTimestampNs: Long = Long.MIN_VALUE
     var driftResyncEventCount: Int = 0
@@ -150,6 +154,23 @@ class RecordingMetricsState {
 
     // ── Depth association threshold ──────────────────────────────────────
     var effectiveDepthAssociationThresholdNs: Long = 40_000_000L
+
+    /** LATEST_CAMERA_IMAGE can return the same frame for many render-loop updates. */
+    fun observeArcoreFrame(timestampNs: Long): Boolean {
+        recordingFrameLoopCount++
+        if (timestampNs == lastObservedArcoreTimestampNs) {
+            repeatedArcoreFrameCount++
+            return false
+        }
+        lastObservedArcoreTimestampNs = timestampNs
+        arcoreFrameCount.incrementAndGet()
+        globalArFrameIndex++
+        return true
+    }
+
+    fun encoderFailureRate(): Double = if (rgbEncodeAttemptCount > 0) {
+        rgbEncoderFailureCount.toDouble() / rgbEncodeAttemptCount
+    } else 0.0
 
     fun captureFailureReason(writtenRgbFrameCount: Int, writeFailure: String? = null): String? =
         when {
@@ -252,7 +273,11 @@ class RecordingMetricsState {
         arcoreCadenceM2IntervalNs = 0.0
 
         rgbSamplingSkippedCount = 0
+        rgbEncodeAttemptCount = 0
         rgbEncoderFailureCount = 0
+        lastCapturedRgbTimestampNs = null
+        recordingFrameLoopCount = 0
+        repeatedArcoreFrameCount = 0
         firstRgbCaptureError = null
         lastObservedArcoreTimestampNs = Long.MIN_VALUE
         driftResyncEventCount = 0
@@ -269,7 +294,7 @@ class RecordingMetricsState {
         bitrateRestoreCount = 0
         bitrateStableSinceMs = 0L
         encodeFrameIntervalNs = 1_000_000_000L / defaultFps
-        dynamicEncoderMode = "deterministic_30fps_sampling"
+        dynamicEncoderMode = "deterministic_${defaultFps}fps_sampling"
 
         effectiveDepthAssociationThresholdNs = depthAssociationThresholdNs
     }

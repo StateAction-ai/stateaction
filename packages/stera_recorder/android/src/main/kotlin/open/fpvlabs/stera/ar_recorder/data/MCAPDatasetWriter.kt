@@ -168,6 +168,9 @@ class MCAPDatasetWriter(
         return try {
             val session = sessionDir ?: return false
 
+            check(!isInitialized) { "Cannot initialize an active MCAP recording" }
+            resetSessionState()
+
             // Initialize MCAP writer
             val sessionTimestamp = session.name.removePrefix("session_")
             val file = File(session, "session_data_$sessionTimestamp.mcap")
@@ -178,10 +181,6 @@ class MCAPDatasetWriter(
             }
             mcapWriter = writer
 
-            firstWriteFailure.set(null)
-            rgbFrameCount = 0
-            trajectoryPoses.clear()
-            lastTrajectoryWriteTimestampNs = 0L
             registerSchemasAndChannels()
 
             isInitialized = true
@@ -810,6 +809,17 @@ class MCAPDatasetWriter(
         baseOutputDir = null
         sessionDir = null
         spatialDataDir = null
+        resetSessionState()
+        freeStorageBeforeBytes = 0L
+        mcapWriter = null
+        mcapFile = null
+        println("MCAP dataset writer released")
+    }
+
+    /** Session-local state must not survive ordinary stop/start on this writer. */
+    private fun resetSessionState() {
+        firstWriteFailure.set(null)
+        rgbFrameCount = 0
         poseCount = 0
         imuSampleCount = 0
         pointCloudCount = 0
@@ -817,15 +827,12 @@ class MCAPDatasetWriter(
         frameLogRows = 0
         skippedDepthFrames = 0
         totalBytesWritten = 0L
-        freeStorageBeforeBytes = 0L
         freeStorageAfterBytes = 0L
         writerLatencyTotalNs = 0L
         writerLatencySamples = 0L
         writersPaused = false
         intrinsicsJsonWritten = false
         thumbnailSaved = false
-        mcapWriter = null
-        mcapFile = null
         lastRealtimeFlushTimestampNs = 0L
         trajectoryPoses.clear()
         lastTrajectoryWriteTimestampNs = 0L
@@ -833,7 +840,6 @@ class MCAPDatasetWriter(
         lastPointCloudDataLength = 0
         lastPointCloudTimestamp = 0L
         lastPointCloudCount = 0
-        println("MCAP dataset writer released")
     }
 
     private fun writeEndOfSessionMessages() {

@@ -75,9 +75,8 @@ class RecordingFrameOrchestrator(
         }
 
         val timestamp = frame.timestamp
-        metrics.arcoreFrameCount.incrementAndGet()
-        val globalFrameIndex = ++metrics.globalArFrameIndex
-        metrics.lastObservedArcoreTimestampNs = timestamp
+        if (!metrics.observeArcoreFrame(timestamp)) return
+        val globalFrameIndex = metrics.globalArFrameIndex
         updateArcoreCadenceEstimate(timestamp)
 
         val trackingState = frameProcessor.extractTrackingState(camera)
@@ -114,9 +113,10 @@ class RecordingFrameOrchestrator(
         }
 
         if (shouldSample && pose != null) {
+            metrics.rgbEncodeAttemptCount++
             val intrinsics = frameProcessor.extractIntrinsics(camera)
             rgbImage = try {
-                cpuImageEncoder.encode(frame, intrinsics, JPEG_QUALITY) { rgbCaptureDiagnostics = it }
+                cpuImageEncoder.encode(frame, intrinsics, JPEG_QUALITY, metrics.lastCapturedRgbTimestampNs) { rgbCaptureDiagnostics = it }
             } catch (error: Exception) {
                 if (metrics.firstRgbCaptureError == null) {
                     metrics.firstRgbCaptureError = "${error.javaClass.simpleName}: ${error.message}"
@@ -131,6 +131,7 @@ class RecordingFrameOrchestrator(
                 datasetWriter.writeCompressedRgbFrame(image.timestampNs, image.jpeg, associationTimestampNs = timestamp)
             }
             if (submitted && image != null) {
+                metrics.lastCapturedRgbTimestampNs = image.timestampNs
                 rgbIntrinsics = intrinsics
                 metrics.actualVideoWidth = image.width
                 metrics.actualVideoHeight = image.height
@@ -161,6 +162,10 @@ class RecordingFrameOrchestrator(
             "capture_geometry_version" to CaptureGeometry.VERSION,
             "frame_timestamp_ns" to timestamp,
             "android_camera_timestamp_ns" to frame.androidCameraTimestamp,
+            "rgb_frame_association" to "Frame.acquireCameraImage_same_frame",
+            "rgb_timestamp_clock" to "ARCore_Image_timestamp_source_specific",
+            "frame_timestamp_clock" to "ARCore_Frame_timestamp_timebase_undefined",
+            "android_camera_timestamp_clock" to "Frame.getAndroidCameraTimestamp",
             "cross_stream_clock_verified" to false,
             "rgb_capture_diagnostics" to rgbCaptureDiagnostics,
             "rgb_timestamp_ns" to if (encoded) rgbImage?.timestampNs else null,

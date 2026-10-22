@@ -26,12 +26,14 @@ class CpuImageEncoderAndroidTest {
         val source = TestImage(nativeTimestamp - 33_333_333)
         var diagnostics: Map<String, Any?>? = null
         assertThrows(IllegalArgumentException::class.java) {
-            CpuImageEncoder().encodeImage(frameTimestamp, nativeTimestamp, { source.image }, calibration, 80) { diagnostics = it }
+            CpuImageEncoder().encodeImage(frameTimestamp, 42L, { source.image }, calibration, 80,
+                previousRgbTimestampNs = nativeTimestamp) { diagnostics = it }
         }
         assertTrue(source.closed)
         assertEquals("validate_image_geometry", diagnostics?.get("stage"))
         assertEquals(source.timestampNs, diagnostics?.get("image_timestamp_ns"))
-        assertEquals(nativeTimestamp, diagnostics?.get("android_camera_timestamp_ns"))
+        assertEquals(42L, diagnostics?.get("android_camera_timestamp_ns"))
+        assertEquals(nativeTimestamp, diagnostics?.get("previous_rgb_timestamp_ns"))
         assertNotNull(diagnostics?.get("error_message"))
     }
 

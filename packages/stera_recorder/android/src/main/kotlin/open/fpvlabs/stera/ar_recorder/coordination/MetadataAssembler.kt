@@ -6,7 +6,6 @@ import android.os.Build
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.encoding.EglManager
 import open.fpvlabs.stera.ar_recorder.metrics.RecordingMetricsCollector
-import open.fpvlabs.stera.ar_recorder.metrics.TimestampWindow
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollector
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessor
 import open.fpvlabs.stera.ar_recorder.session.ArSessionManager
@@ -24,10 +23,8 @@ class MetadataAssembler(
     private val metricsCollector: RecordingMetricsCollector
 ) {
     companion object {
-        private const val VIDEO_FPS_FIXED = 30
         private const val DROP_LOG_INLINE_LIMIT = 1000
         private const val ENCODER_QUEUE_SOFT_LIMIT = 2
-        private const val DEPTH_ASSOCIATION_WIDE_THRESHOLD_NS = 40_000_000L
     }
 
     private fun videoProfileLabel(configuredWidth: Int, configuredHeight: Int): String {
@@ -88,28 +85,12 @@ class MetadataAssembler(
         val bitrate = cs.bitrate
         val imuFps = if (durationSeconds > 0.0) input.imuSampleCount.toDouble() / durationSeconds else 0.0
 
-        // Association stats
-        m.effectiveDepthAssociationThresholdNs = DEPTH_ASSOCIATION_WIDE_THRESHOLD_NS
-        val associationStats = metricsCollector.computeDepthAssociations(
-            rgbTimestamps = m.depthAssociationCandidateRgbTimestamps.toList(),
-            depthTimestamps = m.depthFrameTimestamps.toList(),
-            thresholdNs = m.effectiveDepthAssociationThresholdNs
-        )
-        val associatedDepthFrames = associationStats.associated
-        val unmatchedRgbFrames = associationStats.unmatched
+        // Association is the API acquisition event, not a numeric comparison of
+        // source-specific clocks. Timing synchronization remains unverified.
+        val associatedDepthFrames = m.depthSuccessCount
+        val unmatchedRgbFrames = (m.depthAttemptCount - associatedDepthFrames).coerceAtLeast(0)
         val missingDepthCount = unmatchedRgbFrames
-        val maxAssociationDeltaNs = associationStats.maxDeltaNs
-
-        // Stream overlap
-        val streamOverlap = metricsCollector.computeStreamOverlap(
-            listOf(
-                TimestampWindow(m.rgbTimestampRange.minNs, m.rgbTimestampRange.maxNs, m.rgbTimestampRange.count),
-                TimestampWindow(m.imuTimestampRange.minNs, m.imuTimestampRange.maxNs, m.imuTimestampRange.count),
-                TimestampWindow(m.depthTimestampRange.minNs, m.depthTimestampRange.maxNs, m.depthTimestampRange.count),
-                TimestampWindow(m.pointCloudTimestampRange.minNs, m.pointCloudTimestampRange.maxNs, m.pointCloudTimestampRange.count),
-                TimestampWindow(m.poseTimestampRange.minNs, m.poseTimestampRange.maxNs, m.poseTimestampRange.count)
-            )
-        )
+        val maxAssociationDeltaNs = 0L // legacy result field; not a measured cross-clock delta
 
         // Computed rates
         val averageRenderLoopMs = if (m.renderLoopIterations > 0) {
@@ -120,14 +101,12 @@ class MetadataAssembler(
             (m.depthAcquisitionTotalLatencyNs.toDouble() / m.depthAcquisitionSamples.toDouble()) / 1_000_000.0
         } else 0.0
 
-        val associationCandidateCount = m.depthAssociationCandidateRgbTimestamps.size
+        val associationCandidateCount = m.depthAttemptCount
         val rgbSamplingRatio = if (m.globalArFrameIndex > 0) {
             m.rgbEncodedFrameIndices.size.toDouble() / m.globalArFrameIndex.toDouble()
         } else 0.0
 
-        val encoderFailureRate = if (m.globalArFrameIndex > 0) {
-            m.rgbEncoderFailureCount.toDouble() / m.globalArFrameIndex.toDouble()
-        } else 0.0
+        val encoderFailureRate = m.encoderFailureRate()
 
         val arcoreNativeFps = estimatedArcoreFps(m).takeIf { it > 0.0 } ?: arcoreFps
 
@@ -163,6 +142,7 @@ class MetadataAssembler(
                 totalPoolStarvationEvents == 0
 
         val productionCertifiedModeB =
+            false && // cross-stream timing and physical accuracy have not been validated
             durationSeconds >= 120.0 &&
                 encodedVideoFps >= 29.5 &&
                 encoderFrameIntervalStdMs <= 5.0 &&
@@ -228,12 +208,12 @@ class MetadataAssembler(
             "target_orientation" to "native_cpu_unrotated",
             "fps" to encodedVideoFps,
             "bitrate" to bitrate,
-            "encoder_mode" to "fixed_30fps_sampling",
+            "encoder_mode" to "fixed_${m.targetEncodeFps}fps_sampling",
             "sampling_strategy" to "timestamp_gate",
             "rgb_sampling_strategy" to "timestamp_gate",
             "sampling_strategy_detail" to "deterministic_frame_schedule",
             "rgb_intentional_downsample" to true,
-            "rgb_target_fps" to VIDEO_FPS_FIXED,
+            "rgb_target_fps" to m.targetEncodeFps,
             "arcore_native_fps" to arcoreNativeFps,
             "total_rgb_frames" to m.arcoreFrameCount.get(),
             "total_depth_frames" to m.depthFrameCount.get(),
@@ -245,6 +225,9 @@ class MetadataAssembler(
             "session_duration_seconds" to durationSeconds,
             "total_ar_frames" to m.globalArFrameIndex,
             "total_ar_frames_received" to m.arcoreFrameCount.get(),
+            "recording_frame_loop_count" to m.recordingFrameLoopCount,
+            "repeated_arcore_frame_count" to m.repeatedArcoreFrameCount,
+            "render_loop_iterations" to m.renderLoopIterations,
             "total_video_frames_encoded" to m.encodedVideoFrameCount.get(),
             "session_start_timestamp_ns" to m.sessionStartTimestampNs,
             "deterministic_frame_index" to m.deterministicFrameIndex,
@@ -254,6 +237,8 @@ class MetadataAssembler(
             "rgb_encoded_count" to m.rgbEncodedFrameIndices.size,
             "rgb_sampling_skipped_count" to m.rgbSamplingSkippedCount,
             "rgb_encoder_failure_count" to m.rgbEncoderFailureCount,
+            "rgb_encode_attempt_count" to m.rgbEncodeAttemptCount,
+            "encoder_failure_rate_denominator" to "rgb_encode_attempt_count",
             "rgb_sampling_ratio" to rgbSamplingRatio,
             "encoder_failure_rate" to encoderFailureRate,
             "depth_captured_count" to m.depthFrameIndices.size,
@@ -290,16 +275,18 @@ class MetadataAssembler(
                 "pointcloud" to m.pointCloudTimestampRange.durationNsOrZero() / 1_000_000.0,
                 "pose" to m.poseTimestampRange.durationNsOrZero() / 1_000_000.0
             ),
-            "stream_overlap_valid" to streamOverlap,
+            "stream_overlap_valid" to null,
+            "cross_stream_clock_verified" to false,
+            "depth_association_basis" to "same_Frame_acquisition_event_not_time_synchronization",
             "rgb_frames" to m.rgbFrameTimestamps.size,
             "depth_frames" to m.depthFrameTimestamps.size,
             "association_candidate_rgb_frames" to associationCandidateCount,
             "associated_depth_frames" to associatedDepthFrames,
             "unmatched_rgb_frames" to unmatchedRgbFrames,
             "missing_depth_count" to missingDepthCount,
-            "depth_association_threshold_ns_effective" to m.effectiveDepthAssociationThresholdNs,
-            "association_jitter_window_ms" to (m.effectiveDepthAssociationThresholdNs / 1_000_000.0),
-            "max_timestamp_delta_ms" to (maxAssociationDeltaNs.toDouble() / 1_000_000.0),
+            "depth_association_threshold_ns_effective" to null,
+            "association_jitter_window_ms" to null,
+            "max_timestamp_delta_ms" to null,
             "performance_metrics" to mapOf(
                 "avg_render_loop_ms" to averageRenderLoopMs,
                 "encoder_queue_depth" to encoderQueueDepth,
@@ -350,7 +337,7 @@ class MetadataAssembler(
             "segment_rotation_enabled" to false,
             "segments_count" to 1,
             "encoder_dynamic_mode" to m.dynamicEncoderMode,
-            "production_ready_mode_b" to true,
+            "production_ready_mode_b" to false,
             "bitrate_active" to m.activeVideoBitrate,
             "bitrate_reduction_count" to m.bitrateReducedCount,
             "bitrate_restore_count" to m.bitrateRestoreCount,
@@ -422,9 +409,10 @@ class MetadataAssembler(
         metadata["dataset_quality_summary"] = mapOf(
             "rgb_fps_effective" to encodedVideoFps,
             "depth_fps_effective" to depthFps,
-            "rgb_depth_sync_rate" to rgbDepthSyncRate,
+            "rgb_depth_sync_rate" to null,
+            "same_frame_depth_acquisition_rate" to rgbDepthSyncRate,
             "encoder_failure_rate" to encoderFailureRate,
-            "max_timestamp_delta_ms" to (maxAssociationDeltaNs.toDouble() / 1_000_000.0),
+            "max_timestamp_delta_ms" to null,
             "memory_stable" to memoryStable,
             "memory_stable_long_window" to h.memoryStableLongWindow,
             "queue_stable" to queueStable,
