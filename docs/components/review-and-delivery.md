@@ -1,134 +1,84 @@
 # Internal review and customer delivery
 
-Status: proposed implementation. Updated: 2026-10-22.
+Proposed implementation, 2026-10-23. Owner: backend/frontend/data operations. Both workflows ship in the first deployed product.
 
-Parent: [Technical design](../technical-design.md). Related: [auth](auth-and-access.md), [storage/data model](storage-and-data-model.md), [processing](cloud-processing.md), [orchestration](job-orchestration.md).
+**Our team corrects, approves and publishes. Robotics customers inspect granted releases and download the complete training package.** Customers never accept/reject episodes or change processing/labels.
 
-## Product contract
+Build one static React/Vite console against the owned Node.js 24/TypeScript/Fastify API. Enforce permissions server-side. Follow [shared contracts](../contracts.md), [auth](auth-and-access.md), [storage](storage-and-data-model.md), [processing](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md).
 
-Ship both workflows in the first deployed version. **Our team reviews, corrects, approves and publishes. Robotics customers inspect published deliveries and download the complete released training package.** Customers have no episode accept/reject task and cannot edit internal labels or processing state.
+## What internal reviewers do
 
-Use one small role-aware web application, proposed at `console/`, with shared components and separate internal/customer route groups. A static React/Vite application is sufficient. The standalone Node variant can serve its compiled assets and API under the same HTTPS origin; the Supabase Edge variant requires a static host and qualified cross-origin auth/API configuration. This is a new implementation target, not an existing console. Select one identity authority and API hosting path as described in the [technical design](../technical-design.md).
-
-The API enforces every permission. Hiding a button or choosing a customer route is not authorization. Staff assignment and recipient release grants are defined in [auth](auth-and-access.md).
-
-## Internal workflow
-
-| Surface | User action | Durable result |
-| --- | --- | --- |
-| Collection/project dashboard | Inspect upload progress, ingest failures and recording coverage | Filtered server records; no direct storage listing |
-| Review queue | Open a ready recording; assign reviewer | Assignment/audit history; exact processing run selected |
-| Episode review | Play proxy, inspect QC/missingness, edit semantic intervals/tool/object/outcome labels | Immutable label revision with taxonomy and source-time references |
-| Geometry inspection | Enable available overlays, see transform/clock/validity evidence | Explicit qualification notes; no automatic conversion of estimates into measurements |
-| Review decision | Request correction, reject for a named use, or approve exact revision/profile | Append-only review tied to run, artifact hashes and label revision |
-| Release builder | Select approved items/profile/splits, validate inventory, request packaging | Frozen release selection plus outbox event |
-| Publication | Inspect completed package/loader test, publish and grant customer access | Published immutable manifest and explicit recipient grants |
-
-Keep corrections as new label revisions. A revision has parent revision, author, interval data, taxonomy version and annotation object hash. Use optimistic concurrency (`expectedRevision` or an ETag backed by the DB revision); a concurrent edit returns `409 revision_conflict`. Do not overwrite another reviewer's edits silently.
-
-Approval requires the currently selected revision. An edit after approval makes the new revision unapproved; it does not mutate the prior approval or an existing release. Reprocessing produces another run with its own review. `latest` may help navigation but is never a release dependency.
-
-Internal admins own publication and customer grants. Reviewers can approve assigned items without automatically gaining publication power. For a two-person pilot, the same human may hold both grants; record that fact rather than claim independent review happened.
-
-## Time-aware review
-
-The preview is a presentation artifact. The timeline maps preview PTS/frame index to source frame IDs and native timestamps using the exported mapping. Label intervals carry their clock domain and integer timestamp values as decimal strings. If displaying elapsed seconds, retain the exact underlying source endpoints and mapping version.
-
-Do not apply a fixed-FPS MP4 timestamp to depth, IMU or camera pose without a verified relationship. Show unsupported alignment as unknown. Geometry overlays must specify input coordinate frame, projection/orientation transform, model version and validity; an overlay that looks plausible is not an accuracy qualification.
-
-Use HTML video with Range-enabled signed access and a canvas overlay for the initial 2D viewer. Render only the visible time window; fetch paginated/downsampled overlay data. Large arrays, Rerun replays and detailed per-frame diagnostics are on-demand internal tools, not default browser payloads. See [cloud processing](cloud-processing.md) for compact QC and diagnostic size controls.
-
-## Reuse boundaries
-
-Own the small catalog, review forms, access checks, release builder and download UI. Reuse selected Apache-licensed Open-AoE projection/timeline/rendering code only after copying its notices and isolating asset/model dependencies. HFlow's catalog/provenance patterns can inform the schema without adopting a second job/catalog database. Curator is processing infrastructure, not this product UI.
-
-Pareto is a reference rather than the default UI dependency given the maintenance concern already raised. Do not import MANO files, learned model weights, dataset samples or a full renderer package merely because an enclosing project has an Apache license. Open-AoE's code, datasets and external assets have separate terms. [Open-AoE visualization source](https://github.com/ant-research/Open-AoE/tree/3504ac7e0639963cf9103ff29579504fc00989bd/aoe-visualization), [MANO terms](https://mano.is.tue.mpg.de/license.html).
-
-## Release profiles
-
-Every release names a supported use and tested consumer. Required channels and qualification gates belong to a versioned profile.
-
-| Proposed profile | Required evidence/artifacts | Publication limit |
-| --- | --- | --- |
-| `rgb_semantics_v1` | Decodable oriented RGB, source-time mapping, reviewed temporal labels, taxonomy, rights/provenance, grouped split and tested loader | May support visual/semantic training; does not claim metric actions |
-| `geometry_estimates_v1` | Above plus declared calibration/frames/clocks, camera and optional hand estimates with validity masks and model provenance | Explicitly estimated/unqualified channels stay identified; no blanket metric-accuracy claim |
-| Customer-specific motion profile | Named action representation, timing/geometry error budget, independent qualification and consumer adapter | Block until measurements and applicable commercial model rights exist |
-
-These are proposed product contracts, not published robotics procurement standards. Raw videos and estimated hands do not automatically supply robot actions. Never fabricate gripper commands, forces, contact labels or body motion to satisfy an export shape. A valid empty/masked prediction is preferable to silently invented supervision.
-
-The existing [qualification requirements](../training-qualification-requirements.md) define the evidence gaps. Current Pixel capture success does not establish metric hand accuracy or downstream policy benefit.
-
-## Release build protocol
-
-1. Authorize an internal publication request. Freeze selected run/artifact/label/review IDs, split assignments, profile, rights policy and export/loader revision in one transaction. Insert an export job and outbox event.
-2. Inngest runs the cloud CPU `export_release` stage. The worker reads accepted artifact IDs through scoped capabilities, validates required channels and rights, and streams immutable shards plus indexes. No packaging on a collector phone or the API host.
-3. Emit a release manifest listing every required file/shard with SHA-256 and bytes, item counts, schema and limitations. Include dataset card, attribution, taxonomy, split/group policy and the runnable loader/adapter. Use relative release paths and stable logical IDs.
-4. The trusted promotion service validates the entire object reference closure, performs checksum/loader checks, and copies outputs into the protected release namespace. No manifest may retain hidden dependencies on mutable worker scratch or expiring URLs.
-5. Mark the release `ready`. An internal admin confirms the validated selection and publishes it with recipient grants. The final publication transaction rechecks ready state, frozen manifest/selection digests, current internal authority, rights/profile eligibility and valid recipient grants. If cancellation/deletion/revocation wins during packaging, publication fails safely. Publishing is an audited state change; already published bytes/selection are immutable.
-6. Corrections create a new release version. Revocation disables new access and records a reason; it does not rewrite prior checksums or erase the audit trail.
-
-For a small release, individual immutable files plus one manifest are acceptable. At larger sizes, use independent proposed 1–4 GiB shards so a broken connection does not restart a single enormous archive. Tune shard size with real downloads. Stream packing and multipart writes; do not hold a full dataset in RAM. Video is already compressed, so avoid spending GPU/CPU on unnecessary recompression.
-
-Use portable Parquet/JSON/video and documented array schemas as the canonical evidence package. Add a LeRobot/Open-AoE/other adapter only for a specified, tested consumer/version. Passing a loader smoke test establishes format usability, not improved robot learning. Release contents are the full approved training package defined by its profile; optional raw MCAP access requires a separate grant/product decision.
-
-## Customer experience
-
-The customer sees releases explicitly granted to their user or recipient organization. They do not need membership in the producer organization. Recheck active recipient membership, identity eligibility, grant expiry/revocation and release publication before metadata or URL access.
-
-| Page | Contents |
+| Surface | Action and durable result |
 | --- | --- |
-| Delivery list | Dataset/release version, publication date, usable item counts/hours, profile, size and availability |
-| Delivery details | Dataset card, coverage, schema, QC/qualification summary, limitations, sample playback, changelog and loader instructions |
-| Episode inspection | Published video/annotations/allowed overlays and provenance summary; read-only |
-| Download all | Complete manifest, total bytes/files, resumable downloader instructions and short-lived URL batches |
-| Download status | Local resume/checksum guidance, expired-URL refresh and clear revoked/unavailable errors |
+| Project dashboard | Inspect uploads, ingest failures and coverage within assigned projects. |
+| Review queue | Open a ready review package pinned to its processing run, batch dataset versions, selection/result-contract digests and artifacts. |
+| Episode viewer | Play proxy, inspect QC/overlays and edit semantic intervals, tools, objects and outcomes. |
+| Save labels | Create an immutable revision with parent, author, taxonomy, exact source endpoints and annotation digest. |
+| Decide | Request changes, reject for a named use, or approve exact package/label/profile revisions. |
+| Release builder | Freeze approved items, rights/profile and grouped splits; request cloud packaging. |
+| Publish | An authorized internal admin publishes the independently validated package and recipient grants. |
 
-No internal reviewer notes, unreviewed attempts, raw worker paths, private identity metadata or unrelated recordings appear in customer APIs. Customer feedback can be recorded separately but never changes approval/release contents automatically.
+Saving uses compare-and-set on `expectedRevision`, a safe JSON integer; concurrent edits return `409 revision_conflict`. New labels are unapproved until reviewed. Old approvals and published releases remain unchanged. Reprocessing creates a new run/review package. `latest` helps navigation only; it is never a release dependency.
 
-## API contracts
+Reviewer and publisher grants are separate. The same pilot operator may hold both; audit the actual actor rather than claim independent human review occurred. [Role rules](auth-and-access.md)
 
-All routes below are proposed. Human API prefix: `/api/v1`. The narrowly scoped CLI capability routes use `/api/download` and separate middleware. Use shared runtime schemas and the auth component's error envelope. Tenant/resource lookup must not leak other tenants' IDs.
+## Review evidence and product gates
 
-| Endpoint | Authorization and semantics |
+The preview timeline maps PTS/frame positions to exact source-frame IDs and native clock values. Label intervals are half-open `[start,end)` in one declared native clock/segment, with decimal-string nanoseconds and a pinned mapping revision. Never join depth/IMU/pose by preview FPS or promote plausible overlays to measured accuracy. Display missing alignment and per-field validity explicitly. HTML video/Range access plus a canvas overlay is sufficient; fetch only the visible/downsampled window. Large diagnostic replays remain on demand.
+
+Every source/run/release references `rights_policy_revision`, supporting evidence and permitted processing/export scopes. Review must resolve required privacy treatment, restricted household/customer information and allowed uses before publication. Redaction outputs need their own hashes/transforms; customers receive only the approved variant. A collector assertion, reviewer approval or runnable model does not independently establish commercial rights.
+
+Deletion/withdrawal requests revoke affected new access and follow the dependency-aware retention process, including releases/backups. Already issued URLs and downloaded files cannot be recalled instantly; show that limitation and record obligations. [Storage/deletion](storage-and-data-model.md)
+
+| Profile | Required package and limitation |
 | --- | --- |
-| `GET /internal/review-queue` | Assigned internal staff; cursor filters by project/profile/state |
-| `GET /internal/recordings/:id/review-package` | Assigned staff; exact selected run and available artifact metadata |
-| `POST /internal/recordings/:id/label-revisions` | Assigned reviewer; parent revision required; append-only |
-| `POST /internal/recordings/:id/reviews` | Assigned reviewer; exact run/labels/profile; reason required for negative decision |
-| `POST /internal/releases` | Internal admin; freezes approved selection and queues export; `Idempotency-Key` required |
-| `POST /internal/releases/:id/publish` | Internal admin; only validated `ready` package; explicit recipient grant |
-| `POST /internal/releases/:id/revoke` | Internal admin; audited reason; blocks new download capabilities |
-| `GET /releases` | Customer; cursor of granted published deliveries only |
-| `GET /releases/:id` | Live grant; public-facing card/manifest summary |
-| `GET /releases/:id/items` | Live grant; paginated immutable item inventory |
-| `POST /releases/:id/download-sessions` | Live grant; session bound to requester/grant/release/manifest digest |
-| `POST /api/download/sessions/:id/urls` | Release-scoped capability; recheck live identity/recipient membership/grant; bounded file-ID batch/cursor; exact signed Range GET URLs |
+| `rgb_semantics_v1` | Decodable oriented RGB, exact source-time mapping, reviewed temporal labels, taxonomy, rights/provenance and tested loader. No metric-action claim. |
+| `geometry_estimates_v1` | Above plus declared frames/calibration/clocks and available camera/hand estimates with masks/model provenance. Unqualified channels remain identified. |
+| Customer motion profile | Named action representation, error budget, independent accuracy evidence, commercial rights and tested adapter. Block until established. |
 
-Use opaque file IDs, not caller-supplied bucket/key/URL. Add `GET /api/download/sessions/:id/manifest` for capability-authenticated manifest retrieval. Register these routes outside the global human-cookie middleware and require the hashed random download capability in a redacted Authorization header. A session ID alone never grants access. Load and recheck bound requester eligibility, recipient membership, live grant, release publication, manifest digest, expiry and revocation on every call. Browser creation/renewal remains authenticated through `/api/v1`. The capability cannot access normal user APIs or a different release.
+The profile defines “complete trainable data.” Missing robot actions, forces, contacts or valid hands are not fabricated to satisfy an export shape. A loader test proves usability, not training benefit. [Existing qualification gaps](../training-qualification-requirements.md)
 
-A download URL response includes file ID, relative path, expected bytes/hash and expiry. Proposed default: ten-minute download URLs, refreshed as needed, bounded batches of 100. Test long transfers and provider signature behavior; expiry and Range retries must preserve download correctness. URLs are bearer capabilities and remain usable until expiry even after grant revocation, subject to provider behavior. Do not promise immediate revocation of issued URLs or already downloaded data.
+Split by correlated source groups before making train/validation/test selections: all clips from one recording stay together; include task/session/retake and agreed site/worker grouping when available. Check exact duplicates and available near-duplicate signals across splits. Store the group/split policy revision and overlap report; keep sensitive grouping identities private. If evidence cannot support the promised separation, reject that claim or release profile rather than randomly split adjacent clips.
 
-All required file IDs must be discoverable through the full manifest/pagination. The UI must not limit “download all” to previews or the first result page. Rate limits protect URL minting but must permit the documented downloader to finish.
+## Release build and publication
 
-## Resumable downloader contract
+1. An internal admin freezes run/batch versions, selection/contract digests, artifact/label/review IDs, split assignments, rights/profile and exporter/loader revisions. One transaction creates the release/export job and outbox event.
+2. Inngest invokes Modal CPU `export_release`. It reads only accepted references and writes portable shards into a unique **unpublished release destination**. It never mutates canonical Lance or packages on the phone/API host.
+3. The release manifest lists every file's relative path, SHA-256 and bytes, plus item inventory, schema/loader, masks/mappings, taxonomy, grouped splits, dataset card, attribution and limitations. No expiring URL or hidden scratch dependency belongs in the package.
+4. Close the export writer before validation: prohibit capability renewal, confirm exporter termination, retire or wait for expiry of **all** destination write capabilities, then reconcile pending writes and observed object visibility. Persist a write-barrier generation and its evidence. A catalog state change never revokes storage permission. If retirement/visibility is uncertain, block validation/publication; use a new destination for a later export attempt.
+5. A separate finite trusted CPU validator reads the complete reference closure, checks hashes/profile/rights and runs the loader. Its compact receipt binds the manifest/input digests and exact write-barrier generation/evidence. Do not copy the entire release again by default; copy only when isolation/portability requires it.
+6. Short API acceptance marks the package `ready` only if current claim, frozen inputs, validated write barrier and non-cancelled/non-deleted state still match. Internal publication rechecks the same barrier generation/receipt, current authority, exact ready manifest/selection, rights/privacy eligibility and recipients before atomically publishing/granting access. Never regrant writes to that accepted destination.
+7. Corrections create another release version; revocation blocks new grants/URLs without rewriting historical checksums. Customers cannot cancel export/publication.
 
-Provide a small versioned Python CLI or documented API client with the release. It authenticates through a specifically approved customer credential flow, never a Modal/R2 parent key. For v1, the browser can create a short-lived, release-scoped download-session capability after login; the CLI consumes it without receiving the human session cookie. Store only a hash server-side, allow revocation/renewal through the logged-in portal, redact it from logs, and do not place the secret in a shell command recorded in history. Final credential UX is a required implementation task, not an already shipped CLI.
+Prefer independent 1–4 GiB shards initially, tuned with downloads; stream packing/multipart writes. Portable video/Parquet/JSON and documented arrays are sufficient. Add a LeRobot/Open-AoE adapter only for a named tested consumer/version. Raw MCAP requires a separate grant/product decision. Never ship unapproved predictions or omit required masks because the preview looks complete.
 
-The downloader fetches the immutable manifest, checks safe relative paths, downloads files with bounded concurrency, persists progress and Range offsets, refreshes expired URLs, verifies SHA-256 and writes a local completion receipt. It must reject path traversal, mismatched files and revoked sessions. Counts and hashes determine completion, not the number of URLs issued.
+## API and downloader contract
 
-URL issuance and provider reads are different events. Audit grants/session creation/URL minting without claiming the customer completed a download unless the client submits a verified receipt; even a receipt is client-reported evidence. Never log signed query strings.
+All paths are absolute. Human routes use `/api/v1`; download-capability routes use `/api/download` and separate middleware. Shared schema/envelope/encoding rules are in [contracts](../contracts.md).
 
-## Acceptance and implementation sequence
+| Endpoint | Required scope / key fields |
+| --- | --- |
+| `GET /api/v1/internal/review-queue` | Assigned staff; project/profile/state filters and cursor. |
+| `GET /api/v1/internal/recordings/:id/review-package` | Assigned staff; return exact package/run/snapshots and selected label revision. |
+| `POST /api/v1/internal/recordings/:id/label-revisions` | Reviewer; `processingRunId`, `reviewPackageDigest`, safe-integer `expectedRevision`, `taxonomyRevision`, bounded `intervals`. Append-only; `409` on stale parent. |
+| `POST /api/v1/internal/recordings/:id/reviews` | Reviewer; exact package/run, `labelRevisionId`, `profileRevision`, decision and reason for changes/rejection. |
+| `POST /api/v1/internal/releases` | Admin; `projectId`, `profileRevision`, exact approved item references and `splitPolicyRevision`; require `Idempotency-Key`. |
+| `POST /api/v1/internal/releases/:id/publish` | Admin; `expectedManifestSha256` and validated recipient grants; `409` if package/state changed. |
+| `POST /api/v1/internal/releases/:id/revoke` | Admin; audited reason. |
+| `GET /api/v1/releases` and `GET /api/v1/releases/:id` | Live recipient grant; published inventory/card only. |
+| `GET /api/v1/releases/:id/items` | Live grant; cursor through immutable items. |
+| `POST /api/v1/releases/:id/download-sessions` | Live grant; bind requester/recipient/release/manifest; return session ID, scoped capability and expiry. |
+| `GET /api/download/sessions/:id/manifest` | Download capability; immutable complete manifest. |
+| `POST /api/download/sessions/:id/urls` | Capability; at most 100 file IDs/cursor; return relative paths, bytes/hashes and expiring Range GET URLs. |
 
-Build the role-aware shell and auth first, then internal queue/video/timeline/corrections, then immutable export/publication, then customer inspection/download. Both roles must pass the same end-to-end pilot gate before deployment to collectors.
+Each interval supplies `id`, `sourceSegmentId`, `startSourceFrameId`, `endSourceFrameId`, `clockId`, decimal-string `startTimestampNs`/`endTimestampNs`, and taxonomy-valid `labels`. Endpoints follow `[start,end)` and the pinned source mapping: the end frame is the first excluded frame; at segment end it is null and the mapping must supply an explicit terminal boundary. Require ordered boundaries in the same native clock/segment; split cross-segment intervals. Review `decision` is `needs_changes`, `approved` or `rejected`. Release `items` specify `recordingId`, `processingRunId`, `batchSnapshotIds`, `labelRevisionId` and `reviewId`; resolve these server-side rather than accepting storage URLs. Commit these request schemas before implementation.
 
-- A customer cannot cancel processing/export or publication; it may revoke its own download session. A customer cannot access an internal URL, mutate review state or enumerate unpublished artifacts.
-- Two reviewers editing the same revision get a conflict, and approval is bound to exact accepted artifacts.
-- Reprocessing/corrections leave an already published release byte-identical.
-- Export rejects missing required files, uncleared model-dependent outputs, unapproved labels and mutable external references.
-- A full download traverses multiple inventory/URL pages and verifies every required training artifact, including masks and mappings.
-- Interrupt and resume multi-shard downloads; rotate/expire URLs; revoke a recipient grant; show honest residual URL lifetime.
-- A sample loader can read the entire bounded release with timestamps, masks, coordinate conventions and splits intact.
-- Publication and download work after workflow trace retention expires because application metadata and objects remain durable.
+A session ID is not a credential. Browser login creates the existing release-scoped random capability; store its hash server-side and deliver it to the CLI without shell-history/log exposure. Download middleware rechecks bound identity eligibility, recipient membership, grant, publication, manifest digest and expiry/revocation on every request. The recipient need not join the producer organization. Normal customer APIs reveal no internal notes, unreviewed/raw paths or unrelated identities.
 
-Detailed implementation work and dependencies are in [implementation plan](../implementation-plan.md).
+Provide a versioned Python downloader: fetch the whole manifest, reject unsafe paths, download with bounded concurrency, journal Range offsets, renew expired URLs and verify every SHA-256 before a local completion receipt. Default signed URLs last ten minutes; test large transfers and retries. Grant revocation stops renewal; existing URLs may survive until expiry. Audit URL issuance separately from client-reported download completion.
+
+## Implementation and acceptance
+
+Own `console/`, backend review/release/download services and `processing/export/`. Reuse visualization code only after pinned code/assets/notices are cleared; Pareto remains a reference, not a default dependency. Do not adopt another framework/catalog merely to render timelines.
+
+Before pilot: prove cross-project/customer isolation; label CAS/half-open endpoint mapping and immutable approval; rights/redaction and correlated-split checks; stale/cancelled export rejection; delayed writes or renewed exporter capabilities block validation/publication; complete multi-page downloads with masks/mappings; expiry/revocation/resume/hash verification; and entire-package loader checks after workflow trace retention expires. Internal review and customer delivery must both pass the collector-to-customer canary.
