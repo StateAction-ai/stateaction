@@ -5,6 +5,7 @@ Start with [technical design](technical-design.md), [implementation milestones](
 | Document | Contract owner / purpose |
 | --- | --- |
 | [Current hosting evaluation](components/hosting-evaluation.md) | Confirmed Next.js; Render hosting/workflows comparison and unresolved deployment choices |
+| [Video cost model](components/video-cost-model.md) | Capture-based planning assumptions, direct transfer paths and 20/100/1,000-hour monthly scenarios |
 | [Backend](components/backend-architecture.md) | Backend: runtime, modules and provider boundaries |
 | [Auth](components/auth-and-access.md) | Identity: login, permissions, offline ownership and deletion |
 | [Upload](components/mcap-upload.md) | Mobile/backend: resumable transfer, inventory seal and integrity |

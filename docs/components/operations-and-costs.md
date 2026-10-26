@@ -1,6 +1,6 @@
 # Operations and costs
 
-Updated: 2026-10-26. Owner: platform engineering. Node/AWS deployment and prices below are a reference option; [current hosting evaluation](hosting-evaluation.md) compares Next.js/Render and leaves API/workflow selection open. Detailed protocols: [workflow](job-orchestration.md), [storage](storage-and-data-model.md).
+Updated: 2026-10-26. Owner: platform engineering. Node/AWS deployment and prices below are a reference option; [current hosting evaluation](hosting-evaluation.md) compares Next.js/Render and leaves API/workflow selection open. The [video cost model](video-cost-model.md) supplies capture-based volume assumptions and monthly transfer/storage/compute scenarios. Detailed protocols: [workflow](job-orchestration.md), [storage](storage-and-data-model.md).
 
 ## Deployment
 

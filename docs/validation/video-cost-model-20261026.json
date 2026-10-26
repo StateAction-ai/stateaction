@@ -1,0 +1,123 @@
+{
+  "schema": "video_pipeline_planning_model_v1",
+  "checked_on": "2026-10-26",
+  "currency": "USD",
+  "status": "planning_only_no_deployment_or_model_run",
+  "sources": {
+    "render": "https://render.com/pricing",
+    "render_bandwidth": "https://render.com/docs/outbound-bandwidth",
+    "render_workflows": "https://render.com/docs/workflows-limits",
+    "r2": "https://developers.cloudflare.com/r2/pricing/",
+    "modal": "https://modal.com/pricing",
+    "modal_egress": "https://modal.com/docs/guide/network-egress-billing",
+    "supabase": "https://supabase.com/pricing"
+  },
+  "capture_samples": [
+    {
+      "session": "session_20261022_151917",
+      "mcap_bytes": 64029630,
+      "duration_seconds": 17.239,
+      "decimal_gb_per_hour_extrapolated": 13.371231974012414,
+      "duration_source": "captures/session_20261022_151917/metadata.json",
+      "metadata_sha256": "64a65acc7e1f996fdc48ff5c471707e0cc2297baf6d808644c444f1e7980bb65"
+    },
+    {
+      "session": "session_20261022_152005",
+      "mcap_bytes": 37696852,
+      "duration_seconds": 12.575,
+      "decimal_gb_per_hour_extrapolated": 10.791941725646124,
+      "duration_source": "captures/session_20261022_152005/metadata.json",
+      "metadata_sha256": "548c0c4913a24aebc99ee0ad6f1c70cda95d8c8b85db8c3ec4ff49b8754979fb"
+    }
+  ],
+  "assumptions": {
+    "raw_bundle_decimal_gb_per_recording_hour": 12.5,
+    "steady_raw_and_derived_storage_multiplier": 2,
+    "retention_months": 3,
+    "modal_output_decimal_gb_per_raw_gb": 1,
+    "all_cpu_worker_hours_per_recording_hour": 1,
+    "cpu_profile_physical_cores": 4,
+    "cpu_profile_ram_gib": 32,
+    "optional_l40s_worker_hours_per_recording_hour_low": 0.25,
+    "optional_l40s_worker_hours_per_recording_hour_high": 1,
+    "optional_gpu_profile_physical_cores": 4,
+    "optional_gpu_profile_ram_gib": 128,
+    "compute_retry_cold_start_headroom_multiplier": 1.25,
+    "controller_hours_per_recording_hour": 1,
+    "controller_average_vcpu": 0.1,
+    "controller_average_ram_gb": 0.2,
+    "monthly_scheduler_and_task_state_allowance_usd": 2,
+    "render_host_2gb_usd": 25,
+    "render_postgres_1gb_ram_usd": 19,
+    "render_pro_workspace_usd": 25,
+    "database_disk_allowance_usd": 3
+  },
+  "rates": {
+    "cpu_physical_core_hour": 0.04716,
+    "ram_gib_hour": 0.007992,
+    "l40s_gpu_hour": 1.9512,
+    "r2_storage_per_gb_month": 0.015,
+    "r2_free_storage_gb_month": 10,
+    "modal_free_egress_gib": 1024,
+    "modal_egress_per_gib": 0.04,
+    "cpu_profile_per_hour": 0.444384,
+    "optional_gpu_profile_per_hour": 3.1628160000000003
+  },
+  "scenarios": [
+    {
+      "recording_hours_per_month": 20,
+      "uploaded_decimal_gb_per_month": 250.0,
+      "steady_resident_decimal_gb": 1500.0,
+      "host_database_workspace_allowance_usd": 72,
+      "r2_storage_usd_approx": 22.349999999999998,
+      "modal_egress_usd": 0.0,
+      "cpu_preparation_validation_export_usd": 11.1096,
+      "render_workflow_scheduling_state_allowance_usd": 2.6,
+      "subtotal_without_gpu_usd": 108.05959999999999,
+      "illustrative_optional_gpu_usd_low": 19.7676,
+      "illustrative_optional_gpu_usd_high": 79.0704,
+      "total_usd_low": 127.82719999999999,
+      "total_usd_high": 187.13
+    },
+    {
+      "recording_hours_per_month": 100,
+      "uploaded_decimal_gb_per_month": 1250.0,
+      "steady_resident_decimal_gb": 7500.0,
+      "host_database_workspace_allowance_usd": 72,
+      "r2_storage_usd_approx": 112.35,
+      "modal_egress_usd": 5.606128730773926,
+      "cpu_preparation_validation_export_usd": 55.548,
+      "render_workflow_scheduling_state_allowance_usd": 5.0,
+      "subtotal_without_gpu_usd": 250.5041287307739,
+      "illustrative_optional_gpu_usd_low": 98.83800000000001,
+      "illustrative_optional_gpu_usd_high": 395.35200000000003,
+      "total_usd_low": 349.34212873077394,
+      "total_usd_high": 645.8561287307739
+    },
+    {
+      "recording_hours_per_month": 1000,
+      "uploaded_decimal_gb_per_month": 12500.0,
+      "steady_resident_decimal_gb": 75000.0,
+      "host_database_workspace_allowance_usd": 72,
+      "r2_storage_usd_approx": 1124.85,
+      "modal_egress_usd": 424.7012873077393,
+      "cpu_preparation_validation_export_usd": 555.48,
+      "render_workflow_scheduling_state_allowance_usd": 32.0,
+      "subtotal_without_gpu_usd": 2209.031287307739,
+      "illustrative_optional_gpu_usd_low": 988.3800000000001,
+      "illustrative_optional_gpu_usd_high": 3953.5200000000004,
+      "total_usd_low": 3197.4112873077393,
+      "total_usd_high": 6162.55128730774
+    }
+  ],
+  "exclusions": [
+    "Tax, staff review, collector compensation/mobile data, domains/email, staging, paid Inngest, additional replicas/HA/backups, R2 operation overages, persistent caches above allowances, larger GPU profiles, unbudgeted cross-container traffic or retries, permanent raw/release retention beyond three months"
+  ],
+  "limitations": [
+    "Short local captures do not establish sustained two-hour size or a peak bound. The recorder is being changed independently.",
+    "Runtime, total bytes written, controller consumption and retained artifact multiplier are unmeasured planning sensitivities.",
+    "Optional L40S caption profile remains unqualified; model and asset rights require separate clearance.",
+    "Provider GB rounding and unit definitions can change approximate storage bills. Modal transfer uses exact GiB conversion here.",
+    "No cloud resources were created and no model was executed."
+  ]
+}
