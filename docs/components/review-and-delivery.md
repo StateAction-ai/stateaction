@@ -4,7 +4,7 @@ Proposed implementation, 2026-10-23. Owner: backend/frontend/data operations. Bo
 
 **Our team corrects, approves and publishes. Robotics customers inspect granted releases and download the complete training package.** Customers never accept/reject episodes or change processing/labels.
 
-Build one static React/Vite console against the owned Node.js 24/TypeScript/Fastify API. Enforce permissions server-side. Follow [shared contracts](../contracts.md), [auth](auth-and-access.md), [storage](storage-and-data-model.md), [processing](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md).
+Build one **Next.js** console against the selected domain API. Hosting is under [current evaluation](hosting-evaluation.md); do not assume a static export if using request-time server features. Enforce permissions server-side. Follow [shared contracts](../contracts.md), [auth](auth-and-access.md), [storage](storage-and-data-model.md), [processing](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md).
 
 ## What internal reviewers do
 

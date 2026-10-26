@@ -6,7 +6,7 @@ This is the canonical stage and data-handoff contract. Implementation details li
 
 ## Build target and v1 product
 
-Use an owned Node.js 24/TypeScript/Fastify API on a small AWS host, Supabase PostgreSQL, one Better Auth identity authority, Inngest Cloud and private Modal CPU/GPU Functions. R2 is the storage candidate; S3 is the fallback after equivalent contract tests. Supabase Edge/Deno is deferred, not a parallel implementation. The cloned Stera server is protocol evidence, not a production dependency.
+Next.js is the confirmed frontend. [Hosting evaluation](hosting-evaluation.md) keeps API/identity and workflow-engine selection open; Node/Inngest details remain reference adapters. The stage contracts below are independent of those placements. Supabase PostgreSQL, private Modal workers and R2/S3 qualification remain in scope. Implement one domain backend and identity authority. The Stera server is protocol evidence, not a production dependency.
 
 V1 delivers verified RGB recordings, exact source-frame mappings, compact QC, internal review and versioned customer downloads. Preserve available depth, IMU, calibration and camera tracking as separate evidence. Metric hand pose, robot actions and synchronized sensor supervision are not implicit RGB deliverables. GPU stages are opt-in and require model rights and qualification.
 
@@ -15,7 +15,7 @@ V1 delivers verified RGB recordings, exact source-frame mappings, compact QC, in
 ```mermaid
 flowchart TD
     phone["Flutter: capture and resumable upload"] --> raw[("Private storage: sealed originals")]
-    phone --> api["Node API and Postgres: authorize, seal, outbox"]
+    phone --> api["Domain API and Postgres: authorize, seal, outbox"]
     api --> flow["Inngest Cloud: ingest and bounded batch workflows"]
     raw --> ingest["Modal CPU: ingest and verify native evidence"]
     flow --> ingest

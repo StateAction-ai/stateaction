@@ -1,12 +1,12 @@
 # Implementation milestones
 
-Updated: 2026-10-23. Target: [technical design](technical-design.md). These are engineering deliverables; no backend/worker deployment has been performed.
+Updated: 2026-10-26. Target: [technical design](technical-design.md); Next.js is confirmed and [hosting choices](components/hosting-evaluation.md) remain under evaluation. These are engineering deliverables; no backend/worker deployment has been performed.
 
 ## Work sequence
 
 | Milestone | Owner / dependency | Deliverables | Exit evidence |
 | --- | --- | --- | --- |
-| M0. Contracts and limits | Backend + robotics; first | Shared OpenAPI/JSON Schemas, domain migrations, version pins, project rights/regions/retention, profile/resource/budget config | Cross-language fixtures, tenant constraints and R2/S3 qualification plan; no unspecified limits |
+| M0. Hosting, contracts and limits | Backend + robotics; first | Select API/identity/Next.js host/workflow engine; shared OpenAPI/JSON Schemas, migrations, version pins, rights/regions/retention and resource/budget config | One selected domain-write path and identity authority; cross-language fixtures, tenant constraints and storage qualification plan |
 | M1. Identity and capture transfer | Identity + mobile/backend; M0 | Independently configured Better Auth, enrollment, owner-bound offline journal, direct multipart upload/seal and recovery | Physical-device login/expiry/account-switch tests; complete interrupted large-file transfer and sidecar/seal race |
 | M2. Cloud CPU pipeline | Platform + robotics; M0/M1 | Outbox, Inngest workflows, Modal adapter, claims/validation/admission, streamed ingest, native Curator cut/transcode with stable Lance batches | Two-hour memory/scratch/read-byte receipt; recovery before/after checkpoint/commit; stale/duplicate/cancel tests |
 | M3. Review and delivery | Backend/frontend/data operations; develop UI alongside M1, integrate after M2 | Internal exact-revision review, rights/split checks, cloud exporter/validator, customer grants/inspection, complete downloader/loader | Concurrent review conflict; immutable release; every required file resumes/downloads/checksums with no hidden dependencies |
@@ -20,7 +20,7 @@ M2 control code can use fake workers while ingest is built. M3 UI can use contra
 | Root | Owns |
 | --- | --- |
 | `backend/` | Node/Fastify composition; domain modules; auth/access; reviewed DB migrations; storage/Modal/Inngest adapters; workflow definitions; outbox/reconciliation entrypoint |
-| `console/` | Static React internal review and customer delivery UI |
+| `console/` | Next.js internal review and customer delivery UI; server/static mode depends on selected features/host |
 | `processing/contracts/` | Canonical schemas and generated/validated TypeScript/Python/Dart conformance fixtures |
 | `processing/capture/` | Streaming MCAP ingest, sensor/clock/geometry adapters and bounded sharding |
 | `processing/curator/` | Pinned recipes, preparation/enrichment wrappers and native checkpoint integration |

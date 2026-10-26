@@ -1,0 +1,23 @@
+{
+  "checked_date": "2026-10-26",
+  "kind": "read_only_published_package_inspection",
+  "package": "@renderinc/sdk",
+  "version": "1.4.0",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "metadata_source": "https://registry.npmjs.org/@renderinc%2fsdk/1.4.0",
+  "tarball_source": "https://registry.npmjs.org/@renderinc/sdk/-/sdk-1.4.0.tgz",
+  "registry_integrity": "sha512-pOiYRCnK3VTVgBjRIgNeugqHHdvMUtIrOp3FHIHHK7xJaNdxcSGC3ODKKWQlS6z3gHOCeuH7wagVv1yoAo6qmw==",
+  "tarball_sha256": "980e977d9f2634fa5c684edd12c0be28e7d4684fab03de2c7da8e92561098c00",
+  "file": "package/dist/workflows/types.d.ts",
+  "file_sha256": "96e54e091ee3fa779325b974e8de98a0000c1d2d979d219ff7cf701094e930a6",
+  "task_context_methods": [
+    "run"
+  ],
+  "task_context_has_step_method": false,
+  "installed": false,
+  "task_runs_started": 0,
+  "interpretation": "The inspected public TypeScript TaskContext has run(), not step(); this does not prove absence from every language/private release. Resolve discrepancy with Render comparison article before relying on step replay."
+}

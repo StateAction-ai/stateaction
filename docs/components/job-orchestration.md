@@ -1,6 +1,6 @@
 # Job orchestration and recovery
 
-Updated: 2026-10-23. Build target: owned Node.js 24/TypeScript/Fastify API and supervised outbox/reconciliation process on a small AWS host. Inngest Cloud controls workflows; private Modal Functions execute work; Supabase PostgreSQL owns domain state. Edge/Deno is deferred. No deployment has occurred.
+Updated: 2026-10-26. This is the Inngest/Node reference implementation. [Current evaluation](hosting-evaluation.md) considers Render Workflows and Supabase Edge/Deno API hosting; neither engine/host change is selected. Modal executes processing and Supabase PostgreSQL holds domain state. No deployment has occurred. A Deno option requires finite scheduled relay/reconciliation rather than the Node process described below.
 
 Use the [canonical stage contracts](pipeline-execution-and-data-flow.md), [shared schemas](../contracts.md), [storage records](storage-and-data-model.md) and [processing implementation](cloud-processing.md). This document owns control flow and recovery; it does not redefine stage payloads.
 

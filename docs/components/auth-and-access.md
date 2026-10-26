@@ -1,6 +1,6 @@
 # Authentication and access
 
-Recommended implementation · 2026-10-23 · Not deployed
+Node/Better Auth reference integration · hosting review 2026-10-26 · Not deployed. [Current hosting evaluation](hosting-evaluation.md) supersedes runtime/provider assumptions below. Access rules remain required; an Edge/Deno choice needs its own qualified identity/session adapter.
 
 Parent: [Technical design](../technical-design.md). This document owns identity, permissions and session behavior. [Storage](storage-and-data-model.md) owns tables; [contracts](../contracts.md) owns wire/error formats; [uploads](mcap-upload.md) and [delivery](review-and-delivery.md) own their endpoint protocols.
 

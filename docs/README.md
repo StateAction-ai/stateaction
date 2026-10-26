@@ -4,6 +4,7 @@ Start with [technical design](technical-design.md), [implementation milestones](
 
 | Document | Contract owner / purpose |
 | --- | --- |
+| [Current hosting evaluation](components/hosting-evaluation.md) | Confirmed Next.js; Render hosting/workflows comparison and unresolved deployment choices |
 | [Backend](components/backend-architecture.md) | Backend: runtime, modules and provider boundaries |
 | [Auth](components/auth-and-access.md) | Identity: login, permissions, offline ownership and deletion |
 | [Upload](components/mcap-upload.md) | Mobile/backend: resumable transfer, inventory seal and integrity |
@@ -15,6 +16,6 @@ Start with [technical design](technical-design.md), [implementation milestones](
 | [Operations/costs](components/operations-and-costs.md) | Platform: deployment, spend, monitoring and recovery |
 | [Lance introduction](components/lance-datasets.md) | Background: dataset files, use cases and storage |
 
-Updated 2026-10-23. Status: audited design, implementation/qualification pending. Runtime/hosting alternatives are deferred; the build target is Node.js/TypeScript on AWS with Supabase Postgres.
+Updated 2026-10-26. Status: audited domain design, implementation/qualification pending. Next.js is confirmed; API/identity/workflow hosting remains under review. The current hosting evaluation supersedes October 23 Node/Lightsail deployment assumptions in the component documents.
 
 Existing measurement evidence remains separate: [capture](pixel-v3-physical-validation.md), [geometry](geometry-v3-capture-regression.md), [training qualification](training-qualification-requirements.md), [WiLoR benchmark](wilor-full-hand-benchmark.md). Design review does not upgrade these accuracy claims.

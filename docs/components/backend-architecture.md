@@ -1,14 +1,14 @@
 # Backend implementation
 
-Recommended build target · 2026-10-23 · Not deployed
+Node reference option · reviewed 2026-10-26 · Not deployed. [Current hosting choices](hosting-evaluation.md) supersede the earlier Node/Lightsail recommendation; frontend Next.js is confirmed.
 
 Parent: [Technical design](../technical-design.md). Shared wire contracts: [contracts](../contracts.md). Component contracts: [auth](auth-and-access.md), [storage](storage-and-data-model.md), [orchestration](job-orchestration.md).
 
 ## Build target
 
-Build one owned **Node.js 24 LTS / TypeScript / Fastify** service under `backend/`, initially on a small AWS host. Use Supabase PostgreSQL, one independently configured Better Auth authority, private object storage and Inngest orchestration. Static React under `console/` shares the HTTPS application origin. Python processing runs on Modal.
+If selecting the standalone Node option, build one owned **Node.js 24 LTS / TypeScript / Fastify** service under `backend/`. Use Supabase PostgreSQL, one qualified identity authority, private object storage and the selected workflow engine. Next.js under `console/` may share that origin or have separate managed hosting. Python processing runs on Modal.
 
-This is the recommended implementation baseline, consistent with the user's Node.js/TypeScript preference; it is not deployment approval. Supabase Edge/Deno is a deferred alternative, not a parallel implementation or second identity service. The cloned Stera server supplies mobile protocol fixtures only. Do not import its business logic or assume its auth, upload and deletion behavior is production-ready.
+This document describes the Node option, not a finalized hosting choice. Supabase Edge/Deno remains the managed API alternative; Next.js server rendering does not require moving the domain API there. Implement one identity authority and domain-write path. The cloned Stera server supplies mobile protocol fixtures only; do not import its business logic.
 
 Node 24 is an LTS line through April 2028. Temporal's TypeScript Workers officially require supported Node runtimes; Bun compatibility does not establish equivalent Worker support. Node keeps that alternative available without changing the API runtime. [Node schedule](https://github.com/nodejs/Release/blob/main/schedule.json), [Temporal requirements](https://github.com/temporalio/sdk-typescript#requirements)
 

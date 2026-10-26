@@ -2,7 +2,7 @@
 
 Proposed implementation, 2026-10-23. Owner: mobile/backend. No application code or infrastructure is implemented by this document.
 
-Build the owned Node.js 24/TypeScript/Fastify backend; reuse the Flutter queue/native uploader only after qualification. The cloned server is protocol evidence, not production code. Use private R2 as the storage candidate, with a qualified S3 fallback. Files travel directly from phone to storage; extraction and annotation run on cloud workers.
+Implement these contracts in the selected TypeScript API; the Node/Fastify details are a reference option pending [hosting evaluation](hosting-evaluation.md). Reuse the Flutter queue/native uploader only after qualification. The cloned server is protocol evidence. R2 is the storage candidate, with a qualified S3 fallback. Files travel directly from phone to storage; extraction/annotation run on cloud workers.
 
 Shared definitions: [wire contracts](../contracts.md), [auth](auth-and-access.md), [storage/states](storage-and-data-model.md), [workflow](job-orchestration.md), [processing flow](pipeline-execution-and-data-flow.md).
 

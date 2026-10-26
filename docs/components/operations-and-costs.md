@@ -1,10 +1,10 @@
 # Operations and costs
 
-Updated: 2026-10-23. Owner: platform engineering. Target: [Node/AWS design](../technical-design.md). Detailed protocols: [workflow](job-orchestration.md), [storage](storage-and-data-model.md).
+Updated: 2026-10-26. Owner: platform engineering. Node/AWS deployment and prices below are a reference option; [current hosting evaluation](hosting-evaluation.md) compares Next.js/Render and leaves API/workflow selection open. Detailed protocols: [workflow](job-orchestration.md), [storage](storage-and-data-model.md).
 
 ## Deployment
 
-Run the Node API/static console and a separate supervised outbox/reconciliation process on a small Lightsail host initially. Use TLS, pinned patched Node 24, bounded database pools, health/readiness and graceful shutdown. The host performs no extraction/inference. A 2GB host is a qualification candidate. An outage delays control requests; phones retain journals and completed cloud work remains durable.
+If selecting the Node/VM option, run the API and a supervised outbox/reconciliation process on the host. Next.js hosting is selected separately or deliberately co-located. Use TLS, pinned patched Node, bounded database pools, health/readiness and graceful shutdown. The host performs no extraction/inference. A 2GB host is a qualification candidate. An outage delays control requests; phones retain journals and completed cloud work remains durable.
 
 Separate development, staging and production databases/buckets/credentials/Modal/Inngest environments. CI builds immutable artifacts; deploy additive migrations before API/UI changes. Keep old worker/pipeline revisions until active runs drain. Select production regions from project rights/residency requirements before real uploads. Additional paid environments need separate budgets.
 

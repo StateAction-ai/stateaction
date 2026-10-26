@@ -2,6 +2,8 @@
 
 Date: 2026-10-23. Scope: the complete architecture/component set. Reviewers: backend/identity, processing/platform, upload/delivery and coordinating architecture reviewer. Findings below are resolved in the design; implementation remains unverified.
 
+October 26 update: Next.js is now confirmed. API/identity hosting and Render-versus-Inngest selection are under [current evaluation](components/hosting-evaluation.md). The fixed Node/Lightsail recommendation and word counts below describe the October 23 audit snapshot, not an approved current deployment.
+
 ## Changes made
 
 | Finding | Design correction |

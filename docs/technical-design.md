@@ -1,6 +1,8 @@
 # Repair-data platform: technical design
 
-Updated: 2026-10-23. Status: audited, recommended implementation target. Platform qualification and deployment remain future work.
+Updated: 2026-10-26. Status: audited domain design; hosting/runtime recommendations under review. Platform qualification and deployment remain future work.
+
+**Current decision:** the frontend is Next.js. Render hosting and Render Workflows are being evaluated. API hosting/identity and the workflow engine are not finalized; the October 23 Node/Lightsail recommendation was not deployment approval. [Current hosting evaluation](components/hosting-evaluation.md) takes precedence over older deployment assumptions in the component documents.
 
 ## Product and scope
 
@@ -8,21 +10,22 @@ A repair worker signs in, records offline and reliably uploads finalized MCAP/se
 
 The first profile is **reviewed RGB and semantic labels**. Metric hand trajectories, robot actions and policy-training benefit require separate qualification. All extraction, annotation and packaging run in cloud workers; the phone captures/transfers, and the API handles small control requests.
 
-## Recommended build target
+## Reference platform and current choices
 
-Use one backend, identity authority and workflow engine. This target follows the user's Node.js/TypeScript preference; it is an engineering recommendation, not an infrastructure deployment.
+Use one domain backend, identity authority and workflow engine. The earlier audit described a Node deployment; its domain contracts remain useful, while hosting-specific adapters must follow the final decision.
 
 | Component | Choice | Reason |
 | --- | --- | --- |
-| API and console | Node.js 24 LTS, TypeScript/Fastify; static React console on a small AWS Lightsail host | Supported runtime, one application origin; no media processing on the host |
-| Login | Independently configured Better Auth | Preserves the recorder's cookie protocol; provider/device behavior must pass qualification |
+| Frontend | Next.js; Render is under evaluation | Confirmed framework; choose full server hosting versus static export deliberately |
+| Domain API | Supabase Edge/Deno proposal or owned Node.js/TypeScript service | Hosting/runtime under review; Node/Fastify remains a reference implementation option |
+| Login | Better Auth in the Node reference option; integration/provider under review with API hosting | Preserve or deliberately migrate the recorder's identity/session protocol; qualify real devices |
 | Application database | Supabase Postgres | Managed relational catalog, access rules, job records and audit |
 | Bulk storage | Private R2; S3 fallback if qualification fails | Low transfer cost for processing and customer delivery |
-| Workflow | Inngest Cloud | Durable steps/retries/waits around finite cloud jobs |
+| Workflow | Inngest reference; Render Workflows under evaluation | Select one engine after recovery/waiting tests |
 | Processing | Modal CPU/GPU Functions; Ray inside Curator workers | Scale to zero; resources independent of the API |
 | Dataset state | Lance files in object storage, per bounded batch | Reuse Curator's versioned tables and checkpoint recovery |
 
-Supabase Edge/Deno is a deferred alternative, not a second implementation. It changes the chosen runtime and needs separate identity/SDK qualification. Temporal/Airflow are credible alternatives; their tradeoffs are in [orchestration](components/job-orchestration.md). The Stera backend is protocol evidence, not a production foundation.
+Supabase Edge/Deno and Node are alternative API implementations, not two backends to build. Their identity/SDK adapters need separate qualification. Render Workflows is a candidate alternative to Inngest; Temporal/Airflow remain alternatives described in [orchestration](components/job-orchestration.md). The Stera backend is protocol evidence, not a production foundation.
 
 ## Data flow
 
@@ -64,6 +67,6 @@ Start with one global GPU job, bounded CPU jobs and zero warm GPUs. Scale indepe
 
 Read [implementation milestones](implementation-plan.md), [shared contracts](contracts.md), then your component from the [index](README.md). The [audit](design-audit.md) records fixes and remaining qualification gates.
 
-Contracts, migrations, API, mobile integration and UI work can begin against this target. Production activation requires real-device auth/upload tests, representative two-hour ingest sizing, R2/Lance recovery qualification, confirmed project rights/regions and a full review-to-download canary. Optional models stay disabled until image, memory, quality and commercial rights pass.
+Shared contracts, domain modeling and Next.js UI work can proceed. Resolve hosting/identity/workflow choices before their runtime-specific adapters. Production activation requires real-device auth/upload tests, representative two-hour ingest sizing, R2/Lance recovery qualification, confirmed project rights/regions and a full review-to-download canary. Optional models stay disabled until image, memory, quality and commercial rights pass.
 
-API host plus Postgres starts around **$37/month**, before storage/compute/other usage. [Operations](components/operations-and-costs.md) owns prices, spend admission and recovery. Public credits are not an account balance or spending approval.
+The earlier Node/Lightsail plus Postgres example was about **$37/month**, not the selected hosting budget. [Hosting evaluation](components/hosting-evaluation.md) compares Render costs; [operations](components/operations-and-costs.md) owns spend/recovery controls. Public credits are not an account balance or spending approval.
