@@ -1,6 +1,6 @@
 # Cloud processing implementation
 
-Updated: 2026-10-23. Status: proposed implementation; no cloud image, Function or paid processing run has been qualified.
+Updated: 2026-10-26. Render controllers coordinate the selected Modal worker design; no cloud image, Function or paid processing run has been qualified.
 
 The [execution document](pipeline-execution-and-data-flow.md) owns stage dependencies and read/write handoffs. [Orchestration](job-orchestration.md) owns claims, retries, validation authority and acceptance. [Shared contracts](../contracts.md) define serialization and manifests. This document owns extraction, robotics semantics, native Curator integration and model/resource qualification.
 

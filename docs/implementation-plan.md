@@ -1,16 +1,16 @@
 # Implementation milestones
 
-Updated: 2026-10-26. Target: [technical design](technical-design.md); Next.js is confirmed and [hosting choices](components/hosting-evaluation.md) remain under evaluation. These are engineering deliverables; no backend/worker deployment has been performed.
+Updated: 2026-10-26. Target: [selected technical design](technical-design.md) and [Render deployment](components/render-deployment.md). These are engineering deliverables; no backend/worker deployment has been performed.
 
 ## Work sequence
 
 | Milestone | Owner / dependency | Deliverables | Exit evidence |
 | --- | --- | --- | --- |
-| M0. Hosting, contracts and limits | Backend + robotics; first | Select API/identity/Next.js host/workflow engine; shared OpenAPI/JSON Schemas, migrations, version pins, rights/regions/retention and resource/budget config | One selected domain-write path and identity authority; cross-language fixtures, tenant constraints and storage qualification plan |
+| M0. Contracts, service builds and limits | Backend + robotics; first | Next.js/Node24, Better Auth, Render Postgres/Workflows build targets; shared OpenAPI/JSON Schemas, migrations/version pins, rights/regions/retention and resource/budget config | Root workspace builds web/tasks/cron separately; one identity authority; tenant constraints, cross-language fixtures and storage qualification plan |
 | M1. Identity and capture transfer | Identity + mobile/backend; M0 | Independently configured Better Auth, enrollment, owner-bound offline journal, direct multipart upload/seal and recovery | Physical-device login/expiry/account-switch tests; complete interrupted large-file transfer and sidecar/seal race |
-| M2. Cloud CPU pipeline | Platform + robotics; M0/M1 | Outbox, Inngest workflows, Modal adapter, claims/validation/admission, streamed ingest, native Curator cut/transcode with stable Lance batches | Two-hour memory/scratch/read-byte receipt; recovery before/after checkpoint/commit; stale/duplicate/cancel tests |
+| M2. Cloud CPU pipeline | Platform + robotics; M0/M1 | Render task controllers, transactional outbox/minute cron, Modal adapter, claims/validation/admission, streamed ingest, native Curator cut/transcode with stable Lance batches | Controller restart/continuation and lost-dispatch tests; two-hour memory/scratch/read-byte receipt; same-root checkpoint/commit recovery; duplicate/cancel faults |
 | M3. Review and delivery | Backend/frontend/data operations; develop UI alongside M1, integrate after M2 | Internal exact-revision review, rights/split checks, cloud exporter/validator, customer grants/inspection, complete downloader/loader | Concurrent review conflict; immutable release; every required file resumes/downloads/checksums with no hidden dependencies |
-| M4. Pilot operations | Platform + mobile/data operations; M1–M3 | Separate environments/secrets, monitoring/spend controls, backup/restore, signed app build and operator runbook | Collector → review → customer full canary; cancellation/restore exercise and gross cost receipt |
+| M4. Pilot operations | Platform + mobile/data operations; M1–M3 | Same-region private Render services, scoped credentials, minute/daily cron, PITR/independent backup, spend controls and signed app build | Collector → review → customer full canary; private DB/pool limits, controller cancellation, restore/revocation exercise and gross cost receipt |
 | M5. Optional models | ML/robotics; M2, independent of RGB pilot | Qualified embeddings/captions/hand adapters, model inventory/cache and profile switches | Exact image/context/GPU memory and recovery tests; commercial rights plus declared quality evidence |
 
 M2 control code can use fake workers while ingest is built. M3 UI can use contract fixtures early. Internal review and customer delivery both ship in the first deployed product; optional model branches are not dependencies for a profile that does not promise them.
@@ -19,8 +19,8 @@ M2 control code can use fake workers while ingest is built. M3 UI can use contra
 
 | Root | Owns |
 | --- | --- |
-| `backend/` | Node/Fastify composition; domain modules; auth/access; reviewed DB migrations; storage/Modal/Inngest adapters; workflow definitions; outbox/reconciliation entrypoint |
-| `console/` | Next.js internal review and customer delivery UI; server/static mode depends on selected features/host |
+| `backend/` | Server-only shared TypeScript domain/auth/access modules, DB migrations, storage/Modal/Render adapters and workflow/cron entrypoints |
+| `console/` | Next.js full Node server: internal/customer UI, Better Auth and thin domain/internal/download route handlers |
 | `processing/contracts/` | Canonical schemas and generated/validated TypeScript/Python/Dart conformance fixtures |
 | `processing/capture/` | Streaming MCAP ingest, sensor/clock/geometry adapters and bounded sharding |
 | `processing/curator/` | Pinned recipes, preparation/enrichment wrappers and native checkpoint integration |
@@ -31,7 +31,7 @@ M2 control code can use fake workers while ingest is built. M3 UI can use contra
 | `processing/tests/`, `backend/tests/` | Contract, integration, fault and sizing evidence |
 | Existing Flutter client | Auth/API/owner-journal/upload integration, coordinated with ongoing capture fixes |
 
-These are target modules, not implemented files. Keep the Stera app/SDK source audit separate from the owned backend. Do not create a parallel Edge/Deno backend or an extra identity/catalog/scheduler.
+These are target modules, not implemented files. Build the web/task/cron artifacts from the repository root with pinned dependencies; keep the Stera app/SDK audit separate. The minute cron delivers/reconciles commands only; Render controllers choose successors. No second API/auth/catalog/workflow engine is required.
 
 ## Cross-component acceptance
 
@@ -42,6 +42,7 @@ These are target modules, not implemented files. Keep the Stera app/SDK source a
 | Seal and final required file arrive in either order | One ingest run/outbox event; missing required data never silently downgraded |
 | Corrupt source, oversized dimensions, unsupported clock/geometry | Quarantine/explicit limitation; no unrequested GPU successor |
 | Unknown Modal submission, duplicate event, stale lease | No blind respawn; one accepted result; safe accounting and writer takeover |
+| Render retry/continuation, expired 24h provider idempotency or lost task acknowledgement | Existing DB scope/dispatch/attempt recovered; no duplicate GPU spawn; abandoned controller repaired by minute cron |
 | Crash before/after native checkpoint/commit | Same-root compatible recovery; no full table copy or duplicate accepted inference |
 | Cancel/delete/revoke during validation or export | Final API transaction rejects stale acceptance/publication |
 | Changed labels, split overlap, uncleared rights/model | Publication blocked or new explicit revision; previous release unchanged |

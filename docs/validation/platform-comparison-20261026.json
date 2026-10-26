@@ -112,5 +112,6 @@
     "Storage/API quotas are shared with other project/account usage; assumed unused allowances.",
     "A region-pinned Modal workload incurs documented 1.15x broad or 1.75x narrow resource multipliers, excluded from unpinned base model.",
     "CloudFront Pro delivery variant assumes eligibility, fewer than 10M monthly requests, all viewer bytes traverse the distribution, and private URL/CORS/Range behavior qualified. It does not route native Curator S3 reads through CloudFront or make worker transfer free."
-  ]
+  ],
+  "selected_architecture": "render_core_r2_usd; Render Workflows with cron relay, Modal CPU/GPU"
 }

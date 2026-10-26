@@ -1,12 +1,12 @@
 # Authentication and access
 
-Node/Better Auth reference integration · hosting review 2026-10-26 · Not deployed. [Current hosting evaluation](hosting-evaluation.md) supersedes runtime/provider assumptions below. Access rules remain required; an Edge/Deno choice needs its own qualified identity/session adapter.
+Selected Render / Next.js / Better Auth design · updated 2026-10-26 · Design only; not deployed.
 
 Parent: [Technical design](../technical-design.md). This document owns identity, permissions and session behavior. [Storage](storage-and-data-model.md) owns tables; [contracts](../contracts.md) owns wire/error formats; [uploads](mcap-upload.md) and [delivery](review-and-delivery.md) own their endpoint protocols.
 
 ## Identity and onboarding
 
-Use one independently configured Better Auth authority in the owned Node backend. Supabase supplies PostgreSQL, not a second login system. Preserve the Flutter client's cookie protocol and existing opaque user IDs where data exists; qualify the library and adapter rather than copying Stera's factory. Mount `/api/auth/*` through the supported Fastify integration. OAuth/session cryptography stays in the library. [Better Auth integration](https://better-auth.com/docs/integrations/fastify)
+Use one independently configured Better Auth authority in the Next.js Node web service on Render. Render Postgres stores its users, linked accounts and sessions alongside application tables. Render workspace login is for our infrastructure operators; collectors and customers use our application's Better Auth login. Preserve the Flutter client's cookie protocol and existing opaque user IDs where data exists; qualify the library and adapter rather than copying Stera's factory. Mount `/api/auth/*` using `toNextJsHandler(auth)` in `console/app/api/auth/[...all]/route.ts`. OAuth/session cryptography stays in the library. [Better Auth Next integration](https://better-auth.com/docs/integrations/next)
 
 Pilot onboarding uses Google sign-in and explicit invitations. Enable Apple only after real production signing, client IDs and audiences pass native tests; exclude borrowed development audiences. Configure only enabled providers. Verify nonce, issuer, expiry and the actual ID-token audience; Android using a web `serverClientId` is not evidence that every Android client ID belongs in the audience allowlist. A provider ID token establishes identity, not project access.
 
@@ -65,9 +65,11 @@ Explicit logout stops scheduling/renewal, saves receipts, cancels transfers best
 
 ## Browser and service authentication
 
-Serve console and API under one HTTPS origin. Use host-only `HttpOnly; Secure; SameSite=Lax` cookies covering auth and API paths, and `Cache-Control: no-store` for private responses. No session tokens in browser localStorage. Trust forwarded host/protocol only from the configured proxy.
+Serve console and API under one HTTPS origin. Use host-only `HttpOnly; Secure; SameSite=Lax` cookies covering auth and API paths, and `Cache-Control: no-store` for private responses. No session tokens in browser localStorage. Configure one canonical application origin/base URL and explicit trusted origins; trust forwarded host/protocol only from Render's configured proxy. Private Next pages/data must not enter public/static/shared caches.
 
-Keep Better Auth's origin/nonce/state checks. Custom human cookie-authenticated `/api/v1/*` mutation routes require JSON, `X-Stera-Client`, exact allowed Origin when present, and rejection of cross-site Fetch Metadata/`Origin: null`. Native requests without browser Origin are supported with the header and valid session. The header is not authentication. Allow only required CORS origins/methods/headers, including idempotency headers; no credentialed wildcard. OAuth callbacks retain their proper content types. Signed workflow, internal worker/validator and download-capability routes have their separate authentication/middleware below and are outside this human-cookie CSRF rule. [Security](https://better-auth.com/docs/reference/security)
+Next proxy/middleware may redirect for navigation, but cookie presence never authorizes a page or API request. Protected data loaders and route handlers authenticate and check current grants before returning data. Use the same human HTTP API for browser and native mutations. Server Components cannot write refreshed cookies: session refresh occurs through auth/route responses, and domain route adapters must forward every returned `Set-Cookie` separately. If a future Server Action calls cookie-setting auth APIs, qualify Better Auth's `nextCookies` integration before enabling it. [Next session integration](https://better-auth.com/docs/integrations/next)
+
+Keep Better Auth's origin/nonce/state checks. Custom human cookie-authenticated `/api/v1/*` mutation routes require JSON, `X-Stera-Client`, exact allowed Origin when present, and rejection of cross-site Fetch Metadata/`Origin: null`. Native requests without browser Origin are supported with the header and valid session. The header is not authentication. Allow only required CORS origins/methods/headers, including idempotency headers; no credentialed wildcard. OAuth callbacks retain their proper content types. Internal workflow/worker/validator and download-capability routes have separate authentication below and are outside this human-cookie CSRF rule. [Security](https://better-auth.com/docs/reference/security)
 
 Use separate authentication boundaries:
 
@@ -75,11 +77,15 @@ Use separate authentication boundaries:
 | --- | --- | --- |
 | `/api/auth/*` | Provider/library protocol | Sign-in/session lifecycle |
 | `/api/v1/*` | Human cookie session plus current grants | Authorized domain actions |
-| `/api/inngest` | SDK-verified service signature | Registered short workflow steps only |
-| Dedicated attempt claim/heartbeat/result routes | Hashed expiring attempt capability | Bound run/batch/attempt/claim epoch, allowed actions and invocation owner |
+| Dedicated quiescence and `/internal/v1/processing/jobs/{stageJobId}/accept` routes | Dedicated workflow service credential, rotated and held only by controllers | Allowlisted operations with current dispatch/epoch/resource checks; cannot publish or grant staff access |
+| `/internal/v1/processing/attempts/:id/quiescence` cleanup mode | Separate reconciliation-service credential held only by minute cron | Retire/reconcile the recorded attempt's grants; no acceptance, new grants or writer takeover |
+| Dedicated `/internal/v1/*` attempt claim/heartbeat/result routes | Hashed expiring attempt capability | Bound run/batch/attempt/claim epoch, allowed actions and invocation owner |
+| Dedicated `/internal/v1/*` validation claim/completion routes | Distinct hashed validation bootstrap, then invocation-bound completion capability | Claim returns API-issued read-only storage scope; completion records evidence for one validation ID/candidate/barrier only |
 | `/api/download/sessions/:id/{manifest,urls}` | Hashed download capability | One requester/grant/release/manifest only |
 
-Register signed/capability routes outside blanket human-cookie middleware. IDs alone are never credentials. Keep capabilities in redacted Authorization headers, not event history/manifests/URLs. Workflow events contain identifiers only; Modal/issuer credentials remain server-side.
+Register service/capability routes outside blanket human-cookie middleware. IDs alone are never credentials. Keep capabilities in redacted Authorization headers, not task history/manifests/URLs. Controller routes accept only the allowlisted service principal and validated scoped IDs; human cookies and worker/validator tokens cannot call them. The final-acceptance route loads authoritative validation/barrier state and has no caller-controlled override. Render task inputs contain identifiers only; Modal/issuer credentials remain server-side. Render Workflows invokes registered tasks through its SDK/API; it does not need an incoming `/api/inngest` handler. Do not reuse human session secrets, Render operator API keys, workflow-control credentials or worker capabilities across these boundaries. The public web process has no Render API key; cron dispatches its committed outbox.
+
+R2 signing/temporary-grant issuer keys stay in the Next API. Normal workers obtain grants through their attempt claim/heartbeat; validators use `POST /internal/v1/processing/validations/:id/claim` with a separate bootstrap. A validator cannot use normal producer routes to obtain write grants. Controllers request quiescence with their live scope/epoch; the reconciliation principal can perform cleanup after cancellation/deadline without accepting output or renewing authority. These are bounded metadata operations, never media hashing. [Orchestration](job-orchestration.md) owns the exact request checks.
 
 For CLI downloads, a logged-in customer creates/renews the capability. Each request rechecks its expiry/revocation, original user's eligibility, recipient membership, grant, release state and manifest digest. It cannot access ordinary APIs. Signed file URLs remain bearer capabilities until effective expiry; revocation blocks new issuance, not already downloaded bytes. [Delivery](review-and-delivery.md) defines URL lifetime, batches and complete-inventory behavior.
 
@@ -89,7 +95,7 @@ Workers receive no general database or human-session credentials. Their writable
 
 Replace both direct user-delete paths, including Better Auth deletion and legacy `DELETE /users/me`, with `POST /api/v1/deletion-requests` and the retention-aware workflow. Require a fresh session/support verification, revoke access as policy directs and preserve shared provenance. Auth-owned sessions/accounts may cascade; domain references must not. Do not retain personal data indefinitely under a tombstone excuse. [Storage retention](storage-and-data-model.md) owns purge/restore rules.
 
-Implement auth/access in `backend/src/modules/{auth,access}/`, configuration in `backend/src/config/`, and generated runtime bindings in `backend/src/contracts/` from canonical `processing/contracts/`. Mobile integration must remove queue-clearing expiry/logout behavior and persist owner binding. Do not import old server handlers.
+Implement the single auth authority and access rules in `backend/src/modules/{auth,access}/`, Next route adapters in `console/app/`, configuration in `backend/src/config/`, and generated runtime bindings in `backend/src/contracts/` from canonical `processing/contracts/`. Workflow tasks do not instantiate an alternative human login authority. Mobile integration must remove queue-clearing expiry/logout behavior and persist owner binding. Do not import old server handlers.
 
 Release evidence must prove:
 
@@ -98,5 +104,6 @@ Release evidence must prove:
 - Concurrent invite acceptance is idempotent; forged tenant/staff roles cannot escalate.
 - Cross-tenant raw/draft/review access is denied; recipient grants work without producer membership.
 - CSRF/host spoofing, forged service calls and expired/stale capabilities fail before mutation/spend.
+- Protected Next rendering cannot leak through shared caches; route-level authorization and every rotated cookie survive the production Render proxy/build.
 - CLI capabilities work without human cookies but cannot escape their release.
 - User deletion cannot cascade shared releases; final acceptance/publication rechecks lifecycle and authority as specified by storage/orchestration.

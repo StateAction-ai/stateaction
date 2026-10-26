@@ -1,10 +1,10 @@
 # Internal review and customer delivery
 
-Proposed implementation, 2026-10-23. Owner: backend/frontend/data operations. Both workflows ship in the first deployed product.
+Selected Render implementation design, 2026-10-26. Owner: backend/frontend/data operations. Both workflows ship in the first deployed product.
 
 **Our team corrects, approves and publishes. Robotics customers inspect granted releases and download the complete training package.** Customers never accept/reject episodes or change processing/labels.
 
-Build one **Next.js** console against the selected domain API. Hosting is under [current evaluation](hosting-evaluation.md); do not assume a static export if using request-time server features. Enforce permissions server-side. Follow [shared contracts](../contracts.md), [auth](auth-and-access.md), [storage](storage-and-data-model.md), [processing](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md).
+Build one **Next.js** full Node web service on Render for the console and domain API. [Deployment](render-deployment.md) owns placement; private pages and routes use live authorization rather than static export. Enforce permissions server-side. Follow [shared contracts](../contracts.md), [auth](auth-and-access.md), [storage](storage-and-data-model.md), [processing](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md).
 
 ## What internal reviewers do
 
@@ -43,7 +43,7 @@ Split by correlated source groups before making train/validation/test selections
 ## Release build and publication
 
 1. An internal admin freezes run/batch versions, selection/contract digests, artifact/label/review IDs, split assignments, rights/profile and exporter/loader revisions. One transaction creates the release/export job and outbox event.
-2. Inngest invokes Modal CPU `export_release`. It reads only accepted references and writes portable shards into a unique **unpublished release destination**. It never mutates canonical Lance or packages on the phone/API host.
+2. The Render `export-release` controller invokes Modal CPU `export_release`. It reads only accepted references and writes portable shards into a unique **unpublished release destination**. It never mutates canonical Lance or packages on the phone/API host.
 3. The release manifest lists every file's relative path, SHA-256 and bytes, plus item inventory, schema/loader, masks/mappings, taxonomy, grouped splits, dataset card, attribution and limitations. No expiring URL or hidden scratch dependency belongs in the package.
 4. Close the export writer before validation: prohibit capability renewal, confirm exporter termination, retire or wait for expiry of **all** destination write capabilities, then reconcile pending writes and observed object visibility. Persist a write-barrier generation and its evidence. A catalog state change never revokes storage permission. If retirement/visibility is uncertain, block validation/publication; use a new destination for a later export attempt.
 5. A separate finite trusted CPU validator reads the complete reference closure, checks hashes/profile/rights and runs the loader. Its compact receipt binds the manifest/input digests and exact write-barrier generation/evidence. Do not copy the entire release again by default; copy only when isolation/portability requires it.

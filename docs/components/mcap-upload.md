@@ -1,8 +1,8 @@
 # MCAP upload and ingest handoff
 
-Proposed implementation, 2026-10-23. Owner: mobile/backend. No application code or infrastructure is implemented by this document.
+Selected Render implementation design, 2026-10-26. Owner: mobile/backend. No application code or infrastructure is implemented by this document.
 
-Implement these contracts in the selected TypeScript API; the Node/Fastify details are a reference option pending [hosting evaluation](hosting-evaluation.md). Reuse the Flutter queue/native uploader only after qualification. The cloned server is protocol evidence. R2 is the storage candidate, with a qualified S3 fallback. Files travel directly from phone to storage; extraction/annotation run on cloud workers.
+Implement these contracts in Next.js Node route handlers on Render using the shared TypeScript domain services. Reuse the Flutter queue/native uploader only after qualification. The cloned server is protocol evidence. R2 is the storage candidate, with a qualified S3 fallback. Files travel directly from phone to storage; extraction/annotation run on Modal cloud workers. [Deployment](render-deployment.md)
 
 Shared definitions: [wire contracts](../contracts.md), [auth](auth-and-access.md), [storage/states](storage-and-data-model.md), [workflow](job-orchestration.md), [processing flow](pipeline-execution-and-data-flow.md).
 
@@ -43,7 +43,7 @@ R2 requires uniform non-final parts within its 5 MiB–5 GiB bounds. Its lifecyc
 
 ## API surface
 
-All paths are absolute. Human requests use Better Auth through Fastify; responses, decimal-string bytes/timestamps, hash format, validation limits and error envelopes follow [contracts](../contracts.md). Success responses contain `data`; rejected requests expose no foreign-resource information or provider secrets.
+All paths are absolute. Human requests use Better Auth through Next.js Node route handlers; responses, decimal-string bytes/timestamps, hash format, validation limits and error envelopes follow [contracts](../contracts.md). Success responses contain `data`; rejected requests expose no foreign-resource information or provider secrets.
 
 | Endpoint | Required fields / result |
 | --- | --- |
@@ -78,7 +78,7 @@ AWS recommends preserving UploadPart response receipts and using ListParts for v
 1. Stop ordinary PUT scheduling; authorize and claim completion. Fetch every provider page; require exactly `1..partCount`, exact individual/total bytes, valid matching receipts and no extra parts.
 2. Complete through the qualified SDK; parse success through SDK semantics, because S3 can embed an error in HTTP 200. HEAD must match expected length and server-created file/session identity metadata. [S3 completion semantics](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html)
 3. In a short transaction, recheck current completion claim, generation, source identity and non-cancelled/non-deleted state. Mark transfer `uploaded`, verification `pending`; call `maybeCreateIngest`.
-4. `maybeCreateIngest` runs both on sealing and file completion. It locks the recording, requires the sealed complete required inventory, freezes exact input generations, and uniquely creates the run/`ingest_capture` job plus `event_outbox`. The relay delivers its deterministic event to Inngest. A DB failure after provider completion recovers through the same HEAD/transaction, without reuploading.
+4. `maybeCreateIngest` runs both on sealing and file completion. It locks the recording, requires the sealed complete required inventory, freezes exact input generations, and uniquely creates the run/`ingest_capture` job plus `event_outbox`. The minute Render cron relays its deterministic dispatch to the `ingest-run` Render task. A DB failure after provider completion recovers through the same HEAD/transaction, without reuploading.
 
 A lost completion response or `NoSuchUpload` triggers reconciliation: matching complete object permits recovery; absent object means restart-required; wrong identity/size quarantines. A bare successful HEAD is insufficient. A still-valid PUT may race ListParts before completion; independent cloud SHA-256 catches altered final bytes.
 

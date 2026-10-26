@@ -1,6 +1,6 @@
 # Shared wire and manifest contracts
 
-Updated: 2026-10-23. Owner: backend + processing leads. Generate OpenAPI/JSON Schema and TypeScript/Python/Dart fixtures from this contract during implementation; these generated files are not shipped yet.
+Updated: 2026-10-26. Selected Render design. Owner: backend + processing leads. Generate OpenAPI/JSON Schema and TypeScript/Python/Dart fixtures from this contract during implementation; these generated files are not shipped yet.
 
 Operation-specific bodies belong to [auth](components/auth-and-access.md), [upload](components/mcap-upload.md), [workflow](components/job-orchestration.md), [processing](components/cloud-processing.md) and [delivery](components/review-and-delivery.md). [Storage](components/storage-and-data-model.md) owns entities and state enums.
 
@@ -21,7 +21,7 @@ Bound document bytes/depth/file counts before work. Large inventories use immuta
 
 ## HTTP conventions
 
-Route/auth boundaries: Better Auth `/api/auth/*`; human domain `/api/v1/*`; scoped CLI `/api/download/*`; worker/validator `/internal/v1/*`; signed Inngest `/api/inngest`. Each has separate middleware. Component tables use full paths.
+Route/auth boundaries: Better Auth `/api/auth/*`; human domain `/api/v1/*`; scoped CLI `/api/download/*`; worker/validator/workflow service `/internal/v1/*`. Each has separate middleware. Render tasks have no inbound listener: the cron relay triggers them through Render's API. No `/api/inngest` route is implemented. Component tables use full paths.
 
 Custom success responses use `{"data":...}`; cursor pages use `{"data":[...],"nextCursor":null}` with an opaque cursor when more results exist. Custom error: `{"error":{"code":"revision_conflict","message":"Revision changed","requestId":"..."}}`.
 
@@ -57,15 +57,23 @@ Every document has `schema_version`, ID, UTC creation time, tenant/project scope
 | Schema | Required content |
 | --- | --- |
 | `recording-source/v1` | Recording/seal digest; logical roles/segments and accepted file generations; expected bytes/client SHA; server bytes/SHA after verification; capture/channel/clock/calibration/geometry inventory; required/omitted inputs; rights/profile revision. Before ingest, server verification is explicitly pending. |
+| `workflow-dispatch/v1` | Dispatch/event IDs, task name, scope kind/ID, generation, pipeline revision and logical deadline. Immutable payload digest is checked against Postgres; no model/storage/bootstrap credentials or media. Render receives this as one positional argument. |
 | `processing-task/v1` | Run/job/attempt IDs; batch when applicable; claim epoch; source/parent refs and expected versions; pipeline/image/model/config/result-contract digests; rights/profile revisions; absolute start/execution deadlines; resource/size limits; stable workspace and unique receipt location. Bootstrap capability travels separately in private invocation arguments. |
 | `stage-result/v1` | Task/claim/input identity; actual dataset version/publication receipt or immutable output inventory; successful/failed/skipped counts and row-errors ref; requested/omitted capability flags; checksums; usage when available. A worker candidate is unaccepted. |
+| `validation-task/v1` | Validation ID (the `validate_stage` helper's `job_attempts.id`), producer job/attempt, candidate digest, expected barrier/write-grant generation, authoritative input/output refs, contracts and absolute deadline/bounds. Bootstrap travels only in private Modal invocation arguments; read configuration comes from the API claim. |
 | `validation-result/v1` | Validation ID/candidate digest; checked input/claim identity; write-barrier/grant generation and terminal/retirement/drain evidence; object/snapshot closure and observed versions/checksums; complete pass/fail and diagnostics. Only the distinct validator capability may submit it. |
 | `review-package/v1` | Accepted snapshots/artifacts; preview-to-source mapping; QC/missingness; label/taxonomy revision; rights/quality limitations and provenance. |
 | `release/v1` | Frozen item/review/label/snapshot IDs; profile/taxonomy/loader/schema versions; grouped split assignments; rights/attribution/limitations; every required relative file/shard path, bytes and SHA; counts/dataset card. No mutable scratch or expiring URL dependency. |
 
 Declared and server-verified source manifests are separate immutable revisions; the latter references the former. Do not fill verification fields by editing a manifest already referenced by hash. A manifest's own digest is stored in its reference/catalog, not recursively inside its hashed body.
 
-Inngest events contain event ID/version/name, tenant/project, target run/batch/release IDs, pipeline revision and request time. Load detailed inputs from authoritative records. No media, bulk arrays or secrets. [Orchestration](components/job-orchestration.md) owns names, service endpoints and replay.
+Outbox events contain event ID/type/version, dispatch ID, tenant/project, target run/batch/release IDs, pipeline revision and request time. The relay sends the pinned Render task version with deterministic `idempotencyKey=dispatch:{dispatch_id}`. Render deduplication lasts 24 hours; permanent application scope/generation/digest checks prevent replay from creating new processing work. Load detailed inputs and the next stage from authoritative records. No media, bulk arrays or secrets. [Orchestration](components/job-orchestration.md) owns task names, controller continuation, service endpoints and replay.
+
+Each processing acceptance request carries `workflowDispatchId`, `controllerEpoch` (decimal string) and `expectedAttemptId`; the separate workflow bearer credential authenticates the caller. The API checks live dispatch scope/generation/lease, accepted-input expectations and trusted validation before CAS. Dispatch identity is routing/fencing data, never authentication. Task continuations retain the same logical deadline and processing attempt; they do not authorize a second Modal submission. Controller epochs fence control actions only. They are separate from attempt/worker epochs and never invalidate a running worker claim, heartbeat or storage grant.
+
+Quiescence uses `POST /internal/v1/processing/attempts/{attemptId}/quiescence`, with `expectedAttemptId` and `expectedGrantGeneration` (decimal string). Controllers authenticate with `WORKFLOW_API_TOKEN` plus live dispatch/epoch; cron uses separate cleanup-only `RECONCILE_API_TOKEN`. The API checks trusted terminal/ownership records and bounded storage retirement/drain/visibility metadata: `202` pending, `200` barrier for a valid current controller, or completed retirement evidence for cleanup. Cleanup may outlive cancellation/logical deadlines but cannot mint/renew grants, accept cancelled results or approve a newer writer's barrier. Media hashing and closure validation remain on Modal.
+
+Validator credentials use `POST /internal/v1/processing/validations/{validationId}/claim` with its distinct bootstrap capability and `invocationId`. The API binds one helper-attempt owner, checks the candidate/barrier/deadline, and returns read-only configuration plus a completion capability. Only the API holds storage-issuer secrets. `POST .../{validationId}/complete` records the bound validation receipt; it cannot accept the producer job. Claims are isolated from processing-worker claims and workflow acceptance credentials. Validator helpers reuse `stage_jobs`/`job_attempts`; no separate validation-attempt identity is invented.
 
 A **write barrier** records that the producer has stopped, its write grants cannot be renewed/used and pending writes are reconciled before validation. Hold exclusive ownership through validation and acceptance. The validator can read payloads and submit its receipt; it cannot write those payloads. **Compare-and-set (CAS)** means accepting only if the expected current identity/revision/lifecycle still matches in one database transaction.
 

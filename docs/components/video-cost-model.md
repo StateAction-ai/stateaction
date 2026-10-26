@@ -1,6 +1,6 @@
 # Video pipeline cost model
 
-Updated: 2026-10-26. USD planning estimates, before tax/credits. **No deployment or paid processing performed.** This evaluates the Render application-core candidate; it does not select a provider. [Hosting choices](hosting-evaluation.md), [machine-readable assumptions and calculations](../validation/video-cost-model-20261026.json).
+Updated: 2026-10-26. USD planning estimates, before tax/credits. **No deployment or paid processing performed.** Render Next.js/Better Auth/Postgres/Workflows is now the selected application stack; R2 media and Modal processing remain external. [Hosting choices](hosting-evaluation.md), [machine-readable assumptions and calculations](../validation/video-cost-model-20261026.json).
 
 For matched Render/Supabase/AWS scenarios, including S3 same-region transfers and private CloudFront delivery, read the [platform comparison](platform-cost-comparison.md).
 
@@ -54,11 +54,11 @@ Compute/workflow assumptions are deliberately explicit:
 - Aggregate CPU preparation, validation and export take one worker-hour per recording-hour at four physical cores/32GiB RAM: about **$0.444/worker-hour**.
 - Optional GPU processing takes **0.25–1 total L40S worker-hours per recording-hour**, across the selected GPU stages. L40S plus four physical cores/128GiB host RAM costs about **$3.163/worker-hour**. This follows the conservative caption-profile host-RAM allowance; it is not a measured throughput range or proof that the model fits. L4 embedding and other profiles require their own measured rates.
 - Both compute lines include 25% planning headroom for startup/retries. This is not a hard spend cap or a worst-case bound. Dense hand inference/captioning can take longer, and an H100 profile costs more. GPU stages remain optional and require model/asset rights and qualification.
-- A controller lasts one hour per recording-hour, averaging 0.1 vCPU/0.2GB RAM: $0.03/hour, plus $2/month scheduling/task-state allowance. Concurrent stages and retained memory can increase controller-hours. Render has no verified suspended-wait primitive; task recovery must pass the [hosting evaluation](hosting-evaluation.md). If using Inngest instead, replace this line with its actual plan/usage; do not pay for two outer engines.
+- A controller lasts one hour per recording-hour, averaging 0.1 vCPU/0.2GB RAM: $0.03/hour, plus $2/month for the two cron-service floors; task-state/above-minimum cron usage remains extra. Concurrent stages and retained memory can increase controller-hours. Render has no verified suspended-wait primitive; task recovery must pass the [selected orchestration](job-orchestration.md). Controller generations resume existing Modal work rather than launching it again.
 
 [Modal compute rates](https://modal.com/pricing), [Render Workflow billing](https://render.com/docs/workflows-limits), [model/resource qualification](cloud-processing.md#5-models-and-resources).
 
-R2 request overages, staging, replicas/HA, additional backups, domains/email, paid Inngest, cache storage above allowances, review labor and collector connectivity/compensation are excluded. Storage uses approximate provider-GB pricing; Modal transfer explicitly converts decimal byte volumes to GiB. Check actual billing units/rounding and account credits before activation.
+R2 request overages, staging, replicas/HA, additional backups, domains/email, cache storage above allowances, review labor and collector connectivity/compensation are excluded. Storage uses approximate provider-GB pricing; Modal transfer explicitly converts decimal byte volumes to GiB. Check actual billing units/rounding and account credits before activation.
 
 These use unpinned Modal base rates. Region selection currently adds a 1.15x broad or 1.75x narrow resource multiplier; price the chosen residency/region profile before activation. A geographic region name alone does not establish free same-region AWS S3 transfer. [Modal regions/pricing](https://modal.com/docs/guide/region-selection)
 

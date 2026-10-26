@@ -1,0 +1,84 @@
+{
+  "schema": "render_design_diagram_review_v1",
+  "checked_on": "2026-10-26",
+  "tool": "Mermaid CLI",
+  "tool_version": "11.16.0",
+  "browser": "/usr/bin/google-chrome",
+  "configuration": {
+    "theme": "neutral",
+    "htmlLabels": false,
+    "background": "white"
+  },
+  "reviews": [
+    {
+      "diagram": "render-platform",
+      "raw_source": "docs/figures/render-platform.mmd",
+      "markdown": "docs/figures/render-platform.md",
+      "rendered_png": "docs/figures/render-platform.png",
+      "source_sha256": "a789ef655184301deebdc92f68bc5efc2ef9072fd8d9a79c3f94f967921594ff",
+      "png_sha256": "9d5fbf9375d7b8f683e7d125d65db8c6d3e9484aa0b0be7a4b7638ffb7c727c5",
+      "markdown_source_identical": true,
+      "cli_render_success": true,
+      "human_visual_review": {
+        "inspected": true,
+        "score_out_of_10": 9,
+        "verdict": "accept",
+        "node_labels_correct": true,
+        "arrows_checked": [
+          "web -->|\"Sessions, catalog and outbox\"| db",
+          "db -->|\"Pending commands\"| relay",
+          "relay -->|\"Task dispatch\"| tasks",
+          "tasks -->|\"Controller and job state\"| db",
+          "db -->|\"Daily catalog export\"| backup",
+          "clients -->|\"Login, API and UI\"| web",
+          "clients <-->|\"Direct uploads and downloads\"| objects",
+          "tasks -->|\"Submit and poll\"| workers",
+          "workers -->|\"Claim, heartbeat and receipts\"| web",
+          "workers <-->|\"Read sources and write artifacts\"| objects",
+          "backup -->|\"Private backup objects\"| objects"
+        ],
+        "clipping_or_label_overlap": false,
+        "notes": "Rendered PNG read back by root. Neutral labels and spacing are readable; arrows distinguish direct media from control flow. Processing diagram is vertically long but follows the complete stage order."
+      }
+    },
+    {
+      "diagram": "processing-stages",
+      "raw_source": "docs/figures/processing-stages.mmd",
+      "markdown": "docs/figures/processing-stages.md",
+      "rendered_png": "docs/figures/processing-stages.png",
+      "source_sha256": "23ac252d83a3f88203cb9ffde06965cd81073ba581405221c3fc1ee48576b06e",
+      "png_sha256": "15e060fa77fabbd558edf93ecd4e8988579eeca6ecf2a9839ad4990725423cfd",
+      "markdown_source_identical": true,
+      "cli_render_success": true,
+      "human_visual_review": {
+        "inspected": true,
+        "score_out_of_10": 9,
+        "verdict": "accept",
+        "node_labels_correct": true,
+        "arrows_checked": [
+          "phone[\"Flutter: capture and resumable upload\"] --> raw[(\"Private storage: sealed originals\")]",
+          "phone --> api[\"Render Next.js API and Postgres: authorize, seal, outbox\"]",
+          "api --> relay[\"Render minute cron: relay committed commands\"]",
+          "relay --> flow[\"Render Workflows: ingest and bounded batch controllers\"]",
+          "raw --> ingest[\"Modal CPU: ingest and verify native evidence\"]",
+          "flow --> ingest",
+          "ingest --> prep[\"Modal CPU: Curator cut and transcode\"]",
+          "prep --> enrich[\"Optional Modal GPU: embeddings and captions\"]",
+          "ingest --> hands[\"Optional hand adapter: native frames and sensors\"]",
+          "enrich --> accepted[\"Close writers, retire grants, reconcile writes; CPU validator; API acceptance\"]",
+          "hands --> accepted",
+          "accepted --> review[\"Our team: review exact versions and labels\"]",
+          "review --> export[\"Separate workflow: Modal CPU export\"]",
+          "export --> candidate[(\"Unique unpublished release files\")]",
+          "candidate --> check[\"Close exporter and retire grants; CPU validator; API marks READY\"]",
+          "check --> publish[\"Fresh internal admin: publish exact READY release\"]",
+          "publish --> customer[\"Customer: inspect and download all granted files\"]"
+        ],
+        "clipping_or_label_overlap": false,
+        "notes": "Rendered PNG read back by root. Neutral labels and spacing are readable; arrows distinguish direct media from control flow. Processing diagram is vertically long but follows the complete stage order."
+      }
+    }
+  ],
+  "cloud_deployments": 0,
+  "paid_jobs": 0
+}

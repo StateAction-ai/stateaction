@@ -2,7 +2,7 @@
 
 Date: 2026-10-23. Scope: the complete architecture/component set. Reviewers: backend/identity, processing/platform, upload/delivery and coordinating architecture reviewer. Findings below are resolved in the design; implementation remains unverified.
 
-October 26 update: Next.js is now confirmed. API/identity hosting and Render-versus-Inngest selection are under [current evaluation](components/hosting-evaluation.md). The fixed Node/Lightsail recommendation and word counts below describe the October 23 audit snapshot, not an approved current deployment.
+October 26 decision: the [selected Render deployment](components/render-deployment.md) uses Next.js/Node, Better Auth, Render Postgres and Render Workflows, with R2 media/Modal processing. The Node/Lightsail/Supabase/Inngest recommendation and word counts below are the historical October 23 audit snapshot. Current component contracts supersede its provider assumptions; no deployment has occurred.
 
 ## Changes made
 

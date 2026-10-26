@@ -4,7 +4,8 @@ Start with [technical design](technical-design.md), [implementation milestones](
 
 | Document | Contract owner / purpose |
 | --- | --- |
-| [Current hosting evaluation](components/hosting-evaluation.md) | Confirmed Next.js; Render hosting/workflows comparison and unresolved deployment choices |
+| [Render deployment](components/render-deployment.md) | Selected services, routing, build targets, credentials and rollout |
+| [Hosting decision/evidence](components/hosting-evaluation.md) | Render decision and verified provider/SDK limitations |
 | [Video cost model](components/video-cost-model.md) | Capture-based planning assumptions, direct transfer paths and 20/100/1,000-hour monthly scenarios |
 | [Platform cost comparison](components/platform-cost-comparison.md) | Render/Supabase/AWS with matched video volumes, R2/S3 costs and CloudFront delivery |
 | [Backend](components/backend-architecture.md) | Backend: runtime, modules and provider boundaries |
@@ -18,6 +19,6 @@ Start with [technical design](technical-design.md), [implementation milestones](
 | [Operations/costs](components/operations-and-costs.md) | Platform: deployment, spend, monitoring and recovery |
 | [Lance introduction](components/lance-datasets.md) | Background: dataset files, use cases and storage |
 
-Updated 2026-10-26. Status: audited domain design, implementation/qualification pending. Next.js is confirmed; API/identity/workflow hosting remains under review. The current hosting evaluation supersedes October 23 Node/Lightsail deployment assumptions in the component documents.
+Updated 2026-10-26. Status: Render/Next.js/Node, Better Auth, Render Postgres and Render Workflows selected; implementation/qualification pending. R2 stores media; Modal runs CPU/GPU processing. The deployment specification supersedes older Node/Lightsail/Supabase/Inngest assumptions. No service has been deployed.
 
 Existing measurement evidence remains separate: [capture](pixel-v3-physical-validation.md), [geometry](geometry-v3-capture-regression.md), [training qualification](training-qualification-requirements.md), [WiLoR benchmark](wilor-full-hand-benchmark.md). Design review does not upgrade these accuracy claims.

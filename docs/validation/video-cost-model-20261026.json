@@ -51,7 +51,8 @@
     "render_host_2gb_usd": 25,
     "render_postgres_1gb_ram_usd": 19,
     "render_pro_workspace_usd": 25,
-    "database_disk_allowance_usd": 3
+    "database_disk_allowance_usd": 3,
+    "scheduling_allowance_scope": "Two Render cron-service minima; task-state and cron compute above minima are additional."
   },
   "rates": {
     "cpu_physical_core_hour": 0.04716,
@@ -121,5 +122,6 @@
     "Provider GB rounding and unit definitions can change approximate storage bills. Modal transfer uses exact GiB conversion here.",
     "No cloud resources were created and no model was executed.",
     "Region-pinned Modal resource pricing (1.15x broad / 1.75x narrow) is excluded; residency/region choice must be priced before activation."
-  ]
+  ],
+  "selected_architecture": "Render Next.js/Better Auth/Postgres/Workflows; private R2 media and Modal CPU/GPU"
 }

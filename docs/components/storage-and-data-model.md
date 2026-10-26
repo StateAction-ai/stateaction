@@ -1,6 +1,6 @@
 # Storage and data model
 
-Recommended implementation · 2026-10-23 · Not deployed
+Selected Render design · 2026-10-26 · Not deployed
 
 Parent: [Technical design](../technical-design.md). This document owns database entities, states, namespaces and retention. [Contracts](../contracts.md) owns serialization/manifests; [auth](auth-and-access.md) owns permissions; [processing flow](pipeline-execution-and-data-flow.md) and [orchestration](job-orchestration.md) own execution.
 
@@ -8,7 +8,7 @@ Parent: [Technical design](../technical-design.md). This document owns database 
 
 | Store | Contents | Boundary |
 | --- | --- | --- |
-| Supabase PostgreSQL | Identity/grants, recordings/uploads, workflow/outbox, accepted version references, reviews/releases | Application catalog; clients use our API |
+| Render Postgres | Better Auth identity, grants, recordings/uploads, workflow/outbox, accepted version references, reviews/releases | Application catalog; clients use our Next.js API |
 | Lance files in object storage | Curator clip/span rows, media references, result columns and commit history | One dataset per bounded processing batch; no LanceDB server/vector service |
 | Private object payloads | MCAP, clips, sensor/frame shards, arrays, native checkpoints, manifests and releases | R2 candidate; S3 fallback after equivalent tests |
 | Modal Volume | Pinned model weights | Cache only; no canonical customer dataset |
@@ -35,10 +35,11 @@ Domain IDs are UUIDs; existing Better Auth user IDs remain opaque text. Operatio
 | `upload_parts` | Session/part number, bytes, exact ETag, receipt source/time | Unique session/part; replacement requires recorded re-PUT |
 | `processing_runs` | Recording OR release target, source/selection/code/image/model/config digests, rights policy/scope/evidence, state/requester | Exactly one target; changed inputs/config create new run |
 | `processing_batches` | Recording run/batch key; stable dataset/media/checkpoint roots; source/config/result-contract/selection digests; frozen row-set digest; writer/lease/epoch; capability/termination and quiescence-generation evidence; observed/accepted versions/receipts | Unique run/batch key and root; same tenant/run; one writer |
-| `stage_jobs` | Run, optional batch, stage, partition key, workflow step, current attempt, expected parent refs, accepted result, retry/deadline | Explicit dedup indexes below |
+| `stage_jobs` | Run, optional batch, stage, partition key, optional `validation_for_job_id`, current attempt, expected parent refs, accepted result, retry/deadline | Explicit dedup indexes below; validation parent required exactly for `validate_stage`, with same run/batch scope |
 | `job_attempts` | Job, number, epoch, invocation owner, provider call, deadline/lease, token hash/expiry, batch reference, unique log root, outcome | Unique job/attempt number; index expired leases |
 | `storage_write_grants` | Attempt/owner/root, monotonically increasing grant generation, provider identifier/fingerprint, allowed actions/paths, issued/expiry/revocation and drain evidence | Record every issue/renewal before release to a worker; no plaintext secret; barrier covers all grants for that root/generation |
-| `event_outbox` | Event ID/type/version, aggregate/run, secret-free payload, delivery lease/attempts/time | Unique logical event; inserted with domain change |
+| `workflow_dispatches` | Task name/version, pipeline revision, scope kind/ID, generation, request digest, logical deadline, continuation count/next check, controller epoch/owner/lease, Render run-ID history, payload schema and state | Unique `(task_name,scope_kind,scope_id,generation)`; one active controller lease per business workflow; task inputs carry IDs only |
+| `event_outbox` | Event ID/type/version, aggregate/run, dispatch ID, secret-free payload, delivery lease/attempts/time | Unique logical event; inserted with domain/dispatch change; duplicate delivery reuses its dispatch identity |
 | `artifacts` | Scope/kind; immutable object+hash/bytes OR dataset URI+version/selection/contract digest; acceptance receipt | Typed references; no arbitrary client URLs or mutable `latest` |
 | `label_revisions` | Run, parent/revision, author, annotation hash, taxonomy | Immutable; optimistic edit checks |
 | `reviews` | Run/batch versions, labels, reviewer, decision/profile/reason | Append-only; exact evidence references |
@@ -50,6 +51,10 @@ Domain IDs are UUIDs; existing Better Auth user IDs remain opaque text. Operatio
 | `audit_events`, `deletion_requests` | Attributable redacted events; authorized subject/scope, holds/progress | Append-only audit; deletion tracked before purge |
 
 Make `partition_key` non-null, including an explicit default for unpartitioned work. Use separate partial unique indexes: `(batch_id,stage,partition_key)` for batch jobs; `(run_id,stage,partition_key)` where `batch_id IS NULL` for run jobs. An ordinary unique key containing nullable batch ID does not deduplicate run jobs. Batch references must match the job's run.
+
+For dispatches, also enforce a partial unique index on `(task_name,scope_kind,scope_id)` for active states `queued`, `running`, `waiting`. Continuation atomically marks the old generation `continued`, invalidates its controller lease/epoch, and inserts the next generation/outbox record. Every effect checks the active generation/epoch. Terminal business scopes reject late reopening. Derive the next processing stage from `stage_jobs` and accepted references rather than a second authoritative workflow cursor. Exact continuation/retry rules live in [orchestration](job-orchestration.md).
+
+Validators reuse `stage_jobs`/`job_attempts`: `validate_stage` references its producer job, with a deterministic partition key binding producer attempt, candidate hash and write-barrier generation. `validationId` is the helper attempt ID. Its separate bootstrap/claim/completion capabilities and Modal intent/call ID use the same bounded attempt ledger; no parallel validation-attempt table is required. The API issues only read grants on validation claim. Those read grants do not advance the canonical writer-grant generation or authorize payload writes.
 
 Release export has a release-targeted run and run-level job; recording batches belong only to recording-targeted runs. Enforce the target discriminator/check constraint. Intra-tenant composite foreign keys enforce project consistency. Recipient grants deliberately cross producer-to-recipient scope. Role semantics live in [auth](auth-and-access.md).
 
@@ -69,6 +74,7 @@ Freeze `rights_policy_revision`, permitted collection/processing/export scope an
 | Batch | `planning`, `processing`, `ready`, `blocked`, `retired` |
 | Stage job | `blocked`, `ready`, `dispatching`, `dispatch_unknown`, `running`, `retry_wait`, `succeeded`, `failed`, `cancel_requested`, `cancelled` |
 | Attempt | `created`, `dispatching`, `dispatch_unknown`, `running`, `succeeded`, `failed`, `timed_out`, `cancelled` |
+| Workflow dispatch | `queued`, `running`, `waiting`, `continued`, `succeeded`, `failed`, `cancelled` |
 | Review | `needs_changes`, `approved`, `rejected`; absent means unreviewed |
 | Release | `draft`, `building`, `ready`, `published`, `revoked`, `failed` |
 
@@ -110,9 +116,26 @@ After validation, one short API transaction compares current job/attempt, claim 
 
 Reviews pin dataset versions, selections, artifacts and labels. Export materializes the approved delivery into a protected root once when required; it cannot retain hidden scratch/expiring dependencies. Exporter output requires the same terminal/grant-retirement/drained-write barrier before independent validation. Hold its destination reservation through validation/publication; never reissue writes against a published prefix. Publication rechecks that barrier/generation, frozen selection/digest, current internal authority, rights and ready/non-revoked lifecycle. Signed customer URLs may expose pseudonymous prefixes; use logical file IDs/relative paths and omit direct contributor identity unless permitted.
 
-## Database access, retention and migration
+## Database access
 
-Use separate migration, API and control-worker roles; no processing-worker database URL. Disable unused Supabase Data API and revoke unintended/default `anon`/`authenticated` grants. Better Auth sessions do not populate `auth.uid()` in direct SQL. Bound pools/TLS; transaction pooling needs compatible driver settings (`prepare: false` for postgres-js), transaction-local context and no session-lock dependence. [Connections](https://supabase.com/docs/guides/database/connecting-to-postgres)
+Place the paid Postgres instance, Next.js service, Workflow service and cron jobs in the **same Render workspace and region**. Workflows and cron can initiate private-network connections. Use the database's internal hostname; disable its external IP allow list. External operator access is temporary, allow-listed and TLS-only. Modal workers receive neither a database URL nor a private-network dependency. [Private routing](https://render.com/docs/private-network), [Postgres connections](https://render.com/docs/postgresql-creating-connecting)
+
+Use PostgreSQL 17 with pinned compatible drivers/tools, including the backup client. Require TLS internally with `sslmode=require`: Render uses self-signed internal certificates and does not support `verify-ca`/`verify-full` there. Qualify the selected Node driver's equivalent encryption configuration; never weaken TLS globally. The internal hostname and role-specific password are secrets, never browser variables.
+
+| Role / environment variable | Holder | Permissions / connection |
+| --- | --- | --- |
+| `app_api` / `API_DATABASE_URL` | Next.js server | Qualified Better Auth/domain DML and acceptance routines; no schema ownership or role administration |
+| `app_control` / `CONTROL_DATABASE_URL` | Render controllers and relay/reconciler cron | Required job/dispatch/outbox/lease operations and bounded source reads; no identity administration, review decisions, publication or direct accepted-reference mutation |
+| `app_migrator` / `MIGRATION_DATABASE_URL` | Explicit migration job only | Owns application schema/migrations; direct port `5432`; absent from normal web/task environments |
+| `backup_reader` / `BACKUP_DATABASE_URL` | Dedicated backup cron | Read all required application/identity data for backup; direct port `5432`; no runtime mutations |
+
+Create least-privilege application users through SQL. Revoke unintended `PUBLIC` database/schema privileges; grant explicit schema/table/sequence/routine rights and migration default privileges. Runtime roles have no superuser, database/role creation or RLS-bypass privileges. Database procedure/column grants enforce that control code cannot bless its own results. API tenant queries still check current organization/project/staff/release grants; SQL roles alone are not tenant isolation. If adding RLS, use transaction-local verified context, never connection-global user state.
+
+SQL-created users are not Render-managed credentials. Store their URLs as explicit per-service secrets; a Blueprint's generated default-user connection string must not silently replace a runtime role. Rotate each role's secret through the application procedure, redeploy its consumers, drain old connections, then retire old credentials. Provider default-user rotation is a separate operation. [Credential management](https://render.com/docs/postgresql-credentials)
+
+Enable Render's integrated PgBouncer before launch; use its **internal pooled URL on `6432`** for API/control roles. Start with a web pool maximum of 10 and controller maximum of 2 per run, at most 8 active controllers. Account for deploy overlap, cron/migrations and provider reservations against the selected plan's connection limit. Keep transactions short; no session locks, `LISTEN/NOTIFY`, temporary tables or session-persistent context through this transaction pool. Qualify prepared-statement/driver settings and each restricted SQL role's pooled login/denial tests. If that integration fails, use the same bounded direct pools temporarily; never replace a restricted role with owner credentials. Migrations/backups use direct `5432`; do not add a separate PgBouncer service. [Managed pooling](https://render.com/docs/postgresql-connection-pooling)
+
+## Retention and migration
 
 Proposed retention: seven days for inactive multipart cleanup and terminal attempt-only diagnostic scratch; thirty days for delivered outbox/redacted logs. Never apply that scratch rule to canonical roots, recoverable checkpoints, unpublished durable results or pinned versions/history. Native successful cleanup may remove its staging; retain permanent application receipts. Raw/release age purge requires explicit project policy.
 

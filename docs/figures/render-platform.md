@@ -1,0 +1,30 @@
+# Render platform topology
+
+Selected 2026-10-26. Render hosts the application and orchestration; R2 and Modal carry media and processing. Arrows label logical requests or data flow. The deployment specification owns exact service roles and permissions.
+
+[Rendered PNG](render-platform.png) is available when the Markdown viewer cannot render Mermaid.
+
+```mermaid
+flowchart TD
+    clients["Collector app and web users"]
+    subgraph render["Render: one workspace and region"]
+        web["Next.js UI, Node API and Better Auth"]
+        db[("Render Postgres")]
+        relay["Minute cron: relay and reconcile"]
+        tasks["Render Workflows: bounded controllers"]
+        backup["Daily cron: database backup"]
+        web -->|"Sessions, catalog and outbox"| db
+        db -->|"Pending commands"| relay
+        relay -->|"Task dispatch"| tasks
+        tasks -->|"Controller and job state"| db
+        db -->|"Daily catalog export"| backup
+    end
+    objects[("Private R2 media, datasets and backups")]
+    workers["Modal CPU and GPU workers"]
+    clients -->|"Login, API and UI"| web
+    clients <-->|"Direct uploads and downloads"| objects
+    tasks -->|"Submit and poll"| workers
+    workers -->|"Claim, heartbeat and receipts"| web
+    workers <-->|"Read sources and write artifacts"| objects
+    backup -->|"Private backup objects"| objects
+```

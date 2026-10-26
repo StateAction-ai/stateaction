@@ -1,6 +1,6 @@
 # Render, Supabase and AWS: comparable deployment costs
 
-Updated: 2026-10-26. Evaluation only; no migration, deployment or paid job. Parent: [hosting choices](hosting-evaluation.md). [Calculation receipt](../validation/platform-comparison-20261026.json).
+Updated: 2026-10-26. Decision record: Render Next.js/Better Auth/Postgres/Workflows with R2/Modal is selected. Alternative rows below remain cost evidence; no migration, deployment or paid job. Parent: [hosting choices](hosting-evaluation.md). [Calculation receipt](../validation/platform-comparison-20261026.json).
 
 ## Application hosting and media storage are separate choices
 
@@ -52,6 +52,6 @@ For context, direct S3 downloads without CloudFront raise the AWS row to about $
 
 ## Decision for the unfunded pilot
 
-The application-core difference between Render Postgres/Better Auth and Supabase Postgres/Auth is approximately **$3/month** with matched frontend/workspace sizing. Choose by identity ownership and integration effort. Supabase supplies managed identity; Better Auth runs in our Node application. R2's larger saving comes from its media economics, independent of that choice, subject to the existing Lance/credential/recovery qualification gates.
+The application-core difference between Render Postgres/Better Auth and Supabase Postgres/Auth is approximately **$3/month** with matched frontend/workspace sizing. The user selected the Render Postgres/Better Auth arrangement after this comparison. Supabase supplies managed identity; Better Auth runs in our Node application. R2's larger saving comes from its media economics, independent of that choice, subject to the existing Lance/credential/recovery qualification gates.
 
-Shortlist **Render Next.js/Node API + Supabase Postgres/Auth + R2 + Modal** alongside the Render-Postgres/Better-Auth variant. Preserve one domain API and one workflow owner. A cost comparison does not switch the reference architecture. AWS becomes more attractive if we deliberately colocate processing with S3, qualify private CloudFront delivery, obtain useful credits or need its infrastructure controls. Compare total engineering/operational effort as well as the cloud bill.
+Implement **Render Next.js/Node API + Render Postgres/Better Auth + Render Workflows + R2 + Modal**. Preserve one domain API, identity authority and workflow owner; use the [deployment specification](render-deployment.md). AWS becomes more attractive if we deliberately colocate processing with S3, qualify private CloudFront delivery, obtain useful credits or need its infrastructure controls. Compare total engineering/operational effort as well as the cloud bill.

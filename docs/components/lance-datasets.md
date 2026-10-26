@@ -1,6 +1,6 @@
 # Lance: purpose and storage
 
-Updated: 2026-10-23. Background to [execution](pipeline-execution-and-data-flow.md) and [storage](storage-and-data-model.md).
+Updated: 2026-10-26. Background to [execution](pipeline-execution-and-data-flow.md) and [storage](storage-and-data-model.md).
 
 ## A versioned table of clips
 
@@ -17,9 +17,9 @@ Preparation creates clip references; later stages fill result columns. A review 
 
 ## Where it lives
 
-The proposed private derived-data bucket holds each batch's stable media root, containing `lance`, external `clips/` and native recipe staging/checkpoints. Exact keys are in [storage](storage-and-data-model.md). Modal opens that object-store URI directly with scoped credentials. Supabase Postgres records the URI, accepted version, jobs and permissions.
+The private R2 derived-data bucket holds each batch's stable media root, containing `lance`, external `clips/` and native recipe staging/checkpoints. Exact keys are in [storage](storage-and-data-model.md). Modal opens that object-store URI directly with scoped credentials. **Render Postgres** records the URI, accepted version, jobs and permissions. Render Workflows passes those references and job IDs; it never transports a Lance directory or video payload between tasks.
 
-`s3://` selects the S3-compatible interface; an R2 endpoint/options can address R2 rather than AWS. Qualify pinned Curator/Lance commits, credentials and recovery against R2 before adopting it. No separate Lance server or paid LanceDB Cloud is required. Modal scratch is temporary. [Object-store configuration](https://lance.org/guide/object_store/)
+`s3://` selects the S3-compatible interface; an R2 endpoint/options can address R2 rather than AWS. Qualify pinned Curator/Lance commits, credentials and recovery against R2 before production; S3 is the storage fallback if qualification fails. No separate Lance server or paid LanceDB Cloud is required. Neither Render persistent disk nor Modal scratch is canonical dataset storage. [Object-store configuration](https://lance.org/guide/object_store/)
 
 ## Why use it here?
 

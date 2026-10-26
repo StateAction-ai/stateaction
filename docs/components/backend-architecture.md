@@ -1,43 +1,56 @@
 # Backend implementation
 
-Node reference option · reviewed 2026-10-26 · Not deployed. [Current hosting choices](hosting-evaluation.md) supersede the earlier Node/Lightsail recommendation; frontend Next.js is confirmed.
+Selected Render design · updated 2026-10-26 · Design only; not deployed.
 
 Parent: [Technical design](../technical-design.md). Shared wire contracts: [contracts](../contracts.md). Component contracts: [auth](auth-and-access.md), [storage](storage-and-data-model.md), [orchestration](job-orchestration.md).
 
 ## Build target
 
-If selecting the standalone Node option, build one owned **Node.js 24 LTS / TypeScript / Fastify** service under `backend/`. Use Supabase PostgreSQL, one qualified identity authority, private object storage and the selected workflow engine. Next.js under `console/` may share that origin or have separate managed hosting. Python processing runs on Modal.
+Build one **Next.js / Node.js 24 LTS / TypeScript web service on Render**. It serves the review/delivery UI, the mobile HTTP API and Better Auth under one HTTPS origin. Render Postgres holds identity and application state; Render Workflows runs finite orchestration tasks. Private R2 holds media and datasets; Modal runs Python CPU/GPU processing. The application never proxies large uploads, video playback or dataset downloads. Render supports full Next.js as a Node web service. [Render Next.js hosting](https://render.com/docs/deploy-nextjs-app)
 
-This document describes the Node option, not a finalized hosting choice. Supabase Edge/Deno remains the managed API alternative; Next.js server rendering does not require moving the domain API there. Implement one identity authority and domain-write path. The cloned Stera server supplies mobile protocol fixtures only; do not import its business logic.
+Use Next App Router route handlers with the Node runtime for HTTP boundaries. Share domain modules between route handlers and workflow tasks; implement each operation once. The cloned Stera server supplies mobile protocol fixtures only. No standalone Fastify server, separate API service, Bun/Deno runtime or Supabase dependency is required. Pin the supported Next.js, Node and library versions together before implementation. [Route handlers](https://nextjs.org/docs/app/api-reference/file-conventions/route)
 
-Node 24 is an LTS line through April 2028. Temporal's TypeScript Workers officially require supported Node runtimes; Bun compatibility does not establish equivalent Worker support. Node keeps that alternative available without changing the API runtime. [Node schedule](https://github.com/nodejs/Release/blob/main/schedule.json), [Temporal requirements](https://github.com/temporalio/sdk-typescript#requirements)
-
-## Modules and processes
-
-Use a modular service, not separate microservices. Run the API and a supervised outbox/reconciler as separate entrypoints, initially on the same host. The latter publishes committed events and repairs incomplete external operations; Inngest owns workflow progression. Neither process decodes MCAP or runs models.
+## Modules and execution
 
 | Target | Responsibility |
 | --- | --- |
-| `backend/src/app.ts`, `api.ts` | Testable Fastify composition, startup, health and shutdown |
-| `backend/src/modules/auth/`, `access/` | Better Auth adapter, enrollment, principal and authorization |
-| `backend/src/modules/recordings/`, `uploads/` | Capture registration, seal, canonical multipart lifecycle |
-| `backend/src/modules/processing/` | Admission, attempt claims, batch ownership and final acceptance |
+| `console/app/` | Next pages, layouts and review/delivery components |
+| `console/app/api/auth/[...all]/route.ts` | Official Better Auth Next adapter; one identity authority |
+| `console/app/api/v1/**/route.ts` | Thin human API adapters: validate, authenticate, authorize, call domain services, encode responses |
+| `console/app/internal/v1/**/route.ts` | Workflow, worker and validator endpoints with distinct scoped service authentication |
+| `console/app/api/download/**/route.ts` | Scoped CLI download-session adapters |
+| `backend/src/modules/auth/`, `access/` | Better Auth configuration, enrollment, principal and authorization |
+| `backend/src/modules/recordings/`, `uploads/` | Registration, seal and canonical multipart lifecycle |
+| `backend/src/modules/processing/` | Admission, claims, batch ownership, validation and final acceptance |
 | `backend/src/modules/reviews/`, `releases/`, `downloads/` | Exact-revision approval, publication and recipient access |
-| `backend/src/db/` | Drizzle schema, reviewed migrations, bounded connection factories |
-| `backend/src/adapters/` | Object storage, Modal and workflow provider clients |
-| `backend/src/workflows/`, `workers/` | Inngest definitions, outbox/reconciliation entrypoint |
-| `backend/src/contracts/`, `tests/` | Bindings/runtime validation generated from `processing/contracts/`; client fixtures and integration/fault tests |
+| `backend/src/db/` | Drizzle schema, reviewed migrations, repositories and bounded connection pools |
+| `backend/src/adapters/`, `config/` | R2, Modal and Render clients; validated server-only configuration |
+| `backend/src/workflows/` | Render task definitions, bounded outbox relay and reconciliation tasks |
+| `backend/src/contracts/`, `tests/` | Generated bindings from `processing/contracts/`; integration/fault tests and mobile fixtures |
+| `processing/` | Qualified Python media/model workers and canonical schemas |
 
-Fastify provides route schemas, lifecycle hooks and module boundaries. Drizzle keeps SQL/transactions visible. Better Auth handles identity protocols; our code owns authorization. Pin supported library versions and test their actual Node integrations. Preserve multiple `Set-Cookie` headers, trusted external URLs and callback body formats in the auth adapter. [Fastify support](https://fastify.dev/docs/latest/Reference/LTS/), [Better Auth integration](https://better-auth.com/docs/integrations/fastify)
+Treat `backend/` as a server-only workspace package imported by Next and the workflow build. Build from the repository root so both packages are available; verify production output includes their runtime dependencies. Browser bundles may import public contract types, never database/storage clients, auth configuration or secrets.
 
-Domain services own short database transactions. Routes validate/adapt requests; repositories require explicit resource scope. Network calls occur outside transactions and finish through conditional commits. Do not add a generic framework that hides those boundaries.
+Domain services own short database transactions. Routes adapt requests; repositories require explicit resource scope. Put a state change and its uniquely identified outbox command in the same transaction, then return the durable operation ID. A minute Render cron relays committed commands; the web service does not kick workflows after committing and holds no Render operator/API key. Initial submission latency includes up to one cron interval plus provider queue time. Network calls occur outside transactions and finish through conditional commits. Do not launch untracked work after an HTTP response. Render tasks resume from application records and receipts; process memory and provider retries are not durable domain state.
 
-## Compatibility and cutover
+The planned control plane comprises the web service, one Render Workflow service, a bounded minute cron and a separate daily database-backup cron. Render Workflows owns finite task execution; the [orchestration contract](job-orchestration.md) owns successor scheduling, outbox delivery and recovery. There is no `/api/inngest` endpoint. Media workers cannot invoke control-plane modules directly or receive database/Modal-control credentials. A separately authenticated workflow principal calls quiescence/final acceptance; a distinct cleanup-only principal lets cron retire grants after controller loss. Only the API's conditional transaction accepts validated results. Human publication remains a fresh-session internal-admin action.
 
-1. Capture credential-free mobile fixtures for auth cookies, errors, integer encoding and upload requests. Preserve required behavior, not unsafe implementation quirks.
-2. Build against isolated database/buckets. Preserve existing opaque identity IDs and provider associations where real data exists; never remap recordings by email alone.
-3. Move one complete route group at a time behind the same origin. Auth has one authority; every multipart session has one writing service for start through completion/abort.
-4. Map legacy assets into canonical recording/file records as unverified. Disable direct user-delete bypasses and fail-open upload starts before enabling new writers.
-5. Qualify signed iOS/Android builds: login, rotation, offline ownership, account switching, interrupted upload and cloud verification. Drain old sessions before retiring old credentials/server.
+## Database, sessions and request safety
 
-Acceptance requires a clean build without cloned-server imports, real Postgres isolation tests, safe shutdown/restart, compatible native sessions and the component fault tests. Hosting size, provider credentials and production rollout remain explicit implementation decisions; cost estimates live in [operations](operations-and-costs.md).
+Connect same-region Render services to Render Postgres through its internal URL. Require TLS using the provider-supported internal mode; Render currently documents `sslmode=require` and self-signed internal certificates. Disable external database access, opening only an audited temporary operator path when necessary. Qualify workflow-to-database connectivity in the selected region before deployment. [Render database connections](https://render.com/docs/postgresql-creating-connecting)
+
+Use separate migration, application and bounded workflow-service database roles. The migration role owns DDL; generated owner credentials do not enter runtime services. Workflow access is limited to its ledger/outbox/control requirements; it cannot grant staff access or publish releases. Better Auth identity/session tables and domain tables share this managed database, with reviewed migrations and retention-safe foreign keys. Drizzle keeps SQL and transaction boundaries visible. [Storage](storage-and-data-model.md) owns role-specific URL/pooling configuration.
+
+Use a bounded connection pool per process, not per request. Cap task concurrency so all web replicas, deploy overlap, task instances and operator reserve fit the selected database/pooler's budget. Do not hold a connection or transaction while waiting for Modal. Verify driver and transaction-pooler compatibility, including prepared statements and session settings; load-test before increasing concurrency.
+
+Mount Better Auth through `toNextJsHandler(auth)`. Domain APIs resolve the session once, recheck live grants and propagate any rotated cookies individually. Next proxy redirects are navigation convenience; every page data loader and route independently authorizes its resource. Private responses and authenticated rendering must not enter public/static/shared caches. Use route handlers for mutations so native and browser clients share one explicit API; UI components do not gain a second authorization path. [Better Auth Next integration](https://better-auth.com/docs/integrations/next), [auth/access rules](auth-and-access.md)
+
+## Compatibility and implementation gates
+
+1. Capture credential-free mobile fixtures for cookies, errors, integer encoding and upload requests. Preserve required behavior rather than unsafe legacy quirks.
+2. Build against isolated Render Postgres and buckets. Preserve opaque identity IDs and provider associations where real data exists; never remap recordings by email alone.
+3. Move one complete route group behind the same origin. Auth has one authority; each multipart session has one writing service from start through completion/abort.
+4. Map legacy assets into canonical unverified records. Disable direct user-delete bypasses and fail-open upload starts before enabling new writers.
+5. Qualify signed iOS/Android login, rotation, offline ownership, account switching, interrupted upload and cloud verification. Drain old sessions before retiring old credentials/server.
+
+Acceptance requires a production Next build without cloned-server imports, private-cache/header checks, real Postgres isolation tests, safe deploy/restart and the component fault tests. Qualify the Render SDK, Modal Node SDK, database connectivity and task recovery together; an unavailable checkpoint API is not assumed. Deployment, shape selection and paid canaries remain implementation work. Costs live in [operations](operations-and-costs.md).

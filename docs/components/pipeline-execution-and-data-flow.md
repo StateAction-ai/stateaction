@@ -1,12 +1,12 @@
 # Processing execution and data flow
 
-Updated: 2026-10-23. Status: engineering handoff; cloud and long-recording qualification remain open.
+Updated: 2026-10-26. Status: Render application stack selected; cloud and long-recording qualification remain open.
 
 This is the canonical stage and data-handoff contract. Implementation details live in [cloud processing](cloud-processing.md), control/recovery rules in [orchestration](job-orchestration.md), and cross-language schemas in [contracts](../contracts.md).
 
 ## Build target and v1 product
 
-Next.js is the confirmed frontend. [Hosting evaluation](hosting-evaluation.md) keeps API/identity and workflow-engine selection open; Node/Inngest details remain reference adapters. The stage contracts below are independent of those placements. Supabase PostgreSQL, private Modal workers and R2/S3 qualification remain in scope. Implement one domain backend and identity authority. The Stera server is protocol evidence, not a production dependency.
+Next.js/Node API, Better Auth, Render Postgres and Render Workflows are selected. R2 holds private payloads and private Modal workers execute all processing. [Render deployment](render-deployment.md) owns service/network placement; the stage contracts below own reads, writes and handoffs. The Stera server is protocol evidence, not a production dependency.
 
 V1 delivers verified RGB recordings, exact source-frame mappings, compact QC, internal review and versioned customer downloads. Preserve available depth, IMU, calibration and camera tracking as separate evidence. Metric hand pose, robot actions and synchronized sensor supervision are not implicit RGB deliverables. GPU stages are opt-in and require model rights and qualification.
 
@@ -15,8 +15,9 @@ V1 delivers verified RGB recordings, exact source-frame mappings, compact QC, in
 ```mermaid
 flowchart TD
     phone["Flutter: capture and resumable upload"] --> raw[("Private storage: sealed originals")]
-    phone --> api["Domain API and Postgres: authorize, seal, outbox"]
-    api --> flow["Inngest Cloud: ingest and bounded batch workflows"]
+    phone --> api["Render Next.js API and Postgres: authorize, seal, outbox"]
+    api --> relay["Render minute cron: relay committed commands"]
+    relay --> flow["Render Workflows: ingest and bounded batch controllers"]
     raw --> ingest["Modal CPU: ingest and verify native evidence"]
     flow --> ingest
     ingest --> prep["Modal CPU: Curator cut and transcode"]
@@ -33,7 +34,7 @@ flowchart TD
 ```
 
 
-Arrows show workflow dependencies; media and intermediate files stay in object storage. Every stage uses the write-barrier/validator/API-acceptance protocol before its successors; the diagram shows it once for readability. Disabled optional stages are explicitly skipped. Inngest coordinates dependencies through short Node handlers. Workers fetch objects directly. Publication selects validated files without another bulk copy; customers see only granted published releases.
+Arrows show workflow dependencies; media and intermediate files stay in R2. Every stage uses the write-barrier/validator/API-acceptance protocol before its successors; the diagram shows it once for readability. Disabled optional stages are explicitly skipped. Render controllers resume from Postgres/Curator state and submit/poll private Modal calls. Workers fetch objects directly. Publication selects validated files without another bulk copy; customers see only granted published releases.
 
 ## Canonical stage contracts
 
