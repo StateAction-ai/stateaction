@@ -1,0 +1,106 @@
+{
+  "schema": "aws_s3_price_lookup_v1",
+  "checked_on": "2026-10-26",
+  "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/us-east-1/index.json",
+  "publicationDate": "2026-10-15T17:35:40Z",
+  "source_sha256": "a298361f29bd9bc926d810d1eb093720827275689c1e2db5a7af90890b1dc67c",
+  "region": "us-east-1",
+  "selected_rows": [
+    {
+      "sku": "RYYTS5ZVVDHWE4WC",
+      "attributes": {
+        "servicecode": "AmazonS3",
+        "transferType": "AWS Outbound",
+        "fromLocation": "US East (N. Virginia)",
+        "fromLocationType": "AWS Region",
+        "toLocation": "External",
+        "toLocationType": "Other",
+        "usagetype": "DataTransfer-Out-Bytes",
+        "operation": "",
+        "fromRegionCode": "us-east-1",
+        "servicename": "Amazon Simple Storage Service",
+        "toRegionCode": ""
+      },
+      "description": "$0.0 per GB for S3-DT-AWS Outbound",
+      "beginRange": "0",
+      "endRange": "Inf",
+      "unit": "GB",
+      "pricePerUnit": {
+        "USD": "0.0000000000"
+      },
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    },
+    {
+      "sku": "WP9ANXZGBYYSGJEA",
+      "attributes": {
+        "servicecode": "AmazonS3",
+        "location": "US East (N. Virginia)",
+        "locationType": "AWS Region",
+        "availability": "99.99%",
+        "storageClass": "General Purpose",
+        "volumeType": "Standard",
+        "usagetype": "TimedStorage-ByteHrs",
+        "operation": "",
+        "durability": "99.999999999%",
+        "regionCode": "us-east-1",
+        "servicename": "Amazon Simple Storage Service"
+      },
+      "description": "$0.023 per GB - first 50 TB / month of storage used",
+      "beginRange": "0",
+      "endRange": "51200",
+      "unit": "GB-Mo",
+      "pricePerUnit": {
+        "USD": "0.0230000000"
+      },
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    },
+    {
+      "sku": "WP9ANXZGBYYSGJEA",
+      "attributes": {
+        "servicecode": "AmazonS3",
+        "location": "US East (N. Virginia)",
+        "locationType": "AWS Region",
+        "availability": "99.99%",
+        "storageClass": "General Purpose",
+        "volumeType": "Standard",
+        "usagetype": "TimedStorage-ByteHrs",
+        "operation": "",
+        "durability": "99.999999999%",
+        "regionCode": "us-east-1",
+        "servicename": "Amazon Simple Storage Service"
+      },
+      "description": "$0.022 per GB - next 450 TB / month of storage used",
+      "beginRange": "51200",
+      "endRange": "512000",
+      "unit": "GB-Mo",
+      "pricePerUnit": {
+        "USD": "0.0220000000"
+      },
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    },
+    {
+      "sku": "WP9ANXZGBYYSGJEA",
+      "attributes": {
+        "servicecode": "AmazonS3",
+        "location": "US East (N. Virginia)",
+        "locationType": "AWS Region",
+        "availability": "99.99%",
+        "storageClass": "General Purpose",
+        "volumeType": "Standard",
+        "usagetype": "TimedStorage-ByteHrs",
+        "operation": "",
+        "durability": "99.999999999%",
+        "regionCode": "us-east-1",
+        "servicename": "Amazon Simple Storage Service"
+      },
+      "description": "$0.021 per GB - storage used / month over 500 TB",
+      "beginRange": "512000",
+      "endRange": "Inf",
+      "unit": "GB-Mo",
+      "pricePerUnit": {
+        "USD": "0.0210000000"
+      },
+      "effectiveDate": "2026-10-01T00:00:00Z"
+    }
+  ]
+}

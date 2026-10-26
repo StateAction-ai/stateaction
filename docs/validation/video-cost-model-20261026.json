@@ -10,7 +10,8 @@
     "r2": "https://developers.cloudflare.com/r2/pricing/",
     "modal": "https://modal.com/pricing",
     "modal_egress": "https://modal.com/docs/guide/network-egress-billing",
-    "supabase": "https://supabase.com/pricing"
+    "supabase": "https://supabase.com/pricing",
+    "modal_regions": "https://modal.com/docs/guide/region-selection"
   },
   "capture_samples": [
     {
@@ -118,6 +119,7 @@
     "Runtime, total bytes written, controller consumption and retained artifact multiplier are unmeasured planning sensitivities.",
     "Optional L40S caption profile remains unqualified; model and asset rights require separate clearance.",
     "Provider GB rounding and unit definitions can change approximate storage bills. Modal transfer uses exact GiB conversion here.",
-    "No cloud resources were created and no model was executed."
+    "No cloud resources were created and no model was executed.",
+    "Region-pinned Modal resource pricing (1.15x broad / 1.75x narrow) is excluded; residency/region choice must be priced before activation."
   ]
 }

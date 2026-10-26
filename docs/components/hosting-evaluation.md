@@ -59,6 +59,8 @@ Illustration: retaining 0.2GB RAM for a two-hour Modal wait costs about **$0.02*
 
 For the Render-Postgres candidate, a 2GB Next/API service ($25), 1GB-RAM Postgres ($19), Pro workspace ($25) and about $3 database-disk allowance give a **$72/month application-core allowance**. A single infrastructure operator using a Hobby workspace removes $25; app reviewers/collectors are not Render workspace seats. These are sizing candidates, not capacity measurements. Video storage, transfer and processing scenarios are in the [video cost model](video-cost-model.md).
 
+The [platform comparison](platform-cost-comparison.md) matches workspace/frontend sizing across Render, Supabase and AWS, including a qualified-design candidate for private CloudFront delivery. Render Postgres/Better Auth versus Supabase Postgres/Auth differs by about $3/month at these sizes; media transfer and retention have a much larger effect.
+
 ## Recommendation and decision test
 
 Shortlist Render for full Next.js hosting. Retain Inngest as the current qualified-design workflow option while evaluating Render as its replacement. Before choosing Render Workflows, prove controller restart after Modal submission, parent/child retry behavior, cancellation propagation to Modal, durable result recovery, bounded waiting cost and scheduled reconciliation. Use fake workers locally before an authorized cloud canary. No backend migration or provider activation is implied by this evaluation.

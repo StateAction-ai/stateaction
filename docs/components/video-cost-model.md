@@ -2,6 +2,8 @@
 
 Updated: 2026-10-26. USD planning estimates, before tax/credits. **No deployment or paid processing performed.** This evaluates the Render application-core candidate; it does not select a provider. [Hosting choices](hosting-evaluation.md), [machine-readable assumptions and calculations](../validation/video-cost-model-20261026.json).
 
+For matched Render/Supabase/AWS scenarios, including S3 same-region transfers and private CloudFront delivery, read the [platform comparison](platform-cost-comparison.md).
+
 ## Workload and uncertainty
 
 Budget by **all uploaded bytes per recording hour**, not video resolution alone. The recorder source targets 15Mbps for a 1080p MP4, about 6.75 decimal GB/hour. However, the current Pixel acquisition path embeds individual JPEG frames plus sensors in MCAP. Two existing captures contain 64,029,630 bytes over 17.239 seconds and 37,696,852 bytes over 12.575 seconds: extrapolated rates of **13.37 and 10.79 GB/hour**. These short samples establish neither sustained two-hour size nor a peak bound. They also do not establish that both an MCAP and a separate original MP4 must be uploaded. [Acquisition evidence](../pixel-v3-physical-validation.md)
@@ -57,6 +59,8 @@ Compute/workflow assumptions are deliberately explicit:
 [Modal compute rates](https://modal.com/pricing), [Render Workflow billing](https://render.com/docs/workflows-limits), [model/resource qualification](cloud-processing.md#5-models-and-resources).
 
 R2 request overages, staging, replicas/HA, additional backups, domains/email, paid Inngest, cache storage above allowances, review labor and collector connectivity/compensation are excluded. Storage uses approximate provider-GB pricing; Modal transfer explicitly converts decimal byte volumes to GiB. Check actual billing units/rounding and account credits before activation.
+
+These use unpinned Modal base rates. Region selection currently adds a 1.15x broad or 1.75x narrow resource multiplier; price the chosen residency/region profile before activation. A geographic region name alone does not establish free same-region AWS S3 transfer. [Modal regions/pricing](https://modal.com/docs/guide/region-selection)
 
 ## Low-budget implementation order
 
