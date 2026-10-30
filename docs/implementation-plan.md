@@ -1,54 +1,40 @@
-# Implementation milestones
+# MVP implementation milestones
 
-Updated: 2026-10-26. Target: [selected technical design](technical-design.md) and [Render deployment](components/render-deployment.md). These are engineering deliverables; no backend/worker deployment has been performed.
+Updated: 2026-10-30. Target: [technical design](technical-design.md). All paths/commands are implementation targets, not newly shipped services. Automatic 21-point hand inference and both review/delivery interfaces are required.
 
-## Work sequence
+## Build sequence
 
-| Milestone | Owner / dependency | Deliverables | Exit evidence |
-| --- | --- | --- | --- |
-| M0. Contracts, service builds and limits | Backend + robotics; first | Next.js/Node24, Better Auth, Render Postgres/Workflows build targets; shared OpenAPI/JSON Schemas, migrations/version pins, rights/regions/retention and resource/budget config | Root workspace builds web/tasks/cron separately; one identity authority; tenant constraints, cross-language fixtures and storage qualification plan |
-| M1. Identity and capture transfer | Identity + mobile/backend; M0 | Independently configured Better Auth, enrollment, owner-bound offline journal, direct multipart upload/seal and recovery | Physical-device login/expiry/account-switch tests; complete interrupted large-file transfer and sidecar/seal race |
-| M2. Cloud CPU pipeline | Platform + robotics; M0/M1 | Render task controllers, transactional outbox/minute cron, Modal adapter, claims/validation/admission, streamed ingest, native Curator cut/transcode with stable Lance batches | Controller restart/continuation and lost-dispatch tests; two-hour memory/scratch/read-byte receipt; same-root checkpoint/commit recovery; duplicate/cancel faults |
-| M3. Review and delivery | Backend/frontend/data operations; develop UI alongside M1, integrate after M2 | Internal exact-revision review, rights/split checks, cloud exporter/validator, customer grants/inspection, complete downloader/loader | Concurrent review conflict; immutable release; every required file resumes/downloads/checksums with no hidden dependencies |
-| M4. Pilot operations | Platform + mobile/data operations; M1–M3 | Same-region private Render services, scoped credentials, minute/daily cron, PITR/independent backup, spend controls and signed app build | Collector → review → customer full canary; private DB/pool limits, controller cancellation, restore/revocation exercise and gross cost receipt |
-| M5. Optional models | ML/robotics; M2, independent of RGB pilot | Qualified embeddings/captions/hand adapters, model inventory/cache and profile switches | Exact image/context/GPU memory and recovery tests; commercial rights plus declared quality evidence |
+| Milestone | Deliverable | Exit evidence |
+| --- | --- | --- |
+| M0. Monorepo and contracts | Coordinate the active mobile fixes; import Flutter/native plugin/SDK into one root repository. Pin Node/pnpm, Flutter and Python/uv; add local Postgres/MinIO configuration, official Render local task server and shared schemas. | Clean clone without submodules; Flutter/native regression checks; Node/Python builds and Dart/TypeScript/Python contract fixtures |
+| M1. Local login and upload | Next.js UI/API, Better Auth, manual allowlist with pilot collection/processing permission evidence, owner-bound mobile journals, direct resumable multipart transfer and sealed file inventory. | Real-device login/expiry/account-switch tests; killed app/expired URL/lost completion resumes without changing ownership or duplicating a recording |
+| M2. Local complete processor | The same Render workflow task definitions invoke LocalExecutor to run the shared streaming extractor, mandatory MediaPipe CPU hand inference, RGB/overlay previews, pose arrays, masks/frame mappings and inline checks. Jobs, controller recovery and output uploads follow the production control contract. | Short real MCAP through upload → processing → review; corrupt input/missing hand/stale callback failures; bounded memory and scratch on a representative two-hour input |
+| M3. Local review and delivery | Staff view overlays/QC, label/approve clips, freeze a release and run the same CPU exporter. Customer sees only granted published releases and downloads the entire archive/manifest. | Collector → automatic hands → staff approval → customer download; hashes/loader pass, unauthorized access fails, previous release stays unchanged after corrections |
+| M4. Small cloud CPU canary | Render web/Postgres/Workflows/minute repair cron, private R2, Modal CPU wrapper over the same processing core, native Google sign-in configuration. | Known/unknown submission recovery, duplicate physical worker claim, cancel/timeout, output write closure, direct transfer, backup restore and measured gross cost |
+| M5. Field pilot | Signed mobile build, confirmed collection/processing/export permissions and retention policy; repair-footage hand-quality review; representative two-hour upload/cloud processing and complete delivery. | Recorded device/build/model/image/input versions, latency/resources/bytes/cost, reviewer decisions and customer loader receipt |
+| Later, if needed | Optional local CUDA model profile, then explicit cloud GPU qualification. Curator/Lance only after workload measurements justify another system. | Cleared weights/dependencies; stable 21-joint semantics, quality comparison, peak VRAM/throughput and authorized cloud cost cap |
 
-M2 control code can use fake workers while ingest is built. M3 UI can use contract fixtures early. Internal review and customer delivery both ship in the first deployed product; optional model branches are not dependencies for a profile that does not promise them.
+M2 and M3 must pass without cloud GPU access. Stub models are useful for protocol tests but never substitute for real hand inference in the end-to-end acceptance run. An optional local GPU uses the same processor contract; it does not replace the CPU pipeline with a different product.
 
-## Code ownership
+## Minimum acceptance cases
 
-| Root | Owns |
+| Inject | Required outcome |
 | --- | --- |
-| `backend/` | Server-only shared TypeScript domain/auth/access modules, DB migrations, storage/Modal/Render adapters and workflow/cron entrypoints |
-| `console/` | Next.js full Node server: internal/customer UI, Better Auth and thin domain/internal/download route handlers |
-| `processing/contracts/` | Canonical schemas and generated/validated TypeScript/Python/Dart conformance fixtures |
-| `processing/capture/` | Streaming MCAP ingest, sensor/clock/geometry adapters and bounded sharding |
-| `processing/curator/` | Pinned recipes, preparation/enrichment wrappers and native checkpoint integration |
-| `processing/hand_pose/` | Replaceable model-specific adapter and qualification |
-| `processing/models/`, `processing/validation/` | Model/version/rights registry; independently authorized read-only result validation |
-| `processing/export/` | Portable packaging, manifest/loader and validation |
-| `processing/images/`, `processing/modal_app.py` | Pinned images/private finite Functions and resource limits |
-| `processing/tests/`, `backend/tests/` | Contract, integration, fault and sizing evidence |
-| Existing Flutter client | Auth/API/owner-journal/upload integration, coordinated with ongoing capture fixes |
+| Logout, expired session or account switch mid-upload | Original owner's files/journal retained; new user cannot claim them |
+| Lost part/complete response, required sidecar/seal race | Same logical upload reconciles; one queued job only when all required sources are complete |
+| Corrupt MCAP, unsupported clock/raster or oversized input | Explicit failure/limitation; no silent sensor reassociation or GPU escalation |
+| Lost spawn acknowledgement or dispatcher crash | Existing claim/call ID reconciled; no blind spawn or automatic costly retry |
+| Container replay, late old-job result or cancelled job | One admitted worker; stale result cannot replace the current job |
+| Write after output seal | Denied; published bytes cannot be reopened through an old worker upload capability |
+| Occlusion, gloves, missing hand or ambiguous handedness | Visible missingness/limitations; no fabricated valid joints or validated metric claim |
+| Concurrent review or changed approved labels | Conflict or a new explicit review/release; no overwritten published selection |
+| Interrupted archive transfer, expired link or revoked user | Range download works while authorized; renewed links require live grants; documented resume limits |
+| Database restore | Reconcile external jobs/uploads and reapply revocations before resuming new work |
 
-These are target modules, not implemented files. Build the web/task/cron artifacts from the repository root with pinned dependencies; keep the Stera app/SDK audit separate. The minute cron delivers/reconciles commands only; Render controllers choose successors. No second API/auth/catalog/workflow engine is required.
+Use synthetic data/fake providers for faults, short real MCAP for the full local flow, then a representative long capture. Reuse meaningful existing capture/geometry tests. Record the same input/model/config versions across local and cloud comparisons. Do not repeat expensive model runs when a contract fixture answers the question.
 
-## Cross-component acceptance
+## Ownership
 
-| Failure to inject | Required outcome |
-| --- | --- |
-| Session expiry, account change, revoked assignment | Local source/journal retained; another identity cannot take ownership |
-| App kill, URL expiry, lost part/complete response | Same logical upload resumes; exact parts/generation/hash checked |
-| Seal and final required file arrive in either order | One ingest run/outbox event; missing required data never silently downgraded |
-| Corrupt source, oversized dimensions, unsupported clock/geometry | Quarantine/explicit limitation; no unrequested GPU successor |
-| Unknown Modal submission, duplicate event, stale lease | No blind respawn; one accepted result; safe accounting and writer takeover |
-| Render retry/continuation, expired 24h provider idempotency or lost task acknowledgement | Existing DB scope/dispatch/attempt recovered; no duplicate GPU spawn; abandoned controller repaired by minute cron |
-| Crash before/after native checkpoint/commit | Same-root compatible recovery; no full table copy or duplicate accepted inference |
-| Cancel/delete/revoke during validation or export | Final API transaction rejects stale acceptance/publication |
-| Changed labels, split overlap, uncleared rights/model | Publication blocked or new explicit revision; previous release unchanged |
-| Interrupted full download, expired URLs, revoked grant | Complete paginated inventory, safe resume/checksums and no internal access |
-| Database restore while compute/grants may survive | Reconcile external state/revocations before admission; no resurrected permission |
+[Monorepo](components/monorepo.md) defines the exact target paths. Mobile owns capture/auth/journal transport; backend owns access/catalog/uploads/jobs/reviews/releases; robotics owns streaming extraction, model outputs and exporter; platform owns shared workflow definitions, executor adapters, local services, Render/Modal configuration and recovery. No second API, identity authority or catalog is needed.
 
-Use an isolated DB and fake storage/Modal adapters for protocol faults first. Real provider tests use synthetic data before an authorized, bounded canary. Record source/image/model/config digests, app build, measured peak resources, throughput, bytes and gross cost. A successful model forward pass does not establish geometry accuracy or training usefulness.
-
-The [audit](design-audit.md) lists qualification gates. Component acceptance sections own detailed cases; avoid a second competing test specification here.
+The [contract](contracts.md), [component index](README.md) and [local development plan](components/local-development.md) are the implementation entrypoints. No source relocation, production deployment or paid processing is performed by this planning change.

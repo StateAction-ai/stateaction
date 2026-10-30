@@ -1,56 +1,37 @@
 # Backend implementation
 
-Selected Render design · updated 2026-10-26 · Design only; not deployed.
+MVP design · updated 2026-10-30 · Not implemented or deployed.
 
-Parent: [Technical design](../technical-design.md). Shared wire contracts: [contracts](../contracts.md). Component contracts: [auth](auth-and-access.md), [storage](storage-and-data-model.md), [orchestration](job-orchestration.md).
+Parent: [technical design](../technical-design.md). Routes and schemas: [contracts](../contracts.md). See [auth](auth-and-access.md), [storage](storage-and-data-model.md), [jobs](job-orchestration.md) and [deployment](render-deployment.md).
 
-## Build target
+## One application and two workflow tasks
 
-Build one **Next.js / Node.js 24 LTS / TypeScript web service on Render**. It serves the review/delivery UI, the mobile HTTP API and Better Auth under one HTTPS origin. Render Postgres holds identity and application state; Render Workflows runs finite orchestration tasks. Private R2 holds media and datasets; Modal runs Python CPU/GPU processing. The application never proxies large uploads, video playback or dataset downloads. Render supports full Next.js as a Node web service. [Render Next.js hosting](https://render.com/docs/deploy-nextjs-app)
+Run Next.js/Node.js 24/TypeScript on Render for login, the mobile API, staff review and customer delivery. Render Postgres stores identity and seven domain tables. Two Render Workflow tasks orchestrate processing/export; a minute cron repairs missed starts and lost controllers. **The API is the sole database writer; workflows/cron have no database credentials.** R2 holds files; video bytes never traverse Next.
 
-Use Next App Router route handlers with the Node runtime for HTTP boundaries. Share domain modules between route handlers and workflow tasks; implement each operation once. The cloned Stera server supplies mobile protocol fixtures only. No standalone Fastify server, separate API service, Bun/Deno runtime or Supabase dependency is required. Pin the supported Next.js, Node and library versions together before implementation. [Route handlers](https://nextjs.org/docs/app/api-reference/file-conventions/route)
-
-## Modules and execution
+Two fixed Python functions do the work: `process_recording` extracts MCAP/native evidence, estimates hands, makes preview/clips and validates its own output; `export_release` packages approved clips and checks the archive. The mandatory starting profile is CPU MediaPipe: 21 image landmarks plus explicitly labelled 3D estimates. Exact asset terms and quality remain activation gates. No GPU is required for this profile.
 
 | Target | Responsibility |
 | --- | --- |
-| `console/app/` | Next pages, layouts and review/delivery components |
-| `console/app/api/auth/[...all]/route.ts` | Official Better Auth Next adapter; one identity authority |
-| `console/app/api/v1/**/route.ts` | Thin human API adapters: validate, authenticate, authorize, call domain services, encode responses |
-| `console/app/internal/v1/**/route.ts` | Workflow, worker and validator endpoints with distinct scoped service authentication |
-| `console/app/api/download/**/route.ts` | Scoped CLI download-session adapters |
-| `backend/src/modules/auth/`, `access/` | Better Auth configuration, enrollment, principal and authorization |
-| `backend/src/modules/recordings/`, `uploads/` | Registration, seal and canonical multipart lifecycle |
-| `backend/src/modules/processing/` | Admission, claims, batch ownership, validation and final acceptance |
-| `backend/src/modules/reviews/`, `releases/`, `downloads/` | Exact-revision approval, publication and recipient access |
-| `backend/src/db/` | Drizzle schema, reviewed migrations, repositories and bounded connection pools |
-| `backend/src/adapters/`, `config/` | R2, Modal and Render clients; validated server-only configuration |
-| `backend/src/workflows/` | Render task definitions, bounded outbox relay and reconciliation tasks |
-| `backend/src/contracts/`, `tests/` | Generated bindings from `processing/contracts/`; integration/fault tests and mobile fixtures |
-| `processing/` | Qualified Python media/model workers and canonical schemas |
+| `apps/web` | Next pages and thin Node route handlers, including Better Auth's official Next adapter |
+| `apps/jobs` | Shared Render task definitions, execution adapters and finite repair-cron entrypoint |
+| `packages/server` | Server-only auth, authorization, domain operations, Postgres/R2 adapters and migrations |
+| `packages/contracts` | JSON schemas and cross-language fixtures; generated public types |
+| `workers/processing` | Python extraction, hand inference, inline QC and export |
+| `apps/mobile` | Existing Flutter app, Android/iOS projects and durable upload journal |
+| `packages/stera_recorder`, `packages/stera-sdk` | Existing recorder/plugin and SDK sources |
 
-Treat `backend/` as a server-only workspace package imported by Next and the workflow build. Build from the repository root so both packages are available; verify production output includes their runtime dependencies. Browser bundles may import public contract types, never database/storage clients, auth configuration or secrets.
+This is the target layout; do not move sources while recording fixes are in progress. Use pnpm workspaces for TypeScript, Flutter pub and Python uv separately. Reuse Render's SDK/local runner; no extra monorepo build framework is needed. [Better Auth integration](https://better-auth.com/docs/integrations/next)
 
-Domain services own short database transactions. Routes adapt requests; repositories require explicit resource scope. Put a state change and its uniquely identified outbox command in the same transaction, then return the durable operation ID. A minute Render cron relays committed commands; the web service does not kick workflows after committing and holds no Render operator/API key. Initial submission latency includes up to one cron interval plus provider queue time. Network calls occur outside transactions and finish through conditional commits. Do not launch untracked work after an HTTP response. Render tasks resume from application records and receipts; process memory and provider retries are not durable domain state.
+## Small control operations
 
-The planned control plane comprises the web service, one Render Workflow service, a bounded minute cron and a separate daily database-backup cron. Render Workflows owns finite task execution; the [orchestration contract](job-orchestration.md) owns successor scheduling, outbox delivery and recovery. There is no `/api/inngest` endpoint. Media workers cannot invoke control-plane modules directly or receive database/Modal-control credentials. A separately authenticated workflow principal calls quiescence/final acceptance; a distinct cleanup-only principal lets cron retire grants after controller loss. Only the API's conditional transaction accepts validated results. Human publication remains a fresh-session internal-admin action.
+Route handlers validate bounded requests, resolve the principal, authorize the resource and call a domain operation. Transactions are short; provider calls happen outside them and finish with conditional updates. Private pages/responses bypass shared caches. Preserve individual rotated `Set-Cookie` headers. Next proxy redirects never substitute for route/data authorization.
 
-## Database, sessions and request safety
+Creating a job persists intent; after commit, make a bounded workflow-start request. Failure leaves the job repairable by cron; no outbox is necessary. Tasks `process-recording` and `export-release` claim/control through APIs. Before executing Python, persist submission intent, then record the Modal call ID or uncertainty. Each physical execution claims with its fresh nonce and actual function-call ID before reading media. A finish callback is provisional: API reconciliation checks terminal execution, closed outputs and current state before success. Manual processing retries create another job/prefix; native controller retries recover the same job/call. [Job protocol](job-orchestration.md)
 
-Connect same-region Render services to Render Postgres through its internal URL. Require TLS using the provider-supported internal mode; Render currently documents `sslmode=require` and self-signed internal certificates. Disable external database access, opening only an audited temporary operator path when necessary. Qualify workflow-to-database connectivity in the selected region before deployment. [Render database connections](https://render.com/docs/postgresql-creating-connecting)
+Source/output uploads use API-allocated keys and multipart IDs, including small files. Workers get scoped job capabilities and part URLs, not reusable object-write credentials. The API completes uploads and seals the bounded manifest; sealed jobs cannot allocate more files. Heavy hashing/model checks stay in Python. [Upload](mcap-upload.md)
 
-Use separate migration, application and bounded workflow-service database roles. The migration role owns DDL; generated owner credentials do not enter runtime services. Workflow access is limited to its ledger/outbox/control requirements; it cannot grant staff access or publish releases. Better Auth identity/session tables and domain tables share this managed database, with reviewed migrations and retention-safe foreign keys. Drizzle keeps SQL and transaction boundaries visible. [Storage](storage-and-data-model.md) owns role-specific URL/pooling configuration.
+## Development and acceptance
 
-Use a bounded connection pool per process, not per request. Cap task concurrency so all web replicas, deploy overlap, task instances and operator reserve fit the selected database/pooler's budget. Do not hold a connection or transaction while waiting for Modal. Verify driver and transaction-pooler compatibility, including prepared statements and session settings; load-test before increasing concurrency.
+Run the same task definitions through Render's official local Workflows runner on port 8120 or its hosted service. `EXECUTION_BACKEND=local|modal` selects `LocalExecutor` for real Python subprocesses or `ModalExecutor`. Local Postgres/MinIO use `infra/compose.yaml`. `HAND_MODEL_PROFILE=mediapipe_cpu` completes hand/review/download without a GPU; an optional qualified local CUDA profile can use local hardware. Local success does not qualify Modal/R2 behavior. [Local development](local-development.md)
 
-Mount Better Auth through `toNextJsHandler(auth)`. Domain APIs resolve the session once, recheck live grants and propagate any rotated cookies individually. Next proxy redirects are navigation convenience; every page data loader and route independently authorizes its resource. Private responses and authenticated rendering must not enter public/static/shared caches. Use route handlers for mutations so native and browser clients share one explicit API; UI components do not gain a second authorization path. [Better Auth Next integration](https://better-auth.com/docs/integrations/next), [auth/access rules](auth-and-access.md)
-
-## Compatibility and implementation gates
-
-1. Capture credential-free mobile fixtures for cookies, errors, integer encoding and upload requests. Preserve required behavior rather than unsafe legacy quirks.
-2. Build against isolated Render Postgres and buckets. Preserve opaque identity IDs and provider associations where real data exists; never remap recordings by email alone.
-3. Move one complete route group behind the same origin. Auth has one authority; each multipart session has one writing service from start through completion/abort.
-4. Map legacy assets into canonical unverified records. Disable direct user-delete bypasses and fail-open upload starts before enabling new writers.
-5. Qualify signed iOS/Android login, rotation, offline ownership, account switching, interrupted upload and cloud verification. Drain old sessions before retiring old credentials/server.
-
-Acceptance requires a production Next build without cloned-server imports, private-cache/header checks, real Postgres isolation tests, safe deploy/restart and the component fault tests. Qualify the Render SDK, Modal Node SDK, database connectivity and task recovery together; an unavailable checkpoint API is not assumed. Deployment, shape selection and paid canaries remain implementation work. Costs live in [operations](operations-and-costs.md).
+Before pilot, prove builds, signed-device cookies/ownership, interrupted uploads, controller recovery, unknown submission safety, stale callback rejection and complete archive download. Stage DAGs, shared writable datasets and separate validators remain deferred. Workflow polling/retry follows the verified orchestration contract, not an assumed durable-sleep API.

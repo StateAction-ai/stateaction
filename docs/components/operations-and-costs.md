@@ -1,98 +1,69 @@
-# Operations and costs
+# MVP operations and costs
 
-Selected Render design · updated 2026-10-26 · Owner: platform engineering. Design only; no resources deployed. [Deployment specification](render-deployment.md), [video cost model](video-cost-model.md), [workflow](job-orchestration.md), [storage](storage-and-data-model.md).
+Design · 2026-10-30 · Not deployed. [Deployment](render-deployment.md), [jobs](job-orchestration.md), [processing](cloud-processing.md), [local development](local-development.md), [volume assumptions](video-cost-model.md).
 
-## Production services
+## Deploy these services
 
-| Service | Initial proposal | Responsibility |
-| --- | --- | --- |
-| Next.js public web service | 1 CPU / 2GB RAM, one instance, $25/month | UI, Better Auth and Node/TypeScript API; no media proxy or long-running jobs |
-| Render Postgres | 1GB RAM, $19/month; 10GB initial disk budget | Identity, domain catalog, provenance, workflow/outbox and reviews/releases |
-| Render Workflow service | Flex; at most 8 application controller leases | Finite orchestration; bounded waits, durable state in Postgres |
-| Orchestration cron | Every minute UTC; exits within 45 seconds | Leased outbox delivery, provider reconciliation and due continuations |
-| Backup cron | Daily UTC; finite command | Restricted logical database backup to private R2 backup storage |
-| R2 | Private raw, derived, release and backup buckets | Direct resumable uploads, canonical datasets and customer downloads |
-| Modal | Finite CPU/GPU workers, zero warm containers | Extraction, Curator/custom adapters, independent validation and export |
-
-The two cron services each have a **$1/month minimum**, with active compute billed above that floor. Manual triggering cancels an active cron run; scheduled overlap waits. Work must therefore tolerate interruption and never rely on cron's single-run behavior instead of database claims. The orchestration cron is not a daemon and never waits for a full Modal job. [Cron behavior and pricing](https://render.com/docs/cronjobs)
-
-Use the same Render workspace/region for application, workflow, cron and database. Runtime role-specific connections use private managed PgBouncer; migrations/backups use direct internal connections. Disable public database access. [Storage](storage-and-data-model.md#database-access) specifies exact roles, URLs, TLS and pool budgets. Use graceful HTTP shutdown and bounded transactions; an outage delays control requests while phones retain journals and cloud state remains durable.
-
-Separate local development, staging and production databases, buckets, credentials, callback origins and Modal environments. Within each deployment, use ordinary Render environments with services in the same workspace/region. Do not enable Render's current network-isolated-environment feature for this topology until Workflow private-network support is proven. For a hard staging/production network boundary, use separately budgeted workspaces or a newly qualified supported design. Preview builds receive no production secrets or datasets. Select production regions from rights/residency requirements before real uploads, and reprice any Modal region pinning. Extra paid environments require their own budget.
-
-CI builds pinned immutable revisions. Run reviewed additive migrations explicitly before compatible application/task changes. Never migrate destructively on web startup. Keep old pipeline/model images and compatible task handlers until their runs drain; task definitions and continuation versions are part of the rollout contract. Increase concurrency or replicas only after latency, memory, database and cost measurements. No Kubernetes, separate Redis queue, always-on control worker or warm GPU pool is required initially.
-
-## Prices and budget
-
-USD list rates checked 2026-10-26, before tax/credits. These are planning inputs, not workload measurements or authorization to spend.
-
-| Item | Planning rate |
+| Service | Initial size / purpose |
 | --- | --- |
-| Render application | 2GB/1CPU web service $25/month |
-| Render Postgres | 1GB RAM $19/month; expandable disk $0.30/GB-month |
-| Render workspace | Hobby $0 for one infrastructure operator; Pro $25/month for the engineering team |
-| Render cron | Two services: at least $2/month total; compute above the minima is extra |
-| Render Workflows Flex | $0.20/active vCPU-hour + $0.05/GB-hour RAM; task input/output state $0.25/GB, retained 30 days |
-| Render public outbound | $0.15/GB above workspace allowance; media never traverses Next.js |
-| R2 Standard | $0.015/GB-month; Class A $4.50/million, Class B $0.36/million; free direct egress |
-| Modal GPU-hour | L4 $0.7992; L40S $1.9512; H100 $3.9492; CPU/RAM extra |
-| Modal Function CPU/RAM | $0.04716/physical-core-hour; $0.007992/GiB-hour |
-| Modal Volumes/egress | Volumes: 1TiB/month included then $0.09/GiB-month; Starter outbound: 1TiB/workspace/month then $0.04/GiB |
+| Render Next.js web service | 1CPU / 2GB RAM; UI, Better Auth and bounded JSON APIs |
+| Render Postgres | Paid 1GB RAM instance; about 10GB initial disk; seven MVP application tables plus auth tables |
+| Render Workflow service | Two finite Node controllers: process a recording and export a release; CPU worker execution stays behind an executor adapter |
+| One Render cron | Every minute UTC; requests repair of pending workflow dispatch through the API and exits within 45 seconds |
+| Private R2 | Source MCAP/metadata, job outputs, previews and releases; uploads/downloads bypass Render |
+| Modal CPU Functions | `process_recording` and `export_release`; scale to zero, no required GPU |
 
-Sources: [Render services/workspace](https://render.com/pricing), [workflow rates](https://render.com/docs/workflows-limits), [bandwidth](https://render.com/docs/outbound-bandwidth), [R2](https://developers.cloudflare.com/r2/pricing/), [Modal](https://modal.com/pricing).
+Use one production Render workspace/region for web, workflows, cron and Postgres. **Only the web API connects to the database** using its internal URL, provider-supported TLS and a bounded pool; disable public database access. Workflow controllers and the repair cron use scoped internal API operations. Controllers invoke Modal through its JavaScript SDK; cron repairs Render task dispatch rather than waiting for recording processing. Separate local/test secrets and buckets; preview builds receive no production data.
 
-The application/database/disk allowance is **about $47/month for one operator or $72 for a Pro team workspace**, before cron/workflow, video storage, processing, transfer, email and backups. This uses $3 as a conservative 10GB database-disk allowance; actual included storage/rounding follows the bill. Reviewer/customer app accounts do not require Render workspace seats. The [video cost model](video-cost-model.md) already includes a $2 scheduling allowance: it covers the two cron floors approximately, **not an additional $2 line or an execution cap**. Task-state usage and cron compute above the floors remain extra.
+Deploy the proposed monorepo: `apps/mobile` (Flutter), `apps/web` (Next.js), `apps/jobs` (Node workflow controllers and repair cron), `packages/server`, `packages/contracts`, `packages/stera_recorder`, `packages/stera-sdk`, `workers/processing` (Python). These are implementation targets; source movement is coordinated with the recording-fix agent. Use pinned builds and reviewed additive migrations, then deploy compatible web/controller/cron/worker versions. No automatic destructive startup migration.
 
-At 12.5GB raw per recording hour, twice-raw retained bytes and three-month rolling retention, the model estimates **$108/month at 20 hours, $251 at 100 hours and $2,209 at 1,000 hours before optional GPU stages**, using the Pro workspace. Subtract $25 for the single-operator workspace. These include unmeasured CPU/controller/transfer assumptions; backups and ancillary services are additional. Storage continues growing when policy or published releases prevent deletion.
+## Low-spend defaults
 
-Controllers retain billed RAM while waiting. Resume from Postgres through bounded continuations; do not assume a suspended-wait/checkpoint primitive. Modal bills CPU/RAM at the higher of requested or actual use, and disk requests can increase billed RAM. R2 free outbound does not waive Modal result-upload egress. Region pinning can multiply Modal rates. Confirm actual account credits; do not automatically subtract advertised credits. [Modal resource billing](https://modal.com/docs/guide/resources), [egress](https://modal.com/docs/guide/network-egress-billing), [region pricing](https://modal.com/docs/guide/region-selection)
+Automatic **21 hand landmarks and clearly marked 3D estimates are required MVP output**. Use the pinned MediaPipe CPU baseline, subject to the rollout checks below; embeddings, captions and GPU hand models are outside the initial deployment. Learned 3D is not calibrated metric supervision. Quality checks must include occluded hands, gloves, missed detections, left/right errors and visible overlay accuracy on representative repair tasks.
 
-## Admission and measurement
+Start with **one active Modal job globally**, zero warm containers, finite source/output counts and byte limits, bounded frame/shard buffers and explicit runtime/cost limits. Neither the current local whole-recording geometry script nor short sample success proves two-hour memory safety. Do not auto-resubmit an uncertain call or upgrade resources. Staff authorizes a fresh job/prefix after diagnosis; only the current job can complete outputs. [Job recovery](job-orchestration.md)
 
-Configure an approved monthly envelope and a smaller qualification allowance before activation; do not assume the earlier $100 target covers the team scenario. Reserve estimated upper cost atomically, including loading, inference, validation/export, allowed retries, network output and retained data. Hold uncertain usage/reservations until reconciled. Provider alerts and application reservations are not guaranteed billing hard caps.
+Set account spending alerts and an application admission limit before cloud activation. Count startup, source reads, processing/export, failures, controller compute, output transfer and retained objects. Alerts/admission are not billing hard caps. The API requests an initial controller after committing a job; failed/due dispatch is repaired each minute. Keep queued and uncertain states visible rather than claiming immediate execution.
 
-Start with one global GPU, bounded CPU jobs and no automatic larger-GPU retry. Enable requested, rights-cleared stages after cheap ingest/QC. Profiles must specify upload/source/batch/fragment limits, CPU/RAM/scratch, start/execution deadlines, attempts, controller allowance and per-run ceiling. Unset limits block activation. Reserve database capacity independently of Modal compute and batch writer ownership.
+No suspended sleep or step checkpoint API is assumed. Controllers use an eight-hour task limit covering the bounded worker budget; no planned continuations are needed. A native controller retry resumes API-owned state and the same known worker call. Exact timeouts and leases live in [jobs](job-orchestration.md).
 
-Measure a representative two-hour capture's complete upload size, peak memory/scratch, read/write bytes, startup/inference time, failures/retries, controller consumption, review minutes and **cost per approved recording hour**. Track retained canonical/checkpoint/history bytes separately from disposable logs. Raise limits with evidence rather than assuming recording hours equal worker hours.
+## Cost model
 
-## Secrets and observability
+USD list prices checked 2026-10-30; before tax, credits and engineering/review labor. [Render pricing](https://render.com/pricing), [cron billing](https://render.com/docs/cronjobs), [workflow billing](https://render.com/docs/workflows-limits), [R2](https://developers.cloudflare.com/r2/pricing/), [Modal](https://modal.com/pricing).
 
-| Credential | Holder |
+| Item | Monthly planning input |
 | --- | --- |
-| Better Auth/OAuth/email secrets; API database role | Next.js server only |
-| Migration/schema-owner URL | Explicit migration job only |
-| Control database role | Workflow service and orchestration cron |
-| Render dispatch API key | Orchestration cron only; absent from public web and media workers |
-| Workflow API token / cleanup-only reconciliation token | Workflow / minute cron respectively; independent verifiers in web, no cross-use for acceptance or grant issuance |
-| Modal control token | Workflow controllers and reconciliation cron only; never media workers |
-| R2 multipart signing/temporary-grant issuance keys | Next API only, separated by raw/derived/release purpose; controllers/cron coordinate through scoped APIs, and media workers receive only issued grants |
-| Backup reader / backup-only R2 writer | Daily backup cron only; no auth, Modal or dispatch token |
-| Scoped object grants | Current claimed worker; every issue/renewal tracked |
-| Protected release writer / read-only validator | Distinct approved exporter / validator capabilities |
-| Model-hub token | Controlled, licensed model-cache preparation |
+| Next.js web | $25 |
+| Paid Postgres | $19 |
+| Database disk allowance | $3; conservative allowance before included storage/rounding |
+| **Application/database subtotal** | **$47 for one infrastructure operator** |
+| One cron | **At least $1**; actual active compute can exceed that minimum |
+| Render Workflow controllers | Flex: $0.20/active vCPU-hour + $0.05/GB-hour RAM; retained input/result state $0.25/GB |
+| Optional Render Pro workspace | +$25 when engineering collaboration/features require it; app users need no workspace seats |
+| R2 Standard | $0.015/GB-month, plus $4.50/million writes and $0.36/million reads; free direct internet egress |
+| Modal CPU Functions | $0.04716/physical-core-hour + $0.007992/GiB-hour; requested/actual usage rules apply |
+| Modal output transfer | Starter includes 1TiB/month, then $0.04/GiB |
 
-Use separate service secret sets; an environment group must not distribute migration/backup credentials to every service. Rotate role-specific passwords separately from Render's default database credentials. Redact cookies, signed URL queries, capabilities, raw frames and environment dumps. Next public environment variables contain no secrets.
+The fixed floor is therefore **about $48/month**, or $73 with a Pro workspace, before workflow compute, storage, processing, transfer and ancillary services. The cron's $1 is a minimum, not a flat price for unlimited scheduled compute. A waiting workflow retains billed RAM: a controller averaging 0.1vCPU/0.2GB costs about $0.03/hour, not free suspended waiting. Measure actual controller CPU/RAM across native retries. Model assets can be packaged in the worker image; no separate persistent model cache is necessary for the small hand model.
 
-Logs carry request/run/batch/job/attempt/dispatch/provider IDs, durations, reason codes and observed/accepted versions. Provenance resides in Postgres/immutable receipts, not Render's 30-day task-state retention. Alert on outbox age >5 minutes, uncertain submissions, overdue backup, database/disk/pool saturation, stuck writer ownership, failed verification and budget thresholds 50/80/100%.
+Budget provisionally **12.5GB uploaded per recording hour**, approximately 25GB for two hours, pending the real long-capture test. If raw plus all retained derivatives total twice raw bytes and roll off after three months, storage is roughly **1.5TB/$22.50 at 20 new hours/month** or **7.5TB/$112.50 at 100 hours/month**, before R2 allowances/rounding. Published releases or retained raw data can prevent that roll-off. Existing detailed scenarios are planning evidence; recalculate them for this CPU-only MVP after measuring the required hand stage.
 
-## Backups and recovery
+For illustration, four physical cores and 8GiB RAM cost approximately **$0.253 per worker-hour** at base Modal Function rates. This is a sizing candidate, not measured runtime or a recording-hour price. Budget `worker-hours × actual resource rate`, including export and retries. Region/non-preemptible choices can multiply rates. R2 free outbound does not waive Modal's outbound uploads. Keep media off Render to avoid its metered public outbound bandwidth. [Modal resource billing](https://modal.com/docs/guide/resources), [transfer](https://modal.com/docs/guide/network-egress-billing), [region pricing](https://modal.com/docs/guide/region-selection)
 
-Paid Render Postgres provides continuous PITR: **3 days on Hobby, 7 days on Pro**. Recovery creates a new database for isolated validation; the latest ten minutes are outside the selectable restore window. Provider logical exports last seven days and need explicit creation. Free databases lack managed recovery. [Render recovery](https://render.com/docs/postgresql-backups)
+## Local first, then one CPU cloud canary
 
-Run a daily `pg_dump` logical backup of every application/identity/audit schema into a separate encrypted private R2 backup bucket with **30-day retention**. Use a compatible PostgreSQL client, backup-reader role and backup-prefix-only write credential. Verify success, byte count and checksum; alert after 26 hours without success. Keep a recorded role/grant/migration recipe because an application database dump alone does not restore cluster-level roles. Restrict backup access because sessions and identity evidence are sensitive. Backup bytes/requests and the cron's actual compute are additional usage.
+Run the complete flow locally with **Postgres + MinIO + the official Render local Workflows runner + the CPU hand model**, using `EXECUTION_BACKEND=local` and `HAND_MODEL_PROFILE=mediapipe_cpu`. The local task server at port `8120` runs the same two Node controllers from `apps/jobs`; `LocalExecutor` launches the real Python processor, and `ModalExecutor` replaces only execution in production. Follow [local setup](local-development.md) for the supported Render CLI/configuration.
 
-Backups do not contain MCAP, MP4, Lance fragments/history or native checkpoints. Their reference closure must survive catalog restoration. Seven-day attempt cleanup never applies to recoverable checkpoints or pinned dataset history. Apply reference-aware retention and replay deletion/revocation records after recovery; do not resurrect a deleted or revoked delivery.
+Exercise login, Flutter upload, API-issued multipart output uploads, processing, staff review and full customer download with the same contracts as production. This local execution path requires no GPU or paid cloud processing. A separately qualified local CUDA profile can be added explicitly; it is not an MVP requirement.
 
-| Incident | Response |
-| --- | --- |
-| Web/auth outage | Roll back compatible web revision; preserve phone journals and operation IDs |
-| Unknown submission / expired controller lease | Reconcile external calls; block blind resubmission and writer takeover |
-| Native writer loss | Keep its workspace; confirm execution termination, all grants retired and accepted writes drained before recovery |
-| OOM/image/license failure | Disable profile and diagnose before another bounded attempt |
-| R2/Render/Modal outage | Bounded retry; retain outbox/checkpoints; timeout is not success |
-| Bad labels/customer grant | Revoke future access/use, retain audit and issue a corrected release |
-| Deletion request | Tombstone first; wait for references/holds/writers before purge |
+Next, qualify one small Modal CPU canary and then one representative two-hour capture before admitting collectors. Local success does not establish Modal memory/scratch, callback authentication, R2 completion semantics, transfer charges or cloud throughput. Record total source/output bytes, peak memory/scratch, wall time, hand coverage/overlay errors and full release checksums. Set concurrency/budgets from these measurements.
 
-Restore into isolation with admission disabled. Verify object references, pinned history, schema/roles, rights holds and external provider calls before switching all service URLs. Invalidate restored login/download sessions; replay post-recovery-point revocations/deletion tombstones from retained audit evidence. If that evidence is unavailable, keep affected grants disabled until reauthorized. Never restore an old lease as authority to write an active root. Target **15-minute database RPO within PITR and one-business-day RTO**, subject to a measured drill; daily off-provider backups provide a coarser fallback, not equivalent recovery.
+## Secrets, recovery and rollout
 
-Roll out migrations/auth, UI/API with processing disabled, synthetic recovery tests, a permissioned two-hour canary, review/export/full download, then collectors. Optional GPUs have separate gates. Rollback stops new admission and reverts compatible code while retaining schema, recovery state and immutable datasets. Test restore before real collection, after material storage/schema changes and at least quarterly.
+The web server holds Better Auth/provider secrets, its database role, R2 signing credentials and the Render task-start credential. The repair cron holds only its restricted internal-API token, with no Render task-start, Modal or database credential. Workflow controllers hold the Modal control token and scoped internal-API token; neither controllers nor cron have database credentials. Workers receive a job capability and API-issued read/part URLs, never database credentials or broad storage/Modal keys. Keep migration credentials separate. Redact cookies, job capabilities and signed URL queries from logs; log recording/file/job/release IDs and reason codes.
+
+Use paid Postgres's built-in PITR: **3 days on Hobby, 7 days on Pro**. Restore creates another database for isolated validation; the most recent ten minutes are outside its selectable window. Create/download a logical export before risky migrations. No separate backup cron is required for this MVP. [Recovery](https://render.com/docs/postgresql-backups)
+
+Before real collection, test restoring the catalog and resolving its referenced R2 objects. Keep admission disabled until external Modal calls are reconciled, stale jobs cannot accept output, and restored sessions/customer access are reviewed or invalidated. Database recovery does not restore deleted object payloads. Never delete raw/local originals after failed verification or age-purge published releases as scratch.
+
+Roll out local end-to-end checks, production auth/upload with processing disabled, the CPU canaries, staff review/publication and complete customer download, then collectors. Rollback stops new dispatch and restores compatible code while preserving source files and completed immutable outputs. Alert on queued jobs older than five minutes, uncertain/stuck calls, failed source hashes, disk/connection pressure and spending thresholds.

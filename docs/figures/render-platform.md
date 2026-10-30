@@ -1,30 +1,30 @@
-# Render platform topology
+# MVP platform and local parity
 
-Selected 2026-10-26. Render hosts the application and orchestration; R2 and Modal carry media and processing. Arrows label logical requests or data flow. The deployment specification owns exact service roles and permissions.
-
-[Rendered PNG](render-platform.png) is available when the Markdown viewer cannot render Mermaid.
+Updated: 2026-10-30. Cloud services use the same workflow/task code as the local runner. Solid arrows show control or direct payload transfer as labelled. Video never passes through Next.js.
 
 ```mermaid
 flowchart TD
-    clients["Collector app and web users"]
-    subgraph render["Render: one workspace and region"]
-        web["Next.js UI, Node API and Better Auth"]
-        db[("Render Postgres")]
-        relay["Minute cron: relay and reconcile"]
-        tasks["Render Workflows: bounded controllers"]
-        backup["Daily cron: database backup"]
-        web -->|"Sessions, catalog and outbox"| db
-        db -->|"Pending commands"| relay
-        relay -->|"Task dispatch"| tasks
-        tasks -->|"Controller and job state"| db
-        db -->|"Daily catalog export"| backup
+    phone["Flutter collector app"]
+    browser["Staff and customer browsers"]
+    subgraph render["Render: application platform"]
+        web["Next.js UI, API and Better Auth"]
+        db[("Postgres: identity, jobs, files and reviews")]
+        repair["Minute cron: short repair pass"]
+        tasks["Workflows: process-recording and export-release"]
+        web -->|"Catalog and job transactions"| db
+        repair -->|"Authenticated repair request"| web
+        web -->|"SDK task dispatch"| tasks
+        tasks -->|"Controller state API"| web
     end
-    objects[("Private R2 media, datasets and backups")]
-    workers["Modal CPU and GPU workers"]
-    clients -->|"Login, API and UI"| web
-    clients <-->|"Direct uploads and downloads"| objects
-    tasks -->|"Submit and poll"| workers
-    workers -->|"Claim, heartbeat and receipts"| web
-    workers <-->|"Read sources and write artifacts"| objects
-    backup -->|"Private backup objects"| objects
+    objects[("Private R2: originals, outputs and releases")]
+    workers["Modal CPU: process_recording and export_release"]
+    phone -->|"Login and upload metadata"| web
+    browser -->|"Review, publish and granted deliveries"| web
+    phone -->|"Direct multipart parts"| objects
+    browser <-->|"Direct previews and downloads"| objects
+    tasks -->|"Submit, poll and cancel known call"| workers
+    workers -->|"Claim, output completion and result"| web
+    workers <-->|"Source reads and signed part uploads"| objects
 ```
+
+Local: the official Render Workflows runner starts the same Node tasks; LocalExecutor runs the same Python core, with local Postgres and MinIO. CPU is the default; a separately qualified local GPU profile is optional.

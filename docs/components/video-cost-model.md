@@ -1,6 +1,8 @@
 # Video pipeline cost model
 
-Updated: 2026-10-26. USD planning estimates, before tax/credits. **No deployment or paid processing performed.** Render Next.js/Better Auth/Postgres/Workflows is now the selected application stack; R2 media and Modal processing remain external. [Hosting choices](hosting-evaluation.md), [machine-readable assumptions and calculations](../validation/video-cost-model-20261026.json).
+> Reference status, 2026-10-30: the [simplified MVP](../technical-design.md) supersedes the earlier multi-stage Curator/Lance architecture below. Its historical totals and recovery protocols are not the current implementation contract; use [MVP operations/costs](operations-and-costs.md).
+
+Updated: 2026-10-26. USD planning estimates, before tax/credits. **No deployment or paid processing performed.** Render Next.js/Better Auth/Postgres/Workflows was the selected application stack in this October 26 snapshot; R2 media and Modal processing remain external. [Hosting choices](hosting-evaluation.md), [machine-readable assumptions and calculations](../validation/video-cost-model-20261026.json).
 
 For matched Render/Supabase/AWS scenarios, including S3 same-region transfers and private CloudFront delivery, read the [platform comparison](platform-cost-comparison.md).
 

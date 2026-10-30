@@ -1,6 +1,8 @@
 # Hosting decision and provider evidence
 
-Selected 2026-10-26: **Next.js/Node on Render, Better Auth, Render Postgres and Render Workflows**. R2 stores bulk media; Modal runs CPU/GPU processing. No service has been deployed. The [deployment specification](render-deployment.md) and [technical design](../technical-design.md) supersede the earlier Lightsail/Supabase/Inngest assumptions.
+> Reference status, 2026-10-30: the [simplified MVP](../technical-design.md) supersedes the earlier multi-stage Curator/Lance architecture below. Its historical totals and recovery protocols are not the current implementation contract; use [MVP operations/costs](operations-and-costs.md).
+
+Historical selection, 2026-10-26: **Next.js/Node on Render, Better Auth, Render Postgres and Render Workflows**. R2 stores bulk media; Modal runs CPU/GPU processing. No service has been deployed. The [deployment specification](render-deployment.md) and [technical design](../technical-design.md) supersede the earlier Lightsail/Supabase/Inngest assumptions.
 
 ## Decision and boundaries
 

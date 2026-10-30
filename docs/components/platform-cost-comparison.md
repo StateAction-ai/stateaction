@@ -1,6 +1,8 @@
 # Render, Supabase and AWS: comparable deployment costs
 
-Updated: 2026-10-26. Decision record: Render Next.js/Better Auth/Postgres/Workflows with R2/Modal is selected. Alternative rows below remain cost evidence; no migration, deployment or paid job. Parent: [hosting choices](hosting-evaluation.md). [Calculation receipt](../validation/platform-comparison-20261026.json).
+> Reference status, 2026-10-30: the [simplified MVP](../technical-design.md) supersedes the earlier multi-stage Curator/Lance architecture below. Its historical totals and recovery protocols are not the current implementation contract; use [MVP operations/costs](operations-and-costs.md).
+
+Updated: 2026-10-26. Historical decision record: Render Next.js/Better Auth/Postgres/Workflows with R2/Modal was selected. Alternative rows below remain cost evidence; no migration, deployment or paid job. Parent: [hosting choices](hosting-evaluation.md). [Calculation receipt](../validation/platform-comparison-20261026.json).
 
 ## Application hosting and media storage are separate choices
 

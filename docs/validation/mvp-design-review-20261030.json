@@ -1,0 +1,803 @@
+{
+  "date": "2026-10-30",
+  "scope": "MVP design, offline interactive mock and documentation; not production runtime qualification",
+  "verdict": "ready_to_implement_with_explicit_launch_gates",
+  "review_roles": [
+    "senior_backend_robotics_engineering",
+    "product_management",
+    "product_design_frontend",
+    "root_synthesis_and_browser_qa"
+  ],
+  "architecture": {
+    "web": "Next.js / Node.js 24 / TypeScript",
+    "workflow": "Render Workflows official local server and hosted runtime, same two task definitions",
+    "workflow_tasks": [
+      "process-recording",
+      "export-release"
+    ],
+    "controller_timeout_seconds": 28800,
+    "planned_continuations": false,
+    "worker_backend": "LocalExecutor or ModalExecutor",
+    "job_attempts": "manual processing retry creates fresh job/prefix; controller retry recovers existing call",
+    "database": "Render Postgres; only API owns database access",
+    "storage": "private R2; MinIO for local protocol tests",
+    "monorepo_includes_mobile": true,
+    "mobile_source_migrated": false,
+    "paid_gpu_required_for_baseline": false,
+    "single_release_archive_limit_bytes": "34359738368"
+  },
+  "model": {
+    "name": "MediaPipe Hand Landmarker CPU / version-1 task asset",
+    "output": "21 image landmarks and explicitly marked model-relative 3D estimates with masks",
+    "metric_accuracy_validated": false,
+    "asset_bytes": "7819105",
+    "asset_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    "license_evidence": "Apache-2.0 explicitly identified on page 2 of the official overview-linked model card",
+    "asset_url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+    "model_card_url": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Hand%20Tracking%20%28Lite_Full%29%20with%20Fairness%20Oct%202021.pdf",
+    "quality_limitation": "Gloves and object occlusion require representative repair-footage evaluation; no cloud-quality claim"
+  },
+  "ui": {
+    "web_library": "shadcn/ui + Tailwind CSS + Radix primitives (MIT sources linked in ui-design.md)",
+    "mobile_library": "existing Flutter widgets/theme",
+    "prototype": "standalone offline HTML/CSS/JavaScript, synthetic data, no connected services",
+    "javascript_syntax": "passed node --check on extracted inline script",
+    "browser": "isolated agent-browser 0.20.11 with local Google Chrome",
+    "scenario_checks": [
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "results": [
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Recordings",
+            "scenario": "normal",
+            "view": "queue",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Recordings",
+            "scenario": "empty",
+            "view": "queue",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1440,
+            "customerReviewButtons": [],
+            "documentWidth": 1440,
+            "heading": "Recordings",
+            "scenario": "unknown",
+            "view": "queue",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Review hand annotations",
+            "scenario": "normal",
+            "view": "review",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Review hand annotations",
+            "scenario": "missing",
+            "view": "review",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Review hand annotations",
+            "scenario": "stale",
+            "view": "review",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "normal",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "ready",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "published",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "export_failed",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "oversize",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "stale_selection",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Build a delivery",
+            "scenario": "revoked",
+            "view": "releases",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1440,
+            "customerReviewButtons": [],
+            "documentWidth": 1440,
+            "heading": "Your deliveries",
+            "scenario": "normal",
+            "view": "customer",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1440,
+            "customerReviewButtons": [],
+            "documentWidth": 1440,
+            "heading": "Your deliveries",
+            "scenario": "empty",
+            "view": "customer",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Your deliveries",
+            "scenario": "expired",
+            "view": "customer",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1440,
+            "customerReviewButtons": [],
+            "documentWidth": 1440,
+            "heading": "Your deliveries",
+            "scenario": "revoked",
+            "view": "customer",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "normal",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "signedout",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "pending",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "permission_denied",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "interrupted",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "offline",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "recording",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "finalizing",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "ready",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "uploading",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "expired",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "url_expired",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "transport_expired",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "wrongaccount",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "lowdisk",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "uploaded",
+            "view": "mobile",
+            "width": 1440
+          },
+          {
+            "bodyWidth": 1425,
+            "customerReviewButtons": [],
+            "documentWidth": 1425,
+            "heading": "Collector app",
+            "scenario": "verified",
+            "view": "mobile",
+            "width": 1440
+          }
+        ]
+      },
+      {
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "results": [
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Recordings",
+            "scenario": "normal",
+            "view": "queue",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Recordings",
+            "scenario": "empty",
+            "view": "queue",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Recordings",
+            "scenario": "unknown",
+            "view": "queue",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Review hand annotations",
+            "scenario": "normal",
+            "view": "review",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Review hand annotations",
+            "scenario": "missing",
+            "view": "review",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Review hand annotations",
+            "scenario": "stale",
+            "view": "review",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "normal",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "ready",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "published",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "export_failed",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "oversize",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "stale_selection",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Build a delivery",
+            "scenario": "revoked",
+            "view": "releases",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Your deliveries",
+            "scenario": "normal",
+            "view": "customer",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Your deliveries",
+            "scenario": "empty",
+            "view": "customer",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Your deliveries",
+            "scenario": "expired",
+            "view": "customer",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Your deliveries",
+            "scenario": "revoked",
+            "view": "customer",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "normal",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "signedout",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "pending",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "permission_denied",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "interrupted",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "offline",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "recording",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "finalizing",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "ready",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "uploading",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "expired",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "url_expired",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "transport_expired",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "wrongaccount",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "lowdisk",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "uploaded",
+            "view": "mobile",
+            "width": 375
+          },
+          {
+            "bodyWidth": 360,
+            "customerReviewButtons": [],
+            "documentWidth": 360,
+            "heading": "Collector app",
+            "scenario": "verified",
+            "view": "mobile",
+            "width": 375
+          }
+        ]
+      }
+    ],
+    "browser_page_errors": [],
+    "interaction_checks": [
+      {
+        "case": "approval requires explicit inspection acknowledgement",
+        "result": "pass"
+      },
+      {
+        "case": "changed review after frozen export disables publication and offers new release",
+        "result": "pass"
+      },
+      {
+        "case": "build export and publish recipient grant in mock",
+        "result": "pass"
+      },
+      {
+        "case": "generated sample manifest is demo-only with no real training files or metric claim",
+        "result": "pass"
+      },
+      {
+        "case": "customer has no visible approve/reject/publish controls",
+        "result": "pass"
+      },
+      {
+        "case": "grant revocation hides new customer preview/download access",
+        "result": "pass"
+      }
+    ],
+    "screenshots_inspected_by_root": true,
+    "actual_training_archive_download_tested": false
+  },
+  "diagrams": {
+    "source_preview_pairs": 2,
+    "mmdc_rendered": true,
+    "pngs_inspected_by_root": true,
+    "assessment": "Labels/arrows/readability checked; accepted after layout fixes"
+  },
+  "documentation_checks": {
+    "markdown_files": 28,
+    "local_links_and_anchors": 205,
+    "matching_mermaid_pairs": 2,
+    "errors": []
+  },
+  "not_performed": [
+    "mobile source migration",
+    "new backend/worker implementation",
+    "Render local workflow runtime execution",
+    "real model inference",
+    "cloud deployment",
+    "paid CPU/GPU processing",
+    "real two-hour device/cloud canary"
+  ],
+  "launch_gates": [
+    "repair/tool/glove/occlusion hand usefulness",
+    "signed-device auth and two-hour background/resumable upload",
+    "bounded two-hour CPU RAM/scratch/time",
+    "R2 multipart retirement/epoch and unknown execution recovery",
+    "permission/retention decisions and PITR restore",
+    "complete real package/reader/all-checksum verification"
+  ],
+  "primary_workflow_references": [
+    "https://render.com/docs/workflows-local-development",
+    "https://render.com/docs/workflows-sdk-typescript",
+    "https://render.com/docs/workflows-limits",
+    "https://render.com/docs/cli-reference"
+  ],
+  "artifacts": [
+    {
+      "path": "docs/mocks/index.html",
+      "bytes": "79201",
+      "sha256": "36e8ecaab8cdd032a4d7e675923d4ffac56981a0f52afb2800ea3110896891d1"
+    },
+    {
+      "path": "docs/mocks/screenshots/queue.png",
+      "bytes": "174280",
+      "sha256": "b963ff54bf6a4e4c2cb5a758aae8d117e99fd3d9c4f25aed12fcef22fab62cba"
+    },
+    {
+      "path": "docs/mocks/screenshots/review.png",
+      "bytes": "360621",
+      "sha256": "332d57824c7ddee68d2ca233983932af8104f13d0632dd14e590a67270dbafe3"
+    },
+    {
+      "path": "docs/mocks/screenshots/releases.png",
+      "bytes": "171473",
+      "sha256": "b14ebb94d5a5771d8f930fc7a584855db909eb72e2245825271d23a68632c6fd"
+    },
+    {
+      "path": "docs/mocks/screenshots/customer.png",
+      "bytes": "417521",
+      "sha256": "4b469eddedae965fc0eb43325d727acd978293810346e729577dc77879e68518"
+    },
+    {
+      "path": "docs/mocks/screenshots/mobile.png",
+      "bytes": "136039",
+      "sha256": "ea48271d3f77c57b626b3ed882b79b94d08846c154599e238ac5ea6793c4d604"
+    },
+    {
+      "path": "docs/figures/render-platform.mmd",
+      "bytes": "1090",
+      "sha256": "ce8a668ecebc252328cba2b78f3b87f397b51728ff92bade1357aeb0a6b51903"
+    },
+    {
+      "path": "docs/figures/render-platform.md",
+      "bytes": "1549",
+      "sha256": "2878d1fbf77292556bd2bd4a5bee3b22f7965dc7177d37206aa935c49f44c705"
+    },
+    {
+      "path": "docs/figures/render-platform.png",
+      "bytes": "149663",
+      "sha256": "bde5e31619c43c6ec89c78a69791bc69d486c16c034dfdc41b648f3272260916"
+    },
+    {
+      "path": "docs/figures/processing-stages.mmd",
+      "bytes": "1058",
+      "sha256": "efc43c318b02f164cb4001dcc97c84468d4b61452e2c90f9095af2b15637f2a4"
+    },
+    {
+      "path": "docs/figures/processing-stages.md",
+      "bytes": "1534",
+      "sha256": "3086d7ffbf0d6c90005641e158f023cde6b0037f504492799b31a03544b423bb"
+    },
+    {
+      "path": "docs/figures/processing-stages.png",
+      "bytes": "118896",
+      "sha256": "dc87c6085fd11da0fc8dc83fbca913db1cebe21612068d74a884fa265df7dd58"
+    }
+  ]
+}

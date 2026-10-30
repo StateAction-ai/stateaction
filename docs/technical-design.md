@@ -1,72 +1,70 @@
 # Repair-data platform: technical design
 
-Updated: 2026-10-26. Status: **Render application stack selected**; implementation, qualification and deployment remain future work.
+Updated: 2026-10-30. **Selected MVP design; implementation and deployment pending.** This revision keeps Render Workflows for local/cloud parity and simplifies the earlier Curator design. Automatic hand pose and both staff/customer interfaces remain required.
 
-**Decision:** Next.js/Node.js on Render, Better Auth, Render Postgres and Render Workflows. Keep private R2 media storage and Modal CPU/GPU processing as explicit external services. [Render deployment](components/render-deployment.md) owns service placement/configuration; this is a design decision, not deployment approval.
+## Product
 
-## Product and scope
+A repair worker signs in, records offline and uploads large MCAP recordings reliably. Cloud processing extracts RGB and available sensor evidence, estimates **21 hand landmarks plus explicitly marked model-relative 3D estimates**, and produces review media. Our team labels, approves and publishes. Robotics customers inspect their delivery and download its complete training package; they do not accept/reject episodes.
 
-A repair worker signs in, records offline and reliably uploads finalized MCAP/sensor files. Cloud workers extract evidence, prepare clips and run requested annotation models. Our team corrects/reviews the results and publishes a fixed dataset release. Robotics customers inspect their granted releases and download the complete training package. Customers do not approve individual episodes.
+The agreed pilot output does not promise validated metric camera/world trajectories, robot actions or demonstrated policy-training benefit. Missing or unreliable observations remain explicit. Representative repair-footage quality is a launch gate.
 
-The first profile is **reviewed RGB and semantic labels**. Metric hand trajectories, robot actions and policy-training benefit require separate qualification. All extraction, annotation and packaging run in cloud workers; the phone captures/transfers, and the API handles small control requests.
+## Smallest complete stack
 
-## Selected stack
-
-Use one Next.js web service for the UI, mobile HTTP API and login. Shared TypeScript modules contain domain logic; Render workflow tasks call those modules and the separately authenticated acceptance API. The Stera server supplies protocol evidence, not production business logic.
-
-| Component | Choice | Reason |
-| --- | --- | --- |
-| Frontend and API | Next.js App Router, Node.js 24 LTS, TypeScript; Render paid web service | One origin/deployment; route handlers reuse domain services |
-| Login | Better Auth in Next.js; Google sign-in and invitations initially | One identity authority; preserve qualified native cookie/offline-owner behavior |
-| Application database | Render Postgres | Private managed catalog, sessions, grants, outbox, jobs and audit |
-| Bulk storage | Private R2; S3 fallback if qualification fails | Low transfer cost for processing and customer delivery |
-| Workflow | Render Workflows; four bounded controller task types | Managed queue/retries; resume from Postgres and Curator checkpoints |
-| Scheduled maintenance | Render minute relay/reconciler cron and daily backup cron | Recover outbox dispatch and create independent database backups |
-| Processing | Modal CPU/GPU Functions; Ray inside Curator workers | Scale to zero; resources independent of the API |
-| Dataset state | Lance files in object storage, per bounded batch | Reuse Curator's versioned tables and checkpoint recovery |
-
-Render owns application hosting and orchestration. R2 holds MCAP, media, Lance/checkpoints and releases; Modal runs every extraction/annotation/export/validation job. Render's object-storage early access and reviewed CPU-only workflow plans do not replace these qualified-design candidates. Supabase, Inngest, a standalone Fastify service and a permanent Ray cluster are not part of this stack.
-
-## Data flow
-
-1. **Phone → object storage:** authorize a recording, transfer resumable parts directly and seal required files. API/database/workflow requests contain no video bytes.
-2. **Modal CPU ingest:** verify hashes/MCAP, preserve clocks/calibration, and produce bounded video, native frame/sensor shards, preview and QC.
-3. **Modal CPU preparation:** Curator plans spans and materializes clips in a stable per-batch Lance/media/checkpoint root.
-4. **Optional enrichment:** qualified GPU workers add embeddings/captions; a separate hand adapter uses native evidence. Workers fetch referenced objects and save durable results.
-5. **Validation/review:** a read-only cloud validator checks candidates; the API accepts exact versions. Our team reviews those versions and creates immutable label revisions.
-6. **Export/delivery:** freeze approved items, package independent shards/loader/checksums, validate, then publish through the API. Customers receive scoped resumable downloads.
-
-The [execution contract](components/pipeline-execution-and-data-flow.md) owns stage locations, reads/writes and handoffs. Ingest, bounded-batch, review-assembly and release controllers are separate tasks. A minute cron relays committed commands; normal starts may take a minute plus queue time. Human review holds no running task.
-
-## Correctness rules
-
-- Uploaded bytes, verified source, accepted results, approved labels and published release are separate states.
-- Compatible Curator retries reuse their batch root/checkpoints. One writer owns it; takeover requires old execution termination and retirement of all write capabilities.
-- Workers cannot approve their own outputs. The API checks trusted validation, current ownership, inputs and lifecycle before acceptance/publication.
-- Releases pin source/dataset/label/rights/schema revisions. Later processing cannot change published bytes.
-- Missing sensors, unsupported timing, unqualified geometry and failed predictions remain explicit masks/limitations.
-
-Detailed rules live in their component contracts, rather than being repeated across every document.
-
-## Reuse and scaling
-
-Reuse Curator/Lance recovery, Better Auth's Next adapter, Render's TypeScript SDK and S3 clients. Build the domain/access layer, MCAP adapter, worker ownership/validation, review workflow and exporter. Provider adapters preserve explicit protocol boundaries.
-
-| Project | Reuse decision / inspected license |
+| Component | MVP choice |
 | --- | --- |
-| Cosmos Curator | Native preparation/enrichment/recovery; Apache-2.0 code. Exact source/image and model gates are in [processing](components/cloud-processing.md). |
-| HFlow | Catalog/provenance patterns; avoid adding its second catalog/controller. [Inspected Apache-2.0 code](https://github.com/Hebbian-Robotics/hflow/blob/6cf6e9849ab3386541eec2f26906c755a2fa3ac5/LICENSE). |
-| Open-AoE | Selected viewer/projection and consumer examples. [Pinned Apache-2.0 code](https://github.com/ant-research/Open-AoE/blob/3504ac7e0639963cf9103ff29579504fc00989bd/LICENSE); datasets/assets/models have separate terms. Do not assume a complete raw-phone processor is released. |
-| FLORA / WiLoR / MANO | Research comparators or optional adapters; no default commercial reuse. Restrictions and evidence are in [model rights](components/cloud-processing.md#model-rights). |
+| App/UI/API/login | One Next.js / Node.js 24 / TypeScript service on Render; Better Auth with Google sign-in |
+| Access | One pilot project; operator-managed collector, staff and customer allowlist |
+| Catalog and queue | Render Postgres; seven domain tables plus Better Auth tables |
+| Workflow | Render Workflows; the same two Node task definitions run under its official local runner and in the cloud |
+| Recovery | Postgres job records plus a short minute cron repair pass; no separate outbox |
+| Bulk storage | Private R2; direct multipart phone/worker uploads and direct customer downloads |
+| Processing | Two finite Modal CPU functions: `process_recording` and `export_release` |
+| Hand model | Pinned MediaPipe Hand Landmarker CPU baseline; mandatory inference, quality-gated |
+| Repository | One monorepo including existing Flutter mobile/native plugin, Node apps and Python workers |
+| Local development | Official Render local Workflows runner, same task/processing contracts, local Postgres/MinIO and LocalExecutor; no cloud GPU |
 
-Pin copied components, retain license/notices and inventory external assets. Code licenses do not grant rights to model weights or private recordings. Pareto remains a reference given the maintenance concern, not a UI dependency.
+The application platform is Render; storage and processing remain explicit external services. Render hosts no video transfer proxy. Two bounded workflow controllers start/poll compute using durable job references. A minute cron repairs dispatch/abandoned controllers and exits; it never processes media.
 
-Start with one global GPU job, bounded CPU jobs, at most eight Render controllers and zero warm GPUs. Scale batches after measuring resource/DB/cost limits, then add web replicas using DB claims. Corpus-wide search/deduplication is optional; each batch keeps its own versioned Lance root.
+## Complete flow
 
-## Handoff and launch gates
+1. **Phone → R2:** owner-bound resumable multipart uploads; the API seals the required-file inventory. Completion of all files creates one processing job in the same database transaction, then requests its workflow run; cron repairs a lost trigger.
+2. **Modal CPU:** one invocation streams/hashes MCAP, extracts bounded native evidence, runs mandatory hand inference, writes RGB/overlay previews and pose arrays, and validates outputs inline. Extraction and inference reuse the same decoded frames.
+3. **API:** confirm the known execution ended, output inventory is closed and the current job/input references still match. Make the result reviewable.
+4. **Our team:** inspect video/hand overlay and coverage, enter task labels and approve/reject bounded clips. Approval pins the exact processing result and labels.
+5. **Modal CPU:** after staff freeze a release, stream the approved files/labels into a bounded local TAR, then hash/upload the archive and manifest. No model is rerun.
+6. **Our team → customer:** explicitly publish the completed package and grant named users access. Customers inspect it and use **Download all** directly from storage.
 
-Read [implementation milestones](implementation-plan.md), [shared contracts](contracts.md), then your component from the [index](README.md). The [service diagram](figures/render-platform.md) shows deployment boundaries; the [audit](design-audit.md) records fixes and remaining qualification gates.
+The [execution table](components/pipeline-execution-and-data-flow.md) specifies every read/write/handoff; [orchestration](components/job-orchestration.md) owns recovery. Human review holds no running compute.
 
-Implement the selected adapters against fake providers first. Production activation requires Render controller restart/continuation and private-network tests, real-device auth/upload tests, representative two-hour ingest sizing, R2/Lance recovery, confirmed rights/regions and a full review-to-download canary. Optional models remain disabled until image, memory, quality and commercial rights pass.
+## What we cut
 
-Application/DB allowance: approximately **$47/month for one infrastructure operator or $72 for a Pro workspace**, plus two cron-service minima, workflow usage, R2 and Modal. The [video cost model](components/video-cost-model.md) supplies complete volume scenarios; [operations](components/operations-and-costs.md) owns spend/recovery controls. Credits are not an account balance or spending approval.
+| Defer | Replacement for the pilot |
+| --- | --- |
+| Additional engines, separate outbox and generic stage DAG | Two Render workflow task types, one durable jobs table and a short repair pass |
+| Cosmos Curator, Ray and Lance | Streaming MCAP/FFmpeg/model adapter, ordinary files and versioned manifests |
+| Independent cloud validator and shared-writer takeover protocols | Inline checks, API-controlled consumed multipart writes and unique job prefixes |
+| Captions, embeddings, semantic search and deduplication | Human-entered task labels and basic coverage/QC |
+| Organization/admin/invitation interfaces | Manual user allowlist and explicit release grants |
+| Per-joint correction, advanced 3D annotation and multiple export adapters | Video/hand overlay, whole-clip labels and one documented portable format |
+| Automatic processing retries, GPU upgrades and warm workers | Visible failures, manual bounded retries with new job IDs and prefixes |
+| Custom backup cron and downloader framework | Managed paid Postgres recovery; standard archive/manifest downloads |
+
+Curator's bounded processing and provenance lessons remain useful. Its integration and licensing research is retained as a [later-stage reference](components/curator-integration-reference.md); it is not an MVP dependency. WiLoR/MANO/FLORA are not default commercial models. [Model rights](components/cloud-processing.md#model-rights) records exact evidence.
+
+## UI handoff
+
+Use shadcn/ui with Tailwind CSS and Radix primitives for the Next.js console; keep the existing Flutter widget/theme approach for mobile. The [UI design](components/ui-design.md) maps components, roles and states; [clickable offline mocks](mocks/index.html) cover collection/upload, internal review and customer delivery. These are design artifacts, not a deployed application.
+
+## Guards worth keeping
+
+Keep immutable capture ownership, offline journals, source hashes, native frame/time mappings and explicit missingness. Record submission intent before invoking processing; a lost acknowledgement never causes a blind second invocation. Workers claim before expensive work, receive scoped upload capabilities and cannot overwrite closed outputs. A retry creates another job/prefix. Reviews and published releases pin exact manifests; later processing cannot silently replace them. Every customer query checks a live grant.
+
+This is a trusted-code pilot with human release approval. Inline integrity checks establish structure/provenance, not independent pose accuracy. Model quality and collection/processing permission evidence are checked before real ingest admission; customer export permission is checked again before publication.
+
+## Build and prove locally first
+
+[Monorepo](components/monorepo.md) defines source/build ownership, including migration of the current mobile submodule after active recording fixes. [Local development](components/local-development.md) defines fake-provider tests, full local CPU end-to-end testing, optional local GPU substitution and the small cloud CPU canary. Changing executor/model profile must preserve the same task/output contracts.
+
+Build in the order in [implementation milestones](implementation-plan.md). Before field use, prove device login, interrupted two-hour upload, bounded long-recording processing, useful hand overlays on real repair footage, staff approval and complete customer download/checksums. Local tests do not establish Modal/R2 production behavior; qualify those on a bounded CPU canary before spending on cloud GPUs.
+
+Budget approximately **$47/month for web/database/disk plus a $1 cron minimum**, measured workflow/CPU usage and storage; a Pro workspace adds $25 if needed. Cron usage may exceed its minimum. No GPU is required for the agreed baseline. Throughput/quality remain unmeasured, so there is no defensible all-in per-video price yet. [Operations/costs](components/operations-and-costs.md) owns assumptions and spend limits.

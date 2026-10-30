@@ -1,129 +1,68 @@
-# Job orchestration and recovery
+# Workflow jobs and processing execution
 
-Selected Render design · 2026-10-26 · Not deployed
+Selected MVP design · 2026-10-30 · Planned, not implemented or deployed
 
-**Render Workflows is the sole outer workflow engine.** TypeScript controllers on Render coordinate private Modal CPU/GPU calls; Render Postgres holds durable application state. Curator retains its native Lance/media/checkpoints in object storage. No Inngest, Redis queue, permanent Ray cluster or custom DAG service is required.
+**Use Render Workflows locally and in production, with exactly two Node tasks.** The official local task server executes the same task definitions that Render hosts. `EXECUTION_BACKEND=local|modal` selects local Python execution or private Modal Functions. Postgres `jobs` rows retain business state; no separate outbox, general DAG, Lance/Curator or independent validator is needed.
 
-Use the [canonical stages](pipeline-execution-and-data-flow.md), [shared contracts](../contracts.md), [storage records](storage-and-data-model.md) and [processing implementation](cloud-processing.md). This document owns control flow and recovery.
+[Contracts](../contracts.md) owns task/result schemas, service routes and state names; [processing](cloud-processing.md) owns model/data details; [uploads](mcap-upload.md) owns source/output multipart transfers; [local development](local-development.md) owns setup and the test ladder.
 
-## Four business tasks, one workflow service
+## Two fixed tasks
 
-Register these task names in one versioned Render Workflow service under `backend/src/workflows/`:
+| Render task / job kind | Worker sequence | Completion |
+| --- | --- | --- |
+| `process-recording` / `process_recording` | Stream/hash each sealed source once with a non-seeking MCAP reader; progressively decode bounded frames; run MediaPipe CPU hands; generate bounded RGB/overlay previews, exact frame mappings, 21-point arrays, native evidence and inline QC; upload outputs/result manifest | API selects an immutable result for staff review |
+| `export-release` / `export_release` | Read the frozen approved result/label selection; write one complete TAR (maximum 32 GiB total) to scratch, close/hash it, upload through the output API, then submit the release manifest | API marks `ready`; fresh staff publication remains separate |
 
-| Task | Boundary and completion |
-| --- | --- |
-| `ingest-run` | Run/validate ingest; register the bounded batch manifest and enqueue one dispatch per batch; finish without awaiting every batch |
-| `process-batch` | Advance one batch through its enabled canonical stages and validation; commit a durable batch outcome |
-| `assemble-run` | Recheck all enabled accepted batch dependencies; assemble/validate the review package once |
-| `export-release` | Export/validate a frozen approved selection to `ready`; finish before fresh admin publication |
+Hand inference is required. Image landmarks and clearly labeled 3D estimates carry masks/provenance; they are not verified metric trajectories or robot actions. Missing/no-visible-hand frames stay explicit. Use the small qualified CPU model first; a GPU profile is a separate quality/rights/resource decision, never an automatic upgrade.
 
-Controllers derive the next stage from `stage_jobs` and accepted parent references. The stage list is ordinary versioned TypeScript code. Independent batch tasks provide fan-out. A batch-completion transaction locks the parent run, records its outcome and checks required dependencies; the final ready outcome creates the unique assembly job/dispatch/outbox. Assembly rechecks those accepted inputs and blocks on invalidation rather than producing a partial package. This avoids coalesced notifications losing the final join. No parent waits across all batches or human review.
+The processing worker streams raw source once per attempt through a hash wrapper and non-seeking MCAP reader. Inference may run before the final source hash is known; any mismatch rejects the entire candidate. Do not stage the full raw recording on scratch. It streams observations/shards rather than retaining a whole recording's depth arrays. Manual retry starts again in a fresh job prefix. Export reuses accepted derived data and freezes the reviewed versions; it does not rerun inference or stream an unknown-size archive into a presigned upload.
 
-One unique logical job per business scope and stage prevents duplicate work. Register batch IDs, membership digests and tested integer `max_batches_per_run` before fan-out. Reject oversized/unmeasured profiles; never truncate. Requested optional stages and explicit skips are part of the profile.
+## Task definition and dispatch
 
-## Delivery: outbox to Render
+Pin `@renderinc/sdk` **1.6.0**, inspected read-only for this design. Register the two module-level `task(...)` definitions in `apps/jobs`; its entrypoint statically imports both. The TypeScript SDK starts its task runtime on Render automatically. Keep provider connections/heavy work out of module import. [Task definition](https://render.com/docs/workflows-defining), [published SDK](https://registry.npmjs.org/@renderinc%2fsdk/1.6.0)
 
-Commit domain changes, a `workflow_dispatches` record and a uniquely identified `event_outbox` row together. Initial triggers are accepted upload/seal or authorized processing request, accepted ingest's batch registration, the all-batches-ready join and an admin-frozen release selection. Cancellation records lifecycle immediately and wakes the existing business controller through the same outbox.
+Both use `plan: 'flex'`, `timeoutSeconds: 28800` and `retry: { maxRetries: 2, waitDurationMs: 10000, backoffScaling: 2 }`. An eight-hour controller covers the six-hour processing/one-hour export limits plus startup/finalization allowance. The absolute job deadline is anchored to first admission and never reset by controller retry. There are no planned continuations, dispatch generations or per-stage tasks. Render supports up to 24 hours per task. [Runtime/retries](https://render.com/docs/workflows-defining)
 
-A single **minute Render Cron job** runs the finite relay/reconciler: `* * * * *` UTC, application deadline 45 seconds, bounded pages of 50 rows and at most four outbound requests at once. Normal kickoff waits for the next scheduled invocation plus provider startup/queue delay; show `queued` in the UI. API requests return after committing the outbox; the public web service needs no Render control-plane key. The cron job exits after its bounded pass. [Cron scheduling](https://render.com/docs/cronjobs)
+The API creates a unique job with the domain change in one transaction. Serialize global admission so **one processing/export execution** is admitted; other jobs remain queued without idle billed controllers. Commit the fixed dispatch key `job:{jobId}` before the initial bounded, awaited SDK start:
 
-The relay leases due rows briefly, performs network requests outside transactions and calls `POST https://api.render.com/v1/task-runs` with:
+```ts
+const started = await render.workflows.startTask(taskRef, [{ jobId }], {
+  idempotencyKey: `job:${jobId}`,
+  signal: AbortSignal.timeout(2000),
+});
+```
 
-- `task`: pinned `workflow-slug/task-name:version` from the deployed definition.
-- `input`: one `workflow-dispatch/v1` argument containing IDs, generation and pipeline revision only.
-- `idempotencyKey`: deterministic `dispatch:{dispatch_id}`; save returned Render run ID before acknowledging delivery.
+Save the returned run ID conditionally. An aborted/lost acknowledgement leaves the durable job pending dispatch; it does not undo admission or start processing again. A finite minute cron invokes the scoped reconciliation API to repair undelivered task requests and abandoned control. The API alone holds the Render dispatch credential; cron holds only its reconciliation API token, with no Render, Modal or database credential. Network calls occur outside database transactions; no post-response background launch. The SDK uses the local endpoint in development and Render in production. [SDK reference](https://render.com/docs/workflows-sdk-typescript)
 
-Render deduplicates this key for 24 hours and ignores repeated input. Our stored request digest, scope/generation constraints and lifecycle guards remain authoritative indefinitely. Conflicting payloads fail before sending. Lost acknowledgements retry the same row/key; after its deduplication window, a repeated control task is still harmless because it must claim the current DB dispatch. Do not turn a duplicate control task into another Modal invocation. Respect `429`/`Retry-After`, workspace trigger limits and local admission. [Run-task API](https://api-docs.render.com/reference/createtask), [limits](https://render.com/docs/workflows-limits)
+The provider deduplicates a task key for 24 hours and ignores changed repeated input. Keep our own immutable job/input digest and permanent terminal/lifecycle checks. Pin cloud task references to the deployed version; configure local task names separately. Do not depend on identical local-server deduplication or persistent history. [Run-task contract](https://api-docs.render.com/reference/createtask)
 
-## Controller lifetime and restart
+## Durable state and controller recovery
 
-Pin/test `@renderinc/sdk` 1.4.0 for task definitions. Its inspected `TaskContext` exposes `run()`, with no verified saved-step or suspended-sleep primitive. This design uses neither. A restarted task reloads Postgres and native receipts. Render's temporary task inputs/results are observability, not the catalog or recovery authority. [SDK reference](https://render.com/docs/workflows-sdk-typescript), [inspection receipt](../validation/render-research-20261026.json)
+One `jobs` row represents one intentional processing attempt. Store kind/target, input/profile/code/model/config references, execution backend, fixed deadlines, dispatch key/task reference/run ID, controller nonce/lease, worker submission intent/execution reference, worker nonce/token hash, candidate manifest and outcome/cancellation/retry linkage. A manual processing retry creates a new row/prefix linked to its predecessor; controller retries retain the same job and worker.
 
-| Setting | Initial policy |
-| --- | --- |
-| Compute/retry | `plan: 'flex'`, `retry: { maxRetries: 1, waitDurationMs: 1000, backoffScaling: 2 }`; controller retry does not create a processing retry |
-| Task runtime | `timeoutSeconds: 3600`; stop routine advancement and persist continuation by minute 50 |
-| Logical deadline | 24 hours across controller generations; profile/operator bounds may be shorter, never reset automatically |
-| Polling | Approximately 30 seconds with jitter while a Modal call/validation is active; short requests with explicit timeouts |
-| Controller ownership | 120-second lease, renewed every 30 seconds; generation/epoch CAS on every mutation/dispatch authorization |
-| Capacity wait | Return within two minutes; enqueue a due continuation with backoff, at most 15 minutes; hold no idle controller for capacity |
-| Global controller bound | At most eight active controllers; maximum two database connections per task |
-| Payload/result | Application cap 16KiB each, IDs/status only; provider argument ceiling is 4MB |
+At task entry, use `ctx.metadata.taskRunId` to identify the actual Render run, repairing an acknowledgement lost by the submitter. Claim a 120-second controller lease with a fresh nonce; renew roughly every 30 seconds and check it on control effects. A native retry of the same Render run waits for its old lease to expire before resuming. A different duplicate run exits without effects when a live owner exists. Worker claims/heartbeats depend on their own job/invocation identity, not the controller lease.
 
-These are implementation limits, not throughput measurements. Flex retains billed RAM while polling. Render permits tasks up to 24 hours; our smaller slices permit controlled continuation and bounded deployment/recovery. [Task configuration](https://render.com/docs/workflows-defining), [billing](https://render.com/docs/workflows-limits)
+The current SDK has metadata and `TaskContext.run()`, but no verified saved-step/suspended-sleep primitive. Poll approximately every 30 seconds with bounded requests; RAM remains billed while waiting. Recovery reloads the job and known execution, not process memory. Native controller retries never authorize a second worker submission. [SDK context](https://render.com/docs/workflows-sdk-typescript)
 
-At task entry, claim the current dispatch with a random owner nonce and incremented controller epoch. A stale, completed or already-owned generation returns its current outcome without effects. Each scope has one active generation. Continuation atomically marks the old generation `continued`, invalidates its lease, creates the next generation/outbox and preserves the original logical deadline. Every old controller must fail its subsequent CAS. Stage position comes from accepted job records; no second stage cursor is maintained. **Controller epoch is distinct from processing-attempt/worker epoch.** Taking over or continuing a controller never invalidates an ongoing worker claim, heartbeat or write grant. Only an explicit processing retry creates a new attempt/worker epoch, after safe takeover.
+After controller retries are exhausted, surface `needs_attention` and retain global admission/cost accounting until the execution is known terminal. An operator inspects/cancels the exact call in Modal (or resolves the local child), then records authoritative terminal evidence through the staff reconciliation operation before a manual processing retry. Cron cannot perform this Modal operation because it has no Modal credential. Do not invent a new dispatch key to bypass the provider's failed run or assume a lost local run is proof its child stopped. No automatic GPU/model upgrade or processing restart is allowed.
 
-If a controller dies, the cron reconciler observes its expired lease and atomically creates a replacement generation using the same routine. It can resume monitoring the existing Modal call, barrier or validation. Persist submission intent before every external call; a lease expiry alone never authorizes another processing call. A late Render retry exits when its generation is stale. Bound continuation count and total control cost in the profile; exceeding either visibly blocks new work. Deadline expiry stops starts and begins cleanup; outstanding calls/grants still require reconciliation.
+## Submit, run and accept once
 
-The cron job delivers due dispatches and recovers abandoned ownership, unknown provider state, grants and incomplete receipts. It **never chooses successor stages**, performs inference or approves results. Controllers own dependency progression. Run cron and workflows in the same workspace/region as Postgres, using its internal pooled URL and a scoped control role. Current Render Workflows cannot use that private network inside a network-isolated environment; qualify placement before activation. [Workflow connectivity](https://render.com/docs/workflows), [private networking](https://render.com/docs/private-network)
+1. **Reserve/submit.** Check ownership, source/selection, model rights, bounds and budget. Persist worker submission intent before one executor submission; save its execution reference. Lost acknowledgement is explicitly unknown, never a reason to submit again.
+2. **Claim before heavy work.** Each physical worker invocation creates a fresh nonce and calls the job API with its private bootstrap capability. The API checks current job/backend, lifecycle and a ten-minute start deadline. Modal reports `modal.current_function_call_id()`; local execution reports its local handle. This can repair a missing execution reference. Duplicate/replayed workers exit before model imports, downloads or output allocation.
+3. **Execute/report.** Receive authoritative task configuration and scoped input/output access. Heartbeats report progress without extending hard deadlines. Upload files through API-allocated one-shot multipart sessions and propose a small candidate containing manifest file ID/hash, never arbitrary URLs or arrays.
+4. **Finalize.** Reconcile executor completion and all referenced completed files. The API checks manifest schema, expected job/input/model/config, required files, bounds and active lifecycle, then conditionally selects the result. Inline QC is trusted producer evidence, not independent pose validation. API hosts do no inference, archive creation or bulk hashing.
 
-## Run and accept one processing stage
+Controllers use authenticated control API operations; workers have their separate job-scoped capability. Database/storage issuer authority stays in the API. Modal credentials belong only to the authorized Workflow runtime, never the API cron or media workers. A failed controller without terminal worker evidence remains operator-visible; reconciliation cannot approve it from an untrusted callback alone. [Access](auth-and-access.md)
 
-1. **Admit atomically.** Check active lifecycle, controller identity, source/selection/version, model rights, tested bounds and budget. Lock job/batch/resource rows in fixed order; create attempt/deadlines/bootstrap-token hash and reserve budget, CPU/GPU and writer ownership together. Busy capacity follows the bounded continuation policy.
-2. **Submit once.** Commit a submission-intent flag/counter for that attempt before the single permitted Modal `spawn`. Save `functionCallId` when returned. Lost acknowledgement becomes `dispatch_unknown`; no controller restart or provider retry may blindly replace it.
-3. **Claim before heavy work.** The worker exchanges its bootstrap capability for an invocation-bound claim. CAS checks attempt, epoch, owner, absolute start deadline and active lifecycle. Only the winner receives storage capabilities/configuration. Losers exit before media/model downloads; startup may still cost money.
-4. **Observe.** Poll the known call and accept scoped worker heartbeats/candidate receipts. Missing heartbeat is not termination proof. Curator writes/checkpoints/publishes its stable batch root in place. Controller continuation preserves the call/attempt and does not restart the model.
-5. **Establish quiescence.** Persist trusted Modal terminal observation, then call the API quiescence endpoint. The API disables renewal, retires **all writer capabilities**, and performs bounded grant/drain/visibility metadata reconciliation; `202` means pending, `200` returns the bound barrier. It never hashes media or traverses dataset closure. Bind barrier/grant-generation evidence to the candidate hash; retain exclusive batch ownership. Release the terminal call's compute slot now so validation cannot deadlock behind completed jobs; keep conservative cost accounting.
-6. **Validate independently.** Create a `stage_jobs` helper with `stage=validate_stage` and `validation_for_job_id` pointing to the producer job; its partition key binds producer attempt, candidate hash and barrier generation. Use the existing `job_attempts` ledger: **`validationId` is this helper attempt ID**, not another table. Persist its distinct bootstrap hash, CPU/budget reservation and submission intent before the single Modal call; unknown submission obeys the same no-blind-respawn rule. The private validator claims read-only configuration from the API before reads and submits its separate completion receipt. Check scope, native commit/receipt, row status, schemas, hashes/bytes and closure. Initial timeout: 600 seconds with measured object/row/byte budgets. Oversize requires a budgeted sharded profile. Validation cannot write payloads or accept the producer job.
-7. **Accept through the API.** A workflow-service-authenticated API call loads trusted validation and performs one short CAS over controller generation/epoch, job/attempt/invocation/batch owner, unchanged barrier/grant generation, candidate hash, parent/selection/observed version and lifecycle. Atomically select pinned artifacts/version and mark success. Worker JSON or a physical commit cannot self-approve.
-8. **Settle and advance.** Transfer batch ownership only after validation/acceptance. Settle actual cost conservatively. Compute capacity, controller ownership and canonical writer ownership are separate resources.
+## Executors, uncertainty and cancellation
 
-## Service boundaries
+`LocalExecutor` and `ModalExecutor` share `submit`, `poll` and `cancel`, worker task/result contracts and the HTTP multipart protocol. Local execution is a Python child process owned by the task; Modal execution is a known private Function call. Local restart limitations are explicit in [local development](local-development.md).
 
-Human cookies cannot authenticate service routes. All rows below are POST:
+Use the pinned `modal` Node SDK: look up the private Function; `fn.spawn([taskInput, bootstrapToken])`; save `functionCallId`; later reconstruct with `modal.functionCalls.fromId(id)` and `get({ timeoutMs: 0 })`. Bootstrap is separate from durable task manifests. Poll `TimeoutError` means pending; `FunctionTimeoutError` means the worker exceeded its execution timeout. Other errors require classification, not respawn. Persist result candidates promptly because spawned-call results expire after seven days. [Function](https://modal.com/docs/sdk/js/latest/Function), [call/error semantics](https://modal.com/docs/sdk/js/latest/FunctionCall), [errors](https://modal.com/docs/sdk/js/latest/Errors), [call identity](https://modal.com/docs/sdk/py/latest/current_function_call_id), [retention](https://modal.com/docs/guide/job-queue)
 
-| Path | Caller/authority |
-| --- | --- |
-| `/internal/v1/processing/attempts/{attemptId}/claim` | Random bootstrap capability; establishes one worker invocation owner |
-| `/internal/v1/processing/attempts/{attemptId}/heartbeat` | Claimed invocation capability; renewal only while active and before deadline |
-| `/internal/v1/processing/attempts/{attemptId}/candidate` | Claimed invocation; bounded candidate reference/hash only |
-| `/internal/v1/processing/attempts/{attemptId}/quiescence` | Workflow credential plus live dispatch/epoch; bounded API-issued retirement/drain/visibility evidence. Separate cleanup-only reconciler credential is permitted as described below. |
-| `/internal/v1/processing/validations/{validationId}/claim` | Distinct validation bootstrap; binds one validator invocation and returns API-issued read-only configuration plus completion capability |
-| `/internal/v1/processing/validations/{validationId}/complete` | Claimed validator completion capability; records evidence on its helper attempt only |
-| `/internal/v1/processing/jobs/{stageJobId}/accept` | Workflow service bearer credential plus `workflowDispatchId`, `controllerEpoch`, `expectedAttemptId`; API verifies current dispatch/scope and trusted validation |
+Application-level Modal retries are zero, but container crashes can still trigger provider rescheduling. Fresh invocation claims and avoiding heavy global startup are necessary. Unknown submission without a claim/call ID requires deadline expiry and provider inspection; silence or heartbeat loss proves neither termination nor zero cost. [Crash behavior](https://modal.com/docs/guide/retries)
 
-Use separate high-entropy, rotatable `WORKFLOW_API_TOKEN` (controllers: quiescence/acceptance) and `RECONCILE_API_TOKEN` (cron: quiescence/cleanup only), with server-side hashed/configured verifiers. Exclude these routes from human-cookie/CSRF middleware. Prefer the API's private Render address from controllers; worker callbacks use its public HTTPS origin. Provider keys and random bootstrap/worker/validator capabilities never enter outbox payloads, Render task arguments, durable manifests or logs.
+Cancellation blocks new claims, output signing and acceptance immediately. While its controller is available, cancel the known execution best effort and reconcile uploads/costs. After exhausted controller retries, operator-assisted inspection/cancellation and API recording of terminal evidence handle cleanup. A deadline or expired lease never releases uncertain compute admission. Delayed callbacks cannot reopen work or replace newer results.
 
-Quiescence requests bind `expectedAttemptId` and `expectedGrantGeneration` (decimal string); normal controller requests also carry `workflowDispatchId` and `controllerEpoch`. The API loads trusted provider-terminal evidence from control records, verifies candidate/current ownership and performs only bounded provider metadata operations. Retirement may begin while termination is unresolved, but that cannot establish a validation barrier. The cleanup-only reconciler may retire the exact old attempt's grants after cancellation/deadline/lease loss without a live controller; it cannot mint/renew grants, approve results or bless a newer writer's barrier. Cleanup remains authorized until outstanding calls, grants, writes and cost reservations are settled. Late worker callbacks remain proposals and cannot reopen the run or override cancellation.
-
-Only the Next.js API holds R2/S3 credential-issuer secrets. Controllers create attempt records/bootstrap hashes, submit private Modal calls and monitor them; controllers/cron never mint or receive storage grants. Normal workers obtain write/read configuration through their existing claim/heartbeat API. The validator's claim checks its helper attempt, producer candidate/hash, unchanged barrier/write-grant generation, deadline, lifecycle and one invocation owner. The API resolves approved input/candidate roots, issues read-only grants and a separately hashed completion capability, and returns the bounded validation descriptor. Read grants do not increment the producer's write-grant generation. Repeat claim by the same invocation is safe; another invocation is denied. Completion replay must match the stored receipt digest; changed content returns `409`. The API records the helper's validation evidence without accepting its producer.
-
-Controllers import shared domain services to manage their control ledger and dispatch validation. The workflow secret is not a validator credential. Modal workers receive no DB URL, Render key or Modal control-plane key. The validator may reuse an approved image but runs separately with read-only storage and its own receipt capability. Do not expose an unauthenticated cron/webhook endpoint; Render Cron runs an entrypoint directly.
-
-Human processing controls require current internal project grants and `Idempotency-Key`:
-
-| Route | Request/result |
-| --- | --- |
-| `POST /api/v1/internal/recordings/:id/processing-runs` | `profileRevision`, `expectedSourceManifestSha256`, `reason`; `202` |
-| `GET /api/v1/internal/processing-runs/:id` | Status, queued/blocked reason, attempts and validation references; `200` |
-| `POST /api/v1/internal/processing-runs/:id/cancel` | `reason`; `202`, starts cancellation rather than claiming immediate termination |
-| `POST /api/v1/internal/stage-jobs/:id/retries` | `expectedAttemptNumber`, `reason`; `202`, stale expectation `409` |
-
-The exporter writes a unique unpublished prefix and uses the same barrier/validator/CAS protocol. Its task ends at `ready`. Only a fresh internal-admin session can publish via `POST /api/v1/internal/releases/:id/publish`, rechecking unchanged manifest/barrier, approval, rights, recipients and lifecycle. See [delivery](review-and-delivery.md).
-
-## Native recovery and cancellation
-
-Reuse the same dataset/media root and compatible native checkpoint namespace across attempts. New attempt IDs change logs/accounting, not the dataset. Preserve native layouts, immutable input media/fragments and transaction history; no compaction, rewrite or vacuum while recovery/pinned consumers depend on them. Caption recovery remains recipe-specific. [Processing rules](cloud-processing.md)
-
-| Evidence | Required response |
-| --- | --- |
-| Modal submission unknown, no call ID | Wait for claim/result and investigate; expire bootstrap at the absolute start deadline. Silence proves neither zero cost nor safe replacement. |
-| Old call may run, any write grant valid, or write visibility unresolved | Block validation, acceptance and same-root takeover. Controller/DB epoch changes do not stop object writes. |
-| Checkpoint durable, canonical commit missing | After safe takeover, resume compatible native work; replay uncheckpointed work only. |
-| Commit succeeded, callback lost | Independent validation checks canonical version/receipt; accept without repeating inference. |
-| Invalid candidate/hash/layout/model rights | Classified failure; retain evidence. No automatic GPU upgrade, reset or new root. |
-| Cancellation/deletion wins CAS | Reject late acceptance, cancel known Modal call best effort and retire grants; continue cleanup despite controller/run termination. |
-| Render task/host outage | Preserve outbox, attempts, control ledger and native state; recover monitoring through the bounded reconciler. |
-
-Credential expiry does not cancel an already accepted PUT/multipart upload. Track write operations/MPUs and prove provider-specific bounded drain/visibility with clock-skew margins; fixed sleeps and client timeouts are insufficient. Unknown writes block adoption. The adapter canary must establish this barrier before R2/S3 activation.
-
-Start with Modal retries zero, one admitted GPU and two CPU calls globally; include validator/export CPU and startup uncertainty. Use existing `resource_slots` plus `budget_reservations`, not a second priority scheduler. Allow one diagnosed operator-authorized processing retry during qualification. Render controller retries do not consume this authorization or grant another `spawn`.
-
-## Implementation and qualification
-
-Implement `backend/src/workflows/`, shared processing/control services, provider adapters and `backend/src/workers/relay-reconcile.ts`; Modal Functions remain in `processing/`. Use Render's MIT SDK and hosted workflow service. [SDK package/license](https://github.com/render-oss/sdk/blob/main/typescript/package.json)
-
-Build the shared backend package from the repository root. The workflow start command executes `node backend/dist/workflows/index.js`; that entrypoint statically imports all four module-level `task(...)` definitions. The TypeScript SDK starts its task runtime automatically on Render; do not add an HTTP listener or Python-style `app.start()`. Avoid database/provider connections at module import, including during registration. [Registration/startup](https://render.com/docs/workflows-tutorial)
-
-Before activation, fault-test duplicate/late task delivery, Render acknowledgement loss beyond 24 hours, controller death after Modal submission, continuation and lease races, unknown processing/validation spawn, late or duplicate worker/validator claims, old grants/in-flight writes, checkpoint/commit loss, forged validator receipt, barrier mutation, cancellation racing CAS, concurrent final-batch joins, fan-out/deadline exhaustion, validator slot deadlock and full release download. No cloud qualification or paid task was performed for this design.
+Output immutability uses transport rather than a writer-grant ledger: unique keys, API-controlled CompleteMultipartUpload, no worker prefix write credential and no reuse of completed keys. Consumed upload IDs prevent stale part URLs overwriting completed objects. Accept only closed files allocated to the job; reconcile uncertain completion and abort unreferenced uploads. Qualify this behavior on R2. Staff review/publication and customer delivery remain separate permissions. [Upload contract](mcap-upload.md)

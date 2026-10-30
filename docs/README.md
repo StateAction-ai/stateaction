@@ -1,24 +1,40 @@
 # Engineering handoff
 
-Start with [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [audit findings](design-audit.md). Read the component you own; shared definitions live in [wire/manifest contracts](contracts.md).
+Updated: 2026-10-30. **Build the simplified MVP**, beginning with the [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [shared contracts](contracts.md). The [engineering/PM/design review](mvp-review.md) records scope coverage and remaining launch gates. Automatic hand landmarks, internal staff review and customer inspection/download all ship together.
 
-| Document | Contract owner / purpose |
+## Implementation documents
+
+| Document | Owns |
 | --- | --- |
-| [Render deployment](components/render-deployment.md) | Selected services, routing, build targets, credentials and rollout |
-| [Hosting decision/evidence](components/hosting-evaluation.md) | Render decision and verified provider/SDK limitations |
-| [Video cost model](components/video-cost-model.md) | Capture-based planning assumptions, direct transfer paths and 20/100/1,000-hour monthly scenarios |
-| [Platform cost comparison](components/platform-cost-comparison.md) | Render/Supabase/AWS with matched video volumes, R2/S3 costs and CloudFront delivery |
-| [Backend](components/backend-architecture.md) | Backend: runtime, modules and provider boundaries |
-| [Auth](components/auth-and-access.md) | Identity: login, permissions, offline ownership and deletion |
-| [Upload](components/mcap-upload.md) | Mobile/backend: resumable transfer, inventory seal and integrity |
-| [Storage](components/storage-and-data-model.md) | Backend: entities, enums, namespaces, credentials and retention |
-| [Execution/data flow](components/pipeline-execution-and-data-flow.md) | Processing: stages, locations, reads/writes and handoff |
-| [Orchestration](components/job-orchestration.md) | Platform: workflow partitioning, claims, validation, retries and budgets |
-| [Processing](components/cloud-processing.md) | Robotics/ML: clocks/geometry, images, resources, models and licenses |
-| [Review/delivery](components/review-and-delivery.md) | Product/backend: internal approval, release packaging and customer downloads |
-| [Operations/costs](components/operations-and-costs.md) | Platform: deployment, spend, monitoring and recovery |
-| [Lance introduction](components/lance-datasets.md) | Background: dataset files, use cases and storage |
+| [Monorepo](components/monorepo.md) | Flutter/mobile/native source, Node/Python packages, migration and independent builds |
+| [Local development](components/local-development.md) | Full local CPU end-to-end testing, optional local GPU, Render's local workflow tooling and cloud canary |
+| [UI design and library](components/ui-design.md) | shadcn/ui web choice, Flutter theme, role/state/component map |
+| [Clickable UI mocks](mocks/index.html) | Offline collector/staff/customer prototype and demo states |
+| [Backend](components/backend-architecture.md) | Next.js/Node modules and provider boundaries |
+| [Auth](components/auth-and-access.md) | Manual allowlist, three roles, native login and capture ownership |
+| [Upload](components/mcap-upload.md) | Resumable direct multipart, required-file seal and source integrity |
+| [Storage](components/storage-and-data-model.md) | Seven domain tables, object keys and write closure |
+| [Execution/data flow](components/pipeline-execution-and-data-flow.md) | Exact stage locations, reads/writes and handoffs |
+| [Orchestration](components/job-orchestration.md) | Two Render workflow tasks, job state, repair cron, Local/Modal executors and failure recovery |
+| [Processing](components/cloud-processing.md) | Streaming extraction, required 21-point hand inference, masks, model rights and resources |
+| [Review/delivery](components/review-and-delivery.md) | Staff approval, fixed portable package and customer Download all |
+| [Render deployment](components/render-deployment.md) | Web/database/workflows/cron placement, root monorepo builds and credentials |
+| [Operations/costs](components/operations-and-costs.md) | CPU-first budget, monitoring, retention and recovery |
+| [Current design audit](design-audit.md) | MVP decisions, remaining gates and documentation verification |
 
-Updated 2026-10-26. Status: Render/Next.js/Node, Better Auth, Render Postgres and Render Workflows selected; implementation/qualification pending. R2 stores media; Modal runs CPU/GPU processing. The deployment specification supersedes older Node/Lightsail/Supabase/Inngest assumptions. No service has been deployed.
+## Research and measurement references
 
-Existing measurement evidence remains separate: [capture](pixel-v3-physical-validation.md), [geometry](geometry-v3-capture-regression.md), [training qualification](training-qualification-requirements.md), [WiLoR benchmark](wilor-full-hand-benchmark.md). Design review does not upgrade these accuracy claims.
+These documents retain earlier investigations; they are not extra MVP services or implementation requirements.
+
+| Reference | Purpose |
+| --- | --- |
+| [Curator integration](components/curator-integration-reference.md) | Pinned Curator/Ray/Lance implementation and advanced recovery research; deferred |
+| [Lance introduction](components/lance-datasets.md) | Future table/search/versioning option; not required for ordinary pose files/manifests |
+| [Hosting evidence](components/hosting-evaluation.md) | Render decision plus earlier provider/SDK investigation; current workflow/local contracts supersede old task boundaries |
+| [Video cost research](components/video-cost-model.md) | Capture byte assumptions and previous full-stack volume scenarios |
+| [Platform comparison](components/platform-cost-comparison.md) | Earlier matched Render/Supabase/AWS and R2/S3 comparisons |
+| [Physical capture](pixel-v3-physical-validation.md) / [geometry](geometry-v3-capture-regression.md) | Acquisition evidence and remaining accuracy limits |
+| [Training qualification](training-qualification-requirements.md) | Limits on metric/action/training claims |
+| [WiLoR benchmark](wilor-full-hand-benchmark.md) | Research model comparison, not commercial deployment clearance |
+
+The monorepo migration, application stack and cloud pipeline remain to be implemented. No design review upgrades existing pose-accuracy claims.

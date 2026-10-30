@@ -1,109 +1,44 @@
 # Authentication and access
 
-Selected Render / Next.js / Better Auth design · updated 2026-10-26 · Design only; not deployed.
+MVP design · updated 2026-10-30 · Not implemented or deployed.
 
-Parent: [Technical design](../technical-design.md). This document owns identity, permissions and session behavior. [Storage](storage-and-data-model.md) owns tables; [contracts](../contracts.md) owns wire/error formats; [uploads](mcap-upload.md) and [delivery](review-and-delivery.md) own their endpoint protocols.
+Parent: [technical design](../technical-design.md). [Contracts](../contracts.md) owns routes/encoding; [storage](storage-and-data-model.md) owns tables.
 
-## Identity and onboarding
+## One login and a manual allowlist
 
-Use one independently configured Better Auth authority in the Next.js Node web service on Render. Render Postgres stores its users, linked accounts and sessions alongside application tables. Render workspace login is for our infrastructure operators; collectors and customers use our application's Better Auth login. Preserve the Flutter client's cookie protocol and existing opaque user IDs where data exists; qualify the library and adapter rather than copying Stera's factory. Mount `/api/auth/*` using `toNextJsHandler(auth)` in `console/app/api/auth/[...all]/route.ts`. OAuth/session cryptography stays in the library. [Better Auth Next integration](https://better-auth.com/docs/integrations/next)
+Use one Better Auth instance in Next.js with its official `/api/auth/*` adapter and Render Postgres tables. Start with Google login. Qualify the actual provider audiences/nonce and signed mobile builds; enable Apple only when required and tested. No email service, invitation UI, organizations or delegated administration is needed for the pilot. [Next integration](https://better-auth.com/docs/integrations/next)
 
-Pilot onboarding uses Google sign-in and explicit invitations. Enable Apple only after real production signing, client IDs and audiences pass native tests; exclude borrowed development audiences. Configure only enabled providers. Verify nonce, issuer, expiry and the actual ID-token audience; Android using a web `serverClientId` is not evidence that every Android client ID belongs in the audience allowlist. A provider ID token establishes identity, not project access.
+After verified login, an operator enables the immutable user ID through a reviewed script. Unenrolled users see their identity and an access-pending page. Roles come from `access`, never client flags or email-domain shortcuts. Users may hold multiple roles.
 
-Do not assume SMTP exists. Administrators can distribute one-time invite URLs manually. Email OTP/password recovery is a separate implementation requiring a selected mail service and verified sending domain. Confirm pilot users can use the selected provider.
-
-An invite records recipient verified email, organization/project, delegated permissions, creator, expiry and revocation. Store its random secret hashed. Acceptance requires login and matching provider-verified email, then one transaction locks/consumes the invite and creates grants. Same-user retry returns the original acceptance and current grants without recreating revoked grants; another identity cannot reuse it. Do not normalize addresses using Gmail-specific dot/plus rules. A signed-in unenrolled identity may read its own identity and accept an invite, but cannot enumerate projects or upload.
-
-Bootstrap the first internal administrator through an audited operator command targeting a verified user ID. No first-user-admin rule, public staff-grant endpoint or email-domain shortcut.
-
-### Identity/enrollment API
-
-All paths below are proposed; shared success/error envelopes apply. Identity IDs remain immutable.
-
-| Endpoint | Scope / required fields / result |
+| Role | Allowed |
 | --- | --- |
-| `GET /api/v1/users/me` | Session; own ID, verified email, display name and access state. |
-| `GET /api/v1/access` | Session; current organization/project grants and capabilities. |
-| `POST /api/v1/invitations` | Authorized delegator; `organizationId`, `recipientEmail`, `membershipRole`, bounded `projectGrants[{projectId,role}]`, optional `expiresAt`; `201` ID/one-time URL/expiry. |
-| `POST /api/v1/invitations/accept` | Session; `invitationId`, `token`; verified recipient match; `200` acceptance/current grants, idempotent by accepting user ID. |
-| `DELETE /api/v1/invitations/:id` | Current delegation; revoke pending invitation; `204`, no implicit grant deletion. |
-| `POST /api/v1/deletion-requests` | Fresh own session/support verification; optional `reason`; `202` request ID/state. |
+| `collector` | Register/upload own recordings and inspect own upload/processing status |
+| `staff` | Inspect pilot recordings, retry jobs, label/review clips, build/publish/revoke releases and assign release recipients |
+| `customer` | Inspect/download only explicitly granted published releases; no raw/internal/review access |
 
-## Permission rules
+Configure one pilot project server-side. Every request checks enabled access and ownership or release grant. Staff have pilot-wide access. Customers cannot enumerate others' releases. Operators change roles; no public role-administration endpoint exists. Revocation denies the next API request.
 
-An organization is a tenant. Membership alone grants no producer-project access. `memberships.role` is `member` or `admin`; `project_access.role` is `collector` or `project_admin`. Internal `internal_reviewer`/`internal_admin` roles live in `platform_staff`, separate from customer membership. Staff data access also requires `staff_project_access`; administrators can create an audited assignment after fresh authentication.
+## Sessions and offline ownership
 
-| Principal | Upload | Internal data/review | Processing | Delivery/grants |
-| --- | --- | --- | --- | --- |
-| Unenrolled identity | No | No | No | No |
-| Collector | Own files in assigned active project | Own upload status/allowed collection preview only | No direct submission | Separately granted releases only |
-| Customer member | No | Published items only; no accept/reject | No | Granted releases and complete downloads |
-| Tenant/project administrator | Only with collector grant | No automatic raw/review access | No | Delegated tenant/project invitations; no publication/staff escalation |
-| Internal reviewer | Separate collector grant if collecting | Assigned project; correct/approve exact revisions | Assigned processing/retry through admission policy | No publication unless separately internal admin |
-| Internal administrator | Separate collector grant if collecting | Assigned project | Authorized admission/cancellation | Publish and manage release/staff grants; audited |
-| Processing service | No human upload | Issued inputs; writes proposals/results only | Current attempt only | Cannot approve, publish or grant access |
+Use host-only `HttpOnly; Secure; SameSite=Lax` browser cookies under one HTTPS origin. Native cookies live in platform secure storage. Save every `Set-Cookie` separately and propagate rotation from server auth calls. Disable cookie-only session caching for authoritative revocation. Keep a seven-day session/one-day refresh starting policy; sensitive publication requires a fresh session. [Session management](https://better-auth.com/docs/concepts/session-management)
 
-Every interactive request authenticates once, rejects suspended/deletion-blocked users, loads the resource's scope from Postgres and checks current grants. Client role flags, cached organization IDs and key prefixes are not authority. Grant-changing transactions recheck delegation and cannot escalate the caller. Staff removal or assignment revocation denies the next request.
+Persist the verified owner ID and capture ID in the recording journal **when capture starts**. Previously authorized collectors may record offline; upload/resume rechecks current access. Expiry pauses networking and requests login without deleting local files, queue entries or receipts. Serialize reauthentication. Network errors, expired storage URLs and authorization denial are distinct conditions.
 
-Customer release access requires an eligible user, active membership in the **recipient organization**, live matching `release_grants`, and a published, available release. User-specific grants additionally match that user. The recipient may differ from the producer; no producer-project membership is required. An organization grant intentionally covers its active members, including later authorized invitees. Customers never gain internal review/cancellation rights through delivery access.
+Logout stops transfers/renewal, preserves journals/files, clears credentials and revokes the remote session when reachable. Offline logout records unconfirmed revocation. Another account cannot browse, resume or adopt the previous owner's pending captures. Legacy ownerless recordings require explicit recovery rather than automatic adoption. Unauthenticated capture mode cannot upload.
 
-Use `404` for resources the caller cannot know exist; `403` for a denied action on a visible resource. Retain the shared error envelope from [contracts](../contracts.md). Better Auth endpoints retain their library format, normalized by the client adapter.
+## Browser and service boundaries
 
-## Native sessions and offline ownership
+Human mutations require a valid session, JSON, `X-Stera-Client` and allowed browser Origin; reject cross-site Fetch Metadata and `Origin: null`. Native requests may omit Origin while retaining the header and session. Keep Better Auth's own origin/state checks. Configure canonical/trusted origins explicitly; no credentialed wildcard CORS. Protected Next data and pages never enter public/shared caches. [Security](https://better-auth.com/docs/reference/security)
 
-Persist native session cookies in the qualified platform secure store; ordinary preferences contain only non-secret profile/ownership data. Forward cookies to the intended HTTPS host/path and save every returned `Set-Cookie` separately. Never comma-join them. On the server request Better Auth response headers so rotation reaches clients. Test these behaviors from a clean dependency install and on signed devices, not a modified local package cache.
+| Caller | Credential and scope |
+| --- | --- |
+| Browser/mobile | Human session and live role/ownership checks |
+| Workflow controller | Rotated internal token; scoped job claim/submission/status/reconciliation operations |
+| Repair cron | Separate internal token and workflow-dispatch client; pending-job/controller repair only |
+| Processing/export worker | Hashed expiring job capability, then fresh invocation nonce/call-ID binding; only its inputs/uploads/result |
 
-Initial policy: seven-day session expiry, one-day refresh interval, five-minute freshness for deletion/elevating/publication actions; cookie session caching disabled for authoritative revocation checks. These are configurable defaults. Custom sensitive routes must enforce freshness explicitly. Redact cookies, ID tokens and signatures. [Sessions](https://better-auth.com/docs/concepts/session-management), [response headers](https://better-auth.com/docs/concepts/api)
+Worker tokens cannot claim another job, publish releases or obtain general database/R2/Modal credentials. Workflows/cron have no human session or database access. Only hosted workflow controllers hold Modal control credentials; cron requests reconciliation through the API. Render dispatch credentials belong only to web; task inputs contain IDs, not secrets. Keep credentials in redacted Authorization headers, outside manifests/logs. Service routes never fall back to cookies.
 
-At capture creation, persist immutable owner user ID, organization/project/assignment, capture ID and last verified assignment time in a durable journal. A previously enrolled collector may record offline under that assignment; cached access never authorizes upload. Reconnect rechecks live authority before starting/resuming. Revocation pauses transfer and preserves files; it does not move them to another project.
+Raw/output URLs are issued only after authorization. Revocation blocks new URLs; already issued archive URLs can remain usable for up to 24 hours. Handle deletion through staff-assisted suspension and reference-aware cleanup; disable direct auth-user cascading deletion. Test account switching, CSRF, stale worker claims, private caches and customer isolation before pilot.
 
-Unauthenticated capture-only files remain unclaimed until explicit claim into an authorized project. Legacy rows without an owner are quarantined for claim/recovery, not adopted by whichever account logs in next. `NO_AUTH_MODE` remains capture-only; the deployed collector build must enable authenticated networking.
-
-On session expiry, pause authenticated network work and reauthenticate without deleting files, receipts or queue records. Serialize reauthentication. Storage URL expiry, `403`, network failure and `5xx` are different conditions, not reasons for destructive logout.
-
-Explicit logout stops scheduling/renewal, saves receipts, cancels transfers best effort, revokes the remote session when reachable and clears credentials/UI caches only. Offline logout records unconfirmed remote revocation. Owner B cannot browse/resume/reassign owner A's pending captures. Same-owner recovery remains possible after login. Completion rechecks current ownership and project authority even when previously issued object requests succeeded.
-
-## Browser and service authentication
-
-Serve console and API under one HTTPS origin. Use host-only `HttpOnly; Secure; SameSite=Lax` cookies covering auth and API paths, and `Cache-Control: no-store` for private responses. No session tokens in browser localStorage. Configure one canonical application origin/base URL and explicit trusted origins; trust forwarded host/protocol only from Render's configured proxy. Private Next pages/data must not enter public/static/shared caches.
-
-Next proxy/middleware may redirect for navigation, but cookie presence never authorizes a page or API request. Protected data loaders and route handlers authenticate and check current grants before returning data. Use the same human HTTP API for browser and native mutations. Server Components cannot write refreshed cookies: session refresh occurs through auth/route responses, and domain route adapters must forward every returned `Set-Cookie` separately. If a future Server Action calls cookie-setting auth APIs, qualify Better Auth's `nextCookies` integration before enabling it. [Next session integration](https://better-auth.com/docs/integrations/next)
-
-Keep Better Auth's origin/nonce/state checks. Custom human cookie-authenticated `/api/v1/*` mutation routes require JSON, `X-Stera-Client`, exact allowed Origin when present, and rejection of cross-site Fetch Metadata/`Origin: null`. Native requests without browser Origin are supported with the header and valid session. The header is not authentication. Allow only required CORS origins/methods/headers, including idempotency headers; no credentialed wildcard. OAuth callbacks retain their proper content types. Internal workflow/worker/validator and download-capability routes have separate authentication below and are outside this human-cookie CSRF rule. [Security](https://better-auth.com/docs/reference/security)
-
-Use separate authentication boundaries:
-
-| Route group | Credential | Authority |
-| --- | --- | --- |
-| `/api/auth/*` | Provider/library protocol | Sign-in/session lifecycle |
-| `/api/v1/*` | Human cookie session plus current grants | Authorized domain actions |
-| Dedicated quiescence and `/internal/v1/processing/jobs/{stageJobId}/accept` routes | Dedicated workflow service credential, rotated and held only by controllers | Allowlisted operations with current dispatch/epoch/resource checks; cannot publish or grant staff access |
-| `/internal/v1/processing/attempts/:id/quiescence` cleanup mode | Separate reconciliation-service credential held only by minute cron | Retire/reconcile the recorded attempt's grants; no acceptance, new grants or writer takeover |
-| Dedicated `/internal/v1/*` attempt claim/heartbeat/result routes | Hashed expiring attempt capability | Bound run/batch/attempt/claim epoch, allowed actions and invocation owner |
-| Dedicated `/internal/v1/*` validation claim/completion routes | Distinct hashed validation bootstrap, then invocation-bound completion capability | Claim returns API-issued read-only storage scope; completion records evidence for one validation ID/candidate/barrier only |
-| `/api/download/sessions/:id/{manifest,urls}` | Hashed download capability | One requester/grant/release/manifest only |
-
-Register service/capability routes outside blanket human-cookie middleware. IDs alone are never credentials. Keep capabilities in redacted Authorization headers, not task history/manifests/URLs. Controller routes accept only the allowlisted service principal and validated scoped IDs; human cookies and worker/validator tokens cannot call them. The final-acceptance route loads authoritative validation/barrier state and has no caller-controlled override. Render task inputs contain identifiers only; Modal/issuer credentials remain server-side. Render Workflows invokes registered tasks through its SDK/API; it does not need an incoming `/api/inngest` handler. Do not reuse human session secrets, Render operator API keys, workflow-control credentials or worker capabilities across these boundaries. The public web process has no Render API key; cron dispatches its committed outbox.
-
-R2 signing/temporary-grant issuer keys stay in the Next API. Normal workers obtain grants through their attempt claim/heartbeat; validators use `POST /internal/v1/processing/validations/:id/claim` with a separate bootstrap. A validator cannot use normal producer routes to obtain write grants. Controllers request quiescence with their live scope/epoch; the reconciliation principal can perform cleanup after cancellation/deadline without accepting output or renewing authority. These are bounded metadata operations, never media hashing. [Orchestration](job-orchestration.md) owns the exact request checks.
-
-For CLI downloads, a logged-in customer creates/renews the capability. Each request rechecks its expiry/revocation, original user's eligibility, recipient membership, grant, release state and manifest digest. It cannot access ordinary APIs. Signed file URLs remain bearer capabilities until effective expiry; revocation blocks new issuance, not already downloaded bytes. [Delivery](review-and-delivery.md) defines URL lifetime, batches and complete-inventory behavior.
-
-Workers receive no general database or human-session credentials. Their writable batch scope and canonical single-writer takeover constraints are defined once in [storage](storage-and-data-model.md). A valid attempt token cannot authorize arbitrary object fetching or publication. Trusted validation starts only after the producer is terminal, all writes/grants are retired and provider visibility reconciled; hold ownership through acceptance. The final transaction checks the validated barrier/write-grant generation. Exporter credentials must also be retired before validating/publishing their destination; details belong to storage/orchestration.
-
-## Deletion and implementation gates
-
-Replace both direct user-delete paths, including Better Auth deletion and legacy `DELETE /users/me`, with `POST /api/v1/deletion-requests` and the retention-aware workflow. Require a fresh session/support verification, revoke access as policy directs and preserve shared provenance. Auth-owned sessions/accounts may cascade; domain references must not. Do not retain personal data indefinitely under a tombstone excuse. [Storage retention](storage-and-data-model.md) owns purge/restore rules.
-
-Implement the single auth authority and access rules in `backend/src/modules/{auth,access}/`, Next route adapters in `console/app/`, configuration in `backend/src/config/`, and generated runtime bindings in `backend/src/contracts/` from canonical `processing/contracts/`. Workflow tasks do not instantiate an alternative human login authority. Mobile integration must remove queue-clearing expiry/logout behavior and persist owner binding. Do not import old server handlers.
-
-Release evidence must prove:
-
-- Native Google/Apple configuration as enabled; cookie restart/rotation/expiry and revocation work on signed devices.
-- Expiry, offline logout and account switching preserve journals and prevent cross-owner upload.
-- Concurrent invite acceptance is idempotent; forged tenant/staff roles cannot escalate.
-- Cross-tenant raw/draft/review access is denied; recipient grants work without producer membership.
-- CSRF/host spoofing, forged service calls and expired/stale capabilities fail before mutation/spend.
-- Protected Next rendering cannot leak through shared caches; route-level authorization and every rotated cookie survive the production Render proxy/build.
-- CLI capabilities work without human cookies but cannot escape their release.
-- User deletion cannot cascade shared releases; final acceptance/publication rechecks lifecycle and authority as specified by storage/orchestration.
+Before enabling real collection/processing, the operator records pilot permission evidence covering capture and automated processing; recording registration references that approval. Missing/revoked permission blocks ingest admission. A collector checkbox alone does not establish third-party rights. Publication separately checks permitted customer export. No self-service policy engine is required.

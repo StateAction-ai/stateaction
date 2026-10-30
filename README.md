@@ -2,6 +2,10 @@
 
 Local workspace for building Stera on Linux, collecting raw recordings from an Android phone, and inspecting their native sensor streams.
 
+## Platform implementation plan
+
+The [technical design](docs/technical-design.md) and [engineering handoff](docs/README.md) define the upcoming monorepo, Render local/cloud workflows, cloud processing, login and review/delivery UI. These are plans and offline UI mocks; source migration and deployment have not occurred. The submodule clone instructions below still describe the current checkout.
+
 ## Reproduce this workspace
 
 The workspace and Android changes live in private repositories under

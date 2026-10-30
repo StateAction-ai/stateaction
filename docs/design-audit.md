@@ -1,42 +1,40 @@
-# Design audit and handoff status
+# MVP design audit and handoff status
 
-Date: 2026-10-23. Scope: the complete architecture/component set. Reviewers: backend/identity, processing/platform, upload/delivery and coordinating architecture reviewer. Findings below are resolved in the design; implementation remains unverified.
+Updated: 2026-10-30. Scope: architecture, all active components, local/cloud development and offline UI mocks. Engineering, PM and design reviewers participated; root checks rendered artifacts and documentation consistency. **Ready to implement; no production implementation or field-launch qualification is claimed.**
 
-October 26 decision: the [selected Render deployment](components/render-deployment.md) uses Next.js/Node, Better Auth, Render Postgres and Render Workflows, with R2 media/Modal processing. The Node/Lightsail/Supabase/Inngest recommendation and word counts below are the historical October 23 audit snapshot. Current component contracts supersede its provider assumptions; no deployment has occurred.
+## Current decisions
 
-## Changes made
+One monorepo includes Flutter/native capture, Next.js/Node UI/API, shared contracts and Python processing. Render Workflows' official local runner executes the same two controller definitions as production; LocalExecutor/ModalExecutor changes only execution/provider configuration. Render Postgres stores durable job/catalog state, R2 stores payloads and Modal runs production processing/export.
 
-| Finding | Design correction |
+Mandatory CPU MediaPipe produces 21 image landmarks with clearly labelled model-relative 3D estimates. Staff reviews/approves; customers inspect granted published deliveries and download one complete bounded TAR. Curator/Ray/Lance, independent validators, extra workflow engines, organization administration, automatic processing retries and advanced annotation remain deferred.
+
+## Review findings resolved
+
+| Finding | Minimal correction |
 | --- | --- |
-| Two API/runtime/auth paths left engineers to decide basic architecture | One recommended Node24/TypeScript/Fastify target on AWS; Supabase Postgres and one Better Auth authority. Edge/Deno deferred. |
-| Repeated audit history and rules obscured implementation contracts | Short main design and owner map; each component owns its contract; shared schemas/encoding isolated in contracts.md. Prior detail remains in git history. |
-| One recording workflow could exhaust step/state limits across many batches | Independent ingest, bounded-batch, review-assembly and release workflows; aggregate cost/execution admission. |
-| Nullable batch identity could bypass SQL job uniqueness | Non-null partition keys and separate partial unique constraints for batch/run jobs; recording-versus-release run target explicit. |
-| Worker result, validation and application acceptance were insufficiently separated | Worker candidate → read-only trusted cloud validator → short API acceptance/publication transaction. No worker self-approval. |
-| Validated/published data could remain writable through outstanding capabilities | Producer termination, grant retirement and reconciled pending writes before validation; bind that barrier into final acceptance and publication. |
-| Completed jobs could retain CPU slots needed by their own validators | Release terminated compute capacity while retaining separate dataset/destination ownership through validation and acceptance. |
-| Retry isolation could be mistaken for copying every dataset | Stable per-batch Lance/media/checkpoint root; serialized writer; old execution terminal plus write grants retired before takeover. |
-| Rights evidence and train/validation leakage policy were underspecified | Frozen rights-policy scope/evidence, revocation/redaction gates, correlated split groups and overlap checks. |
-| Cross-language integers, routes and manifests could drift | Shared named schema versions, decimal-string large integers, explicit route/auth boundaries and immutable typed references. |
-| Long-recording costs omitted some resource/transfer effects | Measured scratch/byte/fragment limits; actual-vs-requested CPU/RAM, disk-related memory and Modal egress included. |
+| RGB-only/optional-hands wording contradicted the requirement | Hand inference is mandatory in the first real local and cloud flow; no silent RGB-only success |
+| Custom runner would bypass the user's preferred Render local path | Official local Workflows server and shared two-task definitions; eight-hour task budget, no continuation engine |
+| Expired multipart upload could strand a sealed recording | Stable logical file/hash, explicit transport epoch and fresh key after confirmed old-MPU retirement; full retransmission disclosed |
+| Archive protocol needed size/SHA before streamed packing could supply them | Stage one complete TAR on bounded scratch, close/hash then upload; total release ceiling 32 GiB, not a per-shard allowance |
+| MCAP memory/scratch claims conflicted | Explicit non-seeking file-order reader, bounded chunks/frames, source hash through EOF; no full-recording array/scratch promise |
+| Exhausted controller retries had no credentialed automatic cleanup path | Operator inspects/cancels exact compute and records terminal resolution; uncertain admission stays reserved |
+| Frozen approval could be withdrawn before publication | Publish rechecks latest approved revisions; stale draft requires another release; published bytes stay fixed |
+| Idempotency/review concurrency were only prose | Persistent source-upload identity uniqueness and unique job/clip/review revision append |
+| Model-code license was being confused with asset rights | Official linked MediaPipe model card and exact asset SHA/size; preserve notices; WiLoR/MANO are not cleared defaults |
+| Full phone could block repeated field use | Explicit original-owner local cleanup only after source verification/cloud-copy confirmation; pending/failed files retained |
+
+UI state coverage and review results are in [MVP review](mvp-review.md); [UI design](components/ui-design.md) records the library decision and [clickable mocks](mocks/index.html) demonstrate all three roles.
 
 ## Remaining launch gates
 
-| Gate | Owner / required proof |
+| Evidence still required | Owner |
 | --- | --- |
-| Identity/mobile | Enabled provider credentials, trusted redirects/audiences, real-device session lifecycle and preserved owner journal |
-| Storage | R2/S3 multipart, checksum/session-token behavior and pinned Lance conditional commit/recovery with scoped grants; choose S3 if R2 fails |
-| Processing | Representative two-hour bounded memory/scratch/read-byte test; frozen batch limits and loss/recovery qualification on exact images |
-| Models | Pinned image/weights/context/GPU fit, declared quality and commercial terms. WiLoR/MANO/FLORA are not automatically cleared. |
-| Product/data policy | Project rights evidence, allowed uses, region/retention/redaction, delivery profile and split grouping approved by responsible owners |
-| Delivery/operations | Complete loader/download canary, authorization/cancellation faults, restore/revocation exercise and measured budget |
+| Safe import of active mobile fixes; clean monorepo clone/build, device regression | Mobile/platform |
+| Real-device auth, account switch, background/app-kill and representative two-hour upload | Mobile/backend |
+| Representative repair/tool/glove/occlusion hand quality and honest missingness | Robotics/data operations |
+| Bounded two-hour RAM/scratch/throughput; exact image/model and actual CPU cost | Robotics/platform |
+| R2 consumed multipart/epoch/reconciliation and known/unknown Render/Modal execution behavior | Backend/platform |
+| Full real package extraction, reader and every checksum; customer/grant denial and stale-review publication race | Backend/product |
+| Permission evidence before collection/inference, export check, retention policy and database restore | Operations |
 
-These gates do not block contract/API/UI development. They block activation of the affected production capability. There is no claim that the two-hour pipeline, R2/Lance deployment or optional GPU recipes have already passed.
-
-## Validation of this handoff
-
-The complete set is approximately **16,800 words versus 43,000 before** (61% shorter), including the new shared-contract and audit documents. The main design is under 900 words. Component ownership keeps implementation detail available without repeating the entire architecture.
-
-Checked all 15 documents: 109 local links/anchors, fenced blocks, route/schema/state consistency and clean diff whitespace. Rendered and visually inspected the simplified processing diagram. Cross-review resolved the write-after-validation/publication window, nullable-key dedup, workflow fan-out limits, validator capacity deadlock and naming/state drift.
-
-These are static design/document checks. Implementation tests and paid provider benchmarks remain separate work. The [milestones](implementation-plan.md) define the evidence each engineering owner must produce.
+Only documentation, offline mock interactions, static syntax/links and rendered diagrams are verified in this change. The [verification receipt](validation/mvp-design-review-20261030.json) records the actual checks. See [implementation milestones](implementation-plan.md) for runtime evidence to collect. No source migration, model inference, cloud deployment or paid GPU run was performed.
