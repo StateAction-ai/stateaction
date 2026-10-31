@@ -32,9 +32,11 @@ Source/output uploads use API-allocated keys and multipart IDs, including small 
 
 ## Data browser and Datasets
 
-`/data-browser` lists Dataset names, visible video counts and total hours; `?datasetId=UUID` opens screenshot/title/Task-label cards. Staff creates/manages Datasets and adds/removes existing accepted clips. `datasets` and `dataset_clips` hold many-to-many membership, not media copies; edits check `expectedRevision`. Use the `/api/v1/datasets` list/items/staff-mutation groups defined in [contracts](../contracts.md).
+`/data-browser` lists Datasets; `?datasetId=UUID` opens screenshot/title/Task-label cards. Datasets contain **approved clips only** for both roles. Staff All clips is explicit `?view=clips`, including accepted pending/approved/rejected clips with optional `recordingId` and `reviewStatus=pending`. Pipeline's completed-row Review clips links to that filtered catalog; a thumbnail opens `/clips/[clipId]`. Customer catalog access is forbidden.
 
-Operator-managed `dataset_access` grants enable customer review now. Customer responses include only current members whose latest review is approved; counts/hours use the same visibility. Recheck access on viewer URL issuance. No release/publication flow is required for this working view. Follow-up Dataset versions freeze the whole Dataset at a revision, blocking unreviewed/rejected members. [Dataset contract](data-browser-and-datasets.md)
+Review approval and optional Dataset multi-selection share one domain transaction. Lock clips first, then affected Datasets in UUID order; validate review/selection revisions before appending approval and replacing the requested membership set. Omission preserves membership; explicit empty selection clears it. Rejection/withdrawal removes all working memberships and increments affected Dataset revisions atomically. Reapproval never silently restores them. Direct Dataset-add uses the same approved-only guard/locks; no media copies. [Contracts](../contracts.md)
+
+Operator-managed `dataset_access` enables customer review now. Counts/hours use approved current membership; URL issuance rechecks access. No publication flow is needed. Follow-up Dataset versions freeze the whole Dataset at a revision; working rejection/removal never rewrites them. [Dataset contract](data-browser-and-datasets.md)
 
 ## Shared clip viewer
 
@@ -48,4 +50,4 @@ Both roles receive the same safe RRD and viewer component; staff-only forms/QC s
 
 Run the same task definitions through Render's official local Workflows runner on port 8120 or its hosted service. `EXECUTION_BACKEND=local|modal` selects real Python `LocalExecutor` or `ModalExecutor`. Local Postgres/MinIO use `infra/compose.yaml`; MediaPipe CPU needs no GPU. Test customer viewing with operator Dataset grants and approved clips. Export/download generation is follow-up, not an implemented UI dependency. Local success does not qualify Modal/R2. [Local development](local-development.md)
 
-Before pilot, prove builds, signed-device ownership, interrupted uploads, controller/unknown-submission recovery, catalog/review consistency and customer Dataset-grant/approval isolation. Test future archive generation separately when enabled. Stage DAGs, shared writable datasets and separate validators remain deferred. Workflow polling/retry follows the verified orchestration contract, not an assumed durable-sleep API.
+Before pilot, prove builds, device ownership, upload/controller recovery and customer isolation. Test failed/stale approval with selection, concurrent Dataset add versus rejection, all-membership withdrawal and explicit reapproval. Test future archives separately. Stage DAGs/shared writers/separate validators stay deferred. Workflow recovery follows the verified orchestration contract.

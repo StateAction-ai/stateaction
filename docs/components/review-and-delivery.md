@@ -8,22 +8,27 @@ Use `apps/web` with [auth](auth-and-access.md), [contracts](../contracts.md) and
 
 | Surface | Behavior |
 | --- | --- |
-| Pipeline | Staff processing status/errors, cancellation and safe manual retry; not the review entry point |
+| Pipeline | Staff processing status/errors, cancellation and safe retry; a completed row's Review clips action opens filtered All clips |
 | `/data-browser` | Shared Dataset list: name, visible video count and total hours |
 | `/data-browser?datasetId=UUID` | Video grid: screenshot, friendly title, Task label and basic video metadata |
+| `/data-browser?view=clips` | Staff All clips: accepted pending/approved/rejected clips; optional `recordingId` and `reviewStatus=pending` filters |
 | Shared clip detail | A grid card opens `/clips/[clipId]` for either role |
 
-Staff creates/names Datasets and adds/removes existing accepted clips. Videos are immutable processing clips; many-to-many membership copies no media. Name/membership edits use `expectedRevision`. Adding videos selects from the accepted catalog, not failed/in-progress jobs. A default human-readable clip title needs no UUID debug field.
+Staff creates/names Datasets and adds/removes **approved** clips. Add videos offers only clips whose latest review is approved. Many-to-many membership copies no media; edits use the expected Dataset revision. Datasets never contain pending/rejected clips for either role. Review unassigned clips through staff All clips; it is forbidden to customers. Friendly titles need no UUID debug field.
 
-Staff sees working membership. Customer counts/hours/grid include only currently approved members of explicitly granted Datasets. Evaluate each response consistently; never leak hidden draft/rejected counts. Operator-managed Dataset grants suffice initially; no sharing or release-management UI is required.
+Staff/customers share approved-only Dataset eligibility; customer grants further restrict visibility. Counts/hours/grid use consistent membership/review state. Operator grants suffice; no sharing or release-management UI is required.
 
 ## Shared clip review
 
-Use one Rerun component with separate 2D and estimated-3D panes, preserving missingness/frame mappings without metric claims. There is no Clip review sidebar entry, inspection checkbox, yellow warning box or Other clips section. Staff alone has a Task label, optional notes and approve/reject controls. Approval requires a nonblank label; notes and rejection reasons remain optional. Reviews append against the exact job/manifest/clip/revision; stale edits conflict. Keep clips whole; joint/trim editors remain deferred. [Viewer contract](rerun-clip-review.md)
+Use one Rerun component with separate 2D/estimated-3D panes and source-frame mappings. No Clip review sidebar, inspection checkbox, yellow warning box or Other clips section. Staff form: **Task label, optional Datasets multi-select, optional notes, Approve/Reject**. Approval requires a nonblank label; notes/rejection reasons are optional. Keep clips whole; defer joint/trim editors. [Viewer contract](rerun-clip-review.md)
+
+Reviewing a pending clip may select destination Datasets, but assignment happens only with successful approval. Submit optional `datasetSelection:{datasetIds,expectedRevisions}` as the complete desired membership set; the UI sends its current choices. Omission preserves membership; explicit `datasetIds:[]` clears it. Expected Dataset revisions cover current and selected memberships. The API appends approval and applies membership atomically; stale/failed approval changes neither. Record that selection with the immutable review.
+
+Reject/withdraw ignores selection and removes the clip from **every working Dataset** in the same transaction, advancing affected revisions. Reapprove with explicit choices to assign again; previous memberships are not restored. All direct-add/review operations share clip-first/Dataset-order locking. Test concurrent add versus rejection. Published follow-up versions remain frozen; revoke their access separately.
 
 The compact staff-only **Automatic quality checks** panel shows actual worker statuses for checksum, decode, frame mapping and finite/mask validity, plus measured hand-coverage/missingness percentages. Do not hardcode successful checks; a failed accepted-result invariant blocks acceptance. Coverage is not accuracy. QC, notes and internal provenance remain outside the common RRD/customer payload.
 
-`GET /api/v1/clips/:clipId` returns scoped data/capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks the live Dataset grant, membership and approval before issuing the safe RRD URL. Staff reviews use `POST /api/v1/clips/:clipId/reviews` with `expectedRevision`. Membership alone is not permission; another authorized Dataset may independently grant the same clip.
+`GET /api/v1/clips/:clipId` returns scoped capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks the customer's live Dataset grant/membership/approval; staff can inspect All clips independently. Staff reviews use `POST /api/v1/clips/:clipId/reviews` with `expectedRevision`. Membership alone is not permission.
 
 Customers see current approved labels and named authorized Dataset contexts. Removing a member, withdrawing approval or revoking access blocks new working access through that context. Previously issued URLs/loaded bytes cannot be recalled immediately. Test real customer review with operator grants and approved local clips; no published fixture is a prerequisite.
 

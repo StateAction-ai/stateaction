@@ -72,7 +72,7 @@ Modal workers report their actual `modal.current_function_call_id()` on claim; l
 
 ## Storage, auth and physical phones
 
-Apply local migrations and seed separate collector/staff/customer identities, datasets and operator-managed dataset grants. Keep local database volumes, MinIO keys and datasets separate from staging/production. MinIO uses the same API reserve/sign/parts/complete protocol, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
+Apply local migrations and seed separate collector/staff/customer identities, accepted pending/rejected/approved clips, approved-only dataset memberships and operator-managed view grants. Keep local database volumes, MinIO keys and datasets separate from staging/production. MinIO uses the same API reserve/sign/parts/complete protocol, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
 
 A phone's `localhost` is the phone. Host services normally use API port `3000` and MinIO `9000`; containers use their Compose service names; an Android emulator can use a qualified host alias such as `10.0.2.2`; physical devices need the development machine's reachable LAN hostname/IP. Bind only the intended development interfaces/firewall rules. The workflow task server remains host-local; phones call the web API, not port 8120.
 
@@ -84,7 +84,7 @@ Use isolated seeded/test identities for deterministic tests; any test-login adap
 
 | Step | Execution | Evidence |
 | --- | --- | --- |
-| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/dataset grants, source/output multipart, Pipeline status, many-to-many dataset membership, shared staff/customer review; clearly synthetic outputs |
+| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/grants, source/output multipart, completed Pipeline → pending clip grid → shared viewer, approve-and-assign transaction, approved-only membership and customer All clips denial; clearly synthetic outputs |
 | 2. Real CPU | Same runner/task + MediaPipe CPU on a short MCAP | Actual 21-point inference, bounded RRD/thumbnail generation, real embedded Rerun playback/frame mapping, 3D-estimate labels, masks, hashes, QC and loader round trip |
 | 3. Local size/failures | Same CPU path, progressively longer captures including representative two-hour size | Bounded RAM/disk, source read counts, elapsed time, cancellation, corrupt source, task-runner loss, uncertain launch and manual retry |
 | 4. Optional local CUDA | Same contracts plus an explicit small cleared profile on the available local GPU | CUDA visibility, memory/resource limits and schema/mask behavior; substitute-model results do not qualify another model's quality or memory |
@@ -93,10 +93,24 @@ Use isolated seeded/test identities for deterministic tests; any test-login adap
 
 MediaPipe CPU already supplies the required landmark/estimate product. Pin the exact small model asset/hash and environment from [processing](cloud-processing.md). A successful end-to-end test does not establish metric/anatomical accuracy.
 
-Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native controller retry, late starts, stale callbacks, incomplete/uncertain uploads and access revocation. For the follow-up Dataset-version flow, read the complete release archive through the real loader and verify checksums. Before cloud deployment, only environment/provider configuration and packaging should change; business handlers and contracts remain the tested ones. Local success still does not emulate provider failure modes.
+Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native controller retry, late starts, stale callbacks, incomplete/uncertain uploads and access revocation. Include transactional review/membership fixtures below; an HTML mock cannot prove database races. For the follow-up Dataset-version flow, read the complete release archive through the real loader and verify checksums. Before cloud deployment, only environment/provider configuration and packaging should change; business handlers and contracts remain the tested ones. Local success still does not emulate provider failure modes.
 
 ## Real Rerun and Data browser gate
 
 The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.22.1 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
 
-Prove `/data-browser` lists datasets, `?datasetId=...` opens the correct grid, and URL search/filter state survives refresh/paste/Back/Forward. One clip assigned to two datasets has one immutable identity and artifact set. Dataset counts/hours deduplicate memberships and use only authorized clips. Staff see current drafts and automatic QC; customers see only members whose latest review is approved of granted datasets. Removal, withdrawal and revoked access deny new viewer URLs; a known clip ID grants nothing. `/pipeline?status=failed` stays staff-only and does not become the review catalog. No release page or exporter is required to pass this initial shared-review gate.
+Prove `/data-browser` defaults to the dataset list and `?datasetId=...` opens its approved-only grid for either role. Staff may explicitly use `?view=clips` for all accepted clips, including pending/rejected/unassigned ones. A completed Pipeline row's **Review clips** action opens `/data-browser?view=clips&recordingId=<UUID>&reviewStatus=pending`, then a card opens the same `/clips/[clipId]` page. There is no separate Review sidebar item. Pipeline has status/search filters, no scenario selector; `/pipeline?status=failed` remains staff-only. Preserve URL state on refresh/paste/Back/Forward.
+
+Test the real review API/database, not just mock controls:
+
+| Case | Required evidence |
+| --- | --- |
+| Approve and assign | A nonblank task label, current review revision and affected dataset revisions commit one review decision plus the optional selected memberships. Empty selection leaves an approved unassigned clip. |
+| Blank/stale/failed command | Blank approval label, stale review/dataset revision or assignment failure rolls back the whole operation, including decision, memberships and revision bumps. |
+| Membership picker/direct mutation | Only latest-approved clips are offered or accepted; forged pending/rejected clip IDs fail for staff as well as customers. |
+| Reject/withdraw | One transaction removes all working dataset memberships, increments affected dataset revisions and records the decision; unrelated clips remain unchanged. |
+| Reapprove and concurrent writes | No automatic membership restoration. Racing approval/add against rejection cannot leave an unapproved dataset member or partially assigned approval. |
+| Shared identity/counts | One approved clip in two datasets has one immutable artifact set; counts/hours use distinct approved authorized members. |
+| Customer scope | Customer All clips/recording-wide routes are forbidden; current grant/membership/latest approval gates metadata, thumbnails and every fresh viewer URL. Revocation/removal/withdrawal denies new access. |
+
+Keep staff QC/notes out of customer payloads. A known clip ID is not authority. Test recipient permission when granting or changing shared membership. No release page or exporter is required to pass this initial internal/external review gate; frozen dataset versions remain separate follow-up work.

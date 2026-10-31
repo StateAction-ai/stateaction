@@ -4,7 +4,7 @@ Updated: 2026-10-31. **Selected MVP design; implementation and deployment pendin
 
 ## Product
 
-A repair worker signs in, records offline and uploads large MCAP recordings reliably. Cloud processing extracts RGB and available sensor evidence, estimates **21 hand landmarks plus explicitly marked model-relative 3D estimates**, and produces review media. Our team groups clips into datasets, labels and approves them. Robotics customers browse shared datasets and inspect approved clips; review decisions remain with our team. Whole-dataset versions and complete training-package downloads follow later.
+A repair worker signs in, records offline and uploads large MCAP recordings reliably. Cloud processing extracts RGB and available sensor evidence, estimates **21 hand landmarks plus explicitly marked model-relative 3D estimates**, and produces review media. Our team reviews each clip, enters a task label and adds approved clips to datasets. Robotics customers browse shared datasets and inspect approved clips; review decisions remain with our team. Whole-dataset versions and complete training-package downloads follow later.
 
 The agreed pilot output does not promise validated metric camera/world trajectories, robot actions or demonstrated policy-training benefit. Missing or unreliable observations remain explicit. Representative repair-footage quality is a launch gate.
 
@@ -21,7 +21,7 @@ The agreed pilot output does not promise validated metric camera/world trajector
 | Processing | Finite Modal CPU `process_recording`; future `export_release` reuses its control protocol |
 | Hand model | Pinned MediaPipe Hand Landmarker CPU baseline; mandatory inference, quality-gated |
 | Review viewer | One pinned Rerun web viewer on `/clips/[clipId]`, opened from the shared Data browser |
-| Data organization | Named datasets with many-to-many clip memberships; operator-managed customer view grants |
+| Data organization | Named datasets with many-to-many approved clip memberships; operator-managed customer view grants |
 | Repository | One monorepo including existing Flutter mobile/native plugin, Node apps and Python workers |
 | Local development | Official Render local Workflows runner, same task/processing contracts, local Postgres/MinIO and LocalExecutor; no cloud GPU |
 
@@ -32,7 +32,7 @@ The application platform is Render; storage and processing remain explicit exter
 1. **Phone → R2:** owner-bound resumable multipart uploads; the API seals the required-file inventory. Completion of all files creates one processing job in the same database transaction, then requests its workflow run; cron repairs a lost trigger.
 2. **Modal CPU:** one invocation streams/hashes MCAP, extracts bounded native evidence, runs mandatory hand inference, writes RGB clips, bounded Rerun RRDs/thumbnails and pose arrays, and validates outputs inline. Extraction and inference reuse the same decoded frames.
 3. **API:** confirm the known execution ended, output inventory is closed and the current job/input references still match. Atomically register immutable clips and make the result reviewable.
-4. **Our team / Data browser:** create named datasets and assign clips to one or several datasets. Open the shared Rerun clip page, inspect automatic check results, enter a task label and approve/reject; notes are optional.
+4. **Our team / review:** a completed Pipeline row opens **Review clips** → recording-filtered **All clips** → shared Rerun clip page. Inspect automatic check results, enter a task label, select optional Dataset memberships and Approve or Reject; notes are optional. Approval/assignment commits together. Datasets contain approved clips only; rejection removes every working membership.
 5. **Customer / same Data browser:** list granted datasets, open their approved clips and inspect the same viewer read-only. A live dataset grant, membership and latest approval control every new viewer URL. Unreviewed/rejected data and internal notes/QC stay private.
 6. **Follow-up only:** freeze one whole dataset and its exact approved reviews, export a complete bounded TAR, then publish an immutable Dataset version for download. No release-management page is required now.
 
@@ -56,7 +56,7 @@ Curator's bounded processing and provenance lessons remain useful. Its integrati
 
 ## UI handoff
 
-Use shadcn/ui with Tailwind CSS and Radix primitives for the Next.js console; keep the existing Flutter widget/theme approach for mobile. The [UI design](components/ui-design.md) maps components, roles and states; [clickable offline mocks](mocks/index.html) cover collection/upload, Pipeline monitoring and the shared Data browser/clip page. Staff navigation is **Pipeline** and **Data browser**; customers use **Data browser**. It lists datasets by default and a thumbnail grid when `datasetId` is present in the URL. Clips can belong to multiple datasets without copied artifacts. [Naming and browser contract](components/data-browser-and-datasets.md), [Rerun integration](components/rerun-clip-review.md). These are design artifacts, not a deployed application.
+Use shadcn/ui with Tailwind CSS and Radix primitives for the Next.js console; keep the existing Flutter widget/theme approach for mobile. The [UI design](components/ui-design.md) maps components, roles and states; [clickable offline mocks](mocks/index.html) cover collection/upload, Pipeline monitoring and the shared Data browser/clip page. Staff navigation is **Pipeline** and **Data browser**; customers use **Data browser**. It lists datasets by default and an approved thumbnail grid when `datasetId` is present in the URL. Staff also have an explicit All clips view for reviewing processed results before dataset assignment. Clips can belong to multiple datasets without copied artifacts. [Naming and browser contract](components/data-browser-and-datasets.md), [Rerun integration](components/rerun-clip-review.md). These are design artifacts, not a deployed application.
 
 ## Guards worth keeping
 

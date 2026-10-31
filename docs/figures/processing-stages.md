@@ -1,6 +1,6 @@
 # Fixed MVP processing stages
 
-Updated: 2026-10-31. Extraction, hand inference, preview and inline checks share one processing invocation. Staff and customers share the Data browser/Rerun page. Whole-dataset version export is a follow-up and rereads completed files without rerunning inference.
+Updated: 2026-10-31. Extraction, hand inference, preview and inline checks share one processing invocation. Staff enter review from completed Pipeline rows or All clips. Approval and Dataset assignment commit together; customers inspect approved Dataset members through the same Rerun page. Whole-dataset version export is a follow-up and rereads completed files without rerunning inference.
 
 ```mermaid
 flowchart TD
@@ -14,15 +14,16 @@ flowchart TD
         qc["Inline QC; complete uploads; seal result inventory"]
         extract --> hands --> preview --> qc
     end
-    review["API registers clips; Data browser groups datasets and opens shared Rerun review"]
+    review["Staff: Pipeline Review clips; All clips; shared Rerun review"]
+    datasets["Atomically approve clip and assign to datasets"]
     export["Follow-up: freeze whole dataset; Modal CPU exports bounded TAR"]
     publish["Follow-up: publish immutable Dataset version"]
     customer["Customer: inspect approved clips in shared datasets"]
     capture -->|"Direct payload upload"| source
     source -->|"Sealed file references"| dispatch
     dispatch --> process
-    process --> review --> customer
-    review -.-> export --> publish
+    process --> review --> datasets --> customer
+    datasets -.-> export --> publish
     publish -.->|"Future Download all"| customer
 ```
 

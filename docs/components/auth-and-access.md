@@ -13,18 +13,18 @@ After verified login, an operator enables the immutable user ID through a review
 | Role | Allowed |
 | --- | --- |
 | `collector` | Register/upload own recordings and inspect own upload/processing status |
-| `staff` | Inspect Pipeline status/errors, create/manage Datasets and review accepted clips; release/export/publish UI is follow-up |
+| `staff` | Inspect Pipeline, use All clips/review independently of membership, approve/assign clips and manage approved-only Datasets; export/publication UI is follow-up |
 | `customer` | Read-only granted Datasets and their currently approved clips; no raw/internal/review access |
 
 Configure one pilot project server-side. Every request checks enabled access and ownership or Dataset grant. Staff have pilot-wide access. Customers cannot enumerate ungranted Datasets or their hidden members. Operators change roles/view grants; no public role-administration/sharing UI is required. Revocation denies the next API request.
 
-Both roles use **`/clips/[clipId]`**, reached from the shared Data browser. Pipeline is the staff status/error screen. Staff may inspect accepted pilot clips. Customer working access requires an enabled role, live `dataset_access`, current Dataset membership and the clip's latest review being approved. Use that exact current approved label; never expose a draft/rejected decision or internal notes. A newer processing job does not change an older clip's identity. An inaccessible clip returns 404.
+Both roles use **`/clips/[clipId]`** from the Data browser. Staff All clips (`?view=clips`, optional `recordingId`/`reviewStatus=pending`) includes accepted pending/approved/rejected clips; Pipeline's completed-row Review clips action links there. Customers cannot use that catalog/filter route. Direct hidden-clip requests return 404. Customer access requires live `dataset_access`, current membership and the latest review approved; expose only its approved label, not notes. New processing never changes an older clip's identity.
 
-Customer lists, counts, hours and grid items include only currently approved members of granted Datasets. Resolve each response consistently, then recheck the live grant/membership/approval when issuing a viewer URL. A Dataset UUID or membership alone is not authority. Removal, withdrawal or revocation blocks access through that working Dataset; another valid Dataset may still authorize the same clip. Seed operator grants/approved clips for customer tests; no publication flow is required. [Dataset contract](data-browser-and-datasets.md)
+Dataset eligibility is identical for staff/customers: latest-review-approved members only; customer grants additionally restrict visible Datasets. Resolve counts/hours/items consistently and recheck grant/membership/approval on URL issuance. UUID/membership alone is not authority. Rejection/withdrawal removes every working membership atomically; a manual removal/grant revocation blocks that context, while another valid Dataset may still authorize the clip. No publication flow is required. [Dataset contract](data-browser-and-datasets.md)
 
 Follow-up published Dataset versions additionally require publication plus the Dataset grant. Their named label/member snapshots stay pinned when the working Dataset changes; do not replace frozen labels with a draft or silently select another context. Future publication remains staff-only.
 
-`GET /api/v1/clips/:clipId` returns role-scoped data/capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks access before signing the same customer-safe RRD for either role. `POST /api/v1/clips/:clipId/reviews` additionally requires staff, CSRF protection and `expectedRevision`. Customer payloads omit internal QC, notes and provenance; disabling forms is not authorization. [Viewer contract](rerun-clip-review.md)
+`GET /api/v1/clips/:clipId` returns scoped capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks access before signing the common safe RRD. `POST /api/v1/clips/:clipId/reviews` requires staff, CSRF and `expectedRevision`; approval/Dataset selection commits atomically. All direct Dataset-add APIs enforce approved-only eligibility under the same locks. Customer payloads omit internal QC/notes/provenance; disabling forms is not authorization. [Viewer contract](rerun-clip-review.md)
 
 ## Sessions and offline ownership
 

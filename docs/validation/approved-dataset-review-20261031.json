@@ -1,0 +1,318 @@
+{
+  "date": "2026-10-31",
+  "scope": "Synthetic offline mock only; no production Rerun/auth/DB concurrency or cloud qualification",
+  "rootResponsiveChecks": [
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/pipeline",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips&recordingId=9cb6e19f-2069-4d2b-91c6-000000001042&reviewStatus=pending",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000001",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/collector",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/pipeline",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips&recordingId=9cb6e19f-2069-4d2b-91c6-000000001042&reviewStatus=pending",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000001",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "route": "#/collector",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "route": "#/data-browser?view=clips",
+      "width": 375
+    }
+  ],
+  "rootInteractionChecks": [
+    {
+      "case": "Pipeline has no Scenario control; status filtering survives",
+      "pass": true
+    },
+    {
+      "case": "Default dataset list contains approved-only memberships",
+      "pass": true
+    },
+    {
+      "case": "Completed Pipeline example links to recording-scoped pending clips",
+      "pass": true
+    },
+    {
+      "case": "Thumbnail opens review page with task label, datasets and controls",
+      "pass": true
+    },
+    {
+      "case": "Review backlink preserves recording and pending filters",
+      "pass": true
+    },
+    {
+      "case": "Selecting datasets changes no saved membership before approval",
+      "pass": true
+    },
+    {
+      "case": "Viewer Data toggle preserves unsaved dataset choices",
+      "pass": true
+    },
+    {
+      "case": "Viewer 3D toggle preserves unsaved dataset choices",
+      "pass": true
+    },
+    {
+      "case": "Blank approval cannot partially assign or approve",
+      "pass": true
+    },
+    {
+      "case": "Stale dataset approval cannot partially assign or approve",
+      "pass": true
+    },
+    {
+      "case": "Approve and assign to multiple datasets commit together",
+      "pass": true
+    },
+    {
+      "case": "Pipeline review count updates while processing stays Completed",
+      "pass": true
+    },
+    {
+      "case": "Empty pending queue can show all recording clips",
+      "pass": true
+    },
+    {
+      "case": "Customer sees newly approved assigned clip without mutators",
+      "pass": true
+    },
+    {
+      "case": "Rejection removes every working membership and bumps revisions",
+      "pass": true
+    },
+    {
+      "case": "Reapproval without explicit selection does not restore memberships",
+      "pass": true
+    },
+    {
+      "case": "Approved but unassigned clip still denies customer access",
+      "pass": true
+    },
+    {
+      "case": "Dataset Add clips picker excludes pending and offers only approved",
+      "pass": true
+    },
+    {
+      "case": "Pending clip cannot open assignment dialog",
+      "pass": true
+    },
+    {
+      "case": "Dataset grid is approved-only for staff and customer",
+      "pass": true
+    },
+    {
+      "case": "Customer All clips URL is denied rather than broadened",
+      "pass": true
+    },
+    {
+      "case": "Other demo pages retain Scenario without affecting Pipeline",
+      "pass": true
+    }
+  ],
+  "agentReportedResponsiveChecks": 124,
+  "screenshots": [
+    {
+      "file": "mocks/screenshots/20261031-approved/pipeline-review-entry.png",
+      "actor": "staff",
+      "route": "#/pipeline",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/review-queue.png",
+      "actor": "staff",
+      "route": "#/data-browser?view=clips&recordingId=9cb6e19f-2069-4d2b-91c6-000000001042&reviewStatus=pending",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/review-example.png",
+      "actor": "staff",
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000001",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/datasets.png",
+      "actor": "staff",
+      "route": "#/data-browser",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/dataset-clips.png",
+      "actor": "staff",
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/all-clips.png",
+      "actor": "staff",
+      "route": "#/data-browser?view=clips",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/customer-dataset.png",
+      "actor": "customer",
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-approved/review-mobile.png",
+      "actor": "staff",
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000001",
+      "width": 375
+    }
+  ],
+  "rootVisuallyInspectedScreenshots": true,
+  "rootVisuallyInspectedProcessingDiagram": true,
+  "browserErrors": "",
+  "independentDesignReview": {
+    "reviewer": "render_workflow_design",
+    "criticalFindings": [],
+    "scope": "Read-only source/doc review; separate from browser checks"
+  },
+  "artifactSha256": {
+    "docs/mocks/index.html": "22eaa1fbef927d3af864d4e379445fd77b362cdc11cb5b0fbf2eb1017910b280",
+    "docs/figures/processing-stages.png": "85f27db4fa06050590c5ce5224dd4102fce80310912734e1ddb11e71c48398b0",
+    "docs/mocks/screenshots/20261031-approved/all-clips.png": "c04644775244ee3330d295b22467ca96d1034a0f7217640d4eede753e7d106f3",
+    "docs/mocks/screenshots/20261031-approved/customer-dataset.png": "c1ddc5dad5738de53b484f55bd63578ee569b2472242dae5796c44bb0e05c415",
+    "docs/mocks/screenshots/20261031-approved/dataset-clips.png": "967a32da2cbcd773add5193291fe5fdac306a3721d783be8ff452097065382ff",
+    "docs/mocks/screenshots/20261031-approved/datasets.png": "769195bf4f0bfbd130816150ffde8ed1ac002738d10641597be6149a1a1bb78b",
+    "docs/mocks/screenshots/20261031-approved/pipeline-review-entry.png": "f35eff5b878bdabec9bd1a9b784a30be0df61cbd0e6fe77b0a299a49fcf51855",
+    "docs/mocks/screenshots/20261031-approved/review-example.png": "aa7aee8d59895dcd5e078692f8adf7c262b4f8bc92f6e048b262bec43ae2dc4d",
+    "docs/mocks/screenshots/20261031-approved/review-mobile.png": "77ff82432a18759d65448796b1277e18b7fc2ddd3715678ffe2de2631b3ccb7a",
+    "docs/mocks/screenshots/20261031-approved/review-queue.png": "fb5e393d1aacb129e92022a20fe10603b0d69cac067a8a114a6550cf52245a08"
+  },
+  "documentationChecks": {
+    "markdownFiles": 17,
+    "localLinksAndAnchors": 135,
+    "diagramPairs": 2,
+    "errors": []
+  },
+  "syntaxCheck": "node --check /tmp/repair-approved-mock.js: passed"
+}

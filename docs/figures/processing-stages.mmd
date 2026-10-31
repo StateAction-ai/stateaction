@@ -9,13 +9,14 @@ flowchart TD
         qc["Inline QC; complete uploads; seal result inventory"]
         extract --> hands --> preview --> qc
     end
-    review["API registers clips; Data browser groups datasets and opens shared Rerun review"]
+    review["Staff: Pipeline Review clips; All clips; shared Rerun review"]
+    datasets["Atomically approve clip and assign to datasets"]
     export["Follow-up: freeze whole dataset; Modal CPU exports bounded TAR"]
     publish["Follow-up: publish immutable Dataset version"]
     customer["Customer: inspect approved clips in shared datasets"]
     capture -->|"Direct payload upload"| source
     source -->|"Sealed file references"| dispatch
     dispatch --> process
-    process --> review --> customer
-    review -.-> export --> publish
+    process --> review --> datasets --> customer
+    datasets -.-> export --> publish
     publish -.->|"Future Download all"| customer
