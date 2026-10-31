@@ -17,6 +17,8 @@ Updated: 2026-10-31. Target: [technical design](technical-design.md). All paths/
 
 M2 and M3 must pass without cloud GPU access. Stub models are useful for protocol tests but never substitute for real hand inference in the end-to-end acceptance run. An optional local GPU uses the same processor contract. Real external inspection is an initial acceptance gate; operators manage dataset grants through the allowlist, without a sharing UI. F1 retains the specified `export-release` task/TAR format but is not an initial deployment gate or an operator publishing workaround.
 
+M0/M1 must also close the concrete [mobile capture/upload audit findings](components/mobile-capture-and-upload-readiness.md): truthful requested/effective stream inventory, independent raw IMU times, saved-raster calibration, tracking-independent RGB, persisted write/drop evidence, conditional depth/confidence provenance, Android upload implementation and bounded iOS background retries. M5 requires their two-hour device evidence and a measured capture codec/bytes/quality decision. Existing short Pixel captures and current JPEG storage do not establish volume readiness.
+
 ## Minimum acceptance cases
 
 | Inject | Required outcome |

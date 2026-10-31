@@ -46,6 +46,8 @@ Frozen-version creation/publication and customer package download are a follow-u
 
 ## Evidence needed before real collection
 
+The subsequent [mobile capture/upload source audit](components/mobile-capture-and-upload-readiness.md) identifies concrete blockers beneath this design: unsupported Android uploads, iOS retry/background completion risks, and incomplete raw IMU timing/calibration/write-drop evidence. Close those findings and qualify the declared capture profile; registered sensor topics and configured rates do not prove the data was saved. Hardware-encoded RGB remains a measured format decision, with all required sensor evidence retained.
+
 Demonstrate hand usefulness on repair/tool/glove/occlusion footage; signed-device auth and a representative two-hour background/resumable upload; bounded processing RAM/scratch/time and clip RRD bytes; real R2 multipart retirement and known/unknown workflow/worker recovery; permission/retention decisions; database restore; actual pinned Rerun production build/browser behavior; the Pipeline recording-detail review entrypoint; atomic approve/assign and reject/remove races; and real external dataset/clip isolation. Start with the small model locally. No cloud GPU is necessary for the agreed baseline, and no paid GPU run was performed for this review.
 
 Before customer package delivery, separately implement and qualify the whole-dataset release backend, frozen approvals/live grants and complete downloaded package with every checksum verified. A working read-only mock establishes neither initial production inspection nor that later download gate.

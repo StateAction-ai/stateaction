@@ -16,6 +16,7 @@ Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical
 | [Clickable UI mocks](mocks/index.html) | Offline collector/staff/customer prototype and demo states |
 | [Backend](components/backend-architecture.md) | Next.js/Node modules and provider boundaries |
 | [Auth](components/auth-and-access.md) | Manual allowlist, three roles, account Settings/sign-out, native login and capture ownership |
+| [Mobile capture/upload audit](components/mobile-capture-and-upload-readiness.md) | Current Android/iOS blockers, required sensor evidence, JPEG/video options and volume qualification |
 | [Upload](components/mcap-upload.md) | Resumable direct multipart, required-file seal and source integrity |
 | [Storage](components/storage-and-data-model.md) | Nine active domain tables, future version table, object keys and write closure |
 | [Execution/data flow](components/pipeline-execution-and-data-flow.md) | Exact stage locations, reads/writes and handoffs |

@@ -4,6 +4,8 @@ MVP design · 2026-10-30 · Not implemented/deployed. [Contracts](../contracts.m
 
 The Flutter app uploads directly to private R2. Next.js handles bounded JSON and signs part URLs; it never forwards video bytes. One manually configured pilot project has `collector`, `staff` and `customer` access. The API resolves ownership and eligibility from the authenticated account; request metadata cannot grant access or change a capture's owner.
 
+The [mobile capture/upload audit](mobile-capture-and-upload-readiness.md) records the current implementation gaps: Android uploads are unsupported, iOS native retries/background completion need correction, and actual sensor/timestamp/calibration evidence is incomplete. The limits below are proposed settings, not measured current behavior. JPEG in MCAP is the existing source profile; hardware-encoded RGB is a qualification candidate requiring a versioned decoder/source contract.
+
 ## Phone flow
 
 1. Finish capture: stop producers, drain and close MCAP, obtain the native closed-file acknowledgment and final metadata. Early `metadata.json` is not readiness. Stream the complete file's SHA-256 with bounded buffers; compare file identity/length before and after hashing. Never upload a growing file.
