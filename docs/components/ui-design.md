@@ -34,7 +34,7 @@ The Data browser initially lists datasets with name, Clips count and Total hours
 | `/data-browser` | Dataset list; `q` searches visible dataset names |
 | `/data-browser?datasetId=…` | Dataset-scoped grid of approved members only, for staff and customers |
 | `/data-browser?view=clips` | Staff-only All clips review grid, including unreviewed and unassigned clips |
-| Grid `q`, `label`, `reviewStatus`, `recordingId` | URL-persisted title/task filters; staff All clips supports review status and a clearable recording filter |
+| Grid `q`, `label`, `reviewStatus`, `recordingId` | URL-persisted title/task filters; staff All clips supports review status and a fixed recording filter; its recording-name link returns to Pipeline details |
 | `/data-browser?recordingId=<uuid>` | Staff grid of all generated clips from that recording; optional manual review-status filter |
 | `/pipeline?status=…&q=…` | Compact Recording / Collector / Source / Status list; no Actions column or buttons |
 | `/pipeline/[recordingId]` | Recording-specific stages, source metadata, progress/errors and all applicable actions; Back retains list filters |

@@ -10,7 +10,7 @@ Updated: 2026-10-31. UI/API implementation target; [offline mock](../mocks/index
 
 Show a friendly recording title/breadcrumb, source duration/size, current job state, progress/error and a stage visualization. All actions live here: Review clips, Cancel, check cancellation, Retry, source re-upload recovery or execution reconciliation as allowed by current server capabilities. There is no separate Details/Inspect/Cancel button in list rows. Disable conflicting mutations while a request is unresolved; after any action, refresh this recording's authoritative detail rather than another row.
 
-Review clips opens `/data-browser?recordingId=<uuid>`; showing all generated clips regardless of review status. Review-status filtering is optional and user-selected; a thumbnail opens the shared Rerun clip page. Staff review and select Dataset destinations there. Approval and membership commit together; working Datasets contain approved clips only. The recording's completed-processing state is independent of how many clips still need human review.
+Review clips opens `/data-browser?recordingId=<uuid>`; showing all generated clips regardless of review status. The recording-name link returns to this recording’s Pipeline detail; no clear-filter control appears. Review-status filtering is optional and user-selected; a thumbnail opens the shared Rerun clip page. Staff review and select Dataset destinations there. Approval and membership commit together; working Datasets contain approved clips only. The recording's completed-processing state is independent of how many clips still need human review.
 
 ## Stages reflect evidence
 
