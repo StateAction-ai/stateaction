@@ -1,0 +1,250 @@
+{
+  "date": "2026-10-31",
+  "scope": "StateAction.ai offline console branding, account Settings and sign-out prototype",
+  "artifact": "docs/mocks/index.html",
+  "productionAuthenticationTested": false,
+  "rootBrowserChecks": {
+    "viewports": [
+      1440,
+      1024,
+      375
+    ],
+    "passed": 45,
+    "total": 45,
+    "checks": [
+      {
+        "name": "1440: StateAction.ai and no placeholder workspace",
+        "passed": true
+      },
+      {
+        "name": "1440: brand and account fit",
+        "passed": true
+      },
+      {
+        "name": "1440: account menu visible with Settings and Sign out",
+        "passed": true
+      },
+      {
+        "name": "1440: settings readable and no horizontal overflow",
+        "passed": true
+      },
+      {
+        "name": "1440: keyboard opens menu at Settings",
+        "passed": true
+      },
+      {
+        "name": "1440: keyboard moves to Sign out",
+        "passed": true
+      },
+      {
+        "name": "1440: Escape closes and restores focus",
+        "passed": true
+      },
+      {
+        "name": "1440: outside pointer closes menu",
+        "passed": true
+      },
+      {
+        "name": "1024: StateAction.ai and no placeholder workspace",
+        "passed": true
+      },
+      {
+        "name": "1024: brand and account fit",
+        "passed": true
+      },
+      {
+        "name": "1024: account menu visible with Settings and Sign out",
+        "passed": true
+      },
+      {
+        "name": "1024: settings readable and no horizontal overflow",
+        "passed": true
+      },
+      {
+        "name": "1024: keyboard opens menu at Settings",
+        "passed": true
+      },
+      {
+        "name": "1024: keyboard moves to Sign out",
+        "passed": true
+      },
+      {
+        "name": "1024: Escape closes and restores focus",
+        "passed": true
+      },
+      {
+        "name": "1024: outside pointer closes menu",
+        "passed": true
+      },
+      {
+        "name": "375: StateAction.ai and no placeholder workspace",
+        "passed": true
+      },
+      {
+        "name": "375: brand and account fit",
+        "passed": true
+      },
+      {
+        "name": "375: account menu visible with Settings and Sign out",
+        "passed": true
+      },
+      {
+        "name": "375: settings readable and no horizontal overflow",
+        "passed": true
+      },
+      {
+        "name": "375: keyboard opens menu at Settings",
+        "passed": true
+      },
+      {
+        "name": "375: keyboard moves to Sign out",
+        "passed": true
+      },
+      {
+        "name": "375: Escape closes and restores focus",
+        "passed": true
+      },
+      {
+        "name": "375: outside pointer closes menu",
+        "passed": true
+      },
+      {
+        "name": "blank name blocked",
+        "passed": true
+      },
+      {
+        "name": "name trimmed and identity updated",
+        "passed": true
+      },
+      {
+        "name": "profile persists across demo reload",
+        "passed": true
+      },
+      {
+        "name": "80-character name fits mobile account menu",
+        "passed": true
+      },
+      {
+        "name": "overlong name blocked even programmatically",
+        "passed": true
+      },
+      {
+        "name": "customer can edit own name but role/email read-only",
+        "passed": true
+      },
+      {
+        "name": "recording review keeps three clips and Pipeline backlink",
+        "passed": true
+      },
+      {
+        "name": "review draft and playback ready for sign-out cleanup",
+        "passed": true
+      },
+      {
+        "name": "sign-out clears playback, drafts and private screen",
+        "passed": true
+      },
+      {
+        "name": "sign-out preserves admitted jobs, saved datasets and collector ownership",
+        "passed": true
+      },
+      {
+        "name": "playback timer stops after sign-out",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/settings",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/data-browser",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/pipeline",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/pipeline/9cb6e19f-2069-4d2b-91c6-000000001042",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+        "passed": true
+      },
+      {
+        "name": "signed-out guard: #/collector",
+        "passed": true
+      },
+      {
+        "name": "demo role selector cannot bypass signed-out guard",
+        "passed": true
+      },
+      {
+        "name": "signed-out state survives reload",
+        "passed": true
+      },
+      {
+        "name": "demo sign-in returns to Data browser",
+        "passed": true
+      },
+      {
+        "name": "private unsaved review label cleared",
+        "passed": true
+      }
+    ],
+    "javascriptErrors": []
+  },
+  "screenshots": [
+    {
+      "path": "docs/mocks/screenshots/20261031-account/account-menu-desktop.png",
+      "visuallyInspectedByRoot": true
+    },
+    {
+      "path": "docs/mocks/screenshots/20261031-account/settings-desktop.png",
+      "visuallyInspectedByRoot": true
+    },
+    {
+      "path": "docs/mocks/screenshots/20261031-account/settings-mobile.png",
+      "visuallyInspectedByRoot": true
+    },
+    {
+      "path": "docs/mocks/screenshots/20261031-account/account-menu-mobile.png",
+      "visuallyInspectedByRoot": true
+    },
+    {
+      "path": "docs/mocks/screenshots/20261031-account/signed-out-mobile.png",
+      "visuallyInspectedByRoot": true
+    }
+  ],
+  "limits": [
+    "All users, datasets, jobs and clips are synthetic fixtures.",
+    "Sign-in/sign-out simulate browser state; real OAuth and server session revocation remain unimplemented.",
+    "Production must separately test own-profile validation, private page/API authorization, actual revocation and native capture ownership."
+  ],
+  "rolePersistenceFollowup": [
+    {
+      "name": "customer demo role survives refresh",
+      "passed": true
+    },
+    {
+      "name": "customer refresh remains signed out",
+      "passed": true
+    },
+    {
+      "name": "customer demo sign-in retains customer access",
+      "passed": true
+    }
+  ],
+  "agentReportedChecks": {
+    "roleViewportFlows": 6,
+    "signedOutRouteGuards": 36,
+    "viewports": [
+      1440,
+      1024,
+      375
+    ],
+    "javascriptErrors": [],
+    "note": "Independent agent report; separate from root browser evidence."
+  }
+}

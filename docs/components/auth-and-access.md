@@ -28,6 +28,16 @@ Follow-up published Dataset versions additionally require publication plus the D
 
 `GET /api/v1/clips/:clipId` returns scoped capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks access before signing the common safe RRD. `POST /api/v1/clips/:clipId/reviews` requires staff, CSRF and `expectedRevision`; approval/Dataset selection commits atomically. All direct Dataset-add APIs enforce approved-only eligibility under the same locks. Customer payloads omit internal QC/notes/provenance; disabling forms is not authorization. [Viewer contract](rerun-clip-review.md)
 
+## Account menu and Settings
+
+StateAction.ai provides an account menu at desktop and phone widths, with **Settings** and **Sign out**. `/settings` requires a valid session for either staff or customer. Show the user's email and permitted role read-only; allow only their display name to be edited (trimmed, nonblank, maximum 80 characters). Display-name changes never change identity, capture ownership, roles or Dataset grants. No project/workspace selector, organization/billing page or additional user administration is required for the MVP.
+
+Use Better Auth's existing `authClient.updateUser({name})` and server-side validation; retain the authenticated immutable user ID and refresh the displayed profile only after success. Keep role/grant fields outside client-writable identity attributes. This reuses the existing auth tables and `/api/auth/*` surface. [Official profile update](https://better-auth.com/docs/concepts/users-accounts)
+
+Use `authClient.signOut()` to end the current console session. Stop the viewer and polling, close transient menus and clear private browser queries/drafts. On confirmed server success, replace navigation with `/login` and refresh session-dependent UI; Back or a pasted private URL must still pass server/session checks. If revocation fails, show a retryable error rather than claim the session ended. Signing out never cancels admitted cloud jobs or deletes recordings, upload journals or approved Dataset contents. Native collector logout continues to follow the owner-bound rules below. [Official sign-out](https://better-auth.com/docs/basic-usage#signout)
+
+The offline mock simulates these controls and a labeled Google sign-in button. It performs no real OAuth or server revocation. Production acceptance must prove actual session invalidation, protected-page/API denial, profile validation and correct identity after signing in again.
+
 ## Sessions and offline ownership
 
 Use host-only `HttpOnly; Secure; SameSite=Lax` browser cookies under one HTTPS origin. Native cookies live in platform secure storage. Save every `Set-Cookie` separately and propagate rotation from server auth calls. Disable cookie-only session caching for authoritative revocation. Keep a seven-day session/one-day refresh starting policy; sensitive publication requires a fresh session. [Session management](https://better-auth.com/docs/concepts/session-management)

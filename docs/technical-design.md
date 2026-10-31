@@ -1,4 +1,4 @@
-# Repair-data platform: technical design
+# StateAction.ai: technical design
 
 Updated: 2026-10-31. **Selected MVP design; implementation and deployment pending.** This revision keeps Render Workflows for local/cloud parity and simplifies the earlier Curator design. Automatic hand pose and both staff/customer review remain required. Dataset publication/download is follow-up work; no release page is in the initial UI.
 
@@ -12,7 +12,7 @@ The agreed pilot output does not promise validated metric camera/world trajector
 
 | Component | MVP choice |
 | --- | --- |
-| App/UI/API/login | One Next.js / Node.js 24 / TypeScript service on Render; Better Auth with Google sign-in |
+| App/UI/API/login | One Next.js / Node.js 24 / TypeScript service on Render; Better Auth with Google sign-in, account Settings and sign-out |
 | Access | One pilot project; operator-managed collector, staff and customer allowlist |
 | Catalog and queue | Render Postgres; nine active domain tables plus Better Auth tables; future dataset versions add `releases` |
 | Workflow | Render Workflows; the same Node task definition runs under its official local runner and in the cloud; add the export task in the follow-up |

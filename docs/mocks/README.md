@@ -1,8 +1,16 @@
-# Clickable MVP interface mock
+# StateAction.ai interface mock
 
 Open [index.html](index.html) directly in a browser, or run `python3 -m http.server 8765` from this folder and open `http://localhost:8765`. It works offline without installs, CDN or service calls.
 
-**DEMO / synthetic only.** View as simulates staff/customer access; it is not authentication. Refresh resets in-memory edits. The Rerun-looking HTML/SVG stand-in does not load real Rerun, RRDs, private media or inference. No release/export/download function is active. [UI/component decision](../components/ui-design.md).
+**DEMO / synthetic only.** View as simulates staff/customer access; it is not authentication. Refresh resets in-memory dataset/review fixture edits; the tab retains the demo login marker, selected demo actor and saved display name. The Rerun-looking HTML/SVG stand-in does not load real Rerun, RRDs, private media or inference. No release/export/download function is active. [UI/component decision](../components/ui-design.md).
+
+## Account menu and Settings
+
+The console header has one account menu at every width: **Settings** and **Sign out**. Arrow keys/Home/End navigate, Escape restores trigger focus, and outside click closes it. `#/settings` edits only display name (1–80 nonblank characters), with email/current role read-only. Saving updates the console name and avatar initials. Sam R. remains the separate mobile collector fixture.
+
+Sign out stops local player/upload timers, clears unsaved web drafts and view/filter caches, and opens `#/login`. Pasted private routes stay gated and View as is disabled. The demo signed-out marker survives refresh. **Continue with Google · demo** performs no OAuth/network call and returns to Data browser in the same demo role. Existing job/dataset fixture records and collector ownership/progress are retained.
+
+Focused agent checks passed staff/customer account flows at **1440, 1024 and 375 px**, including 36 signed-out route checks, keyboard/outside-click behavior, display-name/initials updates, read-only fields, refresh/login guards, timer/draft cleanup and the recording → three clips → Pipeline round trip. Root independently passed 45 account checks and three role-persistence follow-ups, and inspected the five final screenshots below. JavaScript errors were empty. [Account receipt](../validation/account-settings-20261031.json). These checks exercise the synthetic mock; production OAuth and server revocation remain unimplemented.
 
 ## Names and navigation
 
@@ -21,6 +29,8 @@ Sidebar: **Pipeline** (staff only), **Data browser** (both actors), and **Collec
 | `#/pipeline/<recordingUuid>` | Staff-only recording detail with all actions, source/status/error information and conceptual processing stages; Back retains filters |
 | `#/clips/<uuid>` | One shared Rerun-style clip page; role-specific review/read-only controls |
 | `#/collector` | Capture, offline ownership, upload and recovery scenarios |
+| `#/settings` | Display name, read-only email/current role; no role administration |
+| `#/login` | Signed-out gate and explicit demo Google sign-in |
 
 Seeded dataset IDs (technical test references; not shown in the page):
 
@@ -56,6 +66,10 @@ Stages are conceptual milestones: Upload → Queued → Processing → Quality c
 Focused checks passed all six details at **375, 768, 1024 and 1440 px** (24 detail/viewport cases), including visible action controls, list row/keyboard navigation, filter-preserving Back, cancellation/terminal/retry ordering, unknown execution without Retry, source re-upload, recording review queue, not found and customer denial. No page overflow or JavaScript errors were found. Root independently checked 56 recording/list/viewport combinations, 16 navigation/action cases and seven recording-filter follow-up cases. Review clips now uses only `recordingId`, showing all three generated clips; review status can be filtered manually. [Current receipt](../validation/pipeline-recording-details-20261031.json). Older receipts predate this layout.
 
 ## Current screenshots and verification
+
+Latest StateAction.ai account previews: [desktop menu](screenshots/20261031-account/account-menu-desktop.png), [Settings at 1024 px](screenshots/20261031-account/settings-desktop.png), [phone Settings](screenshots/20261031-account/settings-mobile.png), [phone menu](screenshots/20261031-account/account-menu-mobile.png) and [signed-out page](screenshots/20261031-account/signed-out-mobile.png). All five were visually inspected by root.
+
+The earlier Pipeline previews below retain the previous branding and still illustrate the recording layouts/navigation.
 
 [Compact list at 1024 px](screenshots/20261031-pipeline/pipeline-list-1024.png), [phone list](screenshots/20261031-pipeline/pipeline-list-mobile.png), [processing detail](screenshots/20261031-pipeline/recording-processing.png), [completed detail / Review clips](screenshots/20261031-pipeline/recording-completed.png), [error/recovery detail](screenshots/20261031-pipeline/recording-error.png), [phone detail](screenshots/20261031-pipeline/recording-mobile.png) and [recording clips with Pipeline backlink](screenshots/20261031-pipeline/recording-review-backlink.png) and [phone recording review](screenshots/20261031-pipeline/recording-review-mobile.png).
 

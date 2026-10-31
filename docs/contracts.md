@@ -16,7 +16,7 @@ Creation uses a persistent client ID or `Idempotency-Key`, scoped to actor/opera
 
 | Principal | Routes / operation |
 | --- | --- |
-| Human | `/api/auth/*`, `/api/v1/me`; Better Auth identity plus enabled pilot role |
+| Human | `/api/auth/*`, `/api/v1/me`; Better Auth identity plus enabled pilot role; existing auth-library profile-update and sign-out operations support Settings/account menu |
 | Collector | `/api/v1/recordings` and `/api/v1/uploads`; exact resumable source protocol in [upload](components/mcap-upload.md#http-surface) |
 | Staff | `GET /api/v1/internal/recordings?status=...`; compact Pipeline list. `GET /api/v1/internal/recordings/:recordingId`; per-recording job/stage/progress/error/capabilities detail |
 | Staff/customer | `GET /api/v1/datasets` and `GET /api/v1/datasets/:datasetId/clips`; bounded authorized dataset list or thumbnail grid, with URL-backed filters |
@@ -48,6 +48,8 @@ Processing manifests assign immutable clip UUIDs, stable ordinals, source bounds
 Each automatic check has `code`, `status` (`pass|warn|fail|measured|not_evaluated`), concise `message` and bounded optional measurements/rule revision. Required codes cover source checksum, decode, frame mapping, landmark shape/finite masks and detection coverage/missing frames. Coverage includes observed/total frame counts and denominator semantics; percentages alone are measured, not proof of anatomical accuracy. Blocking integrity/decode failure rejects the result. Quiet viewer semantics label model-relative 3D; no reviewer acknowledgement checkbox is required.
 
 The [Pipeline detail contract](components/pipeline-monitoring.md) owns the stage display: Upload, Queued, Processing, Quality checks and Ready for review. Return bounded latest stage evidence, review counts, exact current job reference and server capabilities. Worker heartbeat/result summaries may report phase and processed/total counts; absent telemetry remains unknown rather than fabricated. Hashing, decoding, inference and asset writing still share the same streaming invocation; source verification completes at EOF. These labels add no workflow tasks or tables. Mutations target the exact job/lifecycle and fail on a stale current-job reference.
+
+Account Settings at `/settings` is session-protected. Display-name updates use the existing Better Auth user-update operation, allow only the validated own name (1–80 trimmed characters), and cannot change role, email, owner ID or Dataset grants. Sign-out uses the existing library session endpoint; only confirmed revocation yields a signed-out success. No parallel identity/profile service or domain table is added. [Account contract](components/auth-and-access.md#account-menu-and-settings)
 
 ## Task and result handoff
 

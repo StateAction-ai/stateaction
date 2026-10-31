@@ -2,6 +2,8 @@
 
 Design target · 2026-10-31 · [Offline prototype](../mocks/index.html), [routes and scenarios](../mocks/README.md). Synthetic data only; no production application or real Rerun runtime is installed by this mock. Pipeline list/detail have no Scenario selector. The list has search/status filtering; recording actions live only on the detail page. Scenario selectors elsewhere are demo-only.
 
+Product branding is **StateAction.ai** in the console and mobile mock. Omit the placeholder project/workspace selector and “Repair pilot” breadcrumb; one pilot project remains a server-side scope, not MVP navigation.
+
 ## Components
 
 Use **shadcn/ui + Tailwind CSS, with Radix primitives**, around the web application. Copy only required components into `apps/web`; pin their versions and explicitly select Radix. These libraries use MIT licenses; retain required notices. This does not cover arbitrary third-party registry blocks, fonts or assets. Use system fonts and owned assets initially. [shadcn docs](https://ui.shadcn.com/docs), [shadcn license](https://github.com/shadcn-ui/ui/blob/main/LICENSE.md), [Radix license](https://github.com/radix-ui/primitives/blob/main/LICENSE), [Tailwind license](https://github.com/tailwindlabs/tailwindcss/blob/main/LICENSE).
@@ -20,6 +22,16 @@ Flutter keeps its existing native widgets/theme. Share terminology and status se
 | Clip inspection | One Rerun embed: RGB, 21 landmarks and timeline; optional data/estimated-3D panes |
 | Staff clip review | Task-label Input, optional notes, optional dataset checklist, direct Approve/Reject |
 | Automatic QC | Staff-only neutral worker-results list; integrity, decode, mapping, arrays and coverage |
+
+## Account and Settings
+
+One account menu in the console header works on desktop and mobile; it replaces the static sidebar identity. It opens **Settings** or **Sign out**. Keyboard arrows/Home/End move through its items, Escape closes and returns focus, and outside clicks close it without stealing the destination focus. Use shadcn/Radix Dropdown Menu in production.
+
+`/settings` contains only an editable display name (trimmed, 1–80 characters), read-only email and current role. Saving updates the console name/avatar initials. Profile changes cannot grant roles; omit organization, billing, password and deletion controls. The collector mock remains Sam R., with its original owner-bound journals, independently of the console's Alex Kim profile.
+
+Sign out stops local playback/upload timers, removes unsaved web annotation/dataset-selection drafts and filter/view caches, closes dialogs and replaces private content with `/login`. It does not cancel cloud jobs, remove dataset memberships or delete collector files/receipts. All private routes, including Settings, are gated while signed out; the DEMO actor selector cannot restore access. The login page says **Sign in to StateAction.ai** and offers an explicitly simulated Google sign-in returning to Data browser.
+
+The offline mock uses tab session storage only for its demo signed-in/out marker, selected demo actor and saved display name; no provider credential is stored or real authentication performed. Refresh retains the signed-out guard. Production session verification/revocation belongs to the [auth contract](auth-and-access.md).
 
 ## Names and navigation
 
