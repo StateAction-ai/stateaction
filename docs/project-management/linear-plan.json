@@ -1,0 +1,1256 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-10-31",
+  "sourceBaselineCommit": "5955d66",
+  "workspaceSlug": "hw-personal-projects",
+  "teamKey": "SA",
+  "project": {
+    "name": "StateAction.ai · Collection & review MVP",
+    "summary": "Reliable mobile MCAP upload, cloud CPU hand processing, internal clip review and authorized customer dataset inspection.",
+    "statusIntent": "Backlog",
+    "lead": "4071afea-cebb-4849-b272-759a758368f3",
+    "targetDate": null,
+    "outcome": "A repair worker can reliably upload a two-hour recording; our team reviews automatic 21-point hand clips and assigns approved data to datasets; authorized robotics customers inspect the same real viewer.",
+    "inScope": [
+      "Flutter mobile app and recorder/SDK in one monorepo",
+      "Node.js/TypeScript Next.js API/auth/UI and Render workflow controllers",
+      "Better Auth Google login, minimal account Settings and sign-out",
+      "Direct resumable MCAP multipart upload to private R2",
+      "Official Render local runner and the same local/Modal CPU processing core",
+      "Mandatory 21 image hand landmarks with explicitly model-relative 3D estimates",
+      "Staff Pipeline recording details and recording-filtered clip review",
+      "Atomic approval/assignment, approved-only many-to-many datasets and manual customer grants",
+      "Real shared Rerun viewer and customer read-only inspection",
+      "Bounded cloud CPU canary, failure recovery, resource/cost measurements and field pilot qualification"
+    ],
+    "outOfScope": [
+      "Frozen dataset versions, publication, archive export and customer Download all (F1 follow-up)",
+      "Cloud GPU, WiLoR/MANO/FLORA production models or automatic GPU upgrades",
+      "Cosmos Curator, Ray, Lance, semantic captions/search/deduplication",
+      "Generic DAG/outbox/extra workflow engine, independent validator or second API",
+      "Organization/invitation/billing/admin/sharing interfaces",
+      "Per-joint correction, validated metric trajectories, robot actions or demonstrated training benefit"
+    ],
+    "successEvidence": [
+      "Clean-clone builds and real official-runner local E2E",
+      "Real Google/session/device ownership and interrupted multipart recovery",
+      "Mandatory CPU hand inference, native frame mapping, reader/checksum round trip and safe real RRD",
+      "Atomic approval/membership race proofs and actual cross-customer isolation",
+      "Real provider recovery/closure/cancellation and isolated restore drill",
+      "Measured representative two-hour resource/time/byte/cost receipt plus repair-footage usefulness pass",
+      "Accountable internal/customer UAT and explicit pilot go/no-go"
+    ]
+  },
+  "management": {
+    "ticketStateIntent": "Backlog until triaged; only dependency-free work may be promoted to Todo after owner/capacity review.",
+    "assignmentPolicy": "Do not guess individual assignees. ownerRole states the required discipline; assign one accountable person before starting.",
+    "datePolicy": "Milestone order and dependency edges are commitments to sequence, not invented calendar deadlines. Add target dates only after capacity/estimates are confirmed.",
+    "sizePolicy": "S/M are relative planning sizes, not elapsed-time promises or native Linear points; calibrate to the team estimate scale before sprint commitment. Split a ticket if it no longer has one reviewable outcome.",
+    "priorityPolicy": "1=High for early feasibility, current foundations, integrity/recovery or launch gates; 2=Normal for other required MVP work. Required scope alone does not make an issue High. No artificial Urgent tickets.",
+    "workflow": "Backlog -> Todo -> In Progress -> In Review -> Done, mapped to existing team statuses; blocked work records native dependencies rather than a fabricated progress state.",
+    "definitionOfReady": [
+      "One accountable assignee, understood dependencies and sufficient input fixtures/access.",
+      "Acceptance criteria and evidence method reviewed; open technical/product decisions have a named resolver.",
+      "No unresolved source-migration conflict or unapproved paid activation."
+    ],
+    "definitionOfDone": [
+      "Acceptance criteria demonstrated with linked meaningful test/measurement evidence.",
+      "Code/config reviewed; contract/permission/failure cases relevant to the change pass.",
+      "Docs/runbooks and source/model/config provenance updated; no secret or raw private payload leakage.",
+      "Completion is implementation evidence, never a design document or synthetic mock alone."
+    ],
+    "cadence": "Triage weekly and before committing work. Review milestone exits against evidence; publish a concise weekly project update with outcomes, next work, blockers/owners and measured cost/quality risks.",
+    "followUp": "F1 whole-dataset release/export/download stays in the charter as a separate future increment and does not inflate this MVP project completion.",
+    "dependencyPolicy": "Native blocked-by edges represent immediate prerequisites; omit redundant transitive edges. Milestones describe exit gates, not barriers that prevent early feasibility work in parallel."
+  },
+  "milestones": [
+    {
+      "key": "M0",
+      "name": "M0 · Reproducible foundations",
+      "exitGate": "A clean clone builds the mobile, web, jobs and Python packages; versioned contracts, database constraints and the official Render local runner are reproducible. No production services are assumed.",
+      "targetDate": null
+    },
+    {
+      "key": "M1",
+      "name": "M1 · Authenticated, resumable collection",
+      "exitGate": "Real console/mobile identities and owner-bound journals work. Closed MCAP and required sidecars upload directly through the sealed multipart protocol; interruption and account changes preserve ownership and bytes.",
+      "targetDate": null
+    },
+    {
+      "key": "M2",
+      "name": "M2 · Local CPU processing",
+      "exitGate": "A short real recording passes the official local workflow into mandatory hand inference, bounded immutable outputs and a safe RRD. Fault cases and representative long-input memory/scratch/runtime limits are demonstrated.",
+      "targetDate": null
+    },
+    {
+      "key": "M3",
+      "name": "M3 · Internal review and customer inspection",
+      "exitGate": "Pipeline recording details lead to all generated clips. Staff approve/assign atomically; datasets contain approved clips only. Authorized customers use the same real viewer without internal data or mutation access.",
+      "targetDate": null
+    },
+    {
+      "key": "M4",
+      "name": "M4 · Bounded cloud CPU canary",
+      "exitGate": "The same contracts run on Render, R2 and Modal CPU. Real provider failure recovery, direct transfers, measured cost/resource limits, monitoring and an isolated database restore pass.",
+      "targetDate": null
+    },
+    {
+      "key": "M5",
+      "name": "M5 · Collection pilot ready",
+      "exitGate": "A signed physical-device two-hour capture/upload/process/review flow meets documented limits and repair-footage usefulness criteria. Internal and customer UAT, permission/retention decisions and rollout/rollback evidence are recorded.",
+      "targetDate": null
+    }
+  ],
+  "issues": [
+    {
+      "key": "M0-01",
+      "milestone": "M0",
+      "title": "Migrate the mobile recorder and SDK into the monorepo safely",
+      "area": "mobile",
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [],
+      "goal": "Make the full product reproducible from one repository without disrupting the active recording fixes.",
+      "scope": "Coordinate a source-revision handoff; import Flutter, native plugin and SDK into the agreed target paths while preserving package boundaries.",
+      "acceptanceCriteria": [
+        "Record the recording-fix handoff revision and preserve its changes; do not move an actively changing checkout without coordination.",
+        "A clean clone contains apps/mobile, packages/stera_recorder and packages/stera-sdk without required submodules.",
+        "Existing meaningful native/Flutter capture and SDK regression checks pass; licenses, fixtures and build instructions remain available."
+      ],
+      "validation": "Attach source revisions, migration diff and clean-clone/mobile/native build results.",
+      "references": [
+        "docs/components/monorepo.md",
+        "docs/geometry-v3-capture-regression.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M0-02",
+      "milestone": "M0",
+      "title": "Scaffold the TypeScript and Python packages with repeatable CI",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [],
+      "goal": "Provide the smallest buildable Node.js/TypeScript and Python application skeleton.",
+      "scope": "Create apps/web, apps/jobs, packages/server, packages/contracts and workers/processing; pin Node 24, pnpm, Python/uv and lockfiles.",
+      "acceptanceCriteria": [
+        "Web, controller and Python packages have independent build/typecheck entrypoints and reviewed runtime pins.",
+        "CI validates relevant changed packages and existing mobile checks without invoking paid providers.",
+        "Server/provider dependencies and secrets cannot enter browser or mobile bundles; private local files are ignored."
+      ],
+      "validation": "Clean-install/build/typecheck logs and a passing CI run; no cloud resources required.",
+      "references": [
+        "docs/components/monorepo.md",
+        "docs/components/backend-architecture.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M0-03",
+      "milestone": "M0",
+      "title": "Publish versioned API, task and artifact contracts",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M0-02"
+      ],
+      "goal": "Keep phone, API, controller and processing-worker boundaries consistent.",
+      "scope": "Implement shared JSON schemas, public types and cross-language golden fixtures for upload, job control, manifests, frame maps and hand arrays.",
+      "acceptanceCriteria": [
+        "Opaque auth IDs, UUID entity IDs, decimal-string byte sizes and integer timestamp/clock semantics match the design.",
+        "Schemas bound payload/file counts and reject changed request digests, unsupported versions and malformed pose/mask dimensions.",
+        "Node, Dart and Python load the same positive/negative fixtures; fixtures explicitly distinguish model-relative 3D from validated metric coordinates."
+      ],
+      "validation": "Cross-language contract fixture results, versioning policy and compatibility examples.",
+      "references": [
+        "docs/contracts.md",
+        "docs/components/cloud-processing.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M0-04",
+      "milestone": "M0",
+      "title": "Create the catalog migrations and integrity constraints",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M0-03"
+      ],
+      "goal": "Make ownership, immutable clips and approved-only datasets enforceable in the data model.",
+      "scope": "Create nine active domain tables plus Better Auth tables, indexes and additive migrations; keep the future releases table out of the MVP.",
+      "acceptanceCriteria": [
+        "Owner/client identities, unique logical files/jobs and immutable clip input/artifact references are represented with constraints and indexes.",
+        "Reviews carry revisions; dataset membership/grants support many-to-many approved-only operations under the documented lock order.",
+        "Local seed includes collector/staff/customer identities plus pending, rejected, approved, shared and private examples; concurrent write fixtures exercise integrity."
+      ],
+      "validation": "Migration-up results on an empty database, constraint/concurrency fixtures and query plans for bounded catalog reads.",
+      "references": [
+        "docs/components/storage-and-data-model.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M0-05",
+      "milestone": "M0",
+      "title": "Run the official Render workflow runtime locally",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M0-04"
+      ],
+      "goal": "Use the same task definition and provider contracts before paying for cloud execution.",
+      "scope": "Add local Postgres/MinIO configuration, development origins and the official Render local task server with a contract-fixture task.",
+      "acceptanceCriteria": [
+        "Documented clean-clone commands register and trigger the task on the official runner at port 8120.",
+        "The runner/connectivity fixture respects API-only database/storage boundaries and shared request schemas; working reserve/sign/complete APIs are delivered by M1-06/07 and exercised by M2-09.",
+        "Phone-reachable MinIO URLs are signed for the correct origin; local/prod endpoints and secrets cannot be mixed."
+      ],
+      "validation": "Reproducible setup transcript, task registration/run evidence and a physical-device endpoint smoke check.",
+      "references": [
+        "docs/components/local-development.md",
+        "docs/components/render-deployment.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-01",
+      "milestone": "M1",
+      "title": "Implement Google sign-in and server-enforced pilot access",
+      "area": "auth",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M0-04"
+      ],
+      "goal": "Authenticate users and enforce collector, staff and customer access on every protected operation.",
+      "scope": "Use one Better Auth Next.js instance, operator-managed allowlist/permission evidence and explicit human/service credential boundaries.",
+      "acceptanceCriteria": [
+        "Google sign-in, access-pending, disabled access and session expiry behave correctly; roles never come from client fields.",
+        "Private pages/APIs bypass shared caches; origin/CSRF checks, cookie rotation and server revocation are exercised.",
+        "Scoped workflow, cron and worker identities cannot use human endpoints, another job or broad database/storage credentials."
+      ],
+      "validation": "Real OAuth/session tests plus an allow/deny matrix for human and service principals.",
+      "references": [
+        "docs/components/auth-and-access.md",
+        "docs/components/backend-architecture.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-02",
+      "milestone": "M1",
+      "title": "Build the StateAction.ai account menu and Settings",
+      "area": "web",
+      "ownerRole": "Frontend engineer",
+      "size": "S",
+      "priority": 2,
+      "dependsOn": [
+        "M1-01"
+      ],
+      "goal": "Provide the agreed minimal console identity controls at desktop and phone widths.",
+      "scope": "Use shadcn/ui with Tailwind/Radix for the responsive shell, account menu, Settings and sign-out.",
+      "acceptanceCriteria": [
+        "StateAction.ai branding and role-specific navigation match the mock; no placeholder project selector or Review/Releases sidebar entries.",
+        "Only the own trimmed display name of 1–80 characters is editable; email and role remain read-only and avatar/name refresh after server success.",
+        "Confirmed sign-out clears private queries/drafts and stops playback/polling; failed revocation is retryable, and Back/direct URLs remain protected.",
+        "Keyboard/outside-click menu behavior, focus and narrow-screen layout pass; cloud jobs and collector captures are preserved."
+      ],
+      "validation": "Production component/browser checks and real Better Auth update/revocation evidence, not only the offline mock.",
+      "references": [
+        "docs/components/ui-design.md",
+        "docs/components/auth-and-access.md",
+        "docs/mocks/README.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-03",
+      "milestone": "M1",
+      "title": "Integrate mobile login and immutable capture ownership",
+      "area": "mobile",
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M0-01",
+        "M1-01"
+      ],
+      "goal": "Let authorized collectors work offline without allowing another account to adopt their captures.",
+      "scope": "Integrate signed-build Google authentication, secure cookie storage/rotation and owner-bound capture/upload journals.",
+      "acceptanceCriteria": [
+        "Capture records the verified immutable owner when it starts; previously authorized offline capture remains possible.",
+        "Expiry/logout pauses networking while retaining captures and receipts; another account cannot browse, resume or adopt them.",
+        "Same-owner reauthentication resumes safely; legacy ownerless captures require explicit recovery and offline logout reports unconfirmed revocation."
+      ],
+      "validation": "Real-device Google login/expiry/account-switch tests with retained local journals and rotated cookies.",
+      "references": [
+        "docs/components/auth-and-access.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-04",
+      "milestone": "M1",
+      "title": "Finalize and hash closed source files before upload",
+      "area": "mobile",
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-03"
+      ],
+      "goal": "Never admit an incomplete, growing or silently changed MCAP as a completed source.",
+      "scope": "Connect native close acknowledgment, final metadata/required sidecars and bounded streaming SHA-256 to the durable journal.",
+      "acceptanceCriteria": [
+        "Stop/drain/close acknowledgment precedes upload readiness; interrupted/unclosed captures remain recoverable and blocked.",
+        "File size/identity before and after hashing is stable; changed content conflicts rather than reusing the sealed identity.",
+        "MCAP, final recorder metadata and referenced required calibration sidecars are inventoried; two-hour/100 GiB transport caps are explicit."
+      ],
+      "validation": "Native/Flutter tests for close races, crash recovery, source mutation, required sidecars and bounded hashing buffers.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/geometry-v3-capture-regression.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-05",
+      "milestone": "M1",
+      "title": "Register recordings and seal the required-file inventory",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-01"
+      ],
+      "goal": "Create exactly one eligible processing job after all required inputs are complete.",
+      "scope": "Implement recording/file registration, scoped idempotency, immutable inventory seal and the common upload-eligibility transaction.",
+      "acceptanceCriteria": [
+        "Identical owner-scoped client IDs/digests replay safely; changed identities/content return conflict.",
+        "Seal and final-file completion may arrive in either order; concurrent calls create one queued job only after every required input is uploaded.",
+        "Missing/revoked collection/processing permission blocks admission; DB failures leave recoverable state and no untracked upload."
+      ],
+      "validation": "Database race/failure fixtures for seal, missing sidecars, final completion and duplicate registration.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-06",
+      "milestone": "M1",
+      "title": "Implement shared multipart reservation, signing and receipts",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-05"
+      ],
+      "goal": "Transfer large sources and worker outputs directly without proxying video through Next.js.",
+      "scope": "Build the common source/output transport service with server-selected keys, 64 MiB part plans, bounded signing and journaled ETags.",
+      "acceptanceCriteria": [
+        "Reserve a file/key before provider initialization; provider IDs are persisted before any URLs are returned.",
+        "Part numbers, offsets, lengths, roles, count/byte caps and expected transport epoch are server-validated; even small outputs use multipart.",
+        "Phone/worker credentials cannot choose arbitrary keys or obtain broad write access; exact receipts are idempotent and bounded."
+      ],
+      "validation": "MinIO transport/authorization tests, bounded request fixtures and proof the API handles JSON rather than video bytes.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/components/storage-and-data-model.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-07",
+      "milestone": "M1",
+      "title": "Reconcile uncertain multipart completion and transport restart",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M1-06"
+      ],
+      "goal": "Recover lost responses and expired unfinished transfers without duplicate objects or reopened files.",
+      "scope": "Implement fully paginated provider reconciliation, exact completion/HEAD checks, cancellation and transport-epoch restart.",
+      "acceptanceCriteria": [
+        "Verify the frozen complete part set, lengths and ETags across more than 1,000 parts; ETags never substitute for SHA-256.",
+        "Lost create/complete responses or DB writes are reconciled for the exact key/MPU; ambiguous state blocks blind retry.",
+        "Only a proven retired unfinished transport can advance epoch/key; stale requests fail and completed/sealed objects cannot reopen.",
+        "Seven-day restart retains logical file/hash/owner but discards old receipts and discloses full retransmission."
+      ],
+      "validation": "Fault fixtures for provider success/DB failure, completion-in-flight races, stale epochs, pagination and cancellation.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-08",
+      "milestone": "M1",
+      "title": "Implement the owner-bound Flutter resumable uploader",
+      "area": "mobile",
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-04",
+        "M1-07"
+      ],
+      "goal": "Resume direct uploads from durable receipts after app or network interruption.",
+      "scope": "Upload one source with at most two concurrent PUTs; use bounded chunk files and the shared reconcile/sign/complete protocol.",
+      "acceptanceCriteria": [
+        "App kill/backgrounding/network loss preserves IDs, parts and source ownership; provider reconciliation resumes missing bytes only.",
+        "Session expiry, part URL expiry and expired MPU are distinct: same-owner login, missing URL renewal or explicit full restart respectively.",
+        "At most two active 64 MiB chunks plus one reserve exist; no whole-source duplicate or proxy upload is introduced."
+      ],
+      "validation": "Flutter transport fault tests and a physical-device interrupted multipart upload with byte/receipt evidence.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/components/auth-and-access.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M1-09",
+      "milestone": "M1",
+      "title": "Complete collector recovery states and verified local cleanup",
+      "area": "mobile",
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-08"
+      ],
+      "goal": "Make collection recoverable without deleting valuable source data.",
+      "scope": "Implement the agreed Flutter status/error/recovery screens and explicit cleanup of a verified device original.",
+      "acceptanceCriteria": [
+        "Camera denial, low disk, interrupted capture, finalizing, upload/auth/URL/transport expiry and wrong-owner states have actionable recovery.",
+        "Uploaded, source verified, processing complete and human approved remain distinct; no invented success state.",
+        "Only the original owner may explicitly confirm local deletion after source hash verification and staff-confirmed cloud copy; pending/failed originals are never auto-purged."
+      ],
+      "validation": "Real-device scenario checklist with retained journals/files and an explicit verified-copy deletion test.",
+      "references": [
+        "docs/components/ui-design.md",
+        "docs/components/mcap-upload.md",
+        "docs/mocks/README.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-00",
+      "milestone": "M2",
+      "title": "Prove CPU hand overlays and real Rerun playback early",
+      "area": "robotics",
+      "ownerRole": "Robotics engineer",
+      "size": "S",
+      "priority": 1,
+      "dependsOn": [
+        "M0-02"
+      ],
+      "goal": "Reduce the main model/viewer risk before building the full pipeline.",
+      "scope": "Run a short representative repair MCAP through the pinned MediaPipe asset and matching Rerun SDK/viewer in an isolated local probe.",
+      "acceptanceCriteria": [
+        "Record exact model hash/license/card and environment; use real inference rather than a stub.",
+        "Inspect image-space alignment, missing-hand clearing and explicitly labelled model-relative 3D on tool/occlusion/glove examples.",
+        "A real bounded RRD loads in the proposed browser viewer; record bytes, startup/memory and limitations, and define the pilot hand-usefulness rubric/thresholds for staff agreement.",
+        "Failed usefulness or viewer qualification is reported as a blocking finding; do not substitute RGB-only or silently upgrade to a restricted GPU model."
+      ],
+      "validation": "Short real-input receipt, browser evidence, pinned assets/notices and an explicit quality decision/rubric.",
+      "references": [
+        "docs/components/cloud-processing.md",
+        "docs/components/rerun-clip-review.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-01",
+      "milestone": "M2",
+      "title": "Implement durable job admission and worker claims",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M1-05"
+      ],
+      "goal": "Admit one intentional execution and reject duplicates before expensive media work.",
+      "scope": "Implement jobs state, permanent input identity/deadlines, serialized global admission, controller leases and worker-scoped capabilities.",
+      "acceptanceCriteria": [
+        "Persist dispatch/submission intent before external effects; queued jobs hold no idle controller and at most one processing execution is admitted.",
+        "Fresh physical worker nonce and actual execution ID claim before reading media; duplicate physical executions exit without work.",
+        "Stale/cancelled jobs, wrong capabilities and expired absolute deadlines cannot mutate current results or obtain output writes."
+      ],
+      "validation": "Database concurrency/state-machine fixtures and duplicate/stale claim tests.",
+      "references": [
+        "docs/components/job-orchestration.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-02",
+      "milestone": "M2",
+      "title": "Run the processing controller with LocalExecutor",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M0-05",
+        "M2-01"
+      ],
+      "goal": "Execute the production task definition locally without duplicating orchestration logic.",
+      "scope": "Register process-recording in the official TypeScript Render SDK; implement bounded controller polling and LocalExecutor over the shared Python CLI.",
+      "acceptanceCriteria": [
+        "Controller retries recover authoritative API state and the same known execution; a lost acknowledgement never blindly spawns again.",
+        "Use documented task metadata, lease renewal, fixed deadlines and finite limits; waiting RAM is accounted for rather than assuming suspended sleep.",
+        "Pass bootstrap privately with argv/stdin or protected files, not logged shell interpolation; uncertain local child/PID identity requires operator recovery."
+      ],
+      "validation": "Official local-runner integration with controller restart, runner loss, known execution and uncertain local-child cases.",
+      "references": [
+        "docs/components/job-orchestration.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-03",
+      "milestone": "M2",
+      "title": "Add dispatch repair, cancellation and safe operator recovery",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-02"
+      ],
+      "goal": "Recover missed dispatch and stuck execution without launching duplicate paid work.",
+      "scope": "Implement the finite repair entrypoint, scoped reconciliation APIs and manual cancel/retry/re-upload operations.",
+      "acceptanceCriteria": [
+        "A bounded minute repair pass starts due/uncertain controller dispatch through the API and exits; it has no DB, Render-start or Modal credentials.",
+        "Cancel does not mean stopped; retry is available only after authoritative termination, and creates a new job/output prefix.",
+        "Unknown spawn acknowledgment remains visible and blocks blind resubmission; failed source hashes request corrected source, not a same-bytes retry."
+      ],
+      "validation": "Lost-dispatch, exhausted-controller, cancel/retry ordering and stale-current-job fixtures plus operator instructions.",
+      "references": [
+        "docs/components/job-orchestration.md",
+        "docs/components/pipeline-monitoring.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-04",
+      "milestone": "M2",
+      "title": "Seal worker outputs and atomically accept immutable clips",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M1-07",
+        "M2-01"
+      ],
+      "goal": "Make accepted clip evidence stable and prevent writes after completion.",
+      "scope": "Expose job-scoped common multipart output routes, close the inventory and reconcile candidate manifests with terminal/current execution state.",
+      "acceptanceCriteria": [
+        "Only the current claimed job may allocate/complete permitted bounded outputs; the API consumes multipart IDs and closes further writes.",
+        "Acceptance verifies finalized inventory identity/hash/counts, sealed source references and known worker termination; callbacks alone are provisional.",
+        "One transaction registers immutable clips/artifacts; late, stale, cancelled, corrupt or duplicate results cannot replace a selected result."
+      ],
+      "validation": "Output write-after-seal, old capability, late callback, manifest mismatch and atomic acceptance fixtures.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/components/job-orchestration.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-05",
+      "milestone": "M2",
+      "title": "Stream MCAP and decode frames with bounded memory",
+      "area": "robotics",
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M0-03",
+        "M2-00"
+      ],
+      "goal": "Read each raw recording once per attempt while preserving native evidence.",
+      "scope": "Implement a non-seeking hash-wrapped MCAP reader, bounded decompression/record/frame queues and native clock/raster association.",
+      "acceptanceCriteria": [
+        "Use file-order non-seeking iteration and consume/hash all source bytes including the footer; no full raw source staging or whole-session arrays.",
+        "Bound record sizes, decompression, image dimensions, join windows and encoder queues; reject unsupported ordering/clock associations explicitly.",
+        "Decode each RGB frame once for inference and encoders; preserve native event/timestamps, available sensor evidence and all raster/crop/rotation/mirror transforms."
+      ],
+      "validation": "Corrupt/oversized/clock/raster fixtures with source-read counts and peak buffer measurements.",
+      "references": [
+        "docs/components/cloud-processing.md",
+        "docs/geometry-v3-capture-regression.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-06",
+      "milestone": "M2",
+      "title": "Implement mandatory 21-landmark CPU hand inference",
+      "area": "robotics",
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-05"
+      ],
+      "goal": "Produce the agreed hand observations without overstating accuracy or missingness.",
+      "scope": "Add the pinned MediaPipe CPU model adapter to the streaming processor with deterministic joint/coordinate/provenance contracts.",
+      "acceptanceCriteria": [
+        "Return up to two hands with 21 native-image landmarks, raw model-relative 3D estimates, declared conventions and exact frame mappings.",
+        "Detection/finite masks and unsupported confidence/visibility semantics are explicit; handedness score is never labelled per-joint confidence.",
+        "No-hand frames are legitimate masked output; model errors fail the job and cannot yield successful RGB-only output; metric_accuracy_validated stays false."
+      ],
+      "validation": "Model/coordinate/missingness fixtures and representative real repair overlays against the agreed usefulness rubric.",
+      "references": [
+        "docs/components/cloud-processing.md",
+        "docs/training-qualification-requirements.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-07",
+      "milestone": "M2",
+      "title": "Write bounded clip artifacts and a portable reader",
+      "area": "robotics",
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-06",
+        "M2-04"
+      ],
+      "goal": "Produce reusable immutable clips and customer-safe review payloads.",
+      "scope": "Write native RGB MP4, NPZ arrays, frame-map rows, available sensor evidence, thumbnails, safe RRD and versioned manifests through the output protocol.",
+      "acceptanceCriteria": [
+        "Progressively close/upload shards rather than retain a whole recording; retry output prefixes cannot overwrite prior artifacts.",
+        "Start with <=60-second clips and the proposed <=128 MiB RRD / 1280x720 proxy limits; shorten clips if needed while preserving native cadence and explicit transforms.",
+        "The customer-safe RRD contains no raw MCAP, internal notes/QC or unrelated clip data; hiding entities is not authorization.",
+        "A documented Python reader round-trips poses, masks, timestamps and provenance against the exact manifest; no Lance dependency."
+      ],
+      "validation": "Real emitted artifacts/reader checksums, source-to-preview frame comparison and inspected safe RRD contents/bytes.",
+      "references": [
+        "docs/components/cloud-processing.md",
+        "docs/components/rerun-clip-review.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-08",
+      "milestone": "M2",
+      "title": "Persist inline quality checks and reject corrupt candidates",
+      "area": "robotics",
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-07"
+      ],
+      "goal": "Expose structural processing evidence while withholding failed or unverified results.",
+      "scope": "Implement final source hashes, decode/dimension/frame-map/array/mask/output checks and bounded machine-readable check summaries.",
+      "acceptanceCriteria": [
+        "Final source mismatch rejects the entire candidate even when inference already ran; no source is marked verified before EOF.",
+        "Check status distinguishes pass/warn/fail/measured/not_evaluated with counts/reasons; coverage is measured, not accuracy.",
+        "All writes complete and the bounded manifest/inventory closes before reporting; failures retain actionable job diagnostics without accepting clips."
+      ],
+      "validation": "Injected corrupt hashes, decode errors, missing frames/hands, nonfinite arrays and interrupted output fixtures.",
+      "references": [
+        "docs/components/cloud-processing.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M2-09",
+      "milestone": "M2",
+      "title": "Qualify local end-to-end recovery and long-input bounds",
+      "area": "quality",
+      "ownerRole": "QA / platform engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M1-09",
+        "M2-03",
+        "M2-08"
+      ],
+      "goal": "Prove the real CPU pipeline before activating cloud processing.",
+      "scope": "Run the official local workflow path from real phone upload to accepted clips, then progressively longer/faulted inputs including the two-hour target.",
+      "acceptanceCriteria": [
+        "The same API/transport/task/worker contracts complete a short real MCAP with mandatory hand inference and reader validation.",
+        "Record peak RAM/scratch, source/output/RRD bytes, source-read count and wall time for a representative two-hour input; limits are enforced rather than inferred from upload caps.",
+        "Lost acknowledgements, duplicate workers, runner loss, cancellation, stale results and partial writes preserve admission, immutable outputs and visible errors.",
+        "Stub protocol tests are labelled separately and cannot satisfy real-model acceptance; no cloud GPU/provider is required."
+      ],
+      "validation": "Reproducible local qualification report with input/code/model/config hashes, resource measurements and fault outcomes.",
+      "references": [
+        "docs/components/local-development.md",
+        "docs/implementation-plan.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-01",
+      "milestone": "M3",
+      "title": "Build Pipeline monitoring and per-recording actions",
+      "area": "web",
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M1-02",
+        "M2-03",
+        "M2-04"
+      ],
+      "goal": "Let staff locate processing failures and review the clips from one recording.",
+      "scope": "Implement bounded staff list/detail APIs and the compact Pipeline list, recording detail visualization and lifecycle actions.",
+      "acceptanceCriteria": [
+        "Four-column searchable/status-filtered rows open /pipeline/[recordingId]; no row action buttons, Scenario selector or raw UUID/path display.",
+        "Detail alone contains source/errors, actual stage evidence and applicable Review clips/Cancel/Retry/re-upload/reconcile actions; absent telemetry stays unknown.",
+        "Upload -> Queued -> Processing -> Quality checks -> Ready for review are conceptual stages, not additional workflow tasks; source hash completes at EOF.",
+        "Review clips opens /data-browser?recordingId=<UUID> with all generated clips, no automatic reviewStatus; preserve filters/back navigation and recheck exact current-job capabilities."
+      ],
+      "validation": "Staff/customer route checks, lifecycle/stale-action fixtures and keyboard/desktop/phone navigation evidence.",
+      "references": [
+        "docs/components/pipeline-monitoring.md",
+        "docs/components/backend-architecture.md",
+        "docs/components/ui-design.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-02",
+      "milestone": "M3",
+      "title": "Implement approved-only dataset APIs and view grants",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-04"
+      ],
+      "goal": "Organize approved clips without media copies and expose only authorized data.",
+      "scope": "Implement bounded dataset/clip catalog reads, create/edit/member operations and operator-managed dataset_access.",
+      "acceptanceCriteria": [
+        "Only latest-approved clips can be dataset members for staff and customer; direct forged pending/rejected additions fail.",
+        "One clip may be in multiple datasets or approved/unassigned; counts/hours reflect distinct currently visible approved members.",
+        "Every customer metadata/thumbnail/viewer request rechecks enabled access, live grant, membership and approval; All clips/recording-wide catalog access is forbidden.",
+        "Current recipient-sharing permission is recorded before grants or additions to shared datasets; internal notes/QC/collector details never enter customer payloads."
+      ],
+      "validation": "Membership, pagination/count consistency, permission-revocation and cross-customer access fixtures.",
+      "references": [
+        "docs/components/data-browser-and-datasets.md",
+        "docs/components/auth-and-access.md",
+        "docs/contracts.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-03",
+      "milestone": "M3",
+      "title": "Commit review decisions and dataset assignments atomically",
+      "area": "backend",
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M3-02"
+      ],
+      "goal": "Ensure review races cannot expose pending or rejected clips in datasets.",
+      "scope": "Implement append-only reviews, expected review/dataset revisions, ordered locks and atomic desired memberships.",
+      "acceptanceCriteria": [
+        "Approve requires a nonblank task label and current revisions before one decision/membership transaction; optional notes/empty selection remain valid.",
+        "Blank/stale/failed assignment changes no review, membership or revision; omission preserves membership and explicit empty selection clears it.",
+        "Reject/withdraw removes every working membership and bumps affected revisions atomically; reapproval never restores memberships implicitly.",
+        "Concurrent add/approve/reject commands cannot leave partial membership or an unapproved dataset member."
+      ],
+      "validation": "Real Postgres concurrency/rollback fixtures with before/after review, membership and revision evidence.",
+      "references": [
+        "docs/contracts.md",
+        "docs/components/data-browser-and-datasets.md",
+        "docs/components/review-and-delivery.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-04",
+      "milestone": "M3",
+      "title": "Build the shared Data browser with URL-backed filters",
+      "area": "web",
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M3-02",
+        "M3-01"
+      ],
+      "goal": "Provide one understandable dataset browser and staff recording-review catalog.",
+      "scope": "Implement dataset list, approved clip grid, staff All clips, approved-only add/assignment pickers and persistent query navigation.",
+      "acceptanceCriteria": [
+        "Default /data-browser lists datasets with name, clip count and total hours; datasetId opens screenshot/title/task/metadata cards.",
+        "Staff view=clips includes accepted pending/rejected/unassigned clips; recordingId alone infers clip mode and shows that recording only.",
+        "Recording review has a fixed recording-name backlink to its Pipeline detail and no clear-recording button; clips preserve the return context.",
+        "Customer has only granted approved datasets; loading/empty/denied states and refresh/paste/Back/Forward work at desktop/phone widths."
+      ],
+      "validation": "Role-based browser navigation, URL round trips, dataset picker eligibility and responsive screenshots.",
+      "references": [
+        "docs/components/data-browser-and-datasets.md",
+        "docs/components/ui-design.md",
+        "docs/mocks/README.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-05",
+      "milestone": "M3",
+      "title": "Embed the real shared Rerun viewer safely",
+      "area": "web",
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M1-02",
+        "M2-07",
+        "M3-02"
+      ],
+      "goal": "Replace the HTML/SVG stand-in with the same authorized clip viewer for staff and customers.",
+      "scope": "Use a client-only React adapter around pinned @rerun-io/web-viewer 0.22.1 with matching Python SDK and self-hosted JS/WASM.",
+      "acceptanceCriteria": [
+        "The production Next.js build loads real bounded worker RRDs from authorized local MinIO URLs without SSR/runtime duplication or a live external Rerun server; real R2/provider qualification belongs to M4-03.",
+        "Fresh URL issuance rechecks access; safe bytes exclude staff data rather than relying on hidden entities or client role flags.",
+        "Test CORS/MIME/assets, sequential clip loads, expired URL recovery, route teardown, missing-hand clearing and persistent unsaved staff edits.",
+        "Record startup/transfer/peak browser memory and frame fidelity on supported desktop/phone browsers; 3D estimates remain quietly but clearly labelled."
+      ],
+      "validation": "Production build and real RRD/browser qualification report; mock screenshots alone do not pass.",
+      "references": [
+        "docs/components/rerun-clip-review.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-06",
+      "milestone": "M3",
+      "title": "Build the shared clip review and read-only customer page",
+      "area": "web",
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M3-03",
+        "M3-04",
+        "M3-05"
+      ],
+      "goal": "Let our team review each clip and customers inspect the same approved evidence.",
+      "scope": "Implement /clips/[clipId] with the shared viewer, staff quality checks/form and server-derived role capabilities.",
+      "acceptanceCriteria": [
+        "Staff see Automatic quality checks, task label, optional notes, optional Datasets multiselect and direct Approve/Reject.",
+        "Drafts survive viewer rerenders/URL reloads; selection alone writes nothing and successful decisions rebase from saved memberships.",
+        "Customer sees approved label and safe viewer only; no staff notes/QC, review mutation or per-episode accept/reject.",
+        "No inspection acknowledgment checkbox, yellow callout, Other clips section, raw path chip or separate sidebar Review item."
+      ],
+      "validation": "Real API-backed approval/rejection/draft/denial/error-state browser tests and responsive screenshots.",
+      "references": [
+        "docs/components/ui-design.md",
+        "docs/components/rerun-clip-review.md",
+        "docs/mocks/README.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M3-07",
+      "milestone": "M3",
+      "title": "Prove local staff-to-customer review and isolation",
+      "area": "quality",
+      "ownerRole": "QA engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-09",
+        "M3-06"
+      ],
+      "goal": "Establish actual review/access behavior rather than prototype-only evidence.",
+      "scope": "Run collection -> processing -> Pipeline detail -> recording grid -> review/assignment -> granted-customer inspection through real local services.",
+      "acceptanceCriteria": [
+        "Staff can approve an unassigned clip, assign to multiple datasets, reject/remove all memberships and reapprove without silent restoration.",
+        "Blank/stale/concurrent writes roll back correctly; customer catalog/hidden clips/raw data/internal fields are denied.",
+        "Grant removal, membership removal, latest-review withdrawal and disabled access deny fresh metadata/URL issuance; already issued URLs have documented expiry limits.",
+        "The same real clip URL/viewer works across roles with the latest approved label and no release/export prerequisite."
+      ],
+      "validation": "Recorded end-to-end fixture/input IDs, database race results, browser/API access matrix and real viewer evidence.",
+      "references": [
+        "docs/components/local-development.md",
+        "docs/components/auth-and-access.md",
+        "docs/implementation-plan.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-01",
+      "milestone": "M4",
+      "title": "Deploy the Render stack and private R2 configuration",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-03"
+      ],
+      "goal": "Deploy the agreed application stack with explicit credential and network boundaries.",
+      "scope": "Add reviewed monorepo Render configuration for web, paid Postgres, the Node workflow and finite repair cron; configure private R2 bucket/keys/lifecycle/CORS before worker activation and start with ingest disabled.",
+      "acceptanceCriteria": [
+        "Web alone connects to private Postgres and holds R2 signing/Render dispatch credentials; workflow/cron/worker credentials remain scoped.",
+        "Hosted controller and local runner import the same task definition; production rejects local executor/endpoint settings.",
+        "Compatible pinned builds/migrations, HTTPS/trusted origins, health checks and separated staging/production secrets are documented.",
+        "Before paid activation/canaries, record the approved budget, account spending alerts, admission/runtime/resource limits and stop conditions; no default GPU, warm worker, extra API, outbox or additional engine.",
+        "Private R2 source/output buckets, lifecycle, permitted origins and signing bindings exist before the Modal canary; no public bucket or media proxy."
+      ],
+      "validation": "Reviewed configuration/deploy IDs, connection/credential-boundary checks and rollback procedure; actual paid activation remains separately authorized.",
+      "references": [
+        "docs/components/render-deployment.md",
+        "docs/components/operations-and-costs.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-02",
+      "milestone": "M4",
+      "title": "Deploy the Modal CPU executor over the shared worker",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M2-08",
+        "M4-01",
+        "M2-09"
+      ],
+      "goal": "Switch local execution to Modal without changing business or artifact contracts.",
+      "scope": "Implement ModalExecutor and a finite CPU function wrapper importing the same Python processing core.",
+      "acceptanceCriteria": [
+        "Image/model/code/config hashes and candidate CPU/RAM/scratch/timeout limits are pinned; concurrency is one and warm containers zero.",
+        "Persist submission intent and actual Modal function-call ID; each physical execution claims before source reads and uses only scoped read/upload capabilities.",
+        "Known calls survive controller retries; lost acknowledgements stay uncertain and never authorize automatic second submission or GPU escalation.",
+        "Controllers/worker contain no DB credentials or broad R2 write keys; local/cloud artifacts remain contract-compatible."
+      ],
+      "validation": "After the M4-01 budget/alert/stop-condition preflight and M2-09 local gate pass, run one explicitly bounded CPU canary with execution ID, resource/byte/cost receipt and matching local artifact reader.",
+      "references": [
+        "docs/components/job-orchestration.md",
+        "docs/components/cloud-processing.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-03",
+      "milestone": "M4",
+      "title": "Qualify real R2 multipart and private viewer transfers",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M4-02",
+        "M3-05"
+      ],
+      "goal": "Verify provider semantics that MinIO cannot establish.",
+      "scope": "Qualify the private R2 configuration from M4-01 with bounded real phone/worker/browser transfer tests and provider-semantic fault cases.",
+      "acceptanceCriteria": [
+        "Real part receipts, pagination, completion/HEAD, cancellation and uncertain response recovery preserve exact bytes and transport identity.",
+        "Completed/sealed outputs cannot be overwritten through old part URLs or stale capabilities; public listing/access is denied.",
+        "Phone uploads and browser RRD reads bypass Render; signed URL expiration/renewal and CORS/ETag behavior pass."
+      ],
+      "validation": "Recorded object/file IDs, source/output checksums, provider faults and measured transferred bytes; no real customer data required.",
+      "references": [
+        "docs/components/mcap-upload.md",
+        "docs/components/render-deployment.md",
+        "docs/components/rerun-clip-review.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-04",
+      "milestone": "M4",
+      "title": "Prove cloud workflow and worker failure recovery",
+      "area": "quality",
+      "ownerRole": "QA / platform engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M4-03"
+      ],
+      "goal": "Demonstrate that uncertain cloud outcomes cannot duplicate processing or corrupt accepted data.",
+      "scope": "Run a finite staging fault matrix against real Render/Modal/R2 using synthetic or permission-cleared short captures.",
+      "acceptanceCriteria": [
+        "Inject lost Render/Modal acknowledgements, controller retry/exhaustion, duplicate physical worker claims and late callbacks.",
+        "Cancellation/timeouts retain admission until termination is known; manual retry uses a new job/prefix and never replaces old immutable clips.",
+        "Output allocation/completion after seal or stale/cancelled results are rejected; uncertain executions require the documented operator reconciliation.",
+        "Record each intentional execution and its gross cost; stop after the agreed bounded canary budget."
+      ],
+      "validation": "Provider execution IDs and before/after job/file state for every fault; no automatic expensive test loop.",
+      "references": [
+        "docs/components/job-orchestration.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-05",
+      "milestone": "M4",
+      "title": "Instrument pipeline resources, errors and spending",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M4-02"
+      ],
+      "goal": "Operate a low-budget pilot with measured limits and actionable failures.",
+      "scope": "Add structured stage/job metrics, bounded logs, admission limits, cost accounting, queue/uncertainty/error alerts and retention configuration.",
+      "acceptanceCriteria": [
+        "Record startup/wall time, peak RAM/scratch, source/output/RRD bytes, inline QC and provider execution IDs without cookies/tokens/signed queries.",
+        "No invented progress: unknown telemetry is visible; alerts cover delayed queued jobs, uncertain/stuck execution, source hash failures and spending.",
+        "Admission/runtime/concurrency limits and provider alerts are configured; alerts are not described as billing hard caps.",
+        "Report fixed platform floor and measured per-input/worker/transfer/storage usage separately; verify zero unnecessary warm workers."
+      ],
+      "validation": "Sample operator view/logs, triggered alert tests and one gross-cost/resource receipt with documented assumptions.",
+      "references": [
+        "docs/components/operations-and-costs.md",
+        "docs/components/pipeline-monitoring.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M4-06",
+      "milestone": "M4",
+      "title": "Test database restore and document operational recovery",
+      "area": "platform",
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "priority": 2,
+      "dependsOn": [
+        "M4-04",
+        "M4-05"
+      ],
+      "goal": "Recover catalog state without restarting uncertain work or restoring revoked access.",
+      "scope": "Exercise managed Postgres backup/restore into isolation and document deployment rollback, external-state reconciliation and data retention.",
+      "acceptanceCriteria": [
+        "Restore a representative catalog and verify referenced private objects/checksums without modifying the live database.",
+        "Keep ingest/dispatch disabled until external jobs/uploads and revoked sessions/grants are reconciled.",
+        "Document actual restore window/gaps, recovery steps and measured restore time; DB recovery does not claim to restore deleted R2 payloads.",
+        "Rollback preserves sources and accepted artifacts; referenced/published data is never age-purged as scratch."
+      ],
+      "validation": "Restore drill receipt, checked runbook and source/catalog consistency evidence.",
+      "references": [
+        "docs/components/operations-and-costs.md",
+        "docs/components/storage-and-data-model.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M5-01",
+      "milestone": "M5",
+      "title": "Prepare collector permissions, retention and support runbooks",
+      "area": "operations",
+      "ownerRole": "Project owner / operations",
+      "size": "S",
+      "priority": 2,
+      "dependsOn": [
+        "M1-09",
+        "M3-02",
+        "M4-05"
+      ],
+      "goal": "Admit only the intended collectors and external reviewers with clear retention/support decisions.",
+      "scope": "Record pilot collection/processing/external-inspection permission evidence, allowlist/grant procedures, retention and owner-assisted recovery instructions.",
+      "acceptanceCriteria": [
+        "Operators can enable/revoke immutable user IDs and dataset grants with recorded permission evidence; no self-service sharing/admin UI is introduced.",
+        "Collector instructions distinguish capture finalization, upload completion, verification, review and explicit local cleanup.",
+        "Retention/low-disk/support/incident actions name responsible roles and recording/job references; no automatic deletion of pending or failed originals."
+      ],
+      "validation": "Reviewed permission/retention decisions and operator dry run with test collector/staff/customer accounts.",
+      "references": [
+        "docs/components/auth-and-access.md",
+        "docs/components/mcap-upload.md",
+        "docs/components/operations-and-costs.md"
+      ],
+      "qualificationGate": false,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M5-02",
+      "milestone": "M5",
+      "title": "Qualify a signed-device two-hour capture through cloud review",
+      "area": "quality",
+      "ownerRole": "QA / robotics engineer",
+      "size": "M",
+      "priority": 1,
+      "dependsOn": [
+        "M3-07",
+        "M4-04",
+        "M5-01"
+      ],
+      "goal": "Validate the actual field-sized workload and required hand usefulness before inviting repair workers.",
+      "scope": "Run a representative signed-phone two-hour capture with interruption/resume, cloud CPU processing, real clip review and independent hand-overlay assessment.",
+      "acceptanceCriteria": [
+        "Record device/build, source/code/image/model/config versions; confirm login/background/app-kill recovery and unchanged original owner.",
+        "Measure upload and processing time, native/preview frame mapping, source/output bytes, peak resources and gross cloud cost against the enforced limits.",
+        "Evaluate tools/gloves/occlusion, missing hands, handedness and overlay accuracy against the agreed rubric; document failures and block rollout if usefulness is inadequate.",
+        "All accepted clips load in the real viewer with explicit 3D-estimate limitations; no verified metric/action/training-quality claim is implied."
+      ],
+      "validation": "One permission-cleared long-capture receipt, reviewer observations, resource/cost report and explicit pass/fail against the agreed rubric.",
+      "references": [
+        "docs/implementation-plan.md",
+        "docs/components/cloud-processing.md",
+        "docs/components/local-development.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    },
+    {
+      "key": "M5-03",
+      "milestone": "M5",
+      "title": "Complete internal and customer UAT and pilot go/no-go",
+      "area": "operations",
+      "ownerRole": "Project owner",
+      "size": "S",
+      "priority": 1,
+      "dependsOn": [
+        "M5-02",
+        "M4-06"
+      ],
+      "goal": "Release the collection/review pilot only after all milestone evidence is reviewable.",
+      "scope": "Run the final collector/staff/customer acceptance script and record accountable sign-off, known limitations and rollback readiness.",
+      "acceptanceCriteria": [
+        "Collector completes recovery-aware upload; staff uses Pipeline -> recording clips -> shared review, approves/assigns, and observes automatic QC.",
+        "A separately authenticated customer browses only granted approved datasets and inspects the same clip read-only; forged private routes/mutations are denied.",
+        "All milestone gates link reproducible evidence; unresolved launch blockers, owners and mitigations are explicit before the project is marked complete.",
+        "Rollout/cost/admission limits and incident/rollback responsibilities are confirmed; dataset export/download, GPU and Curator/Lance stay outside MVP completion."
+      ],
+      "validation": "Completed UAT script, separate-role access evidence, go/no-go decision and linked known limitations; screenshots alone are insufficient.",
+      "references": [
+        "docs/mvp-review.md",
+        "docs/implementation-plan.md",
+        "docs/components/operations-and-costs.md"
+      ],
+      "qualificationGate": true,
+      "assignee": null,
+      "dueDate": null
+    }
+  ],
+  "reviews": [
+    {
+      "reviewer": "Independent PM/workflow engineering agent",
+      "date": "2026-10-31",
+      "changesApplied": [
+        "M4-02 requires local real-CPU qualification M2-09 before paid cloud canary.",
+        "Baseline private R2 provisioning/configuration moved to M4-01 before Modal activation; M4-03 qualifies real provider semantics.",
+        "M0-05 accepts runner/connectivity fixtures only; real multipart APIs are later prerequisites.",
+        "M3-05 qualifies production build against local authorized MinIO; real R2 is M4-03.",
+        "M4-01/02 require budget, spending-alert and limit preflight before the first paid canary."
+      ],
+      "remainingNotes": "Individual owners, native estimate scale and calendar commitments require team triage."
+    }
+  ]
+}

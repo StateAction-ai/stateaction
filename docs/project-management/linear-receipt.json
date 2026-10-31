@@ -1,0 +1,4474 @@
+{
+  "schemaVersion": 1,
+  "source": "official configured linear MCP server",
+  "status": "published-and-verified",
+  "workspace": {
+    "name": "Personal",
+    "slug": "hw-personal-projects",
+    "id": "0fc1877a-9860-4239-b383-172173009bf4"
+  },
+  "team": {
+    "key": "SA",
+    "id": "88359d62-e976-4c69-b75c-1092c9706460"
+  },
+  "inputs": [
+    {
+      "path": "docs/project-management/linear-plan.json",
+      "sha256": "c307549fb66a84d944cd4224bd6c3c606f8eec8366e36feaa0662055dd77ffc7"
+    },
+    {
+      "path": "/tmp/linear-publish-content.json",
+      "sha256": "5aba7a2f36619cbba1010a9e4635b828824e2b0fcb8a55fb639dbcf669fc3b42"
+    },
+    {
+      "path": "/tmp/linear-workspace-discovery.json",
+      "sha256": "3780c317036bfe4f5c42020e5f019e0d3daf4ce5298974102d76a55d54ee731d"
+    }
+  ],
+  "sourceBaselineCommit": "5955d66",
+  "priorityMapping": {
+    "1": {
+      "planMeaning": "High",
+      "linearValue": 2,
+      "linearName": "High"
+    },
+    "2": {
+      "planMeaning": "Normal",
+      "linearValue": 3,
+      "linearName": "Medium (normal)"
+    }
+  },
+  "project": {
+    "id": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+    "identifier": "P-SA-2",
+    "name": "StateAction.ai · Collection & review MVP",
+    "url": "https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e",
+    "status": {
+      "id": "1b738cc1-6b43-4ef3-a283-13d5b72dc564",
+      "name": "Backlog",
+      "type": "backlog"
+    },
+    "lead": {
+      "id": "4071afea-cebb-4849-b272-759a758368f3",
+      "name": "Timothy W"
+    },
+    "teamIds": [
+      "88359d62-e976-4c69-b75c-1092c9706460"
+    ],
+    "created": true,
+    "documentsLinked": true,
+    "resources": [
+      {
+        "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+        "type": "document",
+        "title": "Implementation backlog & traceability",
+        "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06"
+      },
+      {
+        "id": "9b37ee33-8417-4a06-9b2c-8c50c00b015e",
+        "type": "document",
+        "title": "Technical design · approved MVP baseline",
+        "url": "https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2"
+      },
+      {
+        "id": "48163158-3092-4811-9865-10a7837b66c1",
+        "type": "document",
+        "title": "Delivery standards & milestone gates",
+        "url": "https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690"
+      },
+      {
+        "id": "4a407068-0073-42c1-a3ad-f1bc2bdbbbed",
+        "type": "document",
+        "title": "Project brief & scope",
+        "url": "https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3"
+      },
+      {
+        "id": "d37fb6a5-593f-41ac-a8d3-6e68e9ab0a23",
+        "type": "link",
+        "title": "Implementation backlog & traceability",
+        "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06"
+      },
+      {
+        "id": "52996785-c8a6-4678-95cd-718c6ed23681",
+        "type": "link",
+        "title": "Technical design · approved MVP baseline",
+        "url": "https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2"
+      },
+      {
+        "id": "c11d106c-3242-4f6a-878a-c16f8831ca4d",
+        "type": "link",
+        "title": "Delivery standards & milestone gates",
+        "url": "https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690"
+      },
+      {
+        "id": "91d0b256-78d8-4839-a864-c8cf3e92229c",
+        "type": "link",
+        "title": "Project brief & scope",
+        "url": "https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3"
+      }
+    ]
+  },
+  "labels": {
+    "Area: auth": {
+      "id": "0275fc46-22d2-4d2e-9245-471853471d0e",
+      "name": "Area: auth",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: backend": {
+      "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+      "name": "Area: backend",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: mobile": {
+      "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+      "name": "Area: mobile",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: web": {
+      "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+      "name": "Area: web",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: platform": {
+      "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+      "name": "Area: platform",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: robotics": {
+      "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+      "name": "Area: robotics",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: quality": {
+      "id": "b8a43138-409d-41a8-a63b-9352292acd8f",
+      "name": "Area: quality",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Area: operations": {
+      "id": "b7c391b2-2e4b-4b8a-9615-857e72079388",
+      "name": "Area: operations",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    },
+    "Qualification gate": {
+      "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+      "name": "Qualification gate",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+      "created": true
+    }
+  },
+  "milestones": {
+    "M0": {
+      "key": "M0",
+      "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "name": "M0 · Reproducible foundations",
+      "description": "A clean clone builds the mobile, web, jobs and Python packages; versioned contracts, database constraints and the official Render local runner are reproducible. No production services are assumed.",
+      "targetDate": null,
+      "created": true
+    },
+    "M1": {
+      "key": "M1",
+      "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "name": "M1 · Authenticated, resumable collection",
+      "description": "Real console/mobile identities and owner-bound journals work. Closed MCAP and required sidecars upload directly through the sealed multipart protocol; interruption and account changes preserve ownership and bytes.",
+      "targetDate": null,
+      "created": true
+    },
+    "M2": {
+      "key": "M2",
+      "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "name": "M2 · Local CPU processing",
+      "description": "A short real recording passes the official local workflow into mandatory hand inference, bounded immutable outputs and a safe RRD. Fault cases and representative long-input memory/scratch/runtime limits are demonstrated.",
+      "targetDate": null,
+      "created": true
+    },
+    "M3": {
+      "key": "M3",
+      "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "name": "M3 · Internal review and customer inspection",
+      "description": "Pipeline recording details lead to all generated clips. Staff approve/assign atomically; datasets contain approved clips only. Authorized customers use the same real viewer without internal data or mutation access.",
+      "targetDate": null,
+      "created": true
+    },
+    "M4": {
+      "key": "M4",
+      "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "name": "M4 · Bounded cloud CPU canary",
+      "description": "The same contracts run on Render, R2 and Modal CPU. Real provider failure recovery, direct transfers, measured cost/resource limits, monitoring and an isolated database restore pass.",
+      "targetDate": null,
+      "created": true
+    },
+    "M5": {
+      "key": "M5",
+      "id": "24ee71c0-34cd-4389-92ec-4422d09477be",
+      "name": "M5 · Collection pilot ready",
+      "description": "A signed physical-device two-hour capture/upload/process/review flow meets documented limits and repair-footage usefulness criteria. Internal and customer UAT, permission/retention decisions and rollout/rollback evidence are recorded.",
+      "targetDate": null,
+      "created": true
+    }
+  },
+  "documents": {
+    "brief": {
+      "id": "4a407068-0073-42c1-a3ad-f1bc2bdbbbed",
+      "title": "Project brief & scope",
+      "url": "https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3",
+      "created": true
+    },
+    "standards": {
+      "id": "48163158-3092-4811-9865-10a7837b66c1",
+      "title": "Delivery standards & milestone gates",
+      "url": "https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690",
+      "created": true
+    },
+    "technical": {
+      "id": "9b37ee33-8417-4a06-9b2c-8c50c00b015e",
+      "title": "Technical design · approved MVP baseline",
+      "url": "https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2",
+      "created": true
+    },
+    "traceability": {
+      "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+      "title": "Implementation backlog & traceability",
+      "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06",
+      "created": true
+    }
+  },
+  "issues": {
+    "M0-01": {
+      "key": "M0-01",
+      "id": "48191e37-e09e-43a0-91bd-827276f0bacb",
+      "identifier": "SA-10",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-10/migrate-the-mobile-recorder-and-sdk-into-the-monorepo-safely",
+      "milestoneKey": "M0",
+      "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "labels": [
+        {
+          "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+          "name": "Area: mobile",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [],
+      "dependencyIds": [],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "48191e37-e09e-43a0-91bd-827276f0bacb",
+          "identifier": "SA-10",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: mobile"
+          ],
+          "blockedByIds": [],
+          "blockedByIdentifiers": [],
+          "blocksIdentifiers": [
+            "SA-17"
+          ]
+        }
+      }
+    },
+    "M0-02": {
+      "key": "M0-02",
+      "id": "5b67fac2-bc8d-443a-8608-628e5d9e44bc",
+      "identifier": "SA-11",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-11/scaffold-the-typescript-and-python-packages-with-repeatable-ci",
+      "milestoneKey": "M0",
+      "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [],
+      "dependencyIds": [],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "5b67fac2-bc8d-443a-8608-628e5d9e44bc",
+          "identifier": "SA-11",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [],
+          "blockedByIdentifiers": [],
+          "blocksIdentifiers": [
+            "SA-12",
+            "SA-24"
+          ]
+        }
+      }
+    },
+    "M0-03": {
+      "key": "M0-03",
+      "id": "bdbaecd0-c6d5-414b-b416-94181ccb916d",
+      "identifier": "SA-12",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-12/publish-versioned-api-task-and-artifact-contracts",
+      "milestoneKey": "M0",
+      "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-02"
+      ],
+      "dependencyIds": [
+        "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "bdbaecd0-c6d5-414b-b416-94181ccb916d",
+          "identifier": "SA-12",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+          ],
+          "blockedByIdentifiers": [
+            "SA-11"
+          ],
+          "blocksIdentifiers": [
+            "SA-13",
+            "SA-29"
+          ]
+        }
+      }
+    },
+    "M0-04": {
+      "key": "M0-04",
+      "id": "641069c2-1df1-4694-ab0a-5afbfcbc5bc7",
+      "identifier": "SA-13",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-13/create-the-catalog-migrations-and-integrity-constraints",
+      "milestoneKey": "M0",
+      "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-03"
+      ],
+      "dependencyIds": [
+        "bdbaecd0-c6d5-414b-b416-94181ccb916d"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "641069c2-1df1-4694-ab0a-5afbfcbc5bc7",
+          "identifier": "SA-13",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "bdbaecd0-c6d5-414b-b416-94181ccb916d"
+          ],
+          "blockedByIdentifiers": [
+            "SA-12"
+          ],
+          "blocksIdentifiers": [
+            "SA-14",
+            "SA-15"
+          ]
+        }
+      }
+    },
+    "M0-05": {
+      "key": "M0-05",
+      "id": "1e261605-4645-405e-aa89-0efe0ce8bf81",
+      "identifier": "SA-14",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-14/run-the-official-render-workflow-runtime-locally",
+      "milestoneKey": "M0",
+      "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-04"
+      ],
+      "dependencyIds": [
+        "641069c2-1df1-4694-ab0a-5afbfcbc5bc7"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "1e261605-4645-405e-aa89-0efe0ce8bf81",
+          "identifier": "SA-14",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "641069c2-1df1-4694-ab0a-5afbfcbc5bc7"
+          ],
+          "blockedByIdentifiers": [
+            "SA-13"
+          ],
+          "blocksIdentifiers": [
+            "SA-26"
+          ]
+        }
+      }
+    },
+    "M1-01": {
+      "key": "M1-01",
+      "id": "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5",
+      "identifier": "SA-15",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-15/implement-google-sign-in-and-server-enforced-pilot-access",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "0275fc46-22d2-4d2e-9245-471853471d0e",
+          "name": "Area: auth",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-04"
+      ],
+      "dependencyIds": [
+        "641069c2-1df1-4694-ab0a-5afbfcbc5bc7"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.482Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5",
+          "identifier": "SA-15",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: auth"
+          ],
+          "blockedByIds": [
+            "641069c2-1df1-4694-ab0a-5afbfcbc5bc7"
+          ],
+          "blockedByIdentifiers": [
+            "SA-13"
+          ],
+          "blocksIdentifiers": [
+            "SA-16",
+            "SA-17",
+            "SA-19"
+          ]
+        }
+      }
+    },
+    "M1-02": {
+      "key": "M1-02",
+      "id": "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+      "identifier": "SA-16",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-16/build-the-stateactionai-account-menu-and-settings",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+          "name": "Area: web",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-01"
+      ],
+      "dependencyIds": [
+        "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Frontend engineer",
+      "size": "S",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+          "identifier": "SA-16",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: web"
+          ],
+          "blockedByIds": [
+            "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+          ],
+          "blockedByIdentifiers": [
+            "SA-15"
+          ],
+          "blocksIdentifiers": [
+            "SA-34",
+            "SA-38"
+          ]
+        }
+      }
+    },
+    "M1-03": {
+      "key": "M1-03",
+      "id": "a1bfd926-4d70-4533-b09f-c897f45e06ee",
+      "identifier": "SA-17",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-17/integrate-mobile-login-and-immutable-capture-ownership",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+          "name": "Area: mobile",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-01",
+        "M1-01"
+      ],
+      "dependencyIds": [
+        "48191e37-e09e-43a0-91bd-827276f0bacb",
+        "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "a1bfd926-4d70-4533-b09f-c897f45e06ee",
+          "identifier": "SA-17",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: mobile"
+          ],
+          "blockedByIds": [
+            "48191e37-e09e-43a0-91bd-827276f0bacb",
+            "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+          ],
+          "blockedByIdentifiers": [
+            "SA-10",
+            "SA-15"
+          ],
+          "blocksIdentifiers": [
+            "SA-18"
+          ]
+        }
+      }
+    },
+    "M1-04": {
+      "key": "M1-04",
+      "id": "9933014a-4f7f-4d2e-b768-ba05d01e5199",
+      "identifier": "SA-18",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-18/finalize-and-hash-closed-source-files-before-upload",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+          "name": "Area: mobile",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-03"
+      ],
+      "dependencyIds": [
+        "a1bfd926-4d70-4533-b09f-c897f45e06ee"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "9933014a-4f7f-4d2e-b768-ba05d01e5199",
+          "identifier": "SA-18",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: mobile"
+          ],
+          "blockedByIds": [
+            "a1bfd926-4d70-4533-b09f-c897f45e06ee"
+          ],
+          "blockedByIdentifiers": [
+            "SA-17"
+          ],
+          "blocksIdentifiers": [
+            "SA-22"
+          ]
+        }
+      }
+    },
+    "M1-05": {
+      "key": "M1-05",
+      "id": "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6",
+      "identifier": "SA-19",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-19/register-recordings-and-seal-the-required-file-inventory",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-01"
+      ],
+      "dependencyIds": [
+        "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6",
+          "identifier": "SA-19",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+          ],
+          "blockedByIdentifiers": [
+            "SA-15"
+          ],
+          "blocksIdentifiers": [
+            "SA-20",
+            "SA-25"
+          ]
+        }
+      }
+    },
+    "M1-06": {
+      "key": "M1-06",
+      "id": "cd919f4f-1532-4727-ba32-47b4a2657c8d",
+      "identifier": "SA-20",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-20/implement-shared-multipart-reservation-signing-and-receipts",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-05"
+      ],
+      "dependencyIds": [
+        "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "cd919f4f-1532-4727-ba32-47b4a2657c8d",
+          "identifier": "SA-20",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6"
+          ],
+          "blockedByIdentifiers": [
+            "SA-19"
+          ],
+          "blocksIdentifiers": [
+            "SA-21"
+          ]
+        }
+      }
+    },
+    "M1-07": {
+      "key": "M1-07",
+      "id": "1f28e536-1a29-430f-865d-375f921a5f9a",
+      "identifier": "SA-21",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-21/reconcile-uncertain-multipart-completion-and-transport-restart",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-06"
+      ],
+      "dependencyIds": [
+        "cd919f4f-1532-4727-ba32-47b4a2657c8d"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "1f28e536-1a29-430f-865d-375f921a5f9a",
+          "identifier": "SA-21",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "cd919f4f-1532-4727-ba32-47b4a2657c8d"
+          ],
+          "blockedByIdentifiers": [
+            "SA-20"
+          ],
+          "blocksIdentifiers": [
+            "SA-22",
+            "SA-28"
+          ]
+        }
+      }
+    },
+    "M1-08": {
+      "key": "M1-08",
+      "id": "8a9d5027-a8d7-49f4-8b4c-8421f116544d",
+      "identifier": "SA-22",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-22/implement-the-owner-bound-flutter-resumable-uploader",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+          "name": "Area: mobile",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-04",
+        "M1-07"
+      ],
+      "dependencyIds": [
+        "9933014a-4f7f-4d2e-b768-ba05d01e5199",
+        "1f28e536-1a29-430f-865d-375f921a5f9a"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "8a9d5027-a8d7-49f4-8b4c-8421f116544d",
+          "identifier": "SA-22",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: mobile"
+          ],
+          "blockedByIds": [
+            "9933014a-4f7f-4d2e-b768-ba05d01e5199",
+            "1f28e536-1a29-430f-865d-375f921a5f9a"
+          ],
+          "blockedByIdentifiers": [
+            "SA-18",
+            "SA-21"
+          ],
+          "blocksIdentifiers": [
+            "SA-23"
+          ]
+        }
+      }
+    },
+    "M1-09": {
+      "key": "M1-09",
+      "id": "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+      "identifier": "SA-23",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-23/complete-collector-recovery-states-and-verified-local-cleanup",
+      "milestoneKey": "M1",
+      "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+      "labels": [
+        {
+          "id": "b5f8297f-11e6-4137-bf17-f00165b630a9",
+          "name": "Area: mobile",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-08"
+      ],
+      "dependencyIds": [
+        "8a9d5027-a8d7-49f4-8b4c-8421f116544d"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Mobile engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+          "identifier": "SA-23",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: mobile"
+          ],
+          "blockedByIds": [
+            "8a9d5027-a8d7-49f4-8b4c-8421f116544d"
+          ],
+          "blockedByIdentifiers": [
+            "SA-22"
+          ],
+          "blocksIdentifiers": [
+            "SA-33",
+            "SA-47"
+          ]
+        }
+      }
+    },
+    "M2-00": {
+      "key": "M2-00",
+      "id": "a8d2d973-c404-40ee-a294-8f1603d070b1",
+      "identifier": "SA-24",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-24/prove-cpu-hand-overlays-and-real-rerun-playback-early",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+          "name": "Area: robotics",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-02"
+      ],
+      "dependencyIds": [
+        "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Robotics engineer",
+      "size": "S",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "a8d2d973-c404-40ee-a294-8f1603d070b1",
+          "identifier": "SA-24",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: robotics"
+          ],
+          "blockedByIds": [
+            "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+          ],
+          "blockedByIdentifiers": [
+            "SA-11"
+          ],
+          "blocksIdentifiers": [
+            "SA-29"
+          ]
+        }
+      }
+    },
+    "M2-01": {
+      "key": "M2-01",
+      "id": "ed29627b-26e8-43e4-afaf-0914c8fe91d2",
+      "identifier": "SA-25",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-25/implement-durable-job-admission-and-worker-claims",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-05"
+      ],
+      "dependencyIds": [
+        "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "ed29627b-26e8-43e4-afaf-0914c8fe91d2",
+          "identifier": "SA-25",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6"
+          ],
+          "blockedByIdentifiers": [
+            "SA-19"
+          ],
+          "blocksIdentifiers": [
+            "SA-26",
+            "SA-28"
+          ]
+        }
+      }
+    },
+    "M2-02": {
+      "key": "M2-02",
+      "id": "3f428c44-318a-46a8-9456-fcc626287977",
+      "identifier": "SA-26",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-26/run-the-processing-controller-with-localexecutor",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-05",
+        "M2-01"
+      ],
+      "dependencyIds": [
+        "1e261605-4645-405e-aa89-0efe0ce8bf81",
+        "ed29627b-26e8-43e4-afaf-0914c8fe91d2"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "3f428c44-318a-46a8-9456-fcc626287977",
+          "identifier": "SA-26",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "1e261605-4645-405e-aa89-0efe0ce8bf81",
+            "ed29627b-26e8-43e4-afaf-0914c8fe91d2"
+          ],
+          "blockedByIdentifiers": [
+            "SA-14",
+            "SA-25"
+          ],
+          "blocksIdentifiers": [
+            "SA-27"
+          ]
+        }
+      }
+    },
+    "M2-03": {
+      "key": "M2-03",
+      "id": "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+      "identifier": "SA-27",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-27/add-dispatch-repair-cancellation-and-safe-operator-recovery",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-02"
+      ],
+      "dependencyIds": [
+        "3f428c44-318a-46a8-9456-fcc626287977"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+          "identifier": "SA-27",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "3f428c44-318a-46a8-9456-fcc626287977"
+          ],
+          "blockedByIdentifiers": [
+            "SA-26"
+          ],
+          "blocksIdentifiers": [
+            "SA-33",
+            "SA-34",
+            "SA-41"
+          ]
+        }
+      }
+    },
+    "M2-04": {
+      "key": "M2-04",
+      "id": "958692c6-0dec-41d1-ad42-0e11b4321edd",
+      "identifier": "SA-28",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-28/seal-worker-outputs-and-atomically-accept-immutable-clips",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-07",
+        "M2-01"
+      ],
+      "dependencyIds": [
+        "1f28e536-1a29-430f-865d-375f921a5f9a",
+        "ed29627b-26e8-43e4-afaf-0914c8fe91d2"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "958692c6-0dec-41d1-ad42-0e11b4321edd",
+          "identifier": "SA-28",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "1f28e536-1a29-430f-865d-375f921a5f9a",
+            "ed29627b-26e8-43e4-afaf-0914c8fe91d2"
+          ],
+          "blockedByIdentifiers": [
+            "SA-21",
+            "SA-25"
+          ],
+          "blocksIdentifiers": [
+            "SA-31",
+            "SA-34",
+            "SA-35"
+          ]
+        }
+      }
+    },
+    "M2-05": {
+      "key": "M2-05",
+      "id": "c3450613-315e-4d9e-9bbe-8886b68de928",
+      "identifier": "SA-29",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-29/stream-mcap-and-decode-frames-with-bounded-memory",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+          "name": "Area: robotics",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M0-03",
+        "M2-00"
+      ],
+      "dependencyIds": [
+        "bdbaecd0-c6d5-414b-b416-94181ccb916d",
+        "a8d2d973-c404-40ee-a294-8f1603d070b1"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "c3450613-315e-4d9e-9bbe-8886b68de928",
+          "identifier": "SA-29",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: robotics"
+          ],
+          "blockedByIds": [
+            "bdbaecd0-c6d5-414b-b416-94181ccb916d",
+            "a8d2d973-c404-40ee-a294-8f1603d070b1"
+          ],
+          "blockedByIdentifiers": [
+            "SA-12",
+            "SA-24"
+          ],
+          "blocksIdentifiers": [
+            "SA-30"
+          ]
+        }
+      }
+    },
+    "M2-06": {
+      "key": "M2-06",
+      "id": "153b8ee0-5d73-470f-ac1d-5447acfc8353",
+      "identifier": "SA-30",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-30/implement-mandatory-21-landmark-cpu-hand-inference",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+          "name": "Area: robotics",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-05"
+      ],
+      "dependencyIds": [
+        "c3450613-315e-4d9e-9bbe-8886b68de928"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "153b8ee0-5d73-470f-ac1d-5447acfc8353",
+          "identifier": "SA-30",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: robotics"
+          ],
+          "blockedByIds": [
+            "c3450613-315e-4d9e-9bbe-8886b68de928"
+          ],
+          "blockedByIdentifiers": [
+            "SA-29"
+          ],
+          "blocksIdentifiers": [
+            "SA-31"
+          ]
+        }
+      }
+    },
+    "M2-07": {
+      "key": "M2-07",
+      "id": "afac56d0-c7ec-4525-9d4a-6d459f62102a",
+      "identifier": "SA-31",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-31/write-bounded-clip-artifacts-and-a-portable-reader",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+          "name": "Area: robotics",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-06",
+        "M2-04"
+      ],
+      "dependencyIds": [
+        "153b8ee0-5d73-470f-ac1d-5447acfc8353",
+        "958692c6-0dec-41d1-ad42-0e11b4321edd"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "afac56d0-c7ec-4525-9d4a-6d459f62102a",
+          "identifier": "SA-31",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: robotics"
+          ],
+          "blockedByIds": [
+            "958692c6-0dec-41d1-ad42-0e11b4321edd",
+            "153b8ee0-5d73-470f-ac1d-5447acfc8353"
+          ],
+          "blockedByIdentifiers": [
+            "SA-28",
+            "SA-30"
+          ],
+          "blocksIdentifiers": [
+            "SA-32",
+            "SA-38"
+          ]
+        }
+      }
+    },
+    "M2-08": {
+      "key": "M2-08",
+      "id": "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7",
+      "identifier": "SA-32",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-32/persist-inline-quality-checks-and-reject-corrupt-candidates",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2",
+          "name": "Area: robotics",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-07"
+      ],
+      "dependencyIds": [
+        "afac56d0-c7ec-4525-9d4a-6d459f62102a"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Robotics engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7",
+          "identifier": "SA-32",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: robotics"
+          ],
+          "blockedByIds": [
+            "afac56d0-c7ec-4525-9d4a-6d459f62102a"
+          ],
+          "blockedByIdentifiers": [
+            "SA-31"
+          ],
+          "blocksIdentifiers": [
+            "SA-33",
+            "SA-42"
+          ]
+        }
+      }
+    },
+    "M2-09": {
+      "key": "M2-09",
+      "id": "f0f3509e-46e2-4af6-a205-11cb238aa6ee",
+      "identifier": "SA-33",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-33/qualify-local-end-to-end-recovery-and-long-input-bounds",
+      "milestoneKey": "M2",
+      "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+      "labels": [
+        {
+          "id": "b8a43138-409d-41a8-a63b-9352292acd8f",
+          "name": "Area: quality",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-09",
+        "M2-03",
+        "M2-08"
+      ],
+      "dependencyIds": [
+        "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+        "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+        "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "QA / platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.483Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "f0f3509e-46e2-4af6-a205-11cb238aa6ee",
+          "identifier": "SA-33",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: quality"
+          ],
+          "blockedByIds": [
+            "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+            "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+            "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7"
+          ],
+          "blockedByIdentifiers": [
+            "SA-23",
+            "SA-27",
+            "SA-32"
+          ],
+          "blocksIdentifiers": [
+            "SA-40",
+            "SA-42"
+          ]
+        }
+      }
+    },
+    "M3-01": {
+      "key": "M3-01",
+      "id": "7322e153-b82d-42dc-b003-b25383425a70",
+      "identifier": "SA-34",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-34/build-pipeline-monitoring-and-per-recording-actions",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+          "name": "Area: web",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-02",
+        "M2-03",
+        "M2-04"
+      ],
+      "dependencyIds": [
+        "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+        "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+        "958692c6-0dec-41d1-ad42-0e11b4321edd"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "7322e153-b82d-42dc-b003-b25383425a70",
+          "identifier": "SA-34",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: web"
+          ],
+          "blockedByIds": [
+            "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+            "5a1ebeff-810e-4cd1-be53-ed4e41380ef6",
+            "958692c6-0dec-41d1-ad42-0e11b4321edd"
+          ],
+          "blockedByIdentifiers": [
+            "SA-16",
+            "SA-27",
+            "SA-28"
+          ],
+          "blocksIdentifiers": [
+            "SA-37"
+          ]
+        }
+      }
+    },
+    "M3-02": {
+      "key": "M3-02",
+      "id": "c1b5098b-e685-4525-ac61-721e06faa313",
+      "identifier": "SA-35",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-35/implement-approved-only-dataset-apis-and-view-grants",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-04"
+      ],
+      "dependencyIds": [
+        "958692c6-0dec-41d1-ad42-0e11b4321edd"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "c1b5098b-e685-4525-ac61-721e06faa313",
+          "identifier": "SA-35",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "958692c6-0dec-41d1-ad42-0e11b4321edd"
+          ],
+          "blockedByIdentifiers": [
+            "SA-28"
+          ],
+          "blocksIdentifiers": [
+            "SA-36",
+            "SA-37",
+            "SA-38",
+            "SA-47"
+          ]
+        }
+      }
+    },
+    "M3-03": {
+      "key": "M3-03",
+      "id": "b32dbacd-49a1-4287-aab0-cebe5298627f",
+      "identifier": "SA-36",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-36/commit-review-decisions-and-dataset-assignments-atomically",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777",
+          "name": "Area: backend",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M3-02"
+      ],
+      "dependencyIds": [
+        "c1b5098b-e685-4525-ac61-721e06faa313"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Backend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "b32dbacd-49a1-4287-aab0-cebe5298627f",
+          "identifier": "SA-36",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: backend"
+          ],
+          "blockedByIds": [
+            "c1b5098b-e685-4525-ac61-721e06faa313"
+          ],
+          "blockedByIdentifiers": [
+            "SA-35"
+          ],
+          "blocksIdentifiers": [
+            "SA-39"
+          ]
+        }
+      }
+    },
+    "M3-04": {
+      "key": "M3-04",
+      "id": "40d20e54-893e-457d-b4b8-925d1417ed00",
+      "identifier": "SA-37",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-37/build-the-shared-data-browser-with-url-backed-filters",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+          "name": "Area: web",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M3-02",
+        "M3-01"
+      ],
+      "dependencyIds": [
+        "c1b5098b-e685-4525-ac61-721e06faa313",
+        "7322e153-b82d-42dc-b003-b25383425a70"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "40d20e54-893e-457d-b4b8-925d1417ed00",
+          "identifier": "SA-37",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: web"
+          ],
+          "blockedByIds": [
+            "7322e153-b82d-42dc-b003-b25383425a70",
+            "c1b5098b-e685-4525-ac61-721e06faa313"
+          ],
+          "blockedByIdentifiers": [
+            "SA-34",
+            "SA-35"
+          ],
+          "blocksIdentifiers": [
+            "SA-39"
+          ]
+        }
+      }
+    },
+    "M3-05": {
+      "key": "M3-05",
+      "id": "9d8460d2-5828-42b4-b6ad-b025781447c8",
+      "identifier": "SA-38",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-38/embed-the-real-shared-rerun-viewer-safely",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+          "name": "Area: web",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-02",
+        "M2-07",
+        "M3-02"
+      ],
+      "dependencyIds": [
+        "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+        "afac56d0-c7ec-4525-9d4a-6d459f62102a",
+        "c1b5098b-e685-4525-ac61-721e06faa313"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "9d8460d2-5828-42b4-b6ad-b025781447c8",
+          "identifier": "SA-38",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: web"
+          ],
+          "blockedByIds": [
+            "4c63b066-9eb2-4fbd-90de-d2f0e266f315",
+            "afac56d0-c7ec-4525-9d4a-6d459f62102a",
+            "c1b5098b-e685-4525-ac61-721e06faa313"
+          ],
+          "blockedByIdentifiers": [
+            "SA-16",
+            "SA-31",
+            "SA-35"
+          ],
+          "blocksIdentifiers": [
+            "SA-39",
+            "SA-43"
+          ]
+        }
+      }
+    },
+    "M3-06": {
+      "key": "M3-06",
+      "id": "6e3aacb7-c515-4d28-8b5c-be3269e8ba5c",
+      "identifier": "SA-39",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-39/build-the-shared-clip-review-and-read-only-customer-page",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290",
+          "name": "Area: web",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M3-03",
+        "M3-04",
+        "M3-05"
+      ],
+      "dependencyIds": [
+        "b32dbacd-49a1-4287-aab0-cebe5298627f",
+        "40d20e54-893e-457d-b4b8-925d1417ed00",
+        "9d8460d2-5828-42b4-b6ad-b025781447c8"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Frontend engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "6e3aacb7-c515-4d28-8b5c-be3269e8ba5c",
+          "identifier": "SA-39",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: web"
+          ],
+          "blockedByIds": [
+            "b32dbacd-49a1-4287-aab0-cebe5298627f",
+            "40d20e54-893e-457d-b4b8-925d1417ed00",
+            "9d8460d2-5828-42b4-b6ad-b025781447c8"
+          ],
+          "blockedByIdentifiers": [
+            "SA-36",
+            "SA-37",
+            "SA-38"
+          ],
+          "blocksIdentifiers": [
+            "SA-40"
+          ]
+        }
+      }
+    },
+    "M3-07": {
+      "key": "M3-07",
+      "id": "52c1f375-e4dc-4d98-b2b7-a11181ce57ac",
+      "identifier": "SA-40",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-40/prove-local-staff-to-customer-review-and-isolation",
+      "milestoneKey": "M3",
+      "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+      "labels": [
+        {
+          "id": "b8a43138-409d-41a8-a63b-9352292acd8f",
+          "name": "Area: quality",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-09",
+        "M3-06"
+      ],
+      "dependencyIds": [
+        "f0f3509e-46e2-4af6-a205-11cb238aa6ee",
+        "6e3aacb7-c515-4d28-8b5c-be3269e8ba5c"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "QA engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "52c1f375-e4dc-4d98-b2b7-a11181ce57ac",
+          "identifier": "SA-40",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: quality"
+          ],
+          "blockedByIds": [
+            "f0f3509e-46e2-4af6-a205-11cb238aa6ee",
+            "6e3aacb7-c515-4d28-8b5c-be3269e8ba5c"
+          ],
+          "blockedByIdentifiers": [
+            "SA-33",
+            "SA-39"
+          ],
+          "blocksIdentifiers": [
+            "SA-48"
+          ]
+        }
+      }
+    },
+    "M4-01": {
+      "key": "M4-01",
+      "id": "0b7e8afc-6993-4c6e-8634-de7399711c3a",
+      "identifier": "SA-41",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-41/deploy-the-render-stack-and-private-r2-configuration",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-03"
+      ],
+      "dependencyIds": [
+        "5a1ebeff-810e-4cd1-be53-ed4e41380ef6"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "0b7e8afc-6993-4c6e-8634-de7399711c3a",
+          "identifier": "SA-41",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "5a1ebeff-810e-4cd1-be53-ed4e41380ef6"
+          ],
+          "blockedByIdentifiers": [
+            "SA-27"
+          ],
+          "blocksIdentifiers": [
+            "SA-42"
+          ]
+        }
+      }
+    },
+    "M4-02": {
+      "key": "M4-02",
+      "id": "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e",
+      "identifier": "SA-42",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-42/deploy-the-modal-cpu-executor-over-the-shared-worker",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M2-08",
+        "M4-01",
+        "M2-09"
+      ],
+      "dependencyIds": [
+        "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7",
+        "0b7e8afc-6993-4c6e-8634-de7399711c3a",
+        "f0f3509e-46e2-4af6-a205-11cb238aa6ee"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e",
+          "identifier": "SA-42",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7",
+            "f0f3509e-46e2-4af6-a205-11cb238aa6ee",
+            "0b7e8afc-6993-4c6e-8634-de7399711c3a"
+          ],
+          "blockedByIdentifiers": [
+            "SA-32",
+            "SA-33",
+            "SA-41"
+          ],
+          "blocksIdentifiers": [
+            "SA-43",
+            "SA-45"
+          ]
+        }
+      }
+    },
+    "M4-03": {
+      "key": "M4-03",
+      "id": "4c462c7f-9003-4aee-9c2c-234567b1c449",
+      "identifier": "SA-43",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-43/qualify-real-r2-multipart-and-private-viewer-transfers",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M4-02",
+        "M3-05"
+      ],
+      "dependencyIds": [
+        "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e",
+        "9d8460d2-5828-42b4-b6ad-b025781447c8"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "4c462c7f-9003-4aee-9c2c-234567b1c449",
+          "identifier": "SA-43",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "9d8460d2-5828-42b4-b6ad-b025781447c8",
+            "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e"
+          ],
+          "blockedByIdentifiers": [
+            "SA-38",
+            "SA-42"
+          ],
+          "blocksIdentifiers": [
+            "SA-44"
+          ]
+        }
+      }
+    },
+    "M4-04": {
+      "key": "M4-04",
+      "id": "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+      "identifier": "SA-44",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-44/prove-cloud-workflow-and-worker-failure-recovery",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "b8a43138-409d-41a8-a63b-9352292acd8f",
+          "name": "Area: quality",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M4-03"
+      ],
+      "dependencyIds": [
+        "4c462c7f-9003-4aee-9c2c-234567b1c449"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "QA / platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+          "identifier": "SA-44",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: quality"
+          ],
+          "blockedByIds": [
+            "4c462c7f-9003-4aee-9c2c-234567b1c449"
+          ],
+          "blockedByIdentifiers": [
+            "SA-43"
+          ],
+          "blocksIdentifiers": [
+            "SA-46",
+            "SA-48"
+          ]
+        }
+      }
+    },
+    "M4-05": {
+      "key": "M4-05",
+      "id": "98712b5b-2acb-42b3-8202-ce6227f1b514",
+      "identifier": "SA-45",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-45/instrument-pipeline-resources-errors-and-spending",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M4-02"
+      ],
+      "dependencyIds": [
+        "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "98712b5b-2acb-42b3-8202-ce6227f1b514",
+          "identifier": "SA-45",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e"
+          ],
+          "blockedByIdentifiers": [
+            "SA-42"
+          ],
+          "blocksIdentifiers": [
+            "SA-46",
+            "SA-47"
+          ]
+        }
+      }
+    },
+    "M4-06": {
+      "key": "M4-06",
+      "id": "1e452747-5025-423d-a2b8-ac917d883479",
+      "identifier": "SA-46",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-46/test-database-restore-and-document-operational-recovery",
+      "milestoneKey": "M4",
+      "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+      "labels": [
+        {
+          "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a",
+          "name": "Area: platform",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M4-04",
+        "M4-05"
+      ],
+      "dependencyIds": [
+        "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+        "98712b5b-2acb-42b3-8202-ce6227f1b514"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Platform engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "1e452747-5025-423d-a2b8-ac917d883479",
+          "identifier": "SA-46",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: platform"
+          ],
+          "blockedByIds": [
+            "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+            "98712b5b-2acb-42b3-8202-ce6227f1b514"
+          ],
+          "blockedByIdentifiers": [
+            "SA-44",
+            "SA-45"
+          ],
+          "blocksIdentifiers": [
+            "SA-49"
+          ]
+        }
+      }
+    },
+    "M5-01": {
+      "key": "M5-01",
+      "id": "4b160c4b-beb4-495e-8b00-87f12fdd048b",
+      "identifier": "SA-47",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-47/prepare-collector-permissions-retention-and-support-runbooks",
+      "milestoneKey": "M5",
+      "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+      "labels": [
+        {
+          "id": "b7c391b2-2e4b-4b8a-9615-857e72079388",
+          "name": "Area: operations",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M1-09",
+        "M3-02",
+        "M4-05"
+      ],
+      "dependencyIds": [
+        "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+        "c1b5098b-e685-4525-ac61-721e06faa313",
+        "98712b5b-2acb-42b3-8202-ce6227f1b514"
+      ],
+      "planPriority": 2,
+      "linearPriority": 3,
+      "ownerRole": "Project owner / operations",
+      "size": "S",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "4b160c4b-beb4-495e-8b00-87f12fdd048b",
+          "identifier": "SA-47",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "status": "Backlog",
+          "priority": {
+            "value": 3,
+            "name": "Medium"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Area: operations"
+          ],
+          "blockedByIds": [
+            "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+            "c1b5098b-e685-4525-ac61-721e06faa313",
+            "98712b5b-2acb-42b3-8202-ce6227f1b514"
+          ],
+          "blockedByIdentifiers": [
+            "SA-23",
+            "SA-35",
+            "SA-45"
+          ],
+          "blocksIdentifiers": [
+            "SA-48"
+          ]
+        }
+      }
+    },
+    "M5-02": {
+      "key": "M5-02",
+      "id": "6f13709d-99af-49e4-b7dd-58e0e5451ee2",
+      "identifier": "SA-48",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-48/qualify-a-signed-device-two-hour-capture-through-cloud-review",
+      "milestoneKey": "M5",
+      "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+      "labels": [
+        {
+          "id": "b8a43138-409d-41a8-a63b-9352292acd8f",
+          "name": "Area: quality",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M3-07",
+        "M4-04",
+        "M5-01"
+      ],
+      "dependencyIds": [
+        "52c1f375-e4dc-4d98-b2b7-a11181ce57ac",
+        "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+        "4b160c4b-beb4-495e-8b00-87f12fdd048b"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "QA / robotics engineer",
+      "size": "M",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.484Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "6f13709d-99af-49e4-b7dd-58e0e5451ee2",
+          "identifier": "SA-48",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: quality"
+          ],
+          "blockedByIds": [
+            "52c1f375-e4dc-4d98-b2b7-a11181ce57ac",
+            "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3",
+            "4b160c4b-beb4-495e-8b00-87f12fdd048b"
+          ],
+          "blockedByIdentifiers": [
+            "SA-40",
+            "SA-44",
+            "SA-47"
+          ],
+          "blocksIdentifiers": [
+            "SA-49"
+          ]
+        }
+      }
+    },
+    "M5-03": {
+      "key": "M5-03",
+      "id": "9bc91165-0ce9-4f13-a6b9-93f53eaeec16",
+      "identifier": "SA-49",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-49/complete-internal-and-customer-uat-and-pilot-gono-go",
+      "milestoneKey": "M5",
+      "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+      "labels": [
+        {
+          "id": "b7c391b2-2e4b-4b8a-9615-857e72079388",
+          "name": "Area: operations",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        },
+        {
+          "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5",
+          "name": "Qualification gate",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "created": true
+        }
+      ],
+      "dependencyKeys": [
+        "M5-02",
+        "M4-06"
+      ],
+      "dependencyIds": [
+        "6f13709d-99af-49e4-b7dd-58e0e5451ee2",
+        "1e452747-5025-423d-a2b8-ac917d883479"
+      ],
+      "planPriority": 1,
+      "linearPriority": 2,
+      "ownerRole": "Project owner",
+      "size": "S",
+      "created": true,
+      "verification": {
+        "checkedAt": "2026-10-31T20:56:26.485Z",
+        "pass": true,
+        "checks": {
+          "planningKey": true,
+          "title": true,
+          "project": true,
+          "team": true,
+          "milestone": true,
+          "backlog": true,
+          "priority": true,
+          "assigneeUnset": true,
+          "datesUnset": true,
+          "estimateUnset": true,
+          "cycleUnset": true,
+          "unarchived": true,
+          "labels": true,
+          "nativeBlockers": true,
+          "nativeBlocks": true,
+          "noUnplannedRelations": true,
+          "outcome": true,
+          "scope": true,
+          "acceptanceCriteria": true,
+          "validation": true,
+          "context": true,
+          "dependencyLinks": true,
+          "sections": true
+        },
+        "observed": {
+          "id": "9bc91165-0ce9-4f13-a6b9-93f53eaeec16",
+          "identifier": "SA-49",
+          "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+          "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+          "milestoneId": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "status": "Backlog",
+          "priority": {
+            "value": 2,
+            "name": "High"
+          },
+          "assigneeId": null,
+          "dueDate": null,
+          "estimate": null,
+          "cycleId": null,
+          "labels": [
+            "Qualification gate",
+            "Area: operations"
+          ],
+          "blockedByIds": [
+            "1e452747-5025-423d-a2b8-ac917d883479",
+            "6f13709d-99af-49e4-b7dd-58e0e5451ee2"
+          ],
+          "blockedByIdentifiers": [
+            "SA-46",
+            "SA-48"
+          ],
+          "blocksIdentifiers": []
+        }
+      }
+    }
+  },
+  "journal": [
+    {
+      "at": "2026-10-31T20:52:06.086Z",
+      "action": "project.create",
+      "key": "StateAction.ai · Collection & review MVP",
+      "id": "1f0e36aa-86a3-4f5f-825d-f4331883b536"
+    },
+    {
+      "at": "2026-10-31T20:52:06.841Z",
+      "action": "label.create",
+      "key": "Area: auth",
+      "id": "0275fc46-22d2-4d2e-9245-471853471d0e"
+    },
+    {
+      "at": "2026-10-31T20:52:07.436Z",
+      "action": "label.create",
+      "key": "Area: backend",
+      "id": "0fe55c39-7e89-45ab-aaf7-7a809ba0d777"
+    },
+    {
+      "at": "2026-10-31T20:52:08.289Z",
+      "action": "label.create",
+      "key": "Area: mobile",
+      "id": "b5f8297f-11e6-4137-bf17-f00165b630a9"
+    },
+    {
+      "at": "2026-10-31T20:52:09.402Z",
+      "action": "label.create",
+      "key": "Area: web",
+      "id": "8958b9d5-e9c4-4d6e-a52e-15fa0a02e290"
+    },
+    {
+      "at": "2026-10-31T20:52:10.076Z",
+      "action": "label.create",
+      "key": "Area: platform",
+      "id": "e22b7bc6-eecc-4953-8ed3-ebf2afdd708a"
+    },
+    {
+      "at": "2026-10-31T20:52:10.729Z",
+      "action": "label.create",
+      "key": "Area: robotics",
+      "id": "7add3715-c69c-4c4f-8613-1ba8bde145d2"
+    },
+    {
+      "at": "2026-10-31T20:52:11.748Z",
+      "action": "label.create",
+      "key": "Area: quality",
+      "id": "b8a43138-409d-41a8-a63b-9352292acd8f"
+    },
+    {
+      "at": "2026-10-31T20:52:12.477Z",
+      "action": "label.create",
+      "key": "Area: operations",
+      "id": "b7c391b2-2e4b-4b8a-9615-857e72079388"
+    },
+    {
+      "at": "2026-10-31T20:52:13.360Z",
+      "action": "label.create",
+      "key": "Qualification gate",
+      "id": "0fea766a-f1b0-4172-a9dd-691cc8cacee5"
+    },
+    {
+      "at": "2026-10-31T20:52:33.037Z",
+      "action": "milestone.create",
+      "key": "M0",
+      "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06"
+    },
+    {
+      "at": "2026-10-31T20:52:33.541Z",
+      "action": "milestone.create",
+      "key": "M1",
+      "id": "99688826-02ce-402e-8ece-ef614c716ec0"
+    },
+    {
+      "at": "2026-10-31T20:52:34.034Z",
+      "action": "milestone.create",
+      "key": "M2",
+      "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6"
+    },
+    {
+      "at": "2026-10-31T20:52:34.638Z",
+      "action": "milestone.create",
+      "key": "M3",
+      "id": "8ed38025-3e96-436f-9162-e815dd412bcc"
+    },
+    {
+      "at": "2026-10-31T20:52:35.314Z",
+      "action": "milestone.create",
+      "key": "M4",
+      "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b"
+    },
+    {
+      "at": "2026-10-31T20:52:35.848Z",
+      "action": "milestone.create",
+      "key": "M5",
+      "id": "24ee71c0-34cd-4389-92ec-4422d09477be"
+    },
+    {
+      "at": "2026-10-31T20:52:36.748Z",
+      "action": "document.create",
+      "key": "brief",
+      "id": "4a407068-0073-42c1-a3ad-f1bc2bdbbbed"
+    },
+    {
+      "at": "2026-10-31T20:52:37.394Z",
+      "action": "document.create",
+      "key": "standards",
+      "id": "48163158-3092-4811-9865-10a7837b66c1"
+    },
+    {
+      "at": "2026-10-31T20:52:37.985Z",
+      "action": "document.create",
+      "key": "technical",
+      "id": "9b37ee33-8417-4a06-9b2c-8c50c00b015e"
+    },
+    {
+      "at": "2026-10-31T20:53:12.831Z",
+      "action": "issue.create.reconciled",
+      "key": "M0-01",
+      "id": "48191e37-e09e-43a0-91bd-827276f0bacb"
+    },
+    {
+      "at": "2026-10-31T20:53:15.179Z",
+      "action": "issue.create",
+      "key": "M0-02",
+      "id": "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+    },
+    {
+      "at": "2026-10-31T20:53:16.131Z",
+      "action": "issue.create",
+      "key": "M0-03",
+      "id": "bdbaecd0-c6d5-414b-b416-94181ccb916d"
+    },
+    {
+      "at": "2026-10-31T20:53:17.697Z",
+      "action": "issue.create",
+      "key": "M0-04",
+      "id": "641069c2-1df1-4694-ab0a-5afbfcbc5bc7"
+    },
+    {
+      "at": "2026-10-31T20:53:18.663Z",
+      "action": "issue.create",
+      "key": "M0-05",
+      "id": "1e261605-4645-405e-aa89-0efe0ce8bf81"
+    },
+    {
+      "at": "2026-10-31T20:53:19.789Z",
+      "action": "issue.create",
+      "key": "M1-01",
+      "id": "0d2b2098-fd0b-4cf8-9110-d46fceceb1c5"
+    },
+    {
+      "at": "2026-10-31T20:53:20.840Z",
+      "action": "issue.create",
+      "key": "M1-02",
+      "id": "4c63b066-9eb2-4fbd-90de-d2f0e266f315"
+    },
+    {
+      "at": "2026-10-31T20:53:21.849Z",
+      "action": "issue.create",
+      "key": "M1-03",
+      "id": "a1bfd926-4d70-4533-b09f-c897f45e06ee"
+    },
+    {
+      "at": "2026-10-31T20:53:22.823Z",
+      "action": "issue.create",
+      "key": "M1-04",
+      "id": "9933014a-4f7f-4d2e-b768-ba05d01e5199"
+    },
+    {
+      "at": "2026-10-31T20:53:23.916Z",
+      "action": "issue.create",
+      "key": "M1-05",
+      "id": "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6"
+    },
+    {
+      "at": "2026-10-31T20:53:28.287Z",
+      "action": "issue.create",
+      "key": "M1-06",
+      "id": "cd919f4f-1532-4727-ba32-47b4a2657c8d"
+    },
+    {
+      "at": "2026-10-31T20:53:29.469Z",
+      "action": "issue.create",
+      "key": "M1-07",
+      "id": "1f28e536-1a29-430f-865d-375f921a5f9a"
+    },
+    {
+      "at": "2026-10-31T20:53:30.649Z",
+      "action": "issue.create",
+      "key": "M1-08",
+      "id": "8a9d5027-a8d7-49f4-8b4c-8421f116544d"
+    },
+    {
+      "at": "2026-10-31T20:53:32.826Z",
+      "action": "issue.create",
+      "key": "M1-09",
+      "id": "4f232b9b-c8f6-4712-ab3d-5127c59178b9"
+    },
+    {
+      "at": "2026-10-31T20:53:34.296Z",
+      "action": "issue.create",
+      "key": "M2-00",
+      "id": "a8d2d973-c404-40ee-a294-8f1603d070b1"
+    },
+    {
+      "at": "2026-10-31T20:53:35.798Z",
+      "action": "issue.create",
+      "key": "M2-01",
+      "id": "ed29627b-26e8-43e4-afaf-0914c8fe91d2"
+    },
+    {
+      "at": "2026-10-31T20:53:36.821Z",
+      "action": "issue.create",
+      "key": "M2-02",
+      "id": "3f428c44-318a-46a8-9456-fcc626287977"
+    },
+    {
+      "at": "2026-10-31T20:53:37.873Z",
+      "action": "issue.create",
+      "key": "M2-03",
+      "id": "5a1ebeff-810e-4cd1-be53-ed4e41380ef6"
+    },
+    {
+      "at": "2026-10-31T20:53:38.968Z",
+      "action": "issue.create",
+      "key": "M2-04",
+      "id": "958692c6-0dec-41d1-ad42-0e11b4321edd"
+    },
+    {
+      "at": "2026-10-31T20:53:40.344Z",
+      "action": "issue.create",
+      "key": "M2-05",
+      "id": "c3450613-315e-4d9e-9bbe-8886b68de928"
+    },
+    {
+      "at": "2026-10-31T20:53:41.343Z",
+      "action": "issue.create",
+      "key": "M2-06",
+      "id": "153b8ee0-5d73-470f-ac1d-5447acfc8353"
+    },
+    {
+      "at": "2026-10-31T20:53:42.856Z",
+      "action": "issue.create",
+      "key": "M2-07",
+      "id": "afac56d0-c7ec-4525-9d4a-6d459f62102a"
+    },
+    {
+      "at": "2026-10-31T20:53:43.886Z",
+      "action": "issue.create",
+      "key": "M2-08",
+      "id": "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7"
+    },
+    {
+      "at": "2026-10-31T20:53:45.386Z",
+      "action": "issue.create",
+      "key": "M2-09",
+      "id": "f0f3509e-46e2-4af6-a205-11cb238aa6ee"
+    },
+    {
+      "at": "2026-10-31T20:53:46.543Z",
+      "action": "issue.create",
+      "key": "M3-01",
+      "id": "7322e153-b82d-42dc-b003-b25383425a70"
+    },
+    {
+      "at": "2026-10-31T20:53:49.750Z",
+      "action": "issue.create",
+      "key": "M3-02",
+      "id": "c1b5098b-e685-4525-ac61-721e06faa313"
+    },
+    {
+      "at": "2026-10-31T20:53:50.659Z",
+      "action": "issue.create",
+      "key": "M3-03",
+      "id": "b32dbacd-49a1-4287-aab0-cebe5298627f"
+    },
+    {
+      "at": "2026-10-31T20:53:51.573Z",
+      "action": "issue.create",
+      "key": "M3-04",
+      "id": "40d20e54-893e-457d-b4b8-925d1417ed00"
+    },
+    {
+      "at": "2026-10-31T20:53:52.832Z",
+      "action": "issue.create",
+      "key": "M3-05",
+      "id": "9d8460d2-5828-42b4-b6ad-b025781447c8"
+    },
+    {
+      "at": "2026-10-31T20:53:53.863Z",
+      "action": "issue.create",
+      "key": "M3-06",
+      "id": "6e3aacb7-c515-4d28-8b5c-be3269e8ba5c"
+    },
+    {
+      "at": "2026-10-31T20:53:55.109Z",
+      "action": "issue.create",
+      "key": "M3-07",
+      "id": "52c1f375-e4dc-4d98-b2b7-a11181ce57ac"
+    },
+    {
+      "at": "2026-10-31T20:53:56.488Z",
+      "action": "issue.create",
+      "key": "M4-01",
+      "id": "0b7e8afc-6993-4c6e-8634-de7399711c3a"
+    },
+    {
+      "at": "2026-10-31T20:53:57.733Z",
+      "action": "issue.create",
+      "key": "M4-02",
+      "id": "ece7ec53-892d-4a9d-8e9a-fe92e62cee7e"
+    },
+    {
+      "at": "2026-10-31T20:53:58.713Z",
+      "action": "issue.create",
+      "key": "M4-03",
+      "id": "4c462c7f-9003-4aee-9c2c-234567b1c449"
+    },
+    {
+      "at": "2026-10-31T20:54:01.724Z",
+      "action": "issue.create",
+      "key": "M4-04",
+      "id": "c5727e10-d54e-4c86-bbc5-e4c10acc0ab3"
+    },
+    {
+      "at": "2026-10-31T20:54:02.698Z",
+      "action": "issue.create",
+      "key": "M4-05",
+      "id": "98712b5b-2acb-42b3-8202-ce6227f1b514"
+    },
+    {
+      "at": "2026-10-31T20:54:03.965Z",
+      "action": "issue.create",
+      "key": "M4-06",
+      "id": "1e452747-5025-423d-a2b8-ac917d883479"
+    },
+    {
+      "at": "2026-10-31T20:54:05.349Z",
+      "action": "issue.create",
+      "key": "M5-01",
+      "id": "4b160c4b-beb4-495e-8b00-87f12fdd048b"
+    },
+    {
+      "at": "2026-10-31T20:54:08.985Z",
+      "action": "issue.create",
+      "key": "M5-02",
+      "id": "6f13709d-99af-49e4-b7dd-58e0e5451ee2"
+    },
+    {
+      "at": "2026-10-31T20:54:10.092Z",
+      "action": "issue.create",
+      "key": "M5-03",
+      "id": "9bc91165-0ce9-4f13-a6b9-93f53eaeec16"
+    },
+    {
+      "at": "2026-10-31T20:54:31.206Z",
+      "action": "document.create",
+      "key": "traceability",
+      "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98"
+    },
+    {
+      "at": "2026-10-31T20:54:32.474Z",
+      "action": "project.update.resources",
+      "key": "StateAction.ai · Collection & review MVP",
+      "id": "1f0e36aa-86a3-4f5f-825d-f4331883b536"
+    }
+  ],
+  "problems": [],
+  "capabilityLimits": [
+    "No custom-view mutation tool is exposed; no custom view created.",
+    "Native estimate scale unverified; native estimates and cycles intentionally unset."
+  ],
+  "verification": {
+    "checkedAt": "2026-10-31T20:56:26.681Z",
+    "result": "pass",
+    "counts": {
+      "projects": 1,
+      "issues": 40,
+      "milestones": 6,
+      "documents": 4,
+      "labels": 9,
+      "nativeDependencyEdges": 63,
+      "acceptanceCriteria": 140,
+      "qualificationGateIssues": 9,
+      "issueReadbacks": 40,
+      "issueListPages": 2
+    },
+    "projectChecks": {
+      "exactName": true,
+      "exactSummary": true,
+      "backlog": true,
+      "onlySATeam": true,
+      "lead": true,
+      "datesUnset": true,
+      "description": true,
+      "documentLinks": true,
+      "uniqueExactMatch": true
+    },
+    "globalChecks": {
+      "inputIssueCount": true,
+      "receiptIssueCount": true,
+      "listedIssueCount": true,
+      "listedIdsExact": true,
+      "issuePaginationComplete": true,
+      "allPlanningKeysExact": true,
+      "allIssueChecks": true,
+      "milestoneCount": true,
+      "allMilestoneChecks": true,
+      "documentCount": true,
+      "allDocumentChecks": true,
+      "issueLabelCoverage": true,
+      "nineLabelsPresent": true,
+      "existingLabelsPreserved": true,
+      "nativeDependencyCount": true,
+      "nativeDependencyGraphExact": true,
+      "traceabilityAll40Links": true,
+      "traceabilityKickoff": true,
+      "noImplementationStarted": true
+    },
+    "issueCheckCounts": {
+      "planningKey": {
+        "pass": 40,
+        "fail": 0
+      },
+      "title": {
+        "pass": 40,
+        "fail": 0
+      },
+      "project": {
+        "pass": 40,
+        "fail": 0
+      },
+      "team": {
+        "pass": 40,
+        "fail": 0
+      },
+      "milestone": {
+        "pass": 40,
+        "fail": 0
+      },
+      "backlog": {
+        "pass": 40,
+        "fail": 0
+      },
+      "priority": {
+        "pass": 40,
+        "fail": 0
+      },
+      "assigneeUnset": {
+        "pass": 40,
+        "fail": 0
+      },
+      "datesUnset": {
+        "pass": 40,
+        "fail": 0
+      },
+      "estimateUnset": {
+        "pass": 40,
+        "fail": 0
+      },
+      "cycleUnset": {
+        "pass": 40,
+        "fail": 0
+      },
+      "unarchived": {
+        "pass": 40,
+        "fail": 0
+      },
+      "labels": {
+        "pass": 40,
+        "fail": 0
+      },
+      "nativeBlockers": {
+        "pass": 40,
+        "fail": 0
+      },
+      "nativeBlocks": {
+        "pass": 40,
+        "fail": 0
+      },
+      "noUnplannedRelations": {
+        "pass": 40,
+        "fail": 0
+      },
+      "outcome": {
+        "pass": 40,
+        "fail": 0
+      },
+      "scope": {
+        "pass": 40,
+        "fail": 0
+      },
+      "acceptanceCriteria": {
+        "pass": 40,
+        "fail": 0
+      },
+      "validation": {
+        "pass": 40,
+        "fail": 0
+      },
+      "context": {
+        "pass": 40,
+        "fail": 0
+      },
+      "dependencyLinks": {
+        "pass": 40,
+        "fail": 0
+      },
+      "sections": {
+        "pass": 40,
+        "fail": 0
+      }
+    },
+    "milestoneChecks": [
+      {
+        "key": "M0",
+        "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      },
+      {
+        "key": "M1",
+        "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      },
+      {
+        "key": "M2",
+        "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      },
+      {
+        "key": "M3",
+        "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      },
+      {
+        "key": "M4",
+        "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      },
+      {
+        "key": "M5",
+        "id": "24ee71c0-34cd-4389-92ec-4422d09477be",
+        "checks": {
+          "name": true,
+          "exitGate": true,
+          "order": true,
+          "targetDateUnset": true,
+          "progressZero": true
+        }
+      }
+    ],
+    "documentChecks": [
+      {
+        "key": "brief",
+        "id": "4a407068-0073-42c1-a3ad-f1bc2bdbbbed",
+        "title": true,
+        "project": true,
+        "url": true,
+        "archived": true,
+        "contentEqual": true,
+        "checks": {
+          "title": true,
+          "project": true,
+          "url": true,
+          "unarchived": true,
+          "content": true,
+          "resource": true
+        }
+      },
+      {
+        "key": "standards",
+        "id": "48163158-3092-4811-9865-10a7837b66c1",
+        "title": true,
+        "project": true,
+        "url": true,
+        "archived": true,
+        "contentEqual": true,
+        "checks": {
+          "title": true,
+          "project": true,
+          "url": true,
+          "unarchived": true,
+          "content": true,
+          "resource": true
+        }
+      },
+      {
+        "key": "technical",
+        "id": "9b37ee33-8417-4a06-9b2c-8c50c00b015e",
+        "title": true,
+        "project": true,
+        "url": true,
+        "archived": true,
+        "contentEqual": true,
+        "checks": {
+          "title": true,
+          "project": true,
+          "url": true,
+          "unarchived": true,
+          "content": true,
+          "resource": true
+        }
+      },
+      {
+        "key": "traceability",
+        "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+        "title": true,
+        "project": true,
+        "url": true,
+        "archived": true,
+        "contentEqual": true,
+        "checks": {
+          "title": true,
+          "project": true,
+          "url": true,
+          "unarchived": true,
+          "content": true,
+          "resource": true
+        }
+      }
+    ],
+    "passFailCounts": {
+      "project": {
+        "pass": 9,
+        "fail": 0
+      },
+      "global": {
+        "pass": 19,
+        "fail": 0
+      },
+      "issues": {
+        "pass": 40,
+        "fail": 0
+      },
+      "milestones": {
+        "pass": 6,
+        "fail": 0
+      },
+      "documents": {
+        "pass": 4,
+        "fail": 0
+      },
+      "nativeDependencyEdges": {
+        "pass": 63,
+        "fail": 0
+      }
+    },
+    "renderingNormalization": "Linear normalizes Markdown bullets, automatic links, escaping and table separators and omits a duplicate document-title heading. Wording was compared after those rendering changes; issue AC wording and checkbox counts, repository paths and required actual URLs were checked separately.",
+    "pagination": {
+      "issues": {
+        "pages": 2,
+        "counts": [
+          25,
+          15
+        ],
+        "complete": true
+      },
+      "documents": {
+        "pages": 1,
+        "count": 4,
+        "complete": true
+      }
+    },
+    "capabilityLimits": [
+      "No custom-view mutation tool is exposed; no custom view created.",
+      "Native estimate scale unverified; native estimates and cycles intentionally unset."
+    ]
+  },
+  "updatedAt": "2026-10-31T20:57:01.474Z"
+}

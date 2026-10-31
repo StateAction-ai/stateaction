@@ -6,6 +6,7 @@ Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical
 
 | Document | Owns |
 | --- | --- |
+| [Linear project and backlog](project-management/README.md) | Live project link, milestone gates, scoped tickets/dependencies and delivery standards |
 | [Monorepo](components/monorepo.md) | Flutter/mobile/native source, Node/Python packages, migration and independent builds |
 | [Local development](components/local-development.md) | Full local CPU end-to-end testing, optional local GPU, Render's local workflow tooling and cloud canary |
 | [UI design and library](components/ui-design.md) | shadcn/ui web choice, Flutter theme, role/state/component map |

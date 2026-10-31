@@ -1,0 +1,125 @@
+{
+  "result": "pass",
+  "scope": "Project management setup only",
+  "project": {
+    "id": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+    "url": "https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e",
+    "team": "SA",
+    "team_id": "88359d62-e976-4c69-b75c-1092c9706460",
+    "status": "Backlog",
+    "lead": "Timothy W"
+  },
+  "count_checks": {
+    "issue_pages": [
+      25,
+      15
+    ],
+    "pagination_complete": true,
+    "expected_issues": 40,
+    "actual_unique_issues": 40,
+    "planning_keys_matched": 40,
+    "missing": 0,
+    "duplicates": 0,
+    "unrelated": 0
+  },
+  "milestones": {
+    "matched": 6,
+    "names": [
+      "M0 · Reproducible foundations",
+      "M1 · Authenticated, resumable collection",
+      "M2 · Local CPU processing",
+      "M3 · Internal review and customer inspection",
+      "M4 · Bounded cloud CPU canary",
+      "M5 · Collection pilot ready"
+    ],
+    "exit_gates_match": true,
+    "target_dates_unset": true
+  },
+  "documents": {
+    "attached_and_read": 4,
+    "titles": [
+      "Project brief & scope",
+      "Delivery standards & milestone gates",
+      "Technical design · approved MVP baseline",
+      "Implementation backlog & traceability"
+    ],
+    "ids_titles_and_project_links_match_receipt": true
+  },
+  "all_issue_list_checks": {
+    "titles_team_project_backlog_milestones_labels": "40/40 match",
+    "priority_mapping": {
+      "plan_1_to_linear_2": 14,
+      "plan_2_to_linear_3": 26
+    },
+    "unset_on_all_40": [
+      "assignee",
+      "dueDate",
+      "estimate",
+      "cycleId",
+      "startedAt",
+      "completedAt"
+    ],
+    "project_start_and_target_dates_unset": true,
+    "unavailable_required_metadata_fields": []
+  },
+  "sample_checks": {
+    "passed_for_each": [
+      "exact title, outcome and scope",
+      "exact acceptance criteria and validation evidence",
+      "owner discipline and provisional size",
+      "source paths and baseline 5955d66",
+      "technical and standards document links",
+      "embedded planning key",
+      "native blocked-by IDs match plan and receipt"
+    ],
+    "results": [
+      {
+        "key": "M0-02",
+        "issue": "SA-11",
+        "result": "pass",
+        "acceptance_criteria": 3,
+        "blocked_by_uuids": []
+      },
+      {
+        "key": "M2-00",
+        "issue": "SA-24",
+        "result": "pass",
+        "acceptance_criteria": 4,
+        "blocked_by_uuids": [
+          "5b67fac2-bc8d-443a-8608-628e5d9e44bc"
+        ]
+      },
+      {
+        "key": "M3-03",
+        "issue": "SA-36",
+        "result": "pass",
+        "acceptance_criteria": 4,
+        "blocked_by_uuids": [
+          "c1b5098b-e685-4525-ac61-721e06faa313"
+        ]
+      },
+      {
+        "key": "M5-03",
+        "issue": "SA-49",
+        "result": "pass",
+        "acceptance_criteria": 4,
+        "blocked_by_uuids": [
+          "6f13709d-99af-49e4-b7dd-58e0e5451ee2",
+          "1e452747-5025-423d-a2b8-ac917d883479"
+        ]
+      }
+    ],
+    "relation_method": "Native blockedBy identifiers were resolved to UUIDs using the live paginated issue list."
+  },
+  "mismatches": [],
+  "observations": [
+    "Project resources contain four native documents plus four links to those same documents.",
+    "Linear auto-linked StateAction.ai in traceability row M1-02; visible title wording matches."
+  ],
+  "limits": [
+    "All list descriptions are truncated. All 40 planning-key mappings were corroborated through receipt UUIDs, live titles and the attached traceability table; embedded keys were directly checked only for the four samples.",
+    "Full descriptions and native relations were inspected only for the four requested samples.",
+    "No implementation code, application behavior or acceptance evidence was verified.",
+    "Remote reads used only the configured official Linear MCP server. No remote mutations or file edits were performed."
+  ]
+}

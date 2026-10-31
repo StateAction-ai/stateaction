@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-31",
+  "scope": "Reviewed planning baseline, not implementation or production qualification",
+  "issueCount": 40,
+  "milestoneCount": 6,
+  "milestoneCounts": {
+    "M0": 5,
+    "M1": 9,
+    "M2": 10,
+    "M3": 7,
+    "M4": 6,
+    "M5": 3
+  },
+  "dependencyEdges": 63,
+  "acyclic": true,
+  "allTicketsReachFinalGate": true,
+  "readyAfterAssignment": [
+    "M0-01",
+    "M0-02"
+  ],
+  "priorityIntentCounts": {
+    "High": 14,
+    "Normal": 26
+  },
+  "coverage": {
+    "single_monorepo_mobile_native_sdk": [
+      "M0-01",
+      "M0-02"
+    ],
+    "node_typescript_and_shared_schemas": [
+      "M0-02",
+      "M0-03"
+    ],
+    "google_auth_account_settings_logout": [
+      "M1-01",
+      "M1-02",
+      "M1-03"
+    ],
+    "closed_mcap_sidecars_owner_journal": [
+      "M1-04",
+      "M1-05"
+    ],
+    "direct_resumable_large_multipart": [
+      "M1-06",
+      "M1-07",
+      "M1-08",
+      "M1-09"
+    ],
+    "official_render_local_runner": [
+      "M0-05",
+      "M2-02",
+      "M2-09"
+    ],
+    "early_real_cpu_and_rerun_risk_probe": [
+      "M2-00"
+    ],
+    "mandatory_21_landmarks_explicit_3d_estimates": [
+      "M2-06"
+    ],
+    "bounded_single_pass_native_frame_mapping": [
+      "M2-05",
+      "M2-07",
+      "M2-09"
+    ],
+    "job_admission_recovery_immutable_sealed_outputs": [
+      "M2-01",
+      "M2-03",
+      "M2-04",
+      "M4-04"
+    ],
+    "automatic_quality_results": [
+      "M2-08",
+      "M3-06"
+    ],
+    "compact_pipeline_detail_actions_recording_review": [
+      "M3-01"
+    ],
+    "url_filtered_dataset_browser": [
+      "M3-04"
+    ],
+    "approved_only_many_to_many_datasets": [
+      "M3-02",
+      "M3-03"
+    ],
+    "atomic_approval_assignment_and_rejection_races": [
+      "M3-03",
+      "M3-07"
+    ],
+    "real_shared_rerun_private_payload": [
+      "M3-05",
+      "M3-06"
+    ],
+    "external_customer_inspection_and_isolation": [
+      "M3-02",
+      "M3-07",
+      "M5-03"
+    ],
+    "render_r2_modal_cpu_cloud_stack": [
+      "M4-01",
+      "M4-02",
+      "M4-03"
+    ],
+    "budget_preflight_observability_measured_cost": [
+      "M4-01",
+      "M4-05",
+      "M5-02"
+    ],
+    "database_restore_rollback": [
+      "M4-06"
+    ],
+    "permissions_retention_support": [
+      "M5-01"
+    ],
+    "two_hour_signed_device_field_qualification": [
+      "M5-02"
+    ],
+    "accountable_pilot_go_no_go": [
+      "M5-03"
+    ]
+  },
+  "sourceReferencesExist": true,
+  "errors": []
+}
