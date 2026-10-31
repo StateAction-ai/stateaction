@@ -84,7 +84,7 @@ Use isolated seeded/test identities for deterministic tests; any test-login adap
 
 | Step | Execution | Evidence |
 | --- | --- | --- |
-| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/grants, source/output multipart, completed Pipeline → pending clip grid → shared viewer, approve-and-assign transaction, approved-only membership and customer All clips denial; clearly synthetic outputs |
+| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/grants, source/output multipart, Pipeline → recording detail → recording clip grid → shared viewer, approve-and-assign transaction, approved-only membership and customer All clips denial; clearly synthetic outputs |
 | 2. Real CPU | Same runner/task + MediaPipe CPU on a short MCAP | Actual 21-point inference, bounded RRD/thumbnail generation, real embedded Rerun playback/frame mapping, 3D-estimate labels, masks, hashes, QC and loader round trip |
 | 3. Local size/failures | Same CPU path, progressively longer captures including representative two-hour size | Bounded RAM/disk, source read counts, elapsed time, cancellation, corrupt source, task-runner loss, uncertain launch and manual retry |
 | 4. Optional local CUDA | Same contracts plus an explicit small cleared profile on the available local GPU | CUDA visibility, memory/resource limits and schema/mask behavior; substitute-model results do not qualify another model's quality or memory |
@@ -99,7 +99,7 @@ Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native 
 
 The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.22.1 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
 
-Prove `/data-browser` defaults to the dataset list and `?datasetId=...` opens its approved-only grid for either role. Staff may explicitly use `?view=clips` for all accepted clips, including pending/rejected/unassigned ones. A completed Pipeline row's **Review clips** action opens `/data-browser?view=clips&recordingId=<UUID>&reviewStatus=pending`, then a card opens the same `/clips/[clipId]` page. There is no separate Review sidebar item. Pipeline has status/search filters, no scenario selector; `/pipeline?status=failed` remains staff-only. Preserve URL state on refresh/paste/Back/Forward.
+Prove `/data-browser` defaults to the dataset list and `?datasetId=...` opens its approved-only grid for either role. Staff may explicitly use `?view=clips` for all accepted clips, including pending/rejected/unassigned ones. A Pipeline row opens `/pipeline/[recordingId]` with the stage visualization and all actions; its **Review clips** action opens `/data-browser?recordingId=<UUID>`, then a card opens the same `/clips/[clipId]` page. There is no separate Review sidebar item. Pipeline has status/search filters, no scenario selector; `/pipeline?status=failed` remains staff-only. Preserve URL state on refresh/paste/Back/Forward.
 
 Test the real review API/database, not just mock controls:
 

@@ -30,9 +30,17 @@ Creating a job persists intent; after commit, make a bounded workflow-start requ
 
 Source/output uploads use API-allocated keys and multipart IDs, including small files. Workers get scoped job capabilities and part URLs, not reusable object-write credentials. The API completes uploads and seals the bounded manifest; sealed jobs cannot allocate more files. Heavy hashing/model checks stay in Python. [Upload](mcap-upload.md)
 
+## Pipeline list and recording detail
+
+`/pipeline` is a compact staff-only status list. Each row opens `/pipeline/[recordingId]` for one source MCAP recording; rows have no action buttons. Preserve list filters and return navigation. The detail page contains the stage visualization, bounded metadata/errors and all applicable actions: **Review clips, Cancel, Retry, reupload and reconcile**. Use friendly recording titles; do not display raw UUIDs or storage paths.
+
+`GET /api/v1/internal/recordings/:recordingId` returns the exact current job reference, latest stage evidence/progress, error and server-derived capabilities. Present **Upload → Queued → Processing → Quality checks → Ready for review**. Derive these from upload/job state and actual worker telemetry; missing evidence stays unknown or explicitly inferred, with no invented percentages. Decoding, hand inference and review-artifact writing remain one invocation; source SHA verification completes at EOF within final quality checks. These display stages add no tasks, stage ledger or tables. [Pipeline contract](pipeline-monitoring.md)
+
+Detail actions use existing upload/job operations and recheck the exact current job and lifecycle; stale references fail. Review clips opens `/data-browser?recordingId=UUID`, then a thumbnail opens the shared review page with Dataset choices. No stage click starts a separate model job or proxies raw media.
+
 ## Data browser and Datasets
 
-`/data-browser` lists Datasets; `?datasetId=UUID` opens screenshot/title/Task-label cards. Datasets contain **approved clips only** for both roles. Staff All clips is explicit `?view=clips`, including accepted pending/approved/rejected clips with optional `recordingId` and `reviewStatus=pending`. Pipeline's completed-row Review clips links to that filtered catalog; a thumbnail opens `/clips/[clipId]`. Customer catalog access is forbidden.
+`/data-browser` lists Datasets; `?datasetId=UUID` opens screenshot/title/Task-label cards. Datasets contain **approved clips only** for both roles. Staff All clips is explicit `?view=clips`, including accepted pending/approved/rejected clips with optional `recordingId` and `reviewStatus=pending`. The Pipeline recording detail's Review clips action links to that filtered catalog; a thumbnail opens `/clips/[clipId]`. Customer catalog access is forbidden.
 
 Review approval and optional Dataset multi-selection share one domain transaction. Lock clips first, then affected Datasets in UUID order; validate review/selection revisions before appending approval and replacing the requested membership set. Omission preserves membership; explicit empty selection clears it. Rejection/withdrawal removes all working memberships and increments affected Dataset revisions atomically. Reapproval never silently restores them. Direct Dataset-add uses the same approved-only guard/locks; no media copies. [Contracts](../contracts.md)
 

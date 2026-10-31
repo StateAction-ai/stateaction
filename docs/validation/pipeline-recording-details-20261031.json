@@ -1,0 +1,659 @@
+{
+  "date": "2026-10-31",
+  "scope": "Synthetic offline mock and design docs only; no production telemetry/auth/cloud runtime test",
+  "responsiveChecks": [
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1440
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1100
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 1024
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 900
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 768
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 700
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 600
+    },
+    {
+      "bodyFits": true,
+      "cellsFit": true,
+      "rowButtons": 0,
+      "tableFits": true,
+      "view": "list",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1042",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1041",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1040",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1039",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1038",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    },
+    {
+      "actionsFit": true,
+      "bodyFits": true,
+      "noScenario": true,
+      "recording": "REC-1037",
+      "stagesFit": true,
+      "view": "detail",
+      "width": 375
+    }
+  ],
+  "interactionChecks": [
+    {
+      "case": "Pipeline list has four columns and no Details/Inspect/Cancel/action buttons",
+      "pass": true
+    },
+    {
+      "case": "Clicking recording row opens exact detail and stage visualization",
+      "pass": true
+    },
+    {
+      "case": "Recording detail keeps Pipeline active in sidebar",
+      "pass": true
+    },
+    {
+      "case": "Filtered list Back link preserves status and search",
+      "pass": true
+    },
+    {
+      "case": "Recording-name link supports keyboard navigation",
+      "pass": true
+    },
+    {
+      "case": "Completed detail opens recording review queue",
+      "pass": true
+    },
+    {
+      "case": "Detail-to-review route retains atomic approve and dataset assignment",
+      "pass": true
+    },
+    {
+      "case": "Running cancellation stays on detail and waits for terminal confirmation",
+      "pass": true
+    },
+    {
+      "case": "Known terminal cancellation enables manual retry without stale list DOM access",
+      "pass": true
+    },
+    {
+      "case": "Queued cancellation does not invent a started processing stage",
+      "pass": true
+    },
+    {
+      "case": "Unknown submission has unknown stages and no retry action",
+      "pass": true
+    },
+    {
+      "case": "Reconciliation monitors original execution inside detail",
+      "pass": true
+    },
+    {
+      "case": "Source hash failure is EOF quality failure with re-upload recovery",
+      "pass": true
+    },
+    {
+      "case": "Uploading detail has progress and no redundant Details action",
+      "pass": true
+    },
+    {
+      "case": "Unknown recording detail does not expose another recording or action",
+      "pass": true
+    },
+    {
+      "case": "Customer cannot inspect Pipeline recording detail",
+      "pass": true
+    }
+  ],
+  "agentReportedResponsiveChecks": 24,
+  "screenshots": [
+    {
+      "file": "mocks/screenshots/20261031-pipeline/pipeline-list-1024.png",
+      "route": "#/pipeline",
+      "width": 1024
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/pipeline-list-mobile.png",
+      "route": "#/pipeline",
+      "width": 375
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/recording-processing.png",
+      "route": "#/pipeline/9cb6e19f-2069-4d2b-91c6-000000001041",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/recording-completed.png",
+      "route": "#/pipeline/9cb6e19f-2069-4d2b-91c6-000000001042",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/recording-error.png",
+      "route": "#/pipeline/9cb6e19f-2069-4d2b-91c6-000000001039",
+      "width": 1024
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/recording-mobile.png",
+      "route": "#/pipeline/9cb6e19f-2069-4d2b-91c6-000000001041",
+      "width": 375
+    },
+    {
+      "file": "mocks/screenshots/20261031-pipeline/recording-clips.png",
+      "route": "#/data-browser?recordingId=9cb6e19f-2069-4d2b-91c6-000000001042",
+      "width": 1440
+    }
+  ],
+  "rootVisuallyInspected": true,
+  "browserErrors": "",
+  "recordingFilterFollowupChecks": [
+    {
+      "case": "Review clips sets only recordingId and shows all three generated clips",
+      "pass": true
+    },
+    {
+      "case": "Every shown clip belongs to the selected recording",
+      "pass": true
+    },
+    {
+      "case": "Clip Back link preserves recording URL filter",
+      "pass": true
+    },
+    {
+      "case": "Review status is optional and retains recording filter",
+      "pass": true
+    },
+    {
+      "case": "Clearing recording filter leaves staff All clips catalog",
+      "pass": true
+    },
+    {
+      "case": "Customer cannot open recording-wide catalog",
+      "pass": true
+    },
+    {
+      "case": "No filters still shows dataset list",
+      "pass": true
+    }
+  ],
+  "note": "The original layout/action checks preceded only the Review clips URL simplification; the seven follow-up checks validate recordingId-only/all-status routing after that change.",
+  "processingDiagramVisuallyInspected": true,
+  "documentationChecks": {
+    "markdownFiles": 17,
+    "localLinksAndAnchors": 138,
+    "diagramPairs": 2,
+    "errors": []
+  },
+  "syntaxCheck": "node --check /tmp/repair-pipeline-detail-mock.js: passed",
+  "finalCopyUpdate": "Simplified stage explanation and pending-source-verification labels; refreshed/inspected the four affected detail screenshots.",
+  "artifactSha256": {
+    "docs/mocks/index.html": "ba20ef0ce88706aa765c6665dba98960b370b376a416178320c9699400610290",
+    "docs/figures/processing-stages.png": "7797bda888d47c9cbfbb9a01b950adbb9cf7fbf46c5aa1e7d37fcf97d2c42bd3",
+    "docs/mocks/screenshots/20261031-pipeline/pipeline-list-1024.png": "196e97381f962265fa0bb2bac1ad4cfb8f22e93f727dbafeeda742474fa4a197",
+    "docs/mocks/screenshots/20261031-pipeline/pipeline-list-mobile.png": "f43662121f4fbc54153aef31731827cb75f08cb466ebe8bf9883d5385c1a8535",
+    "docs/mocks/screenshots/20261031-pipeline/recording-clips.png": "ea956843587a952a3cab699cd32597cf9aa1075a4bdc2625ece79f6dc5ac9116",
+    "docs/mocks/screenshots/20261031-pipeline/recording-completed.png": "d27f496bd7b2efc184f2e14ae0cd8e068d693582b84bbca09257a87181d047ef",
+    "docs/mocks/screenshots/20261031-pipeline/recording-error.png": "12dc11e24b8dda4e039f63d879772a82373598fa94d78d4f3fc887065d4aad8b",
+    "docs/mocks/screenshots/20261031-pipeline/recording-mobile.png": "2a91dc4bdc8cfccbb466f2e7d99e5b7885c0a35eaf768468678c7b740754f299",
+    "docs/mocks/screenshots/20261031-pipeline/recording-processing.png": "3383938d7e017c21ccb8cc27e3f79f928ffd4ff5a84f91f455b86af5eb6ac526"
+  }
+}

@@ -22,7 +22,7 @@ This follows established usage: [FiftyOne](https://docs.voxel51.com/user_guide/b
 
 ## Two main pages
 
-**Pipeline** is staff-only. `/pipeline?status=failed` filters recording/job processing state. Default is all states; changes update the URL and browser history. Rows show recording name, upload/processing state, progress, updated time and concise error, with job detail and allowed recovery actions. Completed rows include **Review clips**, opening the staff All clips view filtered to that recording and Not reviewed clips. Processing remains Completed independently of human review status; this action is the clear handoff to review. Use human-readable status labels while retaining the detailed job-state enum in the API.
+**Pipeline** is staff-only. `/pipeline?status=failed` filters recording/job processing state. Default is all states; changes update the URL and browser history. Rows show recording name, upload/processing state, progress, updated time and concise error, without an action column. Each row opens `/pipeline/[recordingId]`, which contains stage visualization, all recovery actions and **Review clips**, opening the staff All clips view filtered only to that recording, including unreviewed, approved and rejected clips. Processing remains Completed independently of human review status; this action is the clear handoff to review. Use human-readable status labels while retaining the detailed job-state enum in the API.
 
 **Data browser** is available to staff and authorized customers:
 
@@ -30,12 +30,12 @@ This follows established usage: [FiftyOne](https://docs.voxel51.com/user_guide/b
 | --- | --- |
 | `/data-browser` | Dataset table: name, Clips count and Total hours. Click a row to set `datasetId`. |
 | `/data-browser?view=clips` | Staff-only All clips grid, including unreviewed, approved, rejected and unassigned accepted results. |
-| `/data-browser?view=clips&recordingId=<uuid>&reviewStatus=pending` | Staff review queue reached from a completed Pipeline recording. |
+| `/data-browser?recordingId=<uuid>` | All clips from one recording, reached from Review clips on a completed recording’s Pipeline detail page. |
 | `/data-browser?datasetId=<uuid>` | Approved clip grid for that dataset: thumbnail, title, task label, duration and raster metadata. Staff also see review status. |
 | `/data-browser?datasetId=<uuid>&q=...&label=...` | Same approved grid with URL-backed search/task-label filters. `reviewStatus` belongs to staff All clips. |
 | `/clips/<uuid>` | Same Rerun clip page for both roles, with staff-only review/QC controls. No clip-review sidebar item. |
 
-URL state is the source of truth. Encode query values, validate IDs/filter enums, bound search length, reset pagination when filters change and support refresh, pasted links and Back/Forward. A missing `datasetId` means the dataset list unless staff explicitly select `view=clips`. Reject customer requests for All clips. `recordingId` is a staff-only All clips filter; reject incompatible dataset/global-view parameters rather than broadening results. An inaccessible/unknown ID shows unavailable, never silently switches to all data. Search on the list filters dataset names; on the grid it filters clip title/task label. Query changes use Next.js router navigation; query parameters contain no credentials or signed storage URLs.
+URL state is the source of truth. Encode query values, validate IDs/filter enums, bound search length, reset pagination when filters change and support refresh, pasted links and Back/Forward. A missing `datasetId` means the dataset list unless staff explicitly select `view=clips` or provide a `recordingId`. A recording filter opens its clips with all review statuses by default. Reject customer requests for All clips. `recordingId` is a staff-only All clips filter; reject incompatible dataset/global-view parameters rather than broadening results. An inaccessible/unknown ID shows unavailable, never silently switches to all data. Search on the list filters dataset names; on the grid it filters clip title/task label. Query changes use Next.js router navigation; query parameters contain no credentials or signed storage URLs.
 
 Compute count and hours from **distinct visible clip IDs** and exact stored clip durations, before rounding for display. Counts are per dataset, so overlapping datasets must not be summed as unique corpus hours. One recording may produce many clips; a clip count is not an original-recording count. Grid filters show matching versus total visible clips; the parent dataset summary remains the full authorized dataset total. Cursor pagination and indexes keep lists bounded; no query loads all manifests into the browser.
 

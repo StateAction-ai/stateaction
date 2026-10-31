@@ -1,6 +1,6 @@
 # MVP interfaces and component decisions
 
-Design target · 2026-10-31 · [Offline prototype](../mocks/index.html), [routes and scenarios](../mocks/README.md). Synthetic data only; no production application or real Rerun runtime is installed by this mock. Pipeline has no Scenario selector; its controls are search and processing-status filtering. Scenario selectors elsewhere are demo-only.
+Design target · 2026-10-31 · [Offline prototype](../mocks/index.html), [routes and scenarios](../mocks/README.md). Synthetic data only; no production application or real Rerun runtime is installed by this mock. Pipeline list/detail have no Scenario selector. The list has search/status filtering; recording actions live only on the detail page. Scenario selectors elsewhere are demo-only.
 
 ## Components
 
@@ -12,7 +12,8 @@ Flutter keeps its existing native widgets/theme. Share terminology and status se
 
 | Need | Production component |
 | --- | --- |
-| Pipeline | Table, Badge, Input, Native Select; upload/processing status and errors only |
+| Pipeline list | Compact four-column recording table; wrapped fields, semantic recording links and no row action controls |
+| Pipeline recording detail | Source/status/error cards, responsive milestone list and the applicable review/recovery action |
 | Dataset list | Table rows with dataset name, visible Clips count and Total hours |
 | Dataset detail | Responsive screenshot grid: title, task label, duration and resolution |
 | Dataset editing | Dialog/Input for New dataset; Approved-only Checkbox picker for Add clips and Assign to datasets |
@@ -24,7 +25,7 @@ Flutter keeps its existing native widgets/theme. Share terminology and status se
 
 Use **Dataset** for a named group of approved clips, **Recording** for the original capture/upload and **Clip** for an immutable accepted processing-result segment. A clip can belong to several datasets. Dataset version means a future frozen release of the **whole dataset**. [Naming/routes](data-browser-and-datasets.md).
 
-The sidebar contains **Pipeline** (staff only), **Data browser** (staff and customers), and a separate collector demo. There is no Clip review, Releases or Deliveries navigation/page. Staff default to the Data browser. The Pipeline shows operational status/errors and recoveries. Its completed example recording has **Review clips**, which opens the recording-scoped All clips queue; completed processing does not mean human approval.
+The sidebar contains **Pipeline** (staff only), **Data browser** (staff and customers), and a separate collector demo. There is no Clip review, Releases or Deliveries navigation/page. Staff default to the Data browser. The Pipeline shows operational status/errors and recoveries. Each recording row opens its staff-only Pipeline detail. All actions live there. The completed example detail has **Review clips**, which opens the recording-scoped All clips grid; completed processing does not mean human approval.
 
 The Data browser initially lists datasets with name, Clips count and Total hours. Selecting a row opens its screenshot grid. Staff can create a named dataset, add only approved clips through a picker, and assign an approved clip to multiple datasets without copying media. The staff-only **All clips** tab exposes every accepted processing-result clip, including unreviewed/unassigned clips; it is not a separate sidebar page. New datasets are staff-only; an operator manages customer dataset grants. Do not add grant administration, publication or export controls to this UI.
 
@@ -34,10 +35,17 @@ The Data browser initially lists datasets with name, Clips count and Total hours
 | `/data-browser?datasetId=…` | Dataset-scoped grid of approved members only, for staff and customers |
 | `/data-browser?view=clips` | Staff-only All clips review grid, including unreviewed and unassigned clips |
 | Grid `q`, `label`, `reviewStatus`, `recordingId` | URL-persisted title/task filters; staff All clips supports review status and a clearable recording filter |
-| `/pipeline?status=…&q=…` | Operational status/search filters, separate from browsing/review |
+| `/data-browser?recordingId=<uuid>` | Staff grid of all generated clips from that recording; optional manual review-status filter |
+| `/pipeline?status=…&q=…` | Compact Recording / Collector / Source / Status list; no Actions column or buttons |
+| `/pipeline/[recordingId]` | Recording-specific stages, source metadata, progress/errors and all applicable actions; Back retains list filters |
 | `/clips/[clipId]` | Same immutable clip page/viewer for both roles; no raw ID/path shown in page |
 
 The offline prototype mirrors these routes in its hash. Opening a clip retains its Data browser return URL/filter context in memory. Changing the DEMO actor on a clip keeps its URL unchanged. Reprocessing creates a new clip ID; old links never resolve through `latest`.
+
+
+Pipeline detail shows **Upload → Queued → Processing → Quality checks → Ready for review** with text/icons for done, in progress, failed, unknown, stopped and not started. These are conceptual progress milestones, not separate workflow tasks. Decode, hand estimation, review-media writing and checks overlap in one streaming pass; source SHA verification completes at EOF within quality checks. Never imply the entire source is verified before it is read.
+
+Use only the applicable detail action: Review clips, Cancel, Check status, Retry, Request re-upload or Check execution. Unknown acknowledgement never exposes a blind retry. Cancellation must be confirmed terminal before Retry. List rows and recording anchors open the detail; at mobile width their four fields stack so source/status/error text remains visible without horizontal clipping.
 
 ## Sharing and clip review
 

@@ -8,11 +8,16 @@ Use `apps/web` with [auth](auth-and-access.md), [contracts](../contracts.md) and
 
 | Surface | Behavior |
 | --- | --- |
-| Pipeline | Staff processing status/errors, cancellation and safe retry; a completed row's Review clips action opens filtered All clips |
+| `/pipeline` | Compact staff status rows with no action buttons; click a row to open its source recording detail |
+| `/pipeline/[recordingId]` | Staff stage visualization, metadata/errors and all applicable actions: Review clips, Cancel, Retry, reupload and reconcile |
 | `/data-browser` | Shared Dataset list: name, visible video count and total hours |
 | `/data-browser?datasetId=UUID` | Video grid: screenshot, friendly title, Task label and basic video metadata |
 | `/data-browser?view=clips` | Staff All clips: accepted pending/approved/rejected clips; optional `recordingId` and `reviewStatus=pending` filters |
 | Shared clip detail | A grid card opens `/clips/[clipId]` for either role |
+
+Pipeline detail presents **Upload → Queued → Processing → Quality checks → Ready for review** using actual upload/job/worker evidence. Unknown progress stays unknown; inferred stages are marked. Decode, hand estimation and RRD generation share one invocation, and source hashing completes at EOF in final quality checks; the visualization introduces no task DAG. Keep recording titles friendly and omit raw IDs/paths. Preserve Pipeline filters/back navigation. [Pipeline contract](pipeline-monitoring.md)
+
+From recording detail, **Review clips** opens `/data-browser?recordingId=UUID`. A thumbnail opens `/clips/[clipId]`, where staff reviews and chooses Datasets. Cancellation/retry/reupload/reconciliation controls live on recording detail, subject to current server capabilities; none appear in Pipeline rows.
 
 Staff creates/names Datasets and adds/removes **approved** clips. Add videos offers only clips whose latest review is approved. Many-to-many membership copies no media; edits use the expected Dataset revision. Datasets never contain pending/rejected clips for either role. Review unassigned clips through staff All clips; it is forbidden to customers. Friendly titles need no UUID debug field.
 

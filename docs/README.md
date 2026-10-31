@@ -9,6 +9,7 @@ Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical
 | [Monorepo](components/monorepo.md) | Flutter/mobile/native source, Node/Python packages, migration and independent builds |
 | [Local development](components/local-development.md) | Full local CPU end-to-end testing, optional local GPU, Render's local workflow tooling and cloud canary |
 | [UI design and library](components/ui-design.md) | shadcn/ui web choice, Flutter theme, role/state/component map |
+| [Pipeline monitoring](components/pipeline-monitoring.md) | Compact recording rows, per-recording stages and all processing/review actions |
 | [Data browser and names](components/data-browser-and-datasets.md) | Approved-only datasets, staff All clips review queue, URL filters and product vocabulary |
 | [Rerun clip review](components/rerun-clip-review.md) | Shared clip URL, pinned SDK/viewer, safe bounded RRD and automatic quality results |
 | [Clickable UI mocks](mocks/index.html) | Offline collector/staff/customer prototype and demo states |
