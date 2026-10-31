@@ -1,39 +1,40 @@
-# Internal review and customer delivery
+# Data browser and clip review
 
-MVP design · updated 2026-10-30 · Both workflows ship first; not implemented or deployed.
+MVP design · updated 2026-10-31 · Not implemented or deployed. Staff and customer review ship together; Dataset-version creation, export and publication UI are follow-up work.
 
-**Staff reviews and publishes. Customers inspect granted releases and download all approved trainable data.** They never approve/reject clips. Build both in `apps/web`; follow [auth](auth-and-access.md) and [contracts](../contracts.md).
+Use `apps/web` with [auth](auth-and-access.md), [contracts](../contracts.md) and the [Dataset/browser contract](data-browser-and-datasets.md). Customers inspect shared approved videos; they never approve/reject clips.
 
-## Staff workflow
+## Data browser now
 
-| Screen | Minimum behavior |
+| Surface | Behavior |
 | --- | --- |
-| Upload/jobs list | Owner, recording, queued/running/failed state, actionable error and manual retry/cancel |
-| Clip review | Play bounded clip with 21 hand-landmark overlay; inspect missing detections/QC and source-time mapping |
-| Review decision | Set a whole-clip task label/notes and approve or reject the exact job/manifest/clip |
-| Release builder | Select approved review revisions, name the release, choose customer recipients and request export |
-| Publish | Inspect completed export inventory and publish; revoke future access when needed |
+| Pipeline | Staff processing status/errors, cancellation and safe manual retry; not the review entry point |
+| `/data-browser` | Shared Dataset list: name, visible video count and total hours |
+| `/data-browser?datasetId=UUID` | Video grid: screenshot, friendly title, Task label and basic video metadata |
+| Shared clip detail | A grid card opens `/clips/[clipId]` for either role |
 
-Separate image landmarks from **estimated 3D hand coordinates**. Mask missing/occluded detections; preserve source-frame/time mappings. Overlays do not establish calibrated actions, global trajectories or metric accuracy.
+Staff creates/names Datasets and adds/removes existing accepted clips. Videos are immutable processing clips; many-to-many membership copies no media. Name/membership edits use `expectedRevision`. Adding videos selects from the accepted catalog, not failed/in-progress jobs. A default human-readable clip title needs no UUID debug field.
 
-Keep clips whole and rejected clips out of delivery. Defer joint/trim editors, configurable taxonomies and split policies. Reviews append and pin the job, manifest hash, clip and label. Stale edits conflict; reprocessing never rewrites approvals.
+Staff sees working membership. Customer counts/hours/grid include only currently approved members of explicitly granted Datasets. Evaluate each response consistently; never leak hidden draft/rejected counts. Operator-managed Dataset grants suffice initially; no sharing or release-management UI is required.
 
-## Export and publication
+## Shared clip review
 
-1. Freeze approved reviews and create an export job transactionally. After commit, request `export-release`; repair cron recovers missed starts.
-2. The task invokes `export_release` through `LocalExecutor` locally or `ModalExecutor` on Render. Package the approved clips/hands/masks/mappings/labels into bounded scratch TAR, close/hash it, then upload with manifest/checksums. Check archive contents inline.
-3. Output keys are unique. Every upload uses API-issued multipart IDs, including manifests; the API completes and seals the output inventory. No worker can reopen those keys or upload after sealing.
-4. The finish callback is provisional. API reconciliation requires the known exporter terminal, closed expected outputs, unchanged frozen selection and active release/job before marking `ready`.
-5. Staff explicitly publishes the ready release and recipient grants after checking permitted use/privacy. Publication rechecks that every frozen review is still the latest approved revision for that exact job/clip. A withdrawn approval or changed label blocks the draft with a create-new-release action; already-published bytes stay fixed and staff may explicitly revoke access. Corrections create another release; published bytes and checksums never change.
+Use one Rerun component with separate 2D and estimated-3D panes, preserving missingness/frame mappings without metric claims. There is no Clip review sidebar entry, inspection checkbox, yellow warning box or Other clips section. Staff alone has a Task label, optional notes and approve/reject controls. Approval requires a nonblank label; notes and rejection reasons remain optional. Reviews append against the exact job/manifest/clip/revision; stale edits conflict. Keep clips whole; joint/trim editors remain deferred. [Viewer contract](rerun-clip-review.md)
 
-The archive contains **all approved data selected for that release**: videos, 21-landmark observations and declared 3D estimates, validity/missingness masks and handedness scores, source-time mappings, labels, model/schema provenance and format README. The archive checksum stays outside it; internal manifests list member hashes. No hidden scratch/expiring URL dependencies belong inside. Test extraction/sample reads. Exclude raw MCAP by default; identify missing channels rather than fabricate targets.
+The compact staff-only **Automatic quality checks** panel shows actual worker statuses for checksum, decode, frame mapping and finite/mask validity, plus measured hand-coverage/missingness percentages. Do not hardcode successful checks; a failed accepted-result invariant blocks acceptance. Coverage is not accuracy. QC, notes and internal provenance remain outside the common RRD/customer payload.
 
-Operators check collection/model rights and privacy before publication, recording evidence in release metadata. No policy engine is needed. Withhold data requiring unavailable redaction.
+`GET /api/v1/clips/:clipId` returns scoped data/capabilities. `POST /api/v1/clips/:clipId/viewer-access` rechecks the live Dataset grant, membership and approval before issuing the safe RRD URL. Staff reviews use `POST /api/v1/clips/:clipId/reviews` with `expectedRevision`. Membership alone is not permission; another authorized Dataset may independently grant the same clip.
 
-## Customer workflow and downloads
+Customers see current approved labels and named authorized Dataset contexts. Removing a member, withdrawing approval or revoking access blocks new working access through that context. Previously issued URLs/loaded bytes cannot be recalled immediately. Test real customer review with operator grants and approved local clips; no published fixture is a prerequisite.
 
-Customers list granted published releases with clip examples, archive bytes, inventory and limitations. **Download all** points to the complete TAR, alongside its immutable manifest and checksum file. All media/download bytes come directly from R2.
+## Whole-Dataset versions and export — follow-up
 
-Authorize each URL issuance against current user access, grant and publication state. Use short preview URLs and up to 24-hour archive URLs for long transfers. R2 must serve Range requests; test normal browser pause/resume while the URL is valid. Expired URLs can be reissued after login; automatic cross-URL resume is not promised. Revocation blocks new issuance, while an existing archive URL may remain usable for its remaining lifetime.
+There is no release builder, publish page or generated Download all requirement in the current UI. The following remains a future contract:
 
-Start with a 32 GiB archive ceiling and measured scratch allowance. Reject larger selections before export and have staff create smaller complete releases; never silently truncate. The archive is staged on scratch so its exact size/SHA are known before reserving its multipart upload. This avoids a new unknown-length upload protocol. No separate download-session service or custom CLI ships initially. Pilot acceptance requires customer isolation, stale-review rejection, complete archive extraction/checksums, valid hand masks/mappings and the full collector-to-customer path.
+1. Freeze `datasetId`, Dataset name/revision and **every member's** exact approved review/label/file references. Block export if any member is unreviewed/rejected; staff must review or remove it. Never silently select only the approved subset.
+2. `export_release` reads that complete frozen selection, stages one TAR on scratch, closes/hashes it, then uses API-issued multipart uploads. API sealing, known execution termination and current lifecycle checks precede `ready`.
+3. Staff checks rights/privacy and unchanged Dataset revision/membership and approval before publication. Published Dataset versions require a live Dataset grant and retain named frozen members/labels; subsequent working edits never retarget them. Corrections create another version.
+
+Cap the complete archive at 32 GiB. Reject oversize Datasets; organize smaller Datasets, then version each whole. Include MP4, hand arrays/masks, mappings, labels, format/provenance README and member hashes. RRD can be omitted explicitly; retain the viewer artifact while referenced. The TAR checksum stays outside it. No raw MCAP or hidden scratch dependency is delivered by default.
+
+Future Download all uses direct R2 archive/manifest/checksum URLs, live authorization and Range support. Archive URLs may last 24 hours; revocation stops renewal, and automatic cross-URL resume is not promised. Validate export/extraction/checksums when this follow-up is built; fixture downloads must not imply an implemented exporter.

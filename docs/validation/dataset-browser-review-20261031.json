@@ -1,0 +1,841 @@
+{
+  "date": "2026-10-31",
+  "scope": "Offline synthetic UI mock and documentation only; actual Rerun/Next/auth/cloud/runtime integration not tested",
+  "namedScenarios": 31,
+  "rootResponsiveChecks": 84,
+  "rootResponsiveResults": [
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "unknown",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "missing",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "stale",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Preparing clip preview",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Clip not available",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "notfound",
+      "title": "Clip not found",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "decode_failed",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "signedout",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "permission_denied",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "interrupted",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "offline",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "recording",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "finalizing",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "ready",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "uploading",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "url_expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "transport_expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "wrongaccount",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "lowdisk",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "uploaded",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "verified",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "missing",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "stale",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Preparing clip preview",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Clip not available",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "notfound",
+      "title": "Clip not found",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "decode_failed",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 1440
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "unknown",
+      "title": "Pipeline",
+      "view": "pipeline",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "missing",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "stale",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Preparing clip preview",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Clip not available",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "notfound",
+      "title": "Clip not found",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "decode_failed",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "signedout",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "permission_denied",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "interrupted",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "offline",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "recording",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "finalizing",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "ready",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "uploading",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "url_expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "transport_expired",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "wrongaccount",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "lowdisk",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "uploaded",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "staff",
+      "noOverflow": true,
+      "scenario": "verified",
+      "title": "Collector app",
+      "view": "mobile",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "empty",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Data browser",
+      "view": "browser",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "normal",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "missing",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "stale",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "pending",
+      "title": "Preparing clip preview",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "denied",
+      "title": "Clip not available",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "notfound",
+      "title": "Clip not found",
+      "view": "clip",
+      "width": 375
+    },
+    {
+      "actor": "customer",
+      "noOverflow": true,
+      "scenario": "decode_failed",
+      "title": "Cable seating",
+      "view": "clip",
+      "width": 375
+    }
+  ],
+  "rootInteractionChecks": [
+    {
+      "case": "Staff dataset list shows names, distinct clip counts and hours",
+      "result": true
+    },
+    {
+      "case": "Dataset row selects datasetId and renders thumbnail cards",
+      "result": true
+    },
+    {
+      "case": "Deep-linked grid filters compose from URL",
+      "result": true
+    },
+    {
+      "case": "Pipeline status filter works with lowercase deep link",
+      "result": true
+    },
+    {
+      "case": "Sidebar contains no clip, release or deliveries destinations",
+      "result": true
+    },
+    {
+      "case": "Add clips picker includes accepted clips absent from any selected dataset",
+      "result": true
+    },
+    {
+      "case": "Assign one immutable clip to multiple datasets without copying",
+      "result": true
+    },
+    {
+      "case": "Staff creates empty named dataset with URL selection",
+      "result": true
+    },
+    {
+      "case": "Customer only sees shared datasets and approved clip counts",
+      "result": true
+    },
+    {
+      "case": "Customer grid excludes draft clips and membership controls",
+      "result": true
+    },
+    {
+      "case": "Staff clip shows automatic check results with explicit measurement denominator",
+      "result": true
+    },
+    {
+      "case": "Same clip URL serves customer without internal forms or QC",
+      "result": true
+    },
+    {
+      "case": "Known unapproved clip ID denies customer viewer",
+      "result": true
+    },
+    {
+      "case": "Inaccessible dataset ID does not broaden to all datasets",
+      "result": true
+    },
+    {
+      "case": "Working label update uses current approved label",
+      "result": true
+    },
+    {
+      "case": "Withdrawal hides clip from customer despite former approval",
+      "result": true
+    },
+    {
+      "case": "Removing last granting membership denies new customer clip access",
+      "result": true
+    },
+    {
+      "case": "Grant revocation denies new viewer access",
+      "result": true
+    },
+    {
+      "case": "Normal clip page omits raw UUID, inspection acknowledgement and unrelated clip section",
+      "result": true
+    }
+  ],
+  "agentReportedResponsiveChecks": 100,
+  "screenshots": [
+    {
+      "file": "mocks/screenshots/20261031/datasets.png",
+      "actor": "staff",
+      "route": "#/data-browser",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031/dataset-clips.png",
+      "actor": "staff",
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031/pipeline.png",
+      "actor": "staff",
+      "route": "#/pipeline?status=failed",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031/clip-review.png",
+      "actor": "staff",
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031/customer-dataset.png",
+      "actor": "customer",
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 1440
+    },
+    {
+      "file": "mocks/screenshots/20261031/customer-clip-mobile.png",
+      "actor": "customer",
+      "route": "#/clips/1fd2b602-2c38-4a62-9c1d-000000000002",
+      "width": 375
+    },
+    {
+      "file": "mocks/screenshots/20261031/dataset-mobile.png",
+      "actor": "staff",
+      "route": "#/data-browser?datasetId=683a8f18-042b-4c7a-9b15-000000000001",
+      "width": 375
+    },
+    {
+      "file": "mocks/screenshots/20261031/collector.png",
+      "actor": "staff",
+      "route": "#/collector",
+      "width": 375
+    }
+  ],
+  "screenshotsVisuallyInspectedByRoot": true,
+  "diagramsVisuallyInspectedByRoot": true,
+  "browserErrors": "",
+  "documentationChecks": {
+    "markdownFiles": 23,
+    "localLinksAndAnchors": 168,
+    "diagramPairs": 2,
+    "errors": []
+  },
+  "syntaxCheck": "node --check /tmp/repair-dataset-mock.js: passed",
+  "postScreenshotCorrection": "Changed customer badge to Approved clip and verified 375px identity row remains within viewport; refreshed/inspected customer screenshot.",
+  "independentDesignReview": {
+    "reviewer": "render_workflow_design",
+    "resolved": [
+      "Staff-only accepted clip search supports adding unassigned clips",
+      "External-review permission checked before dataset grants and subsequent shared membership/approval changes"
+    ],
+    "remainingBlockers": []
+  },
+  "artifactSha256": {
+    "docs/mocks/index.html": "548ab05f81a6f7d26686e6580c360ee2062eed9f4f6696e229f84aada9e27544",
+    "docs/mocks/screenshots/20261031/clip-review.png": "083ccc8493fcdb3ebf5bfa8006818e4a4d3ca43a71cb23fecffd2b3c810a8d6d",
+    "docs/mocks/screenshots/20261031/collector.png": "cf5b4ebcc9f7bbe24d38036569625128f0684725df9740a518844e064216cf7c",
+    "docs/mocks/screenshots/20261031/customer-clip-mobile.png": "989e55e2a163e1598432010ef007ccdee94787d302a4f4b406d87de360c9f6a4",
+    "docs/mocks/screenshots/20261031/customer-dataset.png": "68d1e43d170992a2be73c79bf30fcb6aef692358a59a75a3483d1728d5c71293",
+    "docs/mocks/screenshots/20261031/dataset-clips.png": "e9c1e213a59770eaac383f2414b6b08be91bfef521e70ae02ef5152f0e8f76c5",
+    "docs/mocks/screenshots/20261031/dataset-mobile.png": "8a6603f01eb3c45e85a92d58781e332b6d2281ab17e7b2e342e6c2eafa55a5c6",
+    "docs/mocks/screenshots/20261031/datasets.png": "8a8e885a65e39ac33c3957f385f3d14fc0b3788114fd986311b1c5d07f960479",
+    "docs/mocks/screenshots/20261031/pipeline.png": "1890caa6492ebff818331cee9bba99fa176da1d975dd3b2a6b7d56a355136a3b",
+    "docs/figures/processing-stages.png": "fba1123c509b8d355f25fa77f5af5bfcab1611468699e27bacc3cb25aff223de",
+    "docs/figures/render-platform.png": "19bc80164098e12dd5193be182fdbe8e62bd07d2ec99e2773498fab1ea95f34b"
+  }
+}

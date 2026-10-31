@@ -1,6 +1,6 @@
 # Engineering handoff
 
-Updated: 2026-10-30. **Build the simplified MVP**, beginning with the [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [shared contracts](contracts.md). The [engineering/PM/design review](mvp-review.md) records scope coverage and remaining launch gates. Automatic hand landmarks, internal staff review and customer inspection/download all ship together.
+Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [shared contracts](contracts.md). The [engineering/PM/design review](mvp-review.md) records scope coverage and remaining launch gates. Automatic hands, Pipeline monitoring, many-to-many datasets and shared staff/customer clip review are initial scope. Whole-dataset versions/export/download are follow-up work; no Releases or Deliveries page is required now.
 
 ## Implementation documents
 
@@ -9,15 +9,17 @@ Updated: 2026-10-30. **Build the simplified MVP**, beginning with the [technical
 | [Monorepo](components/monorepo.md) | Flutter/mobile/native source, Node/Python packages, migration and independent builds |
 | [Local development](components/local-development.md) | Full local CPU end-to-end testing, optional local GPU, Render's local workflow tooling and cloud canary |
 | [UI design and library](components/ui-design.md) | shadcn/ui web choice, Flutter theme, role/state/component map |
+| [Data browser and names](components/data-browser-and-datasets.md) | Dataset list, URL-filtered clip grid, overlapping membership and product vocabulary |
+| [Rerun clip review](components/rerun-clip-review.md) | Shared clip URL, pinned SDK/viewer, safe bounded RRD and automatic quality results |
 | [Clickable UI mocks](mocks/index.html) | Offline collector/staff/customer prototype and demo states |
 | [Backend](components/backend-architecture.md) | Next.js/Node modules and provider boundaries |
 | [Auth](components/auth-and-access.md) | Manual allowlist, three roles, native login and capture ownership |
 | [Upload](components/mcap-upload.md) | Resumable direct multipart, required-file seal and source integrity |
-| [Storage](components/storage-and-data-model.md) | Seven domain tables, object keys and write closure |
+| [Storage](components/storage-and-data-model.md) | Nine active domain tables, future version table, object keys and write closure |
 | [Execution/data flow](components/pipeline-execution-and-data-flow.md) | Exact stage locations, reads/writes and handoffs |
-| [Orchestration](components/job-orchestration.md) | Two Render workflow tasks, job state, repair cron, Local/Modal executors and failure recovery |
+| [Orchestration](components/job-orchestration.md) | Initial processing and follow-up export task, job state, repair cron, Local/Modal executors and failure recovery |
 | [Processing](components/cloud-processing.md) | Streaming extraction, required 21-point hand inference, masks, model rights and resources |
-| [Review/delivery](components/review-and-delivery.md) | Staff approval, fixed portable package and customer Download all |
+| [Review/delivery](components/review-and-delivery.md) | Staff approval/customer dataset viewing, plus future whole-dataset versions and portable package |
 | [Render deployment](components/render-deployment.md) | Web/database/workflows/cron placement, root monorepo builds and credentials |
 | [Operations/costs](components/operations-and-costs.md) | CPU-first budget, monitoring, retention and recovery |
 | [Current design audit](design-audit.md) | MVP decisions, remaining gates and documentation verification |

@@ -1,12 +1,12 @@
 # Processing and required hand landmarks
 
-Updated: 2026-10-30. MVP implementation target. The same Python core runs locally and inside Modal; only the executor/storage configuration changes. No new cloud worker has been deployed.
+Updated: 2026-10-31. MVP implementation target. The same Python core runs locally and inside Modal; only the executor/storage configuration changes. No new cloud worker has been deployed.
 
 ## Required output
 
 Use **MediaPipe Hand Landmarker on CPU** for the first end-to-end implementation: up to two hands, 21 native-image landmarks per detected hand and clearly marked model-relative 3D estimates. The user confirmed this output is sufficient for the pilot. Detection quality on repair footage still has to pass review; CPU-first is a starting profile, not a quality guarantee.
 
-Keep hand inference mandatory in `process_recording`. No-hand frames are legitimate masked observations; a model failure is a job failure, not a successful RGB-only result. Reviewers see original RGB and a hand-overlay preview plus detection coverage and failure reasons.
+Keep hand inference mandatory in `process_recording`. No-hand frames are legitimate masked observations; a model failure is a job failure, not a successful RGB-only result. The shared Rerun viewer shows a spatial RGB proxy with 2D hands and clearly marked local 3D estimates; staff additionally see automatic check results. Native-resolution RGB and full frame mappings remain separate evidence.
 
 | Output | Required semantics |
 | --- | --- |
@@ -26,13 +26,13 @@ Implement one bounded streaming reader/decoder using `mcap.reader.NonSeekingRead
 
  Read each source MCAP once per fresh attempt, compute SHA-256 while consuming it and reject the result if its final source identity differs. Bound decompression chunks, decoded dimensions, frame queues and encoder buffers. Decode each RGB frame once and feed both inference and viewing encoders. Close/upload bounded clips and array shards progressively; retain only the current shard plus a small overlap/state window. Do not load the full video or all depth into RAM.
 
-Start with 60-second clips and a measured byte ceiling; shorten a clip if necessary without silently reducing required image quality. Output RGB MP4, overlay preview MP4, NPZ hand arrays, frame-map rows and available calibration/sensor evidence per bounded shard. A small JSON manifest references them. A simple documented Python reader loads the portable arrays; no Lance dependency is required. Large Rerun/HTML reports stay opt-in diagnostics.
+Start with 60-second clips and a measured byte ceiling; shorten a clip if necessary without silently reducing required image quality. Output native RGB MP4, NPZ hand arrays, frame-map rows, available sensor evidence, a thumbnail and a customer-safe `viewer.rrd` per clip. Preserve native frame cadence; spatial proxy transforms must be explicit. The initial RRD proposal is at most 128 MiB and 1280×720 proxy, shortening clips when necessary; qualify these bounds, never silently drop frames to fit. A small JSON manifest references them. A simple documented Python reader loads the portable arrays; no Lance dependency is required. Whole-session Rerun/HTML audit reports remain opt-in diagnostics; bounded clip RRDs are required review artifacts. [Rerun payload, access and version contract](rerun-clip-review.md).
 
 Use native timestamps, not `frame_number / fps`. Preserve distinct RGB, depth, ARCore, IMU and camera-tracking clocks. Unverified clock joins remain unverified; the Android v3 optical-to-link transform and per-frame raster/intrinsics rules still apply. Preserve available evidence without presenting ARCore tracking or guessed depth association as ground truth. [Capture regression](../geometry-v3-capture-regression.md)
 
 ## Inline checks and outputs
 
-Before reporting a result, verify source hashes, MCAP decoding, per-shard dimensions/frame counts, joint-array shapes/masks, source-frame/PTS mapping, required files and output hashes. Inspect all declared errors. Check the archive/reader in `export_release`. Await all writes, complete them through the API and seal the inventory; no output upload is allowed afterwards. API acceptance also checks known execution termination/current job references. These checks replace the independent validator for the trusted-code MVP; they do not prove pose accuracy.
+Before reporting a result, verify source hashes, MCAP decoding, per-shard dimensions/frame counts, joint-array shapes/masks, source-frame/PTS mapping, required files and output hashes. Inspect all declared errors. Persist check status/measurements for the staff Automatic quality checks panel; coverage is not accuracy. Check the archive/reader in the follow-up `export_release`. Await all writes, complete them through the API and seal the inventory; no output upload is allowed afterwards. API acceptance also checks known execution termination/current job references. These checks replace the independent validator for the trusted-code MVP; they do not prove pose accuracy.
 
 Outputs use unique job prefixes and API-issued multipart capabilities, including small manifests. Workers have no broad write credentials or database access. Upload/download behavior is shared by local MinIO and R2 modes. [Transport](mcap-upload.md), [control protocol](job-orchestration.md), [stage handoffs](pipeline-execution-and-data-flow.md).
 
@@ -43,7 +43,7 @@ Initial qualification candidates, not measured capacity:
 | Function/profile | Candidate resource limits |
 | --- | --- |
 | `process_recording` / `mediapipe_cpu` | 4 physical CPU cores, 8 GiB RAM, GPU unset; finite 6-hour timeout; bounded scratch/shards |
-| `export_release` | 2 physical CPU cores, 4 GiB RAM, GPU unset; finite 1-hour timeout; stage a bounded TAR on scratch, then hash/multipart-upload it |
+| Follow-up `export_release` | 2 physical CPU cores, 4 GiB RAM, GPU unset; finite 1-hour timeout; stage a bounded TAR on scratch, then hash/multipart-upload it |
 | Optional local CUDA profile | Use an already available GPU and a separately pinned, rights-cleared model; no automatic cloud submission |
 | Future cloud GPU | Select only after measured VRAM/quality/throughput; no default H100/large caption model |
 
@@ -61,4 +61,4 @@ WiLoR has noncommercial restrictions and MANO has separate terms; do not deploy 
 
 ## Activation evidence
 
-Pass unequal-clock/raster/missingness fixtures, real local end-to-end review/download, a representative long-input memory/scratch test and a small Modal CPU/R2 canary. On repair footage, report hand-detection coverage, handedness errors and manually checked landmark accuracy over agreed examples, including tools/gloves/occlusion. If quality is inadequate, improve/qualify the model before promising useful annotations; do not drop automatic hands from the MVP.
+Pass unequal-clock/raster/missingness fixtures, real local dataset assignment and shared Rerun review (archive round trip in the follow-up), a representative long-input memory/scratch test and a small Modal CPU/R2 canary. On repair footage, report hand-detection coverage, handedness errors and manually checked landmark accuracy over agreed examples, including tools/gloves/occlusion. If quality is inadequate, improve/qualify the model before promising useful annotations; do not drop automatic hands from the MVP.

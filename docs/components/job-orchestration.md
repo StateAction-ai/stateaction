@@ -1,17 +1,17 @@
 # Workflow jobs and processing execution
 
-Selected MVP design · 2026-10-30 · Planned, not implemented or deployed
+Selected MVP design · 2026-10-31 · Planned, not implemented or deployed
 
-**Use Render Workflows locally and in production, with exactly two Node tasks.** The official local task server executes the same task definitions that Render hosts. `EXECUTION_BACKEND=local|modal` selects local Python execution or private Modal Functions. Postgres `jobs` rows retain business state; no separate outbox, general DAG, Lance/Curator or independent validator is needed.
+**Use Render Workflows locally and in production, with one initial Node task and a follow-up export task.** The official local task server executes the same task definitions that Render hosts. `EXECUTION_BACKEND=local|modal` selects local Python execution or private Modal Functions. Postgres `jobs` rows retain business state; no separate outbox, general DAG, Lance/Curator or independent validator is needed.
 
 [Contracts](../contracts.md) owns task/result schemas, service routes and state names; [processing](cloud-processing.md) owns model/data details; [uploads](mcap-upload.md) owns source/output multipart transfers; [local development](local-development.md) owns setup and the test ladder.
 
-## Two fixed tasks
+## Fixed task contracts
 
 | Render task / job kind | Worker sequence | Completion |
 | --- | --- | --- |
-| `process-recording` / `process_recording` | Stream/hash each sealed source once with a non-seeking MCAP reader; progressively decode bounded frames; run MediaPipe CPU hands; generate bounded RGB/overlay previews, exact frame mappings, 21-point arrays, native evidence and inline QC; upload outputs/result manifest | API selects an immutable result for staff review |
-| `export-release` / `export_release` | Read the frozen approved result/label selection; write one complete TAR (maximum 32 GiB total) to scratch, close/hash it, upload through the output API, then submit the release manifest | API marks `ready`; fresh staff publication remains separate |
+| `process-recording` / `process_recording` | Stream/hash each sealed source once with a non-seeking MCAP reader; progressively decode bounded frames; run MediaPipe CPU hands; generate bounded RGB clips, safe Rerun RRDs/thumbnails, exact frame mappings, 21-point arrays, native evidence and inline QC; upload outputs/result manifest | API selects an immutable result for staff review |
+| Follow-up `export-release` / `export_release` | Read one whole frozen dataset and approved reviews; write one complete TAR (maximum 32 GiB total) to scratch, close/hash it, upload through the output API, then submit the release manifest | API marks `ready`; fresh staff publication remains separate |
 
 Hand inference is required. Image landmarks and clearly labeled 3D estimates carry masks/provenance; they are not verified metric trajectories or robot actions. Missing/no-visible-hand frames stay explicit. Use the small qualified CPU model first; a GPU profile is a separate quality/rights/resource decision, never an automatic upgrade.
 
@@ -19,7 +19,7 @@ The processing worker streams raw source once per attempt through a hash wrapper
 
 ## Task definition and dispatch
 
-Pin `@renderinc/sdk` **1.6.0**, inspected read-only for this design. Register the two module-level `task(...)` definitions in `apps/jobs`; its entrypoint statically imports both. The TypeScript SDK starts its task runtime on Render automatically. Keep provider connections/heavy work out of module import. [Task definition](https://render.com/docs/workflows-defining), [published SDK](https://registry.npmjs.org/@renderinc%2fsdk/1.6.0)
+Pin `@renderinc/sdk` **1.6.0**, inspected read-only for this design. Register `process-recording` as a module-level `task(...)` definition in `apps/jobs`; add `export-release` when Dataset versions ship. Each deployed entrypoint statically imports its implemented task definitions. The TypeScript SDK starts its task runtime on Render automatically. Keep provider connections/heavy work out of module import. [Task definition](https://render.com/docs/workflows-defining), [published SDK](https://registry.npmjs.org/@renderinc%2fsdk/1.6.0)
 
 Both use `plan: 'flex'`, `timeoutSeconds: 28800` and `retry: { maxRetries: 2, waitDurationMs: 10000, backoffScaling: 2 }`. An eight-hour controller covers the six-hour processing/one-hour export limits plus startup/finalization allowance. The absolute job deadline is anchored to first admission and never reset by controller retry. There are no planned continuations, dispatch generations or per-stage tasks. Render supports up to 24 hours per task. [Runtime/retries](https://render.com/docs/workflows-defining)
 
@@ -65,4 +65,4 @@ Application-level Modal retries are zero, but container crashes can still trigge
 
 Cancellation blocks new claims, output signing and acceptance immediately. While its controller is available, cancel the known execution best effort and reconcile uploads/costs. After exhausted controller retries, operator-assisted inspection/cancellation and API recording of terminal evidence handle cleanup. A deadline or expired lease never releases uncertain compute admission. Delayed callbacks cannot reopen work or replace newer results.
 
-Output immutability uses transport rather than a writer-grant ledger: unique keys, API-controlled CompleteMultipartUpload, no worker prefix write credential and no reuse of completed keys. Consumed upload IDs prevent stale part URLs overwriting completed objects. Accept only closed files allocated to the job; reconcile uncertain completion and abort unreferenced uploads. Qualify this behavior on R2. Staff review/publication and customer delivery remain separate permissions. [Upload contract](mcap-upload.md)
+Output immutability uses transport rather than a writer-grant ledger: unique keys, API-controlled CompleteMultipartUpload, no worker prefix write credential and no reuse of completed keys. Consumed upload IDs prevent stale part URLs overwriting completed objects. Accept only closed files allocated to the job; reconcile uncertain completion and abort unreferenced uploads. Qualify this behavior on R2. Staff review, customer dataset viewing and future version publication/download remain separate permissions. [Upload contract](mcap-upload.md)

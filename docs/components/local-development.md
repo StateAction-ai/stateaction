@@ -1,15 +1,15 @@
 # Local development and end-to-end qualification
 
-Selected MVP design · 2026-10-30 · Commands/packages below are planned targets, not shipped tooling
+Selected MVP design · 2026-10-31 · Commands/packages below are planned targets, not shipped tooling
 
-**Use Render's official local workflow runner with the same two Node task definitions as production.** Locally they execute the shared Python processor through `LocalExecutor`; in cloud they select `ModalExecutor`. Begin with real MediaPipe CPU, then optionally test a small cleared model on the local GPU. No cloud GPU is required for initial testing.
+**Use Render's official local workflow runner with the same Node processing task definition (and follow-up export definition) as production.** Locally they execute the shared Python processor through `LocalExecutor`; in cloud they select `ModalExecutor`. Begin with real MediaPipe CPU, then optionally test a small cleared model on the local GPU. No cloud GPU is required for initial testing.
 
 ## Monorepo and runtime
 
 | Target | Responsibility |
 | --- | --- |
 | `apps/web` / `@repair/web` | Next.js UI, Better Auth and mobile/worker/control API |
-| `apps/jobs` / `@repair/jobs` | Registered `process-recording` and `export-release` Render tasks; finite reconciliation entrypoint |
+| `apps/jobs` / `@repair/jobs` | Registered `process-recording` Render task, future `export-release`; finite reconciliation entrypoint |
 | `apps/mobile` | Existing Flutter application; native device builds |
 | `packages/server`, `packages/contracts` | Shared server/domain modules and versioned cross-language contracts |
 | `packages/stera_recorder`, `packages/stera-sdk` | Existing recorder and SDK source, retaining Dart/Python package boundaries |
@@ -37,7 +37,7 @@ In another terminal:
 render workflows dev --env-file .env.workflows.local -- pnpm --filter @repair/jobs dev
 ```
 
-`@repair/jobs dev` imports the two task definitions using the local TypeScript entrypoint; it is not another polling daemon or nested watch process. The production start script executes the compiled version of that same entrypoint. Register tasks synchronously and open provider clients only inside handlers.
+`@repair/jobs dev` imports the implemented task definitions using the local TypeScript entrypoint; it is not another polling daemon or nested watch process. The production start script executes the compiled version of that same entrypoint. Register tasks synchronously and open provider clients only inside handlers.
 
 Configure the web dispatch client in `apps/web/.env.local` and the task runtime in `.env.workflows.local` consistently; keep these private files ignored:
 
@@ -56,7 +56,7 @@ render workflows tasks list --local
 render workflows start process-recording --local --input-file=job-input.json
 ```
 
-`job-input.json` contains the positional array, for example `[{"jobId":"an-existing-local-job-id"}]`; the API/database still authorize it. Normal end-to-end runs start through the application's upload/release flow. Use `pnpm --filter @repair/jobs tick` to invoke the same finite reconciliation pass as production when testing dispatch/recovery failures. Every manual Render task command must keep `--local`. [Current CLI reference](https://render.com/docs/cli-reference)
+`job-input.json` contains the positional array, for example `[{"jobId":"an-existing-local-job-id"}]`; the API/database still authorize it. Normal end-to-end runs start through the application's upload flow (and follow-up Dataset-version flow). Use `pnpm --filter @repair/jobs tick` to invoke the same finite reconciliation pass as production when testing dispatch/recovery failures. Every manual Render task command must keep `--local`. [Current CLI reference](https://render.com/docs/cli-reference)
 
 The local task server reloads definitions and holds logs/results in memory; restarting loses that history and regenerates local IDs. It does not supply durable Postgres state, R2 semantics, Modal scheduling/preemption or cloud billing. Persist jobs/results through our real APIs and test recovery against Postgres. Do not infer worker termination from the disappearance of a local task.
 
@@ -72,7 +72,7 @@ Modal workers report their actual `modal.current_function_call_id()` on claim; l
 
 ## Storage, auth and physical phones
 
-Apply local migrations and seed separate collector/staff/customer identities. Keep local database volumes, MinIO keys and datasets separate from staging/production. MinIO uses the same API reserve/sign/parts/complete protocol, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
+Apply local migrations and seed separate collector/staff/customer identities, datasets and operator-managed dataset grants. Keep local database volumes, MinIO keys and datasets separate from staging/production. MinIO uses the same API reserve/sign/parts/complete protocol, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
 
 A phone's `localhost` is the phone. Host services normally use API port `3000` and MinIO `9000`; containers use their Compose service names; an Android emulator can use a qualified host alias such as `10.0.2.2`; physical devices need the development machine's reachable LAN hostname/IP. Bind only the intended development interfaces/firewall rules. The workflow task server remains host-local; phones call the web API, not port 8120.
 
@@ -84,13 +84,19 @@ Use isolated seeded/test identities for deterministic tests; any test-login adap
 
 | Step | Execution | Evidence |
 | --- | --- | --- |
-| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/grants, source/output multipart, staff review, export, customer-only access and complete resumable download; clearly synthetic outputs |
-| 2. Real CPU | Same runner/task + MediaPipe CPU on a short MCAP | Actual 21-point inference, preview/overlay/frame mapping, 3D-estimate labels, masks, hashes, QC and loader round trip |
+| 1. Fixture smoke | Official local Render runner + fixture worker; no learned model | Login/dataset grants, source/output multipart, Pipeline status, many-to-many dataset membership, shared staff/customer review; clearly synthetic outputs |
+| 2. Real CPU | Same runner/task + MediaPipe CPU on a short MCAP | Actual 21-point inference, bounded RRD/thumbnail generation, real embedded Rerun playback/frame mapping, 3D-estimate labels, masks, hashes, QC and loader round trip |
 | 3. Local size/failures | Same CPU path, progressively longer captures including representative two-hour size | Bounded RAM/disk, source read counts, elapsed time, cancellation, corrupt source, task-runner loss, uncertain launch and manual retry |
 | 4. Optional local CUDA | Same contracts plus an explicit small cleared profile on the available local GPU | CUDA visibility, memory/resource limits and schema/mask behavior; substitute-model results do not qualify another model's quality or memory |
-| 5. Small staging CPU | Same two task definitions on Render + R2 + Modal CPU | Real origins/auth/private routing, workflow/worker claim recovery, R2 closeout, measured time/bytes/cost |
+| 5. Small staging CPU | Same processing task definition on Render + R2 + Modal CPU | Real origins/auth/private routing, workflow/worker claim recovery, R2 closeout, measured time/bytes/cost |
 | 6. Qualified cloud scale/GPU | Only a separately approved need/run | Representative cloud limits/cost; GPU only after actual model/image/rights/quality fit, with no automatic upgrade |
 
 MediaPipe CPU already supplies the required landmark/estimate product. Pin the exact small model asset/hash and environment from [processing](cloud-processing.md). A successful end-to-end test does not establish metric/anatomical accuracy.
 
-Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native controller retry, late starts, stale callbacks, incomplete/uncertain uploads and access revocation. Read the complete release archive through the real loader and verify checksums. Before cloud deployment, only environment/provider configuration and packaging should change; business handlers and contracts remain the tested ones. Local success still does not emulate provider failure modes.
+Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native controller retry, late starts, stale callbacks, incomplete/uncertain uploads and access revocation. For the follow-up Dataset-version flow, read the complete release archive through the real loader and verify checksums. Before cloud deployment, only environment/provider configuration and packaging should change; business handlers and contracts remain the tested ones. Local success still does not emulate provider failure modes.
+
+## Real Rerun and Data browser gate
+
+The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.22.1 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
+
+Prove `/data-browser` lists datasets, `?datasetId=...` opens the correct grid, and URL search/filter state survives refresh/paste/Back/Forward. One clip assigned to two datasets has one immutable identity and artifact set. Dataset counts/hours deduplicate memberships and use only authorized clips. Staff see current drafts and automatic QC; customers see only members whose latest review is approved of granted datasets. Removal, withdrawal and revoked access deny new viewer URLs; a known clip ID grants nothing. `/pipeline?status=failed` stays staff-only and does not become the review catalog. No release page or exporter is required to pass this initial shared-review gate.

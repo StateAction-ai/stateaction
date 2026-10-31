@@ -8,12 +8,12 @@ Updated: 2026-10-30. Target layout; source migration has not happened. One Git r
 | --- | --- |
 | `apps/mobile/` | Existing Flutter app, including Dart, Android/Kotlin and iOS/Swift projects; Flutter/pub |
 | `apps/web/` | Next.js UI, API routes and Better Auth entrypoint; Node.js 24 / TypeScript |
-| `apps/jobs/` | Two shared Render Workflow task definitions, finite repair cron and Local/Modal executor adapters; Node.js / TypeScript |
+| `apps/jobs/` | Shared Render processing task, future export task, finite repair cron and Local/Modal executor adapters; Node.js / TypeScript |
 | `packages/server/` | Server-only domain/auth/access/storage services, database schema and migrations; shared by web/control code where appropriate |
 | `packages/contracts/` | Versioned JSON Schemas, API definition and small Dart/TypeScript/Python conformance fixtures; no runtime secrets or server imports |
 | `packages/stera_recorder/` | Existing Flutter native recording plugin; mobile keeps its relative path dependency |
 | `packages/stera-sdk/` | Imported, attributed SDK source needed for capture/model adapters; reviewed dependency, not the production backend |
-| `workers/processing/` | Python extraction, hand-model adapter, preview, QC, export, CLI and thin Modal entrypoints; uv |
+| `workers/processing/` | Python extraction, hand-model adapter, clip RRD/thumbnail, QC, future export, CLI and thin Modal entrypoints; uv |
 | `infra/` | Local Postgres/MinIO Compose definition, Render Blueprint and build configuration |
 | `scripts/`, `tests/`, `docs/` | Existing diagnostics/evidence and cross-component checks; maintain historical receipt paths |
 

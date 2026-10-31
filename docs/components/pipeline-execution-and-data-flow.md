@@ -1,6 +1,6 @@
 # Pipeline execution and data movement
 
-Updated: 2026-10-30. Canonical MVP stage/handoff table. Two shared Render workflow controllers invoke one fixed processing function and one export function, replacing the earlier distributed stage DAG. [Processing](cloud-processing.md) owns extraction/model semantics; [jobs](job-orchestration.md) owns execution/recovery.
+Updated: 2026-10-31. Canonical MVP stage/handoff table. One shared Render workflow controller invokes the fixed processing function; a follow-up controller adds whole-dataset export, replacing the earlier distributed stage DAG. [Processing](cloud-processing.md) owns extraction/model semantics; [jobs](job-orchestration.md) owns execution/recovery.
 
 ## Where each stage runs
 
@@ -10,21 +10,21 @@ Updated: 2026-10-30. Canonical MVP stage/handoff table. Two shared Render workfl
 | 2. Next.js API / Render Postgres | Authenticated owner, sealed required-file inventory, completed object metadata | Atomically create a `process_recording` job and set recording's current job. Request the corresponding workflow after commit; cron repairs lost dispatch. Task payload is IDs/digests, never video bytes. |
 | 3. Render Workflows / Node controllers | Durable job state through the API | Claim the admitted controller run/lease, persist compute-submission intent, spawn/poll the private Modal function and finalize through the API. Minute cron repairs lost dispatch/abandoned controllers. |
 | 4a. Modal CPU / extraction | Scoped direct reads of sealed MCAP/sidecars; native clocks/calibration | Stream/hash/parse once. Decoded frames flow directly into 4b and encoders; bounded sensor/frame shards go to the job's unique output prefix. |
-| 4b. Same Modal invocation / hands and preview | The current decoded frame plus bounded model/encoder state | Mandatory 21-point MediaPipe inference; NPZ observations/masks, RGB clips, overlay previews and frame mappings. Close/upload shards progressively. No second network video download between extraction, inference and preview. |
+| 4b. Same Modal invocation / hands and preview | The current decoded frame plus bounded model/encoder state | Mandatory 21-point MediaPipe inference; NPZ observations/masks, RGB clips, safe bounded Rerun RRDs, thumbnails and frame mappings. Close/upload shards progressively. No second network video download between extraction, inference and preview. |
 | 4c. Same invocation / inline QC | Source hash, counts/mappings, completed shards and their hashes | Bounded manifest/QC, API-completed output uploads and sealed inventory. Candidate result is provisional until known execution terminates and the API accepts current refs. |
-| 5. Staff UI / Render Next.js | Accepted manifest/QC from API; preview bytes directly from R2 | Whole-clip labels and append-only approve/reject decisions pin exact job/clip/revision. No compute runs during human review. |
-| 6. Modal CPU / export | Frozen approved reviews, labels and referenced RGB/pose/mapping files from R2 | Stream inputs into one bounded TAR on worker scratch, close/hash it, then multipart-upload archive/manifest/checksums into a unique release prefix. API completes/seals output; known terminal execution and current frozen refs yield `ready`. |
-| 7. Staff publish / customer UI | Exact ready archive/manifest and named recipient grants | Staff publishes. Customer inspects and downloads all approved package bytes directly from R2; no model recomputation or Next.js media proxy. |
+| 5. Shared Data browser / Render Next.js | Dataset membership, authorized clip metadata and staff-only QC from API; thumbnails/RRD bytes directly from R2 | Staff manage many-to-many datasets, label and approve/reject clips. Customers inspect only approved clips in granted datasets, on the same clip URL. No worker runs during human review. |
+| 6. Follow-up Modal CPU / export | One whole frozen dataset and its approved reviews, labels and referenced RGB/pose/mapping files from R2 | Stream inputs into one bounded TAR on worker scratch, close/hash it, then multipart-upload archive/manifest/checksums into a unique release prefix. API completes/seals output; known terminal execution and current frozen refs yield `ready`. |
+| 7. Follow-up dataset version / customer UI | Exact ready archive/manifest and named recipient grants | Staff publishes. Customer inspects and downloads all approved package bytes directly from R2; no model recomputation or Next.js media proxy. |
 
-The [platform diagram](../figures/render-platform.md) shows hosting boundaries; the [processing diagram](../figures/processing-stages.md) shows the fixed sequence. Every stage above runs with the same contract locally, using the official Render local Workflows runner with Postgres/MinIO and LocalExecutor. [Local qualification ladder](local-development.md)
+The [platform diagram](../figures/render-platform.md) shows hosting boundaries; the [processing diagram](../figures/processing-stages.md) shows the fixed sequence. Each implemented stage uses the same contract locally, using the official Render local Workflows runner with Postgres/MinIO and LocalExecutor. [Local qualification ladder](local-development.md)
 
 ## Intermediate state and repeated reads
 
-Inside `process_recording`, intermediate state is a bounded local frame/shard window. Completed outputs live in private object storage; Postgres stores only file/job/review references. Pass manifests and file IDs between API, workers and exporter. No raw frames or big arrays enter job arguments, HTTP callbacks or database rows.
+Inside `process_recording`, intermediate state is a bounded local frame/shard window. Completed outputs live in private object storage; Postgres stores clip/dataset membership/access and file/job/review references. Pass manifests and file IDs between API, workers and exporter. No raw frames or big arrays enter job arguments, HTTP callbacks or database rows.
 
 A fresh processing attempt streams the raw source once. The parser/model/encoders share decoded frames; they do not redownload the video for each conceptual step. There is no durable per-stage checkpoint in the pilot: failure may restart the whole recording under a new job ID. That tradeoff saves implementation complexity; measure retry cost before adding checkpoints.
 
-Export necessarily reads selected completed clips/arrays again to build the delivery archive. Customer viewing/download is another read. Record actual per-stage read/write bytes; do not promise zero rereads or assume a warm container cache. Avoid retaining another permanent raw copy solely for local scratch.
+The follow-up exporter necessarily reads selected completed clips/arrays again to build the delivery archive. Customer viewing and future download are additional reads. Record actual per-stage read/write bytes; do not promise zero rereads or assume a warm container cache. Avoid retaining another permanent raw copy solely for local scratch.
 
 ## Boundedness and visibility
 
