@@ -1,0 +1,95 @@
+{
+  "date": "2026-11-01",
+  "implementationCommit": "23f41f7e64649076c2314f2db765438f6674f9e0",
+  "issues": [
+    {
+      "id": "SA-11",
+      "title": "Scaffold the TypeScript and Python packages with repeatable CI",
+      "status": "In Progress",
+      "implementationResultReadBack": true,
+      "relations": {
+        "blocks": [
+          "SA-12",
+          "SA-24"
+        ],
+        "blockedBy": [],
+        "relatedTo": []
+      },
+      "prerequisiteRelationsPreserved": true
+    },
+    {
+      "id": "SA-54",
+      "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB",
+      "status": "In Progress",
+      "implementationResultReadBack": true,
+      "relations": {
+        "blocks": [
+          "SA-56"
+        ],
+        "blockedBy": [
+          "SA-10",
+          "SA-50"
+        ],
+        "relatedTo": []
+      },
+      "prerequisiteRelationsPreserved": true
+    },
+    {
+      "id": "SA-60",
+      "title": "Spike: Android hardware H.264 capture with original sensor evidence",
+      "status": "In Progress",
+      "implementationResultReadBack": true,
+      "relations": {
+        "blocks": [
+          "SA-51",
+          "SA-61"
+        ],
+        "blockedBy": [],
+        "relatedTo": [
+          "SA-10"
+        ]
+      },
+      "prerequisiteRelationsPreserved": true
+    },
+    {
+      "id": "SA-61",
+      "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer",
+      "status": "In Progress",
+      "implementationResultReadBack": true,
+      "relations": {
+        "blocks": [
+          "SA-24"
+        ],
+        "blockedBy": [
+          "SA-60"
+        ],
+        "relatedTo": []
+      },
+      "prerequisiteRelationsPreserved": true
+    }
+  ],
+  "documents": [
+    {
+      "id": "9b37ee33-8417-4a06-9b2c-8c50c00b015e",
+      "title": "Technical design · approved MVP baseline",
+      "url": "https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2",
+      "implementationResultReadBack": true
+    },
+    {
+      "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+      "title": "Implementation backlog & traceability",
+      "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06",
+      "implementationResultReadBack": true
+    },
+    {
+      "id": "396b2828-19d4-4728-acf0-e9e282db9313",
+      "title": "Mobile implementation · H.264 capture and reliable upload",
+      "url": "https://linear.app/hw-personal-projects/document/mobile-implementation-h264-capture-and-reliable-upload-5677599f65bd",
+      "implementationResultReadBack": true
+    }
+  ],
+  "allPrerequisiteRelationsPreserved": true,
+  "hostedCiRunOccurred": false,
+  "physicalDeviceMutations": 0,
+  "paidResourcesCreated": 0
+}
