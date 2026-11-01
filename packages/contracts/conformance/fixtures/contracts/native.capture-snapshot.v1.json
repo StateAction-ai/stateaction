@@ -1,0 +1,653 @@
+{
+  "contract": "native.capture-snapshot.v1",
+  "cases": [
+    {
+      "name": "finalized interrupted take above 2^53 sequence",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recording take",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "recording",
+          "containerState": null,
+          "captureOutcome": null,
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "1",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "quarantined take keeps unresolved evidence",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "quarantined",
+          "containerState": "unclosed",
+          "captureOutcome": "failed",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "1",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "quarantined take",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "quarantined",
+          "containerState": "invalid",
+          "captureOutcome": "failed",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "sequence must be a decimal string",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": 9007199254740993,
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/eventSequence"
+        ]
+      }
+    },
+    {
+      "name": "recovered is not a success outcome",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "recovered",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/captureOutcome"
+        ]
+      }
+    },
+    {
+      "name": "unknown state",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "idle",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/state"
+        ]
+      }
+    },
+    {
+      "name": "finalized take must be closed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "unclosed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/containerState"
+        ]
+      }
+    },
+    {
+      "name": "finalized take cannot be failed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "failed",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/captureOutcome"
+        ]
+      }
+    },
+    {
+      "name": "recording take has no outcome yet",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "recording",
+          "containerState": null,
+          "captureOutcome": "completed",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "1",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/captureOutcome"
+        ]
+      }
+    },
+    {
+      "name": "recovery required take is unclosed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "recovery_required",
+          "containerState": null,
+          "captureOutcome": null,
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "1",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/containerState"
+        ]
+      }
+    },
+    {
+      "name": "quarantined take must be failed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "quarantined",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/captureOutcome"
+        ]
+      }
+    },
+    {
+      "name": "written exceeds submitted",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108002",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/counters/videoFramesWritten"
+        ]
+      }
+    },
+    {
+      "name": "submitted exceeds acquired",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108004",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/counters/videoFramesSubmitted"
+        ]
+      }
+    },
+    {
+      "name": "terminal frame counts exceed acquired",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "2",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/counters/videoFramesAcquired"
+        ]
+      }
+    },
+    {
+      "name": "finalized take cannot carry unresolved frames",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "1",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/counters/videoFramesUnresolved"
+        ]
+      }
+    },
+    {
+      "name": "finalized take must account for every acquired frame",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "2",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/counters/videoFramesAcquired"
+        ]
+      }
+    },
+    {
+      "name": "unknown counter",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "state": "finalized",
+          "containerState": "closed",
+          "captureOutcome": "interrupted",
+          "eventSequence": "9007199254740993",
+          "counters": {
+            "videoFramesAcquired": "108003",
+            "videoFramesSubmitted": "108001",
+            "videoFramesWritten": "108000",
+            "videoFramesDropped": "3",
+            "videoFramesUnresolved": "0",
+            "motionEventsWritten": "1440000",
+            "sourceBytesWritten": "134217729",
+            "framesPerSecond": "30"
+          },
+          "lastError": {
+            "schemaVersion": 1,
+            "code": "thermal_limit",
+            "retryable": true,
+            "message": "Recording stopped to protect the phone from overheating.",
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/counters"
+        ]
+      }
+    }
+  ]
+}

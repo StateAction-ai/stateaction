@@ -1,0 +1,225 @@
+{
+  "contract": "http.parts-signed.v1",
+  "cases": [
+    {
+      "name": "signed part",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://acct.r2.cloudflarestorage.com/stateaction-dev/k?X-Amz-Signature=abc",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "non-PUT method",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "POST",
+              "url": "https://acct.r2.cloudflarestorage.com/stateaction-dev/k?X-Amz-Signature=abc",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/method"
+        ]
+      }
+    },
+    {
+      "name": "non-http url",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "file:///etc/passwd",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    },
+    {
+      "name": "url with NEL U+0085",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://h.example/kx",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    },
+    {
+      "name": "url with FS U+001C",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://h.example/k\u001cx",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    },
+    {
+      "name": "url with ZWNBSP U+FEFF",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://h.example/k﻿x",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    },
+    {
+      "name": "url with non-ASCII letter",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://h.example/café",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    },
+    {
+      "name": "url with space",
+      "input": {
+        "document": {
+          "transportEpoch": 1,
+          "parts": [
+            {
+              "partNumber": 1,
+              "method": "PUT",
+              "url": "https://h.example/k x",
+              "headers": {
+                "Content-Length": "67108864"
+              },
+              "offsetBytes": "0",
+              "lengthBytes": "67108864",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/parts/0/url"
+        ]
+      }
+    }
+  ]
+}

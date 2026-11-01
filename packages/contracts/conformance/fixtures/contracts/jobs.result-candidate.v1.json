@@ -1,0 +1,166 @@
+{
+  "contract": "jobs.result-candidate.v1",
+  "cases": [
+    {
+      "name": "candidate referencing manifest",
+      "input": {
+        "file": "artifacts/result-candidate.v1.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unsupported version",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "manifestFileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "manifestSha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+          "summary": {
+            "outcome": "succeeded",
+            "clipCount": 1,
+            "checks": {
+              "pass": 5,
+              "warn": 0,
+              "fail": 0,
+              "measured": 1,
+              "notEvaluated": 0
+            },
+            "errorCode": null
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    },
+    {
+      "name": "candidate may not carry arrays or urls",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "manifestFileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "manifestSha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+          "summary": {
+            "outcome": "succeeded",
+            "clipCount": 1,
+            "checks": {
+              "pass": 5,
+              "warn": 0,
+              "fail": 0,
+              "measured": 1,
+              "notEvaluated": 0
+            },
+            "errorCode": null
+          },
+          "manifestUrl": "https://x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "succeeded with an error code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "manifestFileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "manifestSha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+          "summary": {
+            "outcome": "succeeded",
+            "clipCount": 1,
+            "checks": {
+              "pass": 5,
+              "warn": 0,
+              "fail": 0,
+              "measured": 1,
+              "notEvaluated": 0
+            },
+            "errorCode": "decode_failed"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/summary/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "failed without an error code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "manifestFileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "manifestSha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+          "summary": {
+            "outcome": "failed",
+            "clipCount": 1,
+            "checks": {
+              "pass": 5,
+              "warn": 0,
+              "fail": 0,
+              "measured": 1,
+              "notEvaluated": 0
+            },
+            "errorCode": null
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/summary/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "failed with an error code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "manifestFileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+          "manifestSha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+          "summary": {
+            "outcome": "failed",
+            "clipCount": 0,
+            "checks": {
+              "pass": 5,
+              "warn": 0,
+              "fail": 0,
+              "measured": 1,
+              "notEvaluated": 0
+            },
+            "errorCode": "decode_failed"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    }
+  ]
+}

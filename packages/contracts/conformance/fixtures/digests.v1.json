@@ -1,0 +1,568 @@
+{
+  "encoding": "sa-cjson-v1",
+  "requestDigests": [
+    {
+      "name": "keys sorted, whitespace removed",
+      "json": "{ \"b\": 1, \"a\": [true, false, null], \"c\": {\"z\": \"\", \"y\": -0} }",
+      "canonical": "{\"a\":[true,false,null],\"b\":1,\"c\":{\"y\":0,\"z\":\"\"}}",
+      "sha256": "32df2f7cac0cac925af2b46ba899a90e49a0f1b79ccda19d8f7fb52ab507ce86"
+    },
+    {
+      "name": "UTF-16 key order differs from code point order",
+      "json": "{\"\\ue000\": 1, \"\\ud83d\\ude00\": 2, \"a\": 3, \"\\u00e9\": 4}",
+      "canonical": "{\"a\":3,\"é\":4,\"😀\":2,\"\":1}",
+      "sha256": "c7d51d7c7ebe01fb868b18e3a7adc3b4923dadbca70f762c512c45d262fa3ca7"
+    },
+    {
+      "name": "string escapes",
+      "json": "{\"s\": \"quote\\\" backslash\\\\ slash\\/ ctl\\u0001\\u001f tab\\t nl\\n cr\\r bs\\b ff\\f del\\u007f ls\\u2028\"}",
+      "canonical": "{\"s\":\"quote\\\" backslash\\\\ slash/ ctl\\u0001\\u001f tab\\t nl\\n cr\\r bs\\b ff\\f del ls \"}",
+      "sha256": "88fff58de36f06fab0dce3ba51b9df0bd152df890937c7fb06123ec5b85810f8"
+    },
+    {
+      "name": "non-ASCII stays literal UTF-8",
+      "json": "{\"name\": \"Gr\\u00fc\\u00dfe 日本 🤚\"}",
+      "canonical": "{\"name\":\"Grüße 日本 🤚\"}",
+      "sha256": "042498558c8f5f1ae11c3828da2317265dac7c1f9a7595c6bd82c3b27a97e479"
+    },
+    {
+      "name": "safe integer extremes and decimal strings",
+      "json": "{\"max\": 9007199254740991, \"min\": -9007199254740991, \"bytes\": \"107374182400\", \"ts\": \"9223372036854775807\"}",
+      "canonical": "{\"bytes\":\"107374182400\",\"max\":9007199254740991,\"min\":-9007199254740991,\"ts\":\"9223372036854775807\"}",
+      "sha256": "125ad0e492dd3bd76a40ab6bb158e36e8748c1a56238efa3bc450adb1fe50cef"
+    },
+    {
+      "name": "integral number spellings normalize to integers",
+      "json": "{\"a\": 1.0, \"b\": 1e3, \"c\": -0.0}",
+      "canonical": "{\"a\":1,\"b\":1000,\"c\":0}",
+      "sha256": "b5d2c1733260a15c8be3fe97ccb9acb87072de63b2f1d6c1cd5ead60b0ee8ffe"
+    },
+    {
+      "name": "nested arrays keep order",
+      "json": "[3, [2, 1], {\"k\": [{\"b\": 2, \"a\": 1}]}]",
+      "canonical": "[3,[2,1],{\"k\":[{\"a\":1,\"b\":2}]}]",
+      "sha256": "23c89fe7c095cacede375620ce7410ffecb1137778b771d2cf640d27f03b2773"
+    },
+    {
+      "name": "create recording request",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:05.123456789Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}}",
+      "canonical": "{\"captureFormat\":\"stateaction.capture.v1\",\"clientRecordingId\":\"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\",\"device\":{\"appVersion\":\"0.1.0+7\",\"model\":\"Pixel 9 Pro\",\"osVersion\":\"Android 16\"},\"rgbProfile\":\"h264_mcap_v1\",\"startedAt\":\"2026-11-01T18:04:05.123456789Z\"}",
+      "sha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9"
+    },
+    {
+      "name": "fractional number",
+      "json": "{\"a\": 1.5}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "integer above safe range",
+      "json": "{\"a\": 9007199254740992}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "integer below safe range",
+      "json": "{\"a\": -9007199254740992}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "exponent producing fraction",
+      "json": "{\"a\": 25e-1}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "lone surrogate",
+      "json": "{\"a\": \"\\udc00\"}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "overflowing exponent",
+      "json": "{\"a\": 1e400}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "NaN literal",
+      "json": "{\"a\": NaN}",
+      "error": "malformed_json"
+    },
+    {
+      "name": "trailing comma",
+      "json": "{\"a\": 1,}",
+      "error": "malformed_json"
+    }
+  ],
+  "idempotency": [
+    {
+      "name": "exact replay with different key order and whitespace",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\n    \"device\": {\n        \"model\": \"Pixel 9 Pro\",\n        \"osVersion\": \"Android 16\",\n        \"appVersion\": \"0.1.0+7\"\n    },\n    \"startedAt\": \"2026-11-01T18:04:05.123456789Z\",\n    \"rgbProfile\": \"h264_mcap_v1\",\n    \"captureFormat\": \"stateaction.capture.v1\",\n    \"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\"\n}",
+      "expect": "replay"
+    },
+    {
+      "name": "changed content under same idempotency key",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:06Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}}",
+      "expect": "idempotency_conflict"
+    },
+    {
+      "name": "added field under same key",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:05.123456789Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}, \"note\": \"x\"}",
+      "expect": "idempotency_conflict"
+    }
+  ],
+  "manifestBytes": [
+    {
+      "name": "stored processing-result bytes",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+      "expect": "match"
+    },
+    {
+      "name": "stored recording-source bytes",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+      "expect": "match"
+    },
+    {
+      "name": "stored frame-map bytes",
+      "file": "artifacts/frame-map.v1.json",
+      "sha256": "6138caf6408642a0b7639784d6f95318cf57945ae8f2e373b8b31f50880d3fbe",
+      "expect": "match"
+    },
+    {
+      "name": "stored hand-observations bytes",
+      "file": "artifacts/hand-observations.v1.json",
+      "sha256": "4801aab979a3b9d52cea69ff001a78b56e8b528fa12582fd58e570cc1a4f1b6e",
+      "expect": "match"
+    },
+    {
+      "name": "result candidate digest matches stored manifest bytes",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256From": {
+        "file": "artifacts/result-candidate.v1.json",
+        "pointer": "/manifestSha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "same JSON value re-serialized compactly has different bytes",
+      "file": "artifacts/processing-result.compact.json",
+      "sha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8ea",
+      "expect": "digest_mismatch"
+    },
+    {
+      "name": "changed declared digest",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256": "7302326047d8eddad683a62773fb944553b8c048a2b1b6efcce0779613c3d8e0",
+      "expect": "digest_mismatch"
+    },
+    {
+      "name": "source manifest bytes match the sealed source_manifest entry",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "chain/recording-seal.v1.json",
+        "pointer": "/files/2/sha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "source manifest bytes match TaskInput.sourceManifestSha256",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "chain/task-input.v1.json",
+        "pointer": "/sourceManifestSha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "source manifest bytes match ClaimGrant.digests.sourceManifestSha256",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "chain/claim-grant.v1.json",
+        "pointer": "/digests/sourceManifestSha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "source manifest bytes match the ClaimGrant source_manifest input",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "chain/claim-grant.v1.json",
+        "pointer": "/inputs/2/sha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "source manifest bytes match ProcessingResult.source_manifest_sha256",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "artifacts/processing-result.v1.json",
+        "pointer": "/source_manifest_sha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "re-serialized source declaration does not match the pinned digest",
+      "file": "artifacts/recording-source.compact.json",
+      "sha256From": {
+        "file": "chain/task-input.v1.json",
+        "pointer": "/sourceManifestSha256"
+      },
+      "expect": "digest_mismatch"
+    },
+    {
+      "name": "pinned digest does not match another sealed file",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256From": {
+        "file": "chain/recording-seal.v1.json",
+        "pointer": "/files/1/sha256"
+      },
+      "expect": "digest_mismatch"
+    }
+  ],
+  "sealedInventory": [
+    {
+      "name": "seal holds exactly the declared files plus the manifest",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "declared file order is not significant",
+      "seal": {
+        "files": [
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "declared file missing from seal",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "path": "/files"
+      }
+    },
+    {
+      "name": "undeclared extra file in seal",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          },
+          {
+            "fileId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+            "role": "calibration",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": false
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "path": "/files"
+      }
+    },
+    {
+      "name": "optional second source mcap in seal only",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          },
+          {
+            "fileId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": false
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "path": "/files"
+      }
+    },
+    {
+      "name": "substituted file id",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "path": "/files/1/file_id"
+      }
+    },
+    {
+      "name": "role differs",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "calibration",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "path": "/files/1/role"
+      }
+    },
+    {
+      "name": "size differs",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217730",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "path": "/files/0/size_bytes"
+      }
+    },
+    {
+      "name": "digest differs",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "path": "/files/1/sha256"
+      }
+    },
+    {
+      "name": "requiredness differs",
+      "seal": {
+        "files": [
+          {
+            "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+            "role": "source_mcap",
+            "sizeBytes": "134217729",
+            "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+            "required": true
+          },
+          {
+            "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+            "required": false
+          },
+          {
+            "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+            "role": "source_manifest",
+            "sizeBytes": "1671",
+            "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "required": true
+          }
+        ]
+      },
+      "declaration": "artifacts/recording-source.v1.json",
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "path": "/files/1/required"
+      }
+    }
+  ]
+}

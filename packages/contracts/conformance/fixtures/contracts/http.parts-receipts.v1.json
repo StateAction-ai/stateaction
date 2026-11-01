@@ -1,0 +1,136 @@
+{
+  "contract": "http.parts-receipts.v1",
+  "cases": [
+    {
+      "name": "two receipts, quoted and bare etags",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 2,
+          "receipts": [
+            {
+              "partNumber": 1,
+              "etag": "\"9b2cf535f27731c974343645a3985328\"",
+              "sizeBytes": "67108864"
+            },
+            {
+              "partNumber": 2,
+              "etag": "9b2cf535f27731c974343645a3985329",
+              "sizeBytes": "67108864"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "duplicate receipt part",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 2,
+          "receipts": [
+            {
+              "partNumber": 1,
+              "etag": "\"9b2cf535f27731c974343645a3985328\"",
+              "sizeBytes": "67108864"
+            },
+            {
+              "partNumber": 1,
+              "etag": "9b2cf535f27731c974343645a3985329",
+              "sizeBytes": "67108864"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/receipts/1/partNumber"
+        ]
+      }
+    },
+    {
+      "name": "receipt size as number",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 2,
+          "receipts": [
+            {
+              "partNumber": 1,
+              "etag": "\"9b2cf535f27731c974343645a3985328\"",
+              "sizeBytes": 67108864
+            },
+            {
+              "partNumber": 2,
+              "etag": "9b2cf535f27731c974343645a3985329",
+              "sizeBytes": "67108864"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/receipts/0/sizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "etag with unbalanced leading quote",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 2,
+          "receipts": [
+            {
+              "partNumber": 1,
+              "etag": "\"9b2cf535",
+              "sizeBytes": "67108864"
+            },
+            {
+              "partNumber": 2,
+              "etag": "9b2cf535f27731c974343645a3985329",
+              "sizeBytes": "67108864"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/receipts/0/etag"
+        ]
+      }
+    },
+    {
+      "name": "etag with unbalanced trailing quote",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 2,
+          "receipts": [
+            {
+              "partNumber": 1,
+              "etag": "9b2cf535\"",
+              "sizeBytes": "67108864"
+            },
+            {
+              "partNumber": 2,
+              "etag": "9b2cf535f27731c974343645a3985329",
+              "sizeBytes": "67108864"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/receipts/0/etag"
+        ]
+      }
+    }
+  ]
+}

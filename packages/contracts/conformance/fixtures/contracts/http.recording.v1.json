@@ -1,0 +1,129 @@
+{
+  "contract": "http.recording.v1",
+  "cases": [
+    {
+      "name": "recording with opaque owner",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "opaque owner may not be empty",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/ownerUserId"
+        ]
+      }
+    },
+    {
+      "name": "opaque owner may not contain whitespace",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "user 1",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/ownerUserId"
+        ]
+      }
+    },
+    {
+      "name": "unknown status",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "done",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/status"
+        ]
+      }
+    }
+  ]
+}

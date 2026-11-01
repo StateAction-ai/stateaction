@@ -1,0 +1,221 @@
+{
+  "schema": "stateaction.processing_result.v1",
+  "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+  "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+  "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+  "provenance": {
+    "code_revision": "0f8a21f",
+    "image_spec_sha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+    "config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+    "profile_revision": "cpu-mediapipe-1",
+    "model": {
+      "name": "mediapipe_hand_landmarker",
+      "asset_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "license": "Apache-2.0"
+    },
+    "rerun_sdk_version": "0.41.0"
+  },
+  "verified_sources": [
+    {
+      "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+      "size_bytes": "134217729",
+      "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+    },
+    {
+      "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+      "size_bytes": "4096",
+      "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+    }
+  ],
+  "outputs": [
+    {
+      "file_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "role": "clip_mp4",
+      "relative_path": "clips/000/rgb.mp4",
+      "size_bytes": "1048576",
+      "sha256": "862c4ec62defaadafbf7638961214d286015c38ed4ccc7b10d52bdf434e5bee1"
+    },
+    {
+      "file_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+      "role": "hand_arrays_npz",
+      "relative_path": "clips/000/hands.npz",
+      "size_bytes": "20480",
+      "sha256": "207040fa141238a4f7268fe56968eb205c799bd18b71ff34169713e15f1a00c2"
+    },
+    {
+      "file_id": "d4e5f6a7-b8c9-4d0e-9f2a-3b4c5d6e7f80",
+      "role": "hand_observations_json",
+      "relative_path": "clips/000/hands.json",
+      "size_bytes": "30720",
+      "sha256": "45a229d57d35d935b67ce83a69f0353508b131ca39325494db3520252c841e10"
+    },
+    {
+      "file_id": "e5f6a7b8-c9d0-4e1f-a03b-4c5d6e7f8091",
+      "role": "frame_map_json",
+      "relative_path": "clips/000/frame_map.json",
+      "size_bytes": "2048",
+      "sha256": "0963aafb7c5dba2d6de24e7afa0cd7a19b04ba39aa516a302331405b8f52be36"
+    },
+    {
+      "file_id": "f6a7b8c9-d0e1-4f2a-b14c-5d6e7f8091a2",
+      "role": "thumbnail_jpeg",
+      "relative_path": "clips/000/thumb.jpg",
+      "size_bytes": "8192",
+      "sha256": "05eeec2d70845694d3ba89ad9e1c34b6b4d806275c3c63b84241a40ae4591ca4"
+    },
+    {
+      "file_id": "07b8c9d0-e1f2-4a3b-825d-6e7f8091a2b3",
+      "role": "viewer_rrd",
+      "relative_path": "clips/000/viewer.rrd",
+      "size_bytes": "524288",
+      "sha256": "c3ca7d8dca22f4506818b075be725a12cacc0d3dba1ca52d797c0a90ced6ef04"
+    }
+  ],
+  "clips": [
+    {
+      "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+      "clip_ordinal": 0,
+      "title": "Recording 3f1b clip 1",
+      "source_start_ns": "9223372036000000000",
+      "source_end_ns": "9223372036100000000",
+      "duration_ns": "100000000",
+      "clock_domain": "android.elapsed_realtime",
+      "raster": {
+        "width": 1920,
+        "height": 1080
+      },
+      "frame_count": 3,
+      "files": {
+        "rgb_mp4": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+        "hand_arrays_npz": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+        "hand_observations_json": "d4e5f6a7-b8c9-4d0e-9f2a-3b4c5d6e7f80",
+        "frame_map_json": "e5f6a7b8-c9d0-4e1f-a03b-4c5d6e7f8091",
+        "thumbnail_jpeg": "f6a7b8c9-d0e1-4f2a-b14c-5d6e7f8091a2",
+        "viewer_rrd": "07b8c9d0-e1f2-4a3b-825d-6e7f8091a2b3"
+      },
+      "hand_arrays": {
+        "format": "npz",
+        "joint_order_ref": "stateaction.hand_observations.v1#joint_order",
+        "arrays": [
+          {
+            "name": "image_landmarks_px",
+            "dtype": "float32",
+            "shape": [
+              3,
+              2,
+              21,
+              2
+            ]
+          },
+          {
+            "name": "image_landmarks_mask",
+            "dtype": "bool",
+            "shape": [
+              3,
+              2,
+              21
+            ]
+          },
+          {
+            "name": "model_relative_joints",
+            "dtype": "float32",
+            "shape": [
+              3,
+              2,
+              21,
+              3
+            ]
+          },
+          {
+            "name": "model_relative_mask",
+            "dtype": "bool",
+            "shape": [
+              3,
+              2,
+              21
+            ]
+          },
+          {
+            "name": "hand_detected",
+            "dtype": "bool",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "name": "handedness_score",
+            "dtype": "float32",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "name": "handedness",
+            "dtype": "int8",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "name": "frame_index",
+            "dtype": "int64",
+            "shape": [
+              3
+            ]
+          }
+        ]
+      },
+      "frame_map_schema": "stateaction.frame_map.v1",
+      "hand_observations_schema": "stateaction.hand_observations.v1"
+    }
+  ],
+  "checks": [
+    {
+      "code": "source_checksum",
+      "status": "pass",
+      "message": "Every sealed source matched its declared SHA-256 at EOF.",
+      "rule_revision": "1"
+    },
+    {
+      "code": "decode",
+      "status": "pass",
+      "message": "All access units decoded.",
+      "rule_revision": "1"
+    },
+    {
+      "code": "frame_mapping",
+      "status": "pass",
+      "message": "Every clip frame maps to one native frame.",
+      "rule_revision": "1"
+    },
+    {
+      "code": "landmark_shape",
+      "status": "pass",
+      "message": "21-joint arrays and masks have consistent shapes.",
+      "rule_revision": "1"
+    },
+    {
+      "code": "finite_masks",
+      "status": "pass",
+      "message": "Non-finite coordinates are masked.",
+      "rule_revision": "1"
+    },
+    {
+      "code": "detection_coverage",
+      "status": "measured",
+      "message": "Frames with at least one detected hand.",
+      "rule_revision": "1",
+      "measurements": {
+        "observed_frames": "2",
+        "total_frames": "3"
+      }
+    }
+  ],
+  "metric_accuracy_validated": false,
+  "limitations": [
+    "3D joints are model-relative estimates, not calibrated camera or world positions."
+  ]
+}

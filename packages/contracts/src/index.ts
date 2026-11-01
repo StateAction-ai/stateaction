@@ -1,5 +1,13 @@
 import { Ajv2020 } from "ajv/dist/2020.js";
 import schema from "../api/platform-verify.v1.schema.json" with { type: "json" };
+export * from "./canonical.js";
+export * from "./validate.js";
+export * from "./types.js";
+export {
+  checkSealedInventory,
+  HAND_ARRAY_SHAPES,
+  type RuleViolation,
+} from "./rules.js";
 export type PlatformVerifyRequest = { requestId: string };
 export type WorkerHealth = {
   protocolVersion: 1;

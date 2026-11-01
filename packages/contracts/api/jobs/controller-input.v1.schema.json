@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/controller-input.v1.json",
+  "title": "Workflow controller input v1",
+  "description": "Secret-free Render Workflow task argument for process-recording/export-release. Dispatch key is job:{jobId}.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId"],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}

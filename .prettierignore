@@ -1,0 +1,2 @@
+# Exact-byte contract fixtures: digests cover these bytes, so formatters must not rewrite them.
+packages/contracts/conformance/fixtures/

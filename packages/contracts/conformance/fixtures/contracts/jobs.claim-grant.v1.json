@@ -1,0 +1,1232 @@
+{
+  "contract": "jobs.claim-grant.v1",
+  "cases": [
+    {
+      "name": "grant",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "database url never granted",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          },
+          "databaseUrl": "postgres://x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "control document limit above 1 MiB",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048577
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/limits/maxControlDocumentBytes"
+        ]
+      }
+    },
+    {
+      "name": "stored chain claim grant bytes",
+      "input": {
+        "file": "chain/claim-grant.v1.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "export grant is not a v1 claim",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "export_release",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/kind"
+        ]
+      }
+    },
+    {
+      "name": "unqualified image digest field rejected",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+            "imageDigest": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/digests"
+        ]
+      }
+    },
+    {
+      "name": "source manifest input missing",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/inputs"
+        ]
+      }
+    },
+    {
+      "name": "source mcap input missing",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/inputs"
+        ]
+      }
+    },
+    {
+      "name": "second source mcap input",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/inputs"
+        ]
+      }
+    },
+    {
+      "name": "source manifest input digest differs from pinned digest",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/inputs/2/sha256"
+        ]
+      }
+    },
+    {
+      "name": "source manifest input over 1 MiB",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1048577",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "duplicate input file id",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/inputs/1/fileId"
+        ]
+      }
+    },
+    {
+      "name": "start deadline after execution deadline",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-02T00:04:06Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/executionDeadline"
+        ]
+      }
+    },
+    {
+      "name": "fractional deadlines compare exactly (start later)",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-02T00:04:05.2Z",
+          "executionDeadline": "2026-11-02T00:04:05.123456789Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/executionDeadline"
+        ]
+      }
+    },
+    {
+      "name": "fractional deadlines compare exactly (start earlier)",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-02T00:04:05.1Z",
+          "executionDeadline": "2026-11-02T00:04:05.123Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "equal deadlines accepted",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-02T00:04:05.000Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "url with NEL U+0085",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "https://h.example/kx",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inputs/0/readUrl"
+        ]
+      }
+    },
+    {
+      "name": "url with FS U+001C",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "https://h.example/k\u001cx",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inputs/0/readUrl"
+        ]
+      }
+    },
+    {
+      "name": "url with ZWNBSP U+FEFF",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "https://h.example/k﻿x",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inputs/0/readUrl"
+        ]
+      }
+    },
+    {
+      "name": "url with non-ASCII letter",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "https://h.example/café",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inputs/0/readUrl"
+        ]
+      }
+    },
+    {
+      "name": "url with space",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "kind": "process_recording",
+          "startDeadline": "2026-11-01T18:14:05Z",
+          "executionDeadline": "2026-11-02T00:04:05Z",
+          "digests": {
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "codeRevision": "0f8a21f",
+            "imageSpecSha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+            "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "configSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "limits": {
+            "maxOutputFiles": 2000,
+            "maxOutputBytes": "107374182400",
+            "maxControlDocumentBytes": 1048576
+          },
+          "inputs": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "readUrl": "https://h.example/k x",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+              "expiresAt": "2026-11-01T19:04:05Z"
+            }
+          ],
+          "capability": {
+            "token": "ccccccccccccccccccccccccccccccccccccccccccc",
+            "expiresAt": "2026-11-02T00:04:05Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inputs/0/readUrl"
+        ]
+      }
+    }
+  ]
+}

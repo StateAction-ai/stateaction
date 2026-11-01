@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/upload-create.v1.json",
+  "title": "Allocate source upload request v1",
+  "description": "POST /api/v1/uploads. The server freezes the part plan from sizeBytes; clients cannot choose ranges, keys or part sizes. The source_manifest declaration uses this same transport and is limited to 1 MiB.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recordingId", "clientUploadId", "role", "sizeBytes", "sha256"],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientUploadId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "role": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+    },
+    "sizeBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+    },
+    "sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    }
+  },
+  "if": {
+    "required": ["role"],
+    "properties": {
+      "role": {
+        "const": "source_manifest"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "sizeBytes": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+      }
+    }
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/result-candidate.v1.json",
+  "title": "Result candidate v1",
+  "description": "POST /internal/v1/jobs/{jobId}/result. Provisional until the API observes terminal execution and the manifest bytes hash to manifestSha256. A worker that reaches reporting always uploads a processing-result manifest, including on failure (check records carry the evidence; clips/outputs may be empty). summary.outcome succeeded requires errorCode null; failed requires a non-null errorCode. Failures before reporting are observed from executor terminal state, not a candidate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "invocationNonce",
+    "manifestFileId",
+    "manifestSha256",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "manifestFileId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "manifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "clipCount", "checks", "errorCode"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["succeeded", "failed"]
+        },
+        "clipCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pass", "warn", "fail", "measured", "notEvaluated"],
+          "properties": {
+            "pass": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "warn": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "fail": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "measured": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            },
+            "notEvaluated": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            }
+          }
+        },
+        "errorCode": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

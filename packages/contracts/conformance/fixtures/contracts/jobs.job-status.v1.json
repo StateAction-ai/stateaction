@@ -1,0 +1,43 @@
+{
+  "contract": "jobs.job-status.v1",
+  "cases": [
+    {
+      "name": "submit unknown with predecessor",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown state",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "done",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/state"
+        ]
+      }
+    }
+  ]
+}
