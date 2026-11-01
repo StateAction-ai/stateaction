@@ -46,7 +46,7 @@
       "dependsOn": [],
       "options": {
         "commands": [
-          "spikes/android/capture/gradlew -p spikes/android/capture :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --console=plain",
+          "spikes/android/capture/gradlew -p spikes/android/capture :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon --console=plain",
           "python3 spikes/android/capture/harness/capture_verify.py spikes/android/capture/app/build/spike-fixtures/native-writer.mcap --require container,video --output artifacts/android-capture-spike/jvm-native-writer-verification.json",
           "cd spikes/android/capture/harness && PYTHONPATH=.:tests:../../../../scripts python3 -m unittest discover -s tests -v"
         ],
