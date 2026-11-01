@@ -1,0 +1,22 @@
+name: PR policy
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  ticket-reference:
+    name: Ticket reference
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require a Linear issue ID in the title
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as source:
+              title = json.load(source)["pull_request"]["title"]
+          if not re.fullmatch(r"SA-[1-9][0-9]*: \S(?:[^\r\n]*\S)?", title):
+              raise SystemExit("PR title must use SA-<number>: <description>")
+          print("Linear issue ID present in PR title")
+          PY

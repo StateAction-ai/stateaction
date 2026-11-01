@@ -20,3 +20,11 @@ Always run and iterate on simulations/emulators and local end-to-end tests befor
 The existing Stera checkout is **our temporary work**, not another engineer's active changes. Use its existing recorder as the starting point rather than rebuilding working app behavior unnecessarily. Preserve our existing work and unrelated edits; use an isolated branch/worktree when appropriate. Standalone test package IDs remain useful to avoid replacing the collector.
 
 Capture on the physical phone requires an intentional user Start action. Raw recordings and captured images stay in ignored local directories, never in Git.
+
+## Linear and pull request traceability
+
+- Work from the applicable Linear ticket and keep its acceptance criteria, evidence and remaining gates current.
+- Use an issue branch such as `sa-11-platform-foundations`; include the primary issue ID in each PR title: `SA-11: Scaffold platform foundations`.
+- Include `Refs SA-11` in the PR body for partial work. Use `Fixes SA-11` only when every acceptance criterion is demonstrated and merge should complete the ticket. Reference other affected tickets separately.
+- Record the actual PR URL on the ticket after publication and verify the native GitHub integration link. A pasted commit hash or a configured Git remote is not a verified integration.
+- Use PRs for new work; do not commit new implementation directly on `main`, rewrite existing implementation history, or mark a ticket Done merely because local checks passed.

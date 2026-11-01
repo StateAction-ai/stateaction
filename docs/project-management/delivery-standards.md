@@ -10,6 +10,12 @@
 - Backlog -> Todo -> In Progress -> In Review -> Done, mapped to existing team statuses; blocked work records native dependencies rather than a fabricated progress state.
 - Triage weekly and before committing work. Review milestone exits against evidence; publish a concise weekly project update with outcomes, next work, blockers/owners and measured cost/quality risks.
 
+## Ticket-to-code traceability
+
+Use an issue branch and a PR title such as `SA-11: Scaffold platform foundations`. The PR body uses `Refs SA-11` for partial work and `Fixes SA-11` only when merging should complete all acceptance criteria. Reference additional affected issues separately. Include the change, validation evidence and remaining work using the repository's PR template. The `PR policy / Ticket reference` workflow checks the title on creation, edits and new commits; require that check in GitHub branch protection after it is published.
+
+Native PR linking requires the [Linear GitHub integration](https://linear.app/docs/github) installed for the correct repository. Verify a real PR appears on its Linear ticket; commit text alone is insufficient. Publishing the repository, installing the GitHub App, configuring required checks and obtaining a hosted CI result are distinct steps. The latest implementation results are already on SA-11/SA-54/SA-60/SA-61, but repository integration and a linked PR have not yet been verified.
+
 ## Definition of Ready
 
 - One accountable assignee, understood dependencies and sufficient input fixtures/access.

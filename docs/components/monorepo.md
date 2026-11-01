@@ -19,6 +19,18 @@ Updated: 2026-11-01. Existing mobile/native source is imported from Stera revisi
 
 Use **pnpm workspaces for TypeScript packages only**, Flutter/pub for Dart and uv for Python. Pin Node, pnpm, Flutter, Python and dependency versions; commit their applicable lockfiles. Retain required Gradle/CocoaPods locks. One repository does not require one package manager. No new Bun, Nx, Turbo or Melos dependency is needed for the pilot. A small root Makefile exposes documented setup, check and development commands for the three toolchains.
 
+## Tooling decision
+
+Reviewed 2026-11-01. Keep the current setup for the MVP: four TypeScript workspace packages, one Python worker, and the Flutter app/native plugin. It is a lightweight arrangement of native tools, not a unified cross-language dependency graph. The root `make check` currently checks Node/Python; mobile checks run separately in CI and the capture runbooks. No hosted CI timing is available yet to justify a caching migration.
+
+| Option | Benefit | Decision for this repository |
+| --- | --- | --- |
+| [pnpm workspaces](https://pnpm.io/workspaces) + Makefile + pub/uv | Native dependency management and explicit commands, little configuration | Use now; maintain package boundaries and targeted CI |
+| [Turborepo](https://turborepo.dev/docs/crafting-your-repository/caching) | Task ordering and local/remote output caching for workspace scripts | Consider if repeated workspace builds dominate iteration time; Python/Flutter still need declared tasks and inputs |
+| [Nx](https://nx.dev/docs/features/multi-language-support) | Cross-language task/project graph, affected execution and caching; arbitrary native commands are supported | Preferred candidate if we need one orchestrator across all toolchains; requires explicit cross-language dependency/cache configuration |
+
+Measure CI and development bottlenecks before adding another orchestrator. Any future cache must include relevant manifests, lockfiles, environment/toolchain inputs and outputs. Real upload/workflow/device tests and provider mutations must execute, not replay cached success. [Nx cacheability rules](https://nx.dev/docs/features/cache-task-results)
+
 Mobile consumes an HTTP contract, not TypeScript business logic. Python imports model/MCAP libraries, not web code. Only `apps/web` receives the production database/storage authority; job and worker capabilities follow [orchestration](job-orchestration.md).
 
 ## Existing mobile source import
