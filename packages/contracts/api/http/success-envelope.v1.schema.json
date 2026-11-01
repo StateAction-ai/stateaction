@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
+  "title": "API success envelope v1",
+  "description": "Success body wrapper for every /api/v1 and /internal/v1 route.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["data", "requestId"],
+  "properties": {
+    "data": {
+      "description": "Route-specific payload validated by its own contract."
+    },
+    "requestId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}

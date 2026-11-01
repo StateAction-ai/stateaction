@@ -1,0 +1,284 @@
+{
+  "contract": "native.capture-command.v1",
+  "cases": [
+    {
+      "name": "start capture with accepted profile reference",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "start_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "collectionPermissionRef": "pilot-consent-2026-10",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "stop capture",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "stop_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "reason": "thermal_limit"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "probe capabilities without a take",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "get_capabilities",
+          "profileRequest": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "list recoverable captures",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "list_recoverable_captures"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "snapshot",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "get_capture_snapshot",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recover",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "recover_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "future schema version",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "start_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "collectionPermissionRef": "pilot-consent-2026-10",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    },
+    {
+      "name": "unknown operation",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "pause_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "reason": "thermal_limit"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "start without owner",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "start_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "collectionPermissionRef": "pilot-consent-2026-10",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "probe cannot create a take",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "get_capabilities",
+          "profileRequest": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1"
+          },
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "accepted profile must pin its config digest",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "start_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "collectionPermissionRef": "pilot-consent-2026-10",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "image bytes never cross the bridge",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "start_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "collectionPermissionRef": "pilot-consent-2026-10",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "frame": "AAAA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "unknown stop reason",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "operation": "stop_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "reason": "bored"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "command id must be a uuid",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "cmd-1",
+          "operation": "stop_capture",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "reason": "thermal_limit"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

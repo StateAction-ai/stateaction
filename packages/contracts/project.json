@@ -28,7 +28,7 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec prettier --check \"packages/contracts/api/**/*\" \"packages/contracts/src/**/*\" \"packages/contracts/test/**/*\" \"packages/contracts/*.json\""
+        "command": "pnpm exec prettier --check \"packages/contracts/api/**/*\" \"packages/contracts/src/**/*\" \"packages/contracts/test/**/*\" \"packages/contracts/*.json\" \"packages/contracts/*.md\""
       }
     }
   }

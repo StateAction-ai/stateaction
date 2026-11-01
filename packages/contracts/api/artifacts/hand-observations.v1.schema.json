@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/hand-observations.v1.json",
+  "title": "Hand observations shard v1",
+  "description": "Per-frame hand predictions for one clip. Up to two hands; 21 joints in joint_order. Missing coordinates are null with mask false. handedness_score is not per-joint confidence; visibility is explicitly unknown.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "clip_id",
+    "frame_count",
+    "joint_order",
+    "image_space",
+    "frames"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.hand_observations.v1"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clip_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7200
+    },
+    "joint_order": {
+      "const": [
+        "wrist",
+        "thumb_cmc",
+        "thumb_mcp",
+        "thumb_ip",
+        "thumb_tip",
+        "index_finger_mcp",
+        "index_finger_pip",
+        "index_finger_dip",
+        "index_finger_tip",
+        "middle_finger_mcp",
+        "middle_finger_pip",
+        "middle_finger_dip",
+        "middle_finger_tip",
+        "ring_finger_mcp",
+        "ring_finger_pip",
+        "ring_finger_dip",
+        "ring_finger_tip",
+        "pinky_mcp",
+        "pinky_pip",
+        "pinky_dip",
+        "pinky_tip"
+      ]
+    },
+    "image_space": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raster", "units", "origin"],
+      "properties": {
+        "raster": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/raster"
+        },
+        "units": {
+          "const": "px"
+        },
+        "origin": {
+          "const": "top_left_pixel_corner"
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame_index", "hands"],
+        "properties": {
+          "frame_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7199
+          },
+          "hands": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "hand_index",
+                "handedness",
+                "handedness_score",
+                "visibility",
+                "image_landmarks_px",
+                "image_mask",
+                "points_3d"
+              ],
+              "properties": {
+                "hand_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "handedness": {
+                  "type": "string",
+                  "enum": ["left", "right"]
+                },
+                "handedness_score": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "visibility": {
+                  "const": "unknown"
+                },
+                "image_landmarks_px": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": -1000000000.0,
+                          "maximum": 1000000000.0
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "minItems": 21,
+                  "maxItems": 21
+                },
+                "image_mask": {
+                  "type": "array",
+                  "items": {
+                    "type": "boolean"
+                  },
+                  "minItems": 21,
+                  "maxItems": 21
+                },
+                "points_3d": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "space",
+                        "units",
+                        "origin",
+                        "metric_accuracy_validated",
+                        "joints",
+                        "mask"
+                      ],
+                      "properties": {
+                        "space": {
+                          "const": "model_relative"
+                        },
+                        "units": {
+                          "const": "model_estimated_meters"
+                        },
+                        "origin": {
+                          "const": "hand_geometric_center"
+                        },
+                        "metric_accuracy_validated": {
+                          "const": false
+                        },
+                        "joints": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "number",
+                                  "minimum": -1000000000.0,
+                                  "maximum": 1000000000.0
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "minItems": 21,
+                          "maxItems": 21
+                        },
+                        "mask": {
+                          "type": "array",
+                          "items": {
+                            "type": "boolean"
+                          },
+                          "minItems": 21,
+                          "maxItems": 21
+                        }
+                      },
+                      "description": "Raw model-estimated local 3D. Not a measured camera or world position; never relabel as metric."
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "space",
+                        "units",
+                        "frame",
+                        "metric_accuracy_validated",
+                        "validation",
+                        "joints",
+                        "mask"
+                      ],
+                      "properties": {
+                        "space": {
+                          "const": "camera_metric"
+                        },
+                        "units": {
+                          "const": "meters"
+                        },
+                        "frame": {
+                          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+                        },
+                        "metric_accuracy_validated": {
+                          "const": true
+                        },
+                        "validation": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "profile_revision",
+                            "evidence_file_id",
+                            "evidence_sha256"
+                          ],
+                          "properties": {
+                            "profile_revision": {
+                              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+                            },
+                            "evidence_file_id": {
+                              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+                            },
+                            "evidence_sha256": {
+                              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+                            }
+                          }
+                        },
+                        "joints": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "number",
+                                  "minimum": -1000000000.0,
+                                  "maximum": 1000000000.0
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "minItems": 21,
+                          "maxItems": 21
+                        },
+                        "mask": {
+                          "type": "array",
+                          "items": {
+                            "type": "boolean"
+                          },
+                          "minItems": 21,
+                          "maxItems": 21
+                        }
+                      },
+                      "description": "Reserved for a future separately qualified camera-frame profile. Presence of validation metadata does not itself prove physical accuracy."
+                    }
+                  ]
+                }
+              }
+            },
+            "minItems": 0,
+            "maxItems": 2
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 7200
+    }
+  }
+}

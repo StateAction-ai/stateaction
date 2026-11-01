@@ -1,0 +1,50 @@
+{
+  "name": "contracts-python",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "root": "packages/contracts/python",
+  "projectType": "library",
+  "implicitDependencies": ["contracts"],
+  "namedInputs": {
+    "contractData": [
+      "{workspaceRoot}/packages/contracts/api/**/*",
+      "{workspaceRoot}/packages/contracts/conformance/**/*"
+    ]
+  },
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "contractData"],
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "command": "uv build --wheel --out-dir dist",
+        "cwd": "packages/contracts/python"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --locked mypy",
+        "cwd": "packages/contracts/python"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "contractData"],
+      "options": {
+        "command": "uv run --locked python -m unittest discover -s tests -v",
+        "cwd": "packages/contracts/python"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --locked ruff check .",
+          "uv run --locked ruff format --check ."
+        ],
+        "parallel": false,
+        "cwd": "packages/contracts/python"
+      }
+    }
+  }
+}

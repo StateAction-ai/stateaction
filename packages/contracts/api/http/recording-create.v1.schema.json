@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-create.v1.json",
+  "title": "Create recording request v1",
+  "description": "POST /api/v1/recordings. The owner is the authenticated actor; no owner field is accepted. Idempotency scope: (actor, recordings.create, clientRecordingId) plus request digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clientRecordingId",
+    "captureFormat",
+    "rgbProfile",
+    "startedAt",
+    "device"
+  ],
+  "properties": {
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "captureFormat": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1"]
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "osVersion", "appVersion"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "osVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "appVersion": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        }
+      }
+    }
+  }
+}

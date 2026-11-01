@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/native/capture-snapshot.v1.json",
+  "title": "Native capture snapshot v1",
+  "description": "Authoritative native capture state, returned by every successful command and emitted as the bridge event payload. eventSequence is the persisted, monotonically increasing journal sequence; events are UI hints and snapshots recover missed ones. Counters are writer-accepted evidence, not configuration. preflight/recording/finalizing have null containerState and captureOutcome; finalized is closed with completed|interrupted; recovery_required is unclosed with no outcome; quarantined has outcome failed. Capture Close.outcome maps completed->completed, aborted->interrupted, failed->failed, unknown->null; a salvaged/recovered take is a new derived capture identity, never a success outcome of the original.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "clientRecordingId",
+    "ownerUserId",
+    "state",
+    "containerState",
+    "captureOutcome",
+    "eventSequence",
+    "counters",
+    "lastError"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "preflight",
+        "recording",
+        "finalizing",
+        "finalized",
+        "recovery_required",
+        "quarantined"
+      ]
+    },
+    "containerState": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["closed", "unclosed", "invalid"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "captureOutcome": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["completed", "interrupted", "failed"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "eventSequence": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "counters": {
+      "description": "videoFramesSubmitted <= videoFramesAcquired; videoFramesWritten <= videoFramesSubmitted; videoFramesWritten + videoFramesDropped + videoFramesUnresolved <= videoFramesAcquired. A finalized snapshot additionally requires videoFramesUnresolved == 0 and videoFramesWritten + videoFramesDropped == videoFramesAcquired; active, recovery_required and quarantined snapshots may carry incomplete counters. Names mirror capture Close.frames.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "videoFramesAcquired",
+        "videoFramesSubmitted",
+        "videoFramesWritten",
+        "videoFramesDropped",
+        "videoFramesUnresolved",
+        "motionEventsWritten",
+        "sourceBytesWritten"
+      ],
+      "properties": {
+        "videoFramesAcquired": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "videoFramesSubmitted": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "videoFramesWritten": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "videoFramesDropped": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "videoFramesUnresolved": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "motionEventsWritten": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "sourceBytesWritten": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/byteCount"
+        }
+      }
+    },
+    "lastError": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/native/capture-error.v1.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

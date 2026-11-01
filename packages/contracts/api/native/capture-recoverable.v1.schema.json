@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/native/capture-recoverable.v1.json",
+  "title": "Native recoverable captures v1",
+  "description": "Result of list_recoverable_captures: authoritative snapshots of takes in finalizing or recovery_required, unique by clientRecordingId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "commandId", "captures"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "commandId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "captures": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/native/capture-snapshot.v1.json"
+      },
+      "maxItems": 64
+    }
+  }
+}

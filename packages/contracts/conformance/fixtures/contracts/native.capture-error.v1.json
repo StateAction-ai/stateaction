@@ -1,0 +1,117 @@
+{
+  "contract": "native.capture-error.v1",
+  "cases": [
+    {
+      "name": "capture already active",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "capture_active",
+          "retryable": false,
+          "message": "Another recording is already in progress.",
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "error without command or take identity",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "internal",
+          "retryable": true,
+          "message": "Another recording is already in progress.",
+          "commandId": null,
+          "clientRecordingId": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "oops",
+          "retryable": false,
+          "message": "Another recording is already in progress.",
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/code"
+        ]
+      }
+    },
+    {
+      "name": "message may not contain control characters",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "capture_active",
+          "retryable": false,
+          "message": "line1\nline2",
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/message"
+        ]
+      }
+    },
+    {
+      "name": "message is bounded",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "capture_active",
+          "retryable": false,
+          "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/message"
+        ]
+      }
+    },
+    {
+      "name": "retryable must be boolean",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "code": "capture_active",
+          "retryable": 1,
+          "message": "Another recording is already in progress.",
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/retryable"
+        ]
+      }
+    }
+  ]
+}

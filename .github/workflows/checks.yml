@@ -103,7 +103,7 @@ jobs:
             echo "integration=true" >> "$GITHUB_OUTPUT"
             mobile=$(pnpm exec nx show projects --json)
           fi
-          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "capture-conformance-mobile")] | join(",")' <<< "$mobile")
+          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile")] | join(",")' <<< "$mobile")
           echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
           if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build, typecheck, syntax, test and format
@@ -111,9 +111,9 @@ jobs:
           MODE: ${{ steps.scope.outputs.mode }}
         run: |
           if [[ "$MODE" == affected ]]; then
-            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,capture-conformance-mobile --outputStyle=static
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile --outputStyle=static
           else
-            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,capture-conformance-mobile --outputStyle=static
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile --outputStyle=static
           fi
   android:
     name: Affected Android and Dart checks
