@@ -1,0 +1,32 @@
+{
+  "name": "stateaction",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "24.22.2",
+    "pnpm": "10.33.0"
+  },
+  "scripts": {
+    "build": "nx run-many -t build",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test",
+    "check": "nx run-many -t build,typecheck,syntax,test,format",
+    "dev": "pnpm --filter @stateaction/web dev",
+    "dev:jobs": "pnpm --filter @stateaction/jobs dev",
+    "db:migrate": "pnpm --filter @stateaction/server migrate",
+    "storage:init": "pnpm --filter @stateaction/server storage:init",
+    "test:platform": "nx run infra:integration --skip-nx-cache",
+    "format:check": "nx run-many -t format",
+    "storage:check": "pnpm --filter @stateaction/server storage:check",
+    "affected": "nx affected -t build,typecheck,syntax,test,format",
+    "graph": "nx graph",
+    "prepare": "node scripts/platform/install-hooks.mjs",
+    "hooks:install": "node scripts/platform/install-hooks.mjs",
+    "syntax": "nx run-many -t syntax"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "nx": "24.0.3",
+    "lefthook": "2.2.2"
+  }
+}

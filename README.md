@@ -1,6 +1,10 @@
-# Robotics data collection
+# StateAction.ai
 
-Local workspace for building Stera on Linux, collecting raw recordings from an Android phone, and inspecting their native sensor streams.
+Private monorepo: [timothywangdev/stateaction](https://github.com/timothywangdev/stateaction). Track work in [Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
+
+Nx coordinates the Node/TypeScript and Python foundation over pnpm and uv. Lefthook validates staged content and blocks direct pushes to `main`; CI and the guarded merger implement one-ticket/one-PR delivery. Start with the [platform setup](scripts/platform/README.md) and [repository workflow](docs/repository-workflow.md). The existing Flutter/native source joins this published baseline through its separate mobile-import ticket.
+
+The diagnostic tools and physical-capture results below retain earlier evidence; they do not qualify the new product auth/upload or cloud processing flow.
 
 ## Reproduce this workspace
 
@@ -8,8 +12,8 @@ The workspace and Android changes live in private repositories under
 `timothywangdev`. Clone with submodules to get the exact tested app and SDK commits:
 
 ```bash
-git clone --recurse-submodules https://github.com/timothywangdev/robotics-data-collection.git
-cd robotics-data-collection
+git clone --recurse-submodules https://github.com/timothywangdev/stateaction.git
+cd stateaction
 ```
 
 Authentication is required for the workspace and app repositories. Phone captures,
@@ -21,7 +25,7 @@ below describe the installed local tools; cloning alone does not install them.
 
 ## Validation status
 
-**Current status: v3 physical acquisition works in two Pixel recordings.** The captures contain 245 and 186 matched RGB/depth/tracked-pose events, zero encoder failures, and no message decode errors. The saved-playback orientation fix is installed and tested against the latest recording. See [physical results and remaining hand failures](docs/pixel-v3-physical-validation.md). Hand-pose accuracy, temporal accuracy and training qualification remain unverified.
+**Historical diagnostic status (2026-10-21): v3 physical acquisition works in two Pixel recordings.** The captures contain 245 and 186 matched RGB/depth/tracked-pose events, zero encoder failures, and no message decode errors. The saved-playback orientation fix is installed and tested against the latest recording. See [physical results and remaining hand failures](docs/pixel-v3-physical-validation.md). Hand-pose accuracy, temporal accuracy and training qualification remain unverified.
 
 The user confirmed correct playback orientation. The separate thumbnail fix is
 installed, with ten Flutter regression checks passing. Hand investigation now
@@ -139,13 +143,16 @@ adb devices -l
 # Replace the placeholder with the intended phone's first-column identifier.
 export ROBOTICS_CAPTURE_DEVICE='device-identifier-from-adb-devices'
 adb -s "$ROBOTICS_CAPTURE_DEVICE" get-state
-adb -s "$ROBOTICS_CAPTURE_DEVICE" install -r \
+adb -s "$ROBOTICS_CAPTURE_DEVICE" shell cmd user list -v
+# Verify the personal full user before proceeding; never select a work profile.
+export ANDROID_PERSONAL_USER='verified-personal-user-id'
+adb -s "$ROBOTICS_CAPTURE_DEVICE" install --user "$ANDROID_PERSONAL_USER" -r \
   "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk"
-adb -s "$ROBOTICS_CAPTURE_DEVICE" shell am start \
+adb -s "$ROBOTICS_CAPTURE_DEVICE" shell am start --user "$ANDROID_PERSONAL_USER" \
   -n open.fpvlabs.stera/.MainActivity
 ```
 
-The selected device must show `device`, rather than `unauthorized` or `offline`. ADB can list the same wireless phone twice, under its address and its mDNS identifier; choose one entry and keep targeting it explicitly. Re-select its identifier if wireless reconnection changes it.
+Follow [the mandatory profile checks](AGENTS.md) before installation or launch, including checking the exact package installation scope afterward. The selected device must show `device`, rather than `unauthorized` or `offline`. ADB can list the same wireless phone twice, under its address and its mDNS identifier; choose one entry and keep targeting it explicitly. Re-select its identifier if wireless reconnection changes it.
 
 ## Record and copy data
 

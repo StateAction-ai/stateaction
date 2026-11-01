@@ -1,0 +1,32 @@
+{
+  "name": "@stateaction/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --conditions=react-server --import tsx --test test/*.test.ts",
+    "migrate": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts migrate",
+    "storage:init": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-init",
+    "storage:check": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-check"
+  },
+  "dependencies": {
+    "@stateaction/contracts": "workspace:*",
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0",
+    "@renderinc/sdk": "1.6.0",
+    "pg": "8.23.1",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "@types/pg": "8.15.6",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}

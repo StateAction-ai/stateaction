@@ -1,0 +1,157 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Same-repository PR number when dispatching its current branch
+        type: string
+        required: false
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  NX_NO_CLOUD: "true"
+  NX_DAEMON: "false"
+  NX_TUI: "false"
+  CI: "true"
+jobs:
+  resolve:
+    name: Resolve tested revision
+    runs-on: ubuntu-24.04
+    outputs:
+      head: ${{ steps.revision.outputs.head }}
+      base: ${{ steps.revision.outputs.base }}
+      dispatched_pr: ${{ steps.revision.outputs.dispatched_pr }}
+    steps:
+      - name: Pin event or dispatched PR head
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          head="$EVENT_HEAD"
+          base="$EVENT_BASE"
+          dispatched_pr=false
+          if [[ "$EVENT" == workflow_dispatch && -n "$PR_NUMBER" ]]; then
+            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || exit 1
+            payload=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
+            [[ "$(jq -r '.state' <<< "$payload")" == open ]] || exit 1
+            [[ "$(jq -r '.base.ref' <<< "$payload")" == main ]] || exit 1
+            [[ "$(jq -r '.head.repo.full_name' <<< "$payload")" == "$GITHUB_REPOSITORY" ]] || exit 1
+            head=$(jq -r '.head.sha' <<< "$payload")
+            base=$(jq -r '.base.sha' <<< "$payload")
+            # The dispatcher selects the PR branch; check status belongs to that SHA.
+            [[ "$head" == "$EVENT_HEAD" ]] || exit 1
+            dispatched_pr=true
+          fi
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "dispatched_pr=$dispatched_pr" >> "$GITHUB_OUTPUT"
+  checks:
+    name: Affected checks
+    needs: resolve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      integration: ${{ steps.scope.outputs.integration }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve.outputs.head }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.2
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: 0.13.6
+          enable-cache: false
+      - run: npm install --global pnpm@10.33.0
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project workers/processing --locked
+      - name: Select affected graph
+        id: scope
+        env:
+          BASE_SHA: ${{ needs.resolve.outputs.base }}
+          HEAD_SHA: ${{ needs.resolve.outputs.head }}
+          DISPATCHED_PR: ${{ needs.resolve.outputs.dispatched_pr }}
+        run: |
+          if [[ "$DISPATCHED_PR" == true ]]; then BASE_SHA=$(git rev-parse origin/main); fi
+          if [[ -n "$BASE_SHA" ]] && git cat-file -e "$BASE_SHA:nx.json" 2>/dev/null; then
+            echo "mode=affected" >> "$GITHUB_OUTPUT"
+            echo "NX_BASE=$BASE_SHA" >> "$GITHUB_ENV"
+            echo "NX_HEAD=$HEAD_SHA" >> "$GITHUB_ENV"
+            projects=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --withTarget=integration --json)
+            if [[ "$projects" == '[]' ]]; then echo "integration=false" >> "$GITHUB_OUTPUT"; else echo "integration=true" >> "$GITHUB_OUTPUT"; fi
+          else
+            # The first tooling PR has no Nx graph/lockfile on its base.
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+            echo "integration=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build, typecheck, syntax, test and format
+        env:
+          MODE: ${{ steps.scope.outputs.mode }}
+        run: |
+          if [[ "$MODE" == affected ]]; then
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --outputStyle=static
+          else
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --outputStyle=static
+          fi
+  integration:
+    name: Local runtime smoke
+    needs: [resolve, checks]
+    if: needs.checks.outputs.integration == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.head }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.2
+          package-manager-cache: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: 0.13.6
+          enable-cache: false
+      - run: npm install --global pnpm@10.33.0
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project workers/processing --locked
+      - run: python3 scripts/platform/install-render.py
+      - name: Real Next, Render local runner, Python and storage
+        run: pnpm exec nx run infra:integration --skip-nx-cache --outputStyle=static
+  required:
+    name: Required checks
+    if: always()
+    needs: [resolve, checks, integration]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every applicable job to succeed
+        env:
+          RESOLVE_RESULT: ${{ needs.resolve.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          INTEGRATION_REQUIRED: ${{ needs.checks.outputs.integration }}
+        run: |
+          [[ "$RESOLVE_RESULT" == success ]] || exit 1
+          [[ "$CHECKS_RESULT" == success ]] || exit 1
+          if [[ "$INTEGRATION_REQUIRED" == true ]]; then
+            [[ "$INTEGRATION_RESULT" == success ]] || exit 1
+          elif [[ "$INTEGRATION_REQUIRED" == false ]]; then
+            [[ "$INTEGRATION_RESULT" == skipped || "$INTEGRATION_RESULT" == success ]] || exit 1
+          else
+            exit 1
+          fi

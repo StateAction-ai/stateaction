@@ -1,0 +1,50 @@
+# Monorepo and local platform loop
+
+Nx 24.0.3 owns the dependency graph, affected selection and local task cache. pnpm remains the TypeScript package manager; uv remains the Python package/build manager. Explicit `project.json` targets call native commands, so no language-specific Nx plugin or Nx Cloud is required. Exact pins and primary-source links are in [the toolchain receipt](../../config/platform-toolchain.json).
+
+The graph currently contains web, jobs, server, contracts, processing, tooling, infra and automation tests. Mobile is not imported in this ticket. Its later `mobile` and `recorder` projects will call Flutter/pub and Gradle directly, retain native lockfiles, depend on capture contracts and declare generated outputs. Emulator/device tasks must be uncached; no imaginary Flutter targets run now.
+
+## Setup and checks
+
+Use Node 24.22.2 (`nvm install`), pnpm 10.33.0 and uv 0.13.6:
+
+```sh
+make install
+make check
+pnpm exec nx show projects --json
+pnpm exec nx affected -t build,typecheck,syntax,test,format --base=origin/main --head=HEAD
+```
+
+`make check` checks all current projects. Repeating unchanged cacheable tasks reuses local `.nx/cache`; integration always executes. Private `.env`, build outputs and caches stay ignored. JavaScript helper and automation syntax targets are explicitly separate from TypeScript/mypy typechecks. CI uses all projects when the base predates Nx, then uses Nx affected for later changes. Workflow **CI** ends in the always-running **Required checks** gate; every relevant job must succeed. Ticket reference and merge automation are separate checks. CI can be dispatched on a PR branch with `pr_number` and verifies the dispatched SHA still matches that PR.
+
+## Hooks
+
+Lefthook 2.2.2 installs during pnpm setup in an ordinary clone. Its implicit package postinstall is disabled. `pnpm hooks:install` deliberately skips linked worktrees and preserves an existing custom hooks path; repeating it does not override either case.
+
+For this owned linked worktree, configure an isolated ignored hooks directory explicitly:
+
+```sh
+git config extensions.worktreeConfig true
+git config --worktree core.hooksPath "$PWD/.lefthook-hooks"
+git config --show-origin --get core.hooksPath
+git rev-parse --git-path hooks
+```
+
+Verify that both reported paths identify this worktree's owned `.lefthook-hooks`, then run `pnpm exec lefthook install --force`. Confirm that hooks were written there and shared hooks stayed unchanged. If the CLI refuses or reports another path, stop that installation and preserve the shared hooks. Never reset or force-install over an unrelated existing hooks path.
+
+Pre-commit reads staged blobs directly from Git's index. Prettier and Ruff check stdin: filenames with spaces and partial staging work without stash, rewrites or auto-staging. Format the intended content and stage only intended hunks. The fast hook does not run the whole build. Pre-push rejects any ref update to `main`; publish one ticket branch/PR. Local hooks do not impose server-side branch protection.
+
+Tests install the actual hooks in disposable repositories, check positive/negative commits and both partial-stage directions, then push to a disposable bare repository to prove the main-branch guard.
+
+## Real local runtime
+
+```sh
+make render-cli
+pnpm exec nx run infra:integration --skip-nx-cache
+```
+
+This isolated smoke creates its own local settings and dedicated `stateaction-sa11-smoke` Compose services. It refuses occupied ports/existing settings, proves a real Postgres migration and S3 Put/Get/Delete, then executes Next API → official Render local runner → Node LocalExecutor → installed Python health worker. It stops its own processes/services and retains its own named test volumes. It never deploys or dispatches to cloud Render.
+
+For interactive development, copy `.env.example` and `.env.workflows.example` to their ignored local counterparts, replace `LOCAL_SMOKE_TOKEN`, then run `make infra-up migrate storage-init`, `make web` and `make workflows` in separate terminals. Database/storage credentials stay out of the workflow environment. [Official local runtime](https://render.com/docs/workflows-local-development)
+
+`verify-platform` is a probe, not a production processing job. Authentication, durable job claims, uploads, Modal, R2 transport and review are later tickets. Local storage is Apache-2.0 SeaweedFS because official MinIO images are unavailable and its upstream is archived. The local roundtrip does not qualify multipart/CORS/presigned URLs or long recordings.

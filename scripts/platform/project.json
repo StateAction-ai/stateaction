@@ -1,0 +1,36 @@
+{
+  "name": "tooling",
+  "root": "scripts/platform",
+  "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --test scripts/platform/check-staged.test.mjs"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "pnpm exec prettier --check \"scripts/platform/**/*.{mjs,json,md}\" \"config/**/*.json\" package.json nx.json pnpm-workspace.yaml lefthook.yml \".github/workflows/*.yml\" AGENTS.md README.md docs/repository-workflow.md .github/pull_request_template.md pnpm-lock.yaml",
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml scripts/platform/install-render.py"
+        ],
+        "parallel": false
+      },
+      "inputs": ["default", "repositoryDocs", "automationSources"]
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "node --check scripts/platform/check-staged.mjs",
+          "node --check scripts/platform/check-push.mjs",
+          "node --check scripts/platform/install-hooks.mjs",
+          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/platform/install-render.py"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

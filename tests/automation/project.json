@@ -1,0 +1,32 @@
+{
+  "name": "automation",
+  "root": "tests/automation",
+  "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "automationSources"],
+      "options": {
+        "command": "python3 -m unittest discover -s tests/automation -p 'test_*.py' -v"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "automationSources"],
+      "options": {
+        "command": "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml scripts/automation tests/automation"
+      }
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "automationSources"],
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/automation tests/automation",
+          "python3 -m compileall -q scripts/automation tests/automation"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

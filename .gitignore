@@ -12,3 +12,17 @@ __pycache__/
 *.keystore
 *.jks
 # Nested repositories are tracked as git submodules, never copied build trees.
+
+# Monorepo tools and private local execution state.
+node_modules/
+dist/
+.next/
+.nx/
+.venv/
+.mypy_cache/
+.ruff_cache/
+*.tsbuildinfo
+*.egg-info/
+/apps/web/next-env.d.ts
+/.lefthook-hooks/
+!.env.workflows.example
