@@ -92,6 +92,17 @@ function captureSnapshot(doc: Json, base: string): RuleViolation | null {
         : [container !== null, outcome === "failed"]; // quarantined
   if (!containerOk) return v("outcome_mismatch", `${base}/containerState`);
   if (!outcomeOk) return v("outcome_mismatch", `${base}/captureOutcome`);
+  if (state === "finalized") {
+    // A clean finalized take has no unresolved frames and every acquired
+    // frame is accounted for as written or dropped.
+    if (n("videoFramesUnresolved") !== 0n)
+      return v("progress_mismatch", `${base}/counters/videoFramesUnresolved`);
+    if (
+      n("videoFramesWritten") + n("videoFramesDropped") !==
+      n("videoFramesAcquired")
+    )
+      return v("progress_mismatch", `${base}/counters/videoFramesAcquired`);
+  }
   return null;
 }
 

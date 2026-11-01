@@ -93,6 +93,16 @@ def _capture_snapshot(doc: Any, base: str) -> Violation:
         return ("outcome_mismatch", f"{base}/containerState")
     if not ok[1]:
         return ("outcome_mismatch", f"{base}/captureOutcome")
+    if state == "finalized":
+        # A clean finalized take has no unresolved frames and every acquired
+        # frame is accounted for as written or dropped.
+        if c["videoFramesUnresolved"] != 0:
+            return ("progress_mismatch", f"{base}/counters/videoFramesUnresolved")
+        if (
+            c["videoFramesWritten"] + c["videoFramesDropped"]
+            != c["videoFramesAcquired"]
+        ):
+            return ("progress_mismatch", f"{base}/counters/videoFramesAcquired")
     return None
 
 

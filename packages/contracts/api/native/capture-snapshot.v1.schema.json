@@ -63,7 +63,7 @@
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
     },
     "counters": {
-      "description": "videoFramesSubmitted <= videoFramesAcquired; videoFramesWritten <= videoFramesSubmitted; videoFramesWritten + videoFramesDropped + videoFramesUnresolved <= videoFramesAcquired. Names mirror capture Close.frames.",
+      "description": "videoFramesSubmitted <= videoFramesAcquired; videoFramesWritten <= videoFramesSubmitted; videoFramesWritten + videoFramesDropped + videoFramesUnresolved <= videoFramesAcquired. A finalized snapshot additionally requires videoFramesUnresolved == 0 and videoFramesWritten + videoFramesDropped == videoFramesAcquired; active, recovery_required and quarantined snapshots may carry incomplete counters. Names mirror capture Close.frames.",
       "type": "object",
       "additionalProperties": false,
       "required": [

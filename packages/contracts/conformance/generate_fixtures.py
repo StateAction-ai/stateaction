@@ -710,8 +710,8 @@ snapshot = {
         "videoFramesAcquired": "108003",
         "videoFramesSubmitted": "108001",
         "videoFramesWritten": "108000",
-        "videoFramesDropped": "2",
-        "videoFramesUnresolved": "1",
+        "videoFramesDropped": "3",
+        "videoFramesUnresolved": "0",
         "motionEventsWritten": "1440000",
         "sourceBytesWritten": "134217729",
     },
@@ -722,12 +722,24 @@ snapshot = {
         message="Recording stopped to protect the phone from overheating.",
     ),
 }
+# Active/recovery/quarantined takes may honestly carry incomplete counters.
+unresolved_counters = dict(
+    snapshot["counters"], videoFramesDropped="2", videoFramesUnresolved="1"
+)
 recording_snapshot = dict(
     snapshot,
     state="recording",
     containerState=None,
     captureOutcome=None,
+    counters=unresolved_counters,
     lastError=None,
+)
+quarantined_snapshot = dict(
+    snapshot,
+    state="quarantined",
+    containerState="unclosed",
+    captureOutcome="failed",
+    counters=unresolved_counters,
 )
 capabilities = {
     "schemaVersion": 1,
@@ -2160,6 +2172,7 @@ def contract_cases():
     c["native.capture-snapshot.v1"] = [
         ok("finalized interrupted take above 2^53 sequence", snapshot),
         ok("recording take", recording_snapshot),
+        ok("quarantined take keeps unresolved evidence", quarantined_snapshot),
         ok(
             "quarantined take",
             dict(
@@ -2243,6 +2256,23 @@ def contract_cases():
             "terminal frame counts exceed acquired",
             snapshot,
             [("/counters/videoFramesUnresolved", "2")],
+            "progress_mismatch",
+            "/counters/videoFramesAcquired",
+        ),
+        mut(
+            "finalized take cannot carry unresolved frames",
+            snapshot,
+            [
+                ("/counters/videoFramesDropped", "2"),
+                ("/counters/videoFramesUnresolved", "1"),
+            ],
+            "progress_mismatch",
+            "/counters/videoFramesUnresolved",
+        ),
+        mut(
+            "finalized take must account for every acquired frame",
+            snapshot,
+            [("/counters/videoFramesDropped", "2")],
             "progress_mismatch",
             "/counters/videoFramesAcquired",
         ),

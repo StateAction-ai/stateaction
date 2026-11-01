@@ -66,8 +66,8 @@
                 "videoFramesAcquired": "108003",
                 "videoFramesSubmitted": "108001",
                 "videoFramesWritten": "108000",
-                "videoFramesDropped": "2",
-                "videoFramesUnresolved": "1",
+                "videoFramesDropped": "3",
+                "videoFramesUnresolved": "0",
                 "motionEventsWritten": "1440000",
                 "sourceBytesWritten": "134217729"
               },

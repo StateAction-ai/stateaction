@@ -30,7 +30,7 @@
     "native/capture-command.v1.schema.json": "4a2fd3871a7f5d1e38f3fac4bc56914af024f4d748daa1ade1afcd28d5bf5649",
     "native/capture-error.v1.schema.json": "a8b68e808c6adfa39ffb7a2cabf93037b1d24e72c3a6713b161c2099ab6d2682",
     "native/capture-recoverable.v1.schema.json": "1f88e79f5ad18330108e1a6b39a551851e1f6fae9371624bd2472741a1f3cdcf",
-    "native/capture-snapshot.v1.schema.json": "cbde7f656f755fa72a945c484e4868ba74e9728ce4eac31310eb4196ff7f7aaf",
+    "native/capture-snapshot.v1.schema.json": "da8ef57c927bad2f114e7e5df663c2135b420596ea43a442922ac340af1773dc",
     "platform-verify.v1.schema.json": "171bc49bd9a786d923dfbb14bccabe40a7d4c8281a2caddb5fd0f04f05864080"
   }
 }

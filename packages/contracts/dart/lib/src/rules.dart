@@ -124,6 +124,17 @@ Violation? _captureSnapshot(Json doc, String base) {
       : (container != null, outcome == 'failed'); // quarantined
   if (!containerOk) return _v('outcome_mismatch', '$base/containerState');
   if (!outcomeOk) return _v('outcome_mismatch', '$base/captureOutcome');
+  if (state == 'finalized') {
+    // A clean finalized take has no unresolved frames and every acquired
+    // frame is accounted for as written or dropped.
+    if (n('videoFramesUnresolved') != BigInt.zero) {
+      return _v('progress_mismatch', '$base/counters/videoFramesUnresolved');
+    }
+    if (n('videoFramesWritten') + n('videoFramesDropped') !=
+        n('videoFramesAcquired')) {
+      return _v('progress_mismatch', '$base/counters/videoFramesAcquired');
+    }
+  }
   return null;
 }
 
