@@ -82,6 +82,8 @@ jobs:
       - run: npm install --global pnpm@10.33.0
       - run: pnpm install --frozen-lockfile
       - run: uv sync --project workers/processing --locked
+      - name: Test mobile bootstrap disk and SDK safeguards
+        run: python3 -m unittest discover -s scripts/platform -p 'test_mobile_bootstrap.py' -v
       - name: Select affected graph
         id: scope
         env:
@@ -137,14 +139,23 @@ jobs:
           check-latest: false
       - run: npm install --global pnpm@10.33.0
       - run: pnpm install --frozen-lockfile
+      - name: Report available Android runner storage
+        run: |
+          df -h "$GITHUB_WORKSPACE"
+          echo "Preinstalled Android SDK: $ANDROID_HOME"
       - name: Install verified Flutter and Android build tools
-        run: python3 scripts/platform/install-mobile-toolchain.py
+        run: python3 scripts/platform/install-mobile-toolchain.py --reuse-android-sdk
       - name: Check actual staged Dart through installed hooks
         run: node --test scripts/platform/check-staged-dart.test.mjs
       - name: Analyze, test, format and build affected Android sources
         env:
           MOBILE_PROJECTS: ${{ needs.checks.outputs.mobile_projects }}
         run: pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
+      - name: Report final Android runner storage
+        if: always()
+        run: |
+          df -h "$GITHUB_WORKSPACE"
+          du -sh artifacts/platform-tools/mobile "$HOME/.gradle" "$HOME/.pub-cache" apps/mobile/build 2>/dev/null || true
   integration:
     name: Local runtime smoke
     needs: [resolve, checks]

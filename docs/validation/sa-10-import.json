@@ -807,6 +807,15 @@
     "new_recorder_lock": "Locked internal package and retained example resolution; app dependency lock unchanged.",
     "excluded": "No H264 follow-up, later UI changes, spike recordings or processing implementation restored."
   },
+  "hosted_ci_disk_fix": {
+    "failed_run": "https://github.com/timothywangdev/stateaction/actions/runs/41334940810",
+    "tested_head": "266bddb5d9f31108a8a3a5ac09d79ef561262487",
+    "diagnosis": "Android runner check annotation reports System.IO.IOException: No space left on device; diagnostic/job logs could not be uploaded. Server/tooling, runtime smoke and ticket policy passed; required gate failed and automatic merger waited.",
+    "correction": "Explicitly reuse matching preinstalled Android SDK packages, install only missing pinned packages, preserve existing command-line tools, delete only owned checksum-verified installer archives, avoid broad Android precache and report disk usage.",
+    "local_safeguards": "Six focused tests pass for verified archive deletion, checksum mismatch retention, no absent-archive downloads, preserving old SDK tools, matching SDK-tool reuse and missing-package selection.",
+    "local_sdk_smoke": "Actual reused-SDK bootstrap preserved old latest tools, extracted and verified owned command-line tools23, reused installed pinned Android packages, deleted1725404343bytes of verified archives and validated Flutter/Dart/JDK/SDK pins. Default isolated-SDK bootstrap also passed. No bounded-disk build is claimed.",
+    "qualification": "Local safeguards do not prove hosted disk capacity; the same PR must pass a fresh cold GitHub CI run before merging. No paid larger runner or device operations."
+  },
   "checks": {
     "flutter": {
       "command": "pnpm exec nx run-many --projects=mobile,stera-recorder --targets=typecheck,test --skip-nx-cache --outputStyle=static",

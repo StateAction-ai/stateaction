@@ -52,7 +52,57 @@ def download(spec: dict[str, str], directory: Path) -> Path:
     return path
 
 
-def verify(flutter: Path, sdk: Path, env: dict[str, str]) -> None:
+def remove_verified_archive(spec: dict[str, str], directory: Path) -> None:
+    """Discard only this installer's checksum-verified public download."""
+    archive = directory / spec["url"].rsplit("/", 1)[1]
+    if archive.exists():
+        download(spec, directory).unlink()
+        print(f"Removed verified installer archive: {archive}", flush=True)
+
+
+def disk_report(label: str) -> None:
+    usage = shutil.disk_usage(ROOT)
+    gib = 1024**3
+    print(
+        f"Disk [{label}]: {usage.free / gib:.2f} GiB free / {usage.total / gib:.2f} GiB total",
+        flush=True,
+    )
+
+
+def has_revision(path: Path, revision: str) -> bool:
+    return path.is_file() and properties(path).get("Pkg.Revision") == revision
+
+
+def select_command_tools(sdk: Path, tools: Path) -> Path:
+    existing = sdk / "cmdline-tools/latest"
+    if has_revision(existing / "source.properties", PINS["androidCommandLineTools"]):
+        return existing
+    # A runner/developer may depend on its existing latest tools. Keep them intact.
+    return tools / f"cmdline-tools/{PINS['androidCommandLineTools']}"
+
+
+def missing_android_packages(sdk: Path) -> list[str]:
+    packages = [
+        (
+            f"platforms/android-{PINS['androidApi']}",
+            PINS["androidPlatformRevision"],
+            f"platforms;android-{PINS['androidApi']}",
+        ),
+        (
+            f"build-tools/{PINS['androidBuildTools']}",
+            PINS["androidBuildTools"],
+            f"build-tools;{PINS['androidBuildTools']}",
+        ),
+        (f"ndk/{PINS['ndk']}", PINS["ndk"], f"ndk;{PINS['ndk']}"),
+    ]
+    return [
+        package
+        for directory, revision, package in packages
+        if not has_revision(sdk / directory / "source.properties", revision)
+    ]
+
+
+def verify(flutter: Path, sdk: Path, command_tools: Path, env: dict[str, str]) -> None:
     version = json.loads(
         run([str(flutter / "bin/flutter"), "--version", "--machine"], env)
     )
@@ -61,7 +111,7 @@ def verify(flutter: Path, sdk: Path, env: dict[str, str]) -> None:
         (version["frameworkRevision"], PINS["flutterRevision"]),
         (version["dartSdkVersion"], PINS["dart"]),
         (
-            properties(sdk / "cmdline-tools/latest/source.properties")["Pkg.Revision"],
+            properties(command_tools / "source.properties")["Pkg.Revision"],
             PINS["androidCommandLineTools"],
         ),
         (
@@ -97,7 +147,13 @@ def main() -> None:
         action="store_true",
         help="Validate tools already selected by PATH, JAVA_HOME and ANDROID_HOME",
     )
+    parser.add_argument(
+        "--reuse-android-sdk",
+        action="store_true",
+        help="Explicitly reuse ANDROID_HOME/ANDROID_SDK_ROOT and install missing pinned packages; never delete or replace its tools",
+    )
     args = parser.parse_args()
+    disk_report("before bootstrap")
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise SystemExit("This checksum-pinned bootstrap supports Linux x86-64 only")
     env = dict(os.environ)
@@ -109,6 +165,11 @@ def main() -> None:
         )
     env["PATH"] = f"{java_home / 'bin'}:{env['PATH']}"
     tools = ROOT / "artifacts/platform-tools/mobile"
+    existing_sdk = env.get("ANDROID_HOME") or env.get("ANDROID_SDK_ROOT")
+    if args.reuse_android_sdk and (not existing_sdk or not Path(existing_sdk).is_dir()):
+        raise SystemExit(
+            "--reuse-android-sdk requires an existing ANDROID_HOME/ANDROID_SDK_ROOT"
+        )
     if args.verify_only:
         executable = shutil.which("flutter", path=env["PATH"])
         if not executable or not env.get("ANDROID_HOME"):
@@ -118,7 +179,7 @@ def main() -> None:
     else:
         tools.mkdir(parents=True, exist_ok=True)
         flutter = tools / "flutter"
-        sdk = tools / "android-sdk"
+        sdk = Path(existing_sdk) if args.reuse_android_sdk else tools / "android-sdk"
         if not flutter.exists():
             archive = download(PINS["flutterLinuxX64"], tools)
             with tempfile.TemporaryDirectory(dir=tools) as temporary:
@@ -127,7 +188,9 @@ def main() -> None:
                     check=True,
                 )
                 (Path(temporary) / "flutter").rename(flutter)
-        command_tools = sdk / "cmdline-tools/latest"
+        remove_verified_archive(PINS["flutterLinuxX64"], tools)
+        disk_report("Flutter extracted; archive removed")
+        command_tools = select_command_tools(sdk, tools)
         if not command_tools.exists():
             archive = download(PINS["androidCommandLineToolsLinuxX64"], tools)
             command_tools.parent.mkdir(parents=True, exist_ok=True)
@@ -137,27 +200,30 @@ def main() -> None:
                 (Path(temporary) / "cmdline-tools").rename(command_tools)
             for executable in (command_tools / "bin").iterdir():
                 executable.chmod(executable.stat().st_mode | 0o111)
+        remove_verified_archive(PINS["androidCommandLineToolsLinuxX64"], tools)
+        disk_report("command-line tools ready; archive removed")
         env["ANDROID_HOME"] = str(sdk)
         env["ANDROID_SDK_ROOT"] = str(sdk)
         env["ANDROID_USER_HOME"] = str(sdk / ".android")
         manager = str(command_tools / "bin/sdkmanager")
-        print(run([manager, f"--sdk_root={sdk}", "--licenses"], env, input="y\n" * 100))
-        print(
-            run(
-                [
-                    manager,
-                    f"--sdk_root={sdk}",
-                    f"platforms;android-{PINS['androidApi']}",
-                    f"build-tools;{PINS['androidBuildTools']}",
-                    f"ndk;{PINS['ndk']}",
-                ],
-                env,
+        missing = missing_android_packages(sdk)
+        print(f"Android SDK: {sdk}; packages requiring install: {missing}", flush=True)
+        if missing:
+            print(
+                run(
+                    [manager, f"--sdk_root={sdk}", "--licenses"], env, input="y\n" * 100
+                )
             )
-        )
+            print(run([manager, f"--sdk_root={sdk}", *missing], env))
+        disk_report("pinned Android packages ready")
+    if args.verify_only:
+        command_tools = select_command_tools(sdk, tools)
     env["PATH"] = f"{flutter / 'bin'}:{java_home / 'bin'}:{env['PATH']}"
-    verify(flutter, sdk, env)
+    verify(flutter, sdk, command_tools, env)
     if not args.verify_only:
-        print(run([str(flutter / "bin/flutter"), "precache", "--android"], env))
+        # The real debug x64 build and Flutter tests fetch only their needed
+        # artifacts. Broad --android precache also downloads ARM/release/profile.
+        disk_report("bootstrap complete; no broad Android precache")
         exports = {
             key: env[key]
             for key in ("ANDROID_HOME", "ANDROID_SDK_ROOT", "ANDROID_USER_HOME")

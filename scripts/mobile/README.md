@@ -29,6 +29,23 @@ The [Android CI job](../../.github/workflows/checks.yml) uses the same toolchain
 On this existing development host only, `source scripts/env.sh` exposes the
 previously installed SDKs. CI does not source that host-specific file.
 
+## Android CI footprint
+
+The standard private Ubuntu runner has [2 CPUs, 8 GB RAM and 14 GB SSD](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+CI explicitly uses `--reuse-android-sdk` with its [preinstalled Android SDK](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md),
+verifies API 36 revision 2, build-tools 36.0.0 and NDK 28.2.13676358, and installs
+only missing pinned packages. Command-line tools 23.0 use an owned directory when
+the runner's existing tools differ; existing SDK tools are preserved. Verified
+download archives are deleted after extraction. The bootstrap avoids broad
+Android precaching; the x64 debug build fetches its required artifacts. Disk
+usage is logged before setup, during bootstrap and after the job. Local setup
+without this explicit flag continues to use an isolated SDK under `artifacts/`.
+
+CI runs analysis, Dart unit/widget tests, native JVM tests and Android APK
+assembly using the [command-line build tools](https://developer.android.com/build/building-cmdline).
+Instrumentation APK assembly compiles test code; it does not execute tests in an
+emulator or on a device.
+
 `prepare` runs locked pub resolution, including the retained recorder example.
 It creates only a missing `.env` asset with
 `NO_AUTH_MODE=true`; an existing private asset is preserved. Keep both app and
