@@ -1,0 +1,147 @@
+{
+  "kind": "emulator_only_actual_native_camera_and_software_encoder",
+  "physical_hardware_qualified": false,
+  "emulator_hardware": "ranchu",
+  "camera_configs": [
+    {
+      "image_width": 640,
+      "image_height": 480,
+      "texture_width": 640,
+      "texture_height": 480,
+      "fps_range": "[30, 30]"
+    },
+    {
+      "image_width": 1280,
+      "image_height": 720,
+      "texture_width": 640,
+      "texture_height": 480,
+      "fps_range": "[30, 30]"
+    },
+    {
+      "image_width": 1920,
+      "image_height": 1080,
+      "texture_width": 640,
+      "texture_height": 480,
+      "fps_range": "[30, 30]"
+    }
+  ],
+  "selected_width": 640,
+  "selected_height": 480,
+  "requested_production_profile": "1080p30 hardware Main4.0 12Mbps, NOT what this simulation qualifies",
+  "encoders": [
+    {
+      "name": "c2.android.avc.encoder",
+      "hardware_accelerated": false,
+      "software_only": true
+    },
+    {
+      "name": "OMX.google.h264.encoder",
+      "hardware_accelerated": false,
+      "software_only": true
+    }
+  ],
+  "selected_encoder": "c2.android.avc.encoder",
+  "selected_encoder_hardware": false,
+  "encoder_output_format": "{max-bitrate=2000000, crop-right=639, level=4096, mime=video/avc, profile=65536, bitrate=2000000, intra-refresh-period=0, color-standard=4, csd-1=java.nio.HeapByteBuffer[pos=0 lim=10 cap=10], color-transfer=3, crop-bottom=479, video-qp-average=0, crop-left=0, width=640, color-range=2, crop-top=0, frame-rate=30, height=480, csd-0=java.nio.HeapByteBuffer[pos=0 lim=21 cap=21]}",
+  "status": "passed",
+  "valid_cpu_images": 30,
+  "cpu_image_unavailable": 0,
+  "metadata_unavailable": 0,
+  "positive_android_camera_timestamp_frames": 30,
+  "missing_android_camera_timestamp_frames": 0,
+  "submitted_frames": 30,
+  "encoded_complete_frames": 30,
+  "metadata_fallback_replay_checks": 30,
+  "eos": true,
+  "h264_bytes": 252130,
+  "ticket": "SA-60",
+  "target": "emulator-5582 personal user0 only",
+  "platform": "API33 x86_64 Google APIs AVD, pinned emulator36.4.10; virtual scene, no physical camera",
+  "instrumentation_result": "OK (1 test)",
+  "instrumentation_elapsed_seconds": 7.924,
+  "changed_code_classes_exercised": [
+    "CaptureGl",
+    "AnnexB",
+    "CameraTimestampGate"
+  ],
+  "not_exercised": [
+    "Imported Stera recorder classes/UI/controller",
+    "CaptureEngine full production-profile path",
+    "HardwareAvc strict hardwareMain4.0/1080p profile",
+    "CaptureSink complete recording lifecycle",
+    "Raw IMU under simultaneous encoder load",
+    "Two-hour reliability or crash salvage"
+  ],
+  "clock_equality_counts": {
+    "cpu_image_equals_sensor_timestamp": 0,
+    "android_accessor_equals_sensor_timestamp": 30,
+    "frame_timestamp_equals_sensor_timestamp": 0,
+    "rows": 30
+  },
+  "native_clock_examples": [
+    {
+      "arcore_frame_timestamp_ns": "744624371261",
+      "android_camera_timestamp_ns": "744316316684",
+      "mapped_capture_time_ns": null,
+      "cross_stream_clock_verified": false,
+      "cpu_image_timestamp_ns": "744646183157",
+      "cpu_image_width": 640,
+      "cpu_image_height": 480,
+      "cpu_image_frame_association": "Frame.acquireCameraImage_same_frame",
+      "metadata_sensor_timestamp_ns": "744316316684",
+      "clock_gate_decision": "Accept(cameraNs=744316316684, source=frame_metadata_sensor_timestamp)",
+      "simulation_encoder_pts_us": "0"
+    },
+    {
+      "arcore_frame_timestamp_ns": "745394371573",
+      "android_camera_timestamp_ns": "745064505100",
+      "mapped_capture_time_ns": null,
+      "cross_stream_clock_verified": false,
+      "cpu_image_timestamp_ns": "745394371573",
+      "cpu_image_width": 640,
+      "cpu_image_height": 480,
+      "cpu_image_frame_association": "Frame.acquireCameraImage_same_frame",
+      "metadata_sensor_timestamp_ns": "745064505100",
+      "clock_gate_decision": "Accept(cameraNs=745064505100, source=frame_metadata_sensor_timestamp)",
+      "simulation_encoder_pts_us": "33333"
+    },
+    {
+      "arcore_frame_timestamp_ns": "745695147606",
+      "android_camera_timestamp_ns": "745495760514",
+      "mapped_capture_time_ns": null,
+      "cross_stream_clock_verified": false,
+      "cpu_image_timestamp_ns": "745695147606",
+      "cpu_image_width": 640,
+      "cpu_image_height": 480,
+      "cpu_image_frame_association": "Frame.acquireCameraImage_same_frame",
+      "metadata_sensor_timestamp_ns": "745495760514",
+      "clock_gate_decision": "Accept(cameraNs=745495760514, source=frame_metadata_sensor_timestamp)",
+      "simulation_encoder_pts_us": "66666"
+    }
+  ],
+  "first_run_clock_example": {
+    "cpu_image_timestamp_ns": "596904370702",
+    "arcore_frame_timestamp_ns": "596976904406",
+    "android_camera_timestamp_ns": "596496703000",
+    "metadata_sensor_timestamp_ns": "596496703000"
+  },
+  "ffprobe": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "profile": "Constrained Baseline",
+        "width": 640,
+        "height": 480,
+        "has_b_frames": 0,
+        "level": 41,
+        "nb_read_frames": "30"
+      }
+    ]
+  },
+  "private_local_full_report": "/tmp/stateaction-android-capture-simulation-final-report.json",
+  "full_report_sha256": "f2498d4fe0913cfb3813f20ca22e062a6007664e696b53460a76e397b9542c28",
+  "encoded_stream_sha256": "5974f23c79cd3d6a89d27a4edf999b6706bf956550900a8e10964c460a01d77b",
+  "native_stream_kept_out_of_git": true
+}

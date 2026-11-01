@@ -1,0 +1,8 @@
+{
+  "source": "foxglove-schemas-protobuf",
+  "version": "0.4.0",
+  "schema_name": "foxglove.CompressedVideo",
+  "includes": ["google/protobuf/timestamp.proto"],
+  "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+  "generated_by": "spikes/android/processing descriptor builder"
+}

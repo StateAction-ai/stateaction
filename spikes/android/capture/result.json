@@ -1,0 +1,203 @@
+{
+  "ticket": "SA-60",
+  "date": "2026-10-31",
+  "scope": "isolated Android-only native capture feasibility harness",
+  "status": "local-clock-regression-and-emulator-path-passed; physical buildB capture failed; imported-Stera integration required",
+  "package": "ai.stateaction.spike.capture",
+  "source_fingerprint_sha256": "5ad3c1fbe7b6a3f44f7a50507bdf5433a644c8eb5ff1a3d77bd3faaeca9de7de",
+  "source_files": [
+    {
+      "path": "app/build.gradle.kts",
+      "sha256": "7604bd9d564c7b821e8e8ee7fd2b8d1e3e004026152a9c0b1037cceb3272b85c"
+    },
+    {
+      "path": "app/src/main/AndroidManifest.xml",
+      "sha256": "0f3bc83e48d427793e30a2c6eac9007421dc83abdfd226b12068ae136e063429"
+    },
+    {
+      "path": "app/src/main/assets/foxglove-compressed-video.desc",
+      "sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53"
+    },
+    {
+      "path": "app/src/main/assets/schema-provenance.json",
+      "sha256": "968f8578eafd8fc62d80c06267b72a8e4f7d830ecc96384370eee8b0225bb3c9"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/CameraTimestampGate.kt",
+      "sha256": "7dd566fad40cd85d4cf150e5d9b97d70ce3b559350604219adf3f03beaed8c82"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/CaptureEngine.kt",
+      "sha256": "b5b0a73f9ee2c3230589acf82ecd4bb8c2fd66e92c7f05656418cca7c2d65058"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/CaptureGl.kt",
+      "sha256": "29b07f773694643274786df2438ef56a7dded8f51c4b88f6afa4c12110d02e2b"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/CaptureSink.kt",
+      "sha256": "d98cc55fd2442615e48f0bb8f95adced5690b3ea96b5cfebbfb98a3805b96eb5"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/Cdr.kt",
+      "sha256": "67dccc25e53a77255cafdfb2ae5d004037f204f1bac774d130fa74b5723a7768"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/HardwareAvc.kt",
+      "sha256": "c33fa26a53038ff907bdba02111fb012905203f1f2cbff4e5d4063473cc5575e"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/MCAPWriter.kt",
+      "sha256": "7fc1c86c0a644b873d75e286c683759bf79a1e6a8a9f28fce38ded3a94d35243"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/MainActivity.kt",
+      "sha256": "f227f8e08ca0821e4be452af4e68e27d076b8bfd59435ad3c7e8c67482e7803a"
+    },
+    {
+      "path": "app/src/main/java/ai/stateaction/spike/capture/VideoWire.kt",
+      "sha256": "c07b17bbef1cc57d1d39eac2c53f096ad6e44dd36552a50dbcba85043fa2a8fb"
+    },
+    {
+      "path": "build.gradle.kts",
+      "sha256": "3ccb95d65dbbf90928b9a541c924f84d8a62ae884861244545eadb8c83e0d48a"
+    },
+    {
+      "path": "gradle/wrapper/gradle-wrapper.properties",
+      "sha256": "297c9e63b6fa6e7e8b221900fa1787c1a0e38869d8957da66389fd0f6b00f78e"
+    },
+    {
+      "path": "gradle.properties",
+      "sha256": "fa078c27c9e4bde28a029d673875b028884505efa436b68cf60e1ac0be5b679b"
+    },
+    {
+      "path": "settings.gradle.kts",
+      "sha256": "6f546d2cc41337179dc60aa3411e92d055d0ffde89183a7d51e72d484078742a"
+    }
+  ],
+  "build": {
+    "result": "passed",
+    "command": "source scripts/env.sh && spikes/android/capture/gradlew -p spikes/android/capture :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --no-daemon --console=plain",
+    "gradle": "8.14",
+    "agp": "8.12.1",
+    "kotlin": "2.2.20",
+    "jdk": "21",
+    "compile_sdk": 36,
+    "arcore_sdk": "1.44.0",
+    "log": "/tmp/stateaction-android-capture-clock-regression-build.log"
+  },
+  "apk": {
+    "build": "C-local-simulation-only",
+    "path": "app/build/outputs/apk/debug/app-debug.apk",
+    "bytes": 3737081,
+    "sha256": "542677f0c0468695fc8a72fa74f9625421746adabd36f1420120a463f36ef4aa",
+    "physical_install_authorized_or_performed": false,
+    "purpose": "Contained regression/emulator testing, not a new phone handoff"
+  },
+  "jvm_tests": {
+    "result": "passed",
+    "tests": 17,
+    "failures": 0,
+    "errors": 0
+  },
+  "writer_fixture": {
+    "path": "app/build/spike-fixtures/native-writer.mcap",
+    "bytes": 4910,
+    "sha256": "bd1b01709991f454a7891ecdf83521c39a30cd274d4dd3a01906677d3b237b63",
+    "kind": "synthetic one-frame 64x48 serializer fixture, not hardware evidence"
+  },
+  "emulator": {
+    "result": "passed actual native ARCore/OES/Surface encode at640x480 software only",
+    "receipt": "emulator-result.json",
+    "test_apk_sha256": "59643c6434173cc532f34970501036aaf4d639ed16929b3dbcf53f2128ea2ae5"
+  },
+  "physical": {
+    "ticket": "SA-60",
+    "source": "root agent readback of intentional personal-profile physical capture; this agent performed no physical-device actions",
+    "installed_build": "B",
+    "apk_sha256": "6bb8cdd0505c30ff58a78098db1485e4a3d6aa096d28e1d014682327e8f8c0bc",
+    "result": "failed_before_rgb_acquisition",
+    "error": "java.lang.IllegalArgumentException: Camera native time missing/regressed",
+    "container_state": "closed",
+    "capture_outcome": "failed",
+    "acquired_frames": 0,
+    "submitted_frames": 0,
+    "raw_accelerometer_messages": 73,
+    "raw_gyroscope_messages": 72,
+    "elapsed_seconds": 1.056,
+    "mcap_bytes": 87139,
+    "mcap_sha256": "16916fcd9c16f3671075fc987ce45a161d5af7f7aec627d54ab05c9312d79b90",
+    "native_timestamp_exact_value": "not retained in failure metadata; do not present zero as directly measured",
+    "conclusion": "No RGB/H264 hardware support or quality qualified by this run",
+    "profile_policy": "All future physical actions verified personal full user0 only; no company/work profile operations",
+    "raw_payload_or_device_serial_committed": false
+  },
+  "limits": {
+    "max_pending_visual_frames": 4,
+    "max_access_unit_bytes": 16777216,
+    "writer_queue_bytes": 16777216,
+    "writer_queue_items": 8192,
+    "eos_timeout_seconds": 10,
+    "writer_close_timeout_seconds": 15,
+    "max_mcap_payload_bytes": 16777185,
+    "max_expanded_mcap_chunk_bytes": 16777216
+  },
+  "known_gaps": [
+    "Experimental schemas/manual descriptor-matched wire encoder, not frozen native contract bindings",
+    "No production Flutter bridge/auth/upload",
+    "ARCore Frame timestamp domain undefined; separate Android REALTIME camera timestamp required",
+    "Conditional depth clock and calibration not qualified",
+    "No mesh or point-cloud collection in narrow harness",
+    "Foreground-only; stops on Activity pause",
+    "No crash salvage or durable acquisition journal",
+    "No 10-20-minute physical run yet",
+    "No two-hour memory/heat/battery/image-quality qualification"
+  ],
+  "cross_language_writer": {
+    "result": "passed",
+    "independent_receipt": "../processing/artifacts/kotlin-writer-check.json",
+    "checks": [
+      "generic MCAP header",
+      "indexed JSON/Protobuf/CDR four-message readback",
+      "embedded Timestamp descriptor",
+      "exact epoch ns1800000000123456789",
+      "CameraInfo K/raster",
+      "one synthetic64x48 H264 decoded frame"
+    ]
+  },
+  "previous_installed_build": {
+    "build": "A",
+    "receipt": "build-a-receipt.json",
+    "apk_sha256": "ea6fb7d1888932b6fc2a9a35ba2f87f85c49ee7ae71b2e8553dc8a047e04649f",
+    "source_fingerprint_sha256": "f900551707c79a74fcf644f7340ca91531875d79f3e419f4f21a66520e0e9b71",
+    "root_reported_install": "passed on physical Android; no capture session yet",
+    "local_preserved_apk": "/tmp/stateaction-android-capture-build-a.apk"
+  },
+  "hard_bound_followup": {
+    "result": "passed",
+    "details": "Flush chunk before append if expanded records would exceed16MiB; payload cap includes31-byte MCAP record framing. Exact-bound fixture creates2chunks including prior small record."
+  },
+  "licenses": [
+    {
+      "path": "LICENSE-FOXGLOVE-SCHEMAS",
+      "sha256": "da11235665c17d4c1634072dae92b8ba1b38d6fdde2ccf19a6bbede33253f58d"
+    },
+    {
+      "path": "LICENSE-PROTOBUF",
+      "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+    },
+    {
+      "path": "LICENSE-STERA",
+      "sha256": "d0f602b187d1424a5385e2adb2787f6f74a3a337d25120904721b6c43cc468fb"
+    }
+  ],
+  "integration_recommendation": "STERA-INTEGRATION.md",
+  "previous_physical_build_receipt": "build-b-receipt.json",
+  "clock_fix": {
+    "optional_accessor_absence": "bounded availability wait, never immediate regression error",
+    "positive_same_frame_SENSOR_TIMESTAMP": "documented Camera2 source when camera reportsREALTIME; retain originalotherclockvalues",
+    "positive_accessor_metadata_disagreement": "explicit integrity rejection",
+    "missing_all_camera_clock_evidence": "finite timeout, no substitutedFrame/Image/arrival epoch mapping",
+    "observed_cpu_image_clock": "Differs from HAL metadata in actual emulator; never assumeREALTIME becausecamera supportsit"
+  }
+}

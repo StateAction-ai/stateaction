@@ -1,0 +1,84 @@
+{
+  "apk_sha256": "4e784c75d545e5929da20cd75186fa16d82cb304c1d9e3b84e147ca467cbf5f8",
+  "capture_mcap_bytes": 3317495,
+  "capture_mcap_sha256": "bd7668da3c6f55480a4667b2dfc527295f66a4cfaed5b3401aec6003133eb5bc",
+  "counts": {
+    "accel_events": 2473,
+    "dropped": 0,
+    "gyro_events": 2455,
+    "source_frames_acquired": 100,
+    "video_messages_written": 100
+  },
+  "device": {
+    "abi": "x86_64",
+    "android_release": "13",
+    "api_level": "33",
+    "avd_hardware": "ranchu",
+    "build_fingerprint": "google/sdk_gphone64_x86_64/emu64x:13/TE1A.240213.009/12342917:userdebug/dev-keys"
+  },
+  "encoder": {
+    "image_height": 480,
+    "image_width": 640,
+    "sps_level_idc": 41,
+    "sps_profile_idc": 66
+  },
+  "finding_camera_clock_gate": {
+    "meaning": "CameraTimestampGate rejected Frames whose same-Frame SENSOR_TIMESTAMP disagreed with Frame.androidCameraTimestamp (stale metadata). CaptureEngine aborts capture on this; the harness skips the frame and records it.",
+    "rejected_frames": 10
+  },
+  "instrumentation": "OK (1 test)",
+  "kind": "emulator_only_spike_class_qualification",
+  "metrics": {
+    "accel": {
+      "events": 2473,
+      "max_gap_s": 0.01,
+      "mean_hz": 100.0,
+      "median_hz": 100.0,
+      "sensor": "Goldfish 3-axis Accelerometer"
+    },
+    "frames": {
+      "acquired": 100,
+      "dropped": 0,
+      "written": 100
+    },
+    "gyro": {
+      "events": 2455,
+      "max_gap_s": 0.01,
+      "mean_hz": 100.0,
+      "median_hz": 100.0,
+      "sensor": "Goldfish 3-axis Gyroscope"
+    },
+    "video": {
+      "access_units": 100,
+      "bytes": 931017,
+      "frame_interval_s": {
+        "effective_fps": 5.556757389566296,
+        "max": 1.160853488,
+        "median": 0.179961069
+      },
+      "height": 480,
+      "idr_count": 4,
+      "idr_interval_s": {
+        "max": 8.759063832,
+        "min": 5.445822217
+      },
+      "level_idc": 41,
+      "max_num_ref_frames": 1,
+      "poc_type": 2,
+      "profile_idc": 66,
+      "width": 640
+    }
+  },
+  "physical_hardware_qualified": false,
+  "raw_artifacts": "ignored artifacts directory only; never committed",
+  "sections": {
+    "container": "pass",
+    "identity": "pass",
+    "sensors": "pass",
+    "video": "pending"
+  },
+  "source_digest_sha256": "8943ef81814942b59cd24a221a80aff42237ff1342d091cc27c806c20614b482",
+  "test_apk_sha256": "e6408b29c40f689368176230d763a49473492561b48c8a92474300cd873a684a",
+  "ticket": "SA-60",
+  "verifier_verdict": "pass"
+}
