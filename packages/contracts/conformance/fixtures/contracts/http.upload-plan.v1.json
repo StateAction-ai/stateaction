@@ -136,6 +136,47 @@
           "/transportEpoch"
         ]
       }
+    },
+    {
+      "name": "single-part source manifest plan",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_manifest",
+          "sizeBytes": "1671",
+          "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 1,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "source manifest plan over 1 MiB",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_manifest",
+          "sizeBytes": "1048577",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 1,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
     }
   ]
 }

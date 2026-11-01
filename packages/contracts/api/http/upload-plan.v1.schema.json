@@ -62,5 +62,20 @@
     "transportExpiresAt": {
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
     }
+  },
+  "if": {
+    "required": ["role"],
+    "properties": {
+      "role": {
+        "const": "source_manifest"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "sizeBytes": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+      }
+    }
   }
 }

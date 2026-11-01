@@ -846,6 +846,99 @@
           "/time_base/den"
         ]
       }
+    },
+    {
+      "name": "duplicate native source frame id",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/rows/1/source_frame_id"
+        ]
+      }
     }
   ]
 }

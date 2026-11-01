@@ -32,12 +32,16 @@ const ajv = new Ajv2020({
   validateFormats: false,
 });
 ajv.addSchema(commonSchema);
+// Register every contract first so cross-contract $refs resolve by absolute $id.
+for (const id of contractIds) ajv.addSchema(contractSchemas[id]!);
 const compiled = new Map<string, ValidateFunction>();
 for (const id of contractIds) {
   const entry = entries[id]!;
   for (const rule of entry.rules)
     if (!(rule in RULES)) throw new Error(`Unknown rule ${rule} for ${id}`);
-  compiled.set(id, ajv.compile(contractSchemas[id]!));
+  const validate = ajv.getSchema(entry.id);
+  if (!validate) throw new Error(`Unresolvable schema ${entry.id} for ${id}`);
+  compiled.set(id, validate);
 }
 
 const fail = (code: string, path = "", message = code): ValidationResult => ({

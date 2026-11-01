@@ -53,7 +53,6 @@ H = {
         "fmap",
         "thumb",
         "rrd",
-        "source_manifest",
         "evidence",
     ]
 }
@@ -78,6 +77,8 @@ def ptr_set(doc: object, pointer: str, value: object) -> object:
             del target[int(last)]
         else:
             del target[last]
+    elif isinstance(target, list) and int(last) == len(target):
+        target.append(value)
     elif isinstance(target, list):
         target[int(last)] = value
     else:
@@ -100,11 +101,76 @@ def bad(name, doc, code, *paths):
 
 
 def mut(name, base, changes, code, *paths):
+    """Mutate base; code None means the mutated document must stay valid."""
     doc = base
     for pointer, value in changes:
         doc = ptr_set(doc, pointer, value)
-    return bad(name, doc, code, *paths)
+    return ok(name, doc) if code is None else bad(name, doc, code, *paths)
 
+
+# ------------------------------------------------- Source manifest chain
+recording_source = {
+    "schema": "stateaction.recording_source.v1",
+    "recording_id": U["recording"],
+    "client_recording_id": U["client_recording"],
+    "owner_user_id": OWNER,
+    "capture_format": "stateaction.capture.v1",
+    "rgb_profile": "h264_mcap_v1",
+    "capture_config_sha256": H["config"],
+    "close_status": "closed_clean",
+    "files": [
+        {
+            "file_id": U["file_mcap"],
+            "role": "source_mcap",
+            "required": True,
+            "size_bytes": "134217729",
+            "sha256": H["mcap"],
+        },
+        {
+            "file_id": U["file_meta"],
+            "role": "recorder_metadata",
+            "required": True,
+            "size_bytes": "4096",
+            "sha256": H["meta"],
+        },
+    ],
+    "clock_domains": ["android.elapsed_realtime", "android.sensor_event"],
+    "channels": [
+        {
+            "topic": "/camera/rgb/h264",
+            "message_encoding": "protobuf",
+            "schema_name": "foxglove.CompressedVideo",
+            "clock_domain": "android.elapsed_realtime",
+            "message_count": "108000",
+        },
+        {
+            "topic": "/imu/motion",
+            "message_encoding": "json",
+            "schema_name": "stateaction.capture.MotionEvent",
+            "clock_domain": "android.sensor_event",
+            "message_count": "1440000",
+        },
+    ],
+    "counts": {
+        "video_frames": "108000",
+        "dropped_video_frames": "0",
+        "motion_events": "1440000",
+    },
+    "collection_permission_ref": "pilot-consent-2026-10",
+    "source_verification": "pending",
+}
+
+
+def dump(value) -> bytes:
+    return (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode()
+
+
+# The sealed source_manifest file is these exact bytes; every manifest digest in
+# the task, claim grant and processing result is their plain SHA-256.
+MANIFEST_BYTES = dump(recording_source)
+H["source_manifest"] = hashlib.sha256(MANIFEST_BYTES).hexdigest()
+MANIFEST_SIZE = str(len(MANIFEST_BYTES))
+U["file_manifest"] = "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e"
 
 # ---------------------------------------------------------------- HTTP
 recording_create = {
@@ -123,7 +189,7 @@ seal = {
         {
             "fileId": U["file_mcap"],
             "role": "source_mcap",
-            "sizeBytes": FILE_MAX,
+            "sizeBytes": "134217729",
             "sha256": H["mcap"],
             "required": True,
         },
@@ -132,6 +198,13 @@ seal = {
             "role": "recorder_metadata",
             "sizeBytes": "4096",
             "sha256": H["meta"],
+            "required": True,
+        },
+        {
+            "fileId": U["file_manifest"],
+            "role": "source_manifest",
+            "sizeBytes": MANIFEST_SIZE,
+            "sha256": H["source_manifest"],
             "required": True,
         },
     ]
@@ -253,7 +326,7 @@ grant = {
     "digests": {
         "sourceManifestSha256": H["source_manifest"],
         "codeRevision": "0f8a21f",
-        "imageDigest": H["img"],
+        "imageSpecSha256": H["img"],
         "modelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
         "configSha256": H["config"],
     },
@@ -270,7 +343,23 @@ grant = {
             "sha256": H["mcap"],
             "readUrl": "http://127.0.0.1:8333/stateaction-local/k?X-Amz-Signature=abc",
             "expiresAt": "2026-11-01T19:04:05Z",
-        }
+        },
+        {
+            "fileId": U["file_meta"],
+            "role": "recorder_metadata",
+            "sizeBytes": "4096",
+            "sha256": H["meta"],
+            "readUrl": "http://127.0.0.1:8333/stateaction-local/m?X-Amz-Signature=abd",
+            "expiresAt": "2026-11-01T19:04:05Z",
+        },
+        {
+            "fileId": U["file_manifest"],
+            "role": "source_manifest",
+            "sizeBytes": MANIFEST_SIZE,
+            "sha256": H["source_manifest"],
+            "readUrl": "http://127.0.0.1:8333/stateaction-local/s?X-Amz-Signature=abe",
+            "expiresAt": "2026-11-01T19:04:05Z",
+        },
     ],
     "capability": {"token": "c" * 43, "expiresAt": "2026-11-02T00:04:05Z"},
 }
@@ -306,56 +395,6 @@ job_status = {
 }
 
 # ---------------------------------------------------------------- Artifacts
-recording_source = {
-    "schema": "stateaction.recording_source.v1",
-    "recording_id": U["recording"],
-    "client_recording_id": U["client_recording"],
-    "owner_user_id": OWNER,
-    "capture_format": "stateaction.capture.v1",
-    "rgb_profile": "h264_mcap_v1",
-    "capture_config_sha256": H["config"],
-    "close_status": "closed_clean",
-    "files": [
-        {
-            "file_id": U["file_mcap"],
-            "role": "source_mcap",
-            "required": True,
-            "size_bytes": "134217729",
-            "sha256": H["mcap"],
-        },
-        {
-            "file_id": U["file_meta"],
-            "role": "recorder_metadata",
-            "required": True,
-            "size_bytes": "4096",
-            "sha256": H["meta"],
-        },
-    ],
-    "clock_domains": ["android.elapsed_realtime", "android.sensor_event"],
-    "channels": [
-        {
-            "topic": "/camera/rgb/h264",
-            "message_encoding": "protobuf",
-            "schema_name": "foxglove.CompressedVideo",
-            "clock_domain": "android.elapsed_realtime",
-            "message_count": "108000",
-        },
-        {
-            "topic": "/imu/motion",
-            "message_encoding": "json",
-            "schema_name": "stateaction.capture.MotionEvent",
-            "clock_domain": "android.sensor_event",
-            "message_count": "1440000",
-        },
-    ],
-    "counts": {
-        "video_frames": "108000",
-        "dropped_video_frames": "0",
-        "motion_events": "1440000",
-    },
-    "collection_permission_ref": "pilot-consent-2026-10",
-    "source_verification": "pending",
-}
 FRAMES = 3
 SRC_PTS0 = 9000000000  # 90 kHz ticks: 100000 s after stream origin (exceeds 2^32)
 TS0 = 9223372036000000000  # within 1 s of int64 max: exact integer handling required
@@ -501,6 +540,7 @@ ARR = [
     ("model_relative_mask", "bool", [FRAMES, 2, 21]),
     ("hand_detected", "bool", [FRAMES, 2]),
     ("handedness_score", "float32", [FRAMES, 2]),
+    ("handedness", "int8", [FRAMES, 2]),
     ("frame_index", "int64", [FRAMES]),
 ]
 outputs = [
@@ -518,7 +558,7 @@ result = {
     "source_manifest_sha256": H["source_manifest"],
     "provenance": {
         "code_revision": "0f8a21f",
-        "image_digest": H["img"],
+        "image_spec_sha256": H["img"],
         "config_sha256": H["config"],
         "profile_revision": "cpu-mediapipe-1",
         "model": {
@@ -616,6 +656,99 @@ result = {
 }
 
 
+# ---------------------------------------------------------------- Native bridge
+CMD = "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9"
+accepted_profile = {
+    "captureFormat": "stateaction.capture.v1",
+    "rgbProfile": "h264_mcap_v1",
+    "profileRevision": "h264-mcap-1",
+    "captureConfigSha256": H["config"],
+}
+cmd_start = {
+    "schemaVersion": 1,
+    "commandId": CMD,
+    "operation": "start_capture",
+    "clientRecordingId": U["client_recording"],
+    "ownerUserId": OWNER,
+    "collectionPermissionRef": "pilot-consent-2026-10",
+    "acceptedProfile": accepted_profile,
+}
+cmd_stop = {
+    "schemaVersion": 1,
+    "commandId": CMD,
+    "operation": "stop_capture",
+    "clientRecordingId": U["client_recording"],
+    "reason": "thermal_limit",
+}
+cmd_probe = {
+    "schemaVersion": 1,
+    "commandId": CMD,
+    "operation": "get_capabilities",
+    "profileRequest": {
+        "captureFormat": "stateaction.capture.v1",
+        "rgbProfile": "h264_mcap_v1",
+        "profileRevision": "h264-mcap-1",
+    },
+}
+capture_error = {
+    "schemaVersion": 1,
+    "code": "capture_active",
+    "retryable": False,
+    "message": "Another recording is already in progress.",
+    "commandId": CMD,
+    "clientRecordingId": U["client_recording"],
+}
+snapshot = {
+    "schemaVersion": 1,
+    "clientRecordingId": U["client_recording"],
+    "ownerUserId": OWNER,
+    "state": "finalized",
+    "containerState": "closed",
+    "captureOutcome": "interrupted",
+    "eventSequence": "9007199254740993",  # above 2^53: exact decimal string
+    "counters": {
+        "videoFramesAcquired": "108003",
+        "videoFramesSubmitted": "108001",
+        "videoFramesWritten": "108000",
+        "videoFramesDropped": "2",
+        "videoFramesUnresolved": "1",
+        "motionEventsWritten": "1440000",
+        "sourceBytesWritten": "134217729",
+    },
+    "lastError": dict(
+        capture_error,
+        code="thermal_limit",
+        retryable=True,
+        message="Recording stopped to protect the phone from overheating.",
+    ),
+}
+recording_snapshot = dict(
+    snapshot,
+    state="recording",
+    containerState=None,
+    captureOutcome=None,
+    lastError=None,
+)
+capabilities = {
+    "schemaVersion": 1,
+    "commandId": CMD,
+    "outcome": "accepted",
+    "acceptedProfile": accepted_profile,
+    "unsupportedReasons": [],
+}
+recoverable = {
+    "schemaVersion": 1,
+    "commandId": CMD,
+    "captures": [
+        dict(
+            recording_snapshot,
+            state="recovery_required",
+            containerState="unclosed",
+        )
+    ],
+}
+
+
 def contract_cases():
     c = {}
     c["http.recording-create.v1"] = [
@@ -664,7 +797,53 @@ def contract_cases():
         ),
     ]
     c["http.recording-seal.v1"] = [
-        ok("two-file inventory with 100 GiB source", seal),
+        ok("source manifest plus the files it declares", seal),
+        {
+            "name": "stored chain seal bytes",
+            "input": {"file": "chain/recording-seal.v1.json"},
+            "expect": {"valid": True},
+        },
+        mut(
+            "100 GiB source accepted",
+            seal,
+            [("/files/0/sizeBytes", FILE_MAX)],
+            None,
+        ),
+        mut(
+            "missing source manifest",
+            seal,
+            [("/files/2", DELETE)],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "optional source manifest",
+            seal,
+            [("/files/2/required", False)],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "two source manifests",
+            seal,
+            [("/files/1/role", "source_manifest"), ("/files/1/sizeBytes", "512")],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "source manifest over 1 MiB",
+            seal,
+            [("/files/2/sizeBytes", "1048577")],
+            "schema_violation",
+            # role-conditional bound: adapters report if/then at different depths
+        ),
+        mut(
+            "missing required recorder metadata",
+            seal,
+            [("/files/1/role", "calibration")],
+            "inventory_incomplete",
+            "/files",
+        ),
         mut(
             "byte size over 100 GiB cap",
             seal,
@@ -1448,11 +1627,660 @@ def contract_cases():
             "expect": {"valid": True},
         },
     ]
+
+    def url_cases(base, pointer):
+        return [
+            mut(
+                f"url with {label}", base, [(pointer, url)], "schema_violation", pointer
+            )
+            for label, url in [
+                ("NEL U+0085", "https://h.example/k\u0085x"),
+                ("FS U+001C", "https://h.example/k\u001cx"),
+                ("ZWNBSP U+FEFF", "https://h.example/k\ufeffx"),
+                ("non-ASCII letter", "https://h.example/caf\u00e9"),
+                ("space", "https://h.example/k x"),
+            ]
+        ]
+
+    c["http.parts-signed.v1"] += url_cases(signed, "/parts/0/url")
+    c["http.parts-receipts.v1"] += [
+        mut(
+            "etag with unbalanced leading quote",
+            receipts,
+            [("/receipts/0/etag", '"9b2cf535')],
+            "schema_violation",
+            "/receipts/0/etag",
+        ),
+        mut(
+            "etag with unbalanced trailing quote",
+            receipts,
+            [("/receipts/0/etag", '9b2cf535"')],
+            "schema_violation",
+            "/receipts/0/etag",
+        ),
+    ]
+    c["http.recording-create.v1"] += [
+        mut(
+            "February 31 rejected",
+            recording_create,
+            [("/startedAt", "2026-02-31T18:04:05Z")],
+            "schema_violation",
+            "/startedAt",
+        ),
+        mut(
+            "April 31 rejected",
+            recording_create,
+            [("/startedAt", "2026-04-31T18:04:05Z")],
+            "schema_violation",
+            "/startedAt",
+        ),
+        mut(
+            "February 29 accepted (leap year not checked)",
+            recording_create,
+            [("/startedAt", "2028-02-29T00:00:00.000000001Z")],
+            None,
+        ),
+    ]
+    c["http.upload-create.v1"] += [
+        mut(
+            "allocate source manifest",
+            upload_create,
+            [
+                ("/role", "source_manifest"),
+                ("/sizeBytes", MANIFEST_SIZE),
+                ("/sha256", H["source_manifest"]),
+            ],
+            None,
+        ),
+        mut(
+            "source manifest over 1 MiB",
+            upload_create,
+            [("/role", "source_manifest"), ("/sizeBytes", "1048577")],
+            "schema_violation",
+            # role-conditional bound: adapters report if/then at different depths
+        ),
+    ]
+    c["http.upload-plan.v1"] += [
+        mut(
+            "single-part source manifest plan",
+            upload_plan,
+            [
+                ("/role", "source_manifest"),
+                ("/sizeBytes", MANIFEST_SIZE),
+                ("/sha256", H["source_manifest"]),
+                ("/partCount", 1),
+            ],
+            None,
+        ),
+        mut(
+            "source manifest plan over 1 MiB",
+            upload_plan,
+            [
+                ("/role", "source_manifest"),
+                ("/sizeBytes", "1048577"),
+                ("/partCount", 1),
+            ],
+            "schema_violation",
+            # role-conditional bound: adapters report if/then at different depths
+        ),
+    ]
+    c["http.upload-transition.v1"] += [
+        {
+            "name": "integer token beyond double range",
+            "input": {"json": '{"expectedTransportEpoch": 1' + "0" * 399 + "}"},
+            "expect": {"valid": False, "code": "malformed_json"},
+        },
+    ]
+    c["http.success-envelope.v1"] += [
+        {
+            "name": "data with integer token beyond double range",
+            "input": {
+                "json": '{"data": {"n": 1'
+                + "0" * 399
+                + '}, "requestId": "'
+                + U["request"]
+                + '"}'
+            },
+            "expect": {"valid": False, "code": "malformed_json"},
+        },
+        {
+            "name": "data with large finite integer token",
+            "input": {
+                "json": '{"data": {"n": 1'
+                + "0" * 299
+                + '}, "requestId": "'
+                + U["request"]
+                + '"}'
+            },
+            "expect": {"valid": True},
+        },
+    ]
+    c["jobs.task-input.v1"] += [
+        {
+            "name": "stored chain task input bytes",
+            "input": {"file": "chain/task-input.v1.json"},
+            "expect": {"valid": True},
+        },
+    ]
+    c["jobs.claim-grant.v1"] += [
+        {
+            "name": "stored chain claim grant bytes",
+            "input": {"file": "chain/claim-grant.v1.json"},
+            "expect": {"valid": True},
+        },
+        mut(
+            "export grant is not a v1 claim",
+            grant,
+            [("/kind", "export_release")],
+            "schema_violation",
+            "/kind",
+        ),
+        mut(
+            "unqualified image digest field rejected",
+            grant,
+            [("/digests/imageDigest", H["img"]), ("/digests/imageSpecSha256", DELETE)],
+            "schema_violation",
+            "/digests",
+        ),
+        mut(
+            "source manifest input missing",
+            grant,
+            [("/inputs/2", DELETE)],
+            "inventory_incomplete",
+            "/inputs",
+        ),
+        mut(
+            "source mcap input missing",
+            grant,
+            [("/inputs/0", DELETE)],
+            "inventory_incomplete",
+            "/inputs",
+        ),
+        mut(
+            "source manifest input digest differs from pinned digest",
+            grant,
+            [("/inputs/2/sha256", H["meta"])],
+            "reference_mismatch",
+            "/inputs/2/sha256",
+        ),
+        mut(
+            "source manifest input over 1 MiB",
+            grant,
+            [("/inputs/2/sizeBytes", "1048577")],
+            "schema_violation",
+            # role-conditional bound: adapters report if/then at different depths
+        ),
+        mut(
+            "duplicate input file id",
+            grant,
+            [("/inputs/1/fileId", U["file_mcap"])],
+            "duplicate_identity",
+            "/inputs/1/fileId",
+        ),
+        mut(
+            "start deadline after execution deadline",
+            grant,
+            [("/startDeadline", "2026-11-02T00:04:06Z")],
+            "ordering_violation",
+            "/executionDeadline",
+        ),
+        mut(
+            "fractional deadlines compare exactly (start later)",
+            grant,
+            [
+                ("/startDeadline", "2026-11-02T00:04:05.2Z"),
+                ("/executionDeadline", "2026-11-02T00:04:05.123456789Z"),
+            ],
+            "ordering_violation",
+            "/executionDeadline",
+        ),
+        mut(
+            "fractional deadlines compare exactly (start earlier)",
+            grant,
+            [
+                ("/startDeadline", "2026-11-02T00:04:05.1Z"),
+                ("/executionDeadline", "2026-11-02T00:04:05.123Z"),
+            ],
+            None,
+        ),
+        mut(
+            "equal deadlines accepted",
+            grant,
+            [("/startDeadline", "2026-11-02T00:04:05.000Z")],
+            None,
+        ),
+    ] + url_cases(grant, "/inputs/0/readUrl")
+    c["jobs.result-candidate.v1"] += [
+        mut(
+            "succeeded with an error code",
+            candidate_doc(),
+            [("/summary/errorCode", "decode_failed")],
+            "outcome_mismatch",
+            "/summary/errorCode",
+        ),
+        mut(
+            "failed without an error code",
+            candidate_doc(),
+            [("/summary/outcome", "failed")],
+            "outcome_mismatch",
+            "/summary/errorCode",
+        ),
+        mut(
+            "failed with an error code",
+            candidate_doc(),
+            [
+                ("/summary/outcome", "failed"),
+                ("/summary/errorCode", "decode_failed"),
+                ("/summary/clipCount", 0),
+            ],
+            None,
+        ),
+    ]
+    c["artifacts.recording-source.v1"] += [
+        mut(
+            "declaration lists itself",
+            recording_source,
+            [
+                (
+                    "/files/2",
+                    {
+                        "file_id": U["file_manifest"],
+                        "role": "source_manifest",
+                        "required": True,
+                        "size_bytes": MANIFEST_SIZE,
+                        "sha256": H["source_manifest"],
+                    },
+                )
+            ],
+            "reference_mismatch",
+            "/files/2/role",
+        ),
+    ]
+    c["artifacts.frame-map.v1"] += [
+        mut(
+            "duplicate native source frame id",
+            frame_map,
+            [("/rows/1/source_frame_id", frame_rows[0]["source_frame_id"])],
+            "duplicate_identity",
+            "/rows/1/source_frame_id",
+        ),
+    ]
+    second_clip = dict(
+        result["clips"][0],
+        clip_id="019a4b2c-3d4e-7f52-9b6c-8d9e0f1a2b3c",
+        clip_ordinal=1,
+    )
+    c["artifacts.processing-result.v1"] += [
+        mut(
+            "duplicate verified source",
+            result,
+            [("/verified_sources/1/file_id", U["file_mcap"])],
+            "duplicate_identity",
+            "/verified_sources/1/file_id",
+        ),
+        mut(
+            "two clips share output files",
+            result,
+            [("/clips/1", second_clip)],
+            "duplicate_identity",
+            "/clips/1/files/rgb_mp4",
+        ),
+        mut(
+            "handedness array missing",
+            result,
+            [("/clips/0/hand_arrays/arrays/6", DELETE)],
+            "schema_violation",
+            "/clips/0/hand_arrays/arrays",
+        ),
+        mut(
+            "handedness array must be int8 codes",
+            result,
+            [("/clips/0/hand_arrays/arrays/6/dtype", "bool")],
+            "schema_violation",
+            "/clips/0/hand_arrays/arrays/6/dtype",
+        ),
+        mut(
+            "handedness array has one slot",
+            result,
+            [("/clips/0/hand_arrays/arrays/6/shape", [FRAMES, 1])],
+            "dimension_mismatch",
+            "/clips/0/hand_arrays/arrays/6/shape",
+        ),
+        mut(
+            "unqualified image digest field rejected",
+            result,
+            [
+                ("/provenance/image_digest", H["img"]),
+                ("/provenance/image_spec_sha256", DELETE),
+            ],
+            "schema_violation",
+            "/provenance",
+        ),
+        mut(
+            "failure manifest with no clips or outputs",
+            result,
+            [
+                ("/clips", []),
+                ("/outputs", []),
+                (
+                    "/checks/1",
+                    {
+                        "code": "decode",
+                        "status": "fail",
+                        "message": "Access unit 1201 failed to decode.",
+                        "rule_revision": "1",
+                    },
+                ),
+            ],
+            None,
+        ),
+    ]
+    c["native.capture-command.v1"] = [
+        ok("start capture with accepted profile reference", cmd_start),
+        ok("stop capture", cmd_stop),
+        ok("probe capabilities without a take", cmd_probe),
+        ok(
+            "list recoverable captures",
+            {
+                "schemaVersion": 1,
+                "commandId": CMD,
+                "operation": "list_recoverable_captures",
+            },
+        ),
+        ok(
+            "snapshot",
+            {
+                "schemaVersion": 1,
+                "commandId": CMD,
+                "operation": "get_capture_snapshot",
+                "clientRecordingId": U["client_recording"],
+            },
+        ),
+        ok(
+            "recover",
+            {
+                "schemaVersion": 1,
+                "commandId": CMD,
+                "operation": "recover_capture",
+                "clientRecordingId": U["client_recording"],
+            },
+        ),
+        mut(
+            "future schema version",
+            cmd_start,
+            [("/schemaVersion", 2)],
+            "unsupported_version",
+            "/schemaVersion",
+        ),
+        mut(
+            "unknown operation",
+            cmd_stop,
+            [("/operation", "pause_capture")],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "start without owner",
+            cmd_start,
+            [("/ownerUserId", DELETE)],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "probe cannot create a take",
+            cmd_probe,
+            [("/clientRecordingId", U["client_recording"])],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "accepted profile must pin its config digest",
+            cmd_start,
+            [("/acceptedProfile/captureConfigSha256", DELETE)],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "image bytes never cross the bridge",
+            cmd_start,
+            [("/frame", "AAAA")],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "unknown stop reason",
+            cmd_stop,
+            [("/reason", "bored")],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "command id must be a uuid",
+            cmd_stop,
+            [("/commandId", "cmd-1")],
+            "schema_violation",
+            "",
+        ),
+    ]
+    c["native.capture-error.v1"] = [
+        ok("capture already active", capture_error),
+        ok(
+            "error without command or take identity",
+            dict(
+                capture_error,
+                code="internal",
+                retryable=True,
+                commandId=None,
+                clientRecordingId=None,
+            ),
+        ),
+        mut(
+            "unknown code",
+            capture_error,
+            [("/code", "oops")],
+            "schema_violation",
+            "/code",
+        ),
+        mut(
+            "message may not contain control characters",
+            capture_error,
+            [("/message", "line1\nline2")],
+            "schema_violation",
+            "/message",
+        ),
+        mut(
+            "message is bounded",
+            capture_error,
+            [("/message", "x" * 257)],
+            "schema_violation",
+            "/message",
+        ),
+        mut(
+            "retryable must be boolean",
+            capture_error,
+            [("/retryable", 1)],
+            "schema_violation",
+            "/retryable",
+        ),
+    ]
+    c["native.capture-snapshot.v1"] = [
+        ok("finalized interrupted take above 2^53 sequence", snapshot),
+        ok("recording take", recording_snapshot),
+        ok(
+            "quarantined take",
+            dict(
+                snapshot,
+                state="quarantined",
+                containerState="invalid",
+                captureOutcome="failed",
+            ),
+        ),
+        mut(
+            "sequence must be a decimal string",
+            snapshot,
+            [("/eventSequence", 9007199254740993)],
+            "schema_violation",
+            "/eventSequence",
+        ),
+        mut(
+            "recovered is not a success outcome",
+            snapshot,
+            [("/captureOutcome", "recovered")],
+            "schema_violation",
+            "/captureOutcome",
+        ),
+        mut(
+            "unknown state",
+            snapshot,
+            [("/state", "idle")],
+            "schema_violation",
+            "/state",
+        ),
+        mut(
+            "finalized take must be closed",
+            snapshot,
+            [("/containerState", "unclosed")],
+            "outcome_mismatch",
+            "/containerState",
+        ),
+        mut(
+            "finalized take cannot be failed",
+            snapshot,
+            [("/captureOutcome", "failed")],
+            "outcome_mismatch",
+            "/captureOutcome",
+        ),
+        mut(
+            "recording take has no outcome yet",
+            recording_snapshot,
+            [("/captureOutcome", "completed")],
+            "outcome_mismatch",
+            "/captureOutcome",
+        ),
+        mut(
+            "recovery required take is unclosed",
+            recording_snapshot,
+            [("/state", "recovery_required")],
+            "outcome_mismatch",
+            "/containerState",
+        ),
+        mut(
+            "quarantined take must be failed",
+            snapshot,
+            [("/state", "quarantined")],
+            "outcome_mismatch",
+            "/captureOutcome",
+        ),
+        mut(
+            "written exceeds submitted",
+            snapshot,
+            [("/counters/videoFramesWritten", "108002")],
+            "progress_mismatch",
+            "/counters/videoFramesWritten",
+        ),
+        mut(
+            "submitted exceeds acquired",
+            snapshot,
+            [("/counters/videoFramesSubmitted", "108004")],
+            "progress_mismatch",
+            "/counters/videoFramesSubmitted",
+        ),
+        mut(
+            "terminal frame counts exceed acquired",
+            snapshot,
+            [("/counters/videoFramesUnresolved", "2")],
+            "progress_mismatch",
+            "/counters/videoFramesAcquired",
+        ),
+        mut(
+            "unknown counter",
+            snapshot,
+            [("/counters/framesPerSecond", "30")],
+            "schema_violation",
+            "/counters",
+        ),
+    ]
+    c["native.capture-capabilities.v1"] = [
+        ok("accepted profile", capabilities),
+        ok(
+            "unsupported encoder",
+            dict(
+                capabilities,
+                outcome="unsupported",
+                acceptedProfile=None,
+                unsupportedReasons=["encoder_unavailable", "low_storage"],
+            ),
+        ),
+        mut(
+            "accepted without profile",
+            capabilities,
+            [("/acceptedProfile", None)],
+            "outcome_mismatch",
+            "/acceptedProfile",
+        ),
+        mut(
+            "accepted with reasons",
+            capabilities,
+            [("/unsupportedReasons", ["low_battery"])],
+            "outcome_mismatch",
+            "/unsupportedReasons",
+        ),
+        mut(
+            "unsupported without reasons",
+            capabilities,
+            [("/outcome", "unsupported"), ("/acceptedProfile", None)],
+            "outcome_mismatch",
+            "/unsupportedReasons",
+        ),
+        mut(
+            "duplicate reason",
+            capabilities,
+            [
+                ("/outcome", "unsupported"),
+                ("/acceptedProfile", None),
+                ("/unsupportedReasons", ["low_storage", "low_storage"]),
+            ],
+            "schema_violation",
+            "/unsupportedReasons",
+        ),
+    ]
+    c["native.capture-recoverable.v1"] = [
+        ok("one take needs recovery", recoverable),
+        ok("nothing to recover", dict(recoverable, captures=[])),
+        mut(
+            "finalized take is not recoverable",
+            recoverable,
+            [("/captures/0", snapshot)],
+            "outcome_mismatch",
+            "/captures/0/state",
+        ),
+        mut(
+            "duplicate take",
+            recoverable,
+            [("/captures/1", recoverable["captures"][0])],
+            "duplicate_identity",
+            "/captures/1/clientRecordingId",
+        ),
+        mut(
+            "nested snapshot rules apply",
+            recoverable,
+            [("/captures/0/containerState", "closed")],
+            "outcome_mismatch",
+            "/captures/0/containerState",
+        ),
+        {
+            "name": "more than 64 takes",
+            "input": {
+                "repeat": {"document": recoverable, "pointer": "/captures", "count": 65}
+            },
+            "expect": {
+                "valid": False,
+                "code": "schema_violation",
+                "paths": ["/captures"],
+            },
+        },
+    ]
     return c
-
-
-def dump(value) -> bytes:
-    return (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode()
 
 
 def candidate_doc():
@@ -1640,11 +2468,139 @@ def digests():
             "expect": "digest_mismatch",
         },
     ]
+    src = "artifacts/recording-source.v1.json"
+    manifest += [
+        {
+            "name": f"source manifest bytes match {label}",
+            "file": src,
+            "sha256From": {"file": file, "pointer": pointer},
+            "expect": "match",
+        }
+        for label, file, pointer in [
+            (
+                "the sealed source_manifest entry",
+                "chain/recording-seal.v1.json",
+                "/files/2/sha256",
+            ),
+            (
+                "TaskInput.sourceManifestSha256",
+                "chain/task-input.v1.json",
+                "/sourceManifestSha256",
+            ),
+            (
+                "ClaimGrant.digests.sourceManifestSha256",
+                "chain/claim-grant.v1.json",
+                "/digests/sourceManifestSha256",
+            ),
+            (
+                "the ClaimGrant source_manifest input",
+                "chain/claim-grant.v1.json",
+                "/inputs/2/sha256",
+            ),
+            (
+                "ProcessingResult.source_manifest_sha256",
+                "artifacts/processing-result.v1.json",
+                "/source_manifest_sha256",
+            ),
+        ]
+    ]
+    manifest += [
+        {
+            "name": "re-serialized source declaration does not match the pinned digest",
+            "file": "artifacts/recording-source.compact.json",
+            "sha256From": {
+                "file": "chain/task-input.v1.json",
+                "pointer": "/sourceManifestSha256",
+            },
+            "expect": "digest_mismatch",
+        },
+        {
+            "name": "pinned digest does not match another sealed file",
+            "file": src,
+            "sha256From": {
+                "file": "chain/recording-seal.v1.json",
+                "pointer": "/files/1/sha256",
+            },
+            "expect": "digest_mismatch",
+        },
+    ]
+
+    def inventory(name, changes, code=None, path=None):
+        doc = seal
+        for pointer, value in changes:
+            doc = ptr_set(doc, pointer, value)
+        expect = (
+            {"valid": True}
+            if code is None
+            else {"valid": False, "code": code, "path": path}
+        )
+        return {"name": name, "seal": doc, "declaration": src, "expect": expect}
+
+    sealed_inventory = [
+        inventory("seal holds exactly the declared files plus the manifest", []),
+        inventory(
+            "declared file order is not significant",
+            [("/files/0", seal["files"][1]), ("/files/1", seal["files"][0])],
+        ),
+        inventory(
+            "declared file missing from seal",
+            [("/files/1", DELETE)],
+            "inventory_incomplete",
+            "/files",
+        ),
+        inventory(
+            "undeclared extra file in seal",
+            [
+                (
+                    "/files/3",
+                    dict(
+                        seal["files"][1],
+                        fileId=U["evidence"],
+                        role="calibration",
+                        required=False,
+                    ),
+                )
+            ],
+            "inventory_incomplete",
+            "/files",
+        ),
+        inventory(
+            "substituted file id",
+            [("/files/1/fileId", U["evidence"])],
+            "inventory_incomplete",
+            "/files/1/file_id",
+        ),
+        inventory(
+            "role differs",
+            [("/files/1/role", "calibration")],
+            "reference_mismatch",
+            "/files/1/role",
+        ),
+        inventory(
+            "size differs",
+            [("/files/0/sizeBytes", "134217730")],
+            "reference_mismatch",
+            "/files/0/size_bytes",
+        ),
+        inventory(
+            "digest differs",
+            [("/files/1/sha256", H["mcap"])],
+            "reference_mismatch",
+            "/files/1/sha256",
+        ),
+        inventory(
+            "requiredness differs",
+            [("/files/1/required", False)],
+            "reference_mismatch",
+            "/files/1/required",
+        ),
+    ]
     return {
         "encoding": "sa-cjson-v1",
         "requestDigests": cases,
         "idempotency": idem,
         "manifestBytes": manifest,
+        "sealedInventory": sealed_inventory,
     }
 
 
@@ -1655,7 +2611,14 @@ def render() -> dict[Path, bytes]:
     files[art / "processing-result.compact.json"] = json.dumps(
         result, separators=(",", ":"), ensure_ascii=False
     ).encode()
-    files[art / "recording-source.v1.json"] = dump(recording_source)
+    files[art / "recording-source.v1.json"] = MANIFEST_BYTES
+    files[art / "recording-source.compact.json"] = json.dumps(
+        recording_source, separators=(",", ":"), ensure_ascii=False
+    ).encode()
+    chain = OUT / "chain"
+    files[chain / "recording-seal.v1.json"] = dump(seal)
+    files[chain / "task-input.v1.json"] = dump(task_process)
+    files[chain / "claim-grant.v1.json"] = dump(grant)
     files[art / "frame-map.v1.json"] = dump(frame_map)
     files[art / "hand-observations.v1.json"] = dump(hands_doc)
     files[art / "result-candidate.v1.json"] = dump(candidate_doc())

@@ -15,45 +15,48 @@
       "dart": "json_schema 5.2.2 draft2020_12"
     }
   },
-  "contracts": 22,
+  "contracts": 27,
   "fixtureCases": {
-    "total": 133,
+    "total": 234,
     "outcomes": {
       "clock_mismatch": 3,
-      "dimension_mismatch": 5,
+      "dimension_mismatch": 6,
       "document_too_large": 1,
-      "duplicate_identity": 4,
-      "inventory_incomplete": 1,
-      "malformed_json": 7,
+      "duplicate_identity": 9,
+      "inventory_incomplete": 7,
+      "malformed_json": 9,
       "mask_mismatch": 2,
-      "ordering_violation": 3,
+      "ordering_violation": 5,
+      "outcome_mismatch": 12,
       "part_plan_mismatch": 1,
-      "progress_mismatch": 1,
-      "reference_mismatch": 3,
-      "schema_violation": 69,
-      "unsupported_version": 5,
-      "valid": 28
+      "progress_mismatch": 4,
+      "reference_mismatch": 5,
+      "schema_violation": 109,
+      "unsupported_version": 6,
+      "valid": 55
     }
   },
   "crossLanguage": {
     "identicalOutcomes": true,
-    "outcomeReportSha256": "f6784443013a3e83fda959dd77e097bbdc3b8a72db1a2a40b2b27af9f8882c6c",
-    "typescript": "35 node:test tests passed",
-    "python": "7 unittest tests (per-case subtests) passed",
-    "dart": "274 conformance checks passed",
-    "mutationCheck": "A temporarily altered expected code/path in the frame-map fixture failed in all three runners, then was restored (generator --check reproducible)."
+    "outcomeReportSha256": "5163c155a9e4bbd6afae53ad2cd538b54f5ac72aed6c956db4205e114dcb3647",
+    "typescript": "42 node:test tests passed",
+    "python": "8 unittest tests (per-case subtests) passed, including generate_fixtures --check",
+    "dart": "459 conformance checks passed (234 fixture cases)",
+    "reviewProbes": "Reviewer's 36-case adversarial harness (/tmp/sa12-review) re-run through all three validateBytes: 0 code divergences (previously 4: URL NEL/FS/ZWNBSP and >double-range integer tokens).",
+    "mutationCheck": "22 mutations, all killed: each new rule disabled per adapter (TS claim_grant, sealed_inventory, checkSealedInventory, result_candidate, capture snapshot, recoverable state, manifest self-exclusion; Python sealed_inventory, deadline ordering, integer-overflow fix, check_sealed_inventory, frame duplicate id, capabilities; Dart capture snapshot, handedness shape, checkSealedInventory, verified_sources duplicate, clip file sharing), the URL pattern reverted to [^\\s] (all three runners), a flipped fixture expectation (all three) and a wrong chain digest pointer (all three). Files restored; generator --check reproducible."
   },
   "digests": {
     "requestEncoding": "sa-cjson-v1 (project-defined; no RFC 8785 conformance claim)",
     "goldenCases": 8,
-    "rejectionCases": 7,
+    "rejectionCases": 8,
     "idempotencyCases": 3,
-    "manifestByteCases": 7
+    "manifestByteCases": 14,
+    "sealedInventoryCases": 9
   },
   "commands": [
-    "pnpm exec nx run-many -p contracts,contracts-python,contracts-dart -t build,typecheck,test,format",
-    "pnpm exec nx affected -t build,typecheck,syntax,test,format --base=origin/main --head=HEAD --exclude=mobile,stera-recorder --skip-nx-cache (11 projects passed)",
-    "uv build --wheel; install into a clean Python 3.12 venv; validate with packaged schemas"
+    "pnpm exec nx run-many -p contracts,contracts-python,contracts-dart -t build,typecheck,test,format --skip-nx-cache (12 tasks; Node 24.22.2, uv 0.13.6 isolated install, Dart 3.12.2) (12 tasks passed)",
+    "pnpm exec nx affected -t build,typecheck,syntax,test,format --base=origin/main --head=HEAD --exclude=mobile,stera-recorder --skip-nx-cache (38 tasks over 11 projects passed)",
+    "uv build --wheel; install into a clean Python 3.12 venv; packaged _api includes native/ and validates fixtures"
   ],
   "notRunLocally": [
     "mobile and stera-recorder Flutter/Gradle targets (unchanged by this ticket; hosted CI runs them because checks.yml is a shared input)",
@@ -61,7 +64,10 @@
   ],
   "limitations": [
     "Metric 3D branch is metadata/shape validation only; no profile is qualified for metric claims.",
-    "Route handlers, persistence and provider behaviour are out of scope; these are contract definitions and conformance only."
+    "Route handlers, persistence and provider behaviour are out of scope; these are contract definitions and conformance only.",
+    "Capture bridge documents are contracts and fixtures only; no Kotlin/Swift/Dart channel binding or native recorder integration is claimed (SA-18/SA-51).",
+    "February 29 is accepted in every year (leap years are not checked by the pattern).",
+    "Role-conditional (if/then) size-bound failures are reported at adapter-dependent depths; those fixtures pin the code only."
   ],
-  "schemaLockSha256": "5bd460bcd12f3ecfc9f0b8dca68ef4b263a11144a280ffc9cc2cfa592e2ba764"
+  "schemaLockSha256": "6e755b9945162be4298ee294012fbc6dfffd06e7e7b4bd9a33c6657b42133851"
 }

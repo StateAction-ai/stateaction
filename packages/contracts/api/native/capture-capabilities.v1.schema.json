@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/native/capture-capabilities.v1.json",
+  "title": "Native capture capability result v1",
+  "description": "Result of get_capabilities. accepted carries the negotiated profile reference and no reasons; unsupported carries no profile and at least one reason. Requested/supported/enabled stream detail and encoder identity belong to the capture Profile document (SA-50) hashed by captureConfigSha256.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "commandId",
+    "outcome",
+    "acceptedProfile",
+    "unsupportedReasons"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "commandId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["accepted", "unsupported"]
+    },
+    "acceptedProfile": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/native/capture-command.v1.json#/$defs/acceptedProfile"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unsupportedReasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "unsupported_device",
+          "unsupported_profile",
+          "permission_denied",
+          "camera_unavailable",
+          "encoder_unavailable",
+          "sensor_unavailable",
+          "low_storage",
+          "low_battery",
+          "thermal_limit"
+        ]
+      },
+      "maxItems": 9,
+      "uniqueItems": true
+    }
+  }
+}

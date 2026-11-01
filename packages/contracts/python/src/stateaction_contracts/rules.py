@@ -20,10 +20,80 @@ HAND_ARRAY_SHAPES: tuple[tuple[int | str, ...], ...] = (
     ("F", 2, 21),
     ("F", 2, 21, 3),
     ("F", 2, 21),
-    ("F", 2),
-    ("F", 2),
-    ("F",),
+    ("F", 2),  # hand_detected
+    ("F", 2),  # handedness_score
+    ("F", 2),  # handedness: int8 0 left, 1 right, -1 none
+    ("F",),  # frame_index
 )
+ACTIVE = ("preflight", "recording", "finalizing")
+FINAL_OUTCOMES = ("completed", "interrupted")
+RECOVERABLE = ("finalizing", "recovery_required")
+
+
+def _instant(value: str) -> str:
+    """RFC 3339 UTC (schema-validated) to a fixed-width key with 9 fraction digits."""
+    fraction = value[20:-1] if len(value) > 20 else ""
+    return value[:19] + fraction.ljust(9, "0")
+
+
+def _count(items: list[Any], role: str, required: bool | None = None) -> int:
+    return sum(
+        1
+        for f in items
+        if f["role"] == role and (required is None or f["required"] is required)
+    )
+
+
+def check_sealed_inventory(seal: Any, declaration: Any) -> Violation:
+    """Seal == declaration files + one source_manifest entry; paths into the declaration."""
+    sealed = [f for f in seal["files"] if f["role"] != "source_manifest"]
+    declared = declaration["files"]
+    if len(declared) != len(sealed):
+        return ("inventory_incomplete", "/files")
+    for i, file in enumerate(declared):
+        match = next((f for f in sealed if f["fileId"] == file["file_id"]), None)
+        if match is None:
+            return ("inventory_incomplete", f"/files/{i}/file_id")
+        for snake, camel in (
+            ("role", "role"),
+            ("size_bytes", "sizeBytes"),
+            ("sha256", "sha256"),
+            ("required", "required"),
+        ):
+            if not _same(match[camel], file[snake]):
+                return ("reference_mismatch", f"/files/{i}/{snake}")
+    return None
+
+
+def _capture_snapshot(doc: Any, base: str) -> Violation:
+    c = {k: int(v) for k, v in doc["counters"].items()}
+    if c["videoFramesSubmitted"] > c["videoFramesAcquired"]:
+        return ("progress_mismatch", f"{base}/counters/videoFramesSubmitted")
+    if c["videoFramesWritten"] > c["videoFramesSubmitted"]:
+        return ("progress_mismatch", f"{base}/counters/videoFramesWritten")
+    if (
+        c["videoFramesWritten"] + c["videoFramesDropped"] + c["videoFramesUnresolved"]
+        > c["videoFramesAcquired"]
+    ):
+        return ("progress_mismatch", f"{base}/counters/videoFramesAcquired")
+    state, container, outcome = (
+        doc["state"],
+        doc["containerState"],
+        doc["captureOutcome"],
+    )
+    if state in ACTIVE:
+        ok = (container is None, outcome is None)
+    elif state == "finalized":
+        ok = (container == "closed", outcome in FINAL_OUTCOMES)
+    elif state == "recovery_required":
+        ok = (container == "unclosed", outcome is None)
+    else:  # quarantined
+        ok = (container is not None, outcome == "failed")
+    if not ok[0]:
+        return ("outcome_mismatch", f"{base}/containerState")
+    if not ok[1]:
+        return ("outcome_mismatch", f"{base}/captureOutcome")
+    return None
 
 
 def _same(a: object, b: object) -> bool:
@@ -54,6 +124,67 @@ def unique_file_ids(doc: Any) -> Violation:
     return _duplicate(doc["files"], "fileId", "/files")
 
 
+def sealed_inventory(doc: Any) -> Violation:
+    files = doc["files"]
+    if (
+        _count(files, "source_manifest") != 1
+        or _count(files, "source_manifest", True) != 1
+        or _count(files, "source_mcap", True) != 1
+        or _count(files, "recorder_metadata", True) < 1
+    ):
+        return ("inventory_incomplete", "/files")
+    return None
+
+
+def claim_grant(doc: Any) -> Violation:
+    inputs = doc["inputs"]
+    found = _duplicate(inputs, "fileId", "/inputs")
+    if found:
+        return found
+    if _count(inputs, "source_manifest") != 1 or _count(inputs, "source_mcap") != 1:
+        return ("inventory_incomplete", "/inputs")
+    m = next(i for i, f in enumerate(inputs) if f["role"] == "source_manifest")
+    if inputs[m]["sha256"] != doc["digests"]["sourceManifestSha256"]:
+        return ("reference_mismatch", f"/inputs/{m}/sha256")
+    if _instant(doc["startDeadline"]) > _instant(doc["executionDeadline"]):
+        return ("ordering_violation", "/executionDeadline")
+    return None
+
+
+def result_candidate(doc: Any) -> Violation:
+    summary = doc["summary"]
+    if (summary["outcome"] == "succeeded") != (summary["errorCode"] is None):
+        return ("outcome_mismatch", "/summary/errorCode")
+    return None
+
+
+def capture_snapshot(doc: Any) -> Violation:
+    return _capture_snapshot(doc, "")
+
+
+def capture_recoverable(doc: Any) -> Violation:
+    captures = doc["captures"]
+    found = _duplicate(captures, "clientRecordingId", "/captures")
+    if found:
+        return found
+    for i, capture in enumerate(captures):
+        found = _capture_snapshot(capture, f"/captures/{i}")
+        if found:
+            return found
+        if capture["state"] not in RECOVERABLE:
+            return ("outcome_mismatch", f"/captures/{i}/state")
+    return None
+
+
+def capture_capabilities(doc: Any) -> Violation:
+    accepted = doc["outcome"] == "accepted"
+    if accepted != (doc["acceptedProfile"] is not None):
+        return ("outcome_mismatch", "/acceptedProfile")
+    if accepted != (len(doc["unsupportedReasons"]) == 0):
+        return ("outcome_mismatch", "/unsupportedReasons")
+    return None
+
+
 def unique_part_numbers(doc: Any) -> Violation:
     return _duplicate(doc["receipts"], "partNumber", "/receipts")
 
@@ -81,11 +212,14 @@ def recording_source(doc: Any) -> Violation:
     found = _duplicate(files, "file_id", "/files")
     if found:
         return found
-
-    def required(role: str) -> int:
-        return sum(1 for f in files if f["role"] == role and f["required"] is True)
-
-    if required("source_mcap") != 1 or required("recorder_metadata") < 1:
+    # The declaration is the source_manifest file; it never lists itself.
+    for i, f in enumerate(files):
+        if f["role"] == "source_manifest":
+            return ("reference_mismatch", f"/files/{i}/role")
+    if (
+        _count(files, "source_mcap", True) != 1
+        or _count(files, "recorder_metadata", True) < 1
+    ):
         return ("inventory_incomplete", "/files")
     domains = doc["clock_domains"]
     for i, channel in enumerate(doc["channels"]):
@@ -96,6 +230,9 @@ def recording_source(doc: Any) -> Violation:
 
 def frame_map(doc: Any) -> Violation:
     rows = doc["rows"]
+    found = _duplicate(rows, "source_frame_id", "/rows")
+    if found:
+        return found
     if len(rows) != doc["frame_count"]:
         return ("dimension_mismatch", "/rows")
     first = rows[0]
@@ -149,8 +286,10 @@ def hand_observations(doc: Any) -> Violation:
 
 def processing_result(doc: Any) -> Violation:
     outputs = doc["outputs"]
-    found = _duplicate(outputs, "file_id", "/outputs") or _duplicate(
-        outputs, "relative_path", "/outputs"
+    found = (
+        _duplicate(doc["verified_sources"], "file_id", "/verified_sources")
+        or _duplicate(outputs, "file_id", "/outputs")
+        or _duplicate(outputs, "relative_path", "/outputs")
     )
     if found:
         return found
@@ -162,6 +301,7 @@ def processing_result(doc: Any) -> Violation:
     found = _duplicate(clips, "clip_id", "/clips")
     if found:
         return found
+    claimed: set[object] = set()
     for i, clip in enumerate(clips):
         p = f"/clips/{i}"
         if not _same(clip["clip_ordinal"], i):
@@ -169,6 +309,11 @@ def processing_result(doc: Any) -> Violation:
         for key, role in OUTPUT_ROLE.items():
             if roles.get(clip["files"][key]) != role:
                 return ("reference_mismatch", f"{p}/files/{key}")
+        # Each output file belongs to exactly one clip.
+        for key in OUTPUT_ROLE:
+            if clip["files"][key] in claimed:
+                return ("duplicate_identity", f"{p}/files/{key}")
+            claimed.add(clip["files"][key])
         start, end = int(clip["source_start_ns"]), int(clip["source_end_ns"])
         if end < start:
             return ("clock_mismatch", f"{p}/source_end_ns")
@@ -185,6 +330,12 @@ def processing_result(doc: Any) -> Violation:
 
 RULES: dict[str, Callable[[Any], Violation]] = {
     "unique_file_ids": unique_file_ids,
+    "sealed_inventory": sealed_inventory,
+    "claim_grant": claim_grant,
+    "result_candidate": result_candidate,
+    "capture_snapshot": capture_snapshot,
+    "capture_recoverable": capture_recoverable,
+    "capture_capabilities": capture_capabilities,
     "unique_part_numbers": unique_part_numbers,
     "upload_plan": upload_plan,
     "heartbeat_progress": heartbeat_progress,

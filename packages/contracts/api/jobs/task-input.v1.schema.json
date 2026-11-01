@@ -32,6 +32,7 @@
           "const": "process_recording"
         },
         "sourceManifestSha256": {
+          "description": "SHA-256 of the exact sealed source_manifest file bytes (recording-source/v1).",
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
         }
       }

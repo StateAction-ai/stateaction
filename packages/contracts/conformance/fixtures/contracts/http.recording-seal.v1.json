@@ -2,7 +2,49 @@
   "contract": "http.recording-seal.v1",
   "cases": [
     {
-      "name": "two-file inventory with 100 GiB source",
+      "name": "source manifest plus the files it declares",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "stored chain seal bytes",
+      "input": {
+        "file": "chain/recording-seal.v1.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "100 GiB source accepted",
       "input": {
         "document": {
           "files": [
@@ -19,12 +61,194 @@
               "sizeBytes": "4096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
               "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
             }
           ]
         }
       },
       "expect": {
         "valid": true
+      }
+    },
+    {
+      "name": "missing source manifest",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/files"
+        ]
+      }
+    },
+    {
+      "name": "optional source manifest",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/files"
+        ]
+      }
+    },
+    {
+      "name": "two source manifests",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "source_manifest",
+              "sizeBytes": "512",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/files"
+        ]
+      }
+    },
+    {
+      "name": "source manifest over 1 MiB",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1048577",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "missing required recorder metadata",
+      "input": {
+        "document": {
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "calibration",
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/files"
+        ]
       }
     },
     {
@@ -44,6 +268,13 @@
               "role": "recorder_metadata",
               "sizeBytes": "4096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
               "required": true
             }
           ]
@@ -75,6 +306,13 @@
               "sizeBytes": "4096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
               "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+              "required": true
             }
           ]
         }
@@ -95,7 +333,7 @@
             {
               "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
               "role": "source_mcap",
-              "sizeBytes": "107374182400",
+              "sizeBytes": "134217729",
               "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
               "required": true
             },
@@ -104,6 +342,13 @@
               "role": "recorder_metadata",
               "sizeBytes": "0",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
               "required": true
             }
           ]
@@ -125,7 +370,7 @@
             {
               "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
               "role": "source_mcap",
-              "sizeBytes": "107374182400",
+              "sizeBytes": "134217729",
               "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
               "required": true
             },
@@ -134,6 +379,13 @@
               "role": "recorder_metadata",
               "sizeBytes": "04096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
               "required": true
             }
           ]
@@ -155,7 +407,7 @@
             {
               "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
               "role": "source_mcap",
-              "sizeBytes": "107374182400",
+              "sizeBytes": "134217729",
               "sha256": "D3690131C737F212505F230D86EA322E788DB598FD0162F5500F7E22AB7005BC",
               "required": true
             },
@@ -164,6 +416,13 @@
               "role": "recorder_metadata",
               "sizeBytes": "4096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
               "required": true
             }
           ]
@@ -185,7 +444,7 @@
             {
               "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
               "role": "source_mcap",
-              "sizeBytes": "107374182400",
+              "sizeBytes": "134217729",
               "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
               "required": true
             },
@@ -194,6 +453,13 @@
               "role": "recorder_metadata",
               "sizeBytes": "4096",
               "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+              "required": true
+            },
+            {
+              "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+              "role": "source_manifest",
+              "sizeBytes": "1671",
+              "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
               "required": true
             }
           ]
@@ -216,7 +482,7 @@
               {
                 "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
                 "role": "source_mcap",
-                "sizeBytes": "107374182400",
+                "sizeBytes": "134217729",
                 "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
                 "required": true
               },
@@ -225,6 +491,13 @@
                 "role": "recorder_metadata",
                 "sizeBytes": "4096",
                 "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6",
+                "required": true
+              },
+              {
+                "fileId": "9e4f5061-7283-494a-bdce-3f4a5b6c7d8e",
+                "role": "source_manifest",
+                "sizeBytes": "1671",
+                "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
                 "required": true
               }
             ]

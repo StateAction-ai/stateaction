@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stateaction.ai/schemas/artifacts/frame-map.v1.json",
   "title": "Clip frame map shard v1",
-  "description": "One row per clip frame, in clip order. Preserves the native frame identity and its integer timestamp in its own clock domain; clip_pts = source_pts - first source_pts in time_base ticks. Clocks are never merged or converted.",
+  "description": "One row per clip frame, in clip order. Preserves the native frame identity and its integer timestamp in its own clock domain; clip_pts = source_pts - first source_pts in time_base ticks. Clocks are never merged or converted. source_frame_id values are unique. Rows carry only RGB frame identity and timing; sensor association is not duplicated here: capture SensorEvent records (SA-50) name their associated source_frame_id explicitly (or null), and consumers join on that exact ID, never by nearest timestamp.",
   "type": "object",
   "additionalProperties": false,
   "required": [

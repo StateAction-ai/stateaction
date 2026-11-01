@@ -97,7 +97,15 @@ def _fail(code: str, path: str = "", message: str | None = None) -> ValidationRe
 
 
 def _well_formed(value: object, depth: int, max_depth: int) -> bool:
-    if isinstance(value, bool) or value is None or isinstance(value, int):
+    if isinstance(value, bool) or value is None:
+        return True
+    if isinstance(value, int):
+        # JSON numbers are IEEE-754 doubles in TypeScript and Dart: an integer
+        # token that rounds to infinity is malformed there, so it is here too.
+        try:
+            float(value)
+        except OverflowError:
+            return False
         return True
     if isinstance(value, float):
         return value == value and value not in (float("inf"), float("-inf"))

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stateaction.ai/schemas/artifacts/recording-source.v1.json",
   "title": "Recording source declaration v1",
-  "description": "Client-declared source inventory. Hash the exact stored bytes; its digest lives outside the document. Capture-format details (channels/clocks/profile fields) are owned by the capture contracts.",
+  "description": "Client-declared source inventory, uploaded as the sealed file with role source_manifest. Written after every other source file is closed and hashed. files lists exactly the other sealed files and never this declaration (no source_manifest entry, no self-hash). SHA-256 of the exact stored bytes is the recording's sourceManifestSha256 / source_manifest_sha256. Capture-format details (channels/clocks/profile fields) are owned by the capture contracts.",
   "type": "object",
   "additionalProperties": false,
   "required": [

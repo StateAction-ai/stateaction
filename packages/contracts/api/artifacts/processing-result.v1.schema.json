@@ -29,6 +29,7 @@
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
     },
     "source_manifest_sha256": {
+      "description": "SHA-256 of the exact sealed source_manifest file bytes.",
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
     },
     "provenance": {
@@ -36,7 +37,7 @@
       "additionalProperties": false,
       "required": [
         "code_revision",
-        "image_digest",
+        "image_spec_sha256",
         "config_sha256",
         "profile_revision",
         "model",
@@ -46,7 +47,8 @@
         "code_revision": {
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
         },
-        "image_digest": {
+        "image_spec_sha256": {
+          "description": "SHA-256 of the locked worker image build specification. Not a Modal image ID or OCI registry digest.",
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
         },
         "config_sha256": {
@@ -95,7 +97,8 @@
         }
       },
       "minItems": 1,
-      "maxItems": 2000
+      "maxItems": 2000,
+      "description": "Server-verified non-manifest source files: exactly the recording-source/v1 files, unique by file_id. The manifest itself is pinned by source_manifest_sha256."
     },
     "outputs": {
       "type": "array",
@@ -127,7 +130,7 @@
           }
         }
       },
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 2000
     },
     "clips": {
@@ -229,8 +232,8 @@
               },
               "arrays": {
                 "type": "array",
-                "minItems": 7,
-                "maxItems": 7,
+                "minItems": 8,
+                "maxItems": 8,
                 "prefixItems": [
                   {
                     "type": "object",
@@ -357,6 +360,30 @@
                       },
                       "dtype": {
                         "const": "float32"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    }
+                  },
+                  {
+                    "description": "Predicted side per detector slot: 0 left, 1 right, -1 none (exactly where hand_detected is false). Slot index never implies side; two slots may predict the same side.",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "handedness"
+                      },
+                      "dtype": {
+                        "const": "int8"
                       },
                       "shape": {
                         "type": "array",

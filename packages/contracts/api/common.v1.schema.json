@@ -44,9 +44,9 @@
       "maximum": 9007199254740991
     },
     "rfc3339Utc": {
-      "description": "Wall-clock time, RFC 3339 UTC with Z suffix and up to nanosecond fraction.",
+      "description": "Wall-clock time, RFC 3339 UTC with Z suffix and up to nanosecond fraction. Month-specific day ranges are enforced; February 29 is accepted in every year (leap-year validity is not checked).",
       "type": "string",
-      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$"
+      "pattern": "^[0-9]{4}-((0[13578]|1[02])-(0[1-9]|[12][0-9]|3[01])|(0[469]|11)-(0[1-9]|[12][0-9]|30)|02-(0[1-9]|1[0-9]|2[0-9]))T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?Z$"
     },
     "clockDomain": {
       "description": "Named native clock domain (for example android.elapsed_realtime or android.sensor_event). Timestamps from different domains are never merged.",
@@ -62,11 +62,17 @@
       "description": "Relative POSIX path without empty, dot or dot-dot segments.",
       "type": "string",
       "maxLength": 255,
-      "pattern": "^(?!.*(^|/)\\.{1,2}(/|$))[A-Za-z0-9._-]{1,128}(/[A-Za-z0-9._-]{1,128}){0,7}$"
+      "pattern": "^(?![A-Za-z0-9._/-]*(^|/)\\.{1,2}(/|$))[A-Za-z0-9._-]{1,128}(/[A-Za-z0-9._-]{1,128}){0,7}$"
     },
     "sourceFileRole": {
+      "description": "Sealed source file role. source_manifest is the exact recording-source/v1 declaration bytes; its SHA-256 is the recording's sourceManifestSha256. The declaration lists every other sealed file and never itself.",
       "type": "string",
-      "enum": ["source_mcap", "recorder_metadata", "calibration"]
+      "enum": [
+        "source_mcap",
+        "recorder_metadata",
+        "calibration",
+        "source_manifest"
+      ]
     },
     "outputFileRole": {
       "type": "string",
@@ -133,6 +139,18 @@
           "maximum": 2147483647
         }
       }
+    },
+    "sourceManifestSizeBytes": {
+      "description": "Size of a source_manifest file: a control document of 1..1048576 bytes (the recording-source/v1 maxBytes).",
+      "type": "string",
+      "pattern": "^([1-9][0-9]{0,5}|10[0-3][0-9]{4}|104[0-7][0-9]{3}|1048[0-4][0-9]{2}|10485[0-6][0-9]|104857[0-6])$"
+    },
+    "signedUrl": {
+      "description": "Short-lived http(s) bearer URL. Printable ASCII only (U+0021..U+007E): no whitespace, control or non-ASCII characters, so every regex engine agrees. Never log, persist or cache.",
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 4096,
+      "pattern": "^https?://[!-~]+$"
     }
   }
 }

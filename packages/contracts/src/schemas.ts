@@ -23,6 +23,11 @@ import s18 from "../api/jobs/job-status.v1.schema.json" with { type: "json" };
 import s19 from "../api/jobs/result-candidate.v1.schema.json" with { type: "json" };
 import s20 from "../api/jobs/task-input.v1.schema.json" with { type: "json" };
 import s21 from "../api/jobs/worker-claim.v1.schema.json" with { type: "json" };
+import s22 from "../api/native/capture-capabilities.v1.schema.json" with { type: "json" };
+import s23 from "../api/native/capture-command.v1.schema.json" with { type: "json" };
+import s24 from "../api/native/capture-error.v1.schema.json" with { type: "json" };
+import s25 from "../api/native/capture-recoverable.v1.schema.json" with { type: "json" };
+import s26 from "../api/native/capture-snapshot.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -48,4 +53,9 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.result-candidate.v1": s19,
   "jobs.task-input.v1": s20,
   "jobs.worker-claim.v1": s21,
+  "native.capture-capabilities.v1": s22,
+  "native.capture-command.v1": s23,
+  "native.capture-error.v1": s24,
+  "native.capture-recoverable.v1": s25,
+  "native.capture-snapshot.v1": s26,
 };

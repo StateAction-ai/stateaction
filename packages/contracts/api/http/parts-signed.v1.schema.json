@@ -36,10 +36,7 @@
             "const": "PUT"
           },
           "url": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 4096,
-            "pattern": "^https?://[^\\s]+$"
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/signedUrl"
           },
           "headers": {
             "type": "object",

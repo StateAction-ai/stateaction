@@ -14,10 +14,17 @@ export type TimestampNs = string;
 export type Int64Decimal = string;
 export type Rfc3339Utc = string;
 export type ClockDomain = string;
+/**
+ * Sealed source file roles. "source_manifest" is the exact recording-source/v1
+ * declaration bytes; their SHA-256 is the recording's sourceManifestSha256.
+ */
 export type SourceFileRole =
   | "source_mcap"
   | "recorder_metadata"
-  | "calibration";
+  | "calibration"
+  | "source_manifest";
+/** Roles a recording-source/v1 declaration may list: never itself. */
+export type DeclaredSourceFileRole = Exclude<SourceFileRole, "source_manifest">;
 export type OutputFileRole =
   | "result_manifest"
   | "clip_mp4"
@@ -165,13 +172,16 @@ export type ClaimGrant = {
   schemaVersion: 1;
   jobId: Uuid;
   invocationNonce: string;
-  kind: JobKind;
+  /** Export grants are a separate future contract version. */
+  kind: "process_recording";
+  /** startDeadline <= executionDeadline. */
   startDeadline: Rfc3339Utc;
   executionDeadline: Rfc3339Utc;
   digests: {
     sourceManifestSha256: Sha256Hex;
     codeRevision: string;
-    imageDigest: Sha256Hex;
+    /** SHA-256 of the locked worker image build spec; not a Modal image ID or OCI digest. */
+    imageSpecSha256: Sha256Hex;
     modelSha256: Sha256Hex;
     configSha256: Sha256Hex;
   };
@@ -180,6 +190,7 @@ export type ClaimGrant = {
     maxOutputBytes: DecimalBytes;
     maxControlDocumentBytes: number;
   };
+  /** Every sealed file: exactly one source_manifest (sha256 = digests.sourceManifestSha256) and one source_mcap. */
   inputs: {
     fileId: Uuid;
     role: SourceFileRole;
@@ -247,9 +258,10 @@ export type RecordingSourceV1 = {
   rgb_profile: "h264_mcap_v1";
   capture_config_sha256: Sha256Hex;
   close_status: "closed_clean" | "closed_after_recovery";
+  /** Every other sealed file; never this declaration itself. */
   files: {
     file_id: Uuid;
-    role: SourceFileRole;
+    role: DeclaredSourceFileRole;
     required: boolean;
     size_bytes: DecimalBytes;
     sha256: Sha256Hex;
@@ -270,9 +282,20 @@ export type RecordingSourceV1 = {
   collection_permission_ref: string;
   source_verification: "pending";
 };
+/** NPZ arrays, in schema order; see HAND_ARRAY_SHAPES. */
+export type HandArrayName =
+  | "image_landmarks_px"
+  | "image_landmarks_mask"
+  | "model_relative_joints"
+  | "model_relative_mask"
+  | "hand_detected"
+  | "handedness_score"
+  /** int8 [F,2]: 0 left, 1 right, -1 none where hand_detected is false. Slot never implies side. */
+  | "handedness"
+  | "frame_index";
 export type HandArrayDescriptor = {
-  name: string;
-  dtype: "float32" | "bool" | "int64";
+  name: HandArrayName;
+  dtype: "float32" | "bool" | "int8" | "int64";
   shape: number[];
 };
 export type ProcessingResultV1 = {
@@ -282,7 +305,7 @@ export type ProcessingResultV1 = {
   source_manifest_sha256: Sha256Hex;
   provenance: {
     code_revision: string;
-    image_digest: Sha256Hex;
+    image_spec_sha256: Sha256Hex;
     config_sha256: Sha256Hex;
     profile_revision: string;
     model: {
@@ -411,4 +434,129 @@ export type HandObservationsV1 = {
       points_3d: ModelRelativePoints | CameraMetricPoints;
     }[];
   }[];
+};
+
+// Native capture bridge (camelCase, schemaVersion 1). Detailed capture profile
+// and evidence schemas belong to the capture contracts (SA-50).
+export type CaptureProfileRequest = {
+  captureFormat: "stateaction.capture.v1";
+  rgbProfile: "h264_mcap_v1";
+  profileRevision: string;
+};
+export type AcceptedCaptureProfile = CaptureProfileRequest & {
+  /** SHA-256 of the exact accepted capture Profile document. */
+  captureConfigSha256: Sha256Hex;
+};
+type CommandBase = { schemaVersion: 1; commandId: Uuid };
+export type CaptureCommand =
+  | (CommandBase & {
+      operation: "get_capabilities";
+      profileRequest: CaptureProfileRequest;
+    })
+  | (CommandBase & { operation: "list_recoverable_captures" })
+  | (CommandBase & {
+      operation: "start_capture";
+      clientRecordingId: Uuid;
+      ownerUserId: AuthUserId;
+      collectionPermissionRef: string;
+      acceptedProfile: AcceptedCaptureProfile;
+    })
+  | (CommandBase & {
+      operation: "stop_capture";
+      clientRecordingId: Uuid;
+      reason:
+        | "user_requested"
+        | "low_storage"
+        | "low_battery"
+        | "thermal_limit"
+        | "camera_interrupted"
+        | "app_terminating"
+        | "account_change";
+    })
+  | (CommandBase & {
+      operation: "get_capture_snapshot" | "recover_capture";
+      clientRecordingId: Uuid;
+    });
+export type CaptureErrorCode =
+  | "invalid_command"
+  | "unsupported_device"
+  | "unsupported_profile"
+  | "permission_denied"
+  | "capture_active"
+  | "command_conflict"
+  | "owner_mismatch"
+  | "not_found"
+  | "low_storage"
+  | "low_battery"
+  | "thermal_limit"
+  | "camera_interrupted"
+  | "encoder_failure"
+  | "writer_failure"
+  | "recovery_required"
+  | "internal";
+export type CaptureError = {
+  schemaVersion: 1;
+  code: CaptureErrorCode;
+  retryable: boolean;
+  /** User-safe display text only. */
+  message: string;
+  commandId: Uuid | null;
+  clientRecordingId: Uuid | null;
+};
+export type CaptureSnapshot = {
+  schemaVersion: 1;
+  clientRecordingId: Uuid;
+  ownerUserId: AuthUserId;
+  state:
+    | "preflight"
+    | "recording"
+    | "finalizing"
+    | "finalized"
+    | "recovery_required"
+    | "quarantined";
+  containerState: "closed" | "unclosed" | "invalid" | null;
+  /** Close.outcome: completed->completed, aborted->interrupted, failed->failed, unknown->null. */
+  captureOutcome: "completed" | "interrupted" | "failed" | null;
+  /** Persisted, monotonically increasing journal sequence (int64 decimal). */
+  eventSequence: Int64Decimal;
+  counters: {
+    videoFramesAcquired: Int64Decimal;
+    videoFramesSubmitted: Int64Decimal;
+    videoFramesWritten: Int64Decimal;
+    videoFramesDropped: Int64Decimal;
+    videoFramesUnresolved: Int64Decimal;
+    motionEventsWritten: Int64Decimal;
+    sourceBytesWritten: DecimalBytes;
+  };
+  lastError: CaptureError | null;
+};
+export type CaptureUnsupportedReason =
+  | "unsupported_device"
+  | "unsupported_profile"
+  | "permission_denied"
+  | "camera_unavailable"
+  | "encoder_unavailable"
+  | "sensor_unavailable"
+  | "low_storage"
+  | "low_battery"
+  | "thermal_limit";
+export type CaptureCapabilities =
+  | {
+      schemaVersion: 1;
+      commandId: Uuid;
+      outcome: "accepted";
+      acceptedProfile: AcceptedCaptureProfile;
+      unsupportedReasons: [];
+    }
+  | {
+      schemaVersion: 1;
+      commandId: Uuid;
+      outcome: "unsupported";
+      acceptedProfile: null;
+      unsupportedReasons: CaptureUnsupportedReason[];
+    };
+export type CaptureRecoverable = {
+  schemaVersion: 1;
+  commandId: Uuid;
+  captures: CaptureSnapshot[];
 };

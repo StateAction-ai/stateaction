@@ -16,6 +16,7 @@ from stateaction_contracts import (
     MalformedJsonError,
     NoncanonicalValueError,
     canonical_json_text,
+    check_sealed_inventory,
     classify_replay,
     contract_ids,
     request_sha256,
@@ -137,6 +138,18 @@ class Digests(unittest.TestCase):
                 self.assertEqual(
                     verify_stored_bytes(read(case["file"]), declared), case["expect"]
                 )
+
+    def test_sealed_inventory(self) -> None:
+        for case in self.digests["sealedInventory"]:
+            with self.subTest(case["name"]):
+                found = check_sealed_inventory(
+                    case["seal"], json.loads(read(case["declaration"]))
+                )
+                expect = case["expect"]
+                if expect["valid"]:
+                    self.assertIsNone(found)
+                else:
+                    self.assertEqual(found, (expect["code"], expect["path"]))
 
 
 class Reproducible(unittest.TestCase):

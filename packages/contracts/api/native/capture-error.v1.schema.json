@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/native/capture-error.v1.json",
+  "title": "Native capture bridge error v1",
+  "description": "Failure result of a native capture command, and lastError in a capture snapshot. code is stable and machine-handled; message is display-only. command_conflict: the same commandId arrived with different canonical content. capture_active: another take is active.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "code",
+    "retryable",
+    "message",
+    "commandId",
+    "clientRecordingId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "code": {
+      "type": "string",
+      "enum": [
+        "invalid_command",
+        "unsupported_device",
+        "unsupported_profile",
+        "permission_denied",
+        "capture_active",
+        "command_conflict",
+        "owner_mismatch",
+        "not_found",
+        "low_storage",
+        "low_battery",
+        "thermal_limit",
+        "camera_interrupted",
+        "encoder_failure",
+        "writer_failure",
+        "recovery_required",
+        "internal"
+      ]
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "message": {
+      "description": "User-safe text: no credentials, URLs, paths or raw platform errors. No control characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "commandId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "clientRecordingId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

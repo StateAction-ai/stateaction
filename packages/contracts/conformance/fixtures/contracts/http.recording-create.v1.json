@@ -153,6 +153,71 @@
           ""
         ]
       }
+    },
+    {
+      "name": "February 31 rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-02-31T18:04:05Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startedAt"
+        ]
+      }
+    },
+    {
+      "name": "April 31 rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-04-31T18:04:05Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startedAt"
+        ]
+      }
+    },
+    {
+      "name": "February 29 accepted (leap year not checked)",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2028-02-29T00:00:00.000000001Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
     }
   ]
 }

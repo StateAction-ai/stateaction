@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import {
   canonicalJsonText,
+  checkSealedInventory,
   classifyReplay,
   contractIds,
   requestSha256,
@@ -136,6 +137,16 @@ test("manifest digests are over exact stored bytes", () => {
       ? (pointerGet(json(c.sha256From.file), c.sha256From.pointer) as string)
       : c.sha256;
     assert.equal(verifyStoredBytes(read(c.file), declared), c.expect, c.name);
+  }
+});
+test("sealed inventory equals the declaration plus its source manifest", () => {
+  for (const c of digests.sealedInventory) {
+    const found = checkSealedInventory(c.seal, json(c.declaration));
+    assert.deepEqual(
+      found,
+      c.expect.valid ? null : { code: c.expect.code, path: c.expect.path },
+      c.name,
+    );
   }
 });
 test.after(() => {

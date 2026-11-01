@@ -14,7 +14,8 @@
     "clock_mismatch",
     "reference_mismatch",
     "inventory_incomplete",
-    "progress_mismatch"
+    "progress_mismatch",
+    "outcome_mismatch"
   ],
   "maxDepth": 32,
   "contracts": {
@@ -120,7 +121,7 @@
         "path": "/api/v1"
       },
       "maxBytes": 1048576,
-      "rules": ["unique_file_ids"]
+      "rules": ["unique_file_ids", "sealed_inventory"]
     },
     "http.recording.v1": {
       "schema": "http/recording.v1.schema.json",
@@ -181,7 +182,7 @@
         "accepted": [1]
       },
       "maxBytes": 1048576,
-      "rules": []
+      "rules": ["claim_grant"]
     },
     "jobs.controller-input.v1": {
       "schema": "jobs/controller-input.v1.schema.json",
@@ -223,7 +224,7 @@
         "accepted": [1]
       },
       "maxBytes": 1048576,
-      "rules": []
+      "rules": ["result_candidate"]
     },
     "jobs.task-input.v1": {
       "schema": "jobs/task-input.v1.schema.json",
@@ -246,6 +247,61 @@
       },
       "maxBytes": 1048576,
       "rules": []
+    },
+    "native.capture-capabilities.v1": {
+      "schema": "native/capture-capabilities.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-capabilities.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": ["capture_capabilities"]
+    },
+    "native.capture-command.v1": {
+      "schema": "native/capture-command.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-command.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": []
+    },
+    "native.capture-error.v1": {
+      "schema": "native/capture-error.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-error.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": []
+    },
+    "native.capture-recoverable.v1": {
+      "schema": "native/capture-recoverable.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-recoverable.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 262144,
+      "rules": ["capture_recoverable"]
+    },
+    "native.capture-snapshot.v1": {
+      "schema": "native/capture-snapshot.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-snapshot.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": ["capture_snapshot"]
     }
   }
 }

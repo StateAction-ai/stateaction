@@ -168,6 +168,20 @@ void main(List<String> args) {
       'manifest bytes / ${c['name']}: got $outcome',
     );
   }
+  for (final raw in digests['sealedInventory']! as List<Object?>) {
+    final c = _map(raw);
+    final found = checkSealedInventory(
+      _map(c['seal']),
+      _map(readJson(c['declaration']! as String)),
+    );
+    final expect = _map(c['expect']);
+    final ok = expect['valid'] == true
+        ? found == null
+        : found != null &&
+              found.code == expect['code'] &&
+              found.path == expect['path'];
+    check(ok, 'sealed inventory / ${c['name']}: got $found');
+  }
   try {
     registry.validateValue('http.nope.v1', const {});
     check(false, 'unknown contract must fail closed');

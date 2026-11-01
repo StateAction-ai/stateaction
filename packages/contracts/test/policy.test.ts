@@ -83,13 +83,59 @@ test("decimal bound patterns are generated from their exact limits", () => {
     assert.equal(re.test(value), ok, value);
 });
 
+/**
+ * Regex features whose meaning differs between ECMA-262 (Ajv, Dart) and Python
+ * `re`: class shorthands and the unescaped dot. Patterns spell explicit ASCII
+ * ranges instead. Returns the first offending token or null.
+ */
+export function nonPortableToken(pattern: string): string | null {
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i]!;
+    if (ch === "\\") {
+      const next = pattern[i + 1] ?? "";
+      if (/[sSdDwWbB]/.test(next)) return `\\${next}`;
+      i++;
+      continue;
+    }
+    if (inClass) {
+      if (ch === "]") inClass = false;
+    } else if (ch === "[") {
+      inClass = true;
+      if (pattern[i + 1] === "]") i++;
+    } else if (ch === ".") return ".";
+  }
+  return null;
+}
+
+test("pattern policy rejects engine-dependent regex features", () => {
+  for (const [pattern, token] of [
+    ["^https?://[^\\s]+$", "\\s"],
+    ["^\\d+$", "\\d"],
+    ["^\\w+$", "\\w"],
+    ["^a.b$", "."],
+    ["^[.]$", null],
+    ["^a\\.b$", null],
+    ["^https?://[!-~]+$", null],
+  ] as const)
+    assert.equal(nonPortableToken(pattern), token, pattern);
+});
+
 type Schema = Record<string, any>;
 function* walk(node: Schema, path: string): Generator<[Schema, string]> {
   yield [node, path];
-  for (const key of ["items", "additionalProperties", "propertyNames"])
+  for (const key of [
+    "items",
+    "additionalProperties",
+    "propertyNames",
+    "if",
+    "then",
+    "else",
+    "not",
+  ])
     if (node[key] && typeof node[key] === "object")
       yield* walk(node[key], `${path}/${key}`);
-  for (const key of ["oneOf", "prefixItems"])
+  for (const key of ["oneOf", "anyOf", "allOf", "prefixItems"])
     for (const [i, sub] of (node[key] ?? []).entries())
       yield* walk(sub, `${path}/${key}/${i}`);
   for (const key of ["properties", "$defs"])
@@ -109,8 +155,14 @@ test("schemas are closed, bounded and use the documented casing", () => {
         !("format" in node),
         `${at}: use explicit patterns, not format`,
       );
-      if (node.pattern)
+      if (node.pattern) {
         assert.match(node.pattern, /^\^.*\$$/, `${at}: patterns are anchored`);
+        assert.equal(
+          nonPortableToken(node.pattern),
+          null,
+          `${at}: use explicit ASCII classes, not \\s/\\d/\\w or .`,
+        );
+      }
       const type = node.type;
       if (type === "object") {
         assert.ok("additionalProperties" in node, `${at}: closed object`);

@@ -2,10 +2,10 @@
   "schema": "stateaction.processing_result.v1",
   "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
   "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
-  "source_manifest_sha256": "029c07fd14431c4d243ff0db2f3f8b489a7264bba8f89fabdb900bc0ea513bfb",
+  "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
   "provenance": {
     "code_revision": "0f8a21f",
-    "image_digest": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
+    "image_spec_sha256": "b29814cf5792e684cd75d6a7fce7a67a11887e312f87ca2ac2496d81f365ff72",
     "config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
     "profile_revision": "cpu-mediapipe-1",
     "model": {
@@ -146,6 +146,14 @@
           {
             "name": "handedness_score",
             "dtype": "float32",
+            "shape": [
+              3,
+              2
+            ]
+          },
+          {
+            "name": "handedness",
+            "dtype": "int8",
             "shape": [
               3,
               2

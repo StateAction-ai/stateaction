@@ -28,7 +28,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 130,
-            "pattern": "^\"?[A-Za-z0-9-]{1,128}\"?$"
+            "pattern": "^(\"[A-Za-z0-9-]{1,128}\"|[A-Za-z0-9-]{1,128})$"
           },
           "sizeBytes": {
             "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"

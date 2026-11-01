@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stateaction.ai/schemas/jobs/claim-grant.v1.json",
   "title": "Authoritative claim response v1",
-  "description": "Claim data payload. No database URL or general storage credentials. capability.token is a secret: never log or persist it.",
+  "description": "Claim data payload for process_recording. No database URL or general storage credentials. capability.token is a secret: never log or persist it. inputs list every sealed file, including exactly one source_manifest whose sha256 equals digests.sourceManifestSha256 and exactly one source_mcap. startDeadline <= executionDeadline. Export grants are a separate future contract version.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -30,7 +30,7 @@
       "pattern": "^[A-Za-z0-9_-]{43}$"
     },
     "kind": {
-      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobKind"
+      "const": "process_recording"
     },
     "startDeadline": {
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
@@ -44,18 +44,20 @@
       "required": [
         "sourceManifestSha256",
         "codeRevision",
-        "imageDigest",
+        "imageSpecSha256",
         "modelSha256",
         "configSha256"
       ],
       "properties": {
         "sourceManifestSha256": {
+          "description": "SHA-256 of the exact sealed source_manifest file bytes.",
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
         },
         "codeRevision": {
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
         },
-        "imageDigest": {
+        "imageSpecSha256": {
+          "description": "SHA-256 of the locked worker image build specification recorded by our build tooling. Not a Modal image ID or OCI registry digest; no provider attestation is implied.",
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
         },
         "modelSha256": {
@@ -117,13 +119,25 @@
             "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
           },
           "readUrl": {
-            "type": "string",
-            "minLength": 12,
-            "maxLength": 4096,
-            "pattern": "^https?://[^\\s]+$"
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/signedUrl"
           },
           "expiresAt": {
             "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        },
+        "if": {
+          "required": ["role"],
+          "properties": {
+            "role": {
+              "const": "source_manifest"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "sizeBytes": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+            }
           }
         }
       },

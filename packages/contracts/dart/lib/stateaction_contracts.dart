@@ -3,5 +3,5 @@
 library;
 
 export 'src/canonical.dart';
-export 'src/rules.dart' show handArrayShapes;
+export 'src/rules.dart' show Violation, checkSealedInventory, handArrayShapes;
 export 'src/validate.dart';
