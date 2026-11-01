@@ -1,29 +1,30 @@
 # Robotics data collection
 
-Local workspace for building Stera on Linux, collecting raw recordings from an Android phone, and inspecting their native sensor streams.
+StateAction.ai monorepo for the Flutter collector, native recorder, local processing, and collection/review platform design. Android is the first implementation target.
 
 ## Platform implementation plan
 
-The [technical design](docs/technical-design.md) and [engineering handoff](docs/README.md) define the upcoming monorepo, Render local/cloud workflows, cloud processing, login and review/delivery UI. These are plans and offline UI mocks; source migration and deployment have not occurred. The submodule clone instructions below still describe the current checkout.
+The [technical design](docs/technical-design.md) and [engineering handoff](docs/README.md) define the upcoming monorepo, Render local/cloud workflows, cloud processing, login and review/delivery UI. The existing mobile app and recorder now live in `apps/mobile` and `packages/stera_recorder`. Backend/cloud deployment remains planned. [Android spike results](docs/spikes/android-feasibility.md) separate local/emulator checks from physical qualification.
 
 ## Reproduce this workspace
 
-The workspace and Android changes live in private repositories under
-`timothywangdev`. Clone with submodules to get the exact tested app and SDK commits:
+The mobile app and native recorder are ordinary tracked source in this repository; a normal clone includes them:
 
 ```bash
-git clone --recurse-submodules https://github.com/timothywangdev/robotics-data-collection.git
+git clone https://github.com/timothywangdev/robotics-data-collection.git
 cd robotics-data-collection
 ```
 
-Authentication is required for the workspace and app repositories. Phone captures,
+Authentication is required for the private workspace repository. The optional `stera-sdk` submodule is used only by historical inspection/research scripts; initialize it with `git submodule update --init stera-sdk` when using those scripts. Phone captures,
 downloaded videos, APKs, virtual environments, and device credentials stay local.
 Only the small synthetic Android test fixture is tracked. Create
-`stera-app/apps/mobile/.env` containing `NO_AUTH_MODE=true` before building;
+`apps/mobile/.env` containing `NO_AUTH_MODE=true` before building;
 the file is deliberately excluded from Git. The environment and build instructions
 below describe the installed local tools; cloning alone does not install them.
 
 ## Validation status
+
+The new H.264 spike is **not physically qualified**: its first user-started attempt failed on a startup timestamp assumption before RGB acquisition. The existing JPEG recorder below has historical physical evidence. Migration and startup regression work are tracked in [SA-10](https://linear.app/hw-personal-projects/issue/SA-10) and [SA-60](https://linear.app/hw-personal-projects/issue/SA-60).
 
 **Current status: v3 physical acquisition works in two Pixel recordings.** The captures contain 245 and 186 matched RGB/depth/tracked-pose events, zero encoder failures, and no message decode errors. The saved-playback orientation fix is installed and tested against the latest recording. See [physical results and remaining hand failures](docs/pixel-v3-physical-validation.md). Hand-pose accuracy, temporal accuracy and training qualification remain unverified.
 
@@ -53,19 +54,19 @@ actual Pixel accuracy remains unmeasured.
 
 Verified device: Pixel 9 Pro XL, Android 17 (API 37), `arm64-v8a`, paired and connected over Wi-Fi. Google Play Services for AR is installed. The original pre-geometry-fix APK built successfully on 2026-10-21, its signature passed verification, and its packaged configuration contains only `NO_AUTH_MODE=true`. Build details and SHA-256 are in [docs/build-receipt.json](docs/build-receipt.json). That original build's installation and activity launch on the Pixel passed; the app remained running without matching fatal/Flutter exceptions in the inspected recent app logs. The first recording was copied with matching phone/local hashes and all 21,508 messages decoded without validation errors. Physical tracking accuracy has not been measured.
 
-```text
-robotics-data-collection/
-├── stera-app/  # upstream mobile application and recorder
-├── stera-sdk/  # pinned upstream processing SDK; compatibility helper used locally
-├── artifacts/  # built APKs and other build outputs
-├── captures/   # recordings copied from the phone
-├── docs/       # setup and verification notes
-└── scripts/    # reusable local environment and capture inspector
-```
+| Path | Purpose |
+| --- | --- |
+| `apps/mobile/` | Existing Flutter app, Android and iOS source |
+| `packages/stera_recorder/` | Existing Dart/Kotlin/Swift native recorder |
+| `stera-sdk/` | Optional pinned SDK submodule for historical diagnostics |
+| `spikes/android/` | Isolated feasibility harnesses and safe results |
+| `third_party/stera-app/` | Upstream license, notices and import provenance |
+| `docs/`, `scripts/`, `tests/` | Design, local tools and regression checks |
+| `artifacts/`, `captures/` | Ignored local builds and private recordings |
 
-The checkout is from [fpv-labs/stera-app](https://github.com/fpv-labs/stera-app), based on `fce8de1a44d3b4a8f0bea9bb5f025ea8e04dcc15` on local branch `local/pixel9pro-debug`. Local Android recorder changes implement the [versioned geometry contract](stera-app/packages/stera_recorder/android/CAPTURE_GEOMETRY.md). An earlier change in `apps/mobile/android/app/build.gradle.kts` reads release-keystore properties as nullable values so a missing `android/key.properties` does not prevent debug configuration. Release builds retain their release signing configuration.
+Mobile/native source was imported at `8044ad672dbf03cd6db8690f260c145b9acd51ea`, preserving our existing Pixel fixes and upstream history. Its origin is [fpv-labs/stera-app](https://github.com/fpv-labs/stera-app), based on `fce8de1a44d3b4a8f0bea9bb5f025ea8e04dcc15` on local branch `local/pixel9pro-debug`. Local Android recorder changes implement the [versioned geometry contract](packages/stera_recorder/android/CAPTURE_GEOMETRY.md). An earlier change in `apps/mobile/android/app/build.gradle.kts` reads release-keystore properties as nullable values so a missing `android/key.properties` does not prevent debug configuration. Release builds retain their release signing configuration.
 
-`stera-app/apps/mobile/.env` contains only `NO_AUTH_MODE=true`. This enables local capture and preview without an account, backend, or uploads. The file is ignored by Git but must exist because Flutter bundles it as an asset.
+`apps/mobile/.env` contains only `NO_AUTH_MODE=true`. This enables local capture and preview without an account, backend, or uploads. The file is ignored by Git but must exist because Flutter bundles it as an asset.
 
 ## Environment
 
@@ -88,7 +89,7 @@ The source pins Flutter 3.44.6, Gradle 8.14, Android Gradle Plugin 8.12.1, and K
 
 ```bash
 source ~/projects/robotics-data-collection/scripts/env.sh
-cd "$ROBOTICS_CAPTURE_ROOT/stera-app/apps/mobile"
+cd "$ROBOTICS_CAPTURE_ROOT/apps/mobile"
 flutter pub get
 flutter build apk --debug --target-platform android-arm64,android-x64 --dart-define=NO_AUTH_MODE=true
 install -m 644 build/app/outputs/flutter-apk/app-debug.apk \
@@ -136,6 +137,8 @@ separate validation tasks.
 
 ## Select the phone and install
 
+Read [AGENTS.md](AGENTS.md) first. **Never install or run in a company/work profile.** Identify users with `adb -s "$ROBOTICS_CAPTURE_DEVICE" shell cmd user list -v`; verify the personal full user before any app mutation. On the current Pixel, personal is user0 and Work is user10. The commands below explicitly target personal user0; reverify on another device. Run simulations before involving the user.
+
 Enable debugging and authorize this computer on the phone. For wireless debugging, pair and connect using the temporary details shown by the phone. Pairing codes and network addresses are not stored in this workspace.
 
 ```bash
@@ -143,11 +146,17 @@ adb devices -l
 # Replace the placeholder with the intended phone's first-column identifier.
 export ROBOTICS_CAPTURE_DEVICE='device-identifier-from-adb-devices'
 adb -s "$ROBOTICS_CAPTURE_DEVICE" get-state
-adb -s "$ROBOTICS_CAPTURE_DEVICE" install -r \
-  "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk"
-adb -s "$ROBOTICS_CAPTURE_DEVICE" shell am start \
-  -n open.fpvlabs.stera/.MainActivity
+python3 scripts/android_personal_device.py --serial "$ROBOTICS_CAPTURE_DEVICE" --user 0 \
+  install --package open.fpvlabs.stera \
+  --apk "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk" --dry-run
+python3 scripts/android_personal_device.py --serial "$ROBOTICS_CAPTURE_DEVICE" --user 0 \
+  install --package open.fpvlabs.stera \
+  --apk "$ROBOTICS_CAPTURE_ROOT/artifacts/stera-local-debug.apk"
+python3 scripts/android_personal_device.py --serial "$ROBOTICS_CAPTURE_DEVICE" --user 0 \
+  start --package open.fpvlabs.stera --component open.fpvlabs.stera/.MainActivity
 ```
+
+The [guarded helper](scripts/ANDROID_PERSONAL_DEVICE.md) verifies the full personal user, APK identity and exact package scope; it refuses work profiles and never clears data. Complete simulations first.
 
 The selected device must show `device`, rather than `unauthorized` or `offline`. ADB can list the same wireless phone twice, under its address and its mDNS identifier; choose one entry and keep targeting it explicitly. Re-select its identifier if wireless reconnection changes it.
 
@@ -160,7 +169,7 @@ After stopping the recording, copy the latest completed session:
 ```bash
 ANDROID_SERIAL="$ROBOTICS_CAPTURE_DEVICE" \
 LOCAL_ROOT="$ROBOTICS_CAPTURE_ROOT/captures" \
-  bash "$ROBOTICS_CAPTURE_ROOT/stera-app/apps/mobile/scripts/pull_arcore_dataset.sh" --latest
+  bash "$ROBOTICS_CAPTURE_ROOT/apps/mobile/scripts/pull_arcore_dataset.sh" --latest
 ```
 
 Use `--all` instead of `--latest` to copy all saved sessions. `ANDROID_SERIAL` makes the upstream script's ADB calls target the phone explicitly. The script reads `/storage/emulated/0/Android/data/open.fpvlabs.stera/files/ar_sessions/` and checks for a nonempty `session_data_*.mcap`, `metadata.json`, and `thumbnail.jpg`. Each session remains on the phone after copying. Processing with Stera SDK is a separate step.

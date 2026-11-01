@@ -11,4 +11,12 @@ __pycache__/
 !.env.example
 *.keystore
 *.jks
-# Nested repositories are tracked as git submodules, never copied build trees.
+# Isolated Android spike builds and local-only dependency state.
+/spikes/**/.gradle/
+/spikes/**/build/
+/spikes/**/local.properties
+/spikes/**/node_modules/
+/spikes/**/.venv/
+# Preserve the old app checkout locally as a migration reference only.
+/stera-app/
+# The optional stera-sdk submodule remains for historical diagnostics.

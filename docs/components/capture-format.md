@@ -50,6 +50,8 @@ The profile must declare finite limits for pending frames, complete access-unit 
 
 At recording start sample a fixed pair of host monotonic time and Unix time. Use this anchor to project recorder-time values to Unix nanoseconds without following later wall-clock jumps. Keep original native times and clock IDs unchanged. A host projection is a display-time mapping, **not proof of cross-sensor synchronization**.
 
+Android implementation finding: ARCore `Frame.timestamp` has an undefined timebase. The [capture simulation](../../spikes/android/capture/emulator-result.json) also observed CPU Image timestamps differing from camera `SENSOR_TIMESTAMP` in all 30 frames. Preserve Image, Frame and Android-accessor times separately. Prefer the acquiring Frame's `imageMetadata` `SENSOR_TIMESTAMP` under documented Camera2 `SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME` before applying the monotonic anchor; check a positive Android-accessor timestamp for disagreement. Optional metadata/timestamps can be unavailable during startup: record that state and use a finite availability deadline rather than fail on the first update or invent a CPU-image clock mapping. Raw SensorEvent time retains its documented elapsed-realtime domain. Unsupported clocks fail qualification; proximity cannot establish a mapping. Native depth times remain unmapped until qualified. [ARCore Frame](https://developers.google.com/ar/reference/java/com/google/ar/core/Frame), [Camera2 timestamp source](https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#SENSOR_INFO_TIMESTAMP_SOURCE).
+
 | Time | Meaning |
 | --- | --- |
 | Original native event time | Exact platform value/unit/clock domain, retained in FrameEvent/MotionEvent/SensorEvent |

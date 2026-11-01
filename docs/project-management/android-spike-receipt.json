@@ -1,0 +1,1902 @@
+{
+  "schemaVersion": 1,
+  "status": "in-progress; physical capture failed; monorepo migration first",
+  "scope": "Android-only feasibility spikes; physical, emulator, synthetic and replay-derived evidence remain distinct.",
+  "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+  "issues": {
+    "capture": {
+      "id": "SA-60",
+      "uuid": "3bd2ac54-e823-4dc3-8b91-243133928313",
+      "title": "Spike: Android hardware H.264 capture with original sensor evidence",
+      "description": "## Outcome\n\nDecide whether the available Android phone can sustain the proposed hardware H.264 plus AR/sensor capture path before production native implementation.\n\n## Scope\n\nAndroid only; separate ai.stateaction.spike.capture package and isolated spikes/android/capture source. Preserve the existing collector and the recording engineer's checkout. Candidate 1080p30, Main 4.0, no B frames, 12 Mb/s target and one-second IDR; all settings remain unqualified until measured.\n\n## Acceptance criteria\n\n- [ ] Build a standalone APK and record exact source/APK/device/OS/encoder versions.\n- [ ] On the physical Android device, capture original camera frame IDs/times, hardware H.264 Annex B access units in generic-profile MCAP, independent raw accel/gyro and matching raster/calibration; record actual tracking/depth/confidence availability and gaps.\n- [ ] Verify actual profile/no-B/IDRs, acquisition-to-PTS identity, configuration packets, bounded queues/counts, EOS/close and two consecutive sessions.\n- [ ] Run an initial 10\u201320-minute capture and report actual bytes, cadence, dropped frames, RAM, battery/heat and hand/tool detail. It does not replace two-hour release qualification.\n- [ ] Record pass/fail/pending for every criterion with reproducible commands and artifact hashes; emulator or synthetic results never count as physical hardware proof.\n\n## Current execution\n\nDedicated capture agent is implementing the isolated harness. ADB initially reports no attached device; user has been asked to connect/unlock/authorize it. Continue build and controlled fixture work while waiting.\n\n## Validation and decision\n\nEvidence lives in the ignored artifacts directory and a non-sensitive checked-in receipt. Report whether to keep the candidate, explicitly revise the profile, or stop for an identified blocker. No cloud/GPU spending is needed. Owner discipline: Android/mobile engineer with robotics review. No invented assignee/date/estimate.\n\nPlanning key: SA-MVP/SPIKE-ANDROID-CAPTURE",
+      "projectMilestone": {
+        "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+        "name": "M0 \u00b7 Reproducible foundations"
+      },
+      "priority": {
+        "value": 2,
+        "name": "High"
+      },
+      "url": "https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence",
+      "gitBranchName": "wanghujie/sa-60-spike-android-hardware-h264-capture-with-original-sensor",
+      "createdAt": "2026-11-01T03:07:02.373Z",
+      "updatedAt": "2026-11-01T03:07:02.373Z",
+      "archivedAt": null,
+      "completedAt": null,
+      "startedAt": "2026-11-01T03:07:02.431Z",
+      "canceledAt": null,
+      "dueDate": null,
+      "slaStartedAt": null,
+      "slaMediumRiskAt": null,
+      "slaHighRiskAt": null,
+      "slaBreachesAt": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "labels": [
+        "Qualification gate",
+        "Area: mobile"
+      ],
+      "attachments": [],
+      "documents": [],
+      "createdBy": "Timothy W",
+      "createdById": "4071afea-cebb-4849-b272-759a758368f3",
+      "project": "StateAction.ai \u00b7 Collection & review MVP",
+      "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+      "team": "StateAction",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460"
+    },
+    "review": {
+      "id": "SA-61",
+      "uuid": "b1bd50d5-6679-4084-b2a2-90b549e4454c",
+      "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer",
+      "description": "## Outcome\n\nProve the proposed Android source format reaches usable local review before production processing and UI integration.\n\n## Scope\n\nIsolated spikes/android/processing harness using Python 3.12, Rerun SDK/viewer 0.41.0, MediaPipe 1.2.0 and PyAV 19.0.2. Begin with synthetic mixed MCAP and optionally a clearly labelled H.264 transcode of the retained historical Android JPEG capture; then consume the new native sample from <issue id=\"3bd2ac54-e823-4dc3-8b91-243133928313\" href=\"https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence\">SA-60</issue>. No full backend/workflow or cloud deployment is required.\n\n## Acceptance criteria\n\n- [ ] Read generic MCAP with actual Foxglove Protobuf CompressedVideo descriptors and CDR/JSON evidence; preserve exact original event/frame IDs, clocks and encoder PTS/time bases.\n- [ ] Decode once for real CPU hand inference; no-hand frames are masked, not fabricated detections. Report observed detections separately from anatomical/metric accuracy.\n- [ ] Remux IDR-safe native MP4 clips with clip_pts=source_pts-first_included_source_pts, retaining original timing; reject malformed config, unsupported B frames and ambiguous mappings.\n- [ ] Generate bounded clip-safe H.264 RRD and load it in the actual self-hosted 0.41.0 WASM viewer. Verify playback, seeking, overlay timing, browser/runtime errors and basic memory behavior; an HTML/SVG stand-in is not evidence.\n- [ ] Record reproducible fixtures, source/model/config/artifact hashes, passed failure cases and remaining limitations. Synthetic/replay-derived input never qualifies new phone hardware capture.\n- [ ] Run the native Android sample when available; otherwise leave that criterion pending and keep the spike open.\n\n## Current execution\n\nDedicated processing agent is building the harness in parallel. The isolated package/model/three-frame serialization smoke already passed previously; full MCAP/browser and physical-source checks remain new work.\n\n## Dependencies and decision\n\n<issue id=\"3bd2ac54-e823-4dc3-8b91-243133928313\" href=\"https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence\">SA-60</issue> supplies the physical source. Synthetic and historical-source replay can proceed while the device is unavailable. Decide compatibility and necessary adapter changes before production reader/viewer work. Owner discipline: robotics/backend engineer with Android/web review. No paid GPU/cloud jobs, invented assignee/date/estimate or changes to original sources.\n\nPlanning key: SA-MVP/SPIKE-ANDROID-REVIEW",
+      "projectMilestone": {
+        "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+        "name": "M0 \u00b7 Reproducible foundations"
+      },
+      "priority": {
+        "value": 2,
+        "name": "High"
+      },
+      "url": "https://linear.app/hw-personal-projects/issue/SA-61/spike-android-h264-mcap-through-cpu-hands-and-the-real-rerun-web",
+      "gitBranchName": "wanghujie/sa-61-spike-android-h264-mcap-through-cpu-hands-and-the-real-rerun",
+      "createdAt": "2026-11-01T03:07:24.819Z",
+      "updatedAt": "2026-11-01T03:07:25.570Z",
+      "archivedAt": null,
+      "completedAt": null,
+      "startedAt": "2026-11-01T03:07:25.334Z",
+      "canceledAt": null,
+      "dueDate": null,
+      "slaStartedAt": null,
+      "slaMediumRiskAt": null,
+      "slaHighRiskAt": null,
+      "slaBreachesAt": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "labels": [
+        "Qualification gate",
+        "Area: robotics"
+      ],
+      "attachments": [],
+      "documents": [],
+      "createdBy": "Timothy W",
+      "createdById": "4071afea-cebb-4849-b272-759a758368f3",
+      "project": "StateAction.ai \u00b7 Collection & review MVP",
+      "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+      "team": "StateAction",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460"
+    },
+    "upload": {
+      "id": "SA-62",
+      "uuid": "f699318d-d81c-4807-a202-3723d75ce911",
+      "title": "Spike: Android native authentication and background multipart recovery",
+      "description": "## Outcome\n\nProve the Android native session/control and OS transfer path before implementing the production background uploader.\n\n## Scope\n\nSeparate ai.stateaction.spike.upload APK plus local Node/TypeScript control/provider-shaped fixture in spikes/android/upload. Android API34+ UIDT visible Upload/Resume; explicitly identify older-API support or pending fallback. Use one source, frozen 64 MiB parts, two PUTs, three temporary chunks and owner/transportEpoch journal. The production Google/Better Auth flow must remain distinct from fixture authentication.\n\n## Acceptance criteria\n\n- [ ] Build an isolated APK and runnable local byte-verifying control fixture; never replace the production collector or modify its pending uploads.\n- [ ] Native session client applies secure cookie rotation and renews deliberately short-lived part URLs independently of Dart; only the API signs/reconciles/completes provider state.\n- [ ] Exercise interruption/reconciliation, exact part sizes/hashes, bounded retry/space and stale epoch/owner denial. Label fixture/S3-shaped behavior simulated; it is not R2 qualification.\n- [ ] On the physical phone, test UIDT permissions/notification/constraints, suspension, screen lock, network change, process stop/reopen and cookie/URL expiry. Persist landed parts and original-owner state.\n- [ ] Verify real signed-build native Google ID-token -> Better Auth login and same-owner reauthentication using actual configured audiences; missing credentials/device remains an explicit pending gate, never passed by a test account.\n- [ ] Record measured outcomes, commands/build/artifact hashes and a clear OS recovery/UX decision. Leave unexecuted physical/provider/auth cases pending; do not mark the spike Done from local fixture tests alone.\n\n## Current execution\n\nDedicated upload agent is implementing the isolated Android/native and local-control harness. ADB initially reports no attached phone. No production Google configuration has yet been verified for this separate package.\n\n## Decision and boundaries\n\nDetermine whether native URL/session renewal and UIDT recovery work under supported OS conditions, or where the app must show Resume/reopen. No promise of unlimited background execution. No cloud provisioning, paid resources, existing-app replacement, fabricated assignee/date/estimate or production upload mutations.\n\nPlanning key: SA-MVP/SPIKE-ANDROID-UPLOAD",
+      "projectMilestone": {
+        "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+        "name": "M0 \u00b7 Reproducible foundations"
+      },
+      "priority": {
+        "value": 2,
+        "name": "High"
+      },
+      "url": "https://linear.app/hw-personal-projects/issue/SA-62/spike-android-native-authentication-and-background-multipart-recovery",
+      "gitBranchName": "wanghujie/sa-62-spike-android-native-authentication-and-background-multipart",
+      "createdAt": "2026-11-01T03:07:41.992Z",
+      "updatedAt": "2026-11-01T03:07:41.992Z",
+      "archivedAt": null,
+      "completedAt": null,
+      "startedAt": "2026-11-01T03:07:42.035Z",
+      "canceledAt": null,
+      "dueDate": null,
+      "slaStartedAt": null,
+      "slaMediumRiskAt": null,
+      "slaHighRiskAt": null,
+      "slaBreachesAt": null,
+      "status": "In Progress",
+      "statusType": "started",
+      "labels": [
+        "Qualification gate",
+        "Area: mobile"
+      ],
+      "attachments": [],
+      "documents": [],
+      "createdBy": "Timothy W",
+      "createdById": "4071afea-cebb-4849-b272-759a758368f3",
+      "project": "StateAction.ai \u00b7 Collection & review MVP",
+      "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+      "team": "StateAction",
+      "teamId": "88359d62-e976-4c69-b75c-1092c9706460"
+    }
+  },
+  "results": {
+    "capture": {
+      "kind": "build-and-JVM-synthetic",
+      "status": "JVM/startup regression and native component simulation passed; physical buildB remains failed",
+      "receipt": "spikes/android/capture/result.json",
+      "jvmTestsPassed": 17,
+      "installedBuild": "B",
+      "installedApkSha256": "6bb8cdd0505c30ff58a78098db1485e4a3d6aa096d28e1d014682327e8f8c0bc",
+      "latestBuiltBuild": "C simulation only; not installed on phone",
+      "latestBuiltApkSha256": "542677f0c0468695fc8a72fa74f9625421746adabd36f1420120a463f36ef4aa",
+      "physicalCaptureStarted": true,
+      "crossLanguageMixedMcap": "passed independent Python Protobuf/CDR/H264 synthetic fixture",
+      "personalAndroidUserId": 0,
+      "physicalResult": {
+        "outcome": "failed",
+        "error": "java.lang.IllegalArgumentException: Camera native time missing/regressed",
+        "acquiredFrames": "0",
+        "submittedFrames": "0",
+        "motionCallbackCounts": {
+          "1": "73",
+          "4": "72"
+        },
+        "sourceBytes": 87139,
+        "sourceSha256": "16916fcd9c16f3671075fc987ce45a161d5af7f7aec627d54ab05c9312d79b90",
+        "sourceHashVerifiedAfterPull": true
+      },
+      "emulatorNativeProbe": {
+        "status": "passed",
+        "api": 33,
+        "framesEncodedAndIndependentlyDecoded": 30,
+        "raster": [
+          640,
+          480
+        ],
+        "encoder": "software c2.android.avc.encoder",
+        "hardwareProfileQualified": false,
+        "fullProductionControllerQualified": false,
+        "receipt": "spikes/android/capture/emulator-result.json"
+      },
+      "integrationRecommendation": "spikes/android/capture/STERA-INTEGRATION.md"
+    },
+    "uploadNativeEngine": {
+      "kind": "Android emulator API35 direct native engine; not UIDT",
+      "status": "passed",
+      "receipt": "spikes/android/upload/native-instrumentation-result.json",
+      "verifiedBytes": 134230073,
+      "verifiedSha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be",
+      "maxActivePuts": 2,
+      "maxTemporaryChunks": 3,
+      "urlExpiryRenewal": true,
+      "injected503Retry": true,
+      "realGoogle": false,
+      "realProvider": false
+    },
+    "uploadUidt": {
+      "kind": "API35 emulator UIDT then HOME",
+      "status": "passed",
+      "receipt": "spikes/android/upload/emulator-uidt-result.json",
+      "chargingRequirementDisabled": true,
+      "unmeteredOnly": true,
+      "physicalDeviceQualified": false
+    },
+    "processing": {
+      "status": "local passed; fresh hardware input pending",
+      "receipt": "spikes/android/processing/results.json",
+      "protocolChecksPassed": 13,
+      "actualBrowser": "Rerun 0.41.0 WASM/WebCodecs; forward/backseek/overlay/clear/cleanup pass",
+      "rootVisuallyInspectedFourScreenshots": true
+    }
+  },
+  "blockers": [
+    "Phone H264 hardware/profile and complete controller remain unqualified; first physical buildB failed before RGB.",
+    "Next H264 integration must reuse imported Stera lifecycle/acquisition with one ARSession; standalone simulation probe is not the collector.",
+    "Physical upload, Google/BetterAuth, TLS/provider and representative long-run/quality checks remain pending."
+  ],
+  "paidResourcesCreated": false,
+  "dependencyUpdates": [
+    {
+      "id": "SA-51",
+      "newBlocker": "SA-60",
+      "previousBlockers": [
+        "SA-10",
+        "SA-50"
+      ],
+      "mutationId": "SA-51",
+      "statusBefore": "Backlog"
+    },
+    {
+      "id": "SA-24",
+      "newBlocker": "SA-61",
+      "previousBlockers": [
+        "SA-50",
+        "SA-11"
+      ],
+      "mutationId": "SA-24",
+      "statusBefore": "Backlog"
+    },
+    {
+      "id": "SA-57",
+      "newBlocker": "SA-62",
+      "previousBlockers": [
+        "SA-10",
+        "SA-21"
+      ],
+      "mutationId": "SA-57",
+      "statusBefore": "Backlog"
+    }
+  ],
+  "device": {
+    "ro.product.model": "Pixel 9 Pro XL",
+    "ro.build.version.sdk": "37",
+    "ro.build.version.release": "17",
+    "ro.product.cpu.abi": "arm64-v8a",
+    "serial_sha256": "3a62b7d45e731db78fd2bddde3a752e1e8d04a076b05d4f4391a498d1eed9e38",
+    "connection": "wireless/mDNS ADB",
+    "battery": "Current Battery Service state:\n  AC powered: false\n  USB powered: false\n  Wireless powered: false\n  Dock powered: false\n  Max charging current: 0\n Time when the latest updated value of the Max charging current was sent via battery changed broadcast: +2d8h0m50s624ms\n  Max charging voltage: 0\n  Charge counter: 2537500\n  status: 3\n  health: 2\n  present: true\n  level: 56\n  scale: 100\n  voltage: 3915\n Time when the latest updated value of the voltage was sent via battery changed broadcast: +2d20h20m6s759ms\n The last voltage value sent via the battery changed broadcast: 3921\n  temperature: 268\n  technology: Li-ion\n  Charging state: 1\n  Charging policy: 1\n  Capacity level: 2\n"
+  },
+  "remoteGraphVerification": {
+    "issueCount": 53,
+    "edgeCount": 94,
+    "cycle": false,
+    "byMilestone": {
+      "M0 \u00b7 Reproducible foundations": 9,
+      "M1 \u00b7 Authenticated, resumable collection": 17,
+      "M2 \u00b7 Local CPU processing": 11,
+      "M5 \u00b7 Collection pilot ready": 3,
+      "M3 \u00b7 Internal review and customer inspection": 7,
+      "M4 \u00b7 Bounded cloud CPU canary": 6
+    },
+    "spikesReachFinalGate": {
+      "SA-60": true,
+      "SA-61": true,
+      "SA-62": true
+    },
+    "checkedAllRemoteRelations": true,
+    "rows": [
+      {
+        "id": "SA-62",
+        "status": "In Progress",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-57",
+              "title": "Implement durable Android background multipart uploads"
+            }
+          ],
+          "blockedBy": [],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-60",
+        "status": "In Progress",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-51",
+              "title": "Implement Android hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-61",
+              "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer"
+            }
+          ],
+          "blockedBy": [],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-57",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-22",
+              "title": "Implement the owner-bound Flutter resumable uploader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-62",
+              "title": "Spike: Android native authentication and background multipart recovery"
+            },
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-21",
+              "title": "Reconcile uncertain multipart completion and transport restart"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-24",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-59",
+              "title": "Qualify the mobile H.264 profile, hand detail and resource budget"
+            },
+            {
+              "id": "SA-29",
+              "title": "Stream MCAP and decode frames with bounded memory"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-61",
+              "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer"
+            },
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            },
+            {
+              "id": "SA-11",
+              "title": "Scaffold the TypeScript and Python packages with repeatable CI"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-51",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-60",
+              "title": "Spike: Android hardware H.264 capture with original sensor evidence"
+            },
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-61",
+        "status": "In Progress",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-24",
+              "title": "Prove CPU hand overlays and real Rerun playback early"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-60",
+              "title": "Spike: Android hardware H.264 capture with original sensor evidence"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-48",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-49",
+              "title": "Complete internal and customer UAT and pilot go/no-go"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-59",
+              "title": "Qualify the mobile H.264 profile, hand detail and resource budget"
+            },
+            {
+              "id": "SA-47",
+              "title": "Prepare collector permissions, retention and support runbooks"
+            },
+            {
+              "id": "SA-40",
+              "title": "Prove local staff-to-customer review and isolation"
+            },
+            {
+              "id": "SA-44",
+              "title": "Prove cloud workflow and worker failure recovery"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "name": "M5 \u00b7 Collection pilot ready"
+        }
+      },
+      {
+        "id": "SA-38",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-43",
+              "title": "Qualify real R2 multipart and private viewer transfers"
+            },
+            {
+              "id": "SA-39",
+              "title": "Build the shared clip review and read-only customer page"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-16",
+              "title": "Build the StateAction.ai account menu and Settings"
+            },
+            {
+              "id": "SA-35",
+              "title": "Implement approved-only dataset APIs and view grants"
+            },
+            {
+              "id": "SA-31",
+              "title": "Write bounded clip artifacts and a portable reader"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-31",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-38",
+              "title": "Embed the real shared Rerun viewer safely"
+            },
+            {
+              "id": "SA-32",
+              "title": "Persist inline quality checks and reject corrupt candidates"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-28",
+              "title": "Seal worker outputs and atomically accept immutable clips"
+            },
+            {
+              "id": "SA-30",
+              "title": "Implement mandatory 21-landmark CPU hand inference"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-29",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-30",
+              "title": "Implement mandatory 21-landmark CPU hand inference"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-12",
+              "title": "Publish versioned API, task and artifact contracts"
+            },
+            {
+              "id": "SA-24",
+              "title": "Prove CPU hand overlays and real Rerun playback early"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-23",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-47",
+              "title": "Prepare collector permissions, retention and support runbooks"
+            },
+            {
+              "id": "SA-33",
+              "title": "Qualify local end-to-end recovery and long-input bounds"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-22",
+              "title": "Implement the owner-bound Flutter resumable uploader"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-22",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-23",
+              "title": "Complete collector recovery states and verified local cleanup"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-58",
+              "title": "Fix iOS native retry loops and background completion lifecycle"
+            },
+            {
+              "id": "SA-57",
+              "title": "Implement durable Android background multipart uploads"
+            },
+            {
+              "id": "SA-21",
+              "title": "Reconcile uncertain multipart completion and transport restart"
+            },
+            {
+              "id": "SA-18",
+              "title": "Finalize and hash closed source files before upload"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-17",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-18",
+              "title": "Finalize and hash closed source files before upload"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-15",
+              "title": "Implement Google sign-in and server-enforced pilot access"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-59",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-48",
+              "title": "Qualify a signed-device two-hour capture through cloud review"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            },
+            {
+              "id": "SA-24",
+              "title": "Prove CPU hand overlays and real Rerun playback early"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-58",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-22",
+              "title": "Implement the owner-bound Flutter resumable uploader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-21",
+              "title": "Reconcile uncertain multipart completion and transport restart"
+            },
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-56",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-18",
+              "title": "Finalize and hash closed source files before upload"
+            },
+            {
+              "id": "SA-59",
+              "title": "Qualify the mobile H.264 profile, hand detail and resource budget"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-55",
+              "title": "Preserve available depth, confidence and honest sensor provenance"
+            },
+            {
+              "id": "SA-54",
+              "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB"
+            },
+            {
+              "id": "SA-51",
+              "title": "Implement Android hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-52",
+              "title": "Implement iOS hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-53",
+              "title": "Preserve independent raw IMU events and original sensor clocks"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-55",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            },
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-54",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-53",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-52",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-10",
+              "title": "Migrate the mobile app and native recorder into the monorepo safely"
+            },
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-50",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-24",
+              "title": "Prove CPU hand overlays and real Rerun playback early"
+            },
+            {
+              "id": "SA-55",
+              "title": "Preserve available depth, confidence and honest sensor provenance"
+            },
+            {
+              "id": "SA-54",
+              "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB"
+            },
+            {
+              "id": "SA-53",
+              "title": "Preserve independent raw IMU events and original sensor clocks"
+            },
+            {
+              "id": "SA-52",
+              "title": "Implement iOS hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-51",
+              "title": "Implement Android hardware H.264 frame messages in MCAP"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-12",
+              "title": "Publish versioned API, task and artifact contracts"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-18",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-22",
+              "title": "Implement the owner-bound Flutter resumable uploader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-56",
+              "title": "Make native capture finalization bounded and evidence complete"
+            },
+            {
+              "id": "SA-17",
+              "title": "Integrate mobile login and immutable capture ownership"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-43",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-44",
+              "title": "Prove cloud workflow and worker failure recovery"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-42",
+              "title": "Deploy the Modal CPU executor over the shared worker"
+            },
+            {
+              "id": "SA-38",
+              "title": "Embed the real shared Rerun viewer safely"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-32",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-42",
+              "title": "Deploy the Modal CPU executor over the shared worker"
+            },
+            {
+              "id": "SA-33",
+              "title": "Qualify local end-to-end recovery and long-input bounds"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-31",
+              "title": "Write bounded clip artifacts and a portable reader"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-19",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-25",
+              "title": "Implement durable job admission and worker claims"
+            },
+            {
+              "id": "SA-20",
+              "title": "Implement shared multipart reservation, signing and receipts"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-15",
+              "title": "Implement Google sign-in and server-enforced pilot access"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-12",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-50",
+              "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures"
+            },
+            {
+              "id": "SA-29",
+              "title": "Stream MCAP and decode frames with bounded memory"
+            },
+            {
+              "id": "SA-13",
+              "title": "Create the catalog migrations and integrity constraints"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-11",
+              "title": "Scaffold the TypeScript and Python packages with repeatable CI"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-10",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-58",
+              "title": "Fix iOS native retry loops and background completion lifecycle"
+            },
+            {
+              "id": "SA-57",
+              "title": "Implement durable Android background multipart uploads"
+            },
+            {
+              "id": "SA-55",
+              "title": "Preserve available depth, confidence and honest sensor provenance"
+            },
+            {
+              "id": "SA-54",
+              "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB"
+            },
+            {
+              "id": "SA-53",
+              "title": "Preserve independent raw IMU events and original sensor clocks"
+            },
+            {
+              "id": "SA-52",
+              "title": "Implement iOS hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-51",
+              "title": "Implement Android hardware H.264 frame messages in MCAP"
+            },
+            {
+              "id": "SA-17",
+              "title": "Integrate mobile login and immutable capture ownership"
+            }
+          ],
+          "blockedBy": [],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-21",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-58",
+              "title": "Fix iOS native retry loops and background completion lifecycle"
+            },
+            {
+              "id": "SA-57",
+              "title": "Implement durable Android background multipart uploads"
+            },
+            {
+              "id": "SA-28",
+              "title": "Seal worker outputs and atomically accept immutable clips"
+            },
+            {
+              "id": "SA-22",
+              "title": "Implement the owner-bound Flutter resumable uploader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-20",
+              "title": "Implement shared multipart reservation, signing and receipts"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-49",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [],
+          "blockedBy": [
+            {
+              "id": "SA-48",
+              "title": "Qualify a signed-device two-hour capture through cloud review"
+            },
+            {
+              "id": "SA-46",
+              "title": "Test database restore and document operational recovery"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "name": "M5 \u00b7 Collection pilot ready"
+        }
+      },
+      {
+        "id": "SA-47",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-48",
+              "title": "Qualify a signed-device two-hour capture through cloud review"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-23",
+              "title": "Complete collector recovery states and verified local cleanup"
+            },
+            {
+              "id": "SA-35",
+              "title": "Implement approved-only dataset APIs and view grants"
+            },
+            {
+              "id": "SA-45",
+              "title": "Instrument pipeline resources, errors and spending"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "24ee71c0-34cd-4389-92ec-4422d09477be",
+          "name": "M5 \u00b7 Collection pilot ready"
+        }
+      },
+      {
+        "id": "SA-44",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-48",
+              "title": "Qualify a signed-device two-hour capture through cloud review"
+            },
+            {
+              "id": "SA-46",
+              "title": "Test database restore and document operational recovery"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-43",
+              "title": "Qualify real R2 multipart and private viewer transfers"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-46",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-49",
+              "title": "Complete internal and customer UAT and pilot go/no-go"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-44",
+              "title": "Prove cloud workflow and worker failure recovery"
+            },
+            {
+              "id": "SA-45",
+              "title": "Instrument pipeline resources, errors and spending"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-45",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-47",
+              "title": "Prepare collector permissions, retention and support runbooks"
+            },
+            {
+              "id": "SA-46",
+              "title": "Test database restore and document operational recovery"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-42",
+              "title": "Deploy the Modal CPU executor over the shared worker"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-42",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-45",
+              "title": "Instrument pipeline resources, errors and spending"
+            },
+            {
+              "id": "SA-43",
+              "title": "Qualify real R2 multipart and private viewer transfers"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-33",
+              "title": "Qualify local end-to-end recovery and long-input bounds"
+            },
+            {
+              "id": "SA-41",
+              "title": "Deploy the Render stack and private R2 configuration"
+            },
+            {
+              "id": "SA-32",
+              "title": "Persist inline quality checks and reject corrupt candidates"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-41",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-42",
+              "title": "Deploy the Modal CPU executor over the shared worker"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-27",
+              "title": "Add dispatch repair, cancellation and safe operator recovery"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "426b8b35-0d22-4e2b-9a84-bb9a09ca1f9b",
+          "name": "M4 \u00b7 Bounded cloud CPU canary"
+        }
+      },
+      {
+        "id": "SA-40",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-48",
+              "title": "Qualify a signed-device two-hour capture through cloud review"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-39",
+              "title": "Build the shared clip review and read-only customer page"
+            },
+            {
+              "id": "SA-33",
+              "title": "Qualify local end-to-end recovery and long-input bounds"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-39",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-40",
+              "title": "Prove local staff-to-customer review and isolation"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-37",
+              "title": "Build the shared Data browser with URL-backed filters"
+            },
+            {
+              "id": "SA-36",
+              "title": "Commit review decisions and dataset assignments atomically"
+            },
+            {
+              "id": "SA-38",
+              "title": "Embed the real shared Rerun viewer safely"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-16",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-38",
+              "title": "Embed the real shared Rerun viewer safely"
+            },
+            {
+              "id": "SA-34",
+              "title": "Build Pipeline monitoring and per-recording actions"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-15",
+              "title": "Implement Google sign-in and server-enforced pilot access"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-35",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-47",
+              "title": "Prepare collector permissions, retention and support runbooks"
+            },
+            {
+              "id": "SA-38",
+              "title": "Embed the real shared Rerun viewer safely"
+            },
+            {
+              "id": "SA-37",
+              "title": "Build the shared Data browser with URL-backed filters"
+            },
+            {
+              "id": "SA-36",
+              "title": "Commit review decisions and dataset assignments atomically"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-28",
+              "title": "Seal worker outputs and atomically accept immutable clips"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-37",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-39",
+              "title": "Build the shared clip review and read-only customer page"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-34",
+              "title": "Build Pipeline monitoring and per-recording actions"
+            },
+            {
+              "id": "SA-35",
+              "title": "Implement approved-only dataset APIs and view grants"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-36",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-39",
+              "title": "Build the shared clip review and read-only customer page"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-35",
+              "title": "Implement approved-only dataset APIs and view grants"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-34",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-37",
+              "title": "Build the shared Data browser with URL-backed filters"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-16",
+              "title": "Build the StateAction.ai account menu and Settings"
+            },
+            {
+              "id": "SA-28",
+              "title": "Seal worker outputs and atomically accept immutable clips"
+            },
+            {
+              "id": "SA-27",
+              "title": "Add dispatch repair, cancellation and safe operator recovery"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8ed38025-3e96-436f-9162-e815dd412bcc",
+          "name": "M3 \u00b7 Internal review and customer inspection"
+        }
+      },
+      {
+        "id": "SA-33",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-42",
+              "title": "Deploy the Modal CPU executor over the shared worker"
+            },
+            {
+              "id": "SA-40",
+              "title": "Prove local staff-to-customer review and isolation"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-32",
+              "title": "Persist inline quality checks and reject corrupt candidates"
+            },
+            {
+              "id": "SA-23",
+              "title": "Complete collector recovery states and verified local cleanup"
+            },
+            {
+              "id": "SA-27",
+              "title": "Add dispatch repair, cancellation and safe operator recovery"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-28",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-35",
+              "title": "Implement approved-only dataset APIs and view grants"
+            },
+            {
+              "id": "SA-34",
+              "title": "Build Pipeline monitoring and per-recording actions"
+            },
+            {
+              "id": "SA-31",
+              "title": "Write bounded clip artifacts and a portable reader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-21",
+              "title": "Reconcile uncertain multipart completion and transport restart"
+            },
+            {
+              "id": "SA-25",
+              "title": "Implement durable job admission and worker claims"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-30",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-31",
+              "title": "Write bounded clip artifacts and a portable reader"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-29",
+              "title": "Stream MCAP and decode frames with bounded memory"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-27",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-41",
+              "title": "Deploy the Render stack and private R2 configuration"
+            },
+            {
+              "id": "SA-34",
+              "title": "Build Pipeline monitoring and per-recording actions"
+            },
+            {
+              "id": "SA-33",
+              "title": "Qualify local end-to-end recovery and long-input bounds"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-26",
+              "title": "Run the processing controller with LocalExecutor"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-26",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-27",
+              "title": "Add dispatch repair, cancellation and safe operator recovery"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-14",
+              "title": "Run the official Render workflow runtime locally"
+            },
+            {
+              "id": "SA-25",
+              "title": "Implement durable job admission and worker claims"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-25",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-28",
+              "title": "Seal worker outputs and atomically accept immutable clips"
+            },
+            {
+              "id": "SA-26",
+              "title": "Run the processing controller with LocalExecutor"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-19",
+              "title": "Register recordings and seal the required-file inventory"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "9efbdf73-0d45-467d-8929-c8f84be3efb6",
+          "name": "M2 \u00b7 Local CPU processing"
+        }
+      },
+      {
+        "id": "SA-20",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-21",
+              "title": "Reconcile uncertain multipart completion and transport restart"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-19",
+              "title": "Register recordings and seal the required-file inventory"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-15",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-19",
+              "title": "Register recordings and seal the required-file inventory"
+            },
+            {
+              "id": "SA-17",
+              "title": "Integrate mobile login and immutable capture ownership"
+            },
+            {
+              "id": "SA-16",
+              "title": "Build the StateAction.ai account menu and Settings"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-13",
+              "title": "Create the catalog migrations and integrity constraints"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "99688826-02ce-402e-8ece-ef614c716ec0",
+          "name": "M1 \u00b7 Authenticated, resumable collection"
+        }
+      },
+      {
+        "id": "SA-13",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-15",
+              "title": "Implement Google sign-in and server-enforced pilot access"
+            },
+            {
+              "id": "SA-14",
+              "title": "Run the official Render workflow runtime locally"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-12",
+              "title": "Publish versioned API, task and artifact contracts"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-14",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-26",
+              "title": "Run the processing controller with LocalExecutor"
+            }
+          ],
+          "blockedBy": [
+            {
+              "id": "SA-13",
+              "title": "Create the catalog migrations and integrity constraints"
+            }
+          ],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      },
+      {
+        "id": "SA-11",
+        "status": "Backlog",
+        "relations": {
+          "blocks": [
+            {
+              "id": "SA-24",
+              "title": "Prove CPU hand overlays and real Rerun playback early"
+            },
+            {
+              "id": "SA-12",
+              "title": "Publish versioned API, task and artifact contracts"
+            }
+          ],
+          "blockedBy": [],
+          "relatedTo": [],
+          "duplicateOf": null
+        },
+        "projectMilestone": {
+          "id": "8b267a28-6e45-47ca-af9d-94d7009d1b06",
+          "name": "M0 \u00b7 Reproducible foundations"
+        }
+      }
+    ]
+  },
+  "profileIsolation": {
+    "personalUserId": 0,
+    "managedUserId": 10,
+    "initialUnscopedInstallAlsoInstalledManagedCopy": true,
+    "managedCopyNeverLaunchedAccordingToPackageState": true,
+    "managedCameraPermissionWasNotGranted": true,
+    "managedCopyRemoved": true,
+    "personalPackageVerifiedInstalled": true,
+    "managedSpikePackagesVerifiedAbsent": true,
+    "permanentRules": [
+      "/home/wearaway/.codex/AGENTS.md",
+      "AGENTS.md"
+    ],
+    "futureInstallsRequireExplicitVerifiedPersonalUser": true,
+    "safeHelper": "scripts/android_personal_device.py",
+    "fakeAdbTestsPassed": 22,
+    "actualReadOnlyHelperCheck": "passed: personal user0 installed, no non-target installation",
+    "originalSteraPackageAbsentFromManagedProfile": true
+  },
+  "migration": {
+    "issue": "SA-10",
+    "sourceCommit": "8044ad672dbf03cd6db8690f260c145b9acd51ea",
+    "sourceHistoryRetainedInLocalBranch": "archive/stera-app-pixel9pro",
+    "verifiedFullHistoryBundle": "/tmp/stateaction-stera-app-8044ad6.bundle",
+    "sourceHistoryBundleSha256": "1d80be38c385adb96d44909bab59a48d4d4a463ab890036c902186ed5eb1a49c",
+    "sourceHistoryBundleBytes": 12393820,
+    "sourceImportReceipt": "docs/validation/mobile-source-import.json",
+    "status": "source integrated; 191 tests and two Android APK builds passed"
+  },
+  "verification": {
+    "changedMarkdownFiles": 30,
+    "localLinksAndAnchors": 211,
+    "diagramPairs": 2,
+    "newOwnedWhitespaceCheck": "passed",
+    "importedSourceDeltaWhitespaceCheck": "passed against original source; inherited source whitespace retained",
+    "privateOrGeneratedFilesStaged": false,
+    "intentionalExistingSyntheticMcapFixture": "apps/mobile/test/fixtures/mcap/native_cpu_v3.mcap"
+  }
+}

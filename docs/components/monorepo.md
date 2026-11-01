@@ -1,6 +1,6 @@
 # Monorepo and build boundaries
 
-Updated: 2026-10-30. Target layout; source migration has not happened. One Git repository contains mobile, web, job control, processing, contracts, infrastructure and documentation. Normal cloning must eventually work without submodules.
+Updated: 2026-10-31. Existing mobile/native source is imported from Stera revision `8044ad672dbf03cd6db8690f260c145b9acd51ea`; new web/jobs/processing product packages remain planned. A normal clone contains the Flutter app and recorder without initializing an app submodule. The optional Python SDK submodule remains a historical diagnostic dependency.
 
 ## Source layout
 
@@ -21,16 +21,17 @@ Use **pnpm workspaces for TypeScript packages only**, Flutter/pub for Dart and u
 
 Mobile consumes an HTTP contract, not TypeScript business logic. Python imports model/MCAP libraries, not web code. Only `apps/web` receives the production database/storage authority; job and worker capabilities follow [orchestration](job-orchestration.md).
 
-## Migrate after the recording fixes land
+## Existing mobile source import
 
-The current root tracks `stera-app` and `stera-sdk` as Git submodules. `stera-app` already contains the Flutter app and recorder plugin, plus a legacy Bun/Hono server. Merely adding a root workspace would leave independently versioned source behind.
+`apps/mobile` and `packages/stera_recorder` retain our existing Android geometry/orientation fixes, Dart tests, Kotlin/Swift, FFI bindings, platform projects, assets and app lockfile. The relative Flutter plugin dependency is unchanged. [Import provenance/notices](../../third_party/stera-app/IMPORT.md) and [verification receipt](../validation/mobile-source-import.json) record source hashes and checks. Upstream history is retained in the monorepo import; the original local checkout/history is also preserved as an ignored migration reference.
 
-1. Coordinate a source-move window with the recording engineer. Record both submodule commit IDs and preserve all committed and uncommitted work before changing Git structure.
-2. Import mobile/native source and only the reviewed helpers/fixtures required by the new worker into ordinary tracked directories; full Python SDK import is optional. Preserve history where practical and retain upstream license/notices plus an import-commit record. Exclude credentials, captures, APKs, virtual environments, caches and downloaded weights.
-3. Move the mobile app and recorder plugin together; update relative paths and native scripts. Preserve app IDs, signing identity, local database migrations, capture IDs and owner-bound upload journals. Re-run the physical-device recording/playback checks.
-4. Create the new Node/web/worker packages. The old server is a migration reference; port only reviewed auth/upload behavior. Remove the submodule entries only after the imported source and root clone/build checks pass.
+The user clarified that the original checkout is our temporary work; no separate recording-engineer handoff is required. Native camera logic is preserved during this move. The new standalone H.264 harness failed its first physical startup; use the imported recorder as the base for further integration and retain that timestamp case as a regression. Moving source does not qualify H.264 capture.
 
-Do not move the active mobile checkout during parallel bug fixing. No such move is performed by this documentation change.
+The old Bun/Hono server and JS packages are excluded. Only reviewed behavior should enter the new Node/TypeScript backend. Full Python SDK import remains optional; initialize `stera-sdk` only for existing diagnostic scripts. No mobile runtime imports it.
+
+Regenerate `.dart_tool`, Flutter plugin metadata, native local properties and build outputs. Preserve private `.env` locally and bootstrap clean builds from the example/no-auth configuration; never commit credentials or signing files. The import includes a verified Gradle 8.14 wrapper/checksum because the prior local wrapper was ignored by upstream. Android builds/tests run on Linux; iOS source is retained but builds require macOS.
+
+All device operations follow [AGENTS.md](../../AGENTS.md): verified personal profile only, explicit `--user`, no company/work-profile installs or runs, and simulation before requesting user testing. The maintained emulator-only [test script](../../scripts/test_android_capture.sh) uses the imported paths. [Local Android loop](../linux-recording-test-loop.md) distinguishes native codec fixtures from real ARCore/camera qualification.
 
 ## Independent builds from one commit
 

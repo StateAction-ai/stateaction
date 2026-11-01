@@ -1,7 +1,3 @@
-[submodule "stera-app"]
-	path = stera-app
-	url = https://github.com/timothywangdev/stera-app.git
-	branch = local/pixel9pro-debug
 [submodule "stera-sdk"]
 	path = stera-sdk
 	url = https://github.com/fpv-labs/stera-sdk.git

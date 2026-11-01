@@ -1,0 +1,28 @@
+# Android feasibility spikes
+
+Android is the first device target. Three isolated harnesses test the risky boundaries before production mobile work. They preserve the existing collector and use separate Android package IDs. No paid cloud or GPU resources are needed.
+
+| Spike | Evidence so far | Remaining gate |
+| --- | --- | --- |
+| [SA-60 · Native capture](https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence) | Seventeen JVM tests, including startup regression, pass. Actual ARCore/OES/Surface emulator probe encoded/finalized/decoded 30 software-AVC frames at 640×480. **Physical build B failed before RGB acquisition**. [Harness and receipts](../../spikes/android/capture/README.md) | Integrate a small encoder adapter into the imported existing recorder; qualify the complete controller and phone hardware/profile/clocks, sensor counts, consecutive takes and 10–20-minute limits. |
+| [SA-61 · Processing and real Rerun](https://linear.app/hw-personal-projects/issue/SA-61/spike-android-h264-mcap-through-cpu-hands-and-the-real-rerun-web) | Thirteen protocol checks; synthetic 95-frame source remuxed into four IDR-safe clips with exact PTS/encoded VCL bytes/decoded pixels. Real self-hosted Rerun 0.41.0 WASM playback, forward/back seeking, overlays, missing-hand clearing and cleanup pass. Historical imagery is a separately labelled software transcode. [Harness and receipt](../../spikes/android/processing/README.md) | Fresh native hardware input from SA-60, representative hand quality, long-run limits and production web/storage integration. |
+| [SA-62 · Native auth and upload](https://linear.app/hw-personal-projects/issue/SA-62/spike-android-native-authentication-and-background-multipart-recovery) | Separate API34+ APK/test APK builds; lint has zero errors. Eleven named local control/recovery scenarios pass. Native engine and separate UIDT → HOME run passed on API35 emulator: 134,230,073 exact bytes, URL renewal, two PUTs/three chunks; direct engine also retried injected 503. [Harness and results](../../spikes/android/upload/README.md) | Physical lifecycle/constraints, real Google/Better Auth and TLS/provider qualification. UIDT test disabled charging requirement; pre-34 fallback remains future work. |
+
+All three tickets remain **In Progress** until their required evidence exists. Their descriptions contain current results and remaining checks. They respectively gate production [SA-51](https://linear.app/hw-personal-projects/issue/SA-51), [SA-24](https://linear.app/hw-personal-projects/issue/SA-24) and [SA-57](https://linear.app/hw-personal-projects/issue/SA-57). [Project receipt](../project-management/android-spike-receipt.json) records the actual tickets, device facts and full remote dependency verification.
+
+## Decisions already supported
+
+- Keep original Frame, CPU Image and Android-accessor timestamps separately. The emulator showed CPU Image time differed from camera SENSOR_TIMESTAMP on all 30 frames. Use same-Frame metadata under documented REALTIME clock rules, tolerate finite startup unavailability, and never infer equality from proximity. Native depth clock/calibration remain unqualified.
+- Keep the hardware encoder candidate explicit: native 1920×1080, requested 30 Hz, H.264 Main/4.0, 12 Mb/s and one-second IDR. Unsupported capability must fail visibly; compilation does not qualify it.
+- The mixed-schema generic MCAP → CPU hands → IDR-safe MP4/RRD route works on controlled input. Reuse these narrow adapters after review rather than adopting an entire external pipeline.
+- Native upload renewal can run without Dart. Local fixture success establishes protocol behavior; actual Google login, secure production cookies, R2 and OS scheduling each need their own evidence.
+
+## How to reproduce and interpret evidence
+
+Use each harness's README for pinned build/run commands. Capture starts only after an intentional user action. Raw recordings, images, local fixture data, APKs and caches stay in ignored local directories; tracked receipts retain non-sensitive versions, counts and hashes. A local synthetic fixture, a historical image transcode, an emulator and a fresh physical recording are distinct evidence types.
+
+The available device is a Pixel 9 Pro XL running Android 17/API37 over wireless ADB. Do not toggle Wi-Fi automatically during tests. Its first user-started H.264 attempt closed as failed: zero RGB frames, 73 accel/72 gyro callbacks, 1.056 seconds, 87,139-byte MCAP with matching phone/local SHA-256. It cannot establish capture quality or long-run readiness. Upload tests use synthetic data and an isolated fixture.
+
+The initial unscoped install also installed a copy in the managed profile. Android reported it unlaunched and camera-unpermitted there; that copy was removed and absence verified. **Permanent rules now require explicit verified personal-profile targeting and simulation before user testing**, in both global instructions and [project AGENTS.md](../../AGENTS.md). Current capture build B is installed only in personal user0; Work user10 contains no spike app. Further camera work starts from the migrated Stera app, which is our temporary source, not another engineer's checkout.
+
+Production implementation still follows the [mobile design](../components/mobile-app-implementation.md), [capture contract](../components/capture-format.md) and [upload contract](../components/mcap-upload.md). These experimental harnesses do not freeze production schemas, replace the Flutter bridge or complete signed-device qualification. iOS work remains separately planned.

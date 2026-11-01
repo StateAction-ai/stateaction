@@ -1,0 +1,109 @@
+{
+  "recordedAt": "2026-11-01T03:18:09.168502+00:00",
+  "clientDate": "2026-10-31",
+  "deviceKind": "Android emulator",
+  "api": 35,
+  "executionMode": "uidt",
+  "result": "PASS",
+  "realGoogle": false,
+  "realBetterAuth": false,
+  "realProvider": false,
+  "chargingPolicyOverride": true,
+  "unmeteredOnly": true,
+  "homeAfterStart": true,
+  "journal": {
+    "schema": "stateaction.upload.spike.v1",
+    "simulatedSource": true,
+    "ownerId": "synthetic-a",
+    "clientRecordingId": "164dd4a4-8f2d-454f-bdc9-234c8eb04606",
+    "clientUploadId": "b372b859-cfd4-40c9-84bc-81e5f445f80b",
+    "sourceName": "synthetic-source.bin",
+    "sizeBytes": "134230073",
+    "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be",
+    "sourceModifiedMs": "1793503069928",
+    "transportEpoch": 1,
+    "state": "uploaded",
+    "receipts": {
+      "2": {
+        "partNumber": 2,
+        "etag": "\"f0876ba3b091f36ba31de6846822974b\"",
+        "sizeBytes": "67108864"
+      },
+      "3": {
+        "partNumber": 3,
+        "etag": "\"c6ac64a436080b7a90524f32fc35f392\"",
+        "sizeBytes": "12345"
+      },
+      "1": {
+        "partNumber": 1,
+        "etag": "\"f0876ba3b091f36ba31de6846822974b\"",
+        "sizeBytes": "67108864"
+      }
+    },
+    "attempts": {
+      "1": 2,
+      "2": 1,
+      "3": 1
+    },
+    "metrics": {
+      "reconciliations": 1,
+      "maxTemporaryBytes": 134230073,
+      "maxActivePuts": 2,
+      "maxTemporaryChunks": 3,
+      "expiredUrlRenewals": 1,
+      "apiCompletions": 1
+    },
+    "reason": "fixture_sha256_verified_not_provider_qualification",
+    "updatedAtMs": "1793503085044",
+    "executionMode": "uidt",
+    "jobStartedAtMs": "1793503071505",
+    "fileId": "6219e6b8-c88c-4665-9d06-bfe59702ec1c",
+    "partCount": 3,
+    "retryAfterMs": {
+      "1": "1793503076604",
+      "2": "1793503073152",
+      "3": "1793503081926"
+    },
+    "expiryInjected": true
+  },
+  "fixture": {
+    "simulated": true,
+    "auth": "synthetic_only",
+    "provider": "local_files_not_s3",
+    "counters": {
+      "session_rotations": 11,
+      "reconciliations": 1,
+      "sign_requests": 4,
+      "expired_urls": 1,
+      "provider_puts": 3,
+      "receipt_batches": 3,
+      "api_completions": 1
+    }
+  },
+  "schedulerEvidence": [
+    "JOB #u0a212/6201: 9cd81d1 ai.stateaction.spike.upload/.UploadJobService",
+    "u0a212 tag=*job*/ai.stateaction.spike.upload/.UploadJobService",
+    "Service: ai.stateaction.spike.upload/.UploadJobService",
+    "Requires: charging=false batteryNotLow=false deviceIdle=false",
+    "Network upload bytes: 134230073",
+    "Required constraints: CONNECTIVITY [0x10000000]",
+    "Satisfied constraints: CONNECTIVITY FLEXIBILITY DEVICE_NOT_DOZING BACKGROUND_NOT_RESTRICTED WITHIN_QUOTA [0x13600000]",
+    "-6s725ms   START: #u0a212/6201 ai.stateaction.spike.upload/.UploadJobService",
+    "Slot #0(ID=16911801): 9cd81d1 #u0a212/6201 ai.stateaction.spike.upload/.UploadJobService",
+    "userInitiatedApproved: true (started as UIJ: true)",
+    "Started with foreground flag: true"
+  ],
+  "notTested": [
+    "physical_phone",
+    "lock_doze",
+    "task_manager_stop",
+    "process_kill_resume",
+    "charging_constraint",
+    "network_loss",
+    "google_better_auth",
+    "minio_r2",
+    "pre34_workmanager",
+    "1000_parts",
+    "two_hour_volume"
+  ]
+}

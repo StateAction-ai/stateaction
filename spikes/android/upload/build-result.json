@@ -1,0 +1,34 @@
+{
+  "recordedAt": "2026-11-01T03:19:01.450310+00:00",
+  "clientDate": "2026-10-31",
+  "package": "ai.stateaction.spike.upload",
+  "minSdk": 34,
+  "compileSdk": 35,
+  "targetSdk": 35,
+  "agp": "8.12.1",
+  "gradle": "8.14",
+  "java": "21.0.12.1",
+  "build": "PASS",
+  "lint": {
+    "status": "PASS",
+    "errors": 0,
+    "warnings": 25
+  },
+  "artifacts": [
+    {
+      "path": "app/build/outputs/apk/debug/app-debug.apk",
+      "bytes": 115945,
+      "sha256": "d23233450498aac667b2e6ff44271f5321190d40225b69085b34613fbde5d757"
+    },
+    {
+      "path": "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+      "bytes": 15566,
+      "sha256": "9bd8f8ba7d870025ce8f5e6d32560ea73d201c2e10d391917c5c05f1b4e91bd4"
+    }
+  ],
+  "nativeExecution": "PASS_API35_EMULATOR_DIRECT_ENGINE_AND_UIDT_HOME",
+  "physicalUidt": "PENDING_ROOT_COORDINATED_TEST",
+  "actualGoogleBetterAuth": "PENDING",
+  "actualProvider": "PENDING",
+  "pre34WorkManager": "NOT_IMPLEMENTED"
+}

@@ -90,7 +90,7 @@ RGB and depth MCAP **log time identifies the acquiring ARCore frame event**;
 their headers and publish times retain their respective native image times. This matters because native depth times
 can repeat. The reader selects the exact acquisition payload, rejects unsupported
 contracts and exposes timing failures. The detailed
-[capture contract](../stera-app/packages/stera_recorder/android/CAPTURE_GEOMETRY.md)
+[capture contract](../packages/stera_recorder/android/CAPTURE_GEOMETRY.md)
 documents these conventions.
 
 The [new runner](../scripts/process_geometry_capture.py) preserves raw hand

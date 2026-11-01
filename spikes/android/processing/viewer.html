@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>StateAction Android processing spike — actual Rerun viewer</title>
+<style>
+  body { margin: 0; background: #111827; color: #e5e7eb; font: 14px system-ui; }
+  header { padding: 12px 16px; }
+  #viewer { height: calc(100vh - 65px); }
+</style>
+<header>Local interoperability spike · Rerun 0.41.0 · synthetic/derived evidence only</header>
+<div id="viewer"></div>
+<script type="module">
+  import { WebViewer } from "./node_modules/@rerun-io/web-viewer/index.js";
+  const telemetry = window.telemetry = { errors: [], decoded: [], configs: [], decodeCalls: 0, ready: false };
+  window.addEventListener("error", e => telemetry.errors.push(String(e.error || e.message)));
+  window.addEventListener("unhandledrejection", e => telemetry.errors.push(String(e.reason)));
+  if (window.VideoDecoder) {
+    const Native = window.VideoDecoder;
+    // Observe the actual decoder used by Rerun, without substituting frames.
+    window.VideoDecoder = class extends Native {
+      constructor(options) {
+        super({ ...options, output(frame) {
+          telemetry.decoded.push({timestamp: frame.timestamp, width: frame.codedWidth, height: frame.codedHeight});
+          options.output(frame);
+        }, error(error) { telemetry.errors.push(String(error)); options.error(error); } });
+      }
+      configure(config) { telemetry.configs.push(config); return super.configure(config); }
+      decode(chunk) { telemetry.decodeCalls += 1; return super.decode(chunk); }
+    };
+  }
+  const file = new URL(location.href).searchParams.get("file") || "artifacts/synthetic-v2/clip-001/viewer.rrd";
+  window.viewer = new WebViewer();
+  await window.viewer.start(new URL(file, location.href).href, document.getElementById("viewer"), {
+    width: "100%", height: "100%", render_backend: "webgl", theme: "dark",
+    hide_welcome_screen: true, check_for_updates_on_startup: false, memory_limit: "512MB"
+  });
+  telemetry.ready = true;
+  window.seekNs = async ns => window.viewer.set_time({timeline: "clip_time", duration_nanos: BigInt(ns), play_state: "paused"});
+  window.snapshotEvidence = async () => ({telemetry, state: await viewer.get_state(),
+    schema: await viewer.get_recording_schema({max_entities: 100}), logs: await viewer.get_logs()});
+  window.safeJson = value => JSON.stringify(value, (_, v) => typeof v === "bigint" ? v.toString() : v);
+</script>

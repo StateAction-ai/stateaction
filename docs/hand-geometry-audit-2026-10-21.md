@@ -29,10 +29,10 @@ The Android recorder saves display-transformed GPU RGB, but logs unrotated CPU-i
 
 Relevant source:
 
-- [ArRecorderImpl.kt](../stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/ArRecorderImpl.kt#L380): sets display geometry and computes transformed texture UVs.
-- [RecordingFrameOrchestrator.kt](../stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingFrameOrchestrator.kt#L145): uses those UVs to render saved JPEGs.
-- [ArFrameProcessorImpl.kt](../stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessorImpl.kt#L312): uses `camera.imageIntrinsics` for calibration.
-- [SessionLifecycleManager.kt](../stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/SessionLifecycleManager.kt#L28): preview and configured recording dimensions are equal. A differing preview aspect ratio is not the explanation for this capture.
+- [ArRecorderImpl.kt](../packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/ArRecorderImpl.kt#L380): sets display geometry and computes transformed texture UVs.
+- [RecordingFrameOrchestrator.kt](../packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/coordination/RecordingFrameOrchestrator.kt#L145): uses those UVs to render saved JPEGs.
+- [ArFrameProcessorImpl.kt](../packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/ArFrameProcessorImpl.kt#L312): uses `camera.imageIntrinsics` for calibration.
+- [SessionLifecycleManager.kt](../packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/session/SessionLifecycleManager.kt#L28): preview and configured recording dimensions are equal. A differing preview aspect ratio is not the explanation for this capture.
 
 The saved capture does not retain the display rotation, per-frame UV mapping or GPU texture intrinsics needed to fully reconstruct and validate that chain.
 
@@ -46,7 +46,7 @@ Across all 135 hands, changing only that lookup orientation reduces median disag
 
 ## 3. The world transform and body assumptions are separate failures
 
-The recorder's fixed [optical transform](../stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt#L39) swaps optical X and Z. It maps optical forward onto physical-camera X, inconsistent with the ARCore physical-camera pose it records. An unrotated optical camera would instead use `diag(1,-1,-1)` to convert into ARCore's physical camera coordinates. The displayed JPEG's additional rotation must also be included; replacing the fixed matrix alone is insufficient.
+The recorder's fixed [optical transform](../packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/MCAPDatasetWriter.kt#L39) swaps optical X and Z. It maps optical forward onto physical-camera X, inconsistent with the ARCore physical-camera pose it records. An unrotated optical camera would instead use `diag(1,-1,-1)` to convert into ARCore's physical camera coordinates. The displayed JPEG's additional rotation must also be included; replacing the fixed matrix alone is insufficient.
 
 The body is inferred from a camera assumed to sit near the head, fixed torso dimensions and detected wrists. It is not measured full-body motion. A handheld phone provides no trustworthy torso location. Every detected arm in this capture exceeds the estimator's configured 0.60 m total reach. The [IK fallback](../stera-sdk/src/stera/models/skeleton/estimator.py#L92) leaves an unreachable wrist in place, yielding right forearms of **0.670 m median** against a configured 0.27 m. Those frames should be marked unreachable, not accepted as plausible body geometry.
 

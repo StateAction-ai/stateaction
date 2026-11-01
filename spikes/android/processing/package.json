@@ -1,0 +1,6 @@
+{
+  "name": "stateaction-android-processing-spike",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@rerun-io/web-viewer": "0.41.0" }
+}

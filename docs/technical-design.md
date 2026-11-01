@@ -69,7 +69,7 @@ This is a trusted-code pilot with human clip approval. Inline integrity checks e
 
 ## Build and prove locally first
 
-[Monorepo](components/monorepo.md) defines source/build ownership, including migration of the current mobile submodule after active recording fixes. [Local development](components/local-development.md) defines fake-provider tests, full local CPU end-to-end testing, optional local GPU substitution and the small cloud CPU canary. Changing executor/model profile must preserve the same task/output contracts.
+[Monorepo](components/monorepo.md) defines source/build ownership and the imported existing Flutter/native recorder. [Local development](components/local-development.md) defines fake-provider tests, full local CPU end-to-end testing, optional local GPU substitution and the small cloud CPU canary. Changing executor/model profile must preserve the same task/output contracts.
 
 Build in the order in [implementation milestones](implementation-plan.md). Before field use, prove device login, interrupted two-hour upload, bounded long-recording processing, useful hand overlays on real repair footage, dataset assignment, staff approval and authorized customer viewing. Complete customer download/checksums are a follow-up dataset-version gate. Local tests do not establish Modal/R2 production behavior; qualify those on a bounded CPU canary before spending on cloud GPUs.
 

@@ -1,0 +1,80 @@
+{
+  "recordedAt": "2026-11-01T03:17:26.686660+00:00",
+  "clientDate": "2026-10-31",
+  "deviceKind": "Android emulator",
+  "api": 35,
+  "executionMode": "direct_native_engine_not_uidt",
+  "result": "PASS",
+  "realGoogle": false,
+  "realBetterAuth": false,
+  "realProvider": false,
+  "journal": {
+    "schema": "stateaction.upload.spike.v1",
+    "simulatedSource": true,
+    "ownerId": "synthetic-a",
+    "clientRecordingId": "f4d023cf-5cee-44d5-a29d-36dec7f574a5",
+    "clientUploadId": "26dedf5b-a794-4012-b241-ff53d110d846",
+    "sourceName": "synthetic-source.bin",
+    "sizeBytes": "134230073",
+    "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be",
+    "sourceModifiedMs": "1793502978656",
+    "transportEpoch": 1,
+    "state": "uploaded",
+    "receipts": {
+      "2": {
+        "partNumber": 2,
+        "etag": "\"f0876ba3b091f36ba31de6846822974b\"",
+        "sizeBytes": "67108864"
+      },
+      "3": {
+        "partNumber": 3,
+        "etag": "\"c6ac64a436080b7a90524f32fc35f392\"",
+        "sizeBytes": "12345"
+      },
+      "1": {
+        "partNumber": 1,
+        "etag": "\"f0876ba3b091f36ba31de6846822974b\"",
+        "sizeBytes": "67108864"
+      }
+    },
+    "attempts": {
+      "1": 2,
+      "2": 2,
+      "3": 1
+    },
+    "metrics": {
+      "reconciliations": 1,
+      "maxTemporaryBytes": 134230073,
+      "maxActivePuts": 2,
+      "maxTemporaryChunks": 3,
+      "providerRetries": 1,
+      "expiredUrlRenewals": 1,
+      "apiCompletions": 1
+    },
+    "reason": "fixture_sha256_verified_not_provider_qualification",
+    "updatedAtMs": "1793503025095",
+    "fileId": "2b5b6287-fe65-4831-8989-50259b53f787",
+    "partCount": 3,
+    "retryAfterMs": {
+      "1": "1793503015742",
+      "2": "1793503014105",
+      "3": "1793503023202"
+    },
+    "expiryInjected": true
+  },
+  "fixture": {
+    "simulated": true,
+    "auth": "synthetic_only",
+    "provider": "local_files_not_s3",
+    "counters": {
+      "session_rotations": 15,
+      "reconciliations": 1,
+      "sign_requests": 5,
+      "injected_part_failure": 1,
+      "expired_urls": 1,
+      "provider_puts": 3,
+      "receipt_batches": 3,
+      "api_completions": 1
+    }
+  }
+}

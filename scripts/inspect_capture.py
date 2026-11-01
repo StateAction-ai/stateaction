@@ -466,7 +466,7 @@ def main():
         if path.exists() and sha256(path) != raw_hashes[path.name]["sha256"]:
             raise ValueError(f"raw input changed: {path}")
     provenance_paths = [Path(__file__).resolve(), root / "requirements-inspection.txt", compat]
-    source_dir = root / "stera-app/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder"
+    source_dir = root / "packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder"
     provenance_paths += [source_dir / relative for relative in (
         "coordination/RecordingFrameOrchestrator.kt", "coordination/MetadataAssembler.kt",
         "sensors/ImuCollectorImpl.kt", "data/CDRSerializer.kt", "data/MCAPDatasetWriter.kt")]
@@ -475,8 +475,8 @@ def main():
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "session": str(session), "raw_inputs": raw_hashes, "raw_inputs_unchanged_after_processing": True,
         "provenance": {str(p.relative_to(root)): sha256(p) for p in provenance_paths},
-        "repository_commits": {name: run(["git", "-C", str(root / name), "rev-parse", "HEAD"]).strip()
-                               for name in ("stera-app", "stera-sdk")},
+        "repository_commits": {"monorepo": run(["git", "-C", str(root), "rev-parse", "HEAD"]).strip(),
+                               "stera-sdk": run(["git", "-C", str(root / "stera-sdk"), "rev-parse", "HEAD"]).strip()},
         "dependencies": {name: version(name) for name in ("mcap", "mcap-ros2-support", "numpy", "Pillow", "lz4", "zstandard")},
         "inspection": {"scope": "all MCAP messages; all JPEG/depth payloads; all camera/trajectory/TF poses",
             "actual_message_count": all_count, "decoded_message_count": decoded_count, "decode_errors": len(errors),
