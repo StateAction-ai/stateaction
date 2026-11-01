@@ -191,3 +191,37 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
     await db.close();
   }
 });
+
+test("the grant helper resets broad table grants and default ACLs for the app role", async () => {
+  const db = await freshDatabase();
+  try {
+    await db.owner.query(
+      "GRANT ALL ON ALL TABLES IN SCHEMA public TO stateaction_app",
+    );
+    await db.owner.query(
+      "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO stateaction_app",
+    );
+    await db.owner.query(
+      "ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO stateaction_app",
+    );
+    await db.owner.query(
+      "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO stateaction_app",
+    );
+    await migrateDatabase({ ownerUrl: db.ownerUrl });
+    const acl = await db.owner.query(
+      "SELECT defaclobjtype, defaclacl::text FROM pg_default_acl WHERE defaclacl::text LIKE '%stateaction_app=%'",
+    );
+    assert.deepEqual(acl.rows, []);
+    await db.owner.query("CREATE TABLE releases_probe (id int)");
+    const app = new pg.Client({ connectionString: db.appUrl });
+    await app.connect();
+    try {
+      await expectCode(app.query("SELECT * FROM releases_probe"), "42501");
+      await expectCode(app.query("DELETE FROM reviews"), "42501");
+    } finally {
+      await app.end();
+    }
+  } finally {
+    await db.close();
+  }
+});

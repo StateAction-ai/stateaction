@@ -227,7 +227,8 @@ export async function reserveSourceFile(
   function reserve() {
     return inTransaction(pool, async (tx) => {
       const owner = await tx.query(
-        "SELECT 1 FROM recordings WHERE id = $1 AND owner_user_id = $2 AND deleted_at IS NULL",
+        // Lock first: seal and concurrent reservations serialize on the recording.
+        "SELECT 1 FROM recordings WHERE id = $1 AND owner_user_id = $2 AND deleted_at IS NULL FOR UPDATE",
         [input.recordingId, input.ownerUserId],
       );
       if (!owner.rowCount)
@@ -292,49 +293,55 @@ export async function recordFileCompleted(
   });
 }
 
-/** Seal pins the completed source_manifest; every required source must be closed. */
+/**
+ * Seal freezes the declared v1 source inventory (one manifest, one required
+ * MCAP, >= 1 required recorder_metadata) and pins the manifest's declared
+ * SHA-256. Upload completion may arrive before or after seal; job admission
+ * requires every required file to be completed. An identical replay returns
+ * the existing seal; a different manifest conflicts.
+ */
 export async function sealRecording(
   pool: Queryable,
   input: { recordingId: string; ownerUserId: string; manifestFileId: string },
 ) {
   return inTransaction(pool, async (tx) => {
-    const { rows } = await tx.query<{ status: string }>(
-      "SELECT status FROM recordings WHERE id = $1 AND owner_user_id = $2 FOR UPDATE",
+    const { rows } = await tx.query<{
+      status: string;
+      manifest: string | null;
+    }>(
+      "SELECT status, source_manifest_file_id AS manifest FROM recordings WHERE id = $1 AND owner_user_id = $2 FOR UPDATE",
       [input.recordingId, input.ownerUserId],
     );
-    if (!rows[0]) throw new CatalogError("not_found", "Recording not found");
-    const open = await tx.query(
-      `SELECT 1 FROM files WHERE recording_id = $1 AND purpose = 'source' AND required
-         AND state NOT IN ('completed', 'verified', 'cancelled', 'failed', 'expired')`,
-      [input.recordingId],
-    );
-    if (open.rowCount)
+    const recording = rows[0];
+    if (!recording) throw new CatalogError("not_found", "Recording not found");
+    if (recording.manifest !== null) {
+      if (recording.manifest === input.manifestFileId)
+        return { replayed: true };
       throw new CatalogError(
         "conflict",
-        "Required source files are not completed",
+        "Recording is sealed with another manifest",
       );
-    const closed = await tx.query<{ role: string; n: number }>(
-      `SELECT role, count(*)::int AS n FROM files
-       WHERE recording_id = $1 AND role IN ('source_manifest', 'source_mcap') AND state IN ('completed', 'verified')
-       GROUP BY role`,
+    }
+    const inventory = await tx.query<{ ok: boolean }>(
+      "SELECT catalog_source_inventory_ok($1, false) AS ok",
       [input.recordingId],
     );
-    const count = (role: string) =>
-      closed.rows.find((r) => r.role === role)?.n ?? 0;
-    if (count("source_manifest") !== 1 || count("source_mcap") !== 1)
+    if (!inventory.rows[0]?.ok)
       throw new CatalogError(
         "conflict",
-        "A v1 seal needs exactly one completed source manifest and one MCAP",
+        "A v1 seal needs one source manifest, one required MCAP and required recorder metadata",
       );
     const { rowCount } = await tx.query(
       `UPDATE recordings r SET status = 'sealed', source_manifest_file_id = f.id, source_manifest_sha256 = f.sha256
        FROM files f
        WHERE r.id = $1 AND f.id = $2 AND f.recording_id = r.id AND f.role = 'source_manifest'
+         AND f.state NOT IN ('cancelled', 'failed', 'expired')
          AND r.status IN ('registered', 'uploading')`,
       [input.recordingId, input.manifestFileId],
     );
     if (!rowCount)
       throw new CatalogError("conflict", "Recording cannot be sealed");
+    return { replayed: false };
   });
 }
 
@@ -359,6 +366,15 @@ export async function createProcessingJob(
     );
     if (!rows[0]?.sha)
       throw new CatalogError("conflict", "Recording is not sealed");
+    const ready = await tx.query<{ ok: boolean }>(
+      "SELECT catalog_source_inventory_ok($1, true) AS ok",
+      [input.recordingId],
+    );
+    if (!ready.rows[0]?.ok)
+      throw new CatalogError(
+        "conflict",
+        "Required source files are not all completed",
+      );
     if ((input.previousJobId ?? null) !== rows[0].current)
       throw new CatalogError("conflict", "Stale current job reference");
     await tx.query(
@@ -839,39 +855,50 @@ export async function listDatasetClips(
   }
 }
 
-/** Datasets visible to the viewer with distinct approved clip count/duration. */
-export async function listDatasets(
-  pool: Queryable,
-  input: { viewerUserId: string; limit?: number },
-) {
-  const limit = pageSize(input.limit);
-  const { rows } = await pool.query<{
-    id: string;
-    name: string;
-    revision: number;
-    clip_count: string;
-    duration_ns: string;
-  }>(
-    `SELECT d.id, d.name, d.revision, s.clip_count::text, s.duration_ns::text
+/**
+ * Datasets visible to the viewer with distinct approved clip count/duration,
+ * keyset-paginated by (created_at, id). Counts aggregate the members of the
+ * returned page only (index lookups per member).
+ */
+export const LIST_DATASETS_SQL = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.duration_ns::text,
+       ${TS.replace("%s", "d.created_at")} AS ts
      FROM datasets d
      CROSS JOIN LATERAL (
        SELECT count(*) AS clip_count, coalesce(sum(c.duration_ns), 0) AS duration_ns
        FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id
        WHERE dc.dataset_id = d.id AND catalog_latest_decision(dc.clip_id) = 'approved'
      ) s
-     WHERE catalog_has_role($1, 'staff') OR (
+     WHERE (catalog_has_role($1, 'staff') OR (
        catalog_has_role($1, 'customer') AND EXISTS (
-         SELECT 1 FROM dataset_access da WHERE da.dataset_id = d.id AND da.user_id = $1 AND da.enabled))
-     ORDER BY d.created_at DESC, d.id DESC LIMIT $2`,
-    [input.viewerUserId, limit],
-  );
-  return rows.map((r) => ({
+         SELECT 1 FROM dataset_access da WHERE da.dataset_id = d.id AND da.user_id = $1 AND da.enabled)))
+       AND ($2::timestamptz IS NULL OR (d.created_at, d.id) < ($2::timestamptz, $3::uuid))
+     ORDER BY d.created_at DESC, d.id DESC LIMIT $4`;
+export async function listDatasets(
+  pool: Queryable,
+  input: { viewerUserId: string; cursor?: string; limit?: number },
+) {
+  const limit = pageSize(input.limit);
+  const [afterTs, afterId] = decodeCursor(input.cursor);
+  const { rows } = await pool.query<{
+    id: string;
+    name: string;
+    revision: number;
+    clip_count: string;
+    duration_ns: string;
+    ts: string;
+  }>(LIST_DATASETS_SQL, [input.viewerUserId, afterTs, afterId, limit + 1]);
+  const page = rows.slice(0, limit).map((r) => ({
     datasetId: r.id,
     name: r.name,
     revision: r.revision,
     clipCount: Number(r.clip_count),
     durationNs: r.duration_ns,
+    cursor: encodeCursor(r.ts, r.id),
   }));
+  return {
+    datasets: page,
+    nextCursor: rows.length > limit ? (page.at(-1)?.cursor ?? null) : null,
+  };
 }
 
 /** Staff All clips with latest review status; pending = no review yet. */

@@ -25,9 +25,10 @@ END $$;
 
 -- Transaction-scoped clip lock usable without UPDATE privilege on clips.
 CREATE FUNCTION catalog_lock_clip(clip uuid) RETURNS void
-LANGUAGE sql VOLATILE SET search_path = pg_catalog, public, pg_temp AS $$
-  SELECT pg_advisory_xact_lock(7430013, hashtext(clip::text));
-$$;
+LANGUAGE plpgsql VOLATILE SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(7430013, hashtext(clip::text));
+END $$;
 
 -- 1. access: operator-managed pilot roles.
 CREATE TABLE access (
@@ -42,11 +43,12 @@ CREATE TABLE access (
 CREATE INDEX access_role_enabled_idx ON access (role, user_id) WHERE enabled;
 
 CREATE FUNCTION catalog_has_role(member text, wanted text) RETURNS boolean
-LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
-  SELECT EXISTS (
+LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  RETURN (SELECT EXISTS (
     SELECT 1 FROM public.access WHERE user_id = member AND role = wanted AND enabled
-  );
-$$;
+  ));
+END $$;
 
 -- 2. recordings: immutable owner/client capture identity.
 CREATE TABLE recordings (
@@ -315,12 +317,29 @@ BEGIN
 END $$;
 
 CREATE FUNCTION catalog_file_is_closed(file uuid, wanted_role text) RETURNS boolean
-LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
-  SELECT EXISTS (
+LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  RETURN (SELECT EXISTS (
     SELECT 1 FROM public.files
     WHERE id = file AND role = wanted_role AND state IN ('completed', 'verified')
-  );
-$$;
+  ));
+END $$;
+
+-- v1 source inventory: one manifest, one required MCAP, at least one
+-- required recorder_metadata among live (not cancelled/failed/expired)
+-- source files. Seal freezes this inventory; completion may arrive in either
+-- order, and job admission additionally requires every required file closed.
+CREATE FUNCTION catalog_source_inventory_ok(rec uuid, require_completed boolean) RETURNS boolean
+LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  RETURN (SELECT count(*) FILTER (WHERE role = 'source_manifest') = 1
+     AND count(*) FILTER (WHERE role = 'source_mcap' AND required) = 1
+     AND count(*) FILTER (WHERE role = 'recorder_metadata' AND required) >= 1
+     AND (NOT require_completed
+          OR coalesce(bool_and(state IN ('completed', 'verified')) FILTER (WHERE required), true))
+  FROM public.files
+  WHERE recording_id = rec AND purpose = 'source' AND state NOT IN ('cancelled', 'failed', 'expired'));
+END $$;
 
 CREATE FUNCTION recordings_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
@@ -341,12 +360,20 @@ BEGIN
        IS DISTINCT FROM (OLD.source_manifest_file_id, OLD.source_manifest_sha256) THEN
       PERFORM public.catalog_raise('SAC01', 'sealed source manifest is immutable');
     END IF;
+    -- A seal is final: the source inventory never reopens.
+    IF OLD.source_manifest_file_id IS NOT NULL AND NEW.status IN ('registered', 'uploading') THEN
+      PERFORM public.catalog_raise('SAC04', 'a sealed recording cannot return to upload states');
+    END IF;
     NEW.updated_at := now();
   END IF;
   IF NEW.source_manifest_file_id IS NOT NULL
      AND (TG_OP = 'INSERT' OR OLD.source_manifest_file_id IS NULL)
-     AND NOT public.catalog_file_is_closed(NEW.source_manifest_file_id, 'source_manifest') THEN
-    PERFORM public.catalog_raise('SAC04', 'source manifest must be a completed source_manifest file');
+     AND (NOT EXISTS (
+            SELECT 1 FROM public.files
+            WHERE id = NEW.source_manifest_file_id AND role = 'source_manifest'
+              AND state NOT IN ('cancelled', 'failed', 'expired'))
+          OR NOT public.catalog_source_inventory_ok(NEW.id, false)) THEN
+    PERFORM public.catalog_raise('SAC04', 'seal needs a live source_manifest and a complete v1 source inventory');
   END IF;
   RETURN NEW;
 END $$;
@@ -362,14 +389,17 @@ BEGIN
     IF NEW.state <> 'reserved' OR NEW.transport_epoch <> 1 THEN
       PERFORM public.catalog_raise('SAC04', 'files start reserved at transport epoch 1');
     END IF;
+    -- Lock and recheck the parent: a concurrent seal/acceptance holds it
+    -- FOR UPDATE, so this waits and then sees the committed state.
     IF NEW.purpose = 'source' THEN
-      SELECT status INTO parent_state FROM public.recordings WHERE id = NEW.recording_id;
-      IF parent_state NOT IN ('registered', 'uploading') THEN
+      SELECT status INTO parent_state FROM public.recordings
+      WHERE id = NEW.recording_id AND source_manifest_file_id IS NULL FOR SHARE;
+      IF parent_state IS NULL OR parent_state NOT IN ('registered', 'uploading') THEN
         PERFORM public.catalog_raise('SAC04', 'recording no longer accepts source files');
       END IF;
     ELSE
-      SELECT state INTO parent_state FROM public.jobs WHERE id = NEW.job_id;
-      IF parent_state NOT IN ('running', 'result_pending') THEN
+      SELECT state INTO parent_state FROM public.jobs WHERE id = NEW.job_id FOR SHARE;
+      IF parent_state IS NULL OR parent_state NOT IN ('running', 'result_pending') THEN
         PERFORM public.catalog_raise('SAC04', 'job no longer accepts output files');
       END IF;
     END IF;
@@ -419,6 +449,9 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     IF NEW.state <> 'queued' OR NEW.result_manifest_file_id IS NOT NULL THEN
       PERFORM public.catalog_raise('SAC04', 'jobs start queued without a result');
+    END IF;
+    IF NOT public.catalog_source_inventory_ok(NEW.recording_id, true) THEN
+      PERFORM public.catalog_raise('SAC04', 'every required source file must be completed before processing');
     END IF;
     RETURN NEW;
   END IF;
@@ -473,9 +506,10 @@ CREATE TRIGGER clips_immutable BEFORE UPDATE OR DELETE ON clips
   FOR EACH ROW EXECUTE FUNCTION catalog_forbid_change();
 
 CREATE FUNCTION catalog_latest_decision(clip uuid) RETURNS text
-LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
-  SELECT decision FROM public.reviews WHERE clip_id = clip ORDER BY revision DESC LIMIT 1;
-$$;
+LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  RETURN (SELECT decision FROM public.reviews WHERE clip_id = clip ORDER BY revision DESC LIMIT 1);
+END $$;
 
 CREATE FUNCTION reviews_insert_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
@@ -570,6 +604,12 @@ BEGIN
   IF NOT public.catalog_has_role(p_actor_user_id, 'staff') THEN
     PERFORM public.catalog_raise('SAC05', 'only enabled staff may change dataset access');
   END IF;
+  -- Grants are independent of membership revisions; the dataset row lock
+  -- serializes them with membership writes (lock order step 2, no clip locks).
+  PERFORM 1 FROM public.datasets WHERE id = p_dataset_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'dataset not found';
+  END IF;
   IF p_enabled AND NOT public.catalog_has_role(p_user_id, 'customer') THEN
     PERFORM public.catalog_raise('SAC05', 'dataset access is granted to enabled customers');
   END IF;
@@ -592,6 +632,14 @@ DECLARE
   t text;
 BEGIN
   EXECUTE format('REVOKE CREATE ON SCHEMA public FROM %I', app_role);
+  -- Future objects never inherit app privileges (resets broad default ACLs).
+  EXECUTE format('ALTER DEFAULT PRIVILEGES REVOKE ALL ON TABLES FROM %I', app_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES REVOKE ALL ON SEQUENCES FROM %I', app_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES REVOKE ALL ON FUNCTIONS FROM %I', app_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', app_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', app_role);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', app_role);
+  EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', app_role);
   -- No TEMP objects for the web role: they could shadow catalog relations.
   IF (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()) = current_user THEN
     EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());

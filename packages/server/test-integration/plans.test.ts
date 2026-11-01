@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
-import { createDataset, setDatasetAccess } from "../src/catalog/catalog.js";
+import {
+  LIST_DATASETS_SQL,
+  createDataset,
+  setDatasetAccess,
+} from "../src/catalog/catalog.js";
 import {
   createActors,
   freshDatabase,
@@ -61,6 +65,8 @@ before(async () => {
     "UPDATE files SET state = 'completed', observed_size_bytes = size_bytes, completed_at = now() WHERE job_id = $1 AND state = 'reserved'",
     [p.jobId],
   );
+  // Fresh statistics so the fixture's own bulk join is planned sanely.
+  await db.owner.query("ANALYZE files");
   await db.owner.query(
     "UPDATE jobs SET state = 'result_pending' WHERE id = $1",
     [p.jobId],
@@ -97,6 +103,22 @@ before(async () => {
      WHERE job_id = $3 AND decision = 'approved' AND random() < 0.5`,
     [datasetId, actors.staff, p.jobId],
   );
+  for (let i = 0; i < 40; i++)
+    await createDataset(db.app, {
+      datasetId: randomUUID(),
+      name: `Extra ${i}`,
+      actorUserId: actors.staff,
+    });
+  // Spread the remaining approved clips over the extra datasets.
+  await db.owner.query(
+    `WITH ds AS (SELECT id, row_number() OVER (ORDER BY id) - 1 AS k FROM datasets WHERE name LIKE 'Extra %'),
+          cand AS (SELECT clip_id, row_number() OVER (ORDER BY clip_id) AS n FROM reviews
+                   WHERE job_id = $1 AND decision = 'approved'
+                     AND clip_id NOT IN (SELECT clip_id FROM dataset_clips))
+     INSERT INTO dataset_clips (dataset_id, clip_id, added_by)
+     SELECT ds.id, cand.clip_id, $2 FROM cand JOIN ds ON ds.k = cand.n % 40`,
+    [p.jobId, actors.staff],
+  );
   await db.owner.query("ANALYZE");
 });
 after(() => db.close());
@@ -132,6 +154,16 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
        ORDER BY c.created_at DESC, c.id DESC LIMIT 25`,
       [],
     ],
+    customerDatasetList: [LIST_DATASETS_SQL, [actors.customer, null, null, 25]],
+    staffDatasetListAfterCursor: [
+      LIST_DATASETS_SQL,
+      [
+        actors.staff,
+        new Date().toISOString(),
+        "ffffffff-ffff-4fff-bfff-ffffffffffff",
+        25,
+      ],
+    ],
     latestReview: [
       "SELECT decision FROM reviews WHERE clip_id = (SELECT id FROM clips ORDER BY created_at LIMIT 1) ORDER BY revision DESC LIMIT 1",
       [],
@@ -156,7 +188,7 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
     assert.deepEqual(
       seq.map((n) => n["Relation Name"]),
       [],
-      `${name} must not scan whole catalog tables`,
+      `${name} must not scan whole catalog tables: ${seq.map((n) => n["Relation Name"]).join(",")}`,
     );
     assert.ok(
       nodes.some((n) => n["Node Type"] === "Limit"),

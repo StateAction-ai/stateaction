@@ -125,13 +125,31 @@ describe("local seed", () => {
         viewerUserId: SEED.users.customer.id,
       });
       assert.deepEqual(
-        customerDatasets.map((d) => [d.datasetId, d.clipCount, d.durationNs]),
+        customerDatasets.datasets.map((d) => [
+          d.datasetId,
+          d.clipCount,
+          d.durationNs,
+        ]),
         [[shared.id, 2, "16000000000"]],
       );
       const staffDatasets = await listDatasets(seedDb.app, {
         viewerUserId: SEED.users.staff.id,
       });
-      assert.equal(staffDatasets.length, 2);
+      assert.equal(staffDatasets.datasets.length, 2);
+      const first = await listDatasets(seedDb.app, {
+        viewerUserId: SEED.users.staff.id,
+        limit: 1,
+      });
+      const second = await listDatasets(seedDb.app, {
+        viewerUserId: SEED.users.staff.id,
+        limit: 1,
+        cursor: first.nextCursor!,
+      });
+      assert.deepEqual(
+        [...first.datasets, ...second.datasets].map((d) => d.datasetId),
+        staffDatasets.datasets.map((d) => d.datasetId),
+      );
+      assert.equal(second.nextCursor, null);
       await writeArtifact("seed-summary.json", {
         report,
         clips: all.clips,
@@ -379,10 +397,47 @@ describe("identity and logical uniqueness", () => {
       startedAt: new Date().toISOString(),
       device: { model: "m", osVersion: "1", appVersion: "a" },
     });
+    // Without its own v1 inventory the seal trigger refuses first.
     await expectCode(
       db.app.query(
         "UPDATE recordings SET source_manifest_file_id = $2, source_manifest_sha256 = $3, status = 'sealed' WHERE id = $1",
         [recordingId, ma.id, ma.sha256],
+      ),
+      "SAC04",
+    );
+    let own = "";
+    for (const role of [
+      "source_manifest",
+      "source_mcap",
+      "recorder_metadata",
+    ] as const) {
+      const fileId = randomUUID();
+      if (role === "source_manifest") own = fileId;
+      await reserveSourceFile(db.app, {
+        fileId,
+        recordingId,
+        ownerUserId: actors.collector,
+        clientUploadId: randomUUID(),
+        role,
+        sizeBytes: "10",
+        sha256: seedSha(fileId),
+        required: true,
+        partSizeBytes: "67108864",
+        partCount: 1,
+      });
+    }
+    // With a valid inventory, the composite FK still rejects another recording's manifest and a wrong digest.
+    await expectCode(
+      db.app.query(
+        "UPDATE recordings SET source_manifest_file_id = $2, source_manifest_sha256 = $3, status = 'sealed' WHERE id = $1",
+        [recordingId, ma.id, ma.sha256],
+      ),
+      "23503",
+    );
+    await expectCode(
+      db.app.query(
+        "UPDATE recordings SET source_manifest_file_id = $2, source_manifest_sha256 = $3, status = 'sealed' WHERE id = $1",
+        [recordingId, own, seedSha("wrong")],
       ),
       "23503",
     );
@@ -400,6 +455,21 @@ describe("identity and logical uniqueness", () => {
       "SAC01",
     );
     void mcap;
+    // A seal is final: no return to upload states, even for the owner.
+    await expectCode(
+      db.app.query(
+        "UPDATE recordings SET status = 'registered' WHERE id = $1",
+        [a.recordingId],
+      ),
+      "SAC04",
+    );
+    await expectCode(
+      db.owner.query(
+        "UPDATE recordings SET status = 'uploading' WHERE id = $1",
+        [a.recordingId],
+      ),
+      "SAC04",
+    );
     // Sealed recordings accept no more source files.
     await expectCode(
       reserveSourceFile(db.app, {

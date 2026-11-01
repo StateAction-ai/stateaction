@@ -135,7 +135,11 @@ export async function processedRecording(
     device: { model: "emulator", osVersion: "16", appVersion: "test" },
   });
   let manifestFileId = "";
-  for (const role of ["source_manifest", "source_mcap"] as const) {
+  for (const role of [
+    "source_manifest",
+    "source_mcap",
+    "recorder_metadata",
+  ] as const) {
     const fileId = randomUUID();
     if (role === "source_manifest") manifestFileId = fileId;
     await reserveSourceFile(app, {
