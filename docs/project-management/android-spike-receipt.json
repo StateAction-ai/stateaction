@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "in-progress; physical capture failed; monorepo migration first",
+  "status": "local and emulator evidence recorded; source import complete; full capture/hardware/auth/provider qualification remains open",
   "scope": "Android-only feasibility spikes; physical, emulator, synthetic and replay-derived evidence remain distinct.",
   "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
   "issues": {
@@ -1859,7 +1859,8 @@
           "name": "M0 \u00b7 Reproducible foundations"
         }
       }
-    ]
+    ],
+    "statusSnapshotNote": "Topology fully read before final status updates; latest issue states are in finalIssueReadback. No dependency mutations followed topology verification."
   },
   "profileIsolation": {
     "personalUserId": 0,
@@ -1888,7 +1889,8 @@
     "sourceHistoryBundleSha256": "1d80be38c385adb96d44909bab59a48d4d4a463ab890036c902186ed5eb1a49c",
     "sourceHistoryBundleBytes": 12393820,
     "sourceImportReceipt": "docs/validation/mobile-source-import.json",
-    "status": "source integrated; 191 tests and two Android APK builds passed"
+    "status": "committed; SA-10 Done",
+    "commit": "f0945cf"
   },
   "verification": {
     "changedMarkdownFiles": 30,
@@ -1898,5 +1900,150 @@
     "importedSourceDeltaWhitespaceCheck": "passed against original source; inherited source whitespace retained",
     "privateOrGeneratedFilesStaged": false,
     "intentionalExistingSyntheticMcapFixture": "apps/mobile/test/fixtures/mcap/native_cpu_v3.mcap"
-  }
+  },
+  "finalIssueReadback": [
+    {
+      "id": "SA-10",
+      "status": "Done",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-10/migrate-the-mobile-app-and-native-recorder-into-the-monorepo-safely",
+      "commitMentioned": true,
+      "migrationDone": true,
+      "hardwareStillPending": null,
+      "relations": {
+        "blocks": [
+          {
+            "id": "SA-58",
+            "title": "Fix iOS native retry loops and background completion lifecycle"
+          },
+          {
+            "id": "SA-57",
+            "title": "Implement durable Android background multipart uploads"
+          },
+          {
+            "id": "SA-55",
+            "title": "Preserve available depth, confidence and honest sensor provenance"
+          },
+          {
+            "id": "SA-54",
+            "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB"
+          },
+          {
+            "id": "SA-53",
+            "title": "Preserve independent raw IMU events and original sensor clocks"
+          },
+          {
+            "id": "SA-52",
+            "title": "Implement iOS hardware H.264 frame messages in MCAP"
+          },
+          {
+            "id": "SA-51",
+            "title": "Implement Android hardware H.264 frame messages in MCAP"
+          },
+          {
+            "id": "SA-17",
+            "title": "Integrate mobile login and immutable capture ownership"
+          }
+        ],
+        "blockedBy": [],
+        "relatedTo": [
+          {
+            "id": "SA-60",
+            "title": "Spike: Android hardware H.264 capture with original sensor evidence"
+          }
+        ],
+        "duplicateOf": null
+      },
+      "descriptionSha256": "07daa74fe8209401ea3bb66c22a23609cd1b9a9193b1cb65d99565ef83def23a"
+    },
+    {
+      "id": "SA-60",
+      "status": "In Progress",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence",
+      "commitMentioned": true,
+      "migrationDone": null,
+      "hardwareStillPending": true,
+      "relations": {
+        "blocks": [
+          {
+            "id": "SA-51",
+            "title": "Implement Android hardware H.264 frame messages in MCAP"
+          },
+          {
+            "id": "SA-61",
+            "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer"
+          }
+        ],
+        "blockedBy": [],
+        "relatedTo": [
+          {
+            "id": "SA-10",
+            "title": "Migrate the mobile app and native recorder into the monorepo safely"
+          }
+        ],
+        "duplicateOf": null
+      },
+      "descriptionSha256": "6f6b71f0875987e9b109d63998c33dcb3b3dc0935381d973aefe6999b48f3e6e"
+    },
+    {
+      "id": "SA-61",
+      "status": "In Progress",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-61/spike-android-h264-mcap-through-cpu-hands-and-the-real-rerun-web",
+      "commitMentioned": true,
+      "migrationDone": null,
+      "hardwareStillPending": true,
+      "relations": {
+        "blocks": [
+          {
+            "id": "SA-24",
+            "title": "Prove CPU hand overlays and real Rerun playback early"
+          }
+        ],
+        "blockedBy": [
+          {
+            "id": "SA-60",
+            "title": "Spike: Android hardware H.264 capture with original sensor evidence"
+          }
+        ],
+        "relatedTo": [],
+        "duplicateOf": null
+      },
+      "descriptionSha256": "78aadc2529afffc528c2b73c20a58c2bad727795ab86d74b5b2e06ab999097f6"
+    },
+    {
+      "id": "SA-62",
+      "status": "In Progress",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-62/spike-android-native-authentication-and-background-multipart-recovery",
+      "commitMentioned": true,
+      "migrationDone": null,
+      "hardwareStillPending": true,
+      "relations": {
+        "blocks": [
+          {
+            "id": "SA-57",
+            "title": "Implement durable Android background multipart uploads"
+          }
+        ],
+        "blockedBy": [],
+        "relatedTo": [],
+        "duplicateOf": null
+      },
+      "descriptionSha256": "29a734f1d84ea38132a858c7bb56e401f11cb073082cefa52ef05a958f52563b"
+    }
+  ],
+  "remoteDocumentUpdates": [
+    {
+      "id": "396b2828-19d4-4728-acf0-e9e282db9313",
+      "url": "https://linear.app/hw-personal-projects/document/mobile-implementation-h264-capture-and-reliable-upload-5677599f65bd",
+      "androidScopePresent": true,
+      "spikeLinksPresent": true,
+      "currentCountPresent": true
+    },
+    {
+      "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+      "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06",
+      "androidScopePresent": true,
+      "spikeLinksPresent": true,
+      "currentCountPresent": true
+    }
+  ]
 }
