@@ -165,7 +165,8 @@ Violation? _recordingSource(Json doc) {
       return _v('reference_mismatch', '/files/$i/role');
     }
   }
-  if (_count(files, 'source_mcap', true) != 1 ||
+  if (_count(files, 'source_mcap') != 1 ||
+      _count(files, 'source_mcap', true) != 1 ||
       _count(files, 'recorder_metadata', true) < 1) {
     return _v('inventory_incomplete', '/files');
   }
@@ -316,6 +317,7 @@ final Map<String, Rule> rules = {
     final files = _list(doc['files']).map(_obj).toList();
     return _count(files, 'source_manifest') != 1 ||
             _count(files, 'source_manifest', true) != 1 ||
+            _count(files, 'source_mcap') != 1 ||
             _count(files, 'source_mcap', true) != 1 ||
             _count(files, 'recorder_metadata', true) < 1
         ? _v('inventory_incomplete', '/files')

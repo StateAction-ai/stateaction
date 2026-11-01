@@ -143,6 +143,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
     const files = list(doc.files).map(obj);
     return count(files, "source_manifest") !== 1 ||
       count(files, "source_manifest", true) !== 1 ||
+      count(files, "source_mcap") !== 1 ||
       count(files, "source_mcap", true) !== 1 ||
       count(files, "recorder_metadata", true) < 1
       ? v("inventory_incomplete", "/files")
@@ -215,6 +216,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
       if (file.role === "source_manifest")
         return v("reference_mismatch", `/files/${i}/role`);
     if (
+      count(files, "source_mcap") !== 1 ||
       count(files, "source_mcap", true) !== 1 ||
       count(files, "recorder_metadata", true) < 1
     )

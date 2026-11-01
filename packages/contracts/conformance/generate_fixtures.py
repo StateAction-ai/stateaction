@@ -817,6 +817,25 @@ def contract_cases():
             "/files",
         ),
         mut(
+            "optional second source mcap",
+            seal,
+            [
+                (
+                    "/files/3",
+                    dict(seal["files"][0], fileId=U["evidence"], required=False),
+                )
+            ],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "two required source mcaps",
+            seal,
+            [("/files/3", dict(seal["files"][0], fileId=U["evidence"]))],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
             "optional source manifest",
             seal,
             [("/files/2/required", False)],
@@ -1251,6 +1270,34 @@ def contract_cases():
             "missing required recorder metadata",
             recording_source,
             [("/files/1/role", "calibration")],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "optional second source mcap",
+            recording_source,
+            [
+                (
+                    "/files/2",
+                    dict(
+                        recording_source["files"][0],
+                        file_id=U["evidence"],
+                        required=False,
+                    ),
+                )
+            ],
+            "inventory_incomplete",
+            "/files",
+        ),
+        mut(
+            "two required source mcaps",
+            recording_source,
+            [
+                (
+                    "/files/2",
+                    dict(recording_source["files"][0], file_id=U["evidence"]),
+                )
+            ],
             "inventory_incomplete",
             "/files",
         ),
@@ -1793,6 +1840,13 @@ def contract_cases():
             "source mcap input missing",
             grant,
             [("/inputs/0", DELETE)],
+            "inventory_incomplete",
+            "/inputs",
+        ),
+        mut(
+            "second source mcap input",
+            grant,
+            [("/inputs/3", dict(grant["inputs"][0], fileId=U["evidence"]))],
             "inventory_incomplete",
             "/inputs",
         ),
@@ -2559,6 +2613,17 @@ def digests():
                         role="calibration",
                         required=False,
                     ),
+                )
+            ],
+            "inventory_incomplete",
+            "/files",
+        ),
+        inventory(
+            "optional second source mcap in seal only",
+            [
+                (
+                    "/files/3",
+                    dict(seal["files"][0], fileId=U["evidence"], required=False),
                 )
             ],
             "inventory_incomplete",

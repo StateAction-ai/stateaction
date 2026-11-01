@@ -129,6 +129,7 @@ def sealed_inventory(doc: Any) -> Violation:
     if (
         _count(files, "source_manifest") != 1
         or _count(files, "source_manifest", True) != 1
+        or _count(files, "source_mcap") != 1
         or _count(files, "source_mcap", True) != 1
         or _count(files, "recorder_metadata", True) < 1
     ):
@@ -217,7 +218,8 @@ def recording_source(doc: Any) -> Violation:
         if f["role"] == "source_manifest":
             return ("reference_mismatch", f"/files/{i}/role")
     if (
-        _count(files, "source_mcap", True) != 1
+        _count(files, "source_mcap") != 1
+        or _count(files, "source_mcap", True) != 1
         or _count(files, "recorder_metadata", True) < 1
     ):
         return ("inventory_incomplete", "/files")
