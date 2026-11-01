@@ -1,0 +1,155 @@
+{
+  "date": "2026-11-01",
+  "implementation_commit": "2005c064ffb5a1f27fc0c4066a568cf17b201d84",
+  "status": "android_capture_and_local_cpu_review_implemented_hardware_unqualified",
+  "implementation_runbook": "docs/components/android-h264-implementation.md",
+  "validation_receipt": "docs/validation/android-h264-e2e.json",
+  "source_digests": {
+    "docs/components/android-h264-implementation.md": "e40f4a4dbe6526d4f67dda171c086f0e30693c6a4f22ac78d7633e5df6c46199",
+    "docs/validation/android-h264-e2e.json": "7e14ef232347331143d7790ea22e742207b36ca3120808f4bb38d507a763c5af",
+    "packages/contracts/capture/manifest.json": "e079dce02e765660dd26281f49085a13420cadddfa0c1c4ed9b6c8326d97e01c"
+  },
+  "remote_issue_readbacks": [
+    {
+      "id": "SA-50",
+      "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-50/specify-h264-mcap-capture-schemas-and-cross-language-golden-fixtures",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-12"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-51",
+      "title": "Implement Android hardware H.264 frame messages in MCAP",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-51/implement-android-hardware-h264-frame-messages-in-mcap",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-10",
+        "SA-50",
+        "SA-60"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-53",
+      "title": "Preserve independent raw IMU events and original sensor clocks",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-53/preserve-independent-raw-imu-events-and-original-sensor-clocks",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-10",
+        "SA-50"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-54",
+      "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-54/fix-saved-raster-calibration-capture-settings-and-tracking-loss-rgb",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-10",
+        "SA-50"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-56",
+      "title": "Make native capture finalization bounded and evidence complete",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-56/make-native-capture-finalization-bounded-and-evidence-complete",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-51",
+        "SA-52",
+        "SA-53",
+        "SA-54",
+        "SA-55"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-60",
+      "title": "Spike: Android hardware H.264 capture with original sensor evidence",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-60/spike-android-hardware-h264-capture-with-original-sensor-evidence",
+      "status": "In Progress",
+      "blockedBy": [],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-61",
+      "title": "Spike: Android H.264 MCAP through CPU hands and the real Rerun web viewer",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-61/spike-android-h264-mcap-through-cpu-hands-and-the-real-rerun-web",
+      "status": "In Progress",
+      "blockedBy": [
+        "SA-60"
+      ],
+      "prerequisites_unchanged": true,
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "SA-10",
+      "title": "Migrate the mobile app and native recorder into the monorepo safely",
+      "url": "https://linear.app/hw-personal-projects/issue/SA-10/migrate-the-mobile-app-and-native-recorder-into-the-monorepo-safely",
+      "status": "Done",
+      "blockedBy": [],
+      "prerequisites_unchanged": null,
+      "contains_implementation_commit": null
+    }
+  ],
+  "remote_document_readbacks": [
+    {
+      "id": "396b2828-19d4-4728-acf0-e9e282db9313",
+      "title": "Mobile implementation · H.264 capture and reliable upload",
+      "url": "https://linear.app/hw-personal-projects/document/mobile-implementation-h264-capture-and-reliable-upload-5677599f65bd",
+      "contains_implementation_commit": true
+    },
+    {
+      "id": "7c623f88-ed1c-4b2a-aea8-e30675918c98",
+      "title": "Implementation backlog & traceability",
+      "url": "https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06",
+      "contains_implementation_commit": true
+    }
+  ],
+  "validation": {
+    "flutter_app_tests": 159,
+    "flutter_recorder_tests": 18,
+    "native_unit_tests": 57,
+    "actual_recorder_emulator_instrumentation_cases": 2,
+    "processing_protocol_checks": 16,
+    "canonical_json_schemas": 5,
+    "source_takes": 3,
+    "source_rgb_frames": 58,
+    "exact_mcap_to_mp4_rrd_clips": 7,
+    "real_rerun_wasm_browser": "passed_playback_pause_forward_backward_seek_cleanup",
+    "visual_inspection": [
+      "worker",
+      "root"
+    ],
+    "flutter_h264_simulation_debug_build": "passed",
+    "analyzers": "clean",
+    "hardware_qualified": false,
+    "flutter_ui_navigation_qualified": false
+  },
+  "personal_profile_safety": {
+    "physical_device_operations": false,
+    "all_test_app_mutations": "explicit emulator-5582 single full user0 only",
+    "company_profile_operations": false,
+    "raw_media_staged": false
+  },
+  "paid_resources_created": false,
+  "remaining": [
+    "Physical Android hardware/profile/clocks/calibration and representative hand quality",
+    "10–20-minute then two-hour resource and interruption qualification",
+    "Durable capture ownership/journal/recovery and sealed upload inventory",
+    "Actual Flutter UI navigation plus Google auth/background transfer",
+    "Render/API/storage/workflow/cloud worker integration",
+    "Swift parity and remaining cross-language contract conformance"
+  ]
+}

@@ -8,6 +8,8 @@ The subsequent [mobile implementation update](mobile-implementation-update.md) a
 
 Three [Android feasibility spikes](../spikes/android-feasibility.md) now gate native capture, CPU/Rerun integration and native uploads. **Current project: 53 tickets, six milestones and 94 dependencies.** The [Android receipt](android-spike-receipt.json) verifies all remote dependency relations, no cycles and a path from each spike to the final acceptance gate. Results belong on the actual Linear tickets; unexecuted hardware/auth/provider checks remain explicit.
 
+Implementation update, 2026-11-01: opt-in Android H.264 and local capture→CPU→Rerun checks are committed at `2005c06`. The [implementation receipt](android-capture-implementation-receipt.json) verifies seven updated issues and both live specification/backlog documents, with prerequisite relations preserved. SA-10 remains Done; capture/processing tickets remain In Progress for physical and cross-platform gates. See the [runbook](../components/android-h264-implementation.md) and [exact validation](../validation/android-h264-e2e.json).
+
 Live Linear documents: [scope](https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3), [delivery standards and gates](https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690), [technical baseline](https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2) and [all tickets/dependencies](https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06).
 
 ## Project artifacts
@@ -24,6 +26,7 @@ Live Linear documents: [scope](https://linear.app/hw-personal-projects/document/
 | [Mobile addendum](mobile-implementation-addendum.json) | Reviewed new scopes, existing amendments and additive prerequisites; original baseline is unchanged |
 | [Mobile publication receipt](linear-mobile-update-receipt.json) / [graph validation](mobile-plan-validation.json) | Actual updated Linear records and combined 50-ticket/90-dependency checks |
 | [Android feasibility results](../spikes/android-feasibility.md) / [publication receipt](android-spike-receipt.json) | Three Android-only spike tickets, results, production prerequisites and 53-ticket/94-dependency readback |
+| [Android implementation receipt](android-capture-implementation-receipt.json) | Committed recorder/CPU/Rerun implementation, final tests, seven issue result updates and preserved prerequisite readback |
 
 Original publishing readback verified 40 tickets, 63 native dependencies, 140 acceptance criteria, six milestones and four documents. Original independent readback confirmed metadata and four detailed samples. The mobile addendum retains that history and has its own current receipt; project setup verification is distinct from future application acceptance evidence.
 
@@ -40,7 +43,7 @@ Original publishing readback verified 40 tickets, 63 native dependencies, 140 ac
 
 ## Kickoff and management
 
-- Start by assigning [SA-10: mobile-source handoff](https://linear.app/hw-personal-projects/issue/SA-10/migrate-the-mobile-recorder-and-sdk-into-the-monorepo-safely) and [SA-11: package scaffolding](https://linear.app/hw-personal-projects/issue/SA-11/scaffold-the-typescript-and-python-packages-with-repeatable-ci). Run [SA-24: CPU-hand/Rerun feasibility](https://linear.app/hw-personal-projects/issue/SA-24/prove-cpu-hand-overlays-and-real-rerun-playback-early) as soon as scaffolding exists; it does not wait for the entire upload/UI stack.
+- [SA-10: mobile-source migration](https://linear.app/hw-personal-projects/issue/SA-10/migrate-the-mobile-recorder-and-sdk-into-the-monorepo-safely) is Done. Controlled Android/CPU/Rerun implementation now has local evidence; continue its physical qualification alongside [SA-11: package scaffolding](https://linear.app/hw-personal-projects/issue/SA-11/scaffold-the-typescript-and-python-packages-with-repeatable-ci), auth/API/upload foundations and later [SA-24](https://linear.app/hw-personal-projects/issue/SA-24/prove-cpu-hand-overlays-and-real-rerun-playback-early) production integration. The cloud canary waits for the required local and provider checks.
 - Timothy W is the project lead. Each ticket records its owner discipline; assign one accountable individual before moving it out of Backlog. No calendar deadlines, cycles or native point estimates are fabricated.
 - Relative S/M sizes require team calibration. In the planning JSON, priority intent `1=High` / `2=Normal` maps to native Linear `2=High` / `3=Normal`; nothing is Urgent.
 - Use the existing Backlog → Todo → In Progress → In Review → Done states. Native blocked-by relations carry prerequisite work. Milestones are evidence gates, not rigid barriers against useful parallel work.
