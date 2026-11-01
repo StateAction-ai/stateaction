@@ -37,7 +37,7 @@ Job states: `queued`, `submitting`, `submit_unknown`, `running`, `result_pending
 
 ## Objects and sealed uploads
 
-Use private environment-specific R2 buckets; MinIO is the local development substitute. Logical source identity is stable. An unfinished source transport may restart with a new epoch/key only after old provider operations are reconciled and the old MPU is retired; completed keys are never reused. Each job writes under a unique job prefix; each export uses a new unpublished prefix. No shared writable dataset, Lance history or checkpoint takeover is needed.
+Use private environment-specific R2 buckets; SeaweedFS is the local development substitute. Logical source identity is stable. An unfinished source transport may restart with a new epoch/key only after old provider operations are reconciled and the old MPU is retired; completed keys are never reused. Each job writes under a unique job prefix; each export uses a new unpublished prefix. No shared writable dataset, Lance history or checkpoint takeover is needed.
 
 For **every file, including small JSON**, the API allocates the key and multipart ID. Workers/phones receive bounded part URLs. The API completes that recorded upload; completion consumes its ID. It never reopens a completed key or supplies reusable whole-object PUT URLs/broad worker credentials. Replacements get new keys. Track parts through recorded receipts/provider `ListParts` rather than a new table.
 

@@ -10,6 +10,8 @@ Three [Android feasibility spikes](../spikes/android-feasibility.md) now gate na
 
 Implementation update, 2026-11-01: opt-in Android H.264 and local capture→CPU→Rerun checks are committed at `2005c06`. The [implementation receipt](android-capture-implementation-receipt.json) verifies seven updated issues and both live specification/backlog documents, with prerequisite relations preserved. SA-10 remains Done; capture/processing tickets remain In Progress for physical and cross-platform gates. See the [runbook](../components/android-h264-implementation.md) and [exact validation](../validation/android-h264-e2e.json).
 
+Implementation update, 2026-11-01 (next increment): the [platform foundation](../components/platform-foundations.md) now passes clean locked builds and the official Render local runner with real Postgres/S3 and an installed Python worker. SA-11 remains In Progress until hosted CI evidence exists. The [actual Flutter UI check](../validation/flutter-capture-ui.json) adds Start/Stop/Retry/discard and saved details; its new sources pass packaged CPU processing and actual Rerun. Phone qualification and product auth/upload/review remain open.
+
 Live Linear documents: [scope](https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3), [delivery standards and gates](https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690), [technical baseline](https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2) and [all tickets/dependencies](https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06).
 
 ## Project artifacts

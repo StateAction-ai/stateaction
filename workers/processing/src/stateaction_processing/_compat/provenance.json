@@ -1,0 +1,14 @@
+{
+  "source": "spikes/android/processing/spike.py",
+  "source_sha256": "eb7c10c3d41132284589e20283050f08d44d3aa1197ff535b6dba3695884ad73",
+  "copied_byte_identical": true,
+  "purpose": "Frozen local-only MCAP/CPU/Rerun interoperability adapter; not the production job worker or transport protocol.",
+  "limitations": [
+    "Reads a local closed MCAP path; no source URL/capability/multipart API yet.",
+    "Preserves upstream spike resource and qualification limits.",
+    "No promotion to production profile, metric 3D or hardware qualification."
+  ],
+  "third_party_assets": {
+    "foxglove-compressed-video-0.4.0.desc": "FOXGLOVE-SCHEMAS-LICENSE"
+  }
+}

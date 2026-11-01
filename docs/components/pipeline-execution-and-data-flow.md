@@ -16,7 +16,7 @@ Updated: 2026-10-31. Canonical MVP stage/handoff table. One shared Render workfl
 | 6. Follow-up Modal CPU / export | One whole frozen dataset and its approved reviews, labels and referenced RGB/pose/mapping files from R2 | Stream inputs into one bounded TAR on worker scratch, close/hash it, then multipart-upload archive/manifest/checksums into a unique release prefix. API completes/seals output; known terminal execution and current frozen refs yield `ready`. |
 | 7. Follow-up dataset version / customer UI | Exact ready archive/manifest and named recipient grants | Staff publishes. Customer inspects and downloads all approved package bytes directly from R2; no model recomputation or Next.js media proxy. |
 
-The [platform diagram](../figures/render-platform.md) shows hosting boundaries; the [processing diagram](../figures/processing-stages.md) shows the fixed sequence. Each implemented stage uses the same contract locally, using the official Render local Workflows runner with Postgres/MinIO and LocalExecutor. [Local qualification ladder](local-development.md)
+The [platform diagram](../figures/render-platform.md) shows hosting boundaries; the [processing diagram](../figures/processing-stages.md) shows the fixed sequence. Each implemented stage uses the same contract locally, using the official Render local Workflows runner with Postgres/SeaweedFS and LocalExecutor. [Local qualification ladder](local-development.md)
 
 ## Intermediate state and repeated reads
 

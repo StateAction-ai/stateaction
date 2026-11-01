@@ -78,6 +78,9 @@ class RecordingSessionTile extends StatelessWidget {
                 overlay: isFinalizing
                     ? _FinalizingOverlay(colors: colors)
                     : _MenuOverlay(
+                        previewLabel: session.rgbCodec == "h264"
+                            ? "Recording details"
+                            : "Preview recording",
                         onPreview: () => onPreview(session),
                         onDelete: () => onDelete(session),
                         colors: colors,
@@ -137,12 +140,14 @@ class _FinalizingOverlay extends StatelessWidget {
 
 class _MenuOverlay extends StatelessWidget {
   const _MenuOverlay({
+    required this.previewLabel,
     required this.onPreview,
     required this.onDelete,
     required this.colors,
   });
 
   final VoidCallback onPreview;
+  final String previewLabel;
   final VoidCallback onDelete;
   final C colors;
 
@@ -155,7 +160,7 @@ class _MenuOverlay extends StatelessWidget {
         items: [
           // Duplicates the tile tap on purpose: the tap target isn't signposted,
           // and a menu whose only entry is destructive invites a mis-tap.
-          AppPopupMenuItem(label: "Preview recording", onSelected: onPreview),
+          AppPopupMenuItem(label: previewLabel, onSelected: onPreview),
           AppPopupMenuItem(
             label: "Delete recording",
             isDestructive: true,
@@ -168,11 +173,7 @@ class _MenuOverlay extends StatelessWidget {
             color: colors.surfacePrimary.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(AppRadii.xs),
           ),
-          child: Icon(
-            Icons.more_horiz,
-            size: 18,
-            color: colors.textPrimary,
-          ),
+          child: Icon(Icons.more_horiz, size: 18, color: colors.textPrimary),
         ),
       ),
     );

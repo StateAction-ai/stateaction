@@ -108,6 +108,39 @@ class CaptureRecordingsSection extends StatelessWidget {
   }
 
   void _openPreview(BuildContext context, RecordingSession session) {
+    if (session.rgbCodec == "h264") {
+      // The legacy phone player decodes JPEG messages. Present accurate source
+      // details for H.264 instead of opening a player with no usable RGB track.
+      showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        useSafeArea: true,
+        builder: (context) => Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Recording details",
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              AppSpacing.gapMd,
+              Text(RecordingSessionTile.titleFor(session)),
+              Text(
+                "${session.durationSeconds.toStringAsFixed(1)} s • ${session.frameCount} frames",
+              ),
+              Text(
+                "${session.imuSamples} sensor events • ${formatBytes(session.sizeBytes)}",
+              ),
+              AppSpacing.gapMd,
+              const Text("Stored on this device"),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => McapPreviewPage(

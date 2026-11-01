@@ -2,6 +2,8 @@
 
 Updated: 2026-10-31. Implementation target, not a running web integration. [Data browser](data-browser-and-datasets.md) owns navigation/membership; [contracts](../contracts.md) owns wire fields; [processing](cloud-processing.md) owns observations.
 
+Local validation update, 2026-11-01: [actual Flutter-source clips](../validation/flutter-capture-ui.json) pass the self-hosted viewer, forward/back seeking, playback and cleanup. Preserve source/MP4 timestamps exactly. Browser assertions must account for the pinned viewer's floating-point conversion to integer WebCodecs microseconds: the measured 31,545 µs case becomes 31,544 µs. Verify decoder input/output identity and unique frame mapping; do not mistake this conversion for a dropped frame or silently rewrite source timing. [Rerun time conversion](https://github.com/rerun-io/rerun/blob/0.41.0/crates/utils/re_video/src/time.rs), [WebCodecs boundary](https://github.com/rerun-io/rerun/blob/0.41.0/crates/utils/re_video/src/decode/webcodecs.rs). Product auth, signed URLs and Next.js embedding remain open.
+
 ## One page and one viewer
 
 Use `/clips/[clipId]` for both staff and customers. Open it from the Data browser dataset grid or staff All clips review queue (also reached by Pipeline → recording detail → Review clips); show a friendly title and parent breadcrumb, without a raw path/UUID chip or a Clip review sidebar item. The UUID identifies immutable RGB, observations and mapping from one accepted processing result. Labels and reviews remain outside the RRD, so a label change never requires rerunning inference.

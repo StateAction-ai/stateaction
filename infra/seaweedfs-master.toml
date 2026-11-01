@@ -1,0 +1,3 @@
+# Small local fixtures need one new volume per collection at a time.
+[master.volume_growth]
+copy_1 = 1

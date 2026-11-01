@@ -113,8 +113,8 @@ class _CapturePageState extends State<CapturePage> with WidgetsBindingObserver {
           child: Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppHeader(
-              text1: "Stera",
-              text2: " by FPV Labs",
+              text1: "StateAction.ai",
+              text2: "",
               customStyle2: context.textTheme.head3XlHandjet.copyWith(
                 fontWeight: AppType.bold,
                 fontSize: AppType.xl3Plus,

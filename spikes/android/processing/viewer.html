@@ -10,7 +10,7 @@
 <div id="viewer"></div>
 <script type="module">
   import { WebViewer } from "./node_modules/@rerun-io/web-viewer/index.js";
-  const telemetry = window.telemetry = { errors: [], decoded: [], configs: [], decodeCalls: 0, ready: false };
+  const telemetry = window.telemetry = { errors: [], decoded: [], decodeInputs: [], configs: [], decodeCalls: 0, ready: false };
   window.addEventListener("error", e => telemetry.errors.push(String(e.error || e.message)));
   window.addEventListener("unhandledrejection", e => telemetry.errors.push(String(e.reason)));
   if (window.VideoDecoder) {
@@ -24,7 +24,7 @@
         }, error(error) { telemetry.errors.push(String(error)); options.error(error); } });
       }
       configure(config) { telemetry.configs.push(config); return super.configure(config); }
-      decode(chunk) { telemetry.decodeCalls += 1; return super.decode(chunk); }
+      decode(chunk) { telemetry.decodeCalls += 1; telemetry.decodeInputs.push(chunk.timestamp); return super.decode(chunk); }
     };
   }
   const file = new URL(location.href).searchParams.get("file") || "artifacts/synthetic-v2/clip-001/viewer.rrd";

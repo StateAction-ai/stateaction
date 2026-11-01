@@ -74,9 +74,9 @@ class AppDemoVideoInlineIntroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(
-            title: "Collect Multimodal data",
+            title: "Capture your work",
             subtitle:
-                "Collect raw footage and get 6dof poses, depth, and action labels",
+                "Record video and available sensor data for review",
             maxSubtitleLines: 2,
           ),
           const SizedBox(height: AppSpacing.lg),

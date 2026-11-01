@@ -7,6 +7,7 @@ class RecordingSession {
   final int imuSamples;
   final bool hasVideo;
   final bool hasDepth;
+  final String? rgbCodec;
 
   /// Whether the session's MCAP already carries hand poses — keyed off the
   /// sidecar marker files, a cheap File.exists() like the flags
@@ -30,5 +31,6 @@ class RecordingSession {
     required this.hasDepth,
     required this.sizeBytes,
     this.thumbnailPath,
+    this.rgbCodec,
   });
 }

@@ -1,0 +1,25 @@
+{
+  "name": "stateaction",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": "24.22.2",
+    "pnpm": "10.33.0"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm --filter @stateaction/server... build && pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "dev": "pnpm --filter @stateaction/web dev",
+    "dev:jobs": "pnpm --filter @stateaction/jobs dev",
+    "db:migrate": "pnpm --filter @stateaction/server migrate",
+    "storage:init": "pnpm --filter @stateaction/server storage:init",
+    "test:platform": "pnpm --filter @stateaction/jobs smoke",
+    "format:check": "prettier --check package.json pnpm-workspace.yaml config apps/web/app apps/web/next.config.ts apps/jobs/src apps/jobs/test packages/server/src packages/server/test packages/contracts/src packages/contracts/test packages/contracts/api scripts/platform/*.mjs",
+    "storage:check": "pnpm --filter @stateaction/server storage:check"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}

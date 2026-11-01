@@ -1,6 +1,6 @@
 # Monorepo and build boundaries
 
-Updated: 2026-10-31. Existing mobile/native source is imported from Stera revision `8044ad672dbf03cd6db8690f260c145b9acd51ea`; new web/jobs/processing product packages remain planned. A normal clone contains the Flutter app and recorder without initializing an app submodule. The optional Python SDK submodule remains a historical diagnostic dependency.
+Updated: 2026-11-01. Existing mobile/native source is imported from Stera revision `8044ad672dbf03cd6db8690f260c145b9acd51ea`; web/jobs/server/contracts and Python package foundations are now implemented. Product auth/upload/processing controllers remain planned. [Foundation runbook](platform-foundations.md). A normal clone contains the Flutter app and recorder without initializing an app submodule. The optional Python SDK submodule remains a historical diagnostic dependency.
 
 ## Source layout
 
@@ -14,7 +14,7 @@ Updated: 2026-10-31. Existing mobile/native source is imported from Stera revisi
 | `packages/stera_recorder/` | Existing Flutter native recording plugin; mobile keeps its relative path dependency |
 | `packages/stera-sdk/` (optional) | Only reviewed, attributed Python helpers/fixtures if actually reused; full SDK is reference-only and not a mobile/backend/runtime requirement |
 | `workers/processing/` | Python extraction, hand-model adapter, clip RRD/thumbnail, QC, future export, CLI and thin Modal entrypoints; uv |
-| `infra/` | Local Postgres/MinIO Compose definition, Render Blueprint and build configuration |
+| `infra/` | Local Postgres/SeaweedFS Compose definition, Render Blueprint and build configuration |
 | `scripts/`, `tests/`, `docs/` | Existing diagnostics/evidence and cross-component checks; maintain historical receipt paths |
 
 Use **pnpm workspaces for TypeScript packages only**, Flutter/pub for Dart and uv for Python. Pin Node, pnpm, Flutter, Python and dependency versions; commit their applicable lockfiles. Retain required Gradle/CocoaPods locks. One repository does not require one package manager. No new Bun, Nx, Turbo or Melos dependency is needed for the pilot. A small root Makefile exposes documented setup, check and development commands for the three toolchains.

@@ -8,6 +8,7 @@ Updated: 2026-11-01. **Build the simplified MVP**, beginning with the [technical
 | --- | --- |
 | [Linear project and backlog](project-management/README.md) | Live project link, milestone gates, scoped tickets/dependencies and delivery standards |
 | [Monorepo](components/monorepo.md) | Flutter/mobile/native source, Node/Python packages, migration and independent builds |
+| [Platform foundations](components/platform-foundations.md) | Implemented workspace, local Postgres/S3, official Render probe, exact commands and remaining product work |
 | [Local development](components/local-development.md) | Full local CPU end-to-end testing, optional local GPU, Render's local workflow tooling and cloud canary |
 | [UI design and library](components/ui-design.md) | shadcn/ui web choice, Flutter theme, role/state/component map |
 | [Pipeline monitoring](components/pipeline-monitoring.md) | Compact recording rows, per-recording stages and all processing/review actions |
@@ -46,4 +47,4 @@ These documents retain earlier investigations; they are not extra MVP services o
 | [Training qualification](training-qualification-requirements.md) | Limits on metric/action/training claims |
 | [WiLoR benchmark](wilor-full-hand-benchmark.md) | Research model comparison, not commercial deployment clearance |
 
-Existing Flutter/native recorder source is imported into the monorepo, with opt-in Android H.264 integration and local CPU/Rerun validation. The new application stack and cloud pipeline remain to be implemented. [Import checks](validation/mobile-source-import.json) are separate from capture simulation and physical qualification. No design review upgrades existing pose-accuracy claims.
+Existing Flutter/native recorder source is imported into the monorepo, with opt-in Android H.264 integration and local CPU/Rerun validation. The Node/Python workspace and official Render local probe are runnable; product auth, uploads, workflow processing and web review remain to be implemented. [Import checks](validation/mobile-source-import.json) are separate from capture simulation and physical qualification. No design review upgrades existing pose-accuracy claims.

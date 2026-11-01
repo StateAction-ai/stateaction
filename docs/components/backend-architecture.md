@@ -56,6 +56,6 @@ Both roles receive the same safe RRD and viewer component; staff-only forms/QC s
 
 ## Development and acceptance
 
-Run the same task definitions through Render's official local Workflows runner on port 8120 or its hosted service. `EXECUTION_BACKEND=local|modal` selects real Python `LocalExecutor` or `ModalExecutor`. Local Postgres/MinIO use `infra/compose.yaml`; MediaPipe CPU needs no GPU. Test customer viewing with operator Dataset grants and approved clips. Export/download generation is follow-up, not an implemented UI dependency. Local success does not qualify Modal/R2. [Local development](local-development.md)
+Run the same task definitions through Render's official local Workflows runner on port 8120 or its hosted service. `EXECUTION_BACKEND=local|modal` selects real Python `LocalExecutor` or `ModalExecutor`. Local Postgres/SeaweedFS use `infra/compose.yaml`; MediaPipe CPU needs no GPU. Test customer viewing with operator Dataset grants and approved clips. Export/download generation is follow-up, not an implemented UI dependency. Local success does not qualify Modal/R2. [Local development](local-development.md)
 
 Before pilot, prove builds, device ownership, upload/controller recovery and customer isolation. Test failed/stale approval with selection, concurrent Dataset add versus rejection, all-membership withdrawal and explicit reapproval. Test future archives separately. Stage DAGs/shared writers/separate validators stay deferred. Workflow recovery follows the verified orchestration contract.

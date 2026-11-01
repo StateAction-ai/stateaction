@@ -2,6 +2,8 @@
 
 Updated: 2026-10-31. **Selected MVP design; implementation and deployment pending.** This revision keeps Render Workflows for local/cloud parity and simplifies the earlier Curator design. Automatic hand pose and both staff/customer review remain required. Dataset publication/download is follow-up work; no release page is in the initial UI.
 
+Implementation update, 2026-11-01: the [Node/Python foundation](components/platform-foundations.md) and [Android capture simulation](components/android-h264-implementation.md) are runnable. The full product flow below remains the implementation target; the current Render task is only `verify-platform`.
+
 ## Product
 
 A repair worker signs in, records offline and uploads large MCAP recordings reliably. Cloud processing extracts RGB and available sensor evidence, estimates **21 hand landmarks plus explicitly marked model-relative 3D estimates**, and produces review media. Our team reviews each clip, enters a task label and adds approved clips to datasets. Robotics customers browse shared datasets and inspect approved clips; review decisions remain with our team. Whole-dataset versions and complete training-package downloads follow later.
@@ -26,7 +28,7 @@ The [mobile implementation](components/mobile-app-implementation.md) and [captur
 | Data organization | Named datasets with many-to-many approved clip memberships; operator-managed customer view grants |
 | Repository | One monorepo including existing Flutter mobile/native plugin, Node apps and Python workers |
 | Mobile source | Hardware H.264 inside generic-profile MCAP, Foxglove Protobuf video plus original sensor evidence; historical JPEG decoding retained |
-| Local development | Official Render local Workflows runner, same task/processing contracts, local Postgres/MinIO and LocalExecutor; no cloud GPU |
+| Local development | Official Render local Workflows runner, same task/processing contracts, local Postgres/SeaweedFS and LocalExecutor; no cloud GPU |
 
 The application platform is Render; storage and processing remain explicit external services. Render hosts no video transfer proxy. A bounded workflow controller starts/polls processing using durable job references; the follow-up export task uses the same pattern. A minute cron repairs dispatch/abandoned controllers and exits; it never processes media.
 

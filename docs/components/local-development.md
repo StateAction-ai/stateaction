@@ -1,20 +1,20 @@
 # Local development and end-to-end qualification
 
-Selected MVP design · 2026-10-31 · Commands/packages below are planned targets, not shipped tooling
+Updated 2026-11-01 · The foundation is runnable; product processing, auth, uploads and review remain planned. [Implemented scope and checks](platform-foundations.md).
 
 **Use Render's official local workflow runner with the same Node processing task definition (and follow-up export definition) as production.** Locally they execute the shared Python processor through `LocalExecutor`; in cloud they select `ModalExecutor`. Begin with real MediaPipe CPU, then optionally test a small cleared model on the local GPU. No cloud GPU is required for initial testing.
 
 ## Monorepo and runtime
 
-| Target | Responsibility |
+| Target | Product target; implemented subset is in the foundation runbook |
 | --- | --- |
-| `apps/web` / `@repair/web` | Next.js UI, Better Auth and mobile/worker/control API |
-| `apps/jobs` / `@repair/jobs` | Registered `process-recording` Render task, future `export-release`; finite reconciliation entrypoint |
+| `apps/web` / `@stateaction/web` | Next.js UI, Better Auth and mobile/worker/control API |
+| `apps/jobs` / `@stateaction/jobs` | Planned `process-recording`, future `export-release` and reconciliation; currently only `verify-platform` |
 | `apps/mobile` | Existing Flutter application; native device builds |
 | `packages/server`, `packages/contracts` | Shared server/domain modules and versioned cross-language contracts |
 | `packages/stera_recorder` | Required native recorder; optional reviewed Python SDK helpers retain their own package boundary |
 | `workers/processing` | Shared Python processing/export core, CLI and Modal wrapper; CPU/optional local-CUDA profiles |
-| `infra/compose.yaml`, `infra/render.yaml` | Local Postgres/MinIO versus production services |
+| `infra/compose.yaml`, `infra/render.yaml` | Local Postgres/SeaweedFS versus production services |
 
 Use pnpm for TypeScript, Flutter/pub for Dart and uv for Python; no extra monorepo orchestrator is required. A single repository does not imply hosting Flutter on Render. Keep service credentials and server dependencies out of browser/mobile packages.
 
@@ -22,43 +22,15 @@ Use pnpm for TypeScript, Flutter/pub for Dart and uv for Python; no extra monore
 
 Render documents CLI **2.12.0+** for local workflows; pin a current compatible CLI during implementation. It starts task processes on the host, which permits Node controllers to launch the local Python worker. Docker-based workflow projects do not currently support this local server, so use the native Node workflow runtime. [Official local-development guide](https://render.com/docs/workflows-local-development)
 
-Proposed setup, after dependencies/scripts/fixtures exist:
+Run the implemented foundation using the [local platform runbook](../../scripts/platform/README.md). It pins Node 24.22.2, pnpm 10.33.0, Python 3.12.13, uv 0.13.6, Render CLI 2.34.0 and SDK 1.6.0. `make install`, `make infra-up migrate storage-init`, `make web`, `make workflows` and `make smoke` exercise the real Next API → official Render local runner → Node `LocalExecutor` → installed Python module. Copy and configure the two root environment examples first. No Render account is required.
 
-```sh
-docker compose -f infra/compose.yaml up -d
-pnpm install --frozen-lockfile
-uv sync --project workers/processing --locked
-pnpm --filter @repair/web dev
-```
+**The only registered task today is `verify-platform`.** It verifies runtime identity; it does not upload or process a recording. The planned `process-recording`, reconciliation and export entrypoints below are not shipped commands. The development dispatch route is token protected, loopback only and disabled in production.
 
-In another terminal:
+The local server defaults to port **8120**. Use `--port` and its matching `RENDER_LOCAL_DEV_URL` together when changing it. Every manual Render task/list command must include `--local`; cloud credentials are unnecessary locally. SDK construction and task registration use the official local runtime. [Current CLI reference](https://render.com/docs/cli-reference)
 
-```sh
-render workflows dev --env-file .env.workflows.local -- pnpm --filter @repair/jobs dev
-```
+The local task server reloads definitions and holds logs/results in memory; restarting loses that history and regenerates IDs. It does not supply durable product state, R2 multipart semantics, Modal scheduling/preemption or cloud billing. Product jobs must persist state through the future API/Postgres implementation; disappearing local task history does not prove worker termination.
 
-`@repair/jobs dev` imports the implemented task definitions using the local TypeScript entrypoint; it is not another polling daemon or nested watch process. The production start script executes the compiled version of that same entrypoint. Register tasks synchronously and open provider clients only inside handlers.
-
-Configure the web dispatch client in `apps/web/.env.local` and the task runtime in `.env.workflows.local` consistently; keep these private files ignored:
-
-```dotenv
-RENDER_USE_LOCAL_DEV=true
-RENDER_LOCAL_DEV_URL=http://localhost:8120
-EXECUTION_BACKEND=local
-```
-
-The official server defaults to **8120**; use `--port` plus the corresponding URL for another port. SDK 1.6.0 can construct `new Render()` without a cloud token in local mode. Set the local process/export task references to their registered names; cloud references name the deployed workflow/task version. Production rejects local endpoints and `EXECUTION_BACKEND=local`. Cloud Render credentials stay in the API, Modal credentials in the Workflow runtime, and the finite cron has only its reconciliation API credential; none is needed for fully local execution.
-
-Check registration and optionally trigger a pre-created authorized job:
-
-```sh
-render workflows tasks list --local
-render workflows start process-recording --local --input-file=job-input.json
-```
-
-`job-input.json` contains the positional array, for example `[{"jobId":"an-existing-local-job-id"}]`; the API/database still authorize it. Normal end-to-end runs start through the application's upload flow (and follow-up Dataset-version flow). Use `pnpm --filter @repair/jobs tick` to invoke the same finite reconciliation pass as production when testing dispatch/recovery failures. Every manual Render task command must keep `--local`. [Current CLI reference](https://render.com/docs/cli-reference)
-
-The local task server reloads definitions and holds logs/results in memory; restarting loses that history and regenerates local IDs. It does not supply durable Postgres state, R2 semantics, Modal scheduling/preemption or cloud billing. Persist jobs/results through our real APIs and test recovery against Postgres. Do not infer worker termination from the disappearance of a local task.
+The remaining sections specify the product qualification target. Initial health/Put/Get checks do not satisfy it.
 
 ## Shared worker and executor contract
 
@@ -72,11 +44,11 @@ Modal workers report their actual `modal.current_function_call_id()` on claim; l
 
 ## Storage, auth and physical phones
 
-Apply local migrations and seed separate collector/staff/customer identities, accepted pending/rejected/approved clips, approved-only dataset memberships and operator-managed view grants. Keep local database volumes, MinIO keys and datasets separate from staging/production. MinIO uses the same API reserve/sign/parts/complete protocol, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
+Apply local migrations and seed separate collector/staff/customer identities, accepted pending/rejected/approved clips, approved-only dataset memberships and operator-managed view grants. Keep local database volumes, SeaweedFS keys and datasets separate from staging/production. The application must implement the same API reserve/sign/parts/complete protocol against SeaweedFS and R2, including one-part multipart for small files; never bypass it with direct filesystem output. Local success still needs a small real-R2 transport canary.
 
-A phone's `localhost` is the phone. Host services normally use API port `3000` and MinIO `9000`; containers use their Compose service names; an Android emulator can use a qualified host alias such as `10.0.2.2`; physical devices need the development machine's reachable LAN hostname/IP. Bind only the intended development interfaces/firewall rules. The workflow task server remains host-local; phones call the web API, not port 8120.
+A phone's `localhost` is the phone. Host services normally use API port `3000` and SeaweedFS `9000`; containers use their Compose service names; an Android emulator can use a qualified host alias such as `10.0.2.2`; physical devices need the development machine's reachable LAN hostname/IP. Bind only the intended development interfaces/firewall rules. The workflow task server remains host-local; phones call the web API, not port 8120.
 
-Configure API/callback origins and S3 signing/public endpoints explicitly. Sign MinIO URLs against a phone-reachable address from the outset: rewriting a signed URL's hostname invalidates its signature. Storage CORS permits the selected UI origin/methods and ETag exposure. Callers never choose provider endpoints, buckets or keys.
+Configure API/callback origins and S3 signing/public endpoints explicitly. Sign SeaweedFS URLs against a phone-reachable address from the outset: rewriting a signed URL's hostname invalidates its signature. Storage CORS permits the selected UI origin/methods and ETag exposure. Callers never choose provider endpoints, buckets or keys.
 
 Use isolated seeded/test identities for deterministic tests; any test-login adapter must be development-only. Google/OAuth redirects, app signing fingerprints and secure-cookie behavior require real-device testing with a registered HTTPS development origin. Local HTTP/debug CA allowances do not qualify production cookies/TLS and must not enter release builds. [Auth contract](auth-and-access.md)
 
@@ -101,7 +73,7 @@ Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native 
 
 ## Real Rerun and Data browser gate
 
-The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.41.0 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
+The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.41.0 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private SeaweedFS/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
 
 Prove `/data-browser` defaults to the dataset list and `?datasetId=...` opens its approved-only grid for either role. Staff may explicitly use `?view=clips` for all accepted clips, including pending/rejected/unassigned ones. A Pipeline row opens `/pipeline/[recordingId]` with the stage visualization and all actions; its **Review clips** action opens `/data-browser?recordingId=<UUID>`, then a card opens the same `/clips/[clipId]` page. There is no separate Review sidebar item. Pipeline has status/search filters, no scenario selector; `/pipeline?status=failed` remains staff-only. Preserve URL state on refresh/paste/Back/Forward.
 

@@ -40,7 +40,7 @@ For every remuxed clip, `clip_pts = source_pts - first_included_source_pts` in t
 
 Before reporting a result, verify source hashes, MCAP decoding, per-shard dimensions/frame counts, joint-array shapes/masks, source-frame/PTS mapping, required files and output hashes. Inspect all declared errors. Persist check status/measurements for the staff Automatic quality checks panel; coverage is not accuracy. Check the archive/reader in the follow-up `export_release`. Await all writes, complete them through the API and seal the inventory; no output upload is allowed afterwards. API acceptance also checks known execution termination/current job references. These checks replace the independent validator for the trusted-code MVP; they do not prove pose accuracy.
 
-Outputs use unique job prefixes and API-issued multipart capabilities, including small manifests. Workers have no broad write credentials or database access. Upload/download behavior is shared by local MinIO and R2 modes. [Transport](mcap-upload.md), [control protocol](job-orchestration.md), [stage handoffs](pipeline-execution-and-data-flow.md).
+Outputs use unique job prefixes and API-issued multipart capabilities, including small manifests. Workers have no broad write credentials or database access. Upload/download behavior is shared by local SeaweedFS and R2 modes. [Transport](mcap-upload.md), [control protocol](job-orchestration.md), [stage handoffs](pipeline-execution-and-data-flow.md).
 
 ## 5. Models and resources
 

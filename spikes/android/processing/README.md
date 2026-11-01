@@ -176,3 +176,5 @@ design. The local fixture/proxy encoder is software `libx264`; installed PyAV
 and linked FFmpeg codec licensing requires its own distribution review and
 does not establish phone hardware codec licensing. Reuse these compatibility
 patterns only after promoting them through the production implementation gates.
+
+2026-11-01 browser regression: the actual Flutter app's variable-cadence emulator source exposed a 31,545 µs → 31,544 µs conversion in pinned Rerun 0.41's floating-point seconds/microseconds boundary. `browser_check.py` now mirrors that exact conversion, asserts a maximum 1 µs difference and unique frame identity, checks decoder input/output agreement, and keeps the nanosecond cursor exact. Original source/MP4 timestamps are unchanged. The [new receipt](../../../docs/validation/flutter-capture-ui.json) records forward/back checks and inspected screenshots separately from historical results.

@@ -15,6 +15,9 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// A dedicated package protects the collector's existing recordings during UI tests.
+val stateactionUiIntegration = providers.gradleProperty("stateactionUiIntegration").orNull == "true"
+
 android {
     namespace = "open.fpvlabs.stera"
     compileSdk = flutter.compileSdkVersion
@@ -41,11 +44,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "open.fpvlabs.stera"
+        applicationId = if (stateactionUiIntegration) "ai.stateaction.capture.integration" else "open.fpvlabs.stera"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -74,4 +78,10 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // integration_test exposes older dynamic test dependencies from the SDK.
+    // Keep the app debug and instrumentation classpaths on the same pins.
+    debugImplementation("androidx.test:runner:1.6.2")
+    debugImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }

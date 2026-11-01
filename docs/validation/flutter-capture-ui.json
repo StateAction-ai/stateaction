@@ -1,0 +1,919 @@
+{
+  "status": "passed_actual_flutter_ui_emulator",
+  "emulator": "emulator-5582",
+  "personal_user": 0,
+  "isolated_packages": [
+    {
+      "package": "ai.stateaction.capture.integration",
+      "bytes": 130994528,
+      "sha256": "3db26e5a4a0ae93b63a39182d166a6d547c14881a6a51ce18169b78898c53362"
+    },
+    {
+      "package": "ai.stateaction.capture.integration.test",
+      "bytes": 6502,
+      "sha256": "d7d15918ad62104f83c1b5b4748a6e0c6a6153f208dbfc6e54895edfc42b775d"
+    }
+  ],
+  "screenshots": {
+    "cancel_preview.png": "ec38a20aa41076614038f6a65608f042d400211fbe71c550eb955f3c5ea486f8",
+    "cancel_recording.png": "23cb804838ea3953d52e9c9da886ed11aa8a2b867b2b0ff3da87792eedfaf495",
+    "cancelled_previous_takes_preserved.png": "e13c8978592c5c6a5d6c1ab4b20f3c6a47cac8356d8708722fa1a0b475e64800",
+    "capture_home.png": "1c1b68c77a2cc857532e1e16061a3630adb3d41fc52393ebfe5ada719d08accc",
+    "discard_confirmation.png": "562d670cdfed86622bede86993da96f8af7ff54439c1f25e51c47b7522404e66",
+    "invalid_profile_error.png": "a0db6d483d8a04e0eebcc7e0d780449103a6e7262c10a87cc0134aaaca1aba49",
+    "profile_retry_ready.png": "10b1e6ccc9a51d30e07260bf223ce72a623a65896b603fa3af1e7c0ab0463533",
+    "retake_after_cancel_saved.png": "9c150f8a2e696babd6918c2390b52996ca47d81c2ca2a46b0607da47cda16377",
+    "take_0_details.png": "36dcaa8a426eb6dac8e89e6ea17b41c5d2fa2fd2d6ec91468be2d9d08f4b9353",
+    "take_0_preview.png": "65fd099b81be2b41349990cbfefd46fa8353328c39371d84746662c955c86e91",
+    "take_0_recording.png": "719aa2a198a8d8697f64bd1f3dd67f069305bd40449c1832c3b704df5a20b8a8",
+    "take_0_saved.png": "ab2be77805bec31c8e820df49f8b2586142122f47770f75fd25e580ddcb74b09",
+    "take_1_details.png": "20f50edd684bf4e03f091516face0cda3e9508329ea258befd2cab8a0fa1630e",
+    "take_1_preview.png": "ae8f006e77aa918521fba5833f7ecd7edd31b9ed5ac4248a21e153be889f9faa",
+    "take_1_recording.png": "29b60623c92cb80a87ec3e5935c7030a6d6220f0df277b59bf90c7928f0c95a8",
+    "take_1_saved.png": "9c150f8a2e696babd6918c2390b52996ca47d81c2ca2a46b0607da47cda16377"
+  },
+  "flutter": {
+    "status": "passed",
+    "run_id": "1793511633179473",
+    "stages": [
+      "capture_home",
+      "invalid_profile_error",
+      "profile_retry_ready",
+      "take_0_preview",
+      "take_0_recording",
+      "take_0_saved",
+      "take_0_details",
+      "cancel_preview",
+      "cancel_recording",
+      "discard_confirmation",
+      "cancelled_previous_takes_preserved",
+      "take_1_preview",
+      "take_1_recording",
+      "take_1_saved",
+      "take_1_details",
+      "retake_after_cancel_saved"
+    ],
+    "outputs": [
+      {
+        "directory": "session_20261101_014051_389_ba623cfd",
+        "frames": 62,
+        "imu_events": 2147,
+        "listed_bytes": 2765588,
+        "source_mcap_sha256": "d50eaeffe4a7cd0804889488202c9519cfed09d272b3e25ab6d41a0113a8d7dc",
+        "source_mcap_bytes": 2753968,
+        "metadata_sha256": "dc94f24af1ef9fe2d70115f3f0cf8da8d50f267e96322000faa12b56b72b8371"
+      },
+      {
+        "directory": "session_20261101_014138_047_a7b307e3",
+        "frames": 47,
+        "imu_events": 1971,
+        "listed_bytes": 2201913,
+        "source_mcap_sha256": "17196c6800f4e2c1e90402c3b1235b9ba3364174aa75113cb0197fb47feae96c",
+        "source_mcap_bytes": 2190296,
+        "metadata_sha256": "8dc82d7ead73a67b893e060f533d7a15867df01b19a8f64bafc6c094fc7ff4e6"
+      }
+    ],
+    "cancel_deleted_only_active_take": true,
+    "actual_flutter_screens": true,
+    "actual_native_camera_plugin": true,
+    "hardware_qualified": false,
+    "paid_resources_created": false
+  },
+  "physical_devices_touched": false,
+  "hardware_qualified": false,
+  "paid_resources_created": false,
+  "date": "2026-11-01",
+  "test_mode": "Actual application main/widgets/native recorder, explicit emulator simulation profile and test-only no-auth override",
+  "source_files_sha256": {
+    "apps/mobile/android/app/build.gradle.kts": "117fb7337264ac586638309269ca53ecd94d1d00550f07bb65896f2c07fca757",
+    "apps/mobile/android/app/src/androidTest/java/open/fpvlabs/stera/CaptureUiIntegrationTest.java": "f1b97048f8b16c402904418ad02f23a7035dc8ac76ae4e16b18b082d0eb89d5c",
+    "apps/mobile/integration_test/capture_ui_test.dart": "739d6a0585f4ee9afc2aabf2d5f4a970de6eb7c1ee2c4813a6b6dc9e1c9d2f5f",
+    "apps/mobile/lib/src/modules/capture/ui/capture_page.dart": "12f9aeb88c2b5da0317f972f4ad0da7909ae6f5452dd56641942bcfdeb999c2c",
+    "apps/mobile/lib/src/modules/capture/ui/widgets/capture_recordings_section.dart": "fbea40ad6c7b1d1e32c564d50294a33404674626aaa8b4727433ead102cfa432",
+    "apps/mobile/lib/src/modules/demo/ui/widgets/app_demo_video_inline_intro_card.dart": "e10537c856c60173e0019270288ab0c21c9071cdb5830c19c29331dc37c9d080",
+    "apps/mobile/lib/src/modules/recordings/ui/widgets/recording_session_tile.dart": "97f709d41c8a89686ea2dd5c6017fa57eefc167938f9f20a03fc31c93469a54d",
+    "apps/mobile/lib/src/services/recordings_service/data/models/recording_session.dart": "28a7434ac0bc3ddfca944501e6e5874841545089a98680bb3eeb55193a7abcb2",
+    "apps/mobile/lib/src/services/recordings_service/recordings_service.dart": "0b858be7d50cb591ff84f42dd3a3841ed1a9b801d53bf96a1793701020f94154",
+    "apps/mobile/pubspec.lock": "23c405ca1a0617410820e1cc4c8bd2fc5b5e3674630c54bb3c3d0c6f773ba40e",
+    "apps/mobile/pubspec.yaml": "35eb6d51d994499a8272311c028f88fefcf1d9c397636fbf3471c260e8f6aebe",
+    "apps/mobile/test/src/services/recordings_service/recording_size_test.dart": "eed5067ac0bd00c6a61d5d8ad224349fafcc698eb47c003f78558d73f0d0392c",
+    "scripts/test_flutter_capture_ui.py": "7db72947cac5ea0667a355d9409b3b88e179d1193c4ddd9c4ee0021d9cb2129d",
+    "spikes/android/processing/browser_check.py": "a8f9d3b09846616a67024d97b181c312104978b3e33d7c589c0bcd792018912a",
+    "spikes/android/processing/viewer.html": "2f66b4c06cf91af9169fdc1cc50cd52f85fd9ee4c9c02722c98e3c4bc299287d"
+  },
+  "screenshots_visually_inspected_by_root": [
+    "invalid_profile_error.png",
+    "take_1_saved.png",
+    "take_1_details.png"
+  ],
+  "checks": {
+    "flutter_app_tests": 161,
+    "flutter_recorder_tests": 18,
+    "flutter_analyzers_clean": true,
+    "native_unit_tests": 57,
+    "native_unit_failures": 0,
+    "android_instrumentation_passed": true,
+    "dart_test_passed": true,
+    "fresh_screens_acknowledged": 16
+  },
+  "cpu_processing": [
+    {
+      "source_sha256": "d50eaeffe4a7cd0804889488202c9519cfed09d272b3e25ab6d41a0113a8d7dc",
+      "source_bytes": 2753968,
+      "frames": 62,
+      "channels": {
+        "/camera/camera_info": 62,
+        "/camera/pose": 37,
+        "/camera/rgb/video": 62,
+        "/capture/frame_geometry": 62,
+        "/device/metrics": 16,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/frame_events": 186,
+        "/stateaction/imu/accel": 1074,
+        "/stateaction/imu/gyro": 1073,
+        "/stateaction/sensor_events": 218,
+        "/tf": 37,
+        "/trajectory": 4
+      },
+      "clips": [
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-000",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 11387,
+              "sha256": "e387cf0470a254408da4cd03630f43ae7b929b68a9dc44644008c3fbd543f5d0"
+            },
+            "hands.npz": {
+              "bytes": 1152,
+              "sha256": "6ab6b5e393712a744ca3ecddc749669aaf3af6c2f828f1176151486b27816304"
+            },
+            "rgb.mp4": {
+              "bytes": 69169,
+              "sha256": "b0dbe5e82567bcf1ec7b95aeb9c1e99fea16c0abf1c80980267ddd2d5f447308"
+            },
+            "viewer.rrd": {
+              "bytes": 69449,
+              "sha256": "52154371691e4667daff524fade4359e0192e75e4741322bc6115eb4c3d03abf"
+            }
+          },
+          "first_source_frame_id": "0",
+          "frames": 7,
+          "last_source_frame_id": "6",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "0",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-001",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8181,
+              "sha256": "a25ff21f64cd51a5b491a9fb11db6eec2c9acee292e18e6241c6df0a7217d8b2"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 94385,
+              "sha256": "a6e744f8723c67ef285908395f190ec7d3a2edc8bd10abf3967fd99476855620"
+            },
+            "viewer.rrd": {
+              "bytes": 66019,
+              "sha256": "5881bd36b2f87ad3e0b1db9c2cd8e227d72672aa01628ef9c26e199541ed091e"
+            }
+          },
+          "first_source_frame_id": "7",
+          "frames": 5,
+          "last_source_frame_id": "11",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "1167577",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-002",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 11470,
+              "sha256": "dd62d04b8c244a63f556e2c17cc76ae0f43d703ac4292b10531de3ff05cd3f5c"
+            },
+            "hands.npz": {
+              "bytes": 1152,
+              "sha256": "6ab6b5e393712a744ca3ecddc749669aaf3af6c2f828f1176151486b27816304"
+            },
+            "rgb.mp4": {
+              "bytes": 121417,
+              "sha256": "34c9ad375bbf008bfcb20fb20a1b692629afb94fd652950aaac746a7db09ca24"
+            },
+            "viewer.rrd": {
+              "bytes": 69558,
+              "sha256": "d62bb4c654b9cd2c972c4d923d379267cdcac7775dc92062852b62b9108aed84"
+            }
+          },
+          "first_source_frame_id": "12",
+          "frames": 7,
+          "last_source_frame_id": "18",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "2186001",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-003",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8192,
+              "sha256": "3f594e5a3309d11995b9185a9c003afc22bc0d4a713d37da0976bab5af68b584"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 101543,
+              "sha256": "184975ad5c2573c619522b49eb317854654b6b10ba4dcdc674b57c2744a95769"
+            },
+            "viewer.rrd": {
+              "bytes": 66280,
+              "sha256": "ba945f663994d754591f60d60755566855ca183857b8538b623aac9678ab7526"
+            }
+          },
+          "first_source_frame_id": "19",
+          "frames": 5,
+          "last_source_frame_id": "23",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "3387244",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-004",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 9832,
+              "sha256": "b21e78a45f2a15dbf5e34f6e84ddd0feeb4b34b87b0692a9db4e53b01265f422"
+            },
+            "hands.npz": {
+              "bytes": 1144,
+              "sha256": "f71ffb0dd9242f8fbdd05d10c4755b6f1d96d5e0f98a544ee806080b212b9e85"
+            },
+            "rgb.mp4": {
+              "bytes": 111826,
+              "sha256": "ca90873841d31903b98762bdafc21acfc5e963fa386a545af2698a6869adc0dc"
+            },
+            "viewer.rrd": {
+              "bytes": 67783,
+              "sha256": "995686006c181feb2e758596b3e4f4b2db50aee2bb379f39b1f23047888d00b8"
+            }
+          },
+          "first_source_frame_id": "24",
+          "frames": 6,
+          "last_source_frame_id": "29",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "4527090",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-005",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 13119,
+              "sha256": "8acb716f5d62d56eb1a693be8b5d72bd0be7a3b479c6dbc51960a416635ce84b"
+            },
+            "hands.npz": {
+              "bytes": 1157,
+              "sha256": "e657571bd4ade161cc63030b569b81467c283ba0675d4686caded8e7d1895565"
+            },
+            "rgb.mp4": {
+              "bytes": 186985,
+              "sha256": "745d1174f680a9ef89d3250ab372c8e6b5863cb7faf9f95aead1c894b41a1dfd"
+            },
+            "viewer.rrd": {
+              "bytes": 71230,
+              "sha256": "a34dacd81d4bba6fb745ef139555e13b8983a84dd1f88abd71147522db1889af"
+            }
+          },
+          "first_source_frame_id": "30",
+          "frames": 8,
+          "last_source_frame_id": "37",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "5503642",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-006",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 14754,
+              "sha256": "0125e706b210d03ac5e0029e573ab218ad268de4db6e96a6f5328a71dbb51a9e"
+            },
+            "hands.npz": {
+              "bytes": 1163,
+              "sha256": "04adb30f229f92deb4307aea4096f9d8637b9399c045261b274b7866a2a6e8b8"
+            },
+            "rgb.mp4": {
+              "bytes": 137398,
+              "sha256": "e78ecb9325b635fd7e8bd2c5c99144590dffa38a2dc5a59bc5e20d87dd121e2d"
+            },
+            "viewer.rrd": {
+              "bytes": 72915,
+              "sha256": "451abea04873371f3431380de02490117a3afb8f890cb9c7fe165c9e3fbfe98c"
+            }
+          },
+          "first_source_frame_id": "38",
+          "frames": 9,
+          "last_source_frame_id": "46",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "6995184",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-007",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8190,
+              "sha256": "ebee1d724a5c176f5b45a398be8f9646f1d46ededbb0e8f9118f761d9a2a60ed"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 103641,
+              "sha256": "41b34236a127eaa0c7b544eef2eab2d822c3292aafd2081aee108c8eb97ece58"
+            },
+            "viewer.rrd": {
+              "bytes": 66193,
+              "sha256": "b1b403fdecbb6f4e6b3e5ceeb8707780b65085b5d8f4c3b0467f9c39088f3635"
+            }
+          },
+          "first_source_frame_id": "47",
+          "frames": 5,
+          "last_source_frame_id": "51",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "8108132",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-008",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 11476,
+              "sha256": "fdc070a4df29dbb67b4396ad0fd8247b79139f3a2be3aaa6dacf119417c66edf"
+            },
+            "hands.npz": {
+              "bytes": 1152,
+              "sha256": "6ab6b5e393712a744ca3ecddc749669aaf3af6c2f828f1176151486b27816304"
+            },
+            "rgb.mp4": {
+              "bytes": 120549,
+              "sha256": "aed9348b3ddfe9efb7d6bbc43977f12b57c8edaa155927e5d76c41d472ef739f"
+            },
+            "viewer.rrd": {
+              "bytes": 69686,
+              "sha256": "cb1f1ba2b0120000ebe5ff00de620b66a5adaf0759964847409ab7ba58b6fbe6"
+            }
+          },
+          "first_source_frame_id": "52",
+          "frames": 7,
+          "last_source_frame_id": "58",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "9233689",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-009",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 4916,
+              "sha256": "8adcee565021129690c19062ea7367422f91442dc97c447cf7d1b9841bce3989"
+            },
+            "hands.npz": {
+              "bytes": 1126,
+              "sha256": "24307612bfaa352d14a1019e023221a36c26df8d3aac37ef55a03796476527cc"
+            },
+            "rgb.mp4": {
+              "bytes": 139296,
+              "sha256": "2a0d8b296a3f26e7540e326b6398ab228eb694b8f76de709b72f989b9f1bc341"
+            },
+            "viewer.rrd": {
+              "bytes": 62903,
+              "sha256": "2fcc8cdf3ee39dc3a28574a6f0ee2be378ae2df15f98930055d9bdc4cdfaac5f"
+            }
+          },
+          "first_source_frame_id": "59",
+          "frames": 3,
+          "last_source_frame_id": "61",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "10422169",
+          "time_base": [
+            1,
+            1000000
+          ]
+        }
+      ],
+      "packages": {
+        "av": "19.0.2",
+        "foxglove-schemas-protobuf": "0.4.0",
+        "mcap": "1.6.0",
+        "mediapipe": "1.2.0",
+        "rerun-sdk": "0.41.0"
+      },
+      "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "seconds": 2.816076208022423,
+      "peak_rss_kib": 383688,
+      "metric_accuracy_validated": false,
+      "cross_sensor_synchronization_validated": false
+    },
+    {
+      "source_sha256": "17196c6800f4e2c1e90402c3b1235b9ba3364174aa75113cb0197fb47feae96c",
+      "source_bytes": 2190296,
+      "frames": 47,
+      "channels": {
+        "/camera/camera_info": 47,
+        "/camera/pose": 27,
+        "/camera/rgb/video": 47,
+        "/capture/frame_geometry": 47,
+        "/device/metrics": 14,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/frame_events": 141,
+        "/stateaction/imu/accel": 983,
+        "/stateaction/imu/gyro": 988,
+        "/stateaction/sensor_events": 165,
+        "/tf": 27,
+        "/trajectory": 3
+      },
+      "clips": [
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-000",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 9754,
+              "sha256": "8e3022fbe58d54ed16fab5f2f96b99bd7fa331eb08c4343a4b87bd1f41bb7690"
+            },
+            "hands.npz": {
+              "bytes": 1144,
+              "sha256": "f71ffb0dd9242f8fbdd05d10c4755b6f1d96d5e0f98a544ee806080b212b9e85"
+            },
+            "rgb.mp4": {
+              "bytes": 45745,
+              "sha256": "0a9f1616790f95c3359435f644f6fa19734fbf3da8ef9897fdb43865bb98dbfc"
+            },
+            "viewer.rrd": {
+              "bytes": 67423,
+              "sha256": "026980f4b952b7deb4b2b58eedf8d5ca86702bd4138e1f9bcf9d7c36e5de8931"
+            }
+          },
+          "first_source_frame_id": "0",
+          "frames": 6,
+          "last_source_frame_id": "5",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "0",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-001",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 9820,
+              "sha256": "f50c2d16e38008e902c0c110c23ec78fc7fca8a9cb04a4675d14b69a1b100e23"
+            },
+            "hands.npz": {
+              "bytes": 1144,
+              "sha256": "f71ffb0dd9242f8fbdd05d10c4755b6f1d96d5e0f98a544ee806080b212b9e85"
+            },
+            "rgb.mp4": {
+              "bytes": 111200,
+              "sha256": "a31db4f2d5b1c8d68bf1ef076f92cae33e7c71165b160cc577e7df64de483078"
+            },
+            "viewer.rrd": {
+              "bytes": 67902,
+              "sha256": "5c5fefdd052dd796f8656d3a70ba630a900e9c9323b39563a8bd82d8f61ec3df"
+            }
+          },
+          "first_source_frame_id": "6",
+          "frames": 6,
+          "last_source_frame_id": "11",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "1157899",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-002",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8190,
+              "sha256": "588a89dd86ff568b893102562ddf922f2a4d35bd19320d94e03315b79a7abb74"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 102100,
+              "sha256": "21eb1ab3bc35fe8ed6633c88de488776ff95e9d24bb77814af975b2030411871"
+            },
+            "viewer.rrd": {
+              "bytes": 66017,
+              "sha256": "3b17c3a6e9e69979f784eea5872792e3b2c7367048351fee5ca16e1ebe510801"
+            }
+          },
+          "first_source_frame_id": "12",
+          "frames": 5,
+          "last_source_frame_id": "16",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "2346801",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-003",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 13116,
+              "sha256": "a14054bff51bd53920dbed0673e8e3de7ec6dc6cb9ba83346443670675e9165f"
+            },
+            "hands.npz": {
+              "bytes": 1157,
+              "sha256": "e657571bd4ade161cc63030b569b81467c283ba0675d4686caded8e7d1895565"
+            },
+            "rgb.mp4": {
+              "bytes": 130268,
+              "sha256": "a7b04b9a94ab8f312cca11798e031b02c92ec0fd97458211c20ea9afaebff102"
+            },
+            "viewer.rrd": {
+              "bytes": 71148,
+              "sha256": "292aed3b8a133420d70c41b781e24911f2a377844f5504e64f97cf408a170db8"
+            }
+          },
+          "first_source_frame_id": "17",
+          "frames": 8,
+          "last_source_frame_id": "24",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "3567777",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-004",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8190,
+              "sha256": "94521061af1c9d45c6a76a375c16b113bd36787dc83a25676e4584329b593dfc"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 103591,
+              "sha256": "34992bfdd35f1fbbacba594980820a22e8c0188d269c58a1894bf7d6e7b075de"
+            },
+            "viewer.rrd": {
+              "bytes": 66717,
+              "sha256": "62b7c3cf8100b56c5478813f0c845a887cb27b03a7103825ae65a86100f8c137"
+            }
+          },
+          "first_source_frame_id": "25",
+          "frames": 5,
+          "last_source_frame_id": "29",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "5074983",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-005",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 9832,
+              "sha256": "f0d98a344417ed864dbbc036870c63a70447e42413dd318b976d35483ab80942"
+            },
+            "hands.npz": {
+              "bytes": 1144,
+              "sha256": "f71ffb0dd9242f8fbdd05d10c4755b6f1d96d5e0f98a544ee806080b212b9e85"
+            },
+            "rgb.mp4": {
+              "bytes": 112166,
+              "sha256": "4ceb820bf8f3f0e6ad75c91310c7a7ebf7903d6585a276b6a5f761b0299e72b6"
+            },
+            "viewer.rrd": {
+              "bytes": 68298,
+              "sha256": "d89b497dbea3997b51718e5708bc0643fb1fd23197c8f52ae194f7f862887cbe"
+            }
+          },
+          "first_source_frame_id": "30",
+          "frames": 6,
+          "last_source_frame_id": "35",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "6230725",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-006",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 11476,
+              "sha256": "a4fabab422028a718d034d10b5bdb588edb3e72fa4e631ab81ac32e17b232f53"
+            },
+            "hands.npz": {
+              "bytes": 1152,
+              "sha256": "6ab6b5e393712a744ca3ecddc749669aaf3af6c2f828f1176151486b27816304"
+            },
+            "rgb.mp4": {
+              "bytes": 121337,
+              "sha256": "6572e36597f1c37454b8e15018f44be1e4b4bd5bfaf7e25f335ecd93bfac86cb"
+            },
+            "viewer.rrd": {
+              "bytes": 70057,
+              "sha256": "a7e8c1ec4732eb7fc9b52306ef9ce05e01c757a38be96ff42c726467d92e77a5"
+            }
+          },
+          "first_source_frame_id": "36",
+          "frames": 7,
+          "last_source_frame_id": "42",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "7729877",
+          "time_base": [
+            1,
+            1000000
+          ]
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-007",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 6546,
+              "sha256": "5848ddea257ff5665fc3b2d6cf40eb0a48168b766df50da771eb8d250ffa73f1"
+            },
+            "hands.npz": {
+              "bytes": 1132,
+              "sha256": "26c6fefec220b2c99f1801a38274024a10c58a1419af623a0b23d04b34e324f6"
+            },
+            "rgb.mp4": {
+              "bytes": 93083,
+              "sha256": "336020d9e8a359f789e4013aaea4a6a8fc771b71506fd31333b847e8c1a2b056"
+            },
+            "viewer.rrd": {
+              "bytes": 64293,
+              "sha256": "159fe4a86ef133a3122452c6ba7164e254252107a049460d88c2d9f352e28a3a"
+            }
+          },
+          "first_source_frame_id": "43",
+          "frames": 4,
+          "last_source_frame_id": "46",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "9033725",
+          "time_base": [
+            1,
+            1000000
+          ]
+        }
+      ],
+      "packages": {
+        "av": "19.0.2",
+        "foxglove-schemas-protobuf": "0.4.0",
+        "mcap": "1.6.0",
+        "mediapipe": "1.2.0",
+        "rerun-sdk": "0.41.0"
+      },
+      "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "seconds": 2.136954888002947,
+      "peak_rss_kib": 371548,
+      "metric_accuracy_validated": false,
+      "cross_sensor_synchronization_validated": false
+    }
+  ],
+  "browser": {
+    "status": "passed",
+    "viewer_version": "0.41.0",
+    "rrd_sha256": "5881bd36b2f87ad3e0b1db9c2cd8e227d72672aa01628ef9c26e199541ed091e",
+    "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+    "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2",
+    "screenshots_visually_inspected": true,
+    "playback": {
+      "advanced_to_ns": "300000003",
+      "cursor_advanced": true,
+      "pause_state": "paused"
+    },
+    "stop_removed_canvas": true,
+    "timestamp_contract": "Exact source/MP4 PTS and nanosecond cursor; WebCodecs uses pinned Rerun f64 conversion/truncation, independently checked within 1us.",
+    "limitations": [
+      "Headless Linux Chromium + software WebGL only; no Safari/Firefox or handset browser qualification.",
+      "No signed URL, expiry, API, auth, React remount or production Next.js bundle test.",
+      "Screenshots require human/agent visual readback before recording inspection as passed."
+    ],
+    "snapshots": [
+      {
+        "direction": "forward",
+        "source_frame_id": "10",
+        "source_clip_pts_us": "448631",
+        "webcodecs_timestamp_us": 448631,
+        "webcodecs_source_delta_us": 0,
+        "clip_time_ns": "448631000",
+        "screenshot": "browser-forward.png",
+        "screenshot_sha256": "d41aeff265b97dd05b4dc57a8fe8949c411ad87057bbe0973b896dea8d5d24ab"
+      },
+      {
+        "direction": "backward",
+        "source_frame_id": "8",
+        "source_clip_pts_us": "31545",
+        "webcodecs_timestamp_us": 31544,
+        "webcodecs_source_delta_us": -1,
+        "clip_time_ns": "31545000",
+        "screenshot": "browser-backward.png",
+        "screenshot_sha256": "0e5e6f256e1dec9a06f27825f32924146f4bb8a2a7e8f761163b708bd96b07b9"
+      }
+    ],
+    "timestamp_source": [
+      "https://github.com/rerun-io/rerun/blob/0.41.0/crates/utils/re_video/src/time.rs",
+      "https://github.com/rerun-io/rerun/blob/0.41.0/crates/utils/re_video/src/decode/webcodecs.rs"
+    ]
+  },
+  "limitations": [
+    "Test-only authentication bypass; no login/upload/background transport or web product review qualified.",
+    "API33 virtual camera, software AVC 640x480 and disclosed unverified simulation transport timeline; no physical camera/IMU synchronization, hardware codec/rate, depth or heat qualification.",
+    "CPU inference ran; virtual scene produced zero hands. No anatomical/metric or repair-footage accuracy claim.",
+    "Short captures only; two-hour memory, battery, cadence and storage qualification remain open."
+  ],
+  "failures_fixed": [
+    "Saved list previously omitted MCAP bytes and treated MCAP-only sources as lacking video. H264 entries now show details instead of the JPEG-only player.",
+    "Flutter app overrides ErrorWidget.builder; integration fixture now restores global state after unmount, preserving framework checks.",
+    "ADB can return missing-file text with zero status; harness requires fresh valid JSON, matching run identity, all acknowledged screens and successful Android instrumentation.",
+    "Rerun browser harness expected integer source microseconds. Actual pinned f64 conversion truncates a demonstrated 31545us to 31544us. The harness verifies that exact documented conversion and decoder input/output identity, with a separately enforced 1us bound and unique frame mapping; source/MP4 PTS remain exact."
+  ],
+  "cleanup": {
+    "owned_emulator_adb_connected_after_tests": false,
+    "owned_exec_session_exited": true,
+    "physical_device_mutations": 0,
+    "paid_resources_created": 0
+  }
+}

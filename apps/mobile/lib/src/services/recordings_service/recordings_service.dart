@@ -76,7 +76,7 @@ class RecordingsService {
           await depthZip.exists() && (await depthZip.length()) > 0;
       final hasDepth = hasSpatialDataZip || hasDepthDir || hasDepthZip;
       final recordedAt = parseSessionTimestamp(dirName);
-      final sizeBytes = await _sessionSizeBytes(entity, videoFile);
+      final sizeBytes = await sessionSizeBytes(entity, videoFile);
       final thumbnailFile = File(p.join(entity.path, "thumbnail.jpg"));
       final hasThumbnail = await thumbnailFile.exists();
 
@@ -89,9 +89,14 @@ class RecordingsService {
           durationSeconds: durationSeconds,
           frameCount: frameCount,
           imuSamples: imuSamples,
-          hasVideo: await videoFile.exists(),
+          hasVideo:
+              await videoFile.exists() ||
+              (frameCount > 0 && findMcapFile(entity.path) != null),
           hasDepth: hasDepth,
           sizeBytes: sizeBytes,
+          rgbCodec: metadata["rgb_codec"] is String
+              ? metadata["rgb_codec"] as String
+              : null,
         ),
       );
     }
@@ -206,13 +211,18 @@ class RecordingsService {
     }
   }
 
-  /// Computes the meaningful size of a session directory by summing only
-  /// the video file, spatial_data.zip, and metadata.json — skipping raw
-  /// CSV/binary files that are already included in the zip.
-  static Future<int> _sessionSizeBytes(Directory dir, File videoFile) async {
+  /// Includes the MCAP source, legacy video/archive and final metadata.
+  /// Raw legacy CSV/binary derivatives already included in the archive are
+  /// excluded; new H.264 recordings retain their source imagery inside MCAP.
+  @visibleForTesting
+  static Future<int> sessionSizeBytes(Directory dir, File videoFile) async {
     var bytes = 0;
     if (await videoFile.exists()) {
       bytes += await videoFile.length();
+    }
+    final mcap = findMcapFile(dir.path);
+    if (mcap != null && mcap.path != videoFile.path) {
+      bytes += await mcap.length();
     }
     final spatialZip = File(p.join(dir.path, "spatial_data.zip"));
     if (await spatialZip.exists()) {

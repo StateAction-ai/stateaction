@@ -1,0 +1,87 @@
+name: Checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      platform: ${{ steps.paths.outputs.platform }}
+      mobile: ${{ steps.paths.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          base = os.environ.get("BASE_SHA", "")
+          if not base or set(base) == {"0"}:
+              files = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          else:
+              files = subprocess.check_output(["git", "diff", "--name-only", base, "HEAD"], text=True).splitlines()
+          platform = any(re.match(r"(apps/(web|jobs)/|packages/(server|contracts)/|workers/|infra/|config/|scripts/platform/|package.json$|pnpm-|Makefile$|\.github/workflows/|\.node-version$|\.nvmrc$|\.npmrc$|\.env(?:\.workflows)?\.example$|\.python-version$)", f) for f in files)
+          mobile = any(re.match(r"(apps/mobile/|packages/stera_recorder/|packages/contracts/capture/|scripts/.*android|scripts/.*flutter|scripts/env\.sh$|\.tool-versions$|\.github/workflows/)", f) for f in files)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"platform={str(platform).lower()}\nmobile={str(mobile).lower()}\n")
+          PY
+  platform:
+    needs: changes
+    if: needs.changes.outputs.platform == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.22.2
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: 0.13.6
+      - run: npm install --global pnpm@10.33.0
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --project workers/processing --locked
+      - run: pnpm typecheck && pnpm test && pnpm build && pnpm format:check
+      - run: uv run --project workers/processing --locked python -m unittest discover -s workers/processing/tests -v
+      - run: uv run --locked mypy
+        working-directory: workers/processing
+      - run: uv build --project workers/processing --out-dir artifacts/worker-dist
+      - run: python3 scripts/platform/install-render.py
+      - name: Real local workflow and dependency smoke
+        run: bash scripts/platform/ci-smoke.sh
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: 3.44.6
+          channel: stable
+          cache: true
+      - run: cp apps/mobile/.env.example apps/mobile/.env
+      - run: flutter pub get --enforce-lockfile && flutter analyze && flutter test
+        working-directory: apps/mobile
+      - run: flutter pub get && flutter analyze && flutter test
+        working-directory: packages/stera_recorder
+      - run: sdkmanager "platforms;android-36" "build-tools;35.0.0"
+      - run: flutter build apk --debug --target-platform android-x64
+        working-directory: apps/mobile
+      - run: ./gradlew :stera_recorder:testDebugUnitTest --no-daemon --max-workers=2
+        working-directory: apps/mobile/android
