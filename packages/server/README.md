@@ -1,5 +1,7 @@
 # Server foundation
 
-Server-only configuration, Postgres/storage readiness, local migration/bootstrap and guarded Render dispatch. `pnpm --filter @stateaction/server... build` builds its shared dependency first. Native Node tools importing the guarded package need `--conditions=react-server`; ordinary imports intentionally fail.
+Server-only configuration, Postgres/storage readiness, migrations, the catalog access layer and guarded Render dispatch. `pnpm --filter @stateaction/server... build` builds its shared dependency first. Native Node tools importing the guarded package need `--conditions=react-server`; ordinary imports intentionally fail.
 
-`make migrate` applies the idempotent platform version marker; `make storage-init` creates only the local development bucket. No auth/recording/job/review tables are implied by this migration. Hosted migrations and the production domain model are later work.
+`make migrate` applies ordered, checksummed migrations: platform marker, Better Auth 1.7.15 tables and the SA-13 catalog. `pnpm --filter @stateaction/server seed` adds deterministic local identities and catalog examples; set `LOCAL_SEED_PASSWORD` (≥ 12 characters) for local sign-in accounts. `make storage-init` creates only the local development bucket. See [catalog design](../../docs/components/catalog.md) for constraints, lock order and privileges.
+
+`pnpm exec nx run server:integration` runs the real catalog integration tests on a throwaway Postgres with an unprivileged owner and the restricted `stateaction_app` role. Hosted migration invocation and Render role provisioning are SA-14 wiring.
