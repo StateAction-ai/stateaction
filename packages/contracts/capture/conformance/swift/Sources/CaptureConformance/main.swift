@@ -17,6 +17,8 @@ let magic: [UInt8] = [0x89, 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a]
 
 struct Truncated: Error {}
 struct Malformed: Error {}
+struct Unsupported: Error {}
+struct CrcMismatch: Error {}
 
 // MARK: JSON value (keeps bool/int/string distinct)
 indirect enum J: Decodable, Equatable {
@@ -125,18 +127,31 @@ func readStr(_ b: [UInt8], _ off: Int) throws -> (String, Int) {
     return (String(decoding: b[(off + 4)..<(off + 4 + n)], as: UTF8.self), off + 4 + n)
 }
 
+// Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
+// DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
 func readMcap(_ d: [UInt8]) throws -> Mcap {
+    let out = try readMcapRecords(d)
+    guard out.messages.allSatisfy({ out.channels[$0.channel] != nil }) else { throw Malformed() }
+    return out
+}
+
+func readMcapRecords(_ d: [UInt8]) throws -> Mcap {
     guard d.count >= 8, Array(d[0..<8]) == magic else { throw Truncated() }
     var pos = 8
     var out = Mcap()
+    var dataEnd = false
     while true {
         if pos == d.count || pos + 9 > d.count { throw Truncated() }
+        let recordStart = pos
         let op = d[pos]
-        let len = Int(try le(d, pos + 1, UInt64.self))
+        let rawLen = try le(d, pos + 1, UInt64.self)
         let start = pos + 9
-        guard start + len <= d.count else { throw Truncated() }
+        guard rawLen <= UInt64(d.count - start) else { throw Truncated() }
+        let len = Int(rawLen)
         let body = Array(d[start..<(start + len)])
         pos = start + len
+        if (op == 0x01) != (recordStart == 8) { throw Unsupported() }
+        if dataEnd && op != 0x02 { throw Unsupported() }
         switch op {
         case 0x01: out.profile = try readStr(body, 0).0
         case 0x03:
@@ -149,12 +164,17 @@ func readMcap(_ d: [UInt8]) throws -> Mcap {
             let (topic, o1) = try readStr(body, 4)
             out.channels[Int(try le(body, 0, UInt16.self))] = (Int(try le(body, 2, UInt16.self)), topic, try readStr(body, o1).0)
         case 0x05:
-            guard out.channels[Int(try le(body, 0, UInt16.self))] != nil else { throw Malformed() }
             out.messages.append(Message(channel: Int(try le(body, 0, UInt16.self)), sequence: try le(body, 2, UInt32.self), logTime: try le(body, 6, UInt64.self), data: Array(body[22...])))
+        case 0x0f:
+            let crc = try le(body, 0, UInt32.self)
+            dataEnd = true
+            if crc == 0 || crc != crc32(d, recordStart) { throw CrcMismatch() }
         case 0x02:
+            guard dataEnd else { throw Unsupported() }
+            guard try le(body, 0, UInt64.self) == 0, try le(body, 8, UInt64.self) == 0, try le(body, 16, UInt32.self) == 0 else { throw Unsupported() }
             guard pos + 8 == d.count, Array(d[pos...]) == magic else { throw Truncated() }
             return out
-        default: break
+        default: throw Unsupported()
         }
     }
 }
@@ -276,27 +296,25 @@ let channelTable: [String: (String, String, String)] = [
 ]
 let identityKeys = ["recording_id", "stream_id", "native_timestamp_ns", "native_clock_id", "mapped_capture_time_ns",
                     "clock_mapping_revision", "calibration_id", "encoder_pts_us", "encoder_time_base", "native_timestamps"]
-let frameStates = ["acquired", "submitted", "written", "dropped"]
 
 func isDecimal(_ v: J?) -> Bool {
     guard let s = v?.s, !s.isEmpty, s.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }) else { return false }
     return s == "0" || s.first != "0"
 }
-func nonEmpty(_ v: J?) -> Bool { if let s = v?.s { return !s.isEmpty }; return false }
 func isObj(_ v: J?) -> Bool { if case .obj? = v { return true }; return false }
-func same(_ a: J?, _ b: J?) -> Bool { canonical(a ?? .null) == canonical(b ?? .null) }
+// Identity comparison uses deep JSON equality (1 == 1.0), exactly like the Python reference.
+func same(_ a: J?, _ b: J?) -> Bool { jsonEqual(a, b) }
 
-func frameEventShapeOk(_ e: J) -> Bool {
-    guard case .obj = e, let st = e["state"]?.s, frameStates.contains(st) else { return false }
-    for k in ["recording_id", "stream_id", "native_clock_id", "clock_mapping_revision", "calibration_id"] where !nonEmpty(e[k]) { return false }
-    for k in ["source_frame_id", "native_timestamp_ns", "mapped_capture_time_ns"] where !isDecimal(e[k]) { return false }
-    if !isObj(e["native_timestamps"]) { return false }
-    if st == "dropped" && !nonEmpty(e["reason"]) { return false }
-    if st == "written" {
-        guard e["output_channel"]?.s == videoTopic, let seq = e["output_sequence"]?.i, seq >= 0, case .bool? = e["is_idr"] else { return false }
-    }
-    return true
+var captureDir = "../.."
+var schemaCache: [String: StrictSchema] = [:]
+// The reviewed contract schema (never the file's embedded copy, which is only hash-compared).
+func contractSchema(_ name: String) throws -> StrictSchema {
+    if let s = schemaCache[name] { return s }
+    let s = try StrictSchema(parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(captureDir)/\(custom[name]!)")))))
+    schemaCache[name] = s
+    return s
 }
+let singletonTopics = ["/stateaction/capture_profile", "/stateaction/clocks", "/stateaction/inventory", "/stateaction/close"]
 
 func rejectWith(_ errors: Set<String>) -> J {
     .obj(["outcome": .str("reject"), "errors": .arr(errors.sorted().map { .str($0) }), "facts": .obj([:])])
@@ -307,6 +325,10 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     let f: Mcap
     do { f = try readMcap(data) } catch is Truncated {
         return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_TRUNCATED")]), "facts": .obj([:])])
+    } catch is Unsupported {
+        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_UNSUPPORTED_LAYOUT")]), "facts": .obj([:])])
+    } catch is CrcMismatch {
+        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_DATA_CRC")]), "facts": .obj([:])])
     } catch is Malformed {
         return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_MALFORMED_MESSAGE")]), "facts": .obj([:])])
     }
@@ -347,11 +369,9 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         for (topic, msgs) in byTopic {
             guard let want = channelTable[topic] else { continue }
             if want.2 == "json" {
-                let parsed = try msgs.map { m -> J in
-                    guard let v = try? JSONDecoder().decode(J.self, from: Data(m.data)), isObj(v) else { throw Malformed() }
-                    return v
+                jsonDecoded[topic] = try msgs.map { m -> J in
+                    do { return try parseStrictJson(m.data) } catch { throw Malformed() }
                 }
-                jsonDecoded[topic] = parsed
             } else if want.2 == "protobuf" { videoDecoded = try msgs.map { try decodeVideo($0.data) } }
             else { poseDecoded = try msgs.map { try decodePose($0.data) } }
         }
@@ -359,6 +379,22 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         errors.insert("E_MALFORMED_MESSAGE")
         return rejectWith(errors)
     }
+    // Strict schema gate: violations are reported exactly and stop evaluation.
+    var violations: [String] = []
+    for topic in jsonDecoded.keys.sorted() {
+        let validator = try contractSchema(channelTable[topic]!.0)
+        for (i, value) in jsonDecoded[topic]!.enumerated() {
+            for v in validator.validate(value) { violations.append("\(topic)[\(i)]\(v)") }
+        }
+    }
+    if !violations.isEmpty {
+        errors.insert("E_SCHEMA_MALFORMED")
+        let sortedViolations = violations.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+        return .obj(["outcome": .str("reject"), "errors": .arr(errors.sorted().map { .str($0) }),
+                     "facts": .obj(["schema_violations": .arr(sortedViolations.map { .str($0) })])])
+    }
+    if singletonTopics.contains(where: { (jsonDecoded[$0] ?? []).count != 1 }) { errors.insert("E_CHANNEL_CARDINALITY") }
+    if Set(jsonDecoded.values.flatMap { $0 }.map { $0["recording_id"]?.s ?? "" }).count > 1 { errors.insert("E_RECORDING_ID") }
     func js(_ t: String) -> [J] { jsonDecoded[t] ?? [] }
     let clocks = js("/stateaction/clocks").first?["stream_clocks"] ?? .obj([:])
     var knownCalibrations = Set<String>()
@@ -370,7 +406,6 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     var submitted = Set<String>(), dropReasons: [String: Int] = [:]
     var counts: [String: Int64] = ["acquired": 0, "submitted": 0, "written": 0, "dropped": 0]
     for e in frames {
-        if !frameEventShapeOk(e) { errors.insert("E_SCHEMA_MALFORMED"); continue }
         let sid = e["source_frame_id"]!.s!, st = e["state"]!.s!
         // Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
         // every later event repeats the acquired identity (clock, PTS, calibration, time base).
@@ -381,11 +416,7 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         } else if identityKeys.contains(where: { !same(e[$0], acquired[sid]![$0]) }) {
             errors.insert("E_FRAME_IDENTITY")
         }
-        let tb = e["encoder_time_base"]
-        if !(tb?["numerator"]?.i == 1 && tb?["denominator"]?.i == 1_000_000) { errors.insert("E_TIME_BASE") }
-        if e["encoder_pts_us"] != nil && !isDecimal(e["encoder_pts_us"]) { errors.insert("E_PTS_INVALID") }
         if (st == "acquired" || st == "written") && clocks[e["stream_id"]!.s!]?.s != e["native_clock_id"]?.s { errors.insert("E_CLOCK_MISMATCH") }
-        if (st == "acquired" || st == "written") && e["encoder_pts_us"] == nil { errors.insert("E_MISSING_PTS") }
         if st == "acquired" {
             if isDecimal(e["encoder_pts_us"]), let p = e["encoder_pts_us"]?.s { if !ptsSeen.insert(p).inserted { errors.insert("E_DUPLICATE_PTS") } }
             if !knownCalibrations.contains(e["calibration_id"]!.s!) { errors.insert("E_CALIBRATION_UNKNOWN") }
@@ -452,20 +483,19 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         expect["unresolved"] = .str(String(unresolved))
         let expectMotion: J = .obj(["accel": .str(String(js("/stateaction/imu/accel").count)), "gyro": .str(String(js("/stateaction/imu/gyro").count))])
         let expectDrops: J = .arr(dropReasons.keys.sorted().map { .obj(["reason": .str($0), "count": .str(String(dropReasons[$0]!))]) })
-        var closeDrops: J? = nil
+        var closeDrops: [J] = []
         if case .arr(let d)? = close["drops"] {
-            closeDrops = .arr(d.filter { isObj($0) }.sorted { ($0["reason"]?.s ?? "") < ($1["reason"]?.s ?? "") })
+            closeDrops = d.sorted { Array($0["reason"]!.s!.utf8).lexicographicallyPrecedes(Array($1["reason"]!.s!.utf8)) }
         }
         if !same(close["frames"], .obj(expect)) || close["video_messages"]?.s != String(video.count)
             || !same(close["motion_events"], expectMotion) || close["sensor_events"]?.s != String(sensors.count)
-            || closeDrops == nil || !same(closeDrops, expectDrops) { errors.insert("E_COUNT_MISMATCH") }
+            || !same(.arr(closeDrops), expectDrops) { errors.insert("E_COUNT_MISMATCH") }
         let outcome = close["outcome"]?.s
-        if !["completed", "failed", "aborted", "unknown"].contains(outcome ?? "") { errors.insert("E_SCHEMA_MALFORMED") }
-        else if outcome == "completed" && unresolved != 0 { errors.insert("E_OUTCOME_MISMATCH") }
-        else if outcome == "failed" && !nonEmpty(close["failure_reason"]) { errors.insert("E_OUTCOME_MISMATCH") }
+        if outcome == "completed" && unresolved != 0 { errors.insert("E_OUTCOME_MISMATCH") }
+        else if outcome == "failed" && (close["failure_reason"] ?? .null) == .null { errors.insert("E_OUTCOME_MISMATCH") }
         facts["close_outcome"] = close["outcome"] ?? .null
         facts["unresolved_frames"] = .int(Int64(unresolved))
-    } else { errors.insert("E_COUNT_MISMATCH") }
+    }
     let list = errors.sorted()
     return .obj(["outcome": .str(list.isEmpty ? "accept" : "reject"), "errors": .arr(list.map { .str($0) }), "facts": .obj(list.isEmpty ? facts : [:])])
 }
@@ -520,6 +550,7 @@ func assembleEncoderBuffers(_ buffers: [J], _ sources: [String: [[UInt8]]]) -> J
 }
 
 let cap = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "../..").standardizedFileURL.path
+captureDir = cap
 let manifestRaw = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/manifest.json")))
 var manifest: [String: String] = [:]
 if case .obj(let files)? = manifestRaw["files"] { for (k, v) in files { manifest[k] = v.s } }
@@ -542,6 +573,38 @@ for name in names {
         if result["outcome"]?.s != want["expect"]?.s || !same(result["errors"], want["expected_errors"]) {
             fail("DECLARED \(name): got \(canonical(result["errors"] ?? .null)); declared \(canonical(want["expected_errors"] ?? .null))")
         }
+        // Declared schema violations (without message index) must match exactly.
+        var stripped: [String] = []
+        if case .arr(let vs)? = result["facts"]?["schema_violations"] {
+            for v in vs {
+                let text = v.s!
+                if let r = text.range(of: "\\[[0-9]+\\]", options: .regularExpression) { stripped.append(text.replacingCharacters(in: r, with: "")) }
+            }
+        }
+        stripped.sort { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+        let declaredViolations = want["expected_violations"] ?? .arr([])
+        if !same(.arr(stripped.map { .str($0) }), declaredViolations) { fail("VIOLATIONS \(name): \(stripped)") }
+    }
+}
+// Direct strict-schema interpreter cases and fail-closed schema loading.
+let schemaCases = try parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/schema_cases.json"))))
+var schemaCaseCount = 0, unsupportedCount = 0
+if case .arr(let cs)? = schemaCases["cases"] {
+    for c in cs {
+        schemaCaseCount += 1
+        let text = c["json"]!.s!
+        let raw: [UInt8] = text == "__INVALID_UTF8__" ? [0xff, 0xfe] : Array(text.utf8)
+        var got: J
+        do {
+            got = .arr(try contractSchema("stateaction.capture.\(c["schema"]!.s!).v1").validate(parseStrictJson(raw)).map { .str($0) })
+        } catch is MalformedJson { got = .str("malformed") }
+        if !same(got, c["expect"]) { fail("SCHEMA CASE \(c["name"]!.s!): \(canonical(got))") }
+    }
+}
+if case .arr(let us)? = schemaCases["unsupported_schemas"] {
+    for u in us {
+        unsupportedCount += 1
+        do { _ = try StrictSchema(u["schema"]!); fail("UNSUPPORTED SCHEMA ACCEPTED \(u["name"]!.s!)") } catch is SchemaUnsupported {}
     }
 }
 let fixture = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/encoder_buffers.json")))
@@ -558,5 +621,5 @@ if case .obj(let cases)? = fixture["cases"] {
         if !same(got, c["expect"]) { fail("ENCODER BUFFERS \(name): \(canonical(got))") }
     }
 }
-print("{\"runner\":\"swift\",\"cases\":\(names.count),\"encoder_buffer_cases\":\(fixtureCases),\"failed\":\(failed)}")
+print("{\"runner\":\"swift\",\"cases\":\(names.count),\"encoder_buffer_cases\":\(fixtureCases),\"schema_cases\":\(schemaCaseCount),\"unsupported_schemas\":\(unsupportedCount),\"failed\":\(failed)}")
 exit(failed == 0 ? 0 : 1)

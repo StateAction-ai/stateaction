@@ -71,8 +71,8 @@ class NativeProtocolReplayTest {
         "missing_config" to Native("E_MISSING_PARAMETER_SETS", IllegalArgumentException::class.java, Regex("IDR must include SPS and PPS")),
         "b_frame" to Native("E_B_FRAME", IllegalArgumentException::class.java, Regex("B frames forbidden")),
         "duplicate_pts" to Native("E_DUPLICATE_PTS", IllegalArgumentException::class.java, Regex("Duplicate/nonmonotonic encoder PTS")),
-        "pts_not_integer" to Native("E_PTS_INVALID", IllegalArgumentException::class.java, Regex("Invalid encoder_pts_us")),
-        "time_base_mismatch" to Native("E_TIME_BASE", IllegalArgumentException::class.java, Regex("time base is not 1/1000000")),
+        "pts_not_integer" to Native("E_SCHEMA_MALFORMED", IllegalArgumentException::class.java, Regex("Invalid encoder_pts_us")),
+        "time_base_mismatch" to Native("E_SCHEMA_MALFORMED", IllegalArgumentException::class.java, Regex("time base is not 1/1000000")),
         "written_pts_mismatch" to Native("E_FRAME_IDENTITY", IllegalArgumentException::class.java, Regex("Written PTS differs")),
         "written_capture_time_mismatch" to Native("E_FRAME_IDENTITY", IllegalArgumentException::class.java, Regex("Written capture time differs")),
         "written_calibration_mismatch" to Native("E_FRAME_IDENTITY", IllegalStateException::class.java, Regex("native written event differs from the file")),
@@ -83,7 +83,7 @@ class NativeProtocolReplayTest {
     private fun replay(name: String): Map<String, Any> {
         val m = read(File(dir, "golden/$name.mcap").readBytes())
         assertEquals("", m.profile, name)
-        val ledger = H264FrameLedger("golden-fixture")
+        val ledger = H264FrameLedger("0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19")
         for (v in m.messages.filter { it.first == "/camera/rgb/video" }) {
             val (ns, frame, au) = video(v.third)
             assertEquals("camera_optical_frame", frame)
@@ -141,6 +141,24 @@ class NativeProtocolReplayTest {
         println("kotlin-native accepted=$accepted rejected=$rejected portable_only=${portableOnly.size}")
         assertEquals(nativeRejects.size, rejected)
         assertTrue(accepted >= 5)
+    }
+
+    @Test
+    fun nativeProfileBuilderOutputSatisfiesStrictProfileSchema() {
+        // The production CaptureProtocol.profile() serialization must pass the strict contract schema, for the
+        // device profile and the simulation profile. It does not itself enforce UUID recording IDs (SA-51 gap):
+        // the schema is what rejects a textual recording ID.
+        ContractReader.captureDir = dir
+        val schema = ContractReader.contractSchema("stateaction.capture.Profile.v1")
+        val uuid = "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19"
+        fun violations(input: Map<String, Any?>) =
+            schema.validate(StrictJson.parse(CaptureProtocol.json(CaptureProtocol.profile(input)).toByteArray()))
+        assertEquals(emptyList(), violations(mapOf("recording_id" to uuid)))
+        assertEquals(emptyList(), violations(mapOf("recording_id" to uuid, "rgb_profile" to CaptureProtocol.EMULATOR_PROFILE,
+            "qualification" to "simulation_only", "mapped_timeline_semantics" to "simulation_transport_only")))
+        assertEquals(listOf("/recording_id:pattern"), violations(mapOf("recording_id" to "golden-fixture")))
+        assertEquals(listOf(":additionalProperties"), violations(mapOf("recording_id" to uuid, "camera_id" to "0")))
+        println("kotlin-native-profile strict-schema checks=4")
     }
 
     @Test

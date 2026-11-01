@@ -1052,10 +1052,10 @@ def strictness_cases():
     )
     add(
         "close_200_digit_count",
-        "Close frames.acquired is a 200-digit decimal (exceeds int64 and the 19-character bound).",
+        "Close frames.acquired is a 200-digit decimal (far beyond int64).",
         C,
         setp(["frames", "acquired"], "1" * 200),
-        [f"{C}/frames/acquired:maxLength", f"{C}/frames/acquired:pattern"],
+        [f"{C}/frames/acquired:pattern"],
     )
     add(
         "close_int64_overflow",

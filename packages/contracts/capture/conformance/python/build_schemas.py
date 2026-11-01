@@ -8,7 +8,10 @@ needs no network or cross-file resolution). Every object is closed (`additionalP
 explicitly bounded map (`propertyNames` + `maxProperties`); every string has a bounded ASCII pattern;
 every array has `maxItems`; every count/timestamp is an exact int64 decimal string. Domain entity IDs
 (`recording_id`) are UUIDs; optical frame names, calibration IDs, sensor/stream IDs and reason codes are
-intentionally textual labels, never UUIDs. The keyword set is the portable subset in README.md.
+intentionally textual labels, never UUIDs. `uuid`, `int64Decimal`, `clockDomain` and `revision` are the
+published common.v1 definitions; `label`, `text`, `uint32` and the capture `timeBase` (wire field names
+numerator/denominator, fixed at 1/1000000) are capture-owned. The keyword set is the portable subset in
+README.md.
 """
 
 from __future__ import annotations
@@ -61,33 +64,20 @@ def integer(minimum: int, maximum: int) -> dict:
     return {"type": "integer", "minimum": minimum, "maximum": maximum}
 
 
+# Published SA-12 common definitions, bundled verbatim (resolved offline from the repository file) so each
+# embedded MCAP schema stays self-contained. verify.py and --check fail if they drift from common.v1.
+COMMON_FILE = CAP.parent / "api/common.v1.schema.json"
+COMMON_IDS = ("uuid", "int64Decimal", "clockDomain", "revision")
+COMMON = json.loads(COMMON_FILE.read_text())["$defs"]
+assert COMMON["int64Decimal"]["pattern"] == bounded_decimal_pattern(INT64_MAX), (
+    "common.v1 int64Decimal is not exactly 0..int64 max"
+)
+
 DEFS = {
-    "uuid": {
-        "description": "Domain entity identifier: canonical lowercase RFC 9562 UUID, versions 1-8.",
-        "type": "string",
-        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-    },
-    "int64Decimal": {
-        "description": "Exact non-negative signed 64-bit integer (0..9223372036854775807) as a canonical decimal string: nanoseconds, PTS, IDs and counts.",
-        "type": "string",
-        "maxLength": 19,
-        "pattern": bounded_decimal_pattern(INT64_MAX),
-    },
+    **{k: COMMON[k] for k in COMMON_IDS},
     "uint32": {
         "description": "MCAP message sequence (uint32).",
         **integer(0, UINT32_MAX),
-    },
-    "clockDomain": {
-        "description": "Named native clock domain; timestamps from different domains are never merged.",
-        "type": "string",
-        "maxLength": 131,
-        "pattern": "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){0,3}$",
-    },
-    "revision": {
-        "description": "Code, profile or clock-mapping revision label.",
-        "type": "string",
-        "maxLength": 64,
-        "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$",
     },
     "label": {
         "description": "Textual label (calibration ID, sensor/stream ID, kind, model, reason code). Intentionally not a UUID.",

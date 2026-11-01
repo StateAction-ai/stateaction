@@ -13,6 +13,7 @@
       "!{workspaceRoot}/packages/contracts/capture/conformance/kotlin/.kotlin/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/assets/stateaction/capture/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/h264/**/*",
+      "{workspaceRoot}/packages/contracts/api/common.v1.schema.json",
       "sharedGlobals"
     ]
   },
@@ -21,7 +22,7 @@
       "executor": "nx:run-commands",
       "inputs": ["captureContract"],
       "options": {
-        "command": "dart format --output=none --set-exit-if-changed --language-version=3.9 packages/contracts/capture/conformance/dart/capture_conformance.dart"
+        "command": "dart format --output=none --set-exit-if-changed --language-version=3.9 packages/contracts/capture/conformance/dart/capture_conformance.dart packages/contracts/capture/conformance/dart/strict_schema.dart"
       }
     },
     "test": {

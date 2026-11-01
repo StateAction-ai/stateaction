@@ -1,1 +1,1 @@
-{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/close[0]/frames/acquired:maxLength","/stateaction/close[0]/frames/acquired:pattern"]},"outcome":"reject"}
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/close[0]/frames/acquired:pattern"]},"outcome":"reject"}

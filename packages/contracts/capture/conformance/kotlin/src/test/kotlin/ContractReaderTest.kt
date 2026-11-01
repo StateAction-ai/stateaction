@@ -26,9 +26,40 @@ class ContractReaderTest {
             val want = declared.getJSONObject(name)
             assertEquals(want.getString("expect"), result["outcome"], "declared outcome $name")
             assertEquals(want.getJSONArray("expected_errors").toList(), result["errors"], "declared error codes $name")
+            // Declared schema violations (without message index) must match exactly.
+            @Suppress("UNCHECKED_CAST")
+            val violations = ((result["facts"] as Map<String, Any?>)["schema_violations"] as List<String>?) ?: emptyList()
+            val declaredViolations = want.optJSONArray("expected_violations")?.toList()?.map { it.toString() } ?: emptyList()
+            assertEquals(declaredViolations, violations.map { it.replaceFirst(Regex("\\[[0-9]+\\]"), "") }.sorted(), "declared violations $name")
         }
         println("kotlin-contract-reader cases=${onDisk.size}")
-        assertTrue(onDisk.size >= 40)
+        assertTrue(onDisk.size >= 70)
+    }
+
+    @Test
+    fun strictSchemaCasesAndFailClosedLoading() {
+        val fixture = StrictJson.parse(File(dir, "fixtures/schema_cases.json").readBytes()) as Map<*, *>
+        val cases = fixture["cases"] as List<*>
+        for (raw in cases) {
+            val c = raw as Map<*, *>
+            val text = c["json"] as String
+            val bytes = if (text == "__INVALID_UTF8__") byteArrayOf(0xff.toByte(), 0xfe.toByte()) else text.toByteArray(Charsets.UTF_8)
+            val got: Any = try {
+                ContractReader.contractSchema("stateaction.capture.${c["schema"]}.v1").validate(StrictJson.parse(bytes))
+            } catch (e: StrictJson.MalformedJson) {
+                "malformed"
+            }
+            assertEquals(ContractReader.canonical(c["expect"]), ContractReader.canonical(got), "schema case ${c["name"]}")
+        }
+        val unsupported = fixture["unsupported_schemas"] as List<*>
+        for (raw in unsupported) {
+            val u = raw as Map<*, *>
+            @Suppress("UNCHECKED_CAST")
+            val failure = runCatching { StrictSchema(u["schema"] as Map<String, Any?>) }.exceptionOrNull()
+            assertTrue(failure is SchemaUnsupported, "unsupported schema ${u["name"]} must fail closed, got $failure")
+        }
+        println("kotlin-strict-schema cases=${cases.size} unsupported=${unsupported.size}")
+        assertTrue(cases.size >= 30)
     }
 
     @Test

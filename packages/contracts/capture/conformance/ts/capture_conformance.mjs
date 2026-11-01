@@ -4,6 +4,13 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { crc32 } from "node:zlib";
+import {
+  MalformedJson,
+  Schema,
+  SchemaUnsupported,
+  parseJson,
+} from "./strict_schema.mjs";
 
 const CAP = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const VIDEO = "/camera/rgb/video";
@@ -21,6 +28,8 @@ const MAGIC = Buffer.from("\x89MCAP0\r\n", "latin1");
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 class Truncated extends Error {}
 class Malformed extends Error {}
+class Unsupported extends Error {}
+class CrcMismatch extends Error {}
 
 function str(buf, off) {
   if (off + 4 > buf.length) throw new Truncated();
@@ -29,13 +38,19 @@ function str(buf, off) {
   return [buf.subarray(off + 4, off + 4 + n).toString("utf8"), off + 4 + n];
 }
 
+// Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
+// DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
 export function readMcap(data) {
+  let out;
   try {
-    return readMcapRecords(data);
+    out = readMcapRecords(data);
   } catch (e) {
     if (e instanceof RangeError) throw new Truncated();
     throw e;
   }
+  if (out.messages.some((m) => !out.channels.has(m.channel)))
+    throw new Malformed();
+  return out;
 }
 
 function readMcapRecords(data) {
@@ -51,14 +66,19 @@ function readMcapRecords(data) {
     channels: new Map(),
     messages: [],
   };
+  let dataEnd = false;
   for (;;) {
     if (pos === data.length || pos + 9 > data.length) throw new Truncated();
+    const recordStart = pos;
     const op = data[pos];
-    const len = Number(data.readBigUInt64LE(pos + 1));
+    const len = data.readBigUInt64LE(pos + 1);
     const start = pos + 9;
-    if (start + len > data.length) throw new Truncated();
-    const body = data.subarray(start, start + len);
-    pos = start + len;
+    if (len > BigInt(data.length - start)) throw new Truncated();
+    const body = data.subarray(start, start + Number(len));
+    pos = start + Number(len);
+    if ((op === 0x01) !== (recordStart === MAGIC.length))
+      throw new Unsupported();
+    if (dataEnd && op !== 0x02) throw new Unsupported();
     if (op === 0x01) out.profile = str(body, 0)[0];
     else if (op === 0x03) {
       const [name, o1] = str(body, 2);
@@ -78,21 +98,32 @@ function readMcapRecords(data) {
         encoding: str(body, o1)[0],
       });
     } else if (op === 0x05) {
-      if (!out.channels.has(body.readUInt16LE(0))) throw new Malformed();
       out.messages.push({
         channel: body.readUInt16LE(0),
         sequence: body.readUInt32LE(2),
         logTime: body.readBigUInt64LE(6),
         data: body.subarray(22),
       });
+    } else if (op === 0x0f) {
+      const crc = body.readUInt32LE(0);
+      dataEnd = true;
+      if (crc === 0 || crc !== crc32(data.subarray(0, recordStart)))
+        throw new CrcMismatch();
     } else if (op === 0x02) {
+      if (!dataEnd) throw new Unsupported();
+      if (
+        body.readBigUInt64LE(0) !== 0n ||
+        body.readBigUInt64LE(8) !== 0n ||
+        body.readUInt32LE(16) !== 0
+      )
+        throw new Unsupported();
       if (
         pos + MAGIC.length !== data.length ||
         !data.subarray(pos).equals(MAGIC)
       )
         throw new Truncated();
       return out;
-    }
+    } else throw new Unsupported();
   }
 }
 
@@ -279,43 +310,27 @@ const IDENTITY_KEYS = [
   "encoder_time_base",
   "native_timestamps",
 ];
-const STATES = ["acquired", "submitted", "written", "dropped"];
 const isDecimal = (v) => typeof v === "string" && /^(0|[1-9][0-9]*)$/.test(v);
 const isObject = (v) =>
   v !== null && typeof v === "object" && !Array.isArray(v);
-const nonEmpty = (v) => typeof v === "string" && v.length > 0;
 const same = (a, b) => canonical(a ?? null) === canonical(b ?? null);
 
-function frameEventShapeOk(e) {
-  if (!isObject(e) || !STATES.includes(e.state)) return false;
-  for (const k of [
-    "recording_id",
-    "stream_id",
-    "native_clock_id",
-    "clock_mapping_revision",
-    "calibration_id",
-  ])
-    if (!nonEmpty(e[k])) return false;
-  for (const k of [
-    "source_frame_id",
-    "native_timestamp_ns",
-    "mapped_capture_time_ns",
-  ])
-    if (!isDecimal(e[k])) return false;
-  if (!isObject(e.native_timestamps)) return false;
-  if (e.state === "dropped" && !nonEmpty(e.reason)) return false;
-  if (
-    e.state === "written" &&
-    !(
-      e.output_channel === VIDEO &&
-      Number.isInteger(e.output_sequence) &&
-      e.output_sequence >= 0 &&
-      typeof e.is_idr === "boolean"
-    )
-  )
-    return false;
-  return true;
+const SCHEMAS = new Map();
+// The reviewed contract schema (never the file's embedded copy, which is only hash-compared).
+function contractSchema(name) {
+  if (!SCHEMAS.has(name))
+    SCHEMAS.set(
+      name,
+      new Schema(JSON.parse(readFileSync(join(CAP, CUSTOM[name]), "utf8"))),
+    );
+  return SCHEMAS.get(name);
 }
+const SINGLETON_TOPICS = [
+  "/stateaction/capture_profile",
+  "/stateaction/clocks",
+  "/stateaction/inventory",
+  "/stateaction/close",
+];
 
 export function check(
   data,
@@ -333,6 +348,10 @@ export function check(
   } catch (e) {
     if (e instanceof Truncated)
       return { outcome: "reject", errors: ["E_TRUNCATED"], facts: {} };
+    if (e instanceof Unsupported)
+      return { outcome: "reject", errors: ["E_UNSUPPORTED_LAYOUT"], facts: {} };
+    if (e instanceof CrcMismatch)
+      return { outcome: "reject", errors: ["E_DATA_CRC"], facts: {} };
     if (e instanceof Malformed)
       return { outcome: "reject", errors: ["E_MALFORMED_MESSAGE"], facts: {} };
     throw e;
@@ -400,9 +419,10 @@ export function check(
       const want = CHANNELS.get(topic);
       if (!want) continue;
       if (want[2] === "json") {
-        const parsed = msgs.map((m) => JSON.parse(m.data.toString("utf8")));
-        if (!parsed.every(isObject)) throw new Malformed();
-        decoded.set(topic, parsed);
+        decoded.set(
+          topic,
+          msgs.map((m) => parseJson(m.data)),
+        );
       } else if (want[2] === "protobuf")
         decoded.set(
           topic,
@@ -417,7 +437,7 @@ export function check(
   } catch (e) {
     if (
       e instanceof Malformed ||
-      e instanceof SyntaxError ||
+      e instanceof MalformedJson ||
       e instanceof RangeError
     ) {
       errors.add("E_MALFORMED_MESSAGE");
@@ -425,6 +445,32 @@ export function check(
     }
     throw e;
   }
+  // Strict schema gate: violations are reported exactly and stop evaluation.
+  const violations = [];
+  for (const topic of [...decoded.keys()].sort()) {
+    const [schemaName, , encoding] = CHANNELS.get(topic);
+    if (encoding !== "json") continue;
+    const validator = contractSchema(schemaName);
+    decoded.get(topic).forEach((value, i) => {
+      for (const v of validator.validate(value))
+        violations.push(`${topic}[${i}]${v}`);
+    });
+  }
+  if (violations.length) {
+    errors.add("E_SCHEMA_MALFORMED");
+    return {
+      outcome: "reject",
+      errors: [...errors].sort(),
+      facts: { schema_violations: violations.sort() },
+    };
+  }
+  if (SINGLETON_TOPICS.some((t) => (decoded.get(t) ?? []).length !== 1))
+    errors.add("E_CHANNEL_CARDINALITY");
+  const recordingIds = new Set();
+  for (const [topic, values] of decoded)
+    if (CHANNELS.get(topic)[2] === "json")
+      for (const x of values) recordingIds.add(x.recording_id);
+  if (recordingIds.size > 1) errors.add("E_RECORDING_ID");
   const js = (t) => decoded.get(t) ?? [];
   const clocks = js("/stateaction/clocks")[0]?.stream_clocks ?? {};
   const inventory = js("/stateaction/inventory")[0] ?? {};
@@ -442,10 +488,6 @@ export function check(
     dropReasons = new Map();
   const counts = { acquired: 0, submitted: 0, written: 0, dropped: 0 };
   for (const e of frames) {
-    if (!frameEventShapeOk(e)) {
-      errors.add("E_SCHEMA_MALFORMED");
-      continue;
-    }
     const sid = e.source_frame_id;
     const st = e.state;
     // Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
@@ -463,23 +505,14 @@ export function check(
       if (IDENTITY_KEYS.some((k) => !same(e[k], original[k])))
         errors.add("E_FRAME_IDENTITY");
     }
-    const tb = e.encoder_time_base;
-    if (!(isObject(tb) && tb.numerator === 1 && tb.denominator === 1000000))
-      errors.add("E_TIME_BASE");
-    if ("encoder_pts_us" in e && !isDecimal(e.encoder_pts_us))
-      errors.add("E_PTS_INVALID");
     if (
       (st === "acquired" || st === "written") &&
       clocks[e.stream_id] !== e.native_clock_id
     )
       errors.add("E_CLOCK_MISMATCH");
-    if ((st === "acquired" || st === "written") && !("encoder_pts_us" in e))
-      errors.add("E_MISSING_PTS");
     if (st === "acquired") {
-      if (isDecimal(e.encoder_pts_us)) {
-        if (ptsSeen.has(e.encoder_pts_us)) errors.add("E_DUPLICATE_PTS");
-        ptsSeen.add(e.encoder_pts_us);
-      }
+      if (ptsSeen.has(e.encoder_pts_us)) errors.add("E_DUPLICATE_PTS");
+      ptsSeen.add(e.encoder_pts_us);
       if (!knownCalibrations.has(e.calibration_id))
         errors.add("E_CALIBRATION_UNKNOWN");
       if (!acquired.has(sid)) acquired.set(sid, e);
@@ -594,31 +627,25 @@ export function check(
     const expectDrops = [...dropReasons]
       .map(([reason, n]) => ({ reason, count: String(n) }))
       .sort((a, b) => (a.reason < b.reason ? -1 : 1));
-    const closeDrops = Array.isArray(close.drops) ? close.drops : null;
     if (
       !same(close.frames, expect) ||
       close.video_messages !== String(video.length) ||
       !same(close.motion_events, expectMotion) ||
       close.sensor_events !== String(sensors.length) ||
-      closeDrops === null ||
       !same(
-        closeDrops
-          .filter(isObject)
-          .sort((a, b) => (String(a.reason) < String(b.reason) ? -1 : 1)),
+        [...close.drops].sort((a, b) => (a.reason < b.reason ? -1 : 1)),
         expectDrops,
       )
     )
       errors.add("E_COUNT_MISMATCH");
     const outcome = close.outcome;
-    if (!["completed", "failed", "aborted", "unknown"].includes(outcome))
-      errors.add("E_SCHEMA_MALFORMED");
-    else if (outcome === "completed" && unresolved !== 0)
+    if (outcome === "completed" && unresolved !== 0)
       errors.add("E_OUTCOME_MISMATCH");
-    else if (outcome === "failed" && !nonEmpty(close.failure_reason))
+    else if (outcome === "failed" && (close.failure_reason ?? null) === null)
       errors.add("E_OUTCOME_MISMATCH");
     facts.close_outcome = outcome;
     facts.unresolved_frames = unresolved;
-  } else errors.add("E_COUNT_MISMATCH");
+  }
   const list = [...errors].sort();
   return {
     outcome: list.length ? "reject" : "accept",
@@ -756,6 +783,44 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       fail(
         `DECLARED ${name}: got ${result.outcome} ${result.errors}; declared ${want.expect} ${want.expected_errors}`,
       );
+    // Declared schema violations (without message index) must match exactly.
+    const stripped = (result.facts.schema_violations ?? [])
+      .map((v) => v.replace(/\[[0-9]+\]/, ""))
+      .sort();
+    if (
+      want &&
+      canonical(stripped) !== canonical(want.expected_violations ?? [])
+    )
+      fail(`VIOLATIONS ${name}: ${stripped}`);
+  }
+  // Direct strict-schema interpreter cases and fail-closed schema loading.
+  const schemaCases = JSON.parse(
+    readFileSync(join(CAP, "fixtures/schema_cases.json"), "utf8"),
+  );
+  for (const c of schemaCases.cases) {
+    const raw =
+      c.json === "__INVALID_UTF8__"
+        ? Buffer.from([0xff, 0xfe])
+        : Buffer.from(c.json, "utf8");
+    let got;
+    try {
+      got = contractSchema(`stateaction.capture.${c.schema}.v1`).validate(
+        parseJson(raw),
+      );
+    } catch (e) {
+      if (!(e instanceof MalformedJson)) throw e;
+      got = "malformed";
+    }
+    if (canonical(got) !== canonical(c.expect))
+      fail(`SCHEMA CASE ${c.name}: ${canonical(got)}`);
+  }
+  for (const u of schemaCases.unsupported_schemas) {
+    try {
+      new Schema(u.schema);
+      fail(`UNSUPPORTED SCHEMA ACCEPTED ${u.name}`);
+    } catch (e) {
+      if (!(e instanceof SchemaUnsupported)) throw e;
+    }
   }
   const fixture = JSON.parse(
     readFileSync(join(CAP, "fixtures/encoder_buffers.json"), "utf8"),
@@ -776,6 +841,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       runner: "typescript",
       cases: names.length,
       encoder_buffer_cases: Object.keys(fixture.cases).length,
+      schema_cases: schemaCases.cases.length,
+      unsupported_schemas: schemaCases.unsupported_schemas.length,
       failed,
     }),
   );

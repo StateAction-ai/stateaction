@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'strict_schema.dart';
+
 const videoTopic = '/camera/rgb/video';
 const frameIdName = 'camera_optical_frame';
 const custom = {
@@ -20,6 +22,10 @@ final magic = [0x89, 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a];
 class Truncated implements Exception {}
 
 class Malformed implements Exception {}
+
+class Unsupported implements Exception {}
+
+class CrcMismatch implements Exception {}
 
 // ---- SHA-256 (FIPS 180-4)
 String sha256Hex(List<int> data) {
@@ -186,12 +192,21 @@ String readStr(ByteData bd, Uint8List b, int off, List<int> next) {
   return utf8.decode(b.sublist(off + 4, off + 4 + n));
 }
 
+// Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
+// DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
 Mcap readMcap(Uint8List data) {
+  final Mcap out;
   try {
-    return readMcapRecords(data);
+    out = readMcapRecords(data);
   } on RangeError {
     throw Truncated();
+  } on FormatException {
+    throw Truncated();
   }
+  if (out.messages.any((m) => !out.channels.containsKey(m.channel))) {
+    throw Malformed();
+  }
+  return out;
 }
 
 Mcap readMcapRecords(Uint8List data) {
@@ -202,16 +217,20 @@ Mcap readMcapRecords(Uint8List data) {
   final out = Mcap();
   var pos = 8;
   final all = ByteData.sublistView(data);
+  var dataEnd = false;
   for (;;) {
     if (pos == data.length || pos + 9 > data.length) throw Truncated();
+    final recordStart = pos;
     final op = data[pos];
     final len = all.getUint64(pos + 1, Endian.little);
     final start = pos + 9;
-    if (start + len > data.length) throw Truncated();
+    if (len < 0 || len > data.length - start) throw Truncated();
     final body = Uint8List.sublistView(data, start, start + len);
     final bd = ByteData.sublistView(body);
     pos = start + len;
     final nx = [0];
+    if ((op == 0x01) != (recordStart == 8)) throw Unsupported();
+    if (dataEnd && op != 0x02) throw Unsupported();
     if (op == 0x01) {
       out.profile = readStr(bd, body, 0, nx);
     } else if (op == 0x03) {
@@ -232,9 +251,6 @@ Mcap readMcapRecords(Uint8List data) {
         encoding: readStr(bd, body, nx[0], nx),
       );
     } else if (op == 0x05) {
-      if (!out.channels.containsKey(bd.getUint16(0, Endian.little))) {
-        throw Malformed();
-      }
       out.messages.add(
         Message(
           bd.getUint16(0, Endian.little),
@@ -243,12 +259,24 @@ Mcap readMcapRecords(Uint8List data) {
           Uint8List.sublistView(body, 22),
         ),
       );
+    } else if (op == 0x0f) {
+      final crc = bd.getUint32(0, Endian.little);
+      dataEnd = true;
+      if (crc == 0 || crc != crc32(data, 0, recordStart)) throw CrcMismatch();
     } else if (op == 0x02) {
+      if (!dataEnd) throw Unsupported();
+      if (bd.getUint64(0, Endian.little) != 0 ||
+          bd.getUint64(8, Endian.little) != 0 ||
+          bd.getUint32(16, Endian.little) != 0) {
+        throw Unsupported();
+      }
       if (pos + 8 != data.length) throw Truncated();
       for (var i = 0; i < 8; i++) {
         if (data[pos + i] != magic[i]) throw Truncated();
       }
       return out;
+    } else {
+      throw Unsupported();
     }
   }
 }
@@ -448,43 +476,27 @@ const identityKeys = [
   'encoder_time_base',
   'native_timestamps',
 ];
-const frameStates = ['acquired', 'submitted', 'written', 'dropped'];
 bool isDecimal(Object? v) =>
     v is String && RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(v);
-bool nonEmpty(Object? v) => v is String && v.isNotEmpty;
-bool same(Object? a, Object? b) => canonical(a) == canonical(b);
+// Identity comparison uses deep JSON equality (1 == 1.0), exactly like the Python reference.
+bool same(Object? a, Object? b) => jsonEqual(a, b);
 
-bool frameEventShapeOk(Object? e) {
-  if (e is! Map<String, dynamic> || !frameStates.contains(e['state'])) {
-    return false;
-  }
-  for (final k in [
-    'recording_id',
-    'stream_id',
-    'native_clock_id',
-    'clock_mapping_revision',
-    'calibration_id',
-  ]) {
-    if (!nonEmpty(e[k])) return false;
-  }
-  for (final k in [
-    'source_frame_id',
-    'native_timestamp_ns',
-    'mapped_capture_time_ns',
-  ]) {
-    if (!isDecimal(e[k])) return false;
-  }
-  if (e['native_timestamps'] is! Map) return false;
-  if (e['state'] == 'dropped' && !nonEmpty(e['reason'])) return false;
-  if (e['state'] == 'written' &&
-      !(e['output_channel'] == videoTopic &&
-          e['output_sequence'] is int &&
-          (e['output_sequence'] as int) >= 0 &&
-          e['is_idr'] is bool)) {
-    return false;
-  }
-  return true;
-}
+final _schemas = <String, Schema>{};
+String captureDir = '../..';
+// The reviewed contract schema (never the file's embedded copy, which is only hash-compared).
+Schema contractSchema(String name) => _schemas.putIfAbsent(
+  name,
+  () => Schema(
+    jsonDecode(File('$captureDir/${custom[name]}').readAsStringSync())
+        as Map<String, dynamic>,
+  ),
+);
+const singletonTopics = [
+  '/stateaction/capture_profile',
+  '/stateaction/clocks',
+  '/stateaction/inventory',
+  '/stateaction/close',
+];
 
 Map<String, Object?> rejectWith(Set<String> errors) => {
   'outcome': 'reject',
@@ -501,6 +513,18 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
     return {
       'outcome': 'reject',
       'errors': ['E_TRUNCATED'],
+      'facts': <String, Object?>{},
+    };
+  } on Unsupported {
+    return {
+      'outcome': 'reject',
+      'errors': ['E_UNSUPPORTED_LAYOUT'],
+      'facts': <String, Object?>{},
+    };
+  } on CrcMismatch {
+    return {
+      'outcome': 'reject',
+      'errors': ['E_DATA_CRC'],
       'facts': <String, Object?>{},
     };
   } on Malformed {
@@ -558,16 +582,13 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
   }
   facts['schema_sha256'] = hashes;
   // Decode every message once; an undecodable message is a defined reject.
-  final decoded = <String, List<Object>>{};
+  final decoded = <String, List<Object?>>{};
   try {
     for (final entry in byTopic.entries) {
       final want = channelTable[entry.key];
       if (want == null) continue;
       if (want[2] == 'json') {
-        decoded[entry.key] = [
-          for (final m in entry.value)
-            jsonDecode(utf8.decode(m.data)) as Map<String, dynamic>,
-        ];
+        decoded[entry.key] = [for (final m in entry.value) parseJson(m.data)];
       } else if (want[2] == 'protobuf') {
         decoded[entry.key] = [for (final m in entry.value) decodeVideo(m.data)];
       } else {
@@ -575,6 +596,9 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       }
     }
   } on Malformed {
+    errors.add('E_MALFORMED_MESSAGE');
+    return rejectWith(errors);
+  } on MalformedJson {
     errors.add('E_MALFORMED_MESSAGE');
     return rejectWith(errors);
   } on FormatException {
@@ -587,8 +611,38 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
     errors.add('E_MALFORMED_MESSAGE');
     return rejectWith(errors);
   }
+  // Strict schema gate: violations are reported exactly and stop evaluation.
+  final violations = <String>[];
+  for (final topic in decoded.keys.toList()..sort()) {
+    final want = channelTable[topic]!;
+    if (want[2] != 'json') continue;
+    final validator = contractSchema(want[0]);
+    final values = decoded[topic]!;
+    for (var i = 0; i < values.length; i++) {
+      for (final v in validator.validate(values[i])) {
+        violations.add('$topic[$i]$v');
+      }
+    }
+  }
+  if (violations.isNotEmpty) {
+    errors.add('E_SCHEMA_MALFORMED');
+    return {
+      'outcome': 'reject',
+      'errors': (errors.toList()..sort()),
+      'facts': {'schema_violations': violations..sort()},
+    };
+  }
+  if (singletonTopics.any((t) => (decoded[t] ?? []).length != 1)) {
+    errors.add('E_CHANNEL_CARDINALITY');
+  }
+  final recordingIds = <Object?>{
+    for (final e in decoded.entries)
+      if (channelTable[e.key]![2] == 'json')
+        for (final x in e.value) (x as Map)['recording_id'],
+  };
+  if (recordingIds.length > 1) errors.add('E_RECORDING_ID');
   List<Map<String, dynamic>> js(String t) => [
-    for (final m in decoded[t] ?? <Object>[]) m as Map<String, dynamic>,
+    for (final m in decoded[t] ?? <Object?>[]) m as Map<String, dynamic>,
   ];
   final clockMsgs = js('/stateaction/clocks');
   final clocks = clockMsgs.isEmpty
@@ -609,10 +663,6 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       dropReasons = <String, int>{};
   final counts = {'acquired': 0, 'submitted': 0, 'written': 0, 'dropped': 0};
   for (final e in frames) {
-    if (!frameEventShapeOk(e)) {
-      errors.add('E_SCHEMA_MALFORMED');
-      continue;
-    }
     final sid = e['source_frame_id'] as String;
     final st = e['state'] as String;
     // Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
@@ -629,26 +679,13 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
         errors.add('E_FRAME_IDENTITY');
       }
     }
-    final tb = e['encoder_time_base'];
-    if (!(tb is Map && tb['numerator'] == 1 && tb['denominator'] == 1000000)) {
-      errors.add('E_TIME_BASE');
-    }
-    if (e.containsKey('encoder_pts_us') && !isDecimal(e['encoder_pts_us'])) {
-      errors.add('E_PTS_INVALID');
-    }
     if ((st == 'acquired' || st == 'written') &&
         clocks[e['stream_id']] != e['native_clock_id']) {
       errors.add('E_CLOCK_MISMATCH');
     }
-    if ((st == 'acquired' || st == 'written') &&
-        !e.containsKey('encoder_pts_us')) {
-      errors.add('E_MISSING_PTS');
-    }
     if (st == 'acquired') {
-      if (isDecimal(e['encoder_pts_us'])) {
-        if (!ptsSeen.add(e['encoder_pts_us'] as String)) {
-          errors.add('E_DUPLICATE_PTS');
-        }
+      if (!ptsSeen.add(e['encoder_pts_us'] as String)) {
+        errors.add('E_DUPLICATE_PTS');
       }
       if (!knownCalibrations.contains(e['calibration_id'])) {
         errors.add('E_CALIBRATION_UNKNOWN');
@@ -787,31 +824,24 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       for (final e in dropReasons.entries)
         {'reason': e.key, 'count': e.value.toString()},
     ]..sort((a, b) => (a['reason']!).compareTo(b['reason']!));
-    final closeDrops = close['drops'];
-    final closeDropsSorted = closeDrops is List
-        ? ([...closeDrops.whereType<Map>()]
-            ..sort((a, b) => '${a['reason']}'.compareTo('${b['reason']}')))
-        : null;
+    final closeDropsSorted = [
+      ...(close['drops'] as List).cast<Map>(),
+    ]..sort((a, b) => (a['reason'] as String).compareTo(b['reason'] as String));
     if (!same(close['frames'], expect) ||
         close['video_messages'] != video.length.toString() ||
         !same(close['motion_events'], expectMotion) ||
         close['sensor_events'] != sensors.length.toString() ||
-        closeDropsSorted == null ||
         !same(closeDropsSorted, expectDrops)) {
       errors.add('E_COUNT_MISMATCH');
     }
     final outcome = close['outcome'];
-    if (!['completed', 'failed', 'aborted', 'unknown'].contains(outcome)) {
-      errors.add('E_SCHEMA_MALFORMED');
-    } else if (outcome == 'completed' && unresolved != 0) {
+    if (outcome == 'completed' && unresolved != 0) {
       errors.add('E_OUTCOME_MISMATCH');
-    } else if (outcome == 'failed' && !nonEmpty(close['failure_reason'])) {
+    } else if (outcome == 'failed' && close['failure_reason'] == null) {
       errors.add('E_OUTCOME_MISMATCH');
     }
     facts['close_outcome'] = outcome;
     facts['unresolved_frames'] = unresolved;
-  } else {
-    errors.add('E_COUNT_MISMATCH');
   }
   final list = errors.toList()..sort();
   return {
@@ -940,6 +970,7 @@ String canonical(Object? v) {
 
 void main(List<String> args) {
   final cap = Directory(args.isNotEmpty ? args[0] : '../..').absolute.path;
+  captureDir = cap;
   final manifest =
       (jsonDecode(File('$cap/manifest.json').readAsStringSync())
               as Map<String, dynamic>)['files']
@@ -988,6 +1019,48 @@ void main(List<String> args) {
         'DECLARED $name: got ${result['outcome']} ${result['errors']}; declared ${want['expect']} ${want['expected_errors']}',
       );
     }
+    // Declared schema violations (without message index) must match exactly.
+    final facts = result['facts'] as Map<String, Object?>;
+    final stripped = [
+      for (final v in (facts['schema_violations'] as List?) ?? const [])
+        (v as String).replaceFirst(RegExp(r'\[[0-9]+\]'), ''),
+    ]..sort();
+    if (want != null &&
+        canonical(stripped) !=
+            canonical(want['expected_violations'] ?? const [])) {
+      fail('VIOLATIONS $name: $stripped');
+    }
+  }
+  // Direct strict-schema interpreter cases and fail-closed schema loading.
+  final schemaCases =
+      jsonDecode(File('$cap/fixtures/schema_cases.json').readAsStringSync())
+          as Map<String, dynamic>;
+  for (final c in (schemaCases['cases'] as List).cast<Map<String, dynamic>>()) {
+    final text = c['json'] as String;
+    final raw = text == '__INVALID_UTF8__'
+        ? Uint8List.fromList([0xff, 0xfe])
+        : Uint8List.fromList(utf8.encode(text));
+    Object? got;
+    try {
+      got = contractSchema(
+        'stateaction.capture.${c['schema']}.v1',
+      ).validate(parseJson(raw));
+    } on MalformedJson {
+      got = 'malformed';
+    }
+    if (canonical(got) != canonical(c['expect'])) {
+      fail('SCHEMA CASE ${c['name']}: ${canonical(got)}');
+    }
+  }
+  final unsupported = (schemaCases['unsupported_schemas'] as List)
+      .cast<Map<String, dynamic>>();
+  for (final u in unsupported) {
+    try {
+      Schema(u['schema'] as Map<String, dynamic>);
+      fail('UNSUPPORTED SCHEMA ACCEPTED ${u['name']}');
+    } on SchemaUnsupported {
+      // fail closed
+    }
   }
   final fixture =
       jsonDecode(File('$cap/fixtures/encoder_buffers.json').readAsStringSync())
@@ -1009,6 +1082,8 @@ void main(List<String> args) {
       'runner': 'dart',
       'cases': names.length,
       'encoder_buffer_cases': fixtureCases.length,
+      'schema_cases': (schemaCases['cases'] as List).length,
+      'unsupported_schemas': unsupported.length,
       'failed': failed,
     }),
   );

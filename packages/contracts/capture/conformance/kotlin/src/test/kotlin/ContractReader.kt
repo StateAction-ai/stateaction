@@ -1,5 +1,4 @@
 import org.json.JSONArray
-import org.json.JSONException
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -42,13 +41,23 @@ object ContractReader {
         "recording_id", "stream_id", "native_timestamp_ns", "native_clock_id", "mapped_capture_time_ns",
         "clock_mapping_revision", "calibration_id", "encoder_pts_us", "encoder_time_base", "native_timestamps",
     )
-    private val STATES = listOf("acquired", "submitted", "written", "dropped")
     private val MAGIC = byteArrayOf(0x89.toByte(), 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a)
     private val START = byteArrayOf(0, 0, 0, 1)
     private val DECIMAL = Regex("0|[1-9][0-9]*")
 
     class Truncated : Exception()
     class Malformed : Exception()
+    class Unsupported : Exception()
+    class CrcMismatch : Exception()
+    private val SINGLETON_TOPICS = listOf("/stateaction/capture_profile", "/stateaction/clocks", "/stateaction/inventory", "/stateaction/close")
+    private val schemaCache = HashMap<String, StrictSchema>()
+    var captureDir: java.io.File = java.io.File(System.getProperty("capture.dir") ?: "../..")
+
+    /** The reviewed contract schema (never the file's embedded copy, which is only hash-compared). */
+    @Suppress("UNCHECKED_CAST")
+    fun contractSchema(name: String): StrictSchema = schemaCache.getOrPut(name) {
+        StrictSchema(StrictJson.parse(java.io.File(captureDir, CUSTOM.getValue(name)).readBytes()) as Map<String, Any?>)
+    }
 
     fun sha256(b: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 
@@ -103,29 +112,37 @@ object ContractReader {
         return ByteArray(n).also { b.get(it) }.decodeToString()
     }
 
+    // Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
+    // DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
     fun readMcap(data: ByteArray): Mcap {
-        try {
-            return readRecords(data)
+        val out = try {
+            readRecords(data)
         } catch (e: java.nio.BufferUnderflowException) {
             throw Truncated()
         } catch (e: IndexOutOfBoundsException) {
             throw Truncated()
         }
+        if (out.messages.any { it.channel !in out.channels }) throw Malformed()
+        return out
     }
 
     private fun readRecords(data: ByteArray): Mcap {
         if (data.size < 8 || !data.copyOfRange(0, 8).contentEquals(MAGIC)) throw Truncated()
         val out = Mcap()
         var pos = 8
+        var dataEnd = false
         while (true) {
             if (pos == data.size || pos + 9 > data.size) throw Truncated()
-            val op = data[pos].toInt()
+            val recordStart = pos
+            val op = data[pos].toInt() and 0xff
             val len = ByteBuffer.wrap(data, pos + 1, 8).order(ByteOrder.LITTLE_ENDIAN).long
             val start = pos + 9
-            if (len < 0 || start + len > data.size) throw Truncated()
+            if (len < 0 || len > data.size - start) throw Truncated()
             val body = ByteBuffer.wrap(data, start, len.toInt()).slice().order(ByteOrder.LITTLE_ENDIAN)
             val limit = len.toInt()
             pos = start + len.toInt()
+            if ((op == 0x01) != (recordStart == 8)) throw Unsupported()
+            if (dataEnd && op != 0x02) throw Unsupported()
             when (op) {
                 0x01 -> out.profile = str(body, limit)
                 0x03 -> {
@@ -144,16 +161,24 @@ object ContractReader {
                 }
                 0x05 -> {
                     val ch = body.short.toInt() and 0xffff
-                    if (ch !in out.channels) throw Malformed()
                     val seq = body.int.toLong() and 0xffffffffL
                     val log = body.long
                     body.long
                     out.messages.add(Msg(ch, seq, log, ByteArray(limit - 22).also { body.get(it) }))
                 }
+                0x0f -> {
+                    val crc = body.int.toLong() and 0xffffffffL
+                    dataEnd = true
+                    val actual = java.util.zip.CRC32().also { it.update(data, 0, recordStart) }.value
+                    if (crc == 0L || crc != actual) throw CrcMismatch()
+                }
                 0x02 -> {
+                    if (!dataEnd) throw Unsupported()
+                    if (body.long != 0L || body.long != 0L || body.int != 0) throw Unsupported()
                     if (pos + 8 != data.size || !data.copyOfRange(pos, data.size).contentEquals(MAGIC)) throw Truncated()
                     return out
                 }
+                else -> throw Unsupported()
             }
         }
     }
@@ -274,22 +299,11 @@ object ContractReader {
 
     // ------------------------------------------------------------------ checker
     private fun isDecimal(v: Any?) = v is String && DECIMAL.matches(v)
-    private fun nonEmpty(v: Any?) = v is String && v.isNotEmpty()
-    private fun isInt(v: Any?) = v is Int || v is Long
-    private fun same(a: Any?, b: Any?) = canonical(a) == canonical(b)
+    // Identity comparison uses deep JSON equality (1 == 1.0), exactly like the Python reference.
+    private fun same(a: Any?, b: Any?) = StrictSchema.jsonEqual(a, b)
 
     @Suppress("UNCHECKED_CAST")
     private fun obj(v: Any?): Map<String, Any?>? = v as? Map<String, Any?>
-
-    private fun frameEventShapeOk(e: Map<String, Any?>): Boolean {
-        if (e["state"] !in STATES) return false
-        for (k in listOf("recording_id", "stream_id", "native_clock_id", "clock_mapping_revision", "calibration_id")) if (!nonEmpty(e[k])) return false
-        for (k in listOf("source_frame_id", "native_timestamp_ns", "mapped_capture_time_ns")) if (!isDecimal(e[k])) return false
-        if (obj(e["native_timestamps"]) == null) return false
-        if (e["state"] == "dropped" && !nonEmpty(e["reason"])) return false
-        if (e["state"] == "written" && !(e["output_channel"] == VIDEO && isInt(e["output_sequence"]) && (e["output_sequence"] as Number).toLong() >= 0 && e["is_idr"] is Boolean)) return false
-        return true
-    }
 
     private fun reject(errors: Set<String>) = mapOf("outcome" to "reject", "errors" to errors.sorted(), "facts" to emptyMap<String, Any?>())
 
@@ -299,6 +313,10 @@ object ContractReader {
             readMcap(data)
         } catch (e: Truncated) {
             return reject(setOf("E_TRUNCATED"))
+        } catch (e: Unsupported) {
+            return reject(setOf("E_UNSUPPORTED_LAYOUT"))
+        } catch (e: CrcMismatch) {
+            return reject(setOf("E_DATA_CRC"))
         } catch (e: Malformed) {
             return reject(setOf("E_MALFORMED_MESSAGE"))
         }
@@ -333,23 +351,36 @@ object ContractReader {
         }
         facts["schema_sha256"] = hashes
         // Decode every message once; an undecodable message is a defined reject.
-        val json = HashMap<String, List<Map<String, Any?>>>()
+        val raw = java.util.TreeMap<String, List<Any?>>()
         var videos = emptyList<Video>()
         var poses = emptyList<Map<String, Any?>>()
         try {
             for ((topic, msgs) in byTopic) {
                 val want = CHANNELS[topic] ?: continue
                 when (want[2]) {
-                    "json" -> json[topic] = msgs.map { m -> obj(conv(JSONObject(m.data.decodeToString())))!! }
+                    "json" -> raw[topic] = msgs.map { m -> StrictJson.parse(m.data) }
                     "protobuf" -> videos = msgs.map { decodeVideo(it.data) }
                     else -> poses = msgs.map { decodePose(it.data) }
                 }
             }
         } catch (e: Malformed) {
             errors.add("E_MALFORMED_MESSAGE"); return reject(errors)
-        } catch (e: JSONException) {
+        } catch (e: StrictJson.MalformedJson) {
             errors.add("E_MALFORMED_MESSAGE"); return reject(errors)
         }
+        // Strict schema gate: violations are reported exactly and stop evaluation.
+        val violations = ArrayList<String>()
+        for ((topic, values) in raw) {
+            val validator = contractSchema(CHANNELS.getValue(topic)[0])
+            values.forEachIndexed { i, value -> validator.validate(value).forEach { violations.add("$topic[$i]$it") } }
+        }
+        if (violations.isNotEmpty()) {
+            errors.add("E_SCHEMA_MALFORMED")
+            return mapOf("outcome" to "reject", "errors" to errors.toList(), "facts" to mapOf("schema_violations" to violations.sorted()))
+        }
+        val json = raw.mapValues { (_, v) -> v.map { obj(it)!! } }
+        if (SINGLETON_TOPICS.any { (json[it] ?: emptyList()).size != 1 }) errors.add("E_CHANNEL_CARDINALITY")
+        if (json.values.flatten().map { it["recording_id"] }.toSet().size > 1) errors.add("E_RECORDING_ID")
         fun js(t: String) = json[t] ?: emptyList()
         val clocks = obj(js("/stateaction/clocks").firstOrNull()?.get("stream_clocks")) ?: emptyMap()
         val knownCalibrations = HashSet<Any?>()
@@ -363,7 +394,6 @@ object ContractReader {
         val dropReasons = java.util.TreeMap<String, Int>()
         val counts = linkedMapOf("acquired" to 0, "submitted" to 0, "written" to 0, "dropped" to 0)
         for (e in frames) {
-            if (!frameEventShapeOk(e)) { errors.add("E_SCHEMA_MALFORMED"); continue }
             val sid = e["source_frame_id"] as String
             val st = e["state"] as String
             // Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
@@ -376,13 +406,9 @@ object ContractReader {
                 val original = acquired.getValue(sid)
                 if (IDENTITY_KEYS.any { !same(e[it], original[it]) }) errors.add("E_FRAME_IDENTITY")
             }
-            val tb = obj(e["encoder_time_base"])
-            if (!(tb != null && isInt(tb["numerator"]) && (tb["numerator"] as Number).toLong() == 1L && isInt(tb["denominator"]) && (tb["denominator"] as Number).toLong() == 1_000_000L)) errors.add("E_TIME_BASE")
-            if ("encoder_pts_us" in e && !isDecimal(e["encoder_pts_us"])) errors.add("E_PTS_INVALID")
             if ((st == "acquired" || st == "written") && clocks[e["stream_id"]] != e["native_clock_id"]) errors.add("E_CLOCK_MISMATCH")
-            if ((st == "acquired" || st == "written") && "encoder_pts_us" !in e) errors.add("E_MISSING_PTS")
             if (st == "acquired") {
-                if (isDecimal(e["encoder_pts_us"]) && !ptsSeen.add(e["encoder_pts_us"] as String)) errors.add("E_DUPLICATE_PTS")
+                if (!ptsSeen.add(e["encoder_pts_us"] as String)) errors.add("E_DUPLICATE_PTS")
                 if (e["calibration_id"] !in knownCalibrations) errors.add("E_CALIBRATION_UNKNOWN")
                 acquired.putIfAbsent(sid, e)
             }
@@ -445,17 +471,16 @@ object ContractReader {
             val expect = counts.mapValues { it.value.toString() } + ("unresolved" to unresolved.toString())
             val expectMotion = mapOf("accel" to js("/stateaction/imu/accel").size.toString(), "gyro" to js("/stateaction/imu/gyro").size.toString())
             val expectDrops = dropReasons.map { mapOf("reason" to it.key, "count" to it.value.toString()) }
-            val closeDrops = (close["drops"] as? List<*>)?.mapNotNull { obj(it) }?.sortedBy { it["reason"].toString() }
+            val closeDrops = (close["drops"] as List<*>).map { obj(it)!! }.sortedBy { it["reason"] as String }
             if (!same(close["frames"], expect) || close["video_messages"] != video.size.toString() ||
                 !same(close["motion_events"], expectMotion) || close["sensor_events"] != sensors.size.toString() ||
-                closeDrops == null || !same(closeDrops, expectDrops)) errors.add("E_COUNT_MISMATCH")
+                !same(closeDrops, expectDrops)) errors.add("E_COUNT_MISMATCH")
             val outcome = close["outcome"]
-            if (outcome !in listOf("completed", "failed", "aborted", "unknown")) errors.add("E_SCHEMA_MALFORMED")
-            else if (outcome == "completed" && unresolved != 0) errors.add("E_OUTCOME_MISMATCH")
-            else if (outcome == "failed" && !nonEmpty(close["failure_reason"])) errors.add("E_OUTCOME_MISMATCH")
+            if (outcome == "completed" && unresolved != 0) errors.add("E_OUTCOME_MISMATCH")
+            else if (outcome == "failed" && close["failure_reason"] == null) errors.add("E_OUTCOME_MISMATCH")
             facts["close_outcome"] = outcome
             facts["unresolved_frames"] = unresolved
-        } else errors.add("E_COUNT_MISMATCH")
+        }
         return mapOf("outcome" to if (errors.isEmpty()) "accept" else "reject", "errors" to errors.toList(), "facts" to if (errors.isEmpty()) facts else emptyMap<String, Any?>())
     }
 

@@ -3,7 +3,7 @@
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
   "root": "packages/contracts/capture",
   "projectType": "library",
-  "implicitDependencies": [],
+  "implicitDependencies": ["contracts"],
   "namedInputs": {
     "captureContract": [
       "{projectRoot}/**/*",
@@ -13,6 +13,7 @@
       "!{projectRoot}/conformance/kotlin/.kotlin/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/assets/stateaction/capture/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/h264/**/*",
+      "{workspaceRoot}/packages/contracts/api/common.v1.schema.json",
       "sharedGlobals"
     ]
   },
@@ -21,7 +22,7 @@
       "executor": "nx:run-commands",
       "inputs": ["captureContract"],
       "options": {
-        "command": "node --check packages/contracts/capture/conformance/ts/capture_conformance.mjs && python3 -c \"import ast,sys; [ast.parse(open(p).read(), p) for p in sys.argv[1:]]\" packages/contracts/capture/verify.py packages/contracts/capture/conformance/run_all.py packages/contracts/capture/conformance/python/capture_conformance.py packages/contracts/capture/conformance/python/gen_golden.py packages/contracts/capture/conformance/python/independent_decode.py packages/contracts/capture/conformance/python/build_descriptor.py"
+        "command": "node --check packages/contracts/capture/conformance/ts/capture_conformance.mjs && node --check packages/contracts/capture/conformance/ts/strict_schema.mjs && python3 packages/contracts/capture/conformance/python/build_schemas.py --check && python3 -c \"import ast,sys; [ast.parse(open(p).read(), p) for p in sys.argv[1:]]\" packages/contracts/capture/verify.py packages/contracts/capture/conformance/run_all.py packages/contracts/capture/conformance/python/capture_conformance.py packages/contracts/capture/conformance/python/gen_golden.py packages/contracts/capture/conformance/python/independent_decode.py packages/contracts/capture/conformance/python/build_descriptor.py packages/contracts/capture/conformance/python/build_schemas.py packages/contracts/capture/conformance/python/strict_schema.py"
       }
     },
     "format": {
@@ -31,7 +32,7 @@
         "commands": [
           "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml packages/contracts/capture",
           "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml packages/contracts/capture",
-          "pnpm exec prettier --check \"packages/contracts/capture/*.json\" \"packages/contracts/capture/conformance/ts/*.mjs\" packages/contracts/capture/README.md"
+          "pnpm exec prettier --check \"packages/contracts/capture/*.json\" \"packages/contracts/capture/fixtures/protocol.json\" \"packages/contracts/capture/fixtures/schema_cases.json\" \"packages/contracts/capture/conformance/ts/*.mjs\" packages/contracts/capture/README.md"
         ],
         "parallel": false
       }
