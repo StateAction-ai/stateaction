@@ -74,7 +74,9 @@
       "{workspaceRoot}/scripts/platform/hook-fixtures.mjs",
       "{workspaceRoot}/scripts/platform/check-staged.test.mjs",
       "!{projectRoot}/android/.kotlin/**/*",
-      "!{projectRoot}/**/.cxx/**/*"
+      "!{projectRoot}/**/.cxx/**/*",
+      "{workspaceRoot}/scripts/platform/runner_disk.py",
+      "{workspaceRoot}/scripts/platform/test_mobile_runner_disk.py"
     ]
   },
   "targetDefaults": {

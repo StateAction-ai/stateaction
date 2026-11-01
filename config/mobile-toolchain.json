@@ -23,6 +23,15 @@
     "version": "v6.1.0",
     "sha": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"
   },
+  "flutterAction": {
+    "version": "v2.23.0",
+    "sha": "1a449444c387b1966244ae4d4f8c696479add0b2"
+  },
+  "setupGradleAction": {
+    "version": "v6.4.1",
+    "sha": "8da46b539cd8fe6ab27ca75128919a18d757604c",
+    "cacheProvider": "basic"
+  },
   "sources": {
     "flutterArchive": "https://docs.flutter.dev/install/archive",
     "flutterReleaseManifest": "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json",
@@ -30,7 +39,9 @@
     "androidSdk": "https://developer.android.com/tools/sdkmanager",
     "androidRepository": "https://dl.google.com/android/repository/repository2-3.xml",
     "java": "https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1",
-    "setupJava": "https://github.com/actions/setup-java/releases/tag/v6.1.0"
+    "setupJava": "https://github.com/actions/setup-java/releases/tag/v6.1.0",
+    "flutterAction": "https://github.com/subosito/flutter-action/releases/tag/v2.23.0",
+    "setupGradle": "https://github.com/gradle/actions/releases/tag/v6.4.1"
   },
   "dartFormatLanguageVersion": "3.9"
 }

@@ -82,8 +82,6 @@ jobs:
       - run: npm install --global pnpm@10.33.0
       - run: pnpm install --frozen-lockfile
       - run: uv sync --project workers/processing --locked
-      - name: Test mobile bootstrap disk and SDK safeguards
-        run: python3 -m unittest discover -s scripts/platform -p 'test_mobile_bootstrap.py' -v
       - name: Select affected graph
         id: scope
         env:
@@ -123,6 +121,9 @@ jobs:
     if: needs.checks.outputs.android == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # Reuse dependencies and compiled build scripts, never app task outputs.
+      GRADLE_OPTS: -Dorg.gradle.caching=false -Dorg.gradle.configuration-cache=false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -139,18 +140,33 @@ jobs:
           check-latest: false
       - run: npm install --global pnpm@10.33.0
       - run: pnpm install --frozen-lockfile
-      - name: Report available Android runner storage
-        run: |
-          df -h "$GITHUB_WORKSPACE"
-          echo "Preinstalled Android SDK: $ANDROID_HOME"
+      - name: Reclaim unused tooling on this ephemeral Android runner
+        run: python3 scripts/platform/runner_disk.py prepare
+      - name: Restore pinned Flutter SDK and public Dart dependencies
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.44.6
+          cache: true
+          pub-cache: true
+          cache-key: "stateaction-flutter-:os:-:version:-:arch:-:hash:"
+          pub-cache-key: "stateaction-pub-:os:-:version:-:arch:-${{ hashFiles('apps/mobile/pubspec.lock', 'packages/stera_recorder/pubspec.lock', 'packages/stera_recorder/example/pubspec.lock') }}"
+      - name: Restore Gradle dependencies, wrapper and build-script caches
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
+          # Same-repository PR retries may write their isolated PR cache.
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
       - name: Install verified Flutter and Android build tools
-        run: python3 scripts/platform/install-mobile-toolchain.py --reuse-android-sdk
+        run: |
+          python3 scripts/platform/install-mobile-toolchain.py --reuse-android-sdk --reuse-flutter
+          python3 scripts/platform/runner_disk.py check
       - name: Check actual staged Dart through installed hooks
         run: node --test scripts/platform/check-staged-dart.test.mjs
       - name: Analyze, test, format and build affected Android sources
         env:
           MOBILE_PROJECTS: ${{ needs.checks.outputs.mobile_projects }}
-        run: pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
+        run: python3 scripts/platform/runner_disk.py run -- pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
       - name: Report final Android runner storage
         if: always()
         run: |

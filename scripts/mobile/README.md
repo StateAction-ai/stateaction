@@ -31,7 +31,17 @@ previously installed SDKs. CI does not source that host-specific file.
 
 ## Android CI footprint
 
-The standard private Ubuntu runner has [2 CPUs, 8 GB RAM and 14 GB SSD](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+The standard private Ubuntu runner has [2 CPUs, 8 GB RAM and 14 GB guaranteed free disk headroom](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+The Android job removes only unused .NET, Haskell/GHCup, CodeQL and Swift
+installation directories from the ephemeral GitHub-hosted Ubuntu 24.04 image;
+the helper refuses local hosts, self-hosted runners and other jobs. These fixed
+paths come from the official [runner-image installers](https://github.com/actions/runner-images/tree/main/images/ubuntu/scripts/build).
+After SDK setup it requires 20 GiB for the build plus a real 1 GiB log reserve.
+During the build, a monitor stops its process group at 2 GiB free, releases the
+reserve and fails the check so runner diagnostics can finish. The reserve is
+also released on success, failure or termination. The actual VM disk may be
+larger than the [guaranteed headroom](https://github.com/actions/runner-images/discussions/9329).
+
 CI explicitly uses `--reuse-android-sdk` with its [preinstalled Android SDK](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md),
 verifies API 36 revision 2, build-tools 36.0.0 and NDK 28.2.13676358, and installs
 only missing pinned packages. Command-line tools 23.0 use an owned directory when
@@ -40,6 +50,17 @@ download archives are deleted after extraction. The bootstrap avoids broad
 Android precaching; the x64 debug build fetches its required artifacts. Disk
 usage is logged before setup, during bootstrap and after the job. Local setup
 without this explicit flag continues to use an isolated SDK under `artifacts/`.
+
+CI uses the pinned [subosito/flutter-action](https://github.com/subosito/flutter-action)
+for its official Flutter SDK and public pub-package cache. The bootstrap's
+`--reuse-flutter` flag verifies that selected SDK's exact Flutter/Dart/revision
+without downloading a second SDK. Local setup without the flag retains the
+checksum-pinned isolated installation. The official
+[gradle/actions/setup-gradle](https://github.com/gradle/actions/tree/main/setup-gradle)
+provides free basic caching of dependencies, the wrapper, compiled build scripts
+and public dependency transforms. Android CI disables Gradle task-output and
+configuration caches. Project APKs, `.env` and captures are outside the cached
+paths. Build and test commands still execute; restored caches do not qualify them.
 
 CI runs analysis, Dart unit/widget tests, native JVM tests and Android APK
 assembly using the [command-line build tools](https://developer.android.com/build/building-cmdline).

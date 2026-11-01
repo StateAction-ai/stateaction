@@ -81,6 +81,13 @@ def select_command_tools(sdk: Path, tools: Path) -> Path:
     return tools / f"cmdline-tools/{PINS['androidCommandLineTools']}"
 
 
+def flutter_on_path(env: dict[str, str]) -> Path:
+    executable = shutil.which("flutter", path=env["PATH"])
+    if not executable:
+        raise SystemExit("--reuse-flutter requires an existing Flutter SDK on PATH")
+    return Path(executable).resolve().parents[1]
+
+
 def missing_android_packages(sdk: Path) -> list[str]:
     packages = [
         (
@@ -152,11 +159,17 @@ def main() -> None:
         action="store_true",
         help="Explicitly reuse ANDROID_HOME/ANDROID_SDK_ROOT and install missing pinned packages; never delete or replace its tools",
     )
+    parser.add_argument(
+        "--reuse-flutter",
+        action="store_true",
+        help="Use the Flutter SDK already selected by PATH; verify pins without downloading or changing that SDK",
+    )
     args = parser.parse_args()
     disk_report("before bootstrap")
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise SystemExit("This checksum-pinned bootstrap supports Linux x86-64 only")
     env = dict(os.environ)
+    selected_flutter = flutter_on_path(env) if args.reuse_flutter else None
     java_home = Path(env.get("JAVA_HOME", "/missing-java-home"))
     java_version = properties(java_home / "release").get("JAVA_VERSION", "").strip('"')
     if java_version != PINS["java"]:
@@ -178,18 +191,28 @@ def main() -> None:
         sdk = Path(env["ANDROID_HOME"])
     else:
         tools.mkdir(parents=True, exist_ok=True)
-        flutter = tools / "flutter"
+        flutter = selected_flutter or tools / "flutter"
         sdk = Path(existing_sdk) if args.reuse_android_sdk else tools / "android-sdk"
-        if not flutter.exists():
-            archive = download(PINS["flutterLinuxX64"], tools)
-            with tempfile.TemporaryDirectory(dir=tools) as temporary:
-                subprocess.run(
-                    ["tar", "-xJf", str(archive), "--no-same-owner", "-C", temporary],
-                    check=True,
-                )
-                (Path(temporary) / "flutter").rename(flutter)
-        remove_verified_archive(PINS["flutterLinuxX64"], tools)
-        disk_report("Flutter extracted; archive removed")
+        if selected_flutter is not None:
+            print(f"Reusing Flutter SDK selected by PATH: {flutter}", flush=True)
+        else:
+            if not flutter.exists():
+                archive = download(PINS["flutterLinuxX64"], tools)
+                with tempfile.TemporaryDirectory(dir=tools) as temporary:
+                    subprocess.run(
+                        [
+                            "tar",
+                            "-xJf",
+                            str(archive),
+                            "--no-same-owner",
+                            "-C",
+                            temporary,
+                        ],
+                        check=True,
+                    )
+                    (Path(temporary) / "flutter").rename(flutter)
+            remove_verified_archive(PINS["flutterLinuxX64"], tools)
+        disk_report("Flutter selected; owned archive removed when installed locally")
         command_tools = select_command_tools(sdk, tools)
         if not command_tools.exists():
             archive = download(PINS["androidCommandLineToolsLinuxX64"], tools)

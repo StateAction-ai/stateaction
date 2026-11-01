@@ -2,6 +2,9 @@
 
 import hashlib
 import importlib.util
+import json
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +18,110 @@ SPEC.loader.exec_module(bootstrap)
 
 
 class BootstrapDiskTests(unittest.TestCase):
+    def test_reuse_flutter_missing_path_fails_clearly(self):
+        with patch.object(bootstrap.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(SystemExit, "--reuse-flutter requires"):
+                bootstrap.flutter_on_path({"PATH": "/missing"})
+
+    def test_reuse_flutter_verifies_all_sdk_pins_without_download_or_foreign_writes(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            flutter = root / "action-managed-flutter"
+            executable = flutter / "bin/flutter"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("action SDK sentinel\n")
+            sdk = root / "android-sdk"
+            for directory, revision in [
+                ("cmdline-tools/latest", "23.0"),
+                ("platforms/android-36", "2"),
+                ("build-tools/36.0.0", "36.0.0"),
+                ("ndk/28.2.13676358", "28.2.13676358"),
+            ]:
+                path = sdk / directory / "source.properties"
+                path.parent.mkdir(parents=True)
+                path.write_text(f"Pkg.Revision={revision}\n")
+            java = root / "java"
+            java.mkdir()
+            (java / "release").write_text(f'JAVA_VERSION="{bootstrap.PINS["java"]}"\n')
+            version = {
+                "frameworkVersion": bootstrap.PINS["flutter"],
+                "frameworkRevision": bootstrap.PINS["flutterRevision"],
+                "dartSdkVersion": bootstrap.PINS["dart"],
+            }
+            env = {
+                "PATH": str(executable.parent),
+                "JAVA_HOME": str(java),
+                "ANDROID_HOME": str(sdk),
+            }
+            with (
+                patch.object(bootstrap, "ROOT", root),
+                patch.dict(os.environ, env, clear=True),
+                patch.object(
+                    sys, "argv", ["bootstrap", "--reuse-flutter", "--reuse-android-sdk"]
+                ),
+                patch.object(bootstrap.shutil, "which", return_value=str(executable)),
+                patch.object(
+                    bootstrap,
+                    "download",
+                    side_effect=AssertionError("download forbidden"),
+                ),
+                patch.object(
+                    bootstrap, "run", return_value=json.dumps(version)
+                ) as command,
+            ):
+                bootstrap.main()
+            self.assertEqual(executable.read_text(), "action SDK sentinel\n")
+            self.assertEqual(
+                sorted(
+                    path.relative_to(flutter).as_posix() for path in flutter.rglob("*")
+                ),
+                ["bin", "bin/flutter"],
+            )
+            self.assertFalse(
+                (root / "artifacts/platform-tools/mobile/flutter").exists()
+            )
+            self.assertEqual(command.call_count, 1)
+            self.assertEqual(
+                command.call_args.args[0], [str(executable), "--version", "--machine"]
+            )
+            self.assertIn(
+                str(flutter / "bin"),
+                (root / "artifacts/platform-tools/mobile/env.sh").read_text(),
+            )
+
+    def test_reused_flutter_wrong_version_revision_or_dart_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            sdk = Path(temporary)
+            for directory, revision in [
+                ("cmdline-tools/latest", "23.0"),
+                ("platforms/android-36", "2"),
+                ("build-tools/36.0.0", "36.0.0"),
+                ("ndk/28.2.13676358", "28.2.13676358"),
+            ]:
+                path = sdk / directory / "source.properties"
+                path.parent.mkdir(parents=True)
+                path.write_text(f"Pkg.Revision={revision}\n")
+            expected = {
+                "frameworkVersion": bootstrap.PINS["flutter"],
+                "frameworkRevision": bootstrap.PINS["flutterRevision"],
+                "dartSdkVersion": bootstrap.PINS["dart"],
+            }
+            for field in expected:
+                with (
+                    self.subTest(field=field),
+                    patch.object(
+                        bootstrap,
+                        "run",
+                        return_value=json.dumps(expected | {field: "wrong"}),
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        SystemExit, "Mobile toolchain mismatch"
+                    ):
+                        bootstrap.verify(sdk, sdk, sdk / "cmdline-tools/latest", {})
+
     def test_removes_only_owned_checksum_verified_archive(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
