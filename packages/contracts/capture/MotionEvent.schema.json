@@ -1,27 +1,26 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "$id": "https://stateaction.ai/schemas/capture/v1/MotionEvent",
   "title": "stateaction.capture.MotionEvent.v1",
+  "type": "object",
+  "additionalProperties": false,
   "required": [
     "recording_id",
     "event_id",
     "native_timestamp_ns",
     "native_clock_id",
-    "unit"
+    "unit",
+    "values"
   ],
   "properties": {
     "recording_id": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "#/$defs/uuid"
     },
     "event_id": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)$"
+      "$ref": "#/$defs/int64Decimal"
     },
     "native_timestamp_ns": {
-      "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)$"
+      "$ref": "#/$defs/int64Decimal"
     },
     "native_clock_id": {
       "const": "android.elapsed_realtime"
@@ -32,26 +31,93 @@
     "mapped_capture_time_ns": {
       "anyOf": [
         {
-          "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)$"
+          "$ref": "#/$defs/int64Decimal"
         },
         {
           "type": "null"
         }
       ]
     },
-    "accuracy": {},
+    "callback_elapsed_ns": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "accuracy": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 3
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "values": {
       "type": "array",
       "minItems": 3,
       "maxItems": 3,
       "items": {
-        "type": "number"
+        "type": "number",
+        "minimum": -1000000,
+        "maximum": 1000000
       }
     },
-    "axes": {},
+    "axes": {
+      "enum": ["android_device"]
+    },
     "includes_gravity": {
       "type": ["boolean", "null"]
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "description": "Domain entity identifier: canonical lowercase RFC 9562 UUID, versions 1-8.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "int64Decimal": {
+      "description": "Exact non-negative signed 64-bit integer (0..9223372036854775807) as a canonical decimal string: nanoseconds, PTS, IDs and counts.",
+      "type": "string",
+      "maxLength": 19,
+      "pattern": "^(0|[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$"
+    },
+    "uint32": {
+      "description": "MCAP message sequence (uint32).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "clockDomain": {
+      "description": "Named native clock domain; timestamps from different domains are never merged.",
+      "type": "string",
+      "maxLength": 131,
+      "pattern": "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){0,3}$"
+    },
+    "revision": {
+      "description": "Code, profile or clock-mapping revision label.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "label": {
+      "description": "Textual label (calibration ID, sensor/stream ID, kind, model, reason code). Intentionally not a UUID.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "text": {
+      "description": "Bounded human-readable diagnostic: 1..256 printable ASCII characters.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[ -~]{1,256}$"
+    },
+    "timeBase": {
+      "description": "Encoder PTS time base: exactly 1/1000000 seconds.",
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
     }
   }
 }

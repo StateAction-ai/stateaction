@@ -12,7 +12,9 @@ language runner can parse them without an MCAP dependency. Synthetic data only.
 from __future__ import annotations
 
 import json
+import re
 import struct
+import zlib
 
 import capture_conformance as cc
 
@@ -23,7 +25,8 @@ BASE_CAPTURE_NS = (
 )
 BASE_NATIVE_NS = 1_000_000_007
 STEP_NS = 33_333_333
-REC = "golden-fixture"
+REC = "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19"  # domain recording ID: UUID
+OTHER_REC = "7d1c2b3a-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 
 
 def split_access_units(stream: bytes) -> list[bytes]:
@@ -53,9 +56,18 @@ def s(text: str) -> bytes:
 
 
 class Writer:
-    def __init__(self, profile: str = "", overrides=None, raw_patch=None):
+    def __init__(
+        self,
+        profile: str = "",
+        overrides=None,
+        raw_patch=None,
+        skip=(),
+        json_patch=None,
+    ):
         self.overrides = overrides or {}
         self.raw_patch = raw_patch
+        self.skip = set(skip)
+        self.json_patch = json_patch
         self.out = bytearray(cc.MAGIC)
         self.out += rec(0x01, s(profile) + s("stateaction-golden-gen"))
         self.schemas: dict[str, int] = {}
@@ -97,6 +109,11 @@ class Writer:
     def message(
         self, topic: str, log_ns: int, data: bytes, sequence: int | None = None
     ):
+        if topic in self.skip:
+            return
+        if self.json_patch and topic.startswith("/stateaction/"):
+            # payload patch fn(topic, dict) -> dict; jb() is canonical so unpatched bytes are unchanged
+            data = jb(self.json_patch(topic, json.loads(data)))
         n = self.seq.get(topic, 0) if sequence is None else sequence
         self.seq[topic] = n + 1
         if self.raw_patch:
@@ -105,8 +122,12 @@ class Writer:
             0x05, struct.pack("<HIQQ", self.channels[topic], n, log_ns, log_ns) + data
         )
 
-    def finish(self) -> bytes:
-        self.out += rec(0x02, struct.pack("<QQI", 0, 0, 0)) + cc.MAGIC
+    def finish(self, data_end: str = "crc", footer=(0, 0, 0)) -> bytes:
+        """DataEnd carries CRC-32 of every preceding byte (leading magic included); no summary."""
+        if data_end != "absent":
+            crc = zlib.crc32(bytes(self.out)) if data_end == "crc" else 0
+            self.out += rec(0x0F, struct.pack("<I", crc))
+        self.out += rec(0x02, struct.pack("<QQI", *footer)) + cc.MAGIC
         return bytes(self.out)
 
 
@@ -172,7 +193,13 @@ def render(m: dict) -> bytes:
         return (CAP / name).read_bytes()
 
     desc = (CAP / "foxglove-compressed-video.desc").read_bytes()
-    w = Writer(m.get("profile", ""), m.get("channel_overrides"), m.get("raw_patch"))
+    w = Writer(
+        m.get("profile", ""),
+        m.get("channel_overrides"),
+        m.get("raw_patch"),
+        m.get("skip_topics", ()),
+        m.get("patch"),
+    )
 
     def js(topic, key):
         return w.channel(
@@ -217,6 +244,7 @@ def render(m: dict) -> bytes:
         (CAP / cc.POSE_SCHEMA_FILE).read_bytes(),
         "cdr",
     )
+    w.out += m.get("extra_record", b"")
     t0 = BASE_CAPTURE_NS
     w.message(
         "/stateaction/capture_profile",
@@ -526,9 +554,6 @@ def render(m: dict) -> bytes:
         else [],
     }
     close.update(m["extra"].get("close", {}))
-    patch = m.get("patch")
-    if patch:
-        close = patch("/stateaction/close", close)
     last = max(e[0] for e in events) + 1_000_000
     events.sort(key=lambda e: e[0])
     for log_ns, topic, payload in events:
@@ -538,11 +563,10 @@ def render(m: dict) -> bytes:
         elif isinstance(payload, bytes):
             w.message(topic, log_ns, payload)
         else:
-            if patch:
-                payload = patch(topic, payload)
             w.message(topic, log_ns, jb(payload))
     w.message("/stateaction/close", last, jb(close))
-    return w.finish()
+    out = w.finish(m.get("data_end", "crc"), m.get("footer", (0, 0, 0)))
+    return m["post_patch"](out) if "post_patch" in m else out
 
 
 def patched(m, fn):
@@ -681,10 +705,11 @@ def case_models():
     mp = model()
     mp["frames"][2]["omit"] = ["encoder_pts_us"]
     cases["missing_pts"] = (
-        "A frame event omits its encoder PTS.",
+        "Acquired/submitted/written events of source frame 2 omit the encoder PTS (required for acquired and written).",
         mp,
         "reject",
-        ["E_MISSING_PTS"],
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events:required"] * 2,
     )
     uc = model()
     uc["declared_clocks"] = {"rgb": "android.elapsed_realtime"}
@@ -893,14 +918,16 @@ def case_models():
         "All events of source frame 2 declare time base 1/90000 instead of 1/1000000.",
         tb,
         "reject",
-        ["E_TIME_BASE"],
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events/encoder_time_base:const"] * 3,
     )
     pi = patched(model(), frame_patch(2, ALL, encoder_pts_us="33333.5"))
     cases["pts_not_integer"] = (
         "Encoder PTS of source frame 2 is the non-integer string 33333.5 in every event.",
         pi,
         "reject",
-        ["E_PTS_INVALID"],
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events/encoder_pts_us:pattern"] * 3,
     )
     so = model()
     so["frames"][2]["seq"] = so["frames"][1]["seq"]
@@ -916,8 +943,10 @@ def case_models():
         "A submitted FrameEvent carries native_timestamp_ns as a JSON number instead of a decimal string.",
         sm_,
         "reject",
-        ["E_COUNT_MISMATCH", "E_SCHEMA_MALFORMED"],
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events/native_timestamp_ns:type"],
     )
+    cases.update(strictness_cases())
     for name, fn, desc in (
         (
             "malformed_protobuf_wire_type",
@@ -951,7 +980,322 @@ def case_models():
         mm_ = model()
         mm_["raw_patch"] = fn
         cases[name] = (desc, mm_, "reject", ["E_MALFORMED_MESSAGE"])
+    cases.update(layout_cases())
     return cases
+
+
+def topic_patch(topic, fn):
+    """Patch one JSON channel's payloads: fn(payload copy) -> payload."""
+
+    def apply(t, payload):
+        return fn(json.loads(json.dumps(payload))) if t == topic else payload
+
+    return apply
+
+
+def setp(path, value):
+    """Return fn(payload) that sets (or with value=None deletes) a nested key path."""
+
+    def fn(payload):
+        node = payload
+        for k in path[:-1]:
+            node = node[k]
+        if value is None:
+            node.pop(path[-1])
+        else:
+            node[path[-1]] = value
+        return payload
+
+    return fn
+
+
+def strictness_cases():
+    """Normative unknown-field / identifier / bound cases. Violations are declared without message index
+    as "<topic><pointer>:<keyword>" (a multiset); expected/<case>.json pins the exact indexes."""
+    C, P, CL, INV = (
+        "/stateaction/close",
+        "/stateaction/capture_profile",
+        "/stateaction/clocks",
+        "/stateaction/inventory",
+    )
+    out = {}
+
+    def add(name, desc, fn_topic, fn, violations):
+        out[name] = (
+            desc,
+            patched(model(), topic_patch(fn_topic, fn)),
+            "reject",
+            ["E_SCHEMA_MALFORMED"],
+            violations,
+        )
+
+    add(
+        "close_unknown_root_field",
+        "Close carries an undeclared root field operator_note.",
+        C,
+        setp(["operator_note"], "looks fine"),
+        [f"{C}:additionalProperties"],
+    )
+    add(
+        "close_non_uuid_recording_id",
+        "Close recording_id is the textual label golden-fixture, not a UUID.",
+        C,
+        setp(["recording_id"], "golden-fixture"),
+        [f"{C}/recording_id:pattern"],
+    )
+    add(
+        "close_uppercase_uuid",
+        "Close recording_id is an uppercase UUID (domain IDs are canonical lowercase).",
+        C,
+        setp(["recording_id"], REC.upper()),
+        [f"{C}/recording_id:pattern"],
+    )
+    add(
+        "close_200_digit_count",
+        "Close frames.acquired is a 200-digit decimal (exceeds int64 and the 19-character bound).",
+        C,
+        setp(["frames", "acquired"], "1" * 200),
+        [f"{C}/frames/acquired:maxLength", f"{C}/frames/acquired:pattern"],
+    )
+    add(
+        "close_int64_overflow",
+        "Close video_messages is 9223372036854775808 (int64 max + 1, still 19 digits).",
+        C,
+        setp(["video_messages"], str(2**63)),
+        [f"{C}/video_messages:pattern"],
+    )
+    add(
+        "close_unknown_frames_field",
+        "Close frames object carries an undeclared counter.",
+        C,
+        setp(["frames", "encoded"], "4"),
+        [f"{C}/frames:additionalProperties"],
+    )
+    add(
+        "close_failure_reason_too_long",
+        "Close failure_reason is 257 printable ASCII characters.",
+        C,
+        setp(["failure_reason"], "x" * 257),
+        [f"{C}/failure_reason:anyOf"],
+    )
+    add(
+        "profile_unknown_limit",
+        "Profile limits carries an undeclared key.",
+        P,
+        setp(["limits", "max_frames"], 9),
+        [f"{P}/limits:additionalProperties"],
+    )
+    add(
+        "profile_pending_frames_bound",
+        "Profile limits.pending_frames is 65 (bound 1..64).",
+        P,
+        setp(["limits", "pending_frames"], 65),
+        [f"{P}/limits/pending_frames:maximum"],
+    )
+    add(
+        "clocks_bad_stream_name",
+        "Clocks stream_clocks key 'RGB camera' is not a label.",
+        CL,
+        setp(["stream_clocks", "RGB camera"], "android.elapsed_realtime"),
+        [f"{CL}/stream_clocks:pattern"],
+    )
+    add(
+        "clocks_unknown_transport_field",
+        "Clocks recorder_transport carries an undeclared field.",
+        CL,
+        setp(["recorder_transport", "drift_ppm"], "3"),
+        [f"{CL}/recorder_transport:additionalProperties"],
+    )
+    add(
+        "inventory_too_many_sensors",
+        "Inventory lists 65 sensors (bound 64).",
+        INV,
+        lambda p: {
+            **p,
+            "sensors": p["sensors"] + [p["sensors"][-1]] * (65 - len(p["sensors"])),
+        },
+        [f"{INV}/sensors:maxItems"],
+    )
+    add(
+        "inventory_label_trailing_newline",
+        "Inventory calibration model is 'pinhole\n': a trailing newline never satisfies an anchored pattern.",
+        INV,
+        lambda p: {
+            **p,
+            "calibrations": [{**p["calibrations"][0], "model": "pinhole\n"}]
+            + p["calibrations"][1:],
+        },
+        [f"{INV}/calibrations/0/model:anyOf"],
+    )
+    out["frame_unknown_native_timestamp"] = (
+        "Acquired FrameEvent of source frame 1 carries an undeclared native_timestamps key.",
+        patched(
+            model(),
+            frame_patch(
+                1,
+                ("acquired",),
+                native_timestamps={
+                    "metadata_sensor_timestamp_ns": str(native(1)),
+                    "vsync_ns": "1",
+                },
+            ),
+        ),
+        "reject",
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events/native_timestamps:additionalProperties"],
+    )
+    out["frame_reason_trailing_newline"] = (
+        "Dropped FrameEvent reason ends in a newline.",
+        patched(
+            model(), frame_patch(3, ("dropped",), reason="codec_input_backpressure\n")
+        ),
+        "reject",
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/frame_events/reason:pattern"],
+    )
+    out["motion_value_string"] = (
+        "First accelerometer sample value is the string '0.0' instead of a number.",
+        patched(
+            model(),
+            lambda t, p: (
+                {**p, "values": ["0.0"] + p["values"][1:]}
+                if t == "/stateaction/imu/accel" and p["event_id"] == "0"
+                else p
+            ),
+        ),
+        "reject",
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/imu/accel/values/0:type"],
+    )
+    out["sensor_sequence_overflow"] = (
+        "A SensorEvent output_sequence is 4294967296 (uint32 max + 1).",
+        patched(
+            model(),
+            lambda t, p: (
+                {**p, "output_sequence": 2**32}
+                if t == "/stateaction/sensor_events" and p["event_id"] == "1"
+                else p
+            ),
+        ),
+        "reject",
+        ["E_SCHEMA_MALFORMED"],
+        ["/stateaction/sensor_events/output_sequence:maximum"],
+    )
+    bound = model()
+    bound["patch"] = topic_patch(
+        CL, setp(["recorder_transport", "uncertainty_ns"], str(2**63 - 1))
+    )
+    out["clocks_int64_max"] = (
+        "Clocks uncertainty_ns is exactly int64 max 9223372036854775807 (accepted boundary).",
+        bound,
+        "accept",
+        [],
+    )
+    mismatch = model()
+    mismatch["patch"] = lambda t, p: (
+        {**p, "recording_id": OTHER_REC}
+        if t == "/stateaction/imu/gyro" and p["event_id"] == "1"
+        else p
+    )
+    out["recording_id_mismatch"] = (
+        "One gyroscope event carries a different (valid) recording UUID.",
+        mismatch,
+        "reject",
+        ["E_RECORDING_ID"],
+    )
+    noprofile = model()
+    noprofile["skip_topics"] = ["/stateaction/capture_profile"]
+    out["missing_profile"] = (
+        "The capture profile message is absent (profile/clocks/inventory/close must each appear exactly once).",
+        noprofile,
+        "reject",
+        ["E_CHANNEL_CARDINALITY"],
+    )
+    for name, fn, desc in (
+        (
+            "duplicate_json_key",
+            lambda topic, n, data: (
+                data[:-1] + b',"outcome":"aborted"}' if topic == C else data
+            ),
+            "Close JSON repeats the outcome key (parsers disagree on duplicates, so it is malformed).",
+        ),
+        (
+            "json_number_overflow",
+            lambda topic, n, data: (
+                data.replace(b"9.8", b"1e400")
+                if topic == "/stateaction/imu/accel" and n == 0
+                else data
+            ),
+            "Accelerometer value 1e400 overflows an IEEE-754 double.",
+        ),
+    ):
+        raw = model()
+        raw["raw_patch"] = fn
+        out[name] = (desc, raw, "reject", ["E_MALFORMED_MESSAGE"])
+    return out
+
+
+def layout_cases():
+    """Container integrity: DataEnd CRC and the single supported (unchunked, no summary) layout."""
+    out = {}
+
+    def corrupt(old, new):
+        def fn(data):
+            assert data.count(old) >= 1 and len(old) == len(new)
+            return data.replace(old, new, 1)
+
+        return fn
+
+    for name, mutate, desc in (
+        (
+            "data_crc_header_corrupt",
+            corrupt(b"stateaction-golden-gen", b"stateaction-golden-geN"),
+            "One byte of the Header library string changed after the DataEnd CRC was computed.",
+        ),
+        (
+            "data_crc_payload_corrupt",
+            corrupt(b"[0.0,9.8,0.0]", b"[0.0,9.9,0.0]"),
+            "One digit of a schema-valid accelerometer sample changed after the CRC was computed.",
+        ),
+    ):
+        mod = model()
+        mod["post_patch"] = mutate
+        out[name] = (desc, mod, "reject", ["E_DATA_CRC"])
+    zero = model()
+    zero["data_end"] = "zero"
+    out["data_crc_zero"] = (
+        "DataEnd data_section_crc is 0 (CRC unavailable): the contract requires a nonzero CRC.",
+        zero,
+        "reject",
+        ["E_DATA_CRC"],
+    )
+    absent = model()
+    absent["data_end"] = "absent"
+    out["data_end_missing"] = (
+        "Footer follows the last message without a DataEnd record.",
+        absent,
+        "reject",
+        ["E_UNSUPPORTED_LAYOUT"],
+    )
+    summary = model()
+    summary["footer"] = (40, 0, 0)
+    out["footer_summary_offset"] = (
+        "Footer claims a summary section/index (summary_start != 0), outside the supported layout.",
+        summary,
+        "reject",
+        ["E_UNSUPPORTED_LAYOUT"],
+    )
+    chunk = model()
+    chunk["extra_record"] = rec(
+        0x06, struct.pack("<QQQI", 0, 0, 0, 0) + s("") + struct.pack("<Q", 0)
+    )
+    out["chunk_record"] = (
+        "An (empty) Chunk record appears in the data section: chunked files are not the portable layout.",
+        chunk,
+        "reject",
+        ["E_UNSUPPORTED_LAYOUT"],
+    )
+    return out
 
 
 def legacy_jpeg() -> bytes:
@@ -1177,7 +1521,7 @@ def main():
     cases = case_models()
     index = {}
     models = {}
-    for name, (desc, m, expect, declared) in cases.items():
+    for name, (desc, m, expect, declared, *viol) in cases.items():
         data = render(m)
         (GOLD / f"{name}.mcap").write_bytes(data)
         models[name] = m
@@ -1187,6 +1531,8 @@ def main():
             "expected_errors": sorted(declared),
             "sha256": cc.sha256(data),
         }
+        if viol:
+            index[name]["expected_violations"] = sorted(viol[0])
     full = (GOLD / "valid.mcap").read_bytes()
     for name, cut, desc in (
         (
@@ -1220,6 +1566,11 @@ def main():
         # The declared outcome/errors are the oracle; the checker must agree with them.
         assert result["outcome"] == entry["expect"], (name, result)
         assert result["errors"] == entry["expected_errors"], (name, result["errors"])
+        got_v = sorted(
+            re.sub(r"\[[0-9]+\]", "", v, count=1)
+            for v in result["facts"].get("schema_violations", [])
+        )
+        assert got_v == entry.get("expected_violations", []), (name, got_v)
         if result["outcome"] == "accept":
             got = [
                 {

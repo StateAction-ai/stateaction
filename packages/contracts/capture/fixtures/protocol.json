@@ -2,7 +2,7 @@
   "description": "Synthetic identity/time fixture, not physical camera evidence",
   "FrameEvent": [
     {
-      "recording_id": "contract-fixture",
+      "recording_id": "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19",
       "stream_id": "rgb",
       "source_frame_id": "0",
       "state": "acquired",
@@ -23,7 +23,7 @@
       }
     },
     {
-      "recording_id": "contract-fixture",
+      "recording_id": "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19",
       "stream_id": "rgb",
       "source_frame_id": "0",
       "state": "submitted",
@@ -44,7 +44,7 @@
       }
     },
     {
-      "recording_id": "contract-fixture",
+      "recording_id": "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19",
       "stream_id": "rgb",
       "source_frame_id": "0",
       "state": "written",
@@ -68,7 +68,7 @@
       "is_idr": true
     },
     {
-      "recording_id": "contract-fixture",
+      "recording_id": "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19",
       "stream_id": "rgb",
       "source_frame_id": "1",
       "state": "dropped",
@@ -92,18 +92,14 @@
   ],
   "MotionEvent": [
     {
-      "recording_id": "contract-fixture",
-      "stream_id": "accel",
+      "recording_id": "0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19",
       "event_id": "0",
       "native_timestamp_ns": "1000000001",
       "native_clock_id": "android.elapsed_realtime",
       "mapped_capture_time_ns": "1800000000000000001",
-      "clock_mapping_revision": "android_elapsed_to_unix_v1",
       "callback_elapsed_ns": "1000000011",
       "accuracy": 3,
-      "x": 0.0,
-      "y": 9.8,
-      "z": 0.0,
+      "values": [0.0, 9.8, 0.0],
       "unit": "m/s^2",
       "includes_gravity": true,
       "axes": "android_device"

@@ -1,8 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
   "$id": "https://stateaction.ai/schemas/capture/v1/Profile",
   "title": "stateaction.capture.Profile.v1",
+  "type": "object",
+  "additionalProperties": false,
   "required": [
     "capture_schema",
     "rgb_profile",
@@ -21,17 +22,13 @@
       "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
     },
     "recording_id": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "#/$defs/uuid"
     },
     "wire_contract_revision": {
       "const": "stateaction.capture.v1.1"
     },
     "encoder_time_base": {
-      "const": {
-        "numerator": 1,
-        "denominator": 1000000
-      }
+      "$ref": "#/$defs/timeBase"
     },
     "production_qualified": {
       "const": false
@@ -39,14 +36,95 @@
     "qualification": {
       "enum": ["unqualified", "simulation_only"]
     },
+    "mapped_timeline_semantics": {
+      "const": "simulation_transport_only"
+    },
     "limits": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pending_frames"],
+      "properties": {
+        "pending_frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "access_unit_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "max_queued_encoded_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "mcap_chunk_target_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "mcap_chunk_input_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        },
+        "chunk_index_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "writer_mode": {
+          "enum": ["synchronous_bounded_input"]
+        }
+      }
     },
     "encoder": {
-      "type": "object"
-    },
-    "streams": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codec"],
+      "properties": {
+        "codec": {
+          "const": "h264"
+        },
+        "profile": {
+          "enum": ["baseline", "main", "high"]
+        },
+        "name": {
+          "$ref": "#/$defs/label"
+        },
+        "hardware": {
+          "type": ["boolean", "null"]
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        },
+        "bitrate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "b_frames": {
+          "const": 0
+        },
+        "idr_interval_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        }
+      }
     }
   },
   "allOf": [
@@ -63,12 +141,59 @@
         "properties": {
           "qualification": {
             "const": "simulation_only"
-          },
-          "mapped_timeline_semantics": {
-            "const": "simulation_transport_only"
           }
         }
       }
     }
-  ]
+  ],
+  "$defs": {
+    "uuid": {
+      "description": "Domain entity identifier: canonical lowercase RFC 9562 UUID, versions 1-8.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "int64Decimal": {
+      "description": "Exact non-negative signed 64-bit integer (0..9223372036854775807) as a canonical decimal string: nanoseconds, PTS, IDs and counts.",
+      "type": "string",
+      "maxLength": 19,
+      "pattern": "^(0|[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$"
+    },
+    "uint32": {
+      "description": "MCAP message sequence (uint32).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "clockDomain": {
+      "description": "Named native clock domain; timestamps from different domains are never merged.",
+      "type": "string",
+      "maxLength": 131,
+      "pattern": "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){0,3}$"
+    },
+    "revision": {
+      "description": "Code, profile or clock-mapping revision label.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "label": {
+      "description": "Textual label (calibration ID, sensor/stream ID, kind, model, reason code). Intentionally not a UUID.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "text": {
+      "description": "Bounded human-readable diagnostic: 1..256 printable ASCII characters.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[ -~]{1,256}$"
+    },
+    "timeBase": {
+      "description": "Encoder PTS time base: exactly 1/1000000 seconds.",
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
+    }
+  }
 }

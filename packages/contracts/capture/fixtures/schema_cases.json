@@ -1,0 +1,276 @@
+{
+  "description": "Direct strict-schema interpreter cases run by every language runner. expect is the sorted violation list (instance pointer:keyword), or 'malformed' for JSON text every reader must refuse to parse. 'unsupported' schemas must fail closed at load time. Declared by hand; verify.py also checks them against jsonschema Draft202012Validator.",
+  "cases": [
+    {
+      "name": "frame_acquired_valid",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": []
+    },
+    {
+      "name": "frame_output_sequence_float_integer",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":1.0,\"is_idr\":true}",
+      "expect": [],
+      "note": "1.0 is an integer (zero fraction) in JSON Schema 2020-12"
+    },
+    {
+      "name": "frame_output_sequence_fraction",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":1.5,\"is_idr\":true}",
+      "expect": ["/output_sequence:type"]
+    },
+    {
+      "name": "frame_output_sequence_bool",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":true,\"is_idr\":true}",
+      "expect": ["/output_sequence:type"],
+      "note": "booleans are never numbers"
+    },
+    {
+      "name": "frame_output_sequence_negative",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":-1,\"is_idr\":true}",
+      "expect": ["/output_sequence:minimum"]
+    },
+    {
+      "name": "frame_output_sequence_huge",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":1000000000000000000000000000000,\"is_idr\":true}",
+      "expect": ["/output_sequence:maximum"],
+      "note": "beyond 2^53: every parser still exceeds the bound"
+    },
+    {
+      "name": "frame_time_base_float_equal",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1.0,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": [],
+      "note": "const uses numeric equality"
+    },
+    {
+      "name": "frame_time_base_bool",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":true,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/encoder_time_base:const"],
+      "note": "true != 1"
+    },
+    {
+      "name": "frame_time_base_extra_key",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000,\"x\":0},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/encoder_time_base:const"]
+    },
+    {
+      "name": "frame_unknown_root",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"z\":1}",
+      "expect": [":additionalProperties"]
+    },
+    {
+      "name": "frame_wrong_type_root",
+      "schema": "FrameEvent",
+      "json": "[]",
+      "expect": [":type"]
+    },
+    {
+      "name": "frame_missing_state",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": [":required"],
+      "note": "if/then is vacuous without state; only the root required fails"
+    },
+    {
+      "name": "frame_written_missing_output",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": [":required"]
+    },
+    {
+      "name": "frame_leading_zero",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"01\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/source_frame_id:pattern"]
+    },
+    {
+      "name": "frame_int64_max",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"9223372036854775807\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": []
+    },
+    {
+      "name": "frame_int64_overflow",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"9223372036854775808\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/native_timestamp_ns:pattern"]
+    },
+    {
+      "name": "frame_nonascii_label",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_\\u00e9\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/calibration_id:pattern"]
+    },
+    {
+      "name": "frame_astral_reason_length",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"1\",\"state\":\"dropped\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"reason\":\"\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\"}",
+      "expect": ["/reason:maxLength", "/reason:pattern"],
+      "note": "length counts code points (65), not UTF-16 units (130)"
+    },
+    {
+      "name": "frame_unknown_key_escaped",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"a/b~\\u00e9\":\"1\"}}",
+      "expect": ["/native_timestamps:additionalProperties"]
+    },
+    {
+      "name": "frame_uuid_version0",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-0c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/recording_id:pattern"]
+    },
+    {
+      "name": "frame_uuid_trailing_newline",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\\n\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}",
+      "expect": ["/recording_id:pattern"],
+      "note": "$ never matches before a trailing newline"
+    },
+    {
+      "name": "clocks_map_bad_value_and_name",
+      "schema": "Clocks",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"recorder_transport\":{\"clock_id\":\"android.elapsed_realtime\",\"target_clock_id\":\"unix\",\"native_anchor_ns\":\"1\",\"epoch_anchor_ns\":\"2\",\"method\":\"fixed_host_anchor\",\"revision\":\"r1\",\"status\":\"unverified\",\"uncertainty_ns\":null,\"synchronization_accuracy\":\"unverified\"},\"stream_clocks\":{\"rgb\":\"Bad Clock\",\"bad key\":\"android.x\"}}",
+      "expect": ["/stream_clocks/rgb:pattern", "/stream_clocks:pattern"],
+      "note": "propertyNames errors are reported at the map; value errors at the key"
+    },
+    {
+      "name": "clocks_empty_map",
+      "schema": "Clocks",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"recorder_transport\":{\"clock_id\":\"android.elapsed_realtime\",\"target_clock_id\":\"unix\",\"native_anchor_ns\":\"1\",\"epoch_anchor_ns\":\"2\",\"method\":\"fixed_host_anchor\",\"revision\":\"r1\",\"status\":\"unverified\",\"uncertainty_ns\":null,\"synchronization_accuracy\":\"unverified\"},\"stream_clocks\":{}}",
+      "expect": ["/stream_clocks:minProperties"]
+    },
+    {
+      "name": "clocks_map_key_pointer_escaping",
+      "schema": "Clocks",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"recorder_transport\":{\"clock_id\":\"android.elapsed_realtime\",\"target_clock_id\":\"unix\",\"native_anchor_ns\":\"1\",\"epoch_anchor_ns\":\"2\",\"method\":\"fixed_host_anchor\",\"revision\":\"r1\",\"status\":\"unverified\",\"uncertainty_ns\":null,\"synchronization_accuracy\":\"unverified\"},\"stream_clocks\":{\"a/b~\u00e9\":\"Bad\"}}",
+      "expect": [
+        "/stream_clocks/a%2Fb%7E%C3%A9:pattern",
+        "/stream_clocks:pattern"
+      ],
+      "note": "pointer tokens percent-encode UTF-8 bytes outside [A-Za-z0-9._-]"
+    },
+    {
+      "name": "motion_values_short_and_bad",
+      "schema": "MotionEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"event_id\":\"0\",\"native_timestamp_ns\":\"1000000001\",\"native_clock_id\":\"android.elapsed_realtime\",\"mapped_capture_time_ns\":\"1800000000000000001\",\"callback_elapsed_ns\":\"1000000011\",\"accuracy\":3,\"values\":[true,2000000.0],\"unit\":\"m/s^2\",\"includes_gravity\":true,\"axes\":\"android_device\"}",
+      "expect": ["/values/0:type", "/values/1:maximum", "/values:minItems"]
+    },
+    {
+      "name": "motion_accuracy_null",
+      "schema": "MotionEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"event_id\":\"0\",\"native_timestamp_ns\":\"1000000001\",\"native_clock_id\":\"android.elapsed_realtime\",\"mapped_capture_time_ns\":\"1800000000000000001\",\"callback_elapsed_ns\":\"1000000011\",\"accuracy\":null,\"values\":[0.0,9.8,0.0],\"unit\":\"m/s^2\",\"includes_gravity\":true,\"axes\":\"android_device\"}",
+      "expect": []
+    },
+    {
+      "name": "motion_accuracy_out_of_range",
+      "schema": "MotionEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"event_id\":\"0\",\"native_timestamp_ns\":\"1000000001\",\"native_clock_id\":\"android.elapsed_realtime\",\"mapped_capture_time_ns\":\"1800000000000000001\",\"callback_elapsed_ns\":\"1000000011\",\"accuracy\":4,\"values\":[0.0,9.8,0.0],\"unit\":\"m/s^2\",\"includes_gravity\":true,\"axes\":\"android_device\"}",
+      "expect": ["/accuracy:anyOf"]
+    },
+    {
+      "name": "duplicate_key",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\"}",
+      "expect": "malformed"
+    },
+    {
+      "name": "nan_literal",
+      "schema": "MotionEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"event_id\":\"0\",\"native_timestamp_ns\":\"1000000001\",\"native_clock_id\":\"android.elapsed_realtime\",\"mapped_capture_time_ns\":\"1800000000000000001\",\"callback_elapsed_ns\":\"1000000011\",\"accuracy\":3,\"values\":[0.0,NaN,0.0],\"unit\":\"m/s^2\",\"includes_gravity\":true,\"axes\":\"android_device\"}",
+      "expect": "malformed"
+    },
+    {
+      "name": "double_overflow",
+      "schema": "MotionEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"event_id\":\"0\",\"native_timestamp_ns\":\"1000000001\",\"native_clock_id\":\"android.elapsed_realtime\",\"mapped_capture_time_ns\":\"1800000000000000001\",\"callback_elapsed_ns\":\"1000000011\",\"accuracy\":3,\"values\":[0.0,-1e400,0.0],\"unit\":\"m/s^2\",\"includes_gravity\":true,\"axes\":\"android_device\"}",
+      "expect": "malformed"
+    },
+    {
+      "name": "integer_literal_overflow",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"written\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"},\"output_channel\":\"/camera/rgb/video\",\"output_sequence\":10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,\"is_idr\":true}",
+      "expect": "malformed"
+    },
+    {
+      "name": "trailing_garbage",
+      "schema": "FrameEvent",
+      "json": "{\"recording_id\":\"0b6f5e1c-3d2a-4c8e-9f1a-5e2d7c4b3a19\",\"stream_id\":\"rgb\",\"source_frame_id\":\"0\",\"state\":\"acquired\",\"native_timestamp_ns\":\"1000000007\",\"native_clock_id\":\"android.camera.sensor_timestamp\",\"mapped_capture_time_ns\":\"1800000000000000007\",\"clock_mapping_revision\":\"android_elapsed_to_unix_v1\",\"calibration_id\":\"rgb_0\",\"encoder_pts_us\":\"0\",\"encoder_time_base\":{\"numerator\":1,\"denominator\":1000000},\"native_timestamps\":{\"arcore_frame_timestamp_ns\":\"999999991\",\"arcore_image_timestamp_ns\":\"999999997\",\"metadata_sensor_timestamp_ns\":\"1000000007\"}}x",
+      "expect": "malformed"
+    },
+    {
+      "name": "invalid_utf8",
+      "schema": "FrameEvent",
+      "json": "__INVALID_UTF8__",
+      "expect": "malformed",
+      "note": "the runner substitutes bytes 0xff 0xfe"
+    }
+  ],
+  "unsupported_schemas": [
+    {
+      "name": "oneOf",
+      "schema": {
+        "oneOf": [
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "format",
+      "schema": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    {
+      "name": "remote_ref",
+      "schema": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+      }
+    },
+    {
+      "name": "unanchored_pattern",
+      "schema": {
+        "type": "string",
+        "pattern": "[a-z]+"
+      }
+    },
+    {
+      "name": "patternProperties",
+      "schema": {
+        "type": "object",
+        "patternProperties": {
+          "^a$": {}
+        }
+      }
+    },
+    {
+      "name": "unknown_type",
+      "schema": {
+        "type": "uuid"
+      }
+    },
+    {
+      "name": "nested_unknown",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string",
+            "contentEncoding": "base64"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -14,30 +14,137 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
+import re
 import sys
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError, validators
 
 ROOT = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT / "conformance/python")]
+import build_schemas  # noqa: E402
 import capture_conformance as cc  # noqa: E402
 import independent_decode  # noqa: E402
+import strict_schema  # noqa: E402
 
 
-def validate_json_messages(data: bytes, validators: dict) -> dict:
-    f = cc.read_mcap(data)
+def _fullmatch_pattern(validator, pattern, instance, schema):
+    # JSON Schema patterns are ECMA-262; Python's `$` also matches before a trailing newline, so the
+    # oracle uses whole-string matching exactly like every portable reader.
+    if validator.is_type(instance, "string") and not re.fullmatch(pattern, instance):
+        yield ValidationError(f"{instance!r} does not match {pattern!r}")
+
+
+Oracle = validators.extend(Draft202012Validator, {"pattern": _fullmatch_pattern})
+
+
+def oracle_violations(validator, instance) -> list[str]:
+    return sorted(
+        {
+            "".join("/" + strict_schema.token(k) for k in e.absolute_path)
+            + ":"
+            + e.validator
+            for e in validator.iter_errors(instance)
+        }
+    )
+
+
+class Differential:
+    """Every instance is validated by the portable interpreter and by jsonschema; sets must agree."""
+
+    def __init__(self, oracles, portable):
+        self.oracles, self.portable, self.count, self.rejected = oracles, portable, 0, 0
+
+    def __call__(self, name, instance) -> list[str]:
+        mine = self.portable[name].validate(instance)
+        theirs = oracle_violations(self.oracles[name], instance)
+        assert mine == theirs, (
+            f"interpreter/jsonschema disagree on {name}: {mine} vs {theirs}: {instance!r}"
+        )
+        self.count += 1
+        self.rejected += bool(mine)
+        return mine
+
+
+def mutations(value, rng, depth=0):
+    """Small structural mutations of a valid JSON value (types, extra/missing keys, bounds)."""
+    out = []
+    if isinstance(value, dict):
+        for k in list(value)[:12]:
+            out.append({kk: vv for kk, vv in value.items() if kk != k})
+            for sub in mutations(value[k], rng, depth + 1)[:6]:
+                out.append({**value, k: sub})
+        out.append({**value, "unexpected": 1})
+    elif isinstance(value, list):
+        out += [value[:-1], value + value[-1:], []]
+        if value:
+            for sub in mutations(value[0], rng, depth + 1)[:4]:
+                out.append([sub] + value[1:])
+    elif isinstance(value, str):
+        out += [
+            "",
+            value + "\n",
+            value.upper(),
+            "x" * 300,
+            "9" * 25,
+            7,
+            None,
+            value + "\u00e9",
+        ]
+    elif isinstance(value, bool):
+        out += [not value, 1, "true"]
+    elif isinstance(value, (int, float)):
+        out += [-1, value + 0.5, 2**32, 10**7, True, str(value), None]
+    else:
+        out += ["null", 0, {}]
+    return out
+
+
+def differential_messages(data: bytes, diff, rng) -> dict:
+    """Validate every parseable JSON message (and mutations of it) with both validators."""
+    try:
+        f = cc.read_mcap(data)
+    except (cc.Truncated, cc.Unsupported, cc.CrcMismatch, cc.Malformed):
+        return {}
     counts = {}
     for m in f["messages"]:
-        ch = f["channels"][m["channel"]]
-        schema = f["schemas"][ch["schema_id"]]
-        if schema["name"] in validators:
-            assert schema["data"] == (ROOT / cc.CUSTOM[schema["name"]]).read_bytes(), (
-                f"Emitted schema drift: {schema['name']}"
-            )
-            validators[schema["name"]].validate(json.loads(m["data"]))
-            counts[schema["name"]] = counts.get(schema["name"], 0) + 1
+        want = cc.CHANNELS.get(f["channels"][m["channel"]]["topic"])
+        if want is None or want[2] != "json":
+            continue
+        try:
+            value = strict_schema.parse_json(m["data"])
+        except strict_schema.MalformedJson:
+            continue
+        diff(want[0], value)
+        for mutated in rng.sample(
+            mutations(value, rng), k=min(4, len(mutations(value, rng)))
+        ):
+            diff(want[0], mutated)
+        counts[want[0]] = counts.get(want[0], 0) + 1
     return counts
+
+
+def official_crc_status(path: Path) -> str:
+    """Read with the official mcap reader and validate_crcs=True (independent CRC implementation)."""
+    from mcap.exceptions import McapError
+    from mcap.stream_reader import CRCValidationError, StreamReader
+
+    try:
+        with path.open("rb") as source:
+            for _ in StreamReader(source, validate_crcs=True).records:
+                pass
+    except CRCValidationError:
+        return "crc_error"
+    except (McapError, ValueError, EOFError, struct_error()) as e:
+        return f"unreadable:{type(e).__name__}"
+    return "ok"
+
+
+def struct_error():
+    import struct
+
+    return struct.error
 
 
 def main() -> None:
@@ -62,18 +169,43 @@ def main() -> None:
     assert disk <= set(manifest["files"]), (
         f"Unpinned contract files: {disk - set(manifest['files'])}"
     )
-    validators = {}
+    assert all(
+        (ROOT / f"{n}.schema.json").read_bytes() == build_schemas.render(b)
+        for n, b in build_schemas.SCHEMAS.items()
+    ), "schema files differ from build_schemas.py output"
+    validators, portable = {}, {}
     for name, file in cc.CUSTOM.items():
         schema = json.loads((ROOT / file).read_text())
         Draft202012Validator.check_schema(schema)
-        validators[name] = Draft202012Validator(schema)
+        validators[name] = Oracle(schema)
+        portable[name] = strict_schema.Schema(schema)
+    diff = Differential(validators, portable)
+    short = {n.split(".")[2]: n for n in validators}
+    # direct interpreter cases (declared by hand; also checked against jsonschema)
+    schema_cases = json.loads((ROOT / "fixtures/schema_cases.json").read_text())
+    for case in schema_cases["cases"]:
+        raw = (
+            b"\xff\xfe" if case["json"] == "__INVALID_UTF8__" else case["json"].encode()
+        )
+        try:
+            instance = strict_schema.parse_json(raw)
+        except strict_schema.MalformedJson:
+            assert case["expect"] == "malformed", case["name"]
+            continue
+        assert diff(short[case["schema"]], instance) == case["expect"], case["name"]
+    for case in schema_cases["unsupported_schemas"]:
+        try:
+            strict_schema.Schema(case["schema"])
+        except strict_schema.SchemaUnsupported:
+            continue
+        raise AssertionError(f"unsupported schema accepted: {case['name']}")
     fixture = json.loads((ROOT / "fixtures/protocol.json").read_text())
     count = 0
     for key, events in fixture.items():
         if key == "description":
             continue
         for event in events:
-            validators[f"stateaction.capture.{key}.v1"].validate(event)
+            assert diff(f"stateaction.capture.{key}.v1", event) == [], event
             count += 1
     original = fixture["FrameEvent"][0]
     assert int(original["mapped_capture_time_ns"]) > 2**53
@@ -83,7 +215,7 @@ def main() -> None:
         original | {"native_timestamp_ns": "-1"},
         original | {"state": "encoded"},
     ]:
-        assert not validators["stateaction.capture.FrameEvent.v1"].is_valid(invalid), (
+        assert diff("stateaction.capture.FrameEvent.v1", invalid), (
             f"Invalid fixture admitted: {invalid}"
         )
     # golden corpus
@@ -93,6 +225,7 @@ def main() -> None:
         f"golden/cases.json out of sync: {on_disk ^ set(cases)}"
     )
     summary = {}
+    rng = random.Random(50)
     for name, entry in sorted(cases.items()):
         data = (ROOT / "golden" / f"{name}.mcap").read_bytes()
         assert hashlib.sha256(data).hexdigest() == entry["sha256"], (
@@ -107,8 +240,17 @@ def main() -> None:
             result["outcome"] == entry["expect"]
             and result["errors"] == entry["expected_errors"]
         )
+        stripped = sorted(
+            re.sub(r"\[[0-9]+\]", "", v, count=1)
+            for v in result["facts"].get("schema_violations", [])
+        )
+        assert stripped == entry.get("expected_violations", []), name
+        counts = differential_messages(data, diff, rng)
+        crc = official_crc_status(ROOT / "golden" / f"{name}.mcap")
+        if name.startswith("data_crc_") and name != "data_crc_zero":
+            assert crc == "crc_error", (name, crc)
         if result["outcome"] == "accept":
-            counts = validate_json_messages(data, validators)
+            assert crc == "ok", (name, crc)
             ind = independent_decode.decode(ROOT / "golden" / f"{name}.mcap")
             assert ind["profile"] == ""
             assert (
@@ -150,7 +292,7 @@ def main() -> None:
         from mcap.reader import make_reader
 
         with path.open("rb") as source:
-            reader = make_reader(source)
+            reader = make_reader(source, validate_crcs=True)
             assert reader.get_header().profile == "", (
                 f"Expected generic mixed-encoding MCAP: {path}"
             )
@@ -173,7 +315,9 @@ def main() -> None:
                         schema.data == (ROOT / cc.CUSTOM[schema.name]).read_bytes()
                     ), f"Emitted schema drift: {schema.name}"
                     seen.add(schema.name)
-                by_name[schema.name].validate(json.loads(message.data))
+                assert (
+                    diff(schema.name, strict_schema.parse_json(message.data)) == []
+                ), f"{path}: {schema.name} message violates the strict schema"
                 actual_counts[schema.name] = actual_counts.get(schema.name, 0) + 1
         with path.open("rb") as source:
             sources.append(
@@ -188,6 +332,14 @@ def main() -> None:
                 "schemas": len(validators),
                 "protocol_events": count,
                 "rejected_mutations": 4,
+                "schema_differential": {
+                    "instances": diff.count,
+                    "rejected": diff.rejected,
+                },
+                "schema_cases": len(schema_cases["cases"]),
+                "unsupported_schemas_fail_closed": len(
+                    schema_cases["unsupported_schemas"]
+                ),
                 "native_assets_match": True,
                 "golden_cases": summary,
                 "encoder_buffer_cases": len(buffers["cases"]),

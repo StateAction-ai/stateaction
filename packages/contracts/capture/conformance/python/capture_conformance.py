@@ -14,7 +14,10 @@ import hashlib
 import json
 import re
 import struct
+import zlib
 from pathlib import Path
+
+from strict_schema import MalformedJson, Schema, parse_json
 
 CAPTURE_DIR = Path(__file__).resolve().parents[2]
 VIDEO_CHANNEL = "/camera/rgb/video"
@@ -44,11 +47,33 @@ def sha256(data: bytes) -> str:
 
 
 # ---------------------------------------------------------------- MCAP (unchunked) reader
+# Supported layout (every reader): magic, Header, then only Schema/Channel/Message records, exactly one
+# DataEnd whose data_section_crc is nonzero and equals CRC-32 of every byte before the DataEnd record
+# (leading magic included, as the official MCAP readers compute it), then a Footer with no summary
+# section (summary_start = summary_offset_start = summary_crc = 0) and the closing magic.
+# Chunks, indexes, attachments, metadata, summary records or a missing DataEnd are E_UNSUPPORTED_LAYOUT;
+# a zero or mismatched CRC is E_DATA_CRC. Production chunked/indexed files are checked by verify.py
+# --mcap with the official reader and validate_crcs=True, never reported complete by these readers.
+OP_HEADER, OP_FOOTER, OP_SCHEMA, OP_CHANNEL, OP_MESSAGE, OP_DATA_END = 1, 2, 3, 4, 5, 15
+
+
+class Unsupported(Exception):
+    pass
+
+
+class CrcMismatch(Exception):
+    pass
+
+
 def read_mcap(data: bytes) -> dict:
     try:
-        return _read_mcap(data)
+        out = _read_mcap(data)
     except (struct.error, UnicodeDecodeError, IndexError):
         raise Truncated("record fields") from None
+    for m in out["messages"]:
+        if m["channel"] not in out["channels"]:
+            raise Malformed("message for undeclared channel")
+    return out
 
 
 def _read_mcap(data: bytes) -> dict:
@@ -62,22 +87,28 @@ def _read_mcap(data: bytes) -> dict:
         "messages": [],
         "footer": False,
     }
+    data_end = False
     while True:
         if pos == end:
             raise Truncated("no footer")
         if pos + 9 > end:
             raise Truncated("record header")
+        record_start = pos
         op = data[pos]
         (length,) = struct.unpack_from("<Q", data, pos + 1)
         body_start = pos + 9
-        if body_start + length > end:
+        if length > end - body_start:
             raise Truncated("record body")
         body = data[body_start : body_start + length]
         pos = body_start + length
-        if op == 0x01:
+        if (op == OP_HEADER) != (record_start == len(MAGIC)):
+            raise Unsupported("Header must be exactly the first record")
+        if data_end and op != OP_FOOTER:
+            raise Unsupported("summary section or records after DataEnd")
+        if op == OP_HEADER:
             profile, _ = _string(body, 0)
             out["profile"] = profile
-        elif op == 0x03:
+        elif op == OP_SCHEMA:
             (sid,) = struct.unpack_from("<H", body, 0)
             name, off = _string(body, 2)
             enc, off = _string(body, off)
@@ -89,15 +120,13 @@ def _read_mcap(data: bytes) -> dict:
                 "encoding": enc,
                 "data": body[off + 4 : off + 4 + n],
             }
-        elif op == 0x04:
+        elif op == OP_CHANNEL:
             cid, sid = struct.unpack_from("<HH", body, 0)
             topic, off = _string(body, 4)
             menc, off = _string(body, off)
             out["channels"][cid] = {"schema_id": sid, "topic": topic, "encoding": menc}
-        elif op == 0x05:
+        elif op == OP_MESSAGE:
             cid, seq, log, pub = struct.unpack_from("<HIQQ", body, 0)
-            if cid not in out["channels"]:
-                raise Malformed("message for undeclared channel")
             out["messages"].append(
                 {
                     "channel": cid,
@@ -107,11 +136,22 @@ def _read_mcap(data: bytes) -> dict:
                     "data": body[22:],
                 }
             )
-        elif op == 0x02:
+        elif op == OP_DATA_END:
+            (crc,) = struct.unpack_from("<I", body, 0)
+            data_end = True
+            if crc == 0 or crc != zlib.crc32(data[:record_start]):
+                raise CrcMismatch("data section CRC")
+        elif op == OP_FOOTER:
+            if not data_end:
+                raise Unsupported("Footer without DataEnd")
+            if struct.unpack_from("<QQI", body, 0) != (0, 0, 0):
+                raise Unsupported("summary section/index not supported")
             out["footer"] = True
             if pos + len(MAGIC) != end or data[pos:] != MAGIC:
                 raise Truncated("end magic")
             return out
+        else:
+            raise Unsupported(f"record opcode 0x{op:02x} outside the supported layout")
 
 
 def _string(buf: bytes, off: int):
@@ -325,40 +365,22 @@ def _decimal(value) -> bool:
     return isinstance(value, str) and DECIMAL.match(value) is not None
 
 
-def _is_int(value) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
+_SCHEMAS: dict[str, Schema] = {}
 
 
-def _frame_event_shape_ok(e) -> bool:
-    """Strict-schema subset every runner enforces: required keys and decimal-string integers."""
-    if not isinstance(e, dict) or e.get("state") not in STATES:
-        return False
-    for key in (
-        "recording_id",
-        "stream_id",
-        "native_clock_id",
-        "clock_mapping_revision",
-        "calibration_id",
-    ):
-        if not isinstance(e.get(key), str) or not e[key]:
-            return False
-    for key in ("source_frame_id", "native_timestamp_ns", "mapped_capture_time_ns"):
-        if not _decimal(e.get(key)):
-            return False
-    if not isinstance(e.get("native_timestamps"), dict):
-        return False
-    if e["state"] == "dropped" and not (
-        isinstance(e.get("reason"), str) and e["reason"]
-    ):
-        return False
-    if e["state"] == "written" and not (
-        e.get("output_channel") == VIDEO_CHANNEL
-        and _is_int(e.get("output_sequence"))
-        and e["output_sequence"] >= 0
-        and isinstance(e.get("is_idr"), bool)
-    ):
-        return False
-    return True
+def contract_schema(name: str) -> Schema:
+    """The reviewed contract schema (never the file's embedded copy, which is only hash-compared)."""
+    if name not in _SCHEMAS:
+        _SCHEMAS[name] = Schema(json.loads((CAPTURE_DIR / CUSTOM[name]).read_bytes()))
+    return _SCHEMAS[name]
+
+
+SINGLETON_TOPICS = (
+    "/stateaction/capture_profile",
+    "/stateaction/clocks",
+    "/stateaction/inventory",
+    "/stateaction/close",
+)
 
 
 def check(data: bytes, manifest: dict | None = None) -> dict:
@@ -375,6 +397,10 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         f = read_mcap(data)
     except Truncated:
         return {"outcome": "reject", "errors": ["E_TRUNCATED"], "facts": {}}
+    except Unsupported:
+        return {"outcome": "reject", "errors": ["E_UNSUPPORTED_LAYOUT"], "facts": {}}
+    except CrcMismatch:
+        return {"outcome": "reject", "errors": ["E_DATA_CRC"], "facts": {}}
     except Malformed:
         return {"outcome": "reject", "errors": ["E_MALFORMED_MESSAGE"], "facts": {}}
     if f["profile"] != "":
@@ -432,22 +458,41 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
             if want is None:
                 continue
             if want[2] == "json":
-                decoded[topic] = [json.loads(m["data"]) for m in msgs]
+                decoded[topic] = [parse_json(m["data"]) for m in msgs]
             elif want[2] == "protobuf":
                 decoded[topic] = [decode_video(m["data"]) for m in msgs]
             else:
                 decoded[topic] = [decode_cdr_pose(m["data"]) for m in msgs]
-    except (ValueError, IndexError, struct.error, UnicodeDecodeError):
+    except (MalformedJson, ValueError, IndexError, struct.error, UnicodeDecodeError):
         errors.add("E_MALFORMED_MESSAGE")
         return reject()
-    if any(
-        not isinstance(x, dict)
+
+    # Strict schema gate: every JSON message must satisfy its reviewed contract schema. Violations are
+    # reported exactly (topic[index]pointer:keyword) and stop evaluation, so no rule reads unvalidated data.
+    violations = []
+    for topic in sorted(decoded):
+        if CHANNELS[topic][2] != "json":
+            continue
+        validator = contract_schema(CHANNELS[topic][0])
+        for i, value in enumerate(decoded[topic]):
+            violations += [f"{topic}[{i}]{v}" for v in validator.validate(value)]
+    if violations:
+        errors.add("E_SCHEMA_MALFORMED")
+        return {
+            "outcome": "reject",
+            "errors": sorted(errors),
+            "facts": {"schema_violations": sorted(violations)},
+        }
+    if any(len(decoded.get(t, [])) != 1 for t in SINGLETON_TOPICS):
+        errors.add("E_CHANNEL_CARDINALITY")
+    recording_ids = {
+        x["recording_id"]
         for t, v in decoded.items()
         if CHANNELS[t][2] == "json"
         for x in v
-    ):
-        errors.add("E_MALFORMED_MESSAGE")
-        return reject()
+    }
+    if len(recording_ids) > 1:
+        errors.add("E_RECORDING_ID")
 
     def js(topic):
         return decoded.get(topic, [])
@@ -466,9 +511,6 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
     submitted_ids: set[str] = set()
     drop_reasons: dict[str, int] = {}
     for e in frames:
-        if not _frame_event_shape_ok(e):
-            errors.add("E_SCHEMA_MALFORMED")
-            continue
         sid = e["source_frame_id"]
         st = e["state"]
         # Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
@@ -486,22 +528,15 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
             original = acquired[sid]
             if any(e.get(k) != original.get(k) for k in IDENTITY_KEYS):
                 errors.add("E_FRAME_IDENTITY")
-        if e.get("encoder_time_base") != TIME_BASE:
-            errors.add("E_TIME_BASE")
-        if "encoder_pts_us" in e and not _decimal(e["encoder_pts_us"]):
-            errors.add("E_PTS_INVALID")
         if clocks.get(e["stream_id"]) != e.get("native_clock_id") and st in (
             "acquired",
             "written",
         ):
             errors.add("E_CLOCK_MISMATCH")
-        if st in ("acquired", "written") and "encoder_pts_us" not in e:
-            errors.add("E_MISSING_PTS")
         if st == "acquired":
-            if _decimal(e.get("encoder_pts_us")):
-                if e["encoder_pts_us"] in pts_seen:
-                    errors.add("E_DUPLICATE_PTS")
-                pts_seen.add(e["encoder_pts_us"])
+            if e["encoder_pts_us"] in pts_seen:
+                errors.add("E_DUPLICATE_PTS")
+            pts_seen.add(e["encoder_pts_us"])
             if e["calibration_id"] not in known_calibrations:
                 errors.add("E_CALIBRATION_UNKNOWN")
             acquired.setdefault(sid, e)
@@ -629,33 +664,21 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
             ({"reason": r, "count": str(n)} for r, n in drop_reasons.items()),
             key=lambda d: d["reason"],
         )
-        close_drops = close.get("drops")
         if (
-            close.get("frames") != expect
-            or close.get("video_messages") != str(len(video))
-            or close.get("motion_events") != expect_motion
-            or close.get("sensor_events") != str(len(sensors))
-            or not isinstance(close_drops, list)
-            or sorted(
-                (d for d in close_drops if isinstance(d, dict)),
-                key=lambda d: str(d.get("reason")),
-            )
-            != expect_drops
+            close["frames"] != expect
+            or close["video_messages"] != str(len(video))
+            or close["motion_events"] != expect_motion
+            or close["sensor_events"] != str(len(sensors))
+            or sorted(close["drops"], key=lambda d: d["reason"]) != expect_drops
         ):
             errors.add("E_COUNT_MISMATCH")
-        outcome = close.get("outcome")
-        if outcome not in ("completed", "failed", "aborted", "unknown"):
-            errors.add("E_SCHEMA_MALFORMED")
-        elif outcome == "completed" and unresolved != 0:
+        outcome = close["outcome"]
+        if outcome == "completed" and unresolved != 0:
             errors.add("E_OUTCOME_MISMATCH")
-        elif outcome == "failed" and not (
-            isinstance(close.get("failure_reason"), str) and close["failure_reason"]
-        ):
+        elif outcome == "failed" and close.get("failure_reason") is None:
             errors.add("E_OUTCOME_MISMATCH")
         facts["close_outcome"] = outcome
         facts["unresolved_frames"] = unresolved
-    else:
-        errors.add("E_COUNT_MISMATCH")
     return {
         "outcome": "reject" if errors else "accept",
         "errors": sorted(errors),
