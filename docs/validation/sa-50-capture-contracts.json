@@ -9,7 +9,7 @@
     "kotlin": "passed",
     "swift": "passed"
   },
-  "golden_cases": 44,
+  "golden_cases": 72,
   "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
   "native_assets_match": true,
   "independent_decode": {
@@ -38,19 +38,36 @@
   "not_proven": [
     "Apple-platform (iOS/AVFoundation/VideoToolbox) Swift behaviour",
     "physical device capture or clock accuracy",
-    "Kotlin native enforcement of 28 rejecting cases (descriptor/channel/clock/tracking/calibration reset/close counts/outcome/sequence/malformed/profile/truncation) is portable-reader only; recorder wiring is SA-51+",
+    "Kotlin native enforcement of 55 rejecting cases (strict schema, CRC/layout, descriptor/channel/clock/tracking/calibration reset/counts/cardinality/outcome/sequence/malformed/profile/truncation/legacy) is portable-reader only; recorder wiring is SA-51+",
+    "native CaptureProtocol does not itself enforce UUID recording IDs or closed profile inputs (schema does; SA-51)",
     "MediaCodec producer of encoder buffers (SA-51)",
-    "JSON-Schema validation inside the TypeScript/Dart/Swift/Kotlin readers (strict subset only)",
+    "chunked/indexed production MCAP is checked only through the official reader in verify.py --mcap, not by the five portable readers",
+    "stera-recorder Gradle unit tests not rerun locally (CaptureProtocol.kt unchanged; only asset JSON copies changed); hosted Android job covers them",
     "hosted CI result and hosted Swift (reported separately)",
     "model-relative 3D data is never metric ground truth"
   ],
-  "sa12_shared_contract_integration": "pending SA-12 merge (draft PR5)",
+  "sa12_shared_contract_integration": "merged origin/main 5384027 (SA-12 PR5) normally; common.v1 definitions consumed offline; contracts-dart and capture-conformance-mobile selectors both kept",
   "encoder_buffer_cases": 9,
   "kotlin_scope": {
-    "portable_contract_reader_cases": 44,
-    "native_replay_accepted": 5,
+    "portable_contract_reader_cases": 72,
+    "native_replay_accepted": 6,
     "native_replay_rejected": 11,
-    "portable_only_rejects": 28
+    "portable_only_rejects": 55,
+    "native_profile_builder_strict_schema_checks": 4
   },
-  "hosted_ci": "capture-conformance (server job) and capture-conformance-mobile (Android/Dart job) wired in checks.yml; Swift not run hosted (no toolchain on runner)"
+  "hosted_ci": "capture-conformance (server job) and capture-conformance-mobile (Android/Dart job) wired in checks.yml; Swift not run hosted (no toolchain on runner)",
+  "strict_schema": {
+    "interpreter": "portable fail-closed subset in Python/TS/Dart/Kotlin/Swift; strict JSON parser (duplicate keys, NaN/Infinity, double overflow, invalid UTF-8 are malformed)",
+    "direct_schema_cases": 33,
+    "unsupported_schemas_fail_closed": 7,
+    "jsonschema_differential_instances": 8416,
+    "jsonschema_differential_rejected": 5760,
+    "common_defs": "uuid/int64Decimal/clockDomain/revision bundled verbatim from packages/contracts/api/common.v1.schema.json (SA-12 PR5 merged at 5384027)"
+  },
+  "container_integrity": {
+    "layout": "Header first; Schema/Channel/Message only; one DataEnd with nonzero CRC-32 of preceding bytes; Footer without summary; MCAP0 magic",
+    "codes": ["E_DATA_CRC", "E_UNSUPPORTED_LAYOUT", "E_TRUNCATED"],
+    "official_reader": "mcap 1.6.0 StreamReader(validate_crcs=True): every accepted golden ok; data_crc_header_corrupt/data_crc_payload_corrupt raise CRCValidationError; data_crc_zero treated as unavailable by the official reader but rejected by this contract",
+    "chunked_production_files": "rejected by portable readers (E_UNSUPPORTED_LAYOUT); verify.py --mcap uses the official reader with validate_crcs=True"
+  }
 }
