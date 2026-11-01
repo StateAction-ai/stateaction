@@ -35,7 +35,7 @@
       "options": {
         "commands": [
           "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml spikes/android/capture/harness",
-          "pnpm exec prettier --check spikes/android/capture/project.json spikes/android/capture/README.md spikes/android/capture/QUALIFICATION.md docs/validation/sa-60-emulator-qualification.json"
+          "pnpm exec prettier --check spikes/android/capture/project.json spikes/android/capture/app/project.json spikes/android/capture/README.md spikes/android/capture/QUALIFICATION.md docs/validation/sa-60-emulator-qualification.json"
         ],
         "parallel": false
       }
