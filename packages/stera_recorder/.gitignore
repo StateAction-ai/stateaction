@@ -1,0 +1,19 @@
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+# Internal monorepo package: commit the dependency lock for repeatable checks.
+pubspec.lock
+!/pubspec.lock
+!/example/pubspec.lock
+
+# iOS
+ios/.symlinks/
+ios/Pods/
+.build/
+.swiftpm/
+
+# Android
+android/.gradle/
+android/local.properties

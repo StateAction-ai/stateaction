@@ -23,8 +23,8 @@ Capture on the physical phone requires an intentional user Start action. Raw rec
 
 ## Linear and pull request traceability
 
-- Canonical private repository: `timothywangdev/stateaction`. Verify the active GitHub account before changing remote settings or publishing.
-- Each ticket produces exactly one PR, and each PR has exactly one primary Linear ticket. Before creating a PR, search all existing PRs, including closed/merged ones, for that ticket. Update or reopen the original PR; never create a replacement or catch-all PR.
+- Canonical private repository: `timothywangdev/stateaction`. Verify the active GitHub account before changing remote settings or publishing. When several CLI accounts/sessions exist, pin each repository mutation to the `timothywangdev` credential; do not print or persist its token.
+- Each ticket produces exactly one PR, and each PR has exactly one primary Linear ticket. Before creating a PR, search all existing PRs, including closed/merged ones, for that ticket. Update or reopen the original PR; never create a replacement or catch-all PR. After a PR merges, follow-up work needs a new ticket and its own PR.
 - Before creating or naming a ticket branch, fetch that issue from Linear and use its exact `gitBranchName`, including the username prefix. Never invent, shorten or regenerate the branch name from the title. If Linear does not provide a branch name, resolve that missing value before branching. Use a title such as `SA-11: Scaffold platform foundations` and one `Refs SA-11` or `Fixes SA-11` declaration in its body. Other issues may be described as dependencies, not additional implementation references.
 - Keep acceptance criteria, actual evidence and remaining gates on the ticket. Use `Fixes` only when all criteria are demonstrated. Keep the same PR in draft while required non-CI checks are outstanding; do not make it ready merely to trigger a merge.
 - Every ready PR is merged automatically only after the current head passes the CI `Required checks` and PR policy `Ticket reference` gates. The repository automation rechecks metadata, workflow/job identity, head SHA and current base before merging. Let it merge; never bypass failed/missing checks or use an admin merge.
@@ -33,7 +33,7 @@ Capture on the physical phone requires an intentional user Start action. Raw rec
 
 ## Monorepo commands and checks
 
-- Nx coordinates tasks and affected checks; pnpm manages TypeScript dependencies, uv manages Python, and Flutter/pub/Gradle retain native mobile builds. Do not introduce another task orchestrator or a paid remote cache. Native mobile projects join the graph with the source-import ticket.
+- Nx coordinates tasks and affected checks; pnpm manages TypeScript dependencies, uv manages Python, and Flutter/pub/Gradle retain native mobile builds. Do not introduce another task orchestrator or a paid remote cache. The mobile and recorder projects use actual Flutter/pub/Gradle targets; mobile-tooling covers their local adapters and profile-safety helper.
 - Use the pinned versions and committed lockfiles. Run `pnpm install --frozen-lockfile`, the documented uv sync, `pnpm check` and relevant integration commands. Use `pnpm affected --base=<base> --head=<head>` for affected checks; first setup must also pass a clean full run.
 - Install Lefthook with the documented setup (`pnpm hooks:install`). Pre-commit checks validate staged content without auto-staging unrelated edits; pre-push rejects `main`. Do not routinely disable hooks. Fix locally reproducible failures before publishing.
 - Cache deterministic builds and isolated checks only. Real uploads, database/workflow integration, device simulations and provider mutations must run and must not replay a cached success. Never cache or commit private recordings, images, credentials or raw worker payloads.

@@ -1,0 +1,47 @@
+{
+  "verifiedOn": "2026-11-01",
+  "flutter": "3.44.6",
+  "dart": "3.12.2",
+  "flutterRevision": "ee80f08bbf97172ec030b8751ceab557177a34a6",
+  "java": "21.0.12.1",
+  "javaBuild": "21.0.12.1+1",
+  "androidApi": "36",
+  "androidPlatformRevision": "2",
+  "androidBuildTools": "36.0.0",
+  "androidCommandLineTools": "23.0",
+  "ndk": "28.2.13676358",
+  "gradle": "8.14",
+  "flutterLinuxX64": {
+    "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.6-stable.tar.xz",
+    "sha256": "a6320fd72e9a2690c08e2a6a70874a30cb120dee7c78f49d2c628bd7c9e20525"
+  },
+  "androidCommandLineToolsLinuxX64": {
+    "url": "https://dl.google.com/android/repository/commandlinetools-linux-16111833_latest.zip",
+    "sha256": "0877a1d048fe4a24efe2eff536ca4223f7adeb58648bb81909d33c446918cfa8"
+  },
+  "setupJavaAction": {
+    "version": "v6.1.0",
+    "sha": "b843ebf9b913146b38da2eaa7aeddf76074ae1ad"
+  },
+  "flutterAction": {
+    "version": "v2.23.0",
+    "sha": "1a449444c387b1966244ae4d4f8c696479add0b2"
+  },
+  "setupGradleAction": {
+    "version": "v6.4.1",
+    "sha": "8da46b539cd8fe6ab27ca75128919a18d757604c",
+    "cacheProvider": "basic"
+  },
+  "sources": {
+    "flutterArchive": "https://docs.flutter.dev/install/archive",
+    "flutterReleaseManifest": "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json",
+    "dartFormatter": "https://dart.dev/tools/dart-format",
+    "androidSdk": "https://developer.android.com/tools/sdkmanager",
+    "androidRepository": "https://dl.google.com/android/repository/repository2-3.xml",
+    "java": "https://github.com/adoptium/temurin21-binaries/releases/tag/jdk-21.0.12.1%2B1",
+    "setupJava": "https://github.com/actions/setup-java/releases/tag/v6.1.0",
+    "flutterAction": "https://github.com/subosito/flutter-action/releases/tag/v2.23.0",
+    "setupGradle": "https://github.com/gradle/actions/releases/tag/v6.4.1"
+  },
+  "dartFormatLanguageVersion": "3.9"
+}

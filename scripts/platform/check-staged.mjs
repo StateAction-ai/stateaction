@@ -24,6 +24,9 @@ const paths = git([
   .split("\0")
   .filter(Boolean);
 const prettier = require.resolve("prettier/bin/prettier.cjs");
+// Shared language floor matches package SDK constraints and the CI format target.
+const dartFormatLanguageVersion =
+  require("./config/mobile-toolchain.json").dartFormatLanguageVersion;
 const ruffConfig = fileURLToPath(
   new URL("../../workers/processing/pyproject.toml", import.meta.url),
 );
@@ -36,7 +39,8 @@ for (const path of paths) {
     path,
   );
   const isPython = path.endsWith(".py");
-  if (!isPrettier && !isPython) continue;
+  const isDart = path.endsWith(".dart");
+  if (!isPrettier && !isPython && !isDart) continue;
   const mode = git(["ls-files", "--stage", "--", path])
     .toString("utf8")
     .slice(0, 6);
@@ -45,23 +49,36 @@ for (const path of paths) {
   const staged = git(["cat-file", "blob", `:${path}`]);
   const commands = isPrettier
     ? [[process.execPath, [prettier, "--check", `--stdin-filepath=${path}`]]]
-    : [
-        [
-          ruff,
-          ["check", "--config", ruffConfig, `--stdin-filename=${path}`, "-"],
-        ],
-        [
-          ruff,
+    : isDart
+      ? [
           [
-            "format",
-            "--check",
-            "--config",
-            ruffConfig,
-            `--stdin-filename=${path}`,
-            "-",
+            process.env.STATEACTION_DART_BIN || "dart",
+            [
+              "format",
+              "--output=none",
+              "--set-exit-if-changed",
+              `--language-version=${dartFormatLanguageVersion}`,
+              `--stdin-name=${path}`,
+            ],
           ],
-        ],
-      ];
+        ]
+      : [
+          [
+            ruff,
+            ["check", "--config", ruffConfig, `--stdin-filename=${path}`, "-"],
+          ],
+          [
+            ruff,
+            [
+              "format",
+              "--check",
+              "--config",
+              ruffConfig,
+              `--stdin-filename=${path}`,
+              "-",
+            ],
+          ],
+        ];
   if (isPython && !existsSync(ruff)) {
     console.error(
       "Install Python checks with uv sync --project workers/processing --locked",
@@ -78,7 +95,7 @@ for (const path of paths) {
     if (result.status !== 0) {
       failed = true;
       console.error(
-        `Staged check failed: ${JSON.stringify(path)}\n${result.stdout ?? ""}${result.stderr ?? ""}`,
+        `Staged check failed: ${JSON.stringify(path)}\n${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}${isDart && result.error ? "\nInstall the pinned Flutter SDK and add its bin directory to PATH (or set STATEACTION_DART_BIN)." : ""}`,
       );
     }
   }

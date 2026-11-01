@@ -90,7 +90,7 @@ RGB and depth MCAP **log time identifies the acquiring ARCore frame event**;
 their headers and publish times retain their respective native image times. This matters because native depth times
 can repeat. The reader selects the exact acquisition payload, rejects unsupported
 contracts and exposes timing failures. The detailed
-[capture contract](../stera-app/packages/stera_recorder/android/CAPTURE_GEOMETRY.md)
+[capture contract](../packages/stera_recorder/android/CAPTURE_GEOMETRY.md)
 documents these conventions.
 
 The [new runner](../scripts/process_geometry_capture.py) preserves raw hand
@@ -113,14 +113,14 @@ outputs remain preserved.
 The following table preserves the historical v2 checks and their physical failure.
 Current v3 evidence is recorded in the [v3 receipt](geometry-v3-build-receipt.json).
 
-| Check | Historical v2 result | Evidence boundary |
-|---|---|---|
-| JVM/Robolectric | 24 passed | Geometry, packing, image validation/lifetime, producer barriers, serialization and disk/finalization failures |
-| Native Android instrumentation | 5 passed on `emulator-5580` | Actual Android JPEG codec and Kotlin MCAP writer with synthetic images/depth |
-| Dart provider | 1 passed | Failed stopped recording clears recording/output state and preserves its error |
-| Python | 65 passed | Capture decoding, per-frame geometry, clock separation, quality masks, exports and reports |
-| Android fixture → complete Python pipeline | 3 frames completed | Real producer bytes decoded and exported; no physical camera/depth or hands |
-| Fresh Pixel capture | Failed: zero RGB/depth/pose | 291/291 attempts rejected by invalid Image/Android-camera timestamp equality |
+| Check                                      | Historical v2 result        | Evidence boundary                                                                                             |
+| ------------------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| JVM/Robolectric                            | 24 passed                   | Geometry, packing, image validation/lifetime, producer barriers, serialization and disk/finalization failures |
+| Native Android instrumentation             | 5 passed on `emulator-5580` | Actual Android JPEG codec and Kotlin MCAP writer with synthetic images/depth                                  |
+| Dart provider                              | 1 passed                    | Failed stopped recording clears recording/output state and preserves its error                                |
+| Python                                     | 65 passed                   | Capture decoding, per-frame geometry, clock separation, quality masks, exports and reports                    |
+| Android fixture → complete Python pipeline | 3 frames completed          | Real producer bytes decoded and exported; no physical camera/depth or hands                                   |
+| Fresh Pixel capture                        | Failed: zero RGB/depth/pose | 291/291 attempts rejected by invalid Image/Android-camera timestamp equality                                  |
 
 The [v2 build/validation receipt](geometry-v2-build-receipt.json) records artifact
 and source hashes, commands and logs. Its archived arm64/x86_64 APK is

@@ -1,0 +1,1025 @@
+{
+  "ticket": "SA-10",
+  "recorded_on": "2026-11-01",
+  "qualification": "source_import_and_host_build_only",
+  "branch": "wanghujie/sa-10-migrate-the-mobile-app-and-native-recorder-into-the-monorepo",
+  "history": {
+    "tooling_base": "75201528517e007dc891b0dceb26cd820328d08b",
+    "merged_tooling_main": "6be21658d0706ec19d23b9b535f7550e121a5ef5",
+    "upstream_parent": "8044ad672dbf03cd6db8690f260c145b9acd51ea",
+    "selective_source": "f0945cfdd06ed0ed3278654a20236b3ba85220e9",
+    "method": "Ours two-parent import merge preserves upstream history; restore selected mobile/plugin/provenance/safety-helper paths from selective_source. Root finalizes the merge and integrates current main before publication.",
+    "historical_receipt": "docs/validation/mobile-source-import.json"
+  },
+  "source": {
+    "original_file_count": 694,
+    "unchanged_file_count": 569,
+    "changes_by_kind": {
+      "pinned_prettier_source_format": 4,
+      "intentional_import_adaptation": 4,
+      "trailing_whitespace_and_final_newline": 24,
+      "pinned_dart_format_language_3_9": 92,
+      "pinned_prettier_markdown_format": 1
+    },
+    "source_deltas": [
+      {
+        "path": "apps/mobile/CLAUDE.md",
+        "source_sha256": "8bbe9200b7f6fa823637cc15899d4f3e1d8e0b9d06b02353e6a06fa2e88c734e",
+        "current_sha256": "0f7f5ae22ab9a5e5aea6bacbe9114971ed726670f19d45bf3ef1d5c3859ace75",
+        "kind": "pinned_prettier_source_format"
+      },
+      {
+        "path": "apps/mobile/README.md",
+        "kind": "intentional_import_adaptation",
+        "source_sha256": "0c1473063b6cbc6f01e19396c6f33812a6b42072d71949ab96ba630ae5449891",
+        "current_sha256": "f1c863e7da4785acccbd3e71071d5321b0a14332d4721f75661a568595d718e3"
+      },
+      {
+        "path": "apps/mobile/android/.gitignore",
+        "kind": "intentional_import_adaptation",
+        "source_sha256": "bb129ab6d3355fc30c9c39cf388e672a53c8ca07f7ff3a81dfc6b6412261c7cc",
+        "current_sha256": "1c8a764f80a57182d63d5fd8915c7e00720e85321d5a75cf341085ed04bbff69"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/AndroidManifest.xml",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "cd734def9f7fb4b8e08f91e2267c09b1fa14e4046c991546ee7c9a1b35651473",
+        "current_sha256": "239aa28b8bf5f1b69df08bbe525ae889170d894ed72d0e57fcf70fd6c7bf416e"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/kotlin/open/fpvlabs/stera/gallery_manager/GalleryManager.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "05ff5dcea48e7d7823953ef26bc98cf96f6b3782d551400d360d7e212a04067c",
+        "current_sha256": "d2037b64fb6ebe36c4bfbf0b3c4e3bb67d76f0333dc6c0aed41929354e8579d2"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/kotlin/open/fpvlabs/stera/video_metadata_extractor/VideoMetadataExtractor.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "08240d78f3ff0337da562b593255e90fc431a994eecd75d3ccf53ca7105c03bf",
+        "current_sha256": "23c36f3f56bea43e3e6fec0f374dd88096e01c362cd460960d409932193f936b"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/kotlin/open/fpvlabs/stera/video_metadata_extractor/VideoMetadataExtractorImpl.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "a0413c080c9024d002edfd5216eb197827fb658fe66ea6bd86de66c7b906e8e9",
+        "current_sha256": "6c57411269994882942112bd6a6e9146454e59b2aa7e6e6edc7eaef0e01e6a78"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/kotlin/open/fpvlabs/stera/video_picker/VideoPicker.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "e87839ec8f3acea81984c2823f3254a31dfc842658dc8c31f42911a913a3d8ba",
+        "current_sha256": "93345c9c28e8ed30bb686ed5635bfb3b809e320dcd4a7f9383777b261390eddb"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "26310833a35076dfe3bdcd9fa469c5c7e36c26623eaf6009bf2d450f779189a3",
+        "current_sha256": "ad34f760734dcbe5acae1504a7994411dc0f1bd78b2499042f187e64af8c18a8"
+      },
+      {
+        "path": "apps/mobile/android/app/src/main/res/values/styles.xml",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "010c91760e96f81e745866ed7fc1be6e06f968161c1c09926c1387ba4f19db74",
+        "current_sha256": "937d7c82f539c72eb94fd3a3773f29b3d3fef1997213c92cb632298cedf4bda9"
+      },
+      {
+        "path": "apps/mobile/android/gradle.properties",
+        "kind": "intentional_import_adaptation",
+        "source_sha256": "b490a7ec86e26b3bf4c2debedb855e099afdba37177d0a106e481a8b6bdb8a8f",
+        "current_sha256": "d7d8bae8da9fc458d8c20fd6087adacb05255a77476e2f9920c44657e8f9a0f1"
+      },
+      {
+        "path": "apps/mobile/assets/icon/google.svg",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "9662578f029ac9311ae60bb70be3f7305b5d9963d77a1e167a14a3d7108770be",
+        "current_sha256": "d75cffc84ce4d77008cfd4d1224455fb369e042e4f4c6ea7a6fe5ca7c179d2c1"
+      },
+      {
+        "path": "apps/mobile/ios/Flutter/AppFrameworkInfo.plist",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "9611def907f5e818f45617a24d934a35cacbda9038cc0d8eb621b8b82f4d7519",
+        "current_sha256": "39e8d28102c0bf747b8e660c7f73b51b2f628fc8936f726f6d3130e3a6a39d97"
+      },
+      {
+        "path": "apps/mobile/ios/Podfile",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "4df00f596b32dbc61c5f2f248ff8684da4952f658d006f79f5c15c55f0f24321",
+        "current_sha256": "d779e69dc98d778d4e2ea10ecdff5b83b83c95fe042988a81e4c7334009d78c5"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/Info.plist",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "acc59e2021bf4dc7f52b6ac903f143804a1705d8e3d70c8b4e294e5a755a91e2",
+        "current_sha256": "ade4d726c98cdf1b42d57ad178ab0593d8907efd72f9d7aa1dd3cd91787c279b"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/Runner.entitlements",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "82ebe31e09485692cc4177dfba4479babdba617bfa56bc16dcf2611b2bc8996e",
+        "current_sha256": "dda6560a56cc1bada5dcb5656dc213fbfa3e76b2de650b97bca494052122d048"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/security_scoped_url_helper/SecurityScopedURLHelper.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "db7011cacb53a7fb04454bc15f6a82072087a9265db35a7b1138db3dc54572a5",
+        "current_sha256": "6926fc4d4d99b8554c1a9f1a48b24d090326ea21eebed74614a5488dda57f270"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/security_scoped_url_helper/SecurityScopedURLHelperImpl.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "30ea9dc7283991861b531abbc4ca1321fd9380b846245809b41d34efef2b096d",
+        "current_sha256": "27ca89b85a93cedf8660e446957745d4bf688466c9f9548b5161928f855a407f"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/security_scoped_url_helper/SecurityScopedURLMethodChannelHandler.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "218eecf70139a31a9d41d83fca979a483cee92cf7f838082b4c2719e6ad23416",
+        "current_sha256": "f99d2c7f11ec34338303e66701ddf5d5b9eb0707253931f89b3280eaebae8076"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_metadata_extractor/VideoMetadataExtractor.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "f2a216c9298e4aace7ebc6ea8603993d43a5648b97cbd7aca20b9bdf81a438a8",
+        "current_sha256": "5c17f651e664954b906a6217fccae892ef4aaf61d7a6ccc5cd67886603405859"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_metadata_extractor/VideoMetadataExtractorImpl.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "67bc47c4afe890a8477799f7f7c7afd64c73569e41f88c4e9fb43c19b727f7a9",
+        "current_sha256": "5c80fea99f21d09a151472d23d34cc0763bca689c27fcd27520ee7d18098b24c"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_metadata_extractor/VideoMetadataMethodChannelHandler.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "9ab1a049c5272eb730e3645030e93f7ec2bf3a778143c84c16a8f59bb32633c6",
+        "current_sha256": "129dba5fe86a82ab50c559ad42a9f9b08d71d95a04dd5ad0d5ebf96bdede4b91"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_picker/VideoPicker.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "997bb972fb3d87e4b54f4a2be36f5458b83b5b51db051b0c2d791de59843a0cc",
+        "current_sha256": "0a74222f9e4bc0acd68344bd519cf23cb4f2a79377cb3753b30436e36ce35b99"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_picker/VideoPickerImpl.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "b8ef20152ba371947cbb07d2b84e066ed83f03f7e1b77b0f6a2004cf2f55b971",
+        "current_sha256": "a9b3d82b5b7ff0409252255c95d399f14db872a4e90e2afe4db9714d575eb34d"
+      },
+      {
+        "path": "apps/mobile/ios/Runner/video_picker/VideoPickerMethodChannelHandler.swift",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "3f933e9e60bccc6b2536eb1717c7239cd8e6ce063506bf6ff374eec1af41953e",
+        "current_sha256": "0ecb63649caf7a9ede2c6bc2d964f401e12b5d2a82c276a4469955c2357770d0"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/utils/app_url_launcher.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "d973b21b750ed0e69eddc4c6ff9ffa32f156145329f701caabc167586366e45a",
+        "current_sha256": "a419c86e49ac0b7a7f9ba718c899c122989092cec2b0d46894192044f7da367f"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/app_button/enums/button_sizes.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "f543540ac6528a7fa82690413421c1228b5942dc0bd3b3a127a2e5c9afc7462c",
+        "current_sha256": "0f714118dcdfb253a861e3fefa01cf6d10156aab8082413edb3bd5fdd2575cfc"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/app_error_view.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "0bd17a26ca5d12d0e6c6dfbe7018f1edefbce12097bdce488a52810ec46f0e00",
+        "current_sha256": "dfbe59ecf5ff652048c0a02455f0eabf7235bc24cab9e0bc73efa6d5d3a3fb88"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/app_popup_menu/app_popup_menu.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "3153771cea5f7c0f35ca5995c3571f9338141d3f2e589d682bbf9efeb9b061e0",
+        "current_sha256": "9782104f7cce781dc7da7db0d544de9217ba3e146382812fbfc1a16383ea7631"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/app_slider_dialog.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "dfcf81daca1575b780d689b6e852b074c5d2dbd1f7e27c6e2a1b4e6a99f65912",
+        "current_sha256": "431309d1e28248764cedc817a15227c0d84bbabe7bca925b375f474250776caf"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/choice_chip_row.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "941dc7f5f4ad5de0020f6887d50bf99d8557ea60c1360090230106f8e452b69c",
+        "current_sha256": "93d556c8b5db63d8600a42119da54849c8089b8cbaaa3c7aaf5f4f5f70d9d47e"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/interactive_list_tile/interactive_list.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5ae4c65697a5ad1cdb872cdf23dc6027bf325881c33cd946023b966f9161b6d9",
+        "current_sha256": "501e5304ad5005637338f36d940c8bf80f8ef04a2cf0d0f39cc4a21306842994"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/interactive_list_tile/interactive_list_tile.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "2d469f5dad3ea6ff63b2d497ddf688c09f04a829d28d528237010fd57ea3c4d7",
+        "current_sha256": "56754d981fe4b2860e6890d3e905fc76152f9a29d983c0e5b40de7f924ef8222"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/open_source_badge.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "be68fdcf53b4da77fec917dd214f20654d1b0fd73851ee4412d23c62dec39f3f",
+        "current_sha256": "5ba805a8f968067acf495728d59a9806ff9f5e3744acdf7fc5fb5e3877ebccdd"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/selectable_chip.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "598081fd12833082b8c0c4ca36edfed43ff8555703e733682387379b75173005",
+        "current_sha256": "635b96d3f23ca14eea9ac9fc790ce788790ed0485b95205d6eeafb83c890910c"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/common/widgets/toggle_row.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "842c585809ec20502a0a3180d89a954eb1d6f5cfff84dda0214188bde8748c92",
+        "current_sha256": "aa7a6f409545dcfa74dc61a61befb3eedc7941160b383d1fc6ec8007259e02e9"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/constants/app_assets.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "f1866233c2170509fe4b5927bd10f7039e3569bf649f7a733a5fa00af643100e",
+        "current_sha256": "1984cadaee72fe9336bd6c104bd155b2cdc1204cf0cb83cbd11984855b28b0f2"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/router/app_router.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "c9c6c9f15f65e660be4d3ba3a208e6f92d3c19bd2ebd06613f94bd9ba363e85a",
+        "current_sha256": "e49f364d9dcdce28a76743ef10ecfcd81e25ade45ecd03e59b02fcca363f5be3"
+      },
+      {
+        "path": "apps/mobile/lib/src/core/theme/app_theme.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "fe9872dffc1ea70e3d081764646f46174ed4d789be6de142e55edabe7b1db27c",
+        "current_sha256": "08c63bd63cbddc7e37cdf5c69c01b55664d0d61a0bc1470904d2689f0ba072ac"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/ar_recorder/helpers/ar_recorder_launcher.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1ef30361f2d513ecb04dcea31e2969734d6965e250d5b0bf5bdd931125e1ac2b",
+        "current_sha256": "3b60320ffc7b271d43430c6a84c99c5124d41791c472411993d90cbb87797100"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/ar_recorder/ui/widgets/ar_low_quality_banner.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1f7a61507bf8711c1537792c526bab0730856a24de0cc02605f05e1acd5c34db",
+        "current_sha256": "2910b7bfb0ff365bd0c012f53e0388161fa867f4e7c01d4719818bfa9d8572fd"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/ar_recorder/ui/widgets/ar_recording_controls.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "dff6a5c3861bfeb5f15ad4dd7a6867b4e81f84a16902331b5a4cc125053c4615",
+        "current_sha256": "fc78024b07b198260d9900e2f13d6df7269912ab4e0c3c93a6b08f0c7b25ab69"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/ar_recorder/ui/widgets/ar_recording_settings_pannel/ar_recording_settings_panel.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1f551acdbf886cf2d0af5e9db2d3c06e599f002f06475b34177d96098548919d",
+        "current_sha256": "ace8d074d0e777ef46e0a9f62a2a9bc0156bf6e4262c7621a4eebc74a72d69de"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/ar_recorder/ui/widgets/ar_status_bar.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "7760b379cd798ebff90484a927913bb780aa4f8b6e4cd5d50e384a79a1c5ab2d",
+        "current_sha256": "71ee42d8f1baac63ecdca0751712e1484e1dccd97842d0d60a7bc82fc7783f3f"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/auth/data/repo/user_repo.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "478a8260ae16fd9023749c3d4a5129b7298cb5765cef67c2a6f97dd1a41d5733",
+        "current_sha256": "d2b97e9d94206bd7b8a62195b2e23784bc69935729e5592516151e37d9c53a97"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/auth/ui/widgets/name_onboarding_modal.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "e0ef155a95c709249d703958f66667cd440258f1a0a6c1c76db959c6f02c626a",
+        "current_sha256": "06f79d848065663899e746c8685c1942d5673180ea87793f8615c47587e9bd01"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/demo/ui/demo_video_fullscreen_page.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "ca4a943b689e29a3eb9cd1eb1442205938dacd440a75a6fbf81275c32710ac88",
+        "current_sha256": "0baf78bc87adc1397b899c9ffbc282c881ab2c02d6e4863bca30ae32dfc807ba"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/demo/ui/widgets/demo_video_inline_preview.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "a46155b4d33dd1b34dc07b154fd5dd6ef56a567418cfe6f8986f057e205f7007",
+        "current_sha256": "861bd3381b44b39908be464469b4d8d6a0d6f15d13b1dc6d24e4c72233a4928b"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/home/providers/navigation_provider.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "fed1904e86ad61011776d2ae42c1c6b5b8ec59c267aa56a2dfc8c4b02dd191e5",
+        "current_sha256": "299ee4c31ceeabaa71db15d426be455b10239ea08bfec6fa8fe155344af94fee"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/home/ui/widgets/app_update_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "8686a6c618902fd82e5cc93fa77539b93c2aa6987296b558eb7792ca281a4cb1",
+        "current_sha256": "8e31aae9cb705e8b989be4b657d822e182c29f55ec1bbc2c553f32f34d8d9139"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/home/ui/widgets/notification_permission_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5d5f9d2a39d2f09e9c91583fecb0e3f30e0b6f948c768953c2044289d238dfb2",
+        "current_sha256": "61b5dd6bd2a28587ff0805ace4c3c443e54ecaa030af5b8a38e782bfb6012db4"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/home/ui/widgets/upload_progress_card.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1819aca3174a4086bc8fa35db1c9da518974e713891513695cd2c681db08f19d",
+        "current_sha256": "c97325bfb76eb531e6d7096a0d685d32e4daddd52d759d678e3353482d8f360e"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/keep_awake/ui/widgets/keep_awake_profile_toggle.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "605a81b75c1e49e950d81600dd7c3b956b07cfad4fa4d8a5bf6699ff860dfc51",
+        "current_sha256": "3139eca8ccce6f3a58de76207707580f7b95085cf9819fe6b8e9f474e2a067a9"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/keep_awake/ui/widgets/keep_awake_prompt_banner.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "a1641a6887d575053d71e2afb01a2f6d854261b5fcc5d75b1f7434a79e7b49f6",
+        "current_sha256": "61c8b80b2383f26c0db405bc170f192732c684902769edc5e00d1da98131e7c4"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/providers/mcap_preview_provider.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "82c6f4a08006c4eb567ee6fdb52064bb7ea2330549698fe9f41bc9b9db2dfbca",
+        "current_sha256": "8e1b7786aa52bba69fe9d9489f284cf05b9df1168b456040d63feb2aae13b1df"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/mcap_metadata_sheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "0b31c7b2640258ae66662dbf867e961d9f37e1afeceb26afd291e6179e063c93",
+        "current_sha256": "217f7fb52456e56b8f6f87de8636a662965a39609e068dd3830879c7072033cf"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/mcap_preview_content.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "cec6417b3e17f72bbabcdbcafc7ac2095a42e8b235d1b60ac0c9ad21d12878f8",
+        "current_sha256": "41b7ead0152dfffdf0733027fd37a7cdee70ade4bd4ea3cd5988adfc0c67c78c"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/player/mcap_data_controls.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "27ed04650ee2448b56f92ae152b0d4522a189e8f075887a9dca267db521c7ede",
+        "current_sha256": "a1a2f1b690bee220369d3069356e0f538136e096da5d2b9536cceb4d01dd2852"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/player/mcap_data_player_view.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "eb33c913289a1876c5b945d564696c748b4f8e2ff7d5f11499a43088e8352908",
+        "current_sha256": "3233dbb5ceea475b2d3a473021c417e105c30afc7801a207e029ddc415c7b6c1"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/player/mcap_visual_controls.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "e4317c517532d8c1ac66a86551743fa10b06a5414af1086345aaa61731431425",
+        "current_sha256": "64ab60ea5634e23747ca75265f58ea5d9a37469cf52457d89f849dc3a703b37e"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/mcap_preview/ui/widgets/scene3d_view.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "4117c50633446a30920689430a647b18106e75a5449d692104958c8c171d8946",
+        "current_sha256": "ecbd453c7029815d4c6400a96cd6083e64408f4bca834b2e5e00d68a64d8dda4"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/onboarding/ui/widgets/country_selector_modal.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "4c1324bf616036d9fe2eb711dc91a495940f11f7ffed05aca14ecda5caef610b",
+        "current_sha256": "100da312c5e9a89df44633e65a7a12bd257c8cfe8a906338e56e15e922fb53de"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/profile/data/repo/profile_repo.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "ce1e6d940b7799f6d1d88fd330327ca650ad26c2c5d1e624e835e99d1a6aac57",
+        "current_sha256": "f1f392659efa89448aa214499de133b291b2e48bacd8637bc36a70d9d3f2550e"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/profile/providers/profile_provider.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "8792971cf6d27291abc9c67d6fe7dec5d12f7bb34b27c92baf9d46465bee3b1d",
+        "current_sha256": "6ba993f7f5f296b859e9b9ed798801f0f192361014076aea8a4d5cdf17c82c34"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/profile/ui/widgets/local_settings_body.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "9bf973e9c37a9d73cffaf7ba56d6d4402f5f75cc6a91184afff89b6aa1c08249",
+        "current_sha256": "1e537b3d6f717a6bb2610db42ceafc3b4c1687408ca87e7d22c2bce852860e78"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/profile/ui/widgets/profile_options_item.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "ce9e710f7904d695432b7b649e8f0b853c6d5e47b2631b2c8a7e228e9a6a53bc",
+        "current_sha256": "da692e8d824e3489b33c0ab5d642cc67896f9f557b320516185fe311b09a32ce"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/recordings/providers/recordings_provider.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "4fda5b249b12b52bc467b34e47fbddbd1630b71dd7536e3b84d5e2b039f282ce",
+        "current_sha256": "cb0f47f959902997776eaf9e2312fabdfcd75aad83d428a40a0373dd84555970"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/recordings/ui/widgets/recording_session_tile.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "4ef95111a8523a311f7b56b710861ccf26d6844d48cade0ee985a79459c4332c",
+        "current_sha256": "9395b68482796ae441b04b61d536ef5cb5a96843a5c096928294d4bf43a1ffec"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/startup/view_models/startup_view_model.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1dbeb3ef2ac9ef0e8b2e8a51818bd7f6bd3fd20b9e11d3d3cae4156a7da4d41f",
+        "current_sha256": "848b081dd3aed170fac71c8a0e820cbd67737729a0a1d7ad467de76f5ed9be9b"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/providers/managers/upload_progress_manager.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "c6d4f1fe2461ddb36c0a9e473ad6d686e3dce0046c7aaf7caa4cfddea7b6657f",
+        "current_sha256": "11e225cd9a7840a7092165a7fa61f6733119865a654f220e00134250cd0095cc"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/providers/managers/upload_queue_manager.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "01ae689e5953f6950dc0184abd938ab625ad00f35c1ee5abf0bfc86172f924a1",
+        "current_sha256": "b50a8fdbd8471a6af70864337e61db01654a461aef8bd6194c98cd9f897d4d8c"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/providers/managers/video_source_manager.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "b2e651be70e0598635632223aed8171c011d272590cae152abd47c3d08b34a31",
+        "current_sha256": "e357eaf1cb7a2ff2eda5a9303252314785d2ed9705ef972163c2541eaf91b96a"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/providers/upload_provider.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "b48307567cea873dea8ecfd4ad1fa47ff796ef536249b1e16bc38c1ae6ed5650",
+        "current_sha256": "8e20086d2eb394b72e2a2eea22ed804557c9d95d4a2983612447f2bb7932ee03"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/sections/currently_uploading_options_section.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5d9459acd5e38c92da3b1d9b7f721b3c7994284ded0c03e24d4bfa49dbee8952",
+        "current_sha256": "f1320658de1db03800a0385dcb6291cc8ae02c6050dee4df2b6e408601e4910d"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/sections/failed_upload_section.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5c95ae8aad0c27fbe42d8a9fdb7bd7fbc2aa3feaec1e7f0b833a88e509e17ac3",
+        "current_sha256": "9b961d0d68e56e8eb3a3fe019ad5604ec8df933ec7a7650b73e4d42b59f4e003"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/upload_page.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "286229c6eb30bcfa2ab58c2bf1ecd0513ea9e623b15464fb2e1cbd20befafd39",
+        "current_sha256": "0b5307e9faec6e47fa3daaf8a030008edccefd68fd8e9bba8164b1e424cfee29"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/duplicate_videos_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "029633797188364dcceb672091a50aebf00478574b81ae29236725a1b4a67194",
+        "current_sha256": "482bcb2828098e07ceb90240051091cb13e9ac1e7522879ee13b0a44e97fe358"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/manage_uploads_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "e2fc3a7df0a315b4ae332b221853d26ecf3b5137684f92be247bf7f4fe417606",
+        "current_sha256": "eb6b316ecb1cc85c0f6d16da4aa363eccbb72157ee1b2c7c7db81bf9bb416ba5"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/resume_uploads_button.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "045a1f712c1666de630671e36c1bd5f5e423b9b10020218f4c4a39d3832c03a6",
+        "current_sha256": "750415f264e9907d787f7d667580b60ee3b1327fe9e0dea75686c33c417bd5d6"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/upload_empty_state.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "3a5ae08ab0d895ced4a0840b3a6a44d952f1cab5a89291d907a9c9e6f37f845b",
+        "current_sha256": "4e07c829d5439556ac5c2ff571b42cf24f9e12a75f4de0deedf729be0b735a6e"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/upload_guidelines_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "6f493417f2a42b01cd6c8fee68d795a7433e74027a68182d0b006e73ce00ebda",
+        "current_sha256": "298a6299661102248da3b007dc4e371ec6a11b47f8ed61f9cb5f810de9cedbc8"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload/ui/widgets/upload_success_bottomsheet/upload_success_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "11d5f5bc57c1158c98ae176e060c04e3d6b82e073b77f56154f3daf143e03c6a",
+        "current_sha256": "b4ce2c8f0f61b774e96d8cb00efb3334d3480f29d3c28e3263601a525a33bfa0"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/upload_estimate/ui/upload_estimate_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "717e56da69520cc6936efe272f7eec418b3e787defe54e7eff367e1eceac9f00",
+        "current_sha256": "5ac9f9490cea5f1d464b80ef77bde237e2c4831c5fd8aa9db1f36bd132c36e19"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/uploaded_videos/ui/widgets/uploaded_video_details_bottomsheet.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "6db0ccf883bac63526ccf3fc3aaa63c49295e3280735eff140bad727f2d4812f",
+        "current_sha256": "57f9197eaeee64eaffc93d72fc330da2491f535eec3d28ab75eb6fcc9206a8b2"
+      },
+      {
+        "path": "apps/mobile/lib/src/modules/uploaded_videos/ui/widgets/uploaded_video_tile.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "51941a2a2f3fbc7877fc456021998def748290807ef3b49548d0b355f23740d2",
+        "current_sha256": "b84e7b3e0c9624952449bce412e4fb7564b3f147cef7c4ae731c72d2ac964955"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/api/api.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "b2a13d459c1c2518337632acd3e1f68c3e20d62ce166a7eaf188ca718af2e6df",
+        "current_sha256": "d0fb8e48b1bcec523620a551493ced58db101fd633aae0d52ae52d4d72b07053"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/api/models/api_failure.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "3f36aaab431131ee0038488dcf80103558964cffe3f753fef3f6b31ec87abe27",
+        "current_sha256": "f6fc9cfb667b5ac682f196b2186c406b9c95a29855ee3ff06ba9e26763f91f86"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/api/token_service.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1c49f4b73a71140b4555d3ecc670c1920424a845ebe47780f6e21d8c1713c273",
+        "current_sha256": "6677b2d3fa667d0ad02aef7110f4d6d15da42a50948a5e7d5117cc1d65a6e434"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/db/schema/upload_parts.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "8ce0ba4550bcb9ff2b59698be5938f87c3a6a4d104135f33cdbd170e1ef0d18c",
+        "current_sha256": "9665c21bcd42118ee4531ef3952f49354f5473576272854dc48773c62c1555ad"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/db/upload_session_db.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "917389997263d9f4a4e0402208c5fbe719f32eef0a4368ecdb10234d311cb326",
+        "current_sha256": "01517cbdf0b47ac3f8bd994bdf213370ab2c9df7dc1e08078dfe87d1816d7d62"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/mcap_reader/cdr/cdr_deserializer.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "e1d1d141c7f774a20dd8bb05309bc2a586dd8f2021a4af99b359ff8d9b0c2fe8",
+        "current_sha256": "f83e0b054e1dc7a6a2c543ef9696a949ba00adeb8a0d89b18cc85501fe327986"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/mcap_reader/cdr/ros2_message_decoder.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "73b0741ab8b4387311c8fabceece1332cdd1bcc48e654ff904fc13864af3e189",
+        "current_sha256": "cd9f2abde79623815eeba9178217e5c7f249d1c55b23f562b60a75b8fcb2f486"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/mcap_reader/mcap_reader.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5001dd75959af0b8fb21ff9871fcf8e2a8ff390c4b3db4a97b57b42f89684717",
+        "current_sha256": "aab051372bf9e3a67a0cab90f92ce93b83a5d7e3157de994670a8764d2b9d55c"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/channels/upload_foreground_notifier.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5f0a328452fc22be413d288a638e00f78f20e623769ad665b896c40317484d57",
+        "current_sha256": "a8b9532be3bad02f3778cecef051e91d384598483497b8125d92fb86ba4bed1a"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/chunk_plan/upload_chunk_sizer.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "2fe3ffab80f9bb22f230c4826cb286dff6b96b7458e5439688a348f6c6fb2c4c",
+        "current_sha256": "417f0ede7e45e434110c6d809bfa66f8b800b4a7c44389c013af1995a2f6400a"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/chunk_plan/upload_disk_preflight.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "9e3c78ba92977a646fb5fe684851a199029d3b508bc47df9f0990092d6f3ca48",
+        "current_sha256": "bc5b68a40b4e399a6af8d9df6c970689bb84e2af8176a5896f0a12d7821272cf"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/data/models/multipart_complete_response.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "edfd79c416a7096c167105393d8dbfdc4018cf3606b3ec90476697ab8373ebcb",
+        "current_sha256": "b353463e46235cb44e7f5520385d9aaf2e78fa2de8c301da575266eb53beb362"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/data/models/multipart_finalize_response.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "4191d21a69aeeec6e4d4dbfeded9aa2de5343d2b24ff1034332416393821349d",
+        "current_sha256": "e2025a26db355fb383626fd5fef36cc670911afd94efc4627e6788d903e10c85"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/data/repo/upload_repo.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "5afce4bc0fddd95623722c721e743cb18a5bc4e3b9991cb47d20f6433d1919fb",
+        "current_sha256": "8cd7123cdbed210f0243a571c0c83cbad6fbae846db8ea4da5c53e5a0772865f"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/diagnostics/upload_diagnostics.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "a58fb25acf4b9ad62b7e71d3a6d9cc3f0e0e4ee0a1e978b392917ab0a0630b86",
+        "current_sha256": "4b6ff9ebec193b0e059844528b64241e183791a4041b137e1e0a14379da49bb6"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/diagnostics/upload_log.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "13ff0f1827ea12dc1cf8d9545c67e191a20eb0e7b2138769a95872d3ee32047b",
+        "current_sha256": "367549cc3687f466cb321d318b8e5563463af84d40f70fbbe5e2e1285563b942"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/orchestrator/upload_orchestrator.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "49b295757242469215941f4ea9d52ada6b8e7ad04599d249d162dc5db014f72e",
+        "current_sha256": "af9519db508b04a977a23abe230e27104c6bdbafd5fe6afdac7d2315a2983cf8"
+      },
+      {
+        "path": "apps/mobile/lib/src/services/upload_service/utils/resolve_file_path.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "549ba53435fd0c4c0ea4e9abd181d797c3c19d87d498ff1ea80d930e1384d5e2",
+        "current_sha256": "af4579fca42ed34c157f3cb2c5df160e8d6651106c3d35b7678b891ecfe6c20f"
+      },
+      {
+        "path": "apps/mobile/test/src/services/db/upload_db_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "36a5da966e68ecbd5b8bd1578e6d7d51cbb06f0ceadc81abce02a278d7c5ba82",
+        "current_sha256": "2f1a458f549567752b4cd2df34bdb8e5d05534fcc91fb37a64c4de8ffc0106e3"
+      },
+      {
+        "path": "apps/mobile/test/src/services/db/upload_session_db_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "fca48a43c3346f2e1732523f83d82059d31ff654a0d01d4d88de29f85fde7680",
+        "current_sha256": "e6df866171ec6e951e0644f51cfe7a4b77329188d66b88c42e6f09dc365cbcbc"
+      },
+      {
+        "path": "apps/mobile/test/src/services/db/uploads_migration_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "219b814eceb619c5b99aa28b243d8ee978464316b48c2c94d7b32c061b0e83c1",
+        "current_sha256": "af3b88820ad55383155e1034774b17557a770f2edebc8c0401f082ca0566f408"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/chunk_plan_phase4_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "ccf96abbc8bc97917c35ff3b65a05029a2aac85ef81dbdbdc9342827d544d75c",
+        "current_sha256": "767e1196b7b7b26bc2e486e235248a95bc1f01cdd3252f60e51830075a3ea677"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/data/models/multipart_response_models_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "da5fea22ff37c35b08f4951afdc469cbe79e8889838062357396feb57c8ad8c5",
+        "current_sha256": "7b1879e87f711f6c37f4c05b350c0cf7997732d182cbd77851d804559f3d77b0"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/legacy_upload_migrator_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "1adfe333c45d4d97b1992e47a19ecf969106d04201b722441c5e18b84ee5e079",
+        "current_sha256": "5285900c00fc75a1d39152a1eb0f3fa342d163f25fea8357a4fd2d25c1671f31"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/presign_manager_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "f61d4130e89c915295557eb45cc0bc5d275b0dbd9b471ed26df047b91fe63f91",
+        "current_sha256": "e88e012900be9a981a4f9de71e672148c8ab595384a888fd717973537fe9c8c5"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/upload_chunk_planner_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "61701d36d7a6ea091745e9578783aec36013101945b949f6e73a3de39666dea8",
+        "current_sha256": "ec710ba34b2e89849d91d8e7f2f7ecabc8767c7bf1804ded43924f4dabb9aada"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/upload_orchestrator_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "0a035fb440720c2b69d9ccc3fe63d344ddf8b7f880875226a9fd08e34ede272d",
+        "current_sha256": "7f9526dab36df62508d053a818dce3762a2ce79718bbc308371dbcc020796dda"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/upload_reconciler_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "598f77f94cf7859cf605c26463efb942aa28ba50308af6a3148d04c47f861911",
+        "current_sha256": "2abbe5b06d0842ee7f28dc1174ed0701206c6322976801aadff2da5fae6ca51b"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/upload_retry_policy_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "dde16ffe1a262481857646dfd41f0d4890f197fd145af05da1e22d9b10814ee2",
+        "current_sha256": "dae75c59b2088333db4a2b383444f9d8c9771b4e19cafbdc7c51408157767b13"
+      },
+      {
+        "path": "apps/mobile/test/src/services/upload_service/windowed_upload_coordinator_test.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "7769e44020e34181327b4e2d639bab6c3feee051f8d588b7c16189fe349ab2d1",
+        "current_sha256": "055f30482a48c6c2e603d5ec9cad86ae9b681dbb0bc24016af252a1af4b8a3d0"
+      },
+      {
+        "path": "apps/mobile/tool/mcap_probe.dart",
+        "source_sha256": "9316432a4f93cc80356fdf6183b0fa4b33da99dfc0a577971f1684af71100657",
+        "current_sha256": "96246434fda70b19712670acb3817bca2719db671aa51f64e8840a7fef917912",
+        "kind": "pinned_dart_format_language_3_9"
+      },
+      {
+        "path": "apps/mobile/tool/sync_google_client_ids.dart",
+        "kind": "pinned_dart_format_language_3_9",
+        "source_sha256": "c7fb36ef21f1def34a8af21b7495a2af235d68e3be9ccf79771eb7035e315f8a",
+        "current_sha256": "008b1fb4c84ee11771eecbeb4a8af1578038f34b9fdbf4b550ad2f75e3c34bad"
+      },
+      {
+        "path": "packages/stera_recorder/.gitignore",
+        "kind": "intentional_import_adaptation",
+        "source_sha256": "6bd2d709fc58130ade1fa13d1d6ef4a14097af0a190b2d065ded561fc3074e0c",
+        "current_sha256": "9ce35f8884b2cf3763e442203c27fad3b1aa36e2962004050bd0d53cd60ecfda"
+      },
+      {
+        "path": "packages/stera_recorder/README.md",
+        "kind": "pinned_prettier_markdown_format",
+        "source_sha256": "b7acd2c67592f7adf990174a9bb27287e735062a976e9ec39c0e06ffdc884afb",
+        "current_sha256": "db8ee27808e21ee111eba1bf8a887896e621f7e82278471e3545c225103c3a58"
+      },
+      {
+        "path": "packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/ArRecorder.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "b96d338703aaf90f4943a6cbdf77fef989a57deb088558a781113c5a3de8781d",
+        "current_sha256": "2f0f684ef96b466398bf606543d32aa5c21f1b1fc245aaaf54bedf52dcd6b84d"
+      },
+      {
+        "path": "packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/encoding/EglManagerImpl.kt",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "d64ec7817074613feb0ecd38a1cf69c4ca621583a20f5050d854f9dbcf63c05f",
+        "current_sha256": "c748ab015e7050ea100fa5f3741fde73ecf0aaf3300e6443086282e720ca0629"
+      },
+      {
+        "path": "packages/stera_recorder/example/analysis_options.yaml",
+        "source_sha256": "e0ea485cfdbc3e12b93efb8679a5ea73ebfe20ea4ca0c473dc594fc2fb274ed5",
+        "current_sha256": "28a1edbb2e41d1fe5db282e427bc466e28915f046e29a30e94798a92b8ab0a48",
+        "kind": "pinned_prettier_source_format"
+      },
+      {
+        "path": "packages/stera_recorder/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json",
+        "source_sha256": "3b1e214f466ffedff74baa5598ad5c4421130eea6bc8d57b8fe23435e8280ae4",
+        "current_sha256": "cd841cae92e48a8d48c79a6b634e7fb1f88fb97c924e24736b3bc3824ede3975",
+        "kind": "pinned_prettier_source_format"
+      },
+      {
+        "path": "packages/stera_recorder/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json",
+        "source_sha256": "ccc7950fd5f5b82067c85f667940a9d59189151460761ece8098ca78daa19469",
+        "current_sha256": "3f762eb75010d8d2197b0378ac464bd6a39f7365d44f2cf4dfdaecd3139a7153",
+        "kind": "pinned_prettier_source_format"
+      },
+      {
+        "path": "packages/stera_recorder/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md",
+        "kind": "trailing_whitespace_and_final_newline",
+        "source_sha256": "a985b626c4f7546a8ba392d135e9226c3547c8e2b46895f5f2bdf40d7b14ef9f",
+        "current_sha256": "ed87083592640e86975c949c24eb7ebe57b0e17bd67955541ebc3043b7527d49"
+      }
+    ],
+    "added_files": [
+      {
+        "path": "apps/mobile/project.json",
+        "sha256": "decd2d1f098c7f6290d583f679fdb92990439e17333956187b60d68efebc49ad"
+      },
+      {
+        "path": "packages/stera_recorder/example/pubspec.lock",
+        "sha256": "39ea86e8f4a3bb4996e92827b163d774f8494cf2a14d26aea88c12af00769fff"
+      },
+      {
+        "path": "packages/stera_recorder/project.json",
+        "sha256": "82627285b9837d6fac62a2f3114febbeee55b9840aaedab99e000ea4d8dfe592"
+      },
+      {
+        "path": "packages/stera_recorder/pubspec.lock",
+        "sha256": "8619ed929735654396935a2a1d2eeda0b6d3bc766150bafa866caafb9052b841"
+      }
+    ],
+    "current_source_tree": {
+      "file_count": 698,
+      "sha256": "4bbb0a7558677d9cdc5db1bebc927e79cd21d35332cd692fa17b03ca9e9fb4cb",
+      "method": "SHA-256 of UTF-8 lines <file-sha256><two spaces><repository-relative-path><LF>, sorted by path; hash each current file bytes.",
+      "scope": "git ls-files --cached --others --exclude-standard -- apps/mobile packages/stera_recorder; regular files only; includes unstaged source adaptations and new locks/project configs, excludes ignored generated/private files."
+    }
+  },
+  "intentional_adaptations": {
+    "apps/mobile/README.md": "Current monorepo setup and honest import scope.",
+    "apps/mobile/android/.gitignore": "Ignore generated Kotlin session state.",
+    "apps/mobile/android/gradle.properties": "Build-only memory limits: Gradle heap3G/metaspace1G/code256m/workers2 and Kotlin daemon512m.",
+    "packages/stera_recorder/.gitignore": "Commit package and example dependency locks; both are required for locked recursive pub preparation.",
+    "new_project_configs": "Actual Nx Flutter/pub/Gradle targets; source-only Android build, no device target.",
+    "new_recorder_lock": "Locked internal package and retained example resolution; app dependency lock unchanged.",
+    "excluded": "No H264 follow-up, later UI changes, spike recordings or processing implementation restored."
+  },
+  "hosted_ci_disk_fix": {
+    "failed_run": "https://github.com/timothywangdev/stateaction/actions/runs/41334940810",
+    "tested_head": "266bddb5d9f31108a8a3a5ac09d79ef561262487",
+    "diagnosis": "Android runner check annotation reports System.IO.IOException: No space left on device; diagnostic/job logs could not be uploaded. Server/tooling, runtime smoke and ticket policy passed; required gate failed and automatic merger waited.",
+    "correction": "Explicitly reuse matching preinstalled Android SDK packages, install only missing pinned packages, preserve existing command-line tools, delete only owned checksum-verified installer archives, avoid broad Android precache and report disk usage.",
+    "local_safeguards": "Six focused tests pass for verified archive deletion, checksum mismatch retention, no absent-archive downloads, preserving old SDK tools, matching SDK-tool reuse and missing-package selection.",
+    "local_sdk_smoke": "Actual reused-SDK bootstrap preserved old latest tools, extracted and verified owned command-line tools 23, reused installed pinned Android packages, deleted 1725404343 bytes of verified archives and validated Flutter/Dart/JDK/SDK pins. Default isolated-SDK bootstrap also passed. No bounded-disk build is claimed.",
+    "second_failed_run": "https://github.com/timothywangdev/stateaction/actions/runs/41338174788",
+    "second_failure": "Head 7960786 passed SDK setup and staged Dart hooks but again exhausted runner disk during the cold native build. Server/tooling, local runtime smoke and ticket policy passed. The installer optimization alone was insufficient; hosted Android logs again could not be uploaded.",
+    "third_run_guard_evidence": "https://github.com/timothywangdev/stateaction/actions/runs/41343356636: unused language/tool cleanup recovered about 14.4 GiB. Standard setup actions and SDK pin verification passed. The pre-build guard correctly stopped at 20.42 GiB free versus 21 GiB required, preserving a downloadable Android log. Compilation did not run; cache saves remain unverified. Additional unused side-by-side NDKs will be reclaimed while preserving the configured pin and aligning native-build NDK environment variables.",
+    "runner_headroom_correction": "Only the disposable GitHub-hosted Ubuntu 24.04 Android job may reclaim the fixed unused .NET, Haskell, CodeQL and Swift tool directories and real numeric side-by-side NDK directories other than the configured pin. Unknown entries, symlinks and the pinned NDK are preserved; native-build NDK environment variables are aligned to that pin. The build requires 20 GiB usable space plus an allocated 1 GiB log reserve, stops its owned process group at 2 GiB remaining, and releases the reserve on every exit. Local, self-hosted and foreign-SDK cleanup are rejected.",
+    "prebuilt_actions_and_cache": "Pinned subosito/flutter-action installs/caches Flutter and lock-keyed public pub dependencies; the bootstrap reuses that SDK and verifies exact Flutter/Dart/revision pins. Pinned official gradle/actions/setup-gradle uses the free basic cache provider for dependencies, wrapper and compiled build scripts. Gradle application task-output/configuration caches are disabled; project APKs, private env and recordings are not cached. Current-head checks still execute.",
+    "runner_and_reuse_tests": "Twenty-four Python safeguards and seven installed Node hook tests pass, including real small reserve allocation and release, child failure, low-space cancellation, exited-leader grandchild cleanup, local CLI rejection, external Flutter reuse without duplicate download, pin mismatch rejection, restored isolated local setup, disposable NDK-tree deletion selection and preserving existing environment-file content while publishing the pinned NDK. Tooling syntax/test/format checks and affected-project selection pass.",
+    "qualification": "Local safeguards do not prove hosted disk capacity; the same PR must pass a fresh cold GitHub CI run before merging. No paid larger runner or device operations."
+  },
+  "checks": {
+    "flutter": {
+      "command": "pnpm exec nx run-many --projects=mobile,stera-recorder --targets=typecheck,test --skip-nx-cache --outputStyle=static",
+      "passed": true,
+      "app_tests": 156,
+      "recorder_tests": 9,
+      "analysis": "both clean",
+      "seconds": 35.3
+    },
+    "android_host": {
+      "command": "pnpm exec nx run mobile:build --skip-nx-cache --outputStyle=static",
+      "passed": true,
+      "native_jvm": {
+        "tests": 26,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "instrumentation_apk": "assembled only; never installed or run",
+      "app_target": "Android x64 debug",
+      "seconds": 114,
+      "apk": {
+        "bytes": 98840840,
+        "sha256": "2dcaa2ddd72a945a56710a64029a8a33b10e79e642ac02dab6dd13a54678551e",
+        "stored_in_git": false
+      }
+    },
+    "source_only": {
+      "passed": true,
+      "copied_regular_files": 920,
+      "copy_selection": "git ls-files --cached --others --exclude-standard, current bytes; ignored artifacts/raw captures/old submodule and private env excluded. No .git, .dart_tool, build output, app .env or initialized submodules in copy before checks.",
+      "commands": [
+        "python3 scripts/mobile/run.py stera-recorder prepare",
+        "python3 scripts/mobile/run.py mobile prepare",
+        "python3 scripts/mobile/run.py stera-recorder typecheck",
+        "python3 scripts/mobile/run.py mobile typecheck",
+        "python3 scripts/mobile/run.py stera-recorder test",
+        "python3 scripts/mobile/run.py mobile test",
+        "python3 scripts/mobile/run.py stera-recorder build",
+        "python3 scripts/mobile/run.py mobile build"
+      ],
+      "toolchain": "standalone checksum-verified SDK from scripts/platform/install-mobile-toolchain.py, pinned JDK; dependency caches reused",
+      "bounded_memory_apk": {
+        "bytes": 98850632,
+        "sha256": "51b7bf00a62d4b007738be1d5413444943b6cf4878498c454a303120d7df2f55",
+        "stored_in_git": false
+      },
+      "sdk_plugin_autoinstalls": [
+        "Android platform35 rev2",
+        "Android Build-Tools35.0.0",
+        "Android Platform-Tools37.0.1",
+        "CMake3.22.1"
+      ],
+      "device_commands_executed": false,
+      "status": "passed fail-fast complete loop",
+      "recovered_defect": "Initial shell continued after plugin preparation failed because its example lock was missing. APK/analysis passed independently, but the full clean loop was not accepted. Add retained example lock and rerun all steps with set -e.",
+      "app_tests": 156,
+      "recorder_tests": 9,
+      "analysis": "both clean, including retained recorder example",
+      "native_jvm": {
+        "tests": 26,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "native_seconds": 35,
+      "app_apk_seconds": 49.5,
+      "tested_source_inputs": {
+        "differences_from_final": [
+          {
+            "path": "apps/mobile/CLAUDE.md",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "apps/mobile/tool/mcap_probe.dart",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "apps/mobile/tool/sync_google_client_ids.dart",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "packages/stera_recorder/README.md",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "packages/stera_recorder/example/analysis_options.yaml",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "packages/stera_recorder/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "packages/stera_recorder/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json",
+            "difference": "formatting_or_documentation"
+          },
+          {
+            "path": "packages/stera_recorder/project.json",
+            "difference": "formatting_or_documentation"
+          }
+        ],
+        "sha256": "13e380f9e5196b80d3691973e82741a50142b4a2b55149bc083cc618f9344638",
+        "file_count": 698
+      },
+      "recovery": "Add retained example/pubspec.lock; all eight commands then pass under set -e on a source-only copy with generated Flutter/Gradle state and env/local.properties removed before retry."
+    },
+    "monorepo_full": {
+      "passed": true,
+      "command": "NX_DAEMON=false NX_TUI=false pnpm check --outputStyle=static",
+      "projects": 11,
+      "tasks": 40,
+      "execution": "Real applicable full Nx graph, including current mobile/example locks, Flutter tests/analyzers, native host tests/instrumentation assembly, Android x64 app build, Node/Python/tooling checks and format gates. Local Nx cache enabled for deterministic unchanged checks; APK and prepare targets uncached.",
+      "run_duration": "39.7s",
+      "cache": "27/40 hit (68%)",
+      "scope_note": "Completed before six inherited source-format omissions were corrected. Focused uncached full-source format and staged hook validate that formatting-only follow-up; no broad runtime/build repeat."
+    },
+    "affected_graph": {
+      "method": "Nx show projects --affected --files=<path> --json, without target-scoped pruning",
+      "cases": {
+        "app": {
+          "file": "apps/mobile/lib/main.dart",
+          "projects": ["mobile"]
+        },
+        "recorder": {
+          "file": "packages/stera_recorder/lib/stera_recorder.dart",
+          "projects": ["mobile", "stera-recorder"]
+        },
+        "hook": {
+          "file": "scripts/platform/check-staged.mjs",
+          "projects": ["mobile", "stera-recorder", "tooling"]
+        },
+        "safety_helper": {
+          "file": "scripts/android_personal_device.py",
+          "projects": ["mobile", "mobile-tooling", "stera-recorder"]
+        },
+        "backend": {
+          "file": "packages/server/src/index.ts",
+          "projects": ["infra", "server", "web"]
+        },
+        "receipt": {
+          "file": "docs/validation/sa-10-import.json",
+          "projects": ["mobile-tooling"]
+        },
+        "provenance": {
+          "file": "third_party/stera-app/IMPORT.md",
+          "projects": ["mobile-tooling"]
+        },
+        "generated_kotlin": {
+          "file": "apps/mobile/android/.kotlin/sessions/kotlin-compiler-test.salive",
+          "projects": ["mobile", "stera-recorder"]
+        },
+        "private_env": {
+          "file": "apps/mobile/.env",
+          "projects": []
+        },
+        "recorder_example_lock": {
+          "file": "packages/stera_recorder/example/pubspec.lock",
+          "projects": ["mobile", "stera-recorder"]
+        }
+      },
+      "explanation": ".nxignore anchors /stera-app/ so retired checkout is excluded without hiding third_party/stera-app provenance. Ignored .env is not an input; generated .kotlin is ignored/excluded from source hashes even when explicitly supplied artificial --files queries select its containing project.",
+      "passed": true
+    },
+    "final_source_format": {
+      "passed": true,
+      "command": "NX_DAEMON=false pnpm exec nx run-many --projects=mobile,stera-recorder --targets=format --skip-nx-cache --outputStyle=static",
+      "seconds": 4.4,
+      "coverage": "All Git-visible Dart and hook-supported config/docs, including tools, examples and assets JSON; generated-state directories excluded. App292Dart files and recorder21Dart files checked.",
+      "reason": "Installed staged hook exposed six inherited source formats outside prior lib/test checks; corrected using the shared Dart language3.9/Prettier policy. Formatting-only follow-up; prior runtime/build results remain scoped to pre-format source."
+    }
+  },
+  "cache": {
+    "app_apk": "disabled because Flutter embeds .env",
+    "source_exclusions": [
+      "build",
+      ".dart_tool",
+      ".flutter-plugins",
+      ".gradle",
+      ".kotlin",
+      ".cxx",
+      "android/local.properties",
+      ".env*"
+    ],
+    "gradle_builds": "recorder native host build precedes app APK build in Nx graph"
+  },
+  "safe_artifacts": {
+    "synthetic_mcap_fixture": {
+      "path": "apps/mobile/test/fixtures/mcap/native_cpu_v3.mcap",
+      "sha256": "61b06cdda3bbb67adf40fa8b7149166e0a1c4d1131cb949680bc1a825c55002a",
+      "origin": "three synthetic JPEG/depth/calibration frames; no contributor footage"
+    },
+    "app_pubspec_lock_sha256": "65c8b202e9f03c84874f3882ed0f025a2229189f05962f9d9ce68de13e8eb5c3"
+  },
+  "limits": [
+    "No emulator or physical device was used for SA-10.",
+    "Existing JPEG recorder behavior retained; these checks do not qualify actual capture, H264, sustained1080p performance, thermal behavior or sensor-clock accuracy.",
+    "No upload/backend credential validation, paid resources, iOS build/signing or cloud deployment.",
+    "Hosted CI and PR merge are separate required gates; local success is not hosted-CI evidence."
+  ]
+}
