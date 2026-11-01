@@ -19,6 +19,8 @@ Implemented in `packages/server/migrations/002_auth.sql`, `003_catalog.sql` and 
 
 **Seal and completion order.** Upload completion and sealing may happen in either order. Seal locks the recording row and freezes the declared live source inventory: exactly one `source_manifest`, one required `source_mcap`, and at least one required `recorder_metadata`. It also pins the manifest's declared SHA-256. Source-file inserts lock and recheck the recording (`FOR SHARE`, unsealed only), so no file can join after a concurrent seal commits. An identical seal replay returns the existing seal; a different manifest conflicts; a replay never rewinds status. Job admission (`createProcessingJob` and the `jobs` insert trigger) requires the frozen required files to be completed. Output-file inserts likewise lock and recheck the job, so none land after acceptance commits.
 
+**Logical-file retirement versus transport restart.** A source file entering `cancelled`/`failed`/`expired` retires the _logical_ file: it leaves the live inventory and a replacement may be reserved. That is allowed only before seal. The `files` trigger locks the recording row (`FOR SHARE`) on any such transition and rejects it with `SAC04` once `source_manifest_file_id` is set, so the frozen inventory cannot shrink and no job can be admitted without a declared required file. A cancel racing a seal serializes on the recording row in both orders: cancel first means the waiting seal re-reads the inventory and is rejected if it is incomplete; seal first means the waiting cancel sees the seal and fails. Rows retired before seal remain excluded from the inventory. After seal, a broken, aborted or expired _transport_ (multipart upload) is recovered on the same logical file by advancing `transport_epoch` with a new object key and provider upload; the file stays live. A seal pointer also always takes the recording out of `registered`/`uploading` (row CHECK plus trigger), including in the sealing statement itself.
+
 Errors use SQLSTATE `SAC01` immutable, `SAC02` not approved, `SAC03` stale revision/sequence, `SAC04` lifecycle state, `SAC05` not authorized; `src/catalog/errors.ts` maps them (and unique/FK/check violations) to v1 HTTP error codes.
 
 ## Lock order
@@ -29,6 +31,8 @@ All catalog writes run in READ COMMITTED. Review and membership mutations take, 
 2. dataset rows `FOR UPDATE`, sorted by dataset UUID;
 
 then recheck the latest review and expected revisions before writing. The review and membership triggers take the same clip lock, so a direct insert that read stale eligibility waits behind an uncommitted rejection and fails with `SAC02` once it commits. Approval with `datasetSelection` locks current ∪ selected datasets, checks every expected revision, appends the review, applies the diff and advances changed revisions in one transaction; rejection removes all memberships first and advances each affected revision. Bulk adds lock sorted clips, so opposite-order batches cannot deadlock.
+
+Upload lifecycle writes lock the recording row before any of its file rows (`reserveSourceFile`, `sealRecording` and `createProcessingJob` take it `FOR UPDATE`; the `files` trigger takes it `FOR SHARE` on source inserts and source retirements). Seal never locks file rows, so a direct file retirement (file row, then recording) cannot deadlock with it; any future helper that both retires files and touches the recording must lock the recording first.
 
 ## Credentials and privileges
 

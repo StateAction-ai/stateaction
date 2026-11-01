@@ -79,7 +79,10 @@ CREATE TABLE recordings (
   CHECK (
     status IN ('registered', 'uploading', 'cancelled', 'failed')
     OR source_manifest_file_id IS NOT NULL
-  )
+  ),
+  -- A seal pointer always leaves the upload states (including the sealing
+  -- statement itself).
+  CHECK (source_manifest_file_id IS NULL OR status NOT IN ('registered', 'uploading'))
 );
 CREATE INDEX recordings_owner_created_idx ON recordings (owner_user_id, created_at DESC, id DESC);
 CREATE INDEX recordings_created_idx ON recordings (created_at DESC, id DESC);
@@ -329,6 +332,11 @@ END $$;
 -- required recorder_metadata among live (not cancelled/failed/expired)
 -- source files. Seal freezes this inventory; completion may arrive in either
 -- order, and job admission additionally requires every required file closed.
+-- Live is a sound frozen set because files_guard rejects any source file
+-- becoming cancelled/failed/expired once the recording is sealed: rows retired
+-- before seal stay excluded (legitimate replacement), and no declared file can
+-- drop out afterwards. Post-seal transport problems are recovered with a new
+-- transport epoch on the same logical file, never a terminal state.
 CREATE FUNCTION catalog_source_inventory_ok(rec uuid, require_completed boolean) RETURNS boolean
 LANGUAGE plpgsql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
@@ -366,6 +374,10 @@ BEGIN
     END IF;
     NEW.updated_at := now();
   END IF;
+  -- Any new seal pointer (including the sealing statement) leaves upload states.
+  IF NEW.source_manifest_file_id IS NOT NULL AND NEW.status IN ('registered', 'uploading') THEN
+    PERFORM public.catalog_raise('SAC04', 'a sealed recording cannot be in an upload state');
+  END IF;
   IF NEW.source_manifest_file_id IS NOT NULL
      AND (TG_OP = 'INSERT' OR OLD.source_manifest_file_id IS NULL)
      AND (NOT EXISTS (
@@ -384,6 +396,7 @@ CREATE FUNCTION files_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   parent_state text;
+  parent_manifest uuid;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF NEW.state <> 'reserved' OR NEW.transport_epoch <> 1 THEN
@@ -413,6 +426,19 @@ BEGIN
       OLD.client_upload_id, OLD.request_digest, OLD.size_bytes, OLD.sha256,
       OLD.part_size_bytes, OLD.created_at) THEN
     PERFORM public.catalog_raise('SAC01', 'logical file identity is immutable');
+  END IF;
+  -- Seal freezes the declared source inventory. Retiring a logical source
+  -- file (cancelled/failed/expired) is only valid before seal; afterwards a
+  -- transport abort/restart keeps the file live under a new epoch. Lock the
+  -- parent like the insert path so this serializes with a concurrent seal
+  -- (lock order: recording row, then file row, for helpers touching both).
+  IF NEW.purpose = 'source' AND NEW.state IN ('cancelled', 'failed', 'expired')
+     AND OLD.state NOT IN ('cancelled', 'failed', 'expired') THEN
+    SELECT source_manifest_file_id INTO parent_manifest FROM public.recordings
+    WHERE id = NEW.recording_id FOR SHARE;
+    IF NOT FOUND OR parent_manifest IS NOT NULL THEN
+      PERFORM public.catalog_raise('SAC04', 'a sealed recording cannot retire declared source files');
+    END IF;
   END IF;
   IF OLD.state IN ('completed', 'verified') THEN
     IF (NEW.object_key, NEW.provider_upload_id, NEW.transport_epoch, NEW.part_count,
