@@ -58,4 +58,30 @@ class MCAPFailureTest {
         assertTrue(json.contains("\"finalization_complete\": false"))
         writer.finalize()
     }
+
+    @Test fun footerFailureReleasesWriterSoANewSessionCanBeConfigured() {
+        val writer = writerWithFailingDisk()
+        val failedDirectory = File(writer.getSessionDirectory()!!)
+        writer.finalize()
+        assertNotNull(writer.getWriteFailure())
+        writer.configureH264Capture(null)
+        val next = writer.createSessionDirectory(failedDirectory.parentFile)
+        assertNotNull(next)
+        assertNotEquals(failedDirectory, next)
+        assertTrue(failedDirectory.exists())
+        assertTrue(writer.initializeWriters())
+        assertNull(writer.getWriteFailure())
+        writer.finalize()
+    }
+
+    @Test fun rapidDirectoryCreationNeverReusesExistingSourceBytes() {
+        val base = temporary.newFolder()
+        val writer = MCAPDatasetWriter(RuntimeEnvironment.getApplication(), "test", "35")
+        val first = writer.createSessionDirectory(base)!!
+        File(first, "diagnostic-source").writeText("original immutable bytes")
+        val created = (0 until 10).map { writer.createSessionDirectory(base)!!.absolutePath }
+        assertEquals(10, created.distinct().size)
+        assertFalse(first.absolutePath in created)
+        assertEquals("original immutable bytes", File(first, "diagnostic-source").readText())
+    }
 }

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/SensorEvent",
+  "title": "stateaction.capture.SensorEvent.v1",
+  "required": [
+    "recording_id",
+    "stream_id",
+    "event_id",
+    "native_timestamp_ns",
+    "native_clock_id",
+    "mapped_capture_time_ns",
+    "output_channel",
+    "output_sequence",
+    "source_kind",
+    "calibration_id",
+    "association_source_frame_id"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stream_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "native_timestamp_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "native_clock_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mapped_capture_time_ns": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "output_channel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "output_sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "calibration_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "association_source_frame_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

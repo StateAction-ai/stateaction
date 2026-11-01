@@ -11,7 +11,14 @@ data class ImuSample(
     val callbackLatencyNs: Long
 )
 
+data class RawMotionSample(val sensor: String, val eventId: Long, val timestampNs: Long,
+    val callbackElapsedNs: Long, val accuracy: Int, val x: Float, val y: Float, val z: Float)
+
 interface ImuCollector {
+    fun configureRawMotion(enabled: Boolean, samplingHz: Int = 100) {}
+    fun drainRawMotion(): List<RawMotionSample> = emptyList()
+    fun getRawMotionDroppedCount(): Long = 0L
+    fun getStopFailureReason(): String? = null
     fun initialize(): Boolean
     fun start()
     fun stop()

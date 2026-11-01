@@ -1,6 +1,7 @@
 import "dart:convert";
 import "dart:io";
 
+import "package:flutter/foundation.dart";
 import "package:stera/src/services/recordings_service/data/models/recording_session.dart";
 import "package:stera/src/services/upload_service/utils/mcap_finalization.dart";
 import "package:path/path.dart" as p;
@@ -74,7 +75,7 @@ class RecordingsService {
       final hasDepthZip =
           await depthZip.exists() && (await depthZip.length()) > 0;
       final hasDepth = hasSpatialDataZip || hasDepthDir || hasDepthZip;
-      final recordedAt = _parseSessionTimestamp(dirName);
+      final recordedAt = parseSessionTimestamp(dirName);
       final sizeBytes = await _sessionSizeBytes(entity, videoFile);
       final thumbnailFile = File(p.join(entity.path, "thumbnail.jpg"));
       final hasThumbnail = await thumbnailFile.exists();
@@ -171,17 +172,35 @@ class RecordingsService {
     }
   }
 
-  static DateTime _parseSessionTimestamp(String dirName) {
+  @visibleForTesting
+  static DateTime parseSessionTimestamp(String dirName) {
     try {
-      final ts = dirName.replaceFirst("session_", "");
-      if (ts.length != 15) return DateTime.fromMillisecondsSinceEpoch(0);
+      // New Android sessions add milliseconds and a random suffix so a rapid
+      // failure/retry cannot overwrite the previous take. Keep legacy names.
+      final match = RegExp(
+        r"^session_(\d{8}_\d{6})(?:_(\d{3})_[0-9a-f]{8})?$",
+      ).firstMatch(dirName);
+      if (match == null || match.end != dirName.length) {
+        return DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      final ts = match.group(1)!;
       final yyyy = int.parse(ts.substring(0, 4));
       final mm = int.parse(ts.substring(4, 6));
       final dd = int.parse(ts.substring(6, 8));
       final hh = int.parse(ts.substring(9, 11));
       final min = int.parse(ts.substring(11, 13));
       final ss = int.parse(ts.substring(13, 15));
-      return DateTime(yyyy, mm, dd, hh, min, ss);
+      final millis = int.parse(match.group(2) ?? "0");
+      final date = DateTime(yyyy, mm, dd, hh, min, ss, millis);
+      if (date.year != yyyy ||
+          date.month != mm ||
+          date.day != dd ||
+          date.hour != hh ||
+          date.minute != min ||
+          date.second != ss) {
+        return DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      return date;
     } catch (_) {
       return DateTime.fromMillisecondsSinceEpoch(0);
     }

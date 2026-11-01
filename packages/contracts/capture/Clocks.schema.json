@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/Clocks",
+  "title": "stateaction.capture.Clocks.v1",
+  "required": [
+    "recording_id",
+    "recorder_transport"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recorder_transport": {
+      "type": "object",
+      "required": [
+        "clock_id",
+        "target_clock_id",
+        "native_anchor_ns",
+        "epoch_anchor_ns",
+        "method",
+        "revision",
+        "status",
+        "uncertainty_ns",
+        "synchronization_accuracy"
+      ],
+      "properties": {
+        "clock_id": {
+          "const": "android.elapsed_realtime"
+        },
+        "target_clock_id": {
+          "const": "unix"
+        },
+        "native_anchor_ns": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "epoch_anchor_ns": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "uncertainty_ns": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method": {
+          "const": "fixed_host_anchor"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "same_domain",
+            "measured",
+            "unverified"
+          ]
+        },
+        "synchronization_accuracy": {
+          "const": "unverified"
+        }
+      }
+    }
+  }
+}

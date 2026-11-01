@@ -9,13 +9,18 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Collects accelerometer and gyroscope data from device sensors.
  * Buffers the latest reading from each sensor and emits combined samples
  * containing both accel and gyro values.
  */
-class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEventListener {
+class ImuCollectorImpl(
+    private val context: Context,
+    private val stopBarrierOverride: ((Handler?) -> Unit)? = null
+) : ImuCollector, SensorEventListener {
 
     companion object {
         private const val SENSOR_RATE = SensorManager.SENSOR_DELAY_FASTEST
@@ -30,7 +35,26 @@ class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEvent
 
     private val sampleQueue = ConcurrentLinkedQueue<ImuSample>()
 
-    private var isCollecting: Boolean = false
+    @Volatile private var isCollecting: Boolean = false
+    private val rawQueue = ArrayBlockingQueue<RawMotionSample>(20_000)
+    private var rawEnabled = false
+    private var samplingPeriodUs = 10_000
+    private var rawAccelEventId = 0L
+    private var rawGyroEventId = 0L
+    @Volatile private var rawDropped = 0L
+    private val stopFailure = AtomicReference<String?>(null)
+    override fun configureRawMotion(enabled: Boolean, samplingHz: Int) {
+        check(!isCollecting)
+        rawEnabled = enabled
+        // A resume uses start(), so uncertainty survives pause/resume and is cleared only
+        // when the recorder explicitly configures the next recording generation.
+        stopFailure.set(null)
+        rawQueue.clear(); rawAccelEventId = 0; rawGyroEventId = 0; rawDropped = 0
+        samplingPeriodUs = 1_000_000 / samplingHz.coerceIn(1, 200)
+    }
+    override fun drainRawMotion(): List<RawMotionSample> = mutableListOf<RawMotionSample>().also { rawQueue.drainTo(it) }
+    override fun getRawMotionDroppedCount(): Long = rawDropped
+    override fun getStopFailureReason(): String? = stopFailure.get()
 
     // Latest readings for pairing
     @Volatile private var latestAccelX: Float = 0f
@@ -97,6 +121,7 @@ class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEvent
 
         try {
             sampleQueue.clear()
+            rawQueue.clear()
             firstTimestampNs = null
             lastTimestampNs = null
             totalCallbackLatencyNs = 0L
@@ -105,20 +130,26 @@ class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEvent
             hasAccel = false
             hasGyro = false
 
+            isCollecting = true
             accelerometer?.let { sensor ->
-                sensorManager?.registerListener(this, sensor, SENSOR_RATE, handler)
+                val registered = sensorManager?.registerListener(this, sensor, if (rawEnabled) samplingPeriodUs else SENSOR_RATE, handler) == true
+                check(!rawEnabled || registered) { "Required independent raw ${sensor.name} registration failed" }
             }
 
             gyroscope?.let { sensor ->
-                sensorManager?.registerListener(this, sensor, SENSOR_RATE, handler)
+                val registered = sensorManager?.registerListener(this, sensor, if (rawEnabled) samplingPeriodUs else SENSOR_RATE, handler) == true
+                check(!rawEnabled || registered) { "Required independent raw ${sensor.name} registration failed" }
             }
 
             isCollecting = true
             println("✅ IMU collection started")
 
         } catch (e: Exception) {
+            isCollecting = false
+            sensorManager?.unregisterListener(this)
             println("❌ Failed to start IMU collection: ${e.message}")
             e.printStackTrace()
+            if (rawEnabled) throw IllegalStateException("Required independent IMU collection failed", e)
         }
     }
 
@@ -128,15 +159,37 @@ class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEvent
         try {
             sensorManager?.unregisterListener(this)
             isCollecting = false
+            val sensorHandler = handler
+            if (stopBarrierOverride != null) stopBarrierOverride.invoke(sensorHandler)
+            else if (sensorHandler != null && android.os.Looper.myLooper() != sensorHandler.looper) {
+                val barrier = java.util.concurrent.CountDownLatch(1)
+                check(sensorHandler.post { barrier.countDown() })
+                check(barrier.await(5, java.util.concurrent.TimeUnit.SECONDS)) { "IMU callback stop barrier timed out" }
+            }
             println("✅ IMU collection stopped")
         } catch (e: Exception) {
+            stopFailure.compareAndSet(null, "IMU stop completion is uncertain: ${e.javaClass.simpleName}: ${e.message}")
             println("❌ Failed to stop IMU collection: ${e.message}")
             e.printStackTrace()
+        } finally {
+            // Even if unregister or the callback barrier fails, no later callback may be
+            // admitted to the recording. The retained failure prevents a completed result.
+            isCollecting = false
         }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
+            if (!isCollecting) return
+            if (rawEnabled) {
+                val kind = when (it.sensor.type) { Sensor.TYPE_ACCELEROMETER -> "accel"; Sensor.TYPE_GYROSCOPE -> "gyro"; else -> return }
+                val now = SystemClock.elapsedRealtimeNanos()
+                if (!rawQueue.offer(RawMotionSample(kind, if (kind == "accel") rawAccelEventId++ else rawGyroEventId++, it.timestamp, now, it.accuracy, it.values[0], it.values[1], it.values[2]))) rawDropped++
+                firstTimestampNs = firstTimestampNs ?: it.timestamp; lastTimestampNs = it.timestamp
+                callbackCount++; totalCallbackLatencyNs += (now - it.timestamp).coerceAtLeast(0)
+                maxCallbackLatencyNs = maxOf(maxCallbackLatencyNs, (now - it.timestamp).coerceAtLeast(0))
+                return
+            }
             when (it.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
                     latestAccelX = it.values[0]
@@ -211,6 +264,7 @@ class ImuCollectorImpl(private val context: Context) : ImuCollector, SensorEvent
     override fun release() {
         stop()
         sampleQueue.clear()
+        rawQueue.clear()
 
         handlerThread?.quitSafely()
         try {

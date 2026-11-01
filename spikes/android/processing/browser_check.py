@@ -80,6 +80,19 @@ def main():
                                           "clip_time_ns": str(target), "screenshot": screenshot.name,
                                           "screenshot_sha256": digest(screenshot), "data": data})
         evidence["resource_loads"] = json.loads(command(*base, "eval", "performance.getEntriesByType('resource').map(e=>({name:e.name,bytes:e.transferSize,decodedBytes:e.decodedBodySize}))"))
+        command(*base, "eval", "(async () => { await window.viewer.set_time({timeline: 'clip_time', duration_nanos: 0n, play_state: 'playing'}); return true; })()")
+        deadline = time.monotonic() + 10
+        while True:
+            playing = snapshot()
+            cursor = playing["state"]["recordings"][0]["current_time"]
+            if cursor["timeline"] == "clip_time" and int(cursor["time"]) > 0:
+                break
+            assert time.monotonic() < deadline, "playback_cursor_did_not_advance"
+            time.sleep(0.05)
+        command(*base, "eval", "(async () => { await window.viewer.set_time({play_state: 'paused'}); return true; })()")
+        evidence["playback"] = {"cursor_advanced": True, "advanced_to_ns": cursor["time"],
+                                "pause_state": snapshot()["state"]["recordings"][0].get("play_state")}
+        assert evidence["playback"]["pause_state"] == "paused"
         command(*base, "eval", "window.viewer.stop(); true")
         assert json.loads(command(*base, "eval", "document.querySelectorAll('canvas').length")) == 0
         evidence.update(status="passed", stop_removed_canvas=True, seconds=time.monotonic() - start,

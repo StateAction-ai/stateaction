@@ -2,6 +2,8 @@
 
 StateAction.ai · 2026-10-31 · Implementation target, not shipped behavior. The [capture/upload audit](mobile-capture-and-upload-readiness.md) identifies current native gaps. This specification covers the Flutter collector and Android/iOS native adapters; [capture format](capture-format.md), [shared contracts](../contracts.md), [uploads](mcap-upload.md), [auth](auth-and-access.md) and [local qualification](local-development.md) remain authoritative for their respective protocols.
 
+Implementation update, 2026-11-01: the migrated Android recorder now has an opt-in H.264 adapter and local capture→CPU→Rerun harness. See [implementation and reproducible checks](android-h264-implementation.md) for exact scope, build flags and remaining gates. This does not complete the auth, upload or production qualification requirements below.
+
 ## Scope and ownership
 
 Deliver Google login, capture setup/preflight, foreground recording, a persistent own-recordings/upload queue, recovery, upload policy and account/logout controls. The mobile app collects source evidence; the web console performs staff review and dataset assignment. No mobile review, model inference, cloud credentials or direct database client is required.

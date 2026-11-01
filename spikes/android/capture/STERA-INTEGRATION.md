@@ -1,6 +1,8 @@
 # SA-60 follow-up: use the imported recorder as the capture base
 
-The first physical standalone run **failed before RGB acquisition**. Its closed failed MCAP is not video/hardware-encoder qualification. The separate startup stack was unnecessary; the implementation should extend `apps/mobile/packages/stera_recorder`, preserving the working Flutter/ARCore camera lifecycle and our existing fixes. This directory now serves as a protocol/codec experiment and emulator regression harness, not the product app starting point.
+The first physical standalone run **failed before RGB acquisition**. Its closed failed MCAP is not video/hardware-encoder qualification. The separate startup stack was unnecessary; the implementation should extend `packages/stera_recorder`, preserving the working Flutter/ARCore camera lifecycle and our existing fixes. This directory now serves as a protocol/codec experiment and emulator regression harness, not the product app starting point.
+
+Implemented follow-up, 2026-11-01: the [existing-recorder integration](../../../docs/components/android-h264-implementation.md) now follows this approach behind explicit build flags. Its actual-controller emulator/CPU/Rerun checks are distinct from the earlier standalone probe and pending phone qualification.
 
 ## What failed and what local testing established
 

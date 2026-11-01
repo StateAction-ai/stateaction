@@ -6,6 +6,19 @@ import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
 import java.io.File
 
 interface DatasetWriter {
+    /** Opt-in; null restores the historical JPEG profile for the next session. */
+    fun configureH264Capture(profile: Map<String, Any?>?, clocks: Map<String, Any?> = emptyMap()) {
+        require(profile == null) { "This dataset writer does not support H.264 MCAP" }
+    }
+    fun writeH264FrameEvent(event: Map<String, Any?>) {
+        throw UnsupportedOperationException("This dataset writer does not support H.264 evidence")
+    }
+    fun writeH264AccessUnit(sourceFrameId: Long, captureTimeNs: Long, encoderPtsUs: Long, annexB: ByteArray): Boolean =
+        throw UnsupportedOperationException("This dataset writer does not support H.264 MCAP")
+    fun writeRawMotionEvent(sensor: String, event: Map<String, Any?>) {
+        throw UnsupportedOperationException("This dataset writer does not support raw motion evidence")
+    }
+    fun getH264CaptureStats(): Map<String, Any> = emptyMap()
     fun createSessionDirectory(baseDir: File? = null): File?
     fun pauseWriters()
     fun resumeWriters()

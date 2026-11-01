@@ -1,6 +1,6 @@
 # Mobile capture and upload readiness
 
-Audited 2026-10-31. **Not qualified for high-volume field collection.** This is a read-only source/document audit; no recorder changes, new device tests or paid jobs were performed. Another engineer is fixing the app. Preserve that work and coordinate native changes through the monorepo handoff.
+Baseline audited 2026-10-31. **Not qualified for high-volume field collection.** The baseline findings below describe the imported recorder. Our temporary Stera work is now in the monorepo; the [2026-11-01 Android H.264 integration](android-h264-implementation.md) adds an opt-in native adapter and local capture→CPU→Rerun tests. Hardware, signed-device, long-run, ownership and upload gates remain open.
 
 ## JPEG, MP4 and MCAP are separate choices
 
@@ -20,7 +20,7 @@ Two short Pixel captures extrapolate to **10.79–13.37 decimal GB/hour**, appro
 
 **Selected subsequent decision:** new captures target hardware **H.264 inside MCAP**, as specified by [capture format v1](capture-format.md). Keep current immutable JPEG captures as the reference and legacy decoder fixture. Qualify actual total bytes/hour, capture gaps, hand/tool detail, heat/battery and worker/browser decoding before shipping the profile. MP4-plus-sensor-log and HEVC remain alternatives researched above, not parallel MVP implementations. Losslessly preserve original sensor samples, units, validity and timestamps; do not cut required streams or reduce frame cadence/raster silently to hit a size target. No new cloud GPU is needed.
 
-The current recorder still emits JPEG-bearing MCAP; it has not been converted by this documentation. The selected format adds a versioned source profile, complete sealed inventory, exact acquisition-to-decoded-frame mapping and matching streaming decoder. MP4 alone would not satisfy the sensor contract. Cloud conversion after upload cannot reduce phone storage or upload bytes already spent; the selected encoding happens during capture.
+The default recorder still emits JPEG-bearing MCAP; explicit Android H.264 selection uses the new adapter. The complete target also requires a sealed inventory and production qualification beyond local frame/decoder checks. MP4 alone would not satisfy the sensor contract. Cloud conversion after upload cannot reduce phone storage or upload bytes already spent; the selected encoding happens during capture.
 
 ## Required capture evidence
 

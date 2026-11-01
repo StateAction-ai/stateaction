@@ -17,8 +17,41 @@ import "../data/models/recording_config.dart";
 class ArRecordingConfigManager extends ChangeNotifier {
   /// Creates the manager over the host-supplied [preferences] store. Settings
   /// start on their defaults until [loadPersistedToggles] runs.
-  ArRecordingConfigManager({required RecorderPreferences preferences})
-    : _prefs = preferences;
+  ArRecordingConfigManager({
+    required RecorderPreferences preferences,
+    RgbVideoCodec? rgbCodec,
+    bool? h264SimulationMode,
+  }) : _prefs = preferences,
+       _rgbCodec = rgbCodec ?? RgbVideoCodec.fromBuildValue(_buildRgbCodec),
+       _h264SimulationMode =
+           h264SimulationMode ?? _parseSimulationFlag(_buildSimulation) {
+    if (_h264SimulationMode && _rgbCodec != RgbVideoCodec.h264) {
+      throw ArgumentError(
+        "STATEACTION_H264_SIMULATION requires STATEACTION_RGB_CODEC=h264",
+      );
+    }
+  }
+
+  static const _buildRgbCodec = String.fromEnvironment(
+    "STATEACTION_RGB_CODEC",
+    defaultValue: "jpeg",
+  );
+  static const _buildSimulation = String.fromEnvironment(
+    "STATEACTION_H264_SIMULATION",
+    defaultValue: "false",
+  );
+  static bool _parseSimulationFlag(String value) => switch (value) {
+    "true" => true,
+    "false" => false,
+    _ => throw ArgumentError.value(
+      value,
+      "STATEACTION_H264_SIMULATION",
+      "Use true or false",
+    ),
+  };
+
+  final RgbVideoCodec _rgbCodec;
+  final bool _h264SimulationMode;
 
   final RecorderPreferences _prefs;
 
@@ -269,6 +302,8 @@ class ArRecordingConfigManager extends ChangeNotifier {
     recordPointCloud: _recordPointCloud,
     recordMesh: _recordMesh,
     recordRgb: _recordRgb,
+    rgbCodec: _rgbCodec,
+    h264SimulationMode: _h264SimulationMode,
     rgbHz: _rgbHz,
     depthHz: _depthHz,
     pointCloudHz: _pointCloudHz,

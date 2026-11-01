@@ -43,6 +43,7 @@ class RecordingFrameOrchestrator(
     private val recordError: (String, Throwable?) -> Unit
 ) {
     private val cpuImageEncoder = CpuImageEncoder()
+    var h264Controller: H264RecordingController? = null
 
     private data class CapturedDepth(val timestampNs: Long, val width: Int, val height: Int,
                                      val intrinsics: Map<String, Any>, val mapping: DoubleArray)
@@ -104,6 +105,42 @@ class RecordingFrameOrchestrator(
         var rgbCaptureDiagnostics: Map<String, Any?>? = null
         var rgbIntrinsics: Map<String, Any>? = null
         var capturedDepth: CapturedDepth? = null
+
+        val activeH264 = h264Controller
+        if (activeH264 != null) {
+            // RGB capture follows native camera cadence even while AR tracking is paused.
+            val intrinsics = frameProcessor.extractIntrinsics(camera)
+            metrics.rgbEncodeAttemptCount++
+            val accepted = activeH264.capture(frame, intrinsics, trackingState)
+            val poseSnapshot = if (isTracking) frameProcessor.extractPose(camera) else null
+            if (poseSnapshot != null && activeH264.writePose(timestamp, poseSnapshot, trackingState)) {
+                metrics.poseFrameCount.incrementAndGet(); metrics.poseTimestampRange.record(timestamp)
+            }
+            if (accepted) {
+                if (activeH264.recordPointCloud && isTracking) processPointCloud(frame, timestamp, globalFrameIndex, writerHandler)
+                val depthSnapshot = if (activeH264.recordDepth) processDepth(frame, timestamp, globalFrameIndex, isTracking, intrinsics, writerHandler) else null
+                // Same-frame geometry is detached while this ARCore Frame is still leased.
+                // Depth timestamps retain their own native clock; the acquisition association
+                // and calibrated raster transform are evidence, not a clock-equality claim.
+                val identity = checkNotNull(activeH264.currentSubmittedIdentity())
+                activeH264.writeFrameGeometry(timestamp, mapOf(
+                    "capture_geometry_version" to CaptureGeometry.VERSION,
+                    "recording_id" to identity["recording_id"], "source_frame_id" to identity["source_frame_id"],
+                    "rgb_native_timestamps" to identity["native_timestamps"], "rgb_mapped_capture_time_ns" to identity["mapped_capture_time_ns"],
+                    "frame_timestamp_ns" to timestamp.toString(), "frame_timestamp_clock" to "arcore.frame.undefined",
+                    "rgb_frame_association" to "Frame.acquireCameraImage_same_frame", "tracking_state" to trackingState,
+                    "rgb_intrinsics" to intrinsics, "rgb_raster" to "native_cpu_unrotated", "cross_stream_clock_verified" to false,
+                    "depth_available" to (depthSnapshot != null), "depth_source" to "ARCore.acquireDepthImage16Bits",
+                    "depth_timestamp_ns" to depthSnapshot?.timestampNs?.toString(), "depth_timestamp_clock" to "arcore.depth_image.native_unverified",
+                    "depth_width" to depthSnapshot?.width, "depth_height" to depthSnapshot?.height,
+                    "depth_intrinsics" to depthSnapshot?.intrinsics, "rgb_pixel_to_depth_pixel" to depthSnapshot?.mapping?.toList()))
+            }
+            activeH264.writeRawMotion(imuCollector.drainRawMotion(), imuCollector.getRawMotionDroppedCount())
+            healthManager.maybeSamplePassiveH264Health()?.let { snapshot -> activeH264.writeDeviceHealth(timestamp, snapshot) }
+            metrics.maxEncoderQueueDepth = maxOf(metrics.maxEncoderQueueDepth, metrics.encoderQueueDepth())
+            metrics.frameCount++
+            return
+        }
 
         val pose = if (isTracking) frameProcessor.extractPose(camera) else null
         val shouldSample = pose != null && frameSampler.shouldEncodeFrame(timestamp)

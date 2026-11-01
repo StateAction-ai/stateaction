@@ -1,6 +1,6 @@
 # Engineering handoff
 
-Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [shared contracts](contracts.md). The [engineering/PM/design review](mvp-review.md) records scope coverage and remaining launch gates. Automatic hands, Pipeline monitoring, many-to-many datasets and shared staff/customer clip review are initial scope. Whole-dataset versions/export/download are follow-up work; no Releases or Deliveries page is required now.
+Updated: 2026-11-01. **Build the simplified MVP**, beginning with the [technical design](technical-design.md), [implementation milestones](implementation-plan.md) and [shared contracts](contracts.md). The [engineering/PM/design review](mvp-review.md) records scope coverage and remaining launch gates. Automatic hands, Pipeline monitoring, many-to-many datasets and shared staff/customer clip review are initial scope. Whole-dataset versions/export/download are follow-up work; no Releases or Deliveries page is required now.
 
 ## Implementation documents
 
@@ -17,6 +17,7 @@ Updated: 2026-10-31. **Build the simplified MVP**, beginning with the [technical
 | [Backend](components/backend-architecture.md) | Next.js/Node modules and provider boundaries |
 | [Auth](components/auth-and-access.md) | Manual allowlist, three roles, account Settings/sign-out, native login and capture ownership |
 | [Mobile implementation](components/mobile-app-implementation.md) | Flutter/native bridge, capture/auth/transfer states, offline ownership, recovery and signed-device acceptance |
+| [Android H.264 implementation](components/android-h264-implementation.md) | Existing-recorder integration, explicit build flags, local capture→CPU→Rerun checks and remaining hardware gates |
 | [Android feasibility spikes](spikes/android-feasibility.md) | Isolated capture, CPU/Rerun and native upload harnesses; measured results and remaining device/auth gates |
 | [Capture format](components/capture-format.md) | H.264 MCAP profile, mixed schemas, frame/clock evidence, hardware encoder/EOS and conformance fixtures |
 | [Mobile capture/upload audit](components/mobile-capture-and-upload-readiness.md) | Current Android/iOS blockers, required sensor evidence, JPEG/video options and volume qualification |
@@ -45,4 +46,4 @@ These documents retain earlier investigations; they are not extra MVP services o
 | [Training qualification](training-qualification-requirements.md) | Limits on metric/action/training claims |
 | [WiLoR benchmark](wilor-full-hand-benchmark.md) | Research model comparison, not commercial deployment clearance |
 
-Existing Flutter/native recorder source is imported into the monorepo; the new application stack and cloud pipeline remain to be implemented. [Import checks](validation/mobile-source-import.json) are separate from the failed first H.264 hardware attempt and future physical qualification. No design review upgrades existing pose-accuracy claims.
+Existing Flutter/native recorder source is imported into the monorepo, with opt-in Android H.264 integration and local CPU/Rerun validation. The new application stack and cloud pipeline remain to be implemented. [Import checks](validation/mobile-source-import.json) are separate from capture simulation and physical qualification. No design review upgrades existing pose-accuracy claims.

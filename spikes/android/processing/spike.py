@@ -217,7 +217,7 @@ def historical_jpeg(data):
     return sec * NS + ns, data[pos:]
 
 
-def make_fixture(destination, *, legacy_source=None, fault=None):
+def make_fixture(destination, *, legacy_source=None, fault=None, profile_overrides=None):
     """Generate finite test MCAP; never call this a hardware capture."""
     source_hash = None
     times = [1_000_000 + sum(33_333 + (1_111 if j % 7 == 0 else 0) for j in range(i)) for i in range(95)]
@@ -270,7 +270,7 @@ def make_fixture(destination, *, legacy_source=None, fault=None):
         write_json(PROFILE, {"capture_schema": "stateaction.capture.v1", "rgb_profile": "h264_mcap_v1",
                             "encoder_time_base": {"numerator": 1, "denominator": 1_000_000},
                             "fixture_provenance": provenance, "legacy_source_sha256": source_hash,
-                            "pixel_raster": [320, 192], "calibration_status": "not_qualified_fixture"})
+                            "pixel_raster": [320, 192], "calibration_status": "not_qualified_fixture"} | (profile_overrides or {}))
         write_json(CLOCKS, {"mapping_revision": "fixture_1", "status": "unverified",
                            "note": "Unequal clocks are retained; no cross-sensor association is made."})
         pending = []
@@ -327,8 +327,8 @@ def emit(writer, channel, item, write_json, fault):
         write_json(FRAMES, event | {"state": "written", "output_sequence": i, "is_idr": idr})
 
 
-def read_access_units(source, receipt):
-    schemas = {}; channels = {}; acquired = {}; videos = {}
+def read_access_units(source, receipt, *, allow_simulation_profile=False):
+    schemas = {}; channels = {}; acquired = {}; videos = {}; cdr_decoders = {}
     proto = ProtobufDecoder(); ros = RosDecoder()
     profile = None; footer = False; last_pts = None; last_acquired_id = -1; written_count = 0
     counts = Counter(); peaks = Counter()
@@ -340,6 +340,12 @@ def read_access_units(source, receipt):
             elif isinstance(record, Schema):
                 require(len(schemas) < 64 or record.id in schemas, "schema_limit")
                 schemas[record.id] = record
+                # Validate all advertised CDR families, including empty channels.
+                # A producer must embed interoperable definitions; never repair
+                # invalid historical type references inside this consumer.
+                if record.encoding == "ros2msg":
+                    cdr_decoders[record.id] = ros.decoder_for("cdr", record)
+                    require(cdr_decoders[record.id] is not None, "unsupported_cdr_schema")
             elif isinstance(record, Channel):
                 require(len(channels) < 64 or record.id in channels, "channel_limit")
                 channels[record.id] = record
@@ -350,7 +356,7 @@ def read_access_units(source, receipt):
                 schema = schemas[channel.schema_id]
                 counts[channel.topic] += 1
                 if channel.message_encoding == "cdr":
-                    decoder = ros.decoder_for("cdr", schema)
+                    decoder = cdr_decoders.get(schema.id)
                     require(decoder is not None, "unsupported_cdr_schema")
                     sample = decoder(record.data)
                     # Only this finite fixture asserts fields; other CDR remains preserved input.
@@ -372,7 +378,13 @@ def read_access_units(source, receipt):
                         require(profile is None, "midstream_profile_change")
                         # The second value is an explicit unqualified native spike,
                         # never a production auto-dispatch fallback.
-                        require(obj["rgb_profile"] in ("h264_mcap_v1", "android_h264_spike_v1"), "wrong_capture_profile")
+                        if obj["rgb_profile"] == "h264_mcap_simulation_v1":
+                            require(allow_simulation_profile, "simulation_profile_requires_explicit_opt_in")
+                            require(obj.get("qualification") == "simulation_only" and
+                                    obj.get("mapped_timeline_semantics") == "simulation_transport_only" and
+                                    obj.get("production_qualified") is False, "simulation_profile_missing_disclosure")
+                        else:
+                            require(obj["rgb_profile"] in ("h264_mcap_v1", "android_h264_spike_v1"), "wrong_capture_profile")
                         require(obj["encoder_time_base"] == {"numerator": 1, "denominator": 1_000_000}, "unsupported_time_base")
                         profile = obj
                         receipt["profile"] = profile
@@ -393,6 +405,9 @@ def read_access_units(source, receipt):
                             original = acquired.pop(frame_id)
                             for key in ["native_timestamp_ns", "native_clock_id", "encoder_pts_us", "mapped_capture_time_ns"]:
                                 require(original[key] == obj[key], f"identity_changed:{key}")
+                            for key in ["recording_id", "stream_id", "calibration_id", "native_timestamps",
+                                        "clock_mapping_revision", "encoder_time_base"]:
+                                require(original.get(key) == obj.get(key), f"identity_changed:{key}")
                             msg, video_record = videos.pop(obj["output_sequence"])
                             pts = int(obj["encoder_pts_us"])
                             require(last_pts is None or pts > last_pts, "duplicate_or_nonmonotonic_pts")
@@ -411,6 +426,7 @@ def read_access_units(source, receipt):
         require(footer, "missing_footer")
         require(not hashed.read(1), "trailing_data")
         require(not acquired and not videos, "unresolved_frame_evidence")
+        require(profile is not None and written_count > 0, "missing_profile_or_video")
         receipt.update(source_sha256=hashed.hash.hexdigest(), source_bytes=hashed.count,
                        channels=dict(counts), association_peaks=dict(peaks), profile=profile,
                        cross_sensor_synchronization_validated=False)
@@ -538,7 +554,8 @@ class ClipWriter:
                 "files": {p.name: {"bytes": p.stat().st_size, "sha256": digest(p)} for p in sorted(self.dir.iterdir())}}
 
 
-def process(source, destination, *, model=MODEL_DEFAULT, max_clip_seconds=1.1, expected_sha256=None):
+def process(source, destination, *, model=MODEL_DEFAULT, max_clip_seconds=1.1, expected_sha256=None,
+            allow_simulation_profile=False):
     destination = Path(destination); destination.mkdir(parents=True, exist_ok=False)
     require(digest(model) == MODEL_HASH, "model_hash_mismatch")
     started = time.monotonic(); receipt = {"status": "running", "clips": []}
@@ -549,7 +566,7 @@ def process(source, destination, *, model=MODEL_DEFAULT, max_clip_seconds=1.1, e
         running_mode=mp.tasks.vision.RunningMode.IMAGE, num_hands=2)
     clip = None; pending = {}; last_cut = None; count = 0
     with mp.tasks.vision.HandLandmarker.create_from_options(detector_options) as detector:
-        for access in read_access_units(source, receipt):
+        for access in read_access_units(source, receipt, allow_simulation_profile=allow_simulation_profile):
             pts = access["pts"]
             if clip and access["idr"] and Fraction(pts - last_cut, 1_000_000) >= Fraction(max_clip_seconds) / 2:
                 require(not pending, "cut_with_delayed_decode")
@@ -577,8 +594,8 @@ def process(source, destination, *, model=MODEL_DEFAULT, max_clip_seconds=1.1, e
     if expected_sha256:
         require(receipt["source_sha256"] == expected_sha256, "source_hash_mismatch")
     receipt.update(status="passed", frames=count, model_sha256=MODEL_HASH, metric_accuracy_validated=False,
-                   synthetic="fixture_provenance" in receipt["profile"],
-                   fixture_kind=receipt["profile"].get("fixture_provenance", "native_android_spike"),
+                   synthetic="fixture_provenance" in receipt["profile"] or receipt["profile"].get("qualification") == "simulation_only",
+                   fixture_kind=receipt["profile"].get("fixture_provenance", receipt["profile"]["rgb_profile"]),
                    seconds=time.monotonic() - started, peak_rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
                    packages={p: importlib.metadata.version(p) for p in ["av", "rerun-sdk", "mediapipe", "mcap", "foxglove-schemas-protobuf"]},
                    limitations=["Finite local spike, not a production worker or API/storage/workflow integration.",
@@ -597,16 +614,20 @@ def main():
     run = sub.add_parser("process"); run.add_argument("source", type=Path); run.add_argument("output", type=Path)
     run.add_argument("--model", type=Path, default=MODEL_DEFAULT); run.add_argument("--expected-sha256")
     run.add_argument("--max-clip-seconds", type=float, default=1.1)
+    run.add_argument("--allow-simulation-profile", action="store_true",
+                     help="Explicitly accept labeled emulator transport timelines, never hardware qualification")
     check = sub.add_parser("check"); check.add_argument("source", type=Path)
+    check.add_argument("--allow-simulation-profile", action="store_true")
     args = parser.parse_args()
     if args.command == "fixture":
         args.output.parent.mkdir(parents=True, exist_ok=True)
         result = make_fixture(args.output, legacy_source=args.legacy_source, fault=args.fault)
     elif args.command == "process":
         result = process(args.source, args.output, model=args.model, expected_sha256=args.expected_sha256,
-                         max_clip_seconds=args.max_clip_seconds)
+                         max_clip_seconds=args.max_clip_seconds, allow_simulation_profile=args.allow_simulation_profile)
     else:
-        result = {}; frames = sum(1 for _ in read_access_units(args.source, result)); result["frames"] = frames
+        result = {}; frames = sum(1 for _ in read_access_units(args.source, result,
+                                    allow_simulation_profile=args.allow_simulation_profile)); result["frames"] = frames
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

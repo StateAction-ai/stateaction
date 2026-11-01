@@ -44,6 +44,18 @@ def main():
     assert accepted["source_sha256"] == digest(clean)
     assert accepted["association_peaks"]["pending_acquisitions"] == 3
     checks["mixed_schema_delayed_output_vfr_hash_and_unequal_clocks"] = {"status": "passed", "result": accepted}
+    simulation = args.output / "simulation.mcap"
+    disclosed = {"rgb_profile": "h264_mcap_simulation_v1", "qualification": "simulation_only",
+                 "mapped_timeline_semantics": "simulation_transport_only", "production_qualified": False}
+    make_fixture(simulation, profile_overrides=disclosed)
+    checks["reject_simulation_profile_without_opt_in"] = rejected(lambda: consume(simulation), "explicit_opt_in")
+    simulation_receipt = {}
+    assert sum(1 for _ in read_access_units(simulation, simulation_receipt, allow_simulation_profile=True)) == 95
+    checks["accept_disclosed_simulation_profile_only_with_opt_in"] = {"status": "passed"}
+    undisclosed = args.output / "undisclosed-simulation.mcap"
+    make_fixture(undisclosed, profile_overrides=disclosed | {"production_qualified": True})
+    checks["reject_simulation_claiming_production_qualification"] = rejected(
+        lambda: list(read_access_units(undisclosed, {}, allow_simulation_profile=True)), "simulation_profile_missing_disclosure")
     for fault, reason in [("duplicate_pts", "duplicate_or_nonmonotonic_pts"),
                           ("missing_config", "idr_missing_sps_pps"),
                           ("config_only", "config_only_or_empty_access_unit"),

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/Profile",
+  "title": "stateaction.capture.Profile.v1",
+  "required": [
+    "capture_schema",
+    "rgb_profile",
+    "recording_id",
+    "wire_contract_revision",
+    "encoder_time_base",
+    "production_qualified",
+    "qualification",
+    "limits"
+  ],
+  "properties": {
+    "capture_schema": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgb_profile": {
+      "enum": [
+        "h264_mcap_v1",
+        "h264_mcap_simulation_v1"
+      ]
+    },
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wire_contract_revision": {
+      "const": "stateaction.capture.v1.1"
+    },
+    "encoder_time_base": {
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
+    },
+    "production_qualified": {
+      "const": false
+    },
+    "qualification": {
+      "enum": [
+        "unqualified",
+        "simulation_only"
+      ]
+    },
+    "limits": {
+      "type": "object"
+    },
+    "encoder": {
+      "type": "object"
+    },
+    "streams": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgb_profile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "mapped_timeline_semantics"
+        ],
+        "properties": {
+          "qualification": {
+            "const": "simulation_only"
+          },
+          "mapped_timeline_semantics": {
+            "const": "simulation_transport_only"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 Selected design · 2026-10-31 · **Implementation target, not qualified recorder output.** This is the normative source-format contract for [mobile implementation](mobile-app-implementation.md), [upload](mcap-upload.md) and [processing](cloud-processing.md). Existing source files stay immutable. The [capture audit](mobile-capture-and-upload-readiness.md) records current gaps.
 
+Android integration update, 2026-11-01: [wire contract revision `stateaction.capture.v1.1`](../../packages/contracts/capture/README.md) implements the v1 schema family below. The separate emulator-only `h264_mcap_simulation_v1` profile is rejected by default downstream and never qualifies the hardware profile. [Implementation/runbook](android-h264-implementation.md) records the current adapter and remaining production requirements.
+
 ## Format and initial profile
 
 New captures use `capture_schema=stateaction.capture.v1`, `rgb_profile=h264_mcap_v1`: hardware H.264 RGB inside MCAP, with original sensor evidence. No separate source MP4 or duplicate JPEG track is required. The worker retains an explicitly identified `jpeg_mcap_v1` reader for historical captures; missing legacy evidence stays unknown. Legacy decoding is not permission to silently fall back when a new H.264 request is unsupported.

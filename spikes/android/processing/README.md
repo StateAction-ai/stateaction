@@ -60,11 +60,40 @@ For fixture-independent processing:
 .venv/bin/python spike.py process /absolute/path/to/capture.mcap artifacts/native-001 --expected-sha256 ACTUAL_SOURCE_SHA256
 ```
 
-Only explicit `h264_mcap_v1` and unqualified `android_h264_spike_v1` profiles are
-accepted by this harness. The production reader must retain separate dispatch
+By default, only explicit `h264_mcap_v1` and unqualified `android_h264_spike_v1`
+profiles are accepted. The production reader must retain separate dispatch
 and qualification rules. The native spike needs profile/time-base/evidence
 fields agreed with SA-60; the tiny four-message writer fixture does not contain
 a full capture profile and cannot run as a complete recording.
+
+The migrated app's emulator integration tests produce the distinct
+`h264_mcap_simulation_v1` profile. This profile is rejected by default. Pass
+`--allow-simulation-profile` to `check` or `process` only for a disclosed
+`simulation_only` recording with `production_qualified=false` and
+`mapped_timeline_semantics=simulation_transport_only`. Receipt-based simulation
+time cannot establish camera-to-IMU synchronization. Original camera, image and
+ARCore timestamps stay in each frame's `native_timestamps` evidence; the reader
+checks that acquisition-to-written identities remain unchanged.
+
+From the repository root, after sourcing `scripts/env.sh` and starting the
+dedicated ARCore emulator with `scripts/start_capture_emulator.sh --ar -no-window`:
+
+```sh
+python3 scripts/test_android_h264_e2e.py --serial emulator-5582
+```
+
+That harness verifies the emulator and its sole personal full user, installs
+only the test package with an explicit user, then exercises the actual
+`ArRecorderImpl` ARCore acquisition, preview, encoder and writer lifecycle.
+It tests repeated takes, pause/resume, stopping while paused, cancellation and
+a successful take after cancellation. A second test delegates to the real MCAP
+writer while injecting startup and access-unit write failures; it requires
+structural close, failed-session metadata and successful immediate retries.
+Only the Flutter texture registry boundary is replaced by a native `TextureView`
+consumer in the normal capture test. It never selects a physical phone, and copies
+the resulting closed captures into ignored `artifacts/android-h264-e2e/`.
+This native controller test does not exercise Flutter button/navigation code,
+physical codec compatibility, depth, calibrated clocks or long recordings.
 
 To create the historical replay, from this folder:
 

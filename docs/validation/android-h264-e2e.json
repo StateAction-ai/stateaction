@@ -1,0 +1,863 @@
+{
+  "date": "2026-11-01",
+  "status": "passed_local_existing_recorder_simulation",
+  "scope": "Android existing Stera recorder controller, local CPU processing and actual self-hosted Rerun WASM. Hardware and Flutter UI navigation remain unqualified.",
+  "physical_devices_touched": false,
+  "paid_resources_created": false,
+  "personal_profile_safety": {
+    "emulator": "emulator-5582",
+    "android_api": 33,
+    "single_full_user": 0,
+    "type": "full.SYSTEM",
+    "package": "open.fpvlabs.stera.ar_recorder.test",
+    "all_adb_app_mutations_scoped": true,
+    "non_target_package_installations": false,
+    "physical_serial_rejected_before_adb": true
+  },
+  "native_unit": {
+    "tests": 57,
+    "failures": 0,
+    "errors": 0
+  },
+  "instrumentation": {
+    "tests": 2,
+    "failures": 0,
+    "normal_path": "Actual ArRecorderImpl, ARCore acquisition, native TextureView consumer, software AVC encoder, real MCAP writer and finalization; Flutter TextureRegistry boundary substituted.",
+    "checks": [
+      "Repeated takes",
+      "Pause/resume",
+      "Stop while paused",
+      "Cancel deletes only its session",
+      "Successful take after cancellation",
+      "Failure after real writer initialization closes diagnostic MCAP",
+      "Immediate retry preserves prior diagnostics",
+      "Injected AU writer failure triggers automatic stop, failed metadata and structural close",
+      "Successful retry after writer failure",
+      "Second recorder creation after disposal without OOM"
+    ],
+    "fault_receipt": {
+      "hardware_qualified": false,
+      "startup_failure_closed": true,
+      "startup_immediate_retry_success": true,
+      "writer_failure_autostopped": true,
+      "writer_failure_closed": true,
+      "failed_recording_not_valid": true,
+      "writer_failure_retry_success": true,
+      "status": "passed"
+    }
+  },
+  "protocol_checks": {
+    "tests": 16,
+    "status": "passed",
+    "receipt": "spikes/android/processing/artifacts/recorder-integration-protocol-20261101-final/checks.json",
+    "simulation_profile_default_admission": "rejected",
+    "simulation_explicit_opt_in_with_disclosures": "accepted"
+  },
+  "schema_validation": {
+    "schemas": 5,
+    "conformance_events": 5,
+    "rejected_mutations": 4,
+    "native_assets_match": true,
+    "actual_messages": {
+      "stateaction.capture.Profile.v1": 3,
+      "stateaction.capture.Clocks.v1": 3,
+      "stateaction.capture.FrameEvent.v1": 174,
+      "stateaction.capture.SensorEvent.v1": 171,
+      "stateaction.capture.MotionEvent.v1": 2396
+    },
+    "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53"
+  },
+  "source_captures": [
+    {
+      "source_sha256": "44f19fc5a332fb55e1c063baf4e149032297424632b5e9ebeabe6a6a90dc355f",
+      "source_bytes": 1214337,
+      "frames": 25,
+      "channels": {
+        "/camera/camera_info": 25,
+        "/camera/pose": 6,
+        "/camera/rgb/video": 25,
+        "/capture/frame_geometry": 25,
+        "/device/metrics": 8,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/frame_events": 75,
+        "/stateaction/imu/accel": 541,
+        "/stateaction/imu/gyro": 549,
+        "/stateaction/sensor_events": 72,
+        "/tf": 6,
+        "/trajectory": 2
+      },
+      "profile": {
+        "calibration_id": "per_frame_rgb_image_intrinsics",
+        "camera_clock_status": "unverified",
+        "camera_id": "0",
+        "capture_schema": "stateaction.capture.v1",
+        "device": {
+          "android_release": "13",
+          "api_level": 33,
+          "manufacturer": "Google",
+          "model": "sdk_gphone64_x86_64"
+        },
+        "distortion_status": "not_exposed_by_arcore",
+        "encoder": {
+          "b_frames": 0,
+          "bitrate": 4000000,
+          "fps": 30,
+          "hardware": false,
+          "height": 480,
+          "idr_interval_seconds": 1,
+          "input": "ARCore CPU YUV_420_888 copied to codec input Image actual strides",
+          "name": "c2.android.avc.encoder",
+          "requested_level": "3.1",
+          "requested_profile": "Main",
+          "width": 640
+        },
+        "encoder_time_base": {
+          "denominator": 1000000,
+          "numerator": 1
+        },
+        "limits": {
+          "access_unit_bytes": 16773120,
+          "chunk_index_count": 65536,
+          "max_access_unit_bytes": 16773120,
+          "max_pending_frames": 4,
+          "max_queued_access_units": 4,
+          "max_queued_encoded_bytes": 16777216,
+          "mcap_chunk_input_bytes": 16777216,
+          "mcap_chunk_target_bytes": 1048576,
+          "pending_frames": 4,
+          "writer_mode": "synchronous_bounded_input"
+        },
+        "mapped_timeline_semantics": "simulation_transport_only",
+        "production_qualified": false,
+        "qualification": "simulation_only",
+        "recording_id": "session_20261101_004332_120_27bfea95",
+        "rgb_profile": "h264_mcap_simulation_v1",
+        "streams": {
+          "accel": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "depth": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": false
+          },
+          "gyro": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "pointcloud": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": "arcore_conditional"
+          },
+          "rgb": {
+            "calibration": "camera.imageIntrinsics",
+            "enabled": true,
+            "height": 480,
+            "observed": false,
+            "orientation": "native_cpu_unrotated",
+            "requested": true,
+            "required": true,
+            "supported": true,
+            "width": 640
+          }
+        },
+        "wire_contract_revision": "stateaction.capture.v1.1"
+      },
+      "association_peaks": {
+        "pending_acquisitions": 2,
+        "pending_video": 1
+      },
+      "clips": [
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-000",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 16297,
+              "sha256": "fa9f2bda1f2971cab4d46f7da2ce9a8d2d57c806479036162cf9fa76528cb60d"
+            },
+            "hands.npz": {
+              "bytes": 1176,
+              "sha256": "faf6a3e0742aff3d9ae3abc81e0971af4781c62a385572623fe73d01d6658422"
+            },
+            "rgb.mp4": {
+              "bytes": 136534,
+              "sha256": "00c1e61262fbf0eb99b7e2f302de27f63e5df0e2944f3e649a2df2ac43e62f29"
+            },
+            "viewer.rrd": {
+              "bytes": 74974,
+              "sha256": "68f4f3fcfcaacc446d4bfed08c8d85d1d938ace34c285b1114da51887beffb57"
+            }
+          },
+          "first_source_frame_id": "0",
+          "frames": 10,
+          "last_source_frame_id": "9",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "0",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-001",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8186,
+              "sha256": "b63bb12aea51f3ffdcd882ce3741b82e1e57b7b07d6dab48d36497364a28749d"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 103865,
+              "sha256": "9ac58ac62a5257bfbf01fd9eaf5097e3d674f67f4a20f22e34fa03396ff5416b"
+            },
+            "viewer.rrd": {
+              "bytes": 66314,
+              "sha256": "8ceb9565c0fcf38df8192283e325d97871bcbf29f3562407943f7104f3a74250"
+            }
+          },
+          "first_source_frame_id": "10",
+          "frames": 5,
+          "last_source_frame_id": "14",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "2418839",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-002",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 16393,
+              "sha256": "b0e759b40bf339a1b3b5aaa9aa87072869c350cb0836229dcda8b417d7e89233"
+            },
+            "hands.npz": {
+              "bytes": 1176,
+              "sha256": "faf6a3e0742aff3d9ae3abc81e0971af4781c62a385572623fe73d01d6658422"
+            },
+            "rgb.mp4": {
+              "bytes": 205973,
+              "sha256": "ee82e7986da1f10bb318017930701b24191323fba19987a9888bfc57841b6a96"
+            },
+            "viewer.rrd": {
+              "bytes": 75139,
+              "sha256": "e90e016d206fd0f7692b540b7181c1e9cd114ef3d785c35491f5b5f3616a069e"
+            }
+          },
+          "first_source_frame_id": "15",
+          "frames": 10,
+          "last_source_frame_id": "24",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "4133692",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        }
+      ],
+      "seconds": 1.423180482990574,
+      "peak_rss_kib": 328732
+    },
+    {
+      "source_sha256": "a4912643bf35597c99c4d44b858b9eaedcbc6d12dadf38376e8242b7d1e337db",
+      "source_bytes": 846027,
+      "frames": 18,
+      "channels": {
+        "/camera/camera_info": 18,
+        "/camera/pose": 6,
+        "/camera/rgb/video": 18,
+        "/capture/frame_geometry": 18,
+        "/device/metrics": 6,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/frame_events": 54,
+        "/stateaction/imu/accel": 348,
+        "/stateaction/imu/gyro": 348,
+        "/stateaction/sensor_events": 56,
+        "/tf": 6,
+        "/trajectory": 2
+      },
+      "profile": {
+        "calibration_id": "per_frame_rgb_image_intrinsics",
+        "camera_clock_status": "unverified",
+        "camera_id": "0",
+        "capture_schema": "stateaction.capture.v1",
+        "device": {
+          "android_release": "13",
+          "api_level": 33,
+          "manufacturer": "Google",
+          "model": "sdk_gphone64_x86_64"
+        },
+        "distortion_status": "not_exposed_by_arcore",
+        "encoder": {
+          "b_frames": 0,
+          "bitrate": 4000000,
+          "fps": 30,
+          "hardware": false,
+          "height": 480,
+          "idr_interval_seconds": 1,
+          "input": "ARCore CPU YUV_420_888 copied to codec input Image actual strides",
+          "name": "c2.android.avc.encoder",
+          "requested_level": "3.1",
+          "requested_profile": "Main",
+          "width": 640
+        },
+        "encoder_time_base": {
+          "denominator": 1000000,
+          "numerator": 1
+        },
+        "limits": {
+          "access_unit_bytes": 16773120,
+          "chunk_index_count": 65536,
+          "max_access_unit_bytes": 16773120,
+          "max_pending_frames": 4,
+          "max_queued_access_units": 4,
+          "max_queued_encoded_bytes": 16777216,
+          "mcap_chunk_input_bytes": 16777216,
+          "mcap_chunk_target_bytes": 1048576,
+          "pending_frames": 4,
+          "writer_mode": "synchronous_bounded_input"
+        },
+        "mapped_timeline_semantics": "simulation_transport_only",
+        "production_qualified": false,
+        "qualification": "simulation_only",
+        "recording_id": "session_20261101_004339_839_0fedc2c3",
+        "rgb_profile": "h264_mcap_simulation_v1",
+        "streams": {
+          "accel": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "depth": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": false
+          },
+          "gyro": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "pointcloud": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": "arcore_conditional"
+          },
+          "rgb": {
+            "calibration": "camera.imageIntrinsics",
+            "enabled": true,
+            "height": 480,
+            "observed": false,
+            "orientation": "native_cpu_unrotated",
+            "requested": true,
+            "required": true,
+            "supported": true,
+            "width": 640
+          }
+        },
+        "wire_contract_revision": "stateaction.capture.v1.1"
+      },
+      "association_peaks": {
+        "pending_acquisitions": 2,
+        "pending_video": 1
+      },
+      "clips": [
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-000",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 16293,
+              "sha256": "676445fda0e9f49f437ff1716195449414fc193e513b5b1096ee3b6c58064bcb"
+            },
+            "hands.npz": {
+              "bytes": 1176,
+              "sha256": "faf6a3e0742aff3d9ae3abc81e0971af4781c62a385572623fe73d01d6658422"
+            },
+            "rgb.mp4": {
+              "bytes": 131037,
+              "sha256": "64d3c05f54bc9ac8e40c2d98d7025c64278b53be791aeeba012a6f888c5dc034"
+            },
+            "viewer.rrd": {
+              "bytes": 74554,
+              "sha256": "204775c9b31200865da22dc0ba38268c7c89adc7b195c5d69f9399a55564b064"
+            }
+          },
+          "first_source_frame_id": "0",
+          "frames": 10,
+          "last_source_frame_id": "9",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "0",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-001",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 13113,
+              "sha256": "c5fe54c692b0b53c626c532c2783a9eef6dd7684e58ecd59686df7ab35b88266"
+            },
+            "hands.npz": {
+              "bytes": 1157,
+              "sha256": "e657571bd4ade161cc63030b569b81467c283ba0675d4686caded8e7d1895565"
+            },
+            "rgb.mp4": {
+              "bytes": 185344,
+              "sha256": "28b63ce083915b7eebeeabe46bda36379c2f87ff7e40200c22cb3635d65a9992"
+            },
+            "viewer.rrd": {
+              "bytes": 71482,
+              "sha256": "bc9ca3c4a45c9189922207b52a0ce133f842e61db5a493e5fa2f52d3b99aef90"
+            }
+          },
+          "first_source_frame_id": "10",
+          "frames": 8,
+          "last_source_frame_id": "17",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "2006252",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        }
+      ],
+      "seconds": 1.0115299749886617,
+      "peak_rss_kib": 336440
+    },
+    {
+      "source_sha256": "4d5ad801d631dbdcbc20e47dc4950329fa75c5da95068785f735f83a2dd3f97d",
+      "source_bytes": 703004,
+      "frames": 15,
+      "channels": {
+        "/camera/camera_info": 15,
+        "/camera/pose": 3,
+        "/camera/rgb/video": 15,
+        "/capture/frame_geometry": 15,
+        "/device/metrics": 5,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/frame_events": 45,
+        "/stateaction/imu/accel": 304,
+        "/stateaction/imu/gyro": 306,
+        "/stateaction/sensor_events": 43,
+        "/tf": 3,
+        "/trajectory": 2
+      },
+      "profile": {
+        "calibration_id": "per_frame_rgb_image_intrinsics",
+        "camera_clock_status": "unverified",
+        "camera_id": "0",
+        "capture_schema": "stateaction.capture.v1",
+        "device": {
+          "android_release": "13",
+          "api_level": 33,
+          "manufacturer": "Google",
+          "model": "sdk_gphone64_x86_64"
+        },
+        "distortion_status": "not_exposed_by_arcore",
+        "encoder": {
+          "b_frames": 0,
+          "bitrate": 4000000,
+          "fps": 30,
+          "hardware": false,
+          "height": 480,
+          "idr_interval_seconds": 1,
+          "input": "ARCore CPU YUV_420_888 copied to codec input Image actual strides",
+          "name": "c2.android.avc.encoder",
+          "requested_level": "3.1",
+          "requested_profile": "Main",
+          "width": 640
+        },
+        "encoder_time_base": {
+          "denominator": 1000000,
+          "numerator": 1
+        },
+        "limits": {
+          "access_unit_bytes": 16773120,
+          "chunk_index_count": 65536,
+          "max_access_unit_bytes": 16773120,
+          "max_pending_frames": 4,
+          "max_queued_access_units": 4,
+          "max_queued_encoded_bytes": 16777216,
+          "mcap_chunk_input_bytes": 16777216,
+          "mcap_chunk_target_bytes": 1048576,
+          "pending_frames": 4,
+          "writer_mode": "synchronous_bounded_input"
+        },
+        "mapped_timeline_semantics": "simulation_transport_only",
+        "production_qualified": false,
+        "qualification": "simulation_only",
+        "recording_id": "session_20261101_004347_590_cb930b1f",
+        "rgb_profile": "h264_mcap_simulation_v1",
+        "streams": {
+          "accel": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "depth": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": false
+          },
+          "gyro": {
+            "enabled": true,
+            "observed": false,
+            "requested": true,
+            "required": true,
+            "supported": true
+          },
+          "pointcloud": {
+            "enabled": false,
+            "observed": false,
+            "requested": false,
+            "required": false,
+            "supported": "arcore_conditional"
+          },
+          "rgb": {
+            "calibration": "camera.imageIntrinsics",
+            "enabled": true,
+            "height": 480,
+            "observed": false,
+            "orientation": "native_cpu_unrotated",
+            "requested": true,
+            "required": true,
+            "supported": true,
+            "width": 640
+          }
+        },
+        "wire_contract_revision": "stateaction.capture.v1.1"
+      },
+      "association_peaks": {
+        "pending_acquisitions": 2,
+        "pending_video": 1
+      },
+      "clips": [
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-000",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 16283,
+              "sha256": "972d9707bbdac579197ab3ed399d20839aefa1067080b42f27b46d4a49a833bf"
+            },
+            "hands.npz": {
+              "bytes": 1176,
+              "sha256": "faf6a3e0742aff3d9ae3abc81e0971af4781c62a385572623fe73d01d6658422"
+            },
+            "rgb.mp4": {
+              "bytes": 136268,
+              "sha256": "52217caf20ee47ec8b8f7d87895d53902ad1ed2cbd5c2826c9ea4e7b6b9c4f19"
+            },
+            "viewer.rrd": {
+              "bytes": 74670,
+              "sha256": "7c9edf0b562a1f1b67e669bf0549054d10e5e205fef0ad0ecc492c2020c3c0de"
+            }
+          },
+          "first_source_frame_id": "0",
+          "frames": 10,
+          "last_source_frame_id": "9",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "0",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        },
+        {
+          "decoded_mp4_pixels_exact": true,
+          "decoded_mp4_pts_exact": true,
+          "detected_hands": 0,
+          "directory": "clip-001",
+          "encoded_mp4_vcl_nals_exact": true,
+          "files": {
+            "frame-map.jsonl": {
+              "bytes": 8190,
+              "sha256": "dd327b995011fd4840fe9e62ab5bb91b70c7099bb7b312ee55ea91f4dfc5b08e"
+            },
+            "hands.npz": {
+              "bytes": 1139,
+              "sha256": "f6d926a4aa8012a2d5b961913b8c3a525a5221f6ef6be483e85199dfb7781472"
+            },
+            "rgb.mp4": {
+              "bytes": 103023,
+              "sha256": "162bff7c1cf636bf450e4c8401d2f3a87d4ef60a3c537bc13fddfe4c98ed5a42"
+            },
+            "viewer.rrd": {
+              "bytes": 66202,
+              "sha256": "ffb01acd5892a604150685641d12fb2c4e8badda8b76471767a7fe9475325acb"
+            }
+          },
+          "first_source_frame_id": "10",
+          "frames": 5,
+          "last_source_frame_id": "14",
+          "native_resolution": [
+            640,
+            480
+          ],
+          "source_pts_origin": "2223025",
+          "time_base": [
+            1,
+            1000000
+          ],
+          "ffprobe": {
+            "codec_name": "h264",
+            "profile": "Main",
+            "width": 640,
+            "height": 480,
+            "has_b_frames": 0,
+            "level": 31,
+            "time_base": "1/1000000"
+          }
+        }
+      ],
+      "seconds": 0.8374886370147578,
+      "peak_rss_kib": 360164
+    }
+  ],
+  "failed_source_validation": {
+    "structural_close_crc_validation": "passed",
+    "strict_reader": "rejected",
+    "reason": "unresolved_frame_evidence",
+    "sha256": "2dee109a869218f2084adfceac05a598e359d8bfe094c0ceffc21637710c2b95",
+    "metadata": {
+      "container_state": "closed",
+      "capture_outcome": "failed",
+      "capture_result_valid": false,
+      "finalization_complete": false
+    }
+  },
+  "browser": {
+    "status": "passed",
+    "viewer_version": "0.41.0",
+    "rrd_sha256": "68f4f3fcfcaacc446d4bfed08c8d85d1d938ace34c285b1114da51887beffb57",
+    "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+    "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2",
+    "exact_forward_backward_seeks": true,
+    "actual_webcodecs_decode": true,
+    "playback": {
+      "advanced_to_ns": "300000003",
+      "cursor_advanced": true,
+      "pause_state": "paused"
+    },
+    "stop_removed_canvas": true,
+    "screenshots_visually_inspected_by_worker": true,
+    "screenshots": [
+      {
+        "direction": "forward",
+        "source_frame_id": "6",
+        "clip_time_ns": "1595405000",
+        "sha256": "ca76c84e3a37f465b9b928373af5416c183db74d33b66c18050559bf632756fa"
+      },
+      {
+        "direction": "backward",
+        "source_frame_id": "1",
+        "clip_time_ns": "325165000",
+        "sha256": "8e27521a47cf721a5ce8d9e3a176160603b4f2ca6a6f2f19b1732545db0e86cb"
+      }
+    ],
+    "artifacts": "spikes/android/processing/artifacts/recorder-emulator-final-reviewed-20261101/take-0/clip-000",
+    "screenshots_visually_inspected_by_root": true
+  },
+  "hand_estimation": {
+    "delegate": "CPU",
+    "model_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    "ran_on_every_decoded_frame": true,
+    "frames": 58,
+    "detected_hands": 0,
+    "expected_scene": "ARCore virtual room; no real hands",
+    "metric_accuracy_qualified": false,
+    "positive_to_missing_transition_on_real_repair_video_qualified": false
+  },
+  "tested_instrumentation_apk": {
+    "bytes": 6832279,
+    "sha256": "b655953615c91fe0bf5e58a130a57f98d24d9c3cebe1916d824c6f764d95e906",
+    "packaged_descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+    "artifact": "artifacts/android-h264-e2e/20261101T044302Z/tested-instrumentation.apk"
+  },
+  "native_source_tree": {
+    "files": 81,
+    "sha256": "65b84cddfe770a536973d3b59c691cbdd5f88734e00b45be7d56bff627d4b59b",
+    "path_scopes": [
+      "packages/stera_recorder/android/src/main",
+      "packages/stera_recorder/android/src/androidTest",
+      "packages/stera_recorder/android/src/test"
+    ],
+    "selection": "Recursively include every regular file in the three scopes; exclude paths containing an exact __pycache__ component; sort full pathlib.Path values lexicographically (same root prefix).",
+    "algorithm": "For each sorted file: repository-relative POSIX path + colon + lowercase SHA-256 hex of its exact bytes. Join entries with LF, append one final LF, UTF-8 encode, then SHA-256 that manifest. No timestamps, file modes or directory entries included."
+  },
+  "processing_source_hashes": {
+    "spikes/android/processing/spike.py": "eb7c10c3d41132284589e20283050f08d44d3aa1197ff535b6dba3695884ad73",
+    "spikes/android/processing/run_checks.py": "df4470b488a1e6aeabe616769713314387fc7a842dd6027de8626bfede942fe4",
+    "spikes/android/processing/browser_check.py": "86a3cb23ed1036c09d52a10140a75d47ddac040fc7e5e5e7a2e0bf721210f373",
+    "spikes/android/processing/requirements.lock": "57a202c07feb545e166760e33100c01454d5686158c7bbff0c2d8fe845db4ec9",
+    "scripts/test_android_h264_e2e.py": "cd5a5e2d4c58b8e1fdaf0559bb5865f5fa13e7b9376cd337cc7bcbfd9f9c3c74",
+    "scripts/validate_android_h264_e2e.py": "1f7c3af6912b8693a26519a6bcef4a4ae54cc6701a778ad3ee6bbe1027872be7"
+  },
+  "parent_reported_flutter_validation": {
+    "app_tests": 159,
+    "recorder_tests": 18,
+    "analyzers": "clean",
+    "both_init_and_start_h264_flags": "passed_mocked_provider_test",
+    "simulation_apk_bytes": 127585068,
+    "simulation_apk_sha256": "a6224eca0d2ea9c6d8f681e9696e0f30e64dee54f1066cc8b0736ab78d9018f0",
+    "installed_on_physical_phone": false,
+    "flutter_ui_native_navigation_qualified": false
+  },
+  "issues_found_and_fixed": [
+    "Invalid legacy CDR field references in new H264 sources; canonical ROS definitions at writer boundary fixed interoperability.",
+    "Nominal-frame-count I-frame scheduling allowed long VFR GOPs; explicit time-based sync requests added.",
+    "READY was observable before final metadata persisted; publication moved after finalization.",
+    "Eager legacy frame pools caused OOM on recorder recreation; lazy enabled-stream pools and lifecycle release added.",
+    "Immediate retry reused second-resolution session directory; atomic unique names preserve diagnostics.",
+    "Startup/write failures needed bounded cleanup and retry recovery; exercised through real writer fault injection."
+  ],
+  "remaining_gates": [
+    "Physical personal-profile Android hardware 1920x1080/Main4.0 encoding, camera clock validity and calibration.",
+    "Representative repair/tool/glove/occlusion hand estimation quality and metric 3D accuracy.",
+    "Long recording throughput, memory, heat, battery, interruption and device coverage.",
+    "Actual Flutter button/navigation integration; mocked provider/profile tests and compiled APK do not establish it.",
+    "Native Google login, production resumable upload, object storage, workflows and cloud deployment."
+  ],
+  "commands": [
+    "source scripts/env.sh; python3 scripts/test_android_h264_e2e.py --serial emulator-5582",
+    "PROCESSING_PYTHON scripts/validate_android_h264_e2e.py artifacts/android-h264-e2e/20261101T044302Z spikes/android/processing/artifacts/recorder-emulator-final-reviewed-20261101",
+    "uv run --no-project --with jsonschema==4.25.1 --with mcap==1.6.0 python packages/contracts/capture/verify.py --mcap RECORDING_PATHS",
+    "PROCESSING_PYTHON spikes/android/processing/browser_check.py spikes/android/processing/artifacts/recorder-emulator-final-reviewed-20261101/take-0/clip-000 --chrome /usr/bin/google-chrome"
+  ],
+  "private_artifacts": "artifacts/android-h264-e2e/20261101T044302Z",
+  "cleanup": {
+    "owned_emulator": "emulator-5582",
+    "verified_absent": true,
+    "observation": "Already disconnected when cleanup was requested; no further device mutation was made.",
+    "physical_devices_touched": false,
+    "other_emulators_touched": false
+  }
+}

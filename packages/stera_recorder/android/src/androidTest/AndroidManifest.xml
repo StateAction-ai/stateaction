@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <meta-data android:name="com.google.ar.core" android:value="optional" />
+        <activity
+            android:name="open.fpvlabs.stera.ar_recorder.H264RecorderTestActivity"
+            android:exported="true"
+            android:screenOrientation="landscape" />
+    </application>
+</manifest>

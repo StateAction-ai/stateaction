@@ -27,6 +27,8 @@ Mobile consumes an HTTP contract, not TypeScript business logic. Python imports 
 
 The user clarified that the original checkout is our temporary work; no separate recording-engineer handoff is required. Native camera logic is preserved during this move. The new standalone H.264 harness failed its first physical startup; use the imported recorder as the base for further integration and retain that timestamp case as a regression. Moving source does not qualify H.264 capture.
 
+Subsequent implementation: [opt-in Android H.264](android-h264-implementation.md) extends the imported recorder with local end-to-end simulation. The import receipt remains evidence of the unchanged migration baseline; current capture checks have their own receipt.
+
 The old Bun/Hono server and JS packages are excluded. Only reviewed behavior should enter the new Node/TypeScript backend. Full Python SDK import remains optional; initialize `stera-sdk` only for existing diagnostic scripts. No mobile runtime imports it.
 
 Regenerate `.dart_tool`, Flutter plugin metadata, native local properties and build outputs. Preserve private `.env` locally and bootstrap clean builds from the example/no-auth configuration; never commit credentials or signing files. The import includes a verified Gradle 8.14 wrapper/checksum because the prior local wrapper was ignored by upstream. Android builds/tests run on Linux; iOS source is retained but builds require macOS.

@@ -28,6 +28,21 @@ class ArRecorderService {
   static bool get _useIosInterop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
+  static void _validateCodecPlatform(Object? codec) {
+    if (codec == null || codec == "jpeg") return;
+    if (codec != "h264") {
+      throw ArgumentError.value(codec, "rgbCodec", "Unsupported RGB codec");
+    }
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      throw const ArRecorderServiceException(
+        method: "configureCapture",
+        code: "UNSUPPORTED_CAPTURE_CODEC",
+        message:
+            "H.264 source capture is currently implemented for Android only",
+      );
+    }
+  }
+
   static Future<Map<String, dynamic>?> _invokeMapMethod(
     String methodName, [
     Map<String, dynamic>? arguments,
@@ -61,6 +76,7 @@ class ArRecorderService {
   static Future<Map<String, dynamic>?> initializeSession({
     Map<String, dynamic>? preferences,
   }) async {
+    _validateCodecPlatform(preferences?["rgbCodec"]);
     try {
       dev.log("📷 ArRecorderService: Initializing session...");
       final result = await _invokeArRecorderMethod(
@@ -94,13 +110,15 @@ class ArRecorderService {
   static Future<Map<String, dynamic>?> startRecording({
     RecordingConfig config = const RecordingConfig(),
   }) async {
+    _validateCodecPlatform(config.rgbCodec.name);
+    final arguments = config.toMap();
     try {
       dev.log("📷 ArRecorderService: Starting recording...");
       final result = _useIosInterop
           ? IosArRecorderFfiClient.startRecording(config).toMap()
           : await _invokeArRecorderMethod(
               ArRecorderMethod.startRecording,
-              config.toMap(),
+              arguments,
             );
 
       if (result == null) {

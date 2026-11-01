@@ -6,6 +6,9 @@ package open.fpvlabs.stera.ar_recorder.data
  */
 object ROS2SchemaDefinitions {
 
+    /** ROS .msg field/dependency syntax is package/Type, while the MCAP schema name uses package/msg/Type. */
+    fun portableMessageDefinition(legacyDefinition: String): String = legacyDefinition.replace("/msg/", "/")
+
     const val SCHEMA_ENCODING = "ros2msg"
     const val MESSAGE_ENCODING = "cdr"
 
