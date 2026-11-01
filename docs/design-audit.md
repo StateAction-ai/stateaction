@@ -23,7 +23,7 @@ Mandatory CPU MediaPipe produces 21 image landmarks with clearly labelled model-
 | Model-code license was being confused with asset rights | Official linked MediaPipe model card and exact asset SHA/size; preserve notices; WiLoR/MANO are not cleared defaults |
 | Overlapping groups and review navigation were unclear | Consistent Dataset/Recording/Clip vocabulary; Compact Pipeline rows, per-recording stage/action detail and Review clips handoff, approved-only Datasets, staff All clips queue, nine active domain tables with membership/access joins |
 | External review incorrectly depended on a release UI | Live dataset grants plus current membership/latest approval support external review now; immutable whole-dataset versions/export later |
-| A second custom renderer duplicated existing review tooling | Matched Rerun SDK/web-viewer 0.22.1, safe bounded clip RRD, self-hosted assets and one shared clip route; real Next/browser integration remains a gate |
+| A second custom renderer duplicated existing review tooling | Matched Rerun SDK/web-viewer 0.41.0, safe bounded H.264 clip RRD, self-hosted assets and one shared route; real Next/browser integration remains a gate. Historical 0.22 receipts do not qualify the upgrade |
 | Internal quality panel listed provenance instead of results | Worker check rows for checksum/decode/mapping/arrays and measured coverage; no accuracy pass or inspection checkbox |
 | Full phone could block repeated field use | Explicit original-owner local cleanup only after source verification/cloud-copy confirmation; pending/failed files retained |
 

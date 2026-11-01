@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-10-31",
+  "status": "reviewed-for-publication",
+  "sourceBaselineCommit": "096889d",
+  "originalBaseline": "linear-plan.json",
+  "originalReceipt": "linear-receipt.json",
+  "projectId": "1f0e36aa-86a3-4f5f-825d-f4331883b536",
+  "teamId": "88359d62-e976-4c69-b75c-1092c9706460",
+  "decision": "Hardware H.264 inside generic-profile MCAP; original sensor evidence; CPU processing with IDR-safe MP4 and safe Rerun0.41 clip artifacts.",
+  "newIssues": [
+    {
+      "key": "MOB-01",
+      "title": "Specify H.264 MCAP capture schemas and cross-language golden fixtures",
+      "milestone": "M0",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile",
+        "Qualification gate"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-03"
+      ],
+      "goal": "Give Android, iOS and Python one testable source contract before encoder implementation.",
+      "scope": "Materialize stateaction.capture.v1 / h264_mcap_v1 strict JSON Schemas, pinned Foxglove Protobuf descriptor/generated bindings, bridge fixtures, clock/frame evidence and explicitly classified legacy JPEG samples.",
+      "acceptanceCriteria": [
+        "Generic MCAP header profile is empty; Protobuf video, reviewed CDR sensors and JSON evidence declare their exact encodings. Full transitive FileDescriptorSet and schema revisions/hashes are embedded; mixed files never falsely claim the ROS2 profile.",
+        "One complete Annex B access unit per foxglove.CompressedVideo message; capture time, optical frame_id, source frame ID, video sequence, encoder PTS/time base and terminal outcome are distinct and round-trip exactly.",
+        "Independent raw-motion, sensor/calibration, requested/supported/enabled/observed inventory and final close/drop/count schemas include unavailable/unknown states and large integers as decimal strings.",
+        "Golden valid/delayed/partial/config/IDR fixtures and malformed B-frame, missing config, duplicate/missing PTS, unequal-clock, tracking-loss, calibration-reset, truncation and historical JPEG fixtures have explicit expected outcomes."
+      ],
+      "validation": "Run Kotlin/Swift/Dart/TypeScript/Python conformance fixtures and independently decode a golden MCAP; inspect descriptor/schema hashes, counts and original timestamp preservation.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": true,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-02",
+      "title": "Implement Android hardware H.264 frame messages in MCAP",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "MOB-01"
+      ],
+      "goal": "Record phone RGB using MediaCodec without losing source frame identity or sensor evidence.",
+      "scope": "Implement capability negotiation and hardware encoder adapter for the candidate 1080p30 / Main 4.0 / no B frames / 12 Mb/s / one-second IDR profile; use native buffers and generic mixed-schema writer.",
+      "acceptanceCriteria": [
+        "Unsupported required profile returns an explicit preflight error; no silent JPEG/HEVC/software/raster/FPS fallback. Record actual codec identity/color/raster/settings and inspect the emitted bitstream, not only requested MediaFormat hints.",
+        "Handle output offsets, codec-config and partial buffers; assemble whole frames, repeat SPS/PPS at IDRs, preserve acquisition IDs through unique encoder PTS and nanosecond evidence, and release buffers promptly.",
+        "Enforce bounded pending frames/access-unit/writer bytes and account for written/dropped/unresolved events; imagery is not sent over the Flutter bridge.",
+        "Two consecutive signed-device sessions produce readable indexed MCAP and matching native/frame/PTS counts; unsupported, tracking-loss and encoder-error cases are explicit."
+      ],
+      "validation": "Physical Android short sample plus decoder/bitstream receipt; check hardware use, no B frames, actual IDR interval, timestamp identity, raster/color and buffer bounds.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-03",
+      "title": "Implement iOS hardware H.264 frame messages in MCAP",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "MOB-01"
+      ],
+      "goal": "Record RGB with VideoToolbox while retaining original AR/camera acquisition identity.",
+      "scope": "Implement native capability/encoder/writer adapter, source-frame references, actual parameter sets and length-prefix-to-Annex-B conversion under the shared candidate profile.",
+      "acceptanceCriteria": [
+        "Probe hardware support, disable frame reordering, honor or explicitly reject the selected profile and record actual encoder/raster/color/configuration; never silently switch format or software encoding.",
+        "Use sourceFrameRefCon/PTS identity rather than callback order; obtain NAL length size and SPS/PPS from format descriptions, assemble one complete access unit and repeat configuration with every IDR.",
+        "Update the writer uptime-only plausibility guard for the explicit epoch-based MCAP recorder-time policy while preserving original native capture clocks separately.",
+        "Bound retained camera/encoder buffers, persist terminal frame outcomes and reset encoder/calibration/session state; two signed-device sessions decode without stale configuration."
+      ],
+      "validation": "Physical iOS sample and explicit hardware/bitstream/frame-map receipt; delayed callbacks, nil/config output, interruption and consecutive-session tests.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-04",
+      "title": "Preserve independent raw IMU events and original sensor clocks",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "MOB-01"
+      ],
+      "goal": "Make motion evidence truthful and comparable by explicit semantics, not invented simultaneous pairs.",
+      "scope": "Separate accelerometer and gyro acquisition on both platforms, initially request 100 Hz each, preserve original event times/clock/units/axes/accuracy and keep fused motion separate.",
+      "acceptanceCriteria": [
+        "Android never combines latest accel/gyro values under the current callback time; iOS raw acceleration is not replaced by CMDeviceMotion gravity-removed/fused values.",
+        "Every delivered event retains exact original timestamp and source identity; requested/effective rates and gaps are measured; mapped time includes declared clock mapping/provenance or null.",
+        "Motion queues are independent of visual backpressure; no drain-and-discard when a video write is dropped. Saturation produces explicit accounting and reasoned capture stop.",
+        "Fused attitude/derived angular velocity/covariance remain separately named with validity and assumed/unavailable provenance."
+      ],
+      "validation": "Native event-level fixtures with unequal accel/gyro schedules and delayed video; physical counts/rates/units/gravity semantics and original timestamp round trips.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-05",
+      "title": "Fix saved-raster calibration, capture settings and tracking-loss RGB",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "MOB-01"
+      ],
+      "goal": "Keep saved imagery, calibration and actual device settings consistent.",
+      "scope": "Unify Dart/native profile keys, capability/start negotiation, rate/toggle handling, camera raster transforms and per-session calibration reset; separate RGB availability from AR pose tracking.",
+      "acceptanceCriteria": [
+        "Requested 1080p30 is honored and observed or explicitly unsupported; no hardcoded hidden 15Hz path or ignored channel toggles. Effective native rates/raster and intentional sampling are recorded.",
+        "Saved-pixel intrinsics and source/output crop/resize/rotation/mirror transforms match every frame/calibration revision; iOS depth calibration state resets between recordings.",
+        "Tracking loss invalidates estimated pose but does not suppress required RGB; origin/reset events remain explicit. Unverified clocks and depth associations are not reported synchronized.",
+        "Consecutive-session, orientation, resolution rejection, tracking-loss and saved-raster geometry fixtures pass on both platforms."
+      ],
+      "validation": "Compare decoded saved raster and overlay geometry against native metadata; two physical sessions/platform with pose-tracking loss and settings rejection.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-06",
+      "title": "Preserve available depth, confidence and honest sensor provenance",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "MOB-01"
+      ],
+      "goal": "Retain available conditional evidence without claiming unsupported sensors or measured accuracy.",
+      "scope": "Version conditional depth/confidence/native precision and camera metadata; correct fabricated confidence/covariance/extrinsic certainty and optional mesh/point-cloud semantics.",
+      "acceptanceCriteria": [
+        "Depth/source-kind/native units/precision/validity/calibration/time and matching confidence are retained when supported/enabled; unavailable is explicit. Raw ARCore depth is still estimated and is never conflated with dense depth.",
+        "Do not silently quantize original float depth or duplicate low-rate depth to meet a requested cadence; any derived representation has explicit conversion/source mapping.",
+        "Preserve exposed exposure/focus/sensitivity/readout fields or unavailable declarations; distortion/extrinsic assumptions and static noise/confidence placeholders are labelled rather than measured.",
+        "Optional mesh/point clouds distinguish actual events, final snapshots and unsupported streams; nonfinite observations remain preserved with flags. No audio/GPS or metric-accuracy scope is added."
+      ],
+      "validation": "Depth-capable and non-depth capability fixtures plus physical samples where available; confirm stored native precision, source-matched confidence and metadata provenance.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-07",
+      "title": "Make native capture finalization bounded and evidence complete",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile",
+        "Qualification gate"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "MOB-02",
+        "MOB-03",
+        "MOB-04",
+        "MOB-05",
+        "MOB-06"
+      ],
+      "goal": "Never present unfinished, dropped or overwritten acquisition evidence as a complete source.",
+      "scope": "Implement bounded producer/writer/evidence queues, durable actual-write/drop accounting, encoder EOS/close lifecycle, session resets and explicit low-disk/thermal/interruption/crash handling.",
+      "acceptanceCriteria": [
+        "Initialize actual frame/system/drop evidence sinks; success counters follow writer acceptance, all submitted frames have terminal outcomes, and inline evidence is retained until any required sidecar closes durably.",
+        "Stop producers, drain encoder to EOS under deadline, reconcile pending IDs, drain/close MCAP/indexes/footer, close sidecars and atomically finalize metadata before closed-file acknowledgement.",
+        "Writer/index/encoder/IMU/evidence memory and finalization time are bounded; low storage/critical heat initiates a reasoned stop with reserve instead of silent fidelity reduction or pending-source deletion.",
+        "Capture/drain/hash crashes, unresolved frames and writer errors remain recovery-required/quarantined. Explicit salvage creates a derived identity/hash retaining original bytes; no automatic upload as complete.",
+        "Separate container_state from capture_outcome: a cleanly closed shorter interrupted take may upload with explicit interruption/QC; unclosed/malformed/unresolved sources cannot auto-admit."
+      ],
+      "validation": "Native fault injection plus signed-device stop/interruption/disk/thermal/reset runs; actual attempted/submitted/written/dropped/unresolved counts, sidecar existence, footer and stable-file evidence.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": true,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-08",
+      "title": "Implement durable Android background multipart uploads",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "M1-07"
+      ],
+      "goal": "Replace the current Android unsupported-upload path with the same owner-bound protocol used by iOS.",
+      "scope": "Implement native OS-scheduled file transfer, durable part/task/retry journal and Flutter bridge under API-issued frozen plans; select supported Android scheduling paths in the mobile specification. API 34+ uses visible-action JobScheduler UIDT; older supported Android uses foreground WorkManager. Native control API client renews signed URLs while Dart is suspended.",
+      "acceptanceCriteria": [
+        "Android uploads real files via API-issued direct multipart PUTs, one source/64 MiB parts/two PUTs/three temporary chunks, and only the API reserves/reconciles/completes/restarts provider uploads.",
+        "OS scheduler/notification/foreground permissions and current background limits are implemented and documented for supported API levels, with durable resume after process/device restart; no unlimited-background promise.",
+        "Original owner, transport epoch, part identity/ETag/size, bounded retry/next-attempt and source immutability survive relaunch; expired URLs pause for authenticated renewal and landed parts remain reusable.",
+        "Wi-Fi/charging/capture-pause policy is enforced natively; logout/account switch cancels or reconciles old-owner tasks without adoption/deletion, and recovery never depends on Dart staying active.",
+        "Implement required UIDT permissions/notification/constraints and checkpoint/stop semantics; fallback WorkManager observes current OS limits, and invalid background starts require visible Resume. Native owner-bound control client calls only existing API routes for renewal/reconcile/receipts/complete."
+      ],
+      "validation": "Physical Android foreground/suspension/process restart/reboot/network-policy/URL-expiry/account-switch tests against local API+MinIO, followed by R2 qualification.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-09",
+      "title": "Fix iOS native retry loops and background completion lifecycle",
+      "milestone": "M1",
+      "linearPriority": 2,
+      "area": "mobile",
+      "labels": [
+        "Area: mobile"
+      ],
+      "ownerRole": "Mobile engineer + robotics reviewer",
+      "size": "M",
+      "dependsOn": [
+        "M0-01",
+        "M1-07"
+      ],
+      "goal": "Preserve useful existing iOS transfer engineering while removing source-backed reliability risks.",
+      "scope": "Fix extraction reselection hot loops, native retry authority while Dart is suspended, BGProcessing completion timing and original-owner scheduling; converge on frozen 64 MiB/2PUT/3chunk policy.",
+      "acceptanceCriteria": [
+        "Unreadable source/extraction failure does not immediately select the same part forever; native persisted retry budgets/backoff and next-attempt time govern network failures when Dart is suspended.",
+        "Background task completion reflects completed bounded work/checkpoint rather than the enqueue call; URLSession restoration and native journal recovery remain durable.",
+        "Keep file-backed background uploads, landed-part reconciliation, bounded extraction buffers and cleanup; source identity is actual byte SHA256 and provider part sizes are checked.",
+        "Enforce owner/network/charging/capture pause, expired-URL renewal and locked-device file access; force-quit cancellation/manual-reopen behavior is accurately shown and tested.",
+        "An owner-bound native control client can renew signed URLs and journal API receipts/complete while Dart is suspended, rotating secure cookies; expired auth pauses for interactive same-owner login."
+      ],
+      "validation": "Native source/extraction/network failure tests plus signed-iOS suspension/relaunch/force-quit/manual-reopen/URL-expiry/account-change and bounded-disk receipts.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": false,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    },
+    {
+      "key": "MOB-10",
+      "title": "Qualify the mobile H.264 profile, hand detail and resource budget",
+      "milestone": "M2",
+      "linearPriority": 2,
+      "area": "robotics",
+      "labels": [
+        "Area: robotics",
+        "Qualification gate"
+      ],
+      "ownerRole": "Robotics engineer + mobile/web reviewers",
+      "size": "M",
+      "dependsOn": [
+        "MOB-07",
+        "M2-00"
+      ],
+      "goal": "Choose a measured shipping device/profile configuration without weakening required data.",
+      "scope": "Benchmark candidate hardware H.264 against retained JPEG reference on comparable repair scenes, then publish supported-device/profile matrix and numeric quality/resource release bounds.",
+      "acceptanceCriteria": [
+        "Report actual total bytes/hour, RGB versus sensor contribution, actual cadence/gaps, hardware/bitstream/IDR settings, peak RAM/disk/index size, close time, battery and heat on both supported platforms.",
+        "Review decoded hands/tools/small components and real CPU landmark usefulness on motion/gloves/occlusion footage; avoid claiming matched-quality savings or anatomical/metric accuracy from file size alone.",
+        "Freeze exact shipping bitrate/profile/level/GOP/color/resource thresholds with version/digest and explicit device support/rejection behavior; no silent downgrade or unnecessary cloud GPU.",
+        "Golden/native H.264 samples pass sequential decode, IDR-safe native MP4 remux, exact mapping and Rerun0.41 paired web playback/seeking/overlay tests before the signed two-hour cloud field gate."
+      ],
+      "validation": "Attach reproducible device/build/source/model/config comparisons and reviewer decisions; unacceptable footage/profile remains unqualified and blocks pilot, rather than disabling automatic hands.",
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "qualificationGate": true,
+      "state": "Backlog",
+      "assignee": null,
+      "dueDate": null,
+      "estimate": null
+    }
+  ],
+  "existingIssueUpdates": [
+    {
+      "key": "M0-01",
+      "identifier": "SA-10",
+      "id": "48191e37-e09e-43a0-91bd-827276f0bacb",
+      "expectedTitle": "Migrate the mobile recorder and SDK into the monorepo safely",
+      "appendAcceptanceCriteria": [
+        "Import the Flutter app and required native recorder together after the recording-engineer handoff; full Python SDK is optional/reference-only. Preserve local DB/journals/signing IDs, upstream notices and import commits."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [
+        {
+          "old": "Coordinate a source-revision handoff; import Flutter, native plugin and SDK into the agreed target paths while preserving package boundaries.",
+          "new": "Import Flutter and native recorder source into the root monorepo after coordinated handoff; preserve app identity, history/notices and local journals. Reuse only reviewed Python helpers/fixtures where needed; the full Stera Python SDK is not a required mobile/backend dependency."
+        },
+        {
+          "old": "A clean clone contains apps/mobile, packages/stera_recorder and packages/stera-sdk without required submodules.",
+          "new": "A clean clone contains apps/mobile and packages/stera_recorder without required submodules; only reviewed Python helpers/fixtures are imported if reused, and full SDK source is optional/reference-only."
+        },
+        {
+          "old": "Existing meaningful native/Flutter capture and SDK regression checks pass; licenses, fixtures and build instructions remain available.",
+          "new": "Existing meaningful native/Flutter capture checks and regression checks for any reused Python helpers pass; licenses, fixtures and build instructions remain available."
+        }
+      ],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true,
+      "newTitle": "Migrate the mobile app and native recorder into the monorepo safely"
+    },
+    {
+      "key": "M0-03",
+      "identifier": "SA-12",
+      "id": "bdbaecd0-c6d5-414b-b416-94181ccb916d",
+      "expectedTitle": "Publish versioned API, task and artifact contracts",
+      "appendAcceptanceCriteria": [
+        "Materialize capture-format v1 strict schemas, bridge/error contracts and cross-language generation/conformance ownership; MOB-01 owns the detailed video/sensor fixture deliverable."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M1-03",
+      "identifier": "SA-17",
+      "id": "a1bfd926-4d70-4533-b09f-c897f45e06ee",
+      "expectedTitle": "Integrate mobile login and immutable capture ownership",
+      "appendAcceptanceCriteria": [
+        "Pin native google_sign_in 7.2.0; exchange ID token via pinned Better Auth REST schema, verify platform/server audiences and rotate all secure cookies. Fetch server /me role before initial enrollment; no independent custom JWT service.",
+        "Persist prior verified offline eligibility, clear it on logout, and enforce native owner-aware task pause/cancel on account change. Issued signed URLs are not revoked merely by clearing Flutter state."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md",
+        "docs/components/auth-and-access.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M1-04",
+      "identifier": "SA-18",
+      "id": "9933014a-4f7f-4d2e-b768-ba05d01e5199",
+      "expectedTitle": "Finalize and hash closed source files before upload",
+      "appendAcceptanceCriteria": [
+        "Accept native closure only after finite EOS drain, reconciled frame/sensor evidence, closed MCAP/footer and all required sidecars; failed/unresolved recording is not a complete upload source.",
+        "Hash actual immutable file bytes and seal capture profile/config/clock/calibration/count evidence; reject path+size hash, source mutation and unfinished sidecar inventories.",
+        "Final metadata excludes its own size/hash entry; compute those after atomic close and retain them in the external journal/sealed source manifest."
+      ],
+      "addDependsOn": [
+        "MOB-07"
+      ],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M1-05",
+      "identifier": "SA-19",
+      "id": "aa2bbc73-5f20-4860-a470-fc4eb5ffbdb6",
+      "expectedTitle": "Register recordings and seal the required-file inventory",
+      "appendAcceptanceCriteria": [
+        "Persist capture schema/RGB profile/config digest, native close status and exact required-file/clock/calibration inventory. Reject incompatible/unclosed source declarations before job admission; worker still independently checks bytes/evidence."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M1-08",
+      "identifier": "SA-22",
+      "id": "8a9d5027-a8d7-49f4-8b4c-8421f116544d",
+      "expectedTitle": "Implement the owner-bound Flutter resumable uploader",
+      "appendAcceptanceCriteria": [
+        "Integrate both native adapters with shared frozen plans, transport epochs and original-owner journals; no Android unsupported guard or notification-only substitute.",
+        "64 MiB parts, two active PUTs and three temporary chunks are a measured starting policy; native recovery/backoff and API renewal work without assuming active Dart.",
+        "Preserve old local journals and frozen adaptive part plans; reconcile/retire legacy-authority MPUs and prove ownership before new API allocation. No silent 64 MiB replanning or account adoption during cutover."
+      ],
+      "addDependsOn": [
+        "MOB-08",
+        "MOB-09"
+      ],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M1-09",
+      "identifier": "SA-23",
+      "id": "4f232b9b-c8f6-4712-ab3d-5127c59178b9",
+      "expectedTitle": "Complete collector recovery states and verified local cleanup",
+      "appendAcceptanceCriteria": [
+        "Default Wi-Fi-only/charging-required, with explicit persisted collector override; pause transfers during initial-profile capture and display actual wait/error reason.",
+        "Capture setup exposes capabilities/unsupported profiles, counts/health and finalization/recovery state. Camera/background interruption stops/finalizes when safe; unfinished files remain retained and cannot masquerade as ready."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M2-00",
+      "identifier": "SA-24",
+      "id": "a8d2d973-c404-40ee-a294-8f1603d070b1",
+      "expectedTitle": "Prove CPU hand overlays and real Rerun playback early",
+      "appendAcceptanceCriteria": [
+        "Use a golden mixed-schema H.264 MCAP and paired rerun-sdk/@rerun-io/web-viewer 0.41.0 in the real Next build; record browser/codec/asset/cleanup/overlay timing evidence and regenerate new RRDs rather than assume old 0.22 compatibility.",
+        "Prove H.264 sequential decode, IDR-safe remux and explicit native-capture-to-viewer timeline mapping with real CPU hand inference; documented import support alone is not runtime qualification.",
+        "Lock a fresh compatible Python 3.12/rerun-sdk 0.41.0/MediaPipe 1.2.0/PyAV 19.0.2 worker; NumPy 2 is incompatible with historical MediaPipe0.10.21. Verify dependency resolution/imports/CPU model/video serialization in addition to browser tests; no legacy SDK monkeypatches."
+      ],
+      "addDependsOn": [
+        "MOB-01"
+      ],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md",
+        "docs/components/rerun-clip-review.md",
+        "docs/validation/mobile-worker-dependency-smoke-20261031.json"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M2-05",
+      "identifier": "SA-29",
+      "id": "c3450613-315e-4d9e-9bbe-8886b68de928",
+      "expectedTitle": "Stream MCAP and decode frames with bounded memory",
+      "appendAcceptanceCriteria": [
+        "Dispatch h264_mcap_v1 versus explicit legacy jpeg_mcap_v1; decode mixed Protobuf/CDR/JSON, validate descriptor/config/clock/frame mapping and keep a persistent bounded H.264 decoder.",
+        "Decode frames once, preserve all original times, reject missing config, forbidden B frames/reordering/unknownPTS and oversized/unbounded joins; consume/hash footer/whole source before acceptance."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M2-07",
+      "identifier": "SA-31",
+      "id": "afac56d0-c7ec-4525-9d4a-6d459f62102a",
+      "expectedTitle": "Write bounded clip artifacts and a portable reader",
+      "appendAcceptanceCriteria": [
+        "H.264 native-resolution MP4 clips remux original access units without reencoding; each starts at an actual IDR/config and ends within the60-second ceiling. Last clip may end at EOS. No undecodable predicted-frame starts, artificial constant FPS or silent repair/transcode.",
+        "Create separate bounded spatial H.264 VideoStream proxy RRDs with exact frame/PTS/transform mapping, allowlisted customer-safe entities and matching Rerun 0.41.0; historical JPEG uses its explicit encode path.",
+        "Rebase clipPTS=sourcePTS-firstIncludedSourcePTS while retaining sourcePTS/timebase/origin in the frame map; the viewer/overlays explicitly use that clip-relative mapping."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M2-08",
+      "identifier": "SA-32",
+      "id": "c47ca0b5-ea02-4b85-8af3-47e8d2579fe7",
+      "expectedTitle": "Persist inline quality checks and reject corrupt candidates",
+      "appendAcceptanceCriteria": [
+        "Validate actual acquired/submitted/written/dropped/unresolved and sensor counts, schema/profile/configuration, calibration/raster mapping, decoded frame identity and IDR-safe output boundaries. Unknown clock synchronization stays unknown."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M3-05",
+      "identifier": "SA-38",
+      "id": "9d8460d2-5828-42b4-b6ad-b025781447c8",
+      "expectedTitle": "Embed the real shared Rerun viewer safely",
+      "appendAcceptanceCriteria": [
+        "Replace old 0.22.1 design assumptions with matched0.41.0 SDK/viewer artifacts; self-host assets, use framework-independent start/stop adapter and qualify H.264 WebCodecs, seeking, overlays, URL reload and bounded browser memory.",
+        "Open only an explicitly authorized clip-safe RRD; direct raw-MCAP import is a compatibility fixture, never a customer data/access path."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md",
+        "docs/components/rerun-clip-review.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M4-03",
+      "identifier": "SA-43",
+      "id": "4c462c7f-9003-4aee-9c2c-234567b1c449",
+      "expectedTitle": "Qualify real R2 multipart and private viewer transfers",
+      "appendAcceptanceCriteria": [
+        "Qualify physical Android and iOS multipart native recovery/policies against actual R2, including interrupted PUTs, owner switching and suspended URL renewal. MinIO/fixture success does not replace this evidence."
+      ],
+      "addDependsOn": [],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    },
+    {
+      "key": "M5-02",
+      "identifier": "SA-48",
+      "id": "6f13709d-99af-49e4-b7dd-58e0e5451ee2",
+      "expectedTitle": "Qualify a signed-device two-hour capture through cloud review",
+      "appendAcceptanceCriteria": [
+        "Require signed supported Android/iOS H.264 captures under the frozen qualified profile, consecutive-session reset, independent raw sensor/calibration/drop evidence and bounded native indices/queues/EOS.",
+        "Run the full two-hour capture/upload/process/Rerun/staff-review/customer-inspection path with actual source/output hashes, frame maps, resource/cost/quality limits and documented OS background behavior. Short JPEG Pixel evidence is historical."
+      ],
+      "addDependsOn": [
+        "MOB-10"
+      ],
+      "replaceTexts": [],
+      "references": [
+        "docs/components/mobile-app-implementation.md",
+        "docs/components/capture-format.md",
+        "docs/components/mobile-capture-and-upload-readiness.md"
+      ],
+      "preserveMetadata": true
+    }
+  ],
+  "milestoneUpdates": {
+    "M0": "A clean clone builds mobile/native and Node/Python packages; versioned API plus H.264 MCAP/profile/clock schemas, generated descriptors and cross-language golden fixtures agree. Full Python SDK is optional reviewed reuse.",
+    "M1": "Signed Android/iOS Google identities, truthful hardware H.264/raw-sensor capture, bounded EOS/close/recovery and actual background multipart adapters work with owner-bound journals and sealed stable files. Unsupported profiles and failures are explicit.",
+    "M2": "Golden and native H.264 plus historical JPEG pass bounded one-pass CPU hands, IDR-safe MP4 remux, paired Rerun0.41 review assets, resource/fault tests and measured mobile codec/device qualification.",
+    "M5": "The frozen qualified device/profile passes signed physical two-hour capture/upload/cloud-process/review with complete sensor/clock/calibration/drop/hash evidence, measured limits/cost and staff/customer UAT. No design-only or historical JPEG evidence substitutes."
+  },
+  "documentSources": [
+    "docs/components/mobile-app-implementation.md",
+    "docs/components/capture-format.md",
+    "docs/components/rerun-clip-review.md"
+  ],
+  "publication": {
+    "documentTitle": "Mobile implementation · H.264 capture and reliable upload",
+    "receiptPath": "docs/project-management/linear-mobile-update-receipt.json",
+    "preserveOriginal40TicketBaseline": true,
+    "preserveExistingIssueMetadata": true,
+    "noAssigneesDatesEstimatesInvented": true,
+    "onlyThisProject": true,
+    "dependencySmoke": "docs/validation/mobile-worker-dependency-smoke-20261031.json"
+  }
+}

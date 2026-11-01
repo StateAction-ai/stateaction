@@ -10,7 +10,7 @@ One monorepo: Flutter mobile/native recorder; Next.js/Node.js 24/TypeScript API,
 
 ## In scope
 
-- Flutter mobile app and recorder/SDK in one monorepo
+- Flutter mobile app and required native recorder in one monorepo; full Python SDK is optional reviewed reuse
 - Node.js/TypeScript Next.js API/auth/UI and Render workflow controllers
 - Better Auth Google login, minimal account Settings and sign-out
 - Direct resumable MCAP multipart upload to private R2
@@ -42,7 +42,7 @@ One monorepo: Flutter mobile/native recorder; Next.js/Node.js 24/TypeScript API,
 
 ## Current planning status
 
-Six milestones and 40 scoped implementation/qualification issues. The project and issues start in Backlog. Timothy W is the project lead; role requirements are recorded per ticket, but individual assignments and calendar commitments remain unset pending capacity review. No native estimate scale or active cycle is verified; S/M sizes are relative planning guidance only.
+Six milestones and **50 scoped implementation/qualification issues** after the [mobile addendum](mobile-implementation-update.md), which adds ten issues to the original 40-ticket baseline. The new source contract is hardware H.264 inside generic MCAP with original motion/clock/calibration evidence; Android/iOS capture and native upload correctness are explicit work. The project and issues start in Backlog. Timothy W is project lead; individual assignments and calendar commitments remain unset pending capacity review. No native estimate scale or active cycle is verified; relative sizes require team calibration.
 
 The short CPU hand/Rerun probe starts after package scaffolding and can run alongside other foundation work. Milestones are exit gates, not rigid barriers. Frozen dataset delivery is a separate future increment and is excluded from MVP completion.
 

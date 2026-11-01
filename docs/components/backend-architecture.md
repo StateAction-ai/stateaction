@@ -18,7 +18,7 @@ Implement `process_recording`: extract MCAP/native evidence, estimate hands, mak
 | `packages/contracts` | JSON schemas and cross-language fixtures; generated public types |
 | `workers/processing` | Python extraction, hand inference, inline QC and future export |
 | `apps/mobile` | Existing Flutter app, Android/iOS projects and durable upload journal |
-| `packages/stera_recorder`, `packages/stera-sdk` | Existing recorder/plugin and SDK sources |
+| `packages/stera_recorder`; optional reviewed Python helpers | Required native recorder/plugin; the full Stera Python SDK is reference-only, not a backend dependency |
 
 This is the target layout; do not move sources while recording fixes are in progress. Use pnpm workspaces for TypeScript, Flutter pub and Python uv separately. Reuse Render's SDK/local runner; no extra monorepo build framework is needed. [Better Auth integration](https://better-auth.com/docs/integrations/next)
 
@@ -50,7 +50,7 @@ Operator-managed `dataset_access` enables customer review now. Counts/hours use 
 
 One Next page, `/clips/[clipId]`, serves staff and customers via the immutable `clips` catalog. Open it from the Data browser; it has no sidebar entry. Metadata/capabilities come from `GET /api/v1/clips/:clipId`; `POST /api/v1/clips/:clipId/viewer-access` issues a short-lived direct R2 RRD URL; staff reviews use `POST /api/v1/clips/:clipId/reviews`. Recheck each operation. [Viewer](rerun-clip-review.md), [access](auth-and-access.md)
 
-Mount **`@rerun-io/web-viewer@0.22.1`** in one client-only React adapter using dynamic import/effect lifecycle and cleanup; disable SSR for that adapter. Match Python SDK 0.22.1 and self-host its JS/WASM assets. Avoid the old React wrapper's separate React 18 dependency. No Rerun Cloud, external hosted iframe or persistent live SDK server is needed.
+Mount **`@rerun-io/web-viewer@0.41.0`** in one client-only React adapter using dynamic import/effect lifecycle and cleanup; disable SSR for that adapter. Match Python SDK 0.41.0 and self-host JS/WASM assets. Use the framework-independent package and explicitly generated safe clip RRDs; historical 0.22 diagnostics are isolated. No Rerun Cloud, external hosted iframe or persistent live SDK server is needed. [Version and H.264 qualification](rerun-clip-review.md)
 
 Both roles receive the same safe RRD and viewer component; staff-only forms/QC stay outside it. Start with ≤60-second clips, a proposed 128 MiB RRD ceiling and explicit 1280×720 review-proxy resize, preserving full native frame cadence/mapping. Qualify browser memory, CORS, sequential RRD loading, URL renewal and version compatibility; this RRD loader does not offer HTTP Range seeking. Never load the two-hour source into the viewer or display UUID/storage paths in the page.
 

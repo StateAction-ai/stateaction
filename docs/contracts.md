@@ -66,9 +66,11 @@ Use job states `queued`, `submitting`, `submit_unknown`, `running`, `result_pend
 
 ## Durable documents
 
+New phone captures follow [capture format v1](components/capture-format.md): `stateaction.capture.v1` / `h264_mcap_v1`, generic MCAP header, Protobuf video plus explicitly declared CDR/JSON channels, original native clock/frame identity, independent motion events and actual write/drop evidence. Implement its strict schemas/generated descriptor fixtures alongside this API definition. The [mobile bridge/state machines](components/mobile-app-implementation.md) are the native/Dart implementation contract. Native end-of-stream/closed-file acknowledgement precedes file hashing or inventory sealing; a configured stream alone is not evidence of saved data.
+
 | Document | Required content |
 | --- | --- |
-| `recording-source/v1` | Recording/owner/client capture identity, exact sealed file IDs/roles/requiredness/bytes/hashes, capture version, native channel/calibration/clock inventory and collection permission reference. Source verification starts pending. |
+| `recording-source/v1` | Recording/owner/client capture identity, exact sealed file IDs/roles/requiredness/bytes/hashes, capture schema/RGB profile/config digest, final close status, native channel/calibration/clock inventory, actual counts/gaps and collection permission reference. Source verification starts pending. |
 | `processing-result/v1` | Job and source digest, code/image/model/config/profile, server-verified source hashes, required output file IDs/bytes/hashes, immutable clip inventory including safe RRD/thumbnail file references and pinned Rerun SDK version, frame-map/pose-array schema refs, automatic check records/errors and limitations. No mutable `latest` or arbitrary URL. |
 | `hand-observations/v1` | Exact source-frame mapping and joint order; up to two predicted sides; 21 image `(x,y)` landmarks and model-relative `(x,y,z)` estimates; units/raster/model frame, detection/finite masks, handedness score and explicit unknown visibility. Never manufacture per-joint confidence. |
 | `review/v1` | Successful job/result hash/clip, reviewer/revision/time, approved/rejected decision, whole-clip task label and notes. Append a revision; no last-write-wins approval. |

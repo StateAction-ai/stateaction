@@ -4,6 +4,8 @@
 
 The imported baseline covers the collection/review MVP: **six milestones, 40 implementation and qualification tickets**. The source plan and native Linear IDs are retained here for traceability, not as a second live task tracker. Application implementation and paid deployment remain separate work.
 
+The subsequent [mobile implementation update](mobile-implementation-update.md) adds **10 tickets** and amends **14 existing tickets**, bringing the current plan to **50 tickets, six milestones and 90 dependencies**. It specifies H.264-in-MCAP, complete sensor/clock/calibration evidence, native Android/iOS capture and upload work, paired Rerun 0.41.0, and physical-device qualification. [Live mobile specification](https://linear.app/hw-personal-projects/document/mobile-implementation-h264-capture-and-reliable-upload-5677599f65bd). Its [remote receipt](linear-mobile-update-receipt.json) records publication/readback separately from the original baseline.
+
 Live Linear documents: [scope](https://linear.app/hw-personal-projects/document/project-brief-and-scope-451f8b9b2df3), [delivery standards and gates](https://linear.app/hw-personal-projects/document/delivery-standards-and-milestone-gates-2a319c649690), [technical baseline](https://linear.app/hw-personal-projects/document/technical-design-approved-mvp-baseline-d48076a1dee2) and [all tickets/dependencies](https://linear.app/hw-personal-projects/document/implementation-backlog-and-traceability-af9bfc2cea06).
 
 ## Project artifacts
@@ -16,16 +18,19 @@ Live Linear documents: [scope](https://linear.app/hw-personal-projects/document/
 | [Linear receipt](linear-receipt.json) | Actual project/milestone/document/issue IDs and remote verification |
 | [Independent Linear readback](linear-independent-verification.json) | Separate-context project/list checks and four detailed ticket/dependency samples |
 | [Plan validation](plan-validation.json) | Dependency/reference checks and MVP requirement coverage |
+| [Mobile implementation update](mobile-implementation-update.md) | Current native capture/upload work, actual new ticket links and implementation order |
+| [Mobile addendum](mobile-implementation-addendum.json) | Reviewed new scopes, existing amendments and additive prerequisites; original baseline is unchanged |
+| [Mobile publication receipt](linear-mobile-update-receipt.json) / [graph validation](mobile-plan-validation.json) | Actual updated Linear records and combined 50-ticket/90-dependency checks |
 
-Publishing readback verified all 40 tickets, 63 native dependency edges, 140 acceptance criteria, six milestones and four documents. Independent readback confirmed the full project list/metadata and four detailed ticket/relationship samples. This verifies the project setup; application acceptance evidence is future work.
+Original publishing readback verified 40 tickets, 63 native dependencies, 140 acceptance criteria, six milestones and four documents. Original independent readback confirmed metadata and four detailed samples. The mobile addendum retains that history and has its own current receipt; project setup verification is distinct from future application acceptance evidence.
 
 ## Milestones
 
 | Milestone | Tickets | Exit |
 | --- | ---: | --- |
-| M0 · Reproducible foundations | 5 | A clean clone builds the mobile, web, jobs and Python packages; versioned contracts, database constraints and the official Render local runner are reproducible. No production services are assumed. |
-| M1 · Authenticated, resumable collection | 9 | Real console/mobile identities and owner-bound journals work. Closed MCAP and required sidecars upload directly through the sealed multipart protocol; interruption and account changes preserve ownership and bytes. |
-| M2 · Local CPU processing | 10 | A short real recording passes the official local workflow into mandatory hand inference, bounded immutable outputs and a safe RRD. Fault cases and representative long-input memory/scratch/runtime limits are demonstrated. |
+| M0 · Reproducible foundations | 6 | Clean-clone mobile/native and Node/Python builds; versioned API/capture/clock schemas, generated video descriptors and cross-language golden fixtures; full Python SDK is optional reviewed reuse. |
+| M1 · Authenticated, resumable collection | 17 | Signed-device login, H.264/raw-sensor capture, bounded EOS/close/recovery and actual Android/iOS multipart adapters preserve original owner, evidence and stable bytes. Unsupported profiles and failures are explicit. |
+| M2 · Local CPU processing | 11 | Mixed-schema H.264 and legacy JPEG pass bounded CPU inference, IDR-safe MP4 remux, paired Rerun 0.41.0 and resource/fault tests; measured codec/device qualification is recorded. |
 | M3 · Internal review and customer inspection | 7 | Pipeline recording details lead to all generated clips. Staff approve/assign atomically; datasets contain approved clips only. Authorized customers use the same real viewer without internal data or mutation access. |
 | M4 · Bounded cloud CPU canary | 6 | The same contracts run on Render, R2 and Modal CPU. Real provider failure recovery, direct transfers, measured cost/resource limits, monitoring and an isolated database restore pass. |
 | M5 · Collection pilot ready | 3 | A signed physical-device two-hour capture/upload/process/review flow meets documented limits and repair-footage usefulness criteria. Internal and customer UAT, permission/retention decisions and rollout/rollback evidence are recorded. |

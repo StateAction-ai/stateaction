@@ -21,12 +21,12 @@ The [monorepo plan](../implementation-plan.md) owns migration order. These are t
 
 - `apps/web`: Next app; `apps/jobs`: shared workflow definitions/executors and repair-cron entrypoint.
 - `packages/server`: domain/auth/DB/R2 code and migrations; `packages/contracts`: schemas/fixtures.
-- `apps/mobile`, `packages/stera_recorder`, `packages/stera-sdk`: existing Flutter/plugin/SDK sources.
+- `apps/mobile`, `packages/stera_recorder`: required Flutter/native source; import optional reviewed Python helpers only where reused, rather than require the full Stera SDK.
 - `workers/processing`: Python/uv; `infra/render.yaml`: future Render definition.
 
 Use a root pnpm workspace/lockfile for TypeScript, separate Flutter pub/Python uv locks. Leave Render Root Directory blank for shared packages. Web builds include web/server/contracts; workflow and cron builds include jobs/contracts with distinct entrypoints. Build filters include shared dependencies, root lock/config and relevant infrastructure changes. Verify production tracing; no Turbo/Nx/Melos layer is needed.
 
-The shared `/clips/[clipId]` viewer uses one Next.js client-only adapter around framework-independent `@rerun-io/web-viewer` **0.22.1**, matching the Python SDK. Self-host pinned JavaScript/WASM with the application; qualify Next's production asset paths, WASM MIME type, browser graphics and teardown. The approximately 27.6MiB uncompressed WASM affects uncached application bandwidth; private bounded RRDs load through API-authorized direct R2 URLs. Do not load two-hour raw recordings into the browser. [Viewer contract](rerun-clip-review.md)
+The shared `/clips/[clipId]` viewer uses one Next.js client-only adapter around framework-independent `@rerun-io/web-viewer` **0.41.0**, matching the Python SDK. Self-host pinned JavaScript/WASM; qualify production asset paths, MIME types, WebCodecs/graphics and teardown. Measure this version's actual uncached asset bandwidth rather than reuse historical 0.22 sizes. Private bounded clip RRDs load through API-authorized direct R2 URLs; two-hour raw recordings never enter the customer browser. [Viewer contract](rerun-clip-review.md)
 
 ## Networking and secrets
 

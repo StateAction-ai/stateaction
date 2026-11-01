@@ -12,7 +12,7 @@ Updated: 2026-10-30. Target layout; source migration has not happened. One Git r
 | `packages/server/` | Server-only domain/auth/access/storage services, database schema and migrations; shared by web/control code where appropriate |
 | `packages/contracts/` | Versioned JSON Schemas, API definition and small Dart/TypeScript/Python conformance fixtures; no runtime secrets or server imports |
 | `packages/stera_recorder/` | Existing Flutter native recording plugin; mobile keeps its relative path dependency |
-| `packages/stera-sdk/` | Imported, attributed SDK source needed for capture/model adapters; reviewed dependency, not the production backend |
+| `packages/stera-sdk/` (optional) | Only reviewed, attributed Python helpers/fixtures if actually reused; full SDK is reference-only and not a mobile/backend/runtime requirement |
 | `workers/processing/` | Python extraction, hand-model adapter, clip RRD/thumbnail, QC, future export, CLI and thin Modal entrypoints; uv |
 | `infra/` | Local Postgres/MinIO Compose definition, Render Blueprint and build configuration |
 | `scripts/`, `tests/`, `docs/` | Existing diagnostics/evidence and cross-component checks; maintain historical receipt paths |
@@ -26,7 +26,7 @@ Mobile consumes an HTTP contract, not TypeScript business logic. Python imports 
 The current root tracks `stera-app` and `stera-sdk` as Git submodules. `stera-app` already contains the Flutter app and recorder plugin, plus a legacy Bun/Hono server. Merely adding a root workspace would leave independently versioned source behind.
 
 1. Coordinate a source-move window with the recording engineer. Record both submodule commit IDs and preserve all committed and uncommitted work before changing Git structure.
-2. Import their source into ordinary tracked directories, preserve history where practical and retain upstream license/notices plus an import-commit record. Exclude credentials, captures, APKs, virtual environments, caches and downloaded weights.
+2. Import mobile/native source and only the reviewed helpers/fixtures required by the new worker into ordinary tracked directories; full Python SDK import is optional. Preserve history where practical and retain upstream license/notices plus an import-commit record. Exclude credentials, captures, APKs, virtual environments, caches and downloaded weights.
 3. Move the mobile app and recorder plugin together; update relative paths and native scripts. Preserve app IDs, signing identity, local database migrations, capture IDs and owner-bound upload journals. Re-run the physical-device recording/playback checks.
 4. Create the new Node/web/worker packages. The old server is a migration reference; port only reviewed auth/upload behavior. Remove the submodule entries only after the imported source and root clone/build checks pass.
 
@@ -34,6 +34,6 @@ Do not move the active mobile checkout during parallel bug fixing. No such move 
 
 ## Independent builds from one commit
 
-Render web, workflow and cron builds run from the **repository root**, with package-specific commands and shared-package build filters. A change to contracts/server code must rebuild its consumers; a mobile-only change need not redeploy the backend. Modal images are built from `workers/processing` plus explicitly included SDK/contracts source. Record the repository commit and image/model digests on each job.
+Render web, workflow and cron builds run from the **repository root**, with package-specific commands and shared-package build filters. A change to contracts/server code must rebuild its consumers; a mobile-only change need not redeploy the backend. Modal images include `workers/processing`, contracts and only explicitly reviewed helper dependencies. Keep historical SDK/Rerun 0.22 diagnostics in an isolated optional environment; do not import compatibility monkeypatches into the 0.41 worker. Record repository/image/model digests on each job. [Mobile implementation](mobile-app-implementation.md) owns the Flutter/native bridge and [capture format](capture-format.md) owns the generated video descriptors and schemas.
 
 CI checks changed toolchains and shared contracts. Linux runs Node, Python and Android/Flutter checks; iOS signing/builds require a macOS runner. Native release binaries remain separate from Render deployment. [Local end-to-end setup](local-development.md) is the first implementation gate; no cloud GPU is required to pass it.

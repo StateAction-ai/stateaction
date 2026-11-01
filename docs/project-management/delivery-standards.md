@@ -5,7 +5,7 @@
 - Do not guess individual assignees. ownerRole states the required discipline; assign one accountable person before starting.
 - Milestone order and dependency edges are commitments to sequence, not invented calendar deadlines. Add target dates only after capacity/estimates are confirmed.
 - S/M are relative planning sizes, not elapsed-time promises or native Linear points; calibrate to the team estimate scale before sprint commitment. Split a ticket if it no longer has one reviewable outcome.
-- 1=High for early feasibility, current foundations, integrity/recovery or launch gates; 2=Normal for other required MVP work. Required scope alone does not make an issue High. No artificial Urgent tickets.
+- Native Linear priority is 2=High for feasibility, integrity/recovery and launch gates, 3=Normal for other work; do not create artificial Urgent tickets. The historical baseline JSON used custom intent 1=High/2=Normal, mapped to native 2/3. The mobile addendum records native values explicitly.
 - Native blocked-by edges represent immediate prerequisites; omit redundant transitive edges. Milestones describe exit gates, not barriers that prevent early feasibility work in parallel.
 - Backlog -> Todo -> In Progress -> In Review -> Done, mapped to existing team statuses; blocked work records native dependencies rather than a fabricated progress state.
 - Triage weekly and before committing work. Review milestone exits against evidence; publish a concise weekly project update with outcomes, next work, blockers/owners and measured cost/quality risks.
@@ -23,19 +23,21 @@
 - Docs/runbooks and source/model/config provenance updated; no secret or raw private payload leakage.
 - Completion is implementation evidence, never a design document or synthetic mock alone.
 
+The [mobile implementation update](mobile-implementation-update.md) amends native capture/upload and codec/Rerun qualification scope. These gates describe required evidence, not completed work.
+
 ## Milestone exit gates
 
 ### M0 · Reproducible foundations
 
-A clean clone builds the mobile, web, jobs and Python packages; versioned contracts, database constraints and the official Render local runner are reproducible. No production services are assumed.
+A clean clone builds mobile/native and Node/Python packages; versioned API plus H.264 MCAP/profile/clock schemas, generated descriptors and cross-language golden fixtures agree. Full Python SDK is optional reviewed reuse.
 
 ### M1 · Authenticated, resumable collection
 
-Real console/mobile identities and owner-bound journals work. Closed MCAP and required sidecars upload directly through the sealed multipart protocol; interruption and account changes preserve ownership and bytes.
+Signed Android/iOS Google identities, truthful hardware H.264/raw-sensor capture, bounded EOS/close/recovery and actual background multipart adapters work with owner-bound journals and sealed stable files. Unsupported profiles and failures are explicit.
 
 ### M2 · Local CPU processing
 
-A short real recording passes the official local workflow into mandatory hand inference, bounded immutable outputs and a safe RRD. Fault cases and representative long-input memory/scratch/runtime limits are demonstrated.
+Golden and native H.264 plus historical JPEG pass bounded one-pass CPU hands, IDR-safe MP4 remux, paired Rerun0.41 review assets, resource/fault tests and measured mobile codec/device qualification.
 
 ### M3 · Internal review and customer inspection
 
@@ -47,7 +49,7 @@ The same contracts run on Render, R2 and Modal CPU. Real provider failure recove
 
 ### M5 · Collection pilot ready
 
-A signed physical-device two-hour capture/upload/process/review flow meets documented limits and repair-footage usefulness criteria. Internal and customer UAT, permission/retention decisions and rollout/rollback evidence are recorded.
+The frozen qualified device/profile passes signed physical two-hour capture/upload/cloud-process/review with complete sensor/clock/calibration/drop/hash evidence, measured limits/cost and staff/customer UAT. No design-only or historical JPEG evidence substitutes.
 
 ## Project completion
 

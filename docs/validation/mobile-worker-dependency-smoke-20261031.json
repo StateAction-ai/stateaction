@@ -1,0 +1,172 @@
+{
+  "checks": {
+    "imports": {
+      "result": {
+        "av": "19.0.2",
+        "mediapipe": "1.2.0",
+        "numpy": "2.5.4",
+        "rerun": "0.41.0"
+      },
+      "seconds": 0.9126079082489014,
+      "status": "passed"
+    },
+    "installed_package_compatibility": {
+      "message": "All installed packages are compatible",
+      "packages_checked": 26,
+      "status": "passed"
+    },
+    "mediapipe_model_cpu": {
+      "result": {
+        "asset_bytes": 7819105,
+        "asset_path": "/home/wearaway/.cache/mediapipe/hand_landmarker.task",
+        "delegate": "CPU",
+        "hand_detections": 0,
+        "hand_world_landmark_detections": 0,
+        "matches_pinned_asset": true,
+        "running_mode": "IMAGE",
+        "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+        "synthetic_image_shape": [
+          160,
+          160,
+          3
+        ]
+      },
+      "seconds": 0.23639369010925293,
+      "status": "passed"
+    },
+    "pyav_software_h264_roundtrip": {
+      "result": {
+        "annex_b_prefix": "00000001",
+        "artifact": "/tmp/stateaction-mobile-deps-synthetic.h264",
+        "decoded_frames": 3,
+        "encoded_bytes": 770,
+        "encoded_packets": 3,
+        "h264_decoder": "h264",
+        "libx264_encoder": "libx264",
+        "linked_libraries": {
+          "libavcodec": [
+            63,
+            1,
+            102
+          ],
+          "libavdevice": [
+            63,
+            1,
+            102
+          ],
+          "libavfilter": [
+            12,
+            1,
+            102
+          ],
+          "libavformat": [
+            63,
+            1,
+            102
+          ],
+          "libavutil": [
+            61,
+            1,
+            102
+          ],
+          "libswresample": [
+            7,
+            1,
+            102
+          ],
+          "libswscale": [
+            10,
+            1,
+            102
+          ]
+        },
+        "raster": [
+          64,
+          64
+        ]
+      },
+      "seconds": 0.007878303527832031,
+      "status": "passed"
+    },
+    "rerun_api": {
+      "result": {
+        "VideoCodec_members": "[<VideoCodec.AV1: 1635135537>, <VideoCodec.H264: 1635148593>, <VideoCodec.H265: 1751479857>, <VideoCodec.VP8: 1987063864>, <VideoCodec.VP9: 1987063865>]",
+        "VideoCodec_present": true,
+        "VideoStream_present": true,
+        "VideoStream_signature": "(codec: 'components.VideoCodecLike', *, sample: 'encodings.BlobLike | None' = None, is_keyframe: 'encodings.BoolLike | None' = None, opacity: 'encodings.Float32Like | None' = None, draw_order: 'encodings.Float32Like | None' = None) -> 'None'",
+        "minimal_rrd": {
+          "bytes": 5808,
+          "path": "/tmp/stateaction-mobile-deps-minimal.rrd"
+        },
+        "VideoStream_stability": "Installed SDK marks this API unstable; pin SDK/viewer/artifact versions together."
+      },
+      "seconds": 0.0038747787475585938,
+      "status": "passed"
+    },
+    "rerun_video_stream_serialization": {
+      "result": {
+        "api_unstable": true,
+        "browser_playback_tested": false,
+        "codec": "H264",
+        "keyframes": 1,
+        "rrd_bytes": 11042,
+        "rrd_path": "/tmp/stateaction-mobile-deps-video-stream.rrd",
+        "samples_logged": 3,
+        "timeline": "frame sequence"
+      },
+      "seconds": 0.002239227294921875,
+      "status": "passed"
+    }
+  },
+  "commands": [
+    "UV_CACHE_DIR=/tmp/stateaction-mobile-deps-cache uv venv --python /usr/bin/python3.12 /tmp/stateaction-mobile-deps-venv",
+    "UV_CACHE_DIR=/tmp/stateaction-mobile-deps-cache uv pip install --python /tmp/stateaction-mobile-deps-venv/bin/python --index-url https://pypi.org/simple rerun-sdk==0.41.0 mediapipe==1.2.0 av==19.0.2",
+    "MPLCONFIGDIR=/tmp/stateaction-mobile-deps-matplotlib /tmp/stateaction-mobile-deps-venv/bin/python /tmp/stateaction-mobile-deps-smoke.py",
+    "UV_CACHE_DIR=/tmp/stateaction-mobile-deps-cache uv pip check --python /tmp/stateaction-mobile-deps-venv/bin/python"
+  ],
+  "completed_unix": 1793499670.6540828,
+  "diagnostics": {
+    "cpu_delegate_log": "Created TensorFlow Lite XNNPACK delegate for CPU.",
+    "install_log": "/tmp/stateaction-mobile-deps-install.log",
+    "mediapipe_warnings": [
+      "Feedback manager disabled support for feedback tensors because model does not have a single signature inference.",
+      "NORM_RECT without IMAGE_DIMENSIONS warning: synthetic square image smoke does not qualify real-image geometry."
+    ],
+    "run_log": "/tmp/stateaction-mobile-deps-run.log"
+  },
+  "environment": "/tmp/stateaction-mobile-deps-venv",
+  "limitations": [
+    "Isolated Linux CPU dependency/API smoke only; no phone, browser/WASM, Modal, R2, original H.264 MCAP, signed native build or model accuracy qualification.",
+    "Synthetic black RGB has no hand and cannot establish landmark quality, coverage, model behavior equivalence or throughput.",
+    "PyAV encoder/decoder smoke is software CPU codec interoperability, not Android/iOS hardware encoder qualification.",
+    "No repository code, dependency lockfiles or existing environments modified. Temporary environment/cache/artifacts retained under /tmp."
+  ],
+  "migration_notes": [
+    "Initial helper used removed rr.flush; corrected to rr.get_global_data_recording().flush and disconnect. Initial receipt retained at /tmp/stateaction-mobile-deps-initial-smoke.json. VideoStream is explicitly unstable in installed SDK docs; exact matched SDK/viewer and artifact version pin required."
+  ],
+  "packages": {
+    "av": "19.0.2",
+    "mediapipe": "1.2.0",
+    "numpy": "2.5.4",
+    "opencv-contrib-python": "5.0.0.93",
+    "protobuf": null,
+    "pyarrow": "26.0.0",
+    "rerun-sdk": "0.41.0"
+  },
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+  "started_unix": 1793499669.4820194,
+  "status": "passed",
+  "schemaVersion": 1,
+  "evidenceKind": "isolated-linux-cpu-dependency-and-serialization-smoke",
+  "observedDate": "2026-10-31",
+  "notQualified": [
+    "phone hardware encoding",
+    "MCAP native capture",
+    "web/WASM playback",
+    "real hand quality",
+    "two-hour resources",
+    "cloud services"
+  ],
+  "baselineConflict": "Historical MediaPipe0.10.21 requiresnumpy<2; Rerun0.41 requiresnumpy>=2. Fresh worker usesMediaPipe1.2.0 without oldSDK imports/monkeypatches."
+}

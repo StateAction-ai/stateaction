@@ -8,6 +8,8 @@ A repair worker signs in, records offline and uploads large MCAP recordings reli
 
 The agreed pilot output does not promise validated metric camera/world trajectories, robot actions or demonstrated policy-training benefit. Missing or unreliable observations remain explicit. Representative repair-footage quality is a launch gate.
 
+The [mobile implementation](components/mobile-app-implementation.md) and [capture format](components/capture-format.md) specify hardware H.264 RGB inside generic-profile MCAP, alongside original sensor timestamps/calibration and available depth/confidence. Historical JPEG sources remain readable. Capture format, native sensor fixes, background uploads and paired Rerun 0.41.0 SDK/viewer qualification are implementation gates, not capabilities established by the existing app.
+
 ## Smallest complete stack
 
 | Component | MVP choice |
@@ -23,6 +25,7 @@ The agreed pilot output does not promise validated metric camera/world trajector
 | Review viewer | One pinned Rerun web viewer on `/clips/[clipId]`, opened from the shared Data browser |
 | Data organization | Named datasets with many-to-many approved clip memberships; operator-managed customer view grants |
 | Repository | One monorepo including existing Flutter mobile/native plugin, Node apps and Python workers |
+| Mobile source | Hardware H.264 inside generic-profile MCAP, Foxglove Protobuf video plus original sensor evidence; historical JPEG decoding retained |
 | Local development | Official Render local Workflows runner, same task/processing contracts, local Postgres/MinIO and LocalExecutor; no cloud GPU |
 
 The application platform is Render; storage and processing remain explicit external services. Render hosts no video transfer proxy. A bounded workflow controller starts/polls processing using durable job references; the follow-up export task uses the same pattern. A minute cron repairs dispatch/abandoned controllers and exits; it never processes media.

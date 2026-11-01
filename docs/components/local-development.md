@@ -12,7 +12,7 @@ Selected MVP design · 2026-10-31 · Commands/packages below are planned targets
 | `apps/jobs` / `@repair/jobs` | Registered `process-recording` Render task, future `export-release`; finite reconciliation entrypoint |
 | `apps/mobile` | Existing Flutter application; native device builds |
 | `packages/server`, `packages/contracts` | Shared server/domain modules and versioned cross-language contracts |
-| `packages/stera_recorder`, `packages/stera-sdk` | Existing recorder and SDK source, retaining Dart/Python package boundaries |
+| `packages/stera_recorder` | Required native recorder; optional reviewed Python SDK helpers retain their own package boundary |
 | `workers/processing` | Shared Python processing/export core, CLI and Modal wrapper; CPU/optional local-CUDA profiles |
 | `infra/compose.yaml`, `infra/render.yaml` | Local Postgres/MinIO versus production services |
 
@@ -80,6 +80,10 @@ Configure API/callback origins and S3 signing/public endpoints explicitly. Sign 
 
 Use isolated seeded/test identities for deterministic tests; any test-login adapter must be development-only. Google/OAuth redirects, app signing fingerprints and secure-cookie behavior require real-device testing with a registered HTTPS development origin. Local HTTP/debug CA allowances do not qualify production cookies/TLS and must not enter release builds. [Auth contract](auth-and-access.md)
 
+## Mobile format and device gate
+
+Follow [mobile implementation](mobile-app-implementation.md) and [capture format](capture-format.md). First prove mixed-schema H.264 MCAP fixtures through the real reader and pinned Rerun pair, including delayed encoder output, exact source-frame/PTS maps, IDR-safe MP4 clips and legacy JPEG. Then collect signed Android/iOS short samples with original raw motion, matching saved-raster calibration, tracking-loss RGB and actual write/drop evidence. Two consecutive sessions must reset state. Native capture/transport still require device tests; the Render local runner only executes the cloud processing/control path.
+
 ## Test ladder before paid processing
 
 | Step | Execution | Evidence |
@@ -97,7 +101,7 @@ Inject duplicate task/worker claims, lost Render/Modal acknowledgements, native 
 
 ## Real Rerun and Data browser gate
 
-The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.22.1 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
+The HTML mock does not qualify Rerun. Build the production Next.js bundle with matched 0.41.0 viewer/SDK, self-hosted JavaScript/WASM and a real worker-generated bounded RRD. Confirm MIME/import paths, private MinIO/R2 CORS and loading on supported desktop/mobile browsers; measure frame fidelity, startup, peak memory and bytes. Test missing-hand clearing, quiet 3D-estimate labels, expired URL reload retaining staff edits and viewer cleanup on route changes. No live Rerun server or external hosted iframe is required. [Viewer integration](rerun-clip-review.md)
 
 Prove `/data-browser` defaults to the dataset list and `?datasetId=...` opens its approved-only grid for either role. Staff may explicitly use `?view=clips` for all accepted clips, including pending/rejected/unassigned ones. A Pipeline row opens `/pipeline/[recordingId]` with the stage visualization and all actions; its **Review clips** action opens `/data-browser?recordingId=<UUID>`, then a card opens the same `/clips/[clipId]` page. There is no separate Review sidebar item. Pipeline has status/search filters, no scenario selector; `/pipeline?status=failed` remains staff-only. Preserve URL state on refresh/paste/Back/Forward.
 
