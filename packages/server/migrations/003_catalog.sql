@@ -12,7 +12,7 @@
 CREATE DOMAIN sha256_hex AS text CHECK (VALUE ~ '^[0-9a-f]{64}$');
 
 CREATE FUNCTION catalog_raise(code text, message text) RETURNS void
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
   RAISE EXCEPTION USING ERRCODE = code, MESSAGE = message;
 END $$;
@@ -20,10 +20,12 @@ END $$;
 --   SAC01 immutable/append-only violation   SAC02 clip not approved
 --   SAC03 revision/sequence conflict        SAC04 invalid lifecycle state
 --   SAC05 not authorized for this operation
+-- Every function pins search_path = pg_catalog, public, pg_temp and
+-- schema-qualifies relations, so session TEMP objects can never shadow them.
 
 -- Transaction-scoped clip lock usable without UPDATE privilege on clips.
 CREATE FUNCTION catalog_lock_clip(clip uuid) RETURNS void
-LANGUAGE sql VOLATILE AS $$
+LANGUAGE sql VOLATILE SET search_path = pg_catalog, public, pg_temp AS $$
   SELECT pg_advisory_xact_lock(7430013, hashtext(clip::text));
 $$;
 
@@ -40,9 +42,9 @@ CREATE TABLE access (
 CREATE INDEX access_role_enabled_idx ON access (role, user_id) WHERE enabled;
 
 CREATE FUNCTION catalog_has_role(member text, wanted text) RETURNS boolean
-LANGUAGE sql STABLE AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
   SELECT EXISTS (
-    SELECT 1 FROM access WHERE user_id = member AND role = wanted AND enabled
+    SELECT 1 FROM public.access WHERE user_id = member AND role = wanted AND enabled
   );
 $$;
 
@@ -306,25 +308,25 @@ CREATE INDEX dataset_access_user_idx ON dataset_access (user_id, dataset_id) WHE
 
 -- ---------------------------------------------------------------- triggers
 CREATE FUNCTION catalog_forbid_change() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
-  PERFORM catalog_raise('SAC01', TG_TABLE_NAME || ' rows are immutable (' || TG_OP || ')');
+  PERFORM public.catalog_raise('SAC01', TG_TABLE_NAME || ' rows are immutable (' || TG_OP || ')');
   RETURN NULL;
 END $$;
 
 CREATE FUNCTION catalog_file_is_closed(file uuid, wanted_role text) RETURNS boolean
-LANGUAGE sql STABLE AS $$
+LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
   SELECT EXISTS (
-    SELECT 1 FROM files
+    SELECT 1 FROM public.files
     WHERE id = file AND role = wanted_role AND state IN ('completed', 'verified')
   );
 $$;
 
 CREATE FUNCTION recordings_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
-  IF TG_OP = 'INSERT' AND NOT catalog_has_role(NEW.owner_user_id, 'collector') THEN
-    PERFORM catalog_raise('SAC05', 'recording owner must hold an enabled collector role');
+  IF TG_OP = 'INSERT' AND NOT public.catalog_has_role(NEW.owner_user_id, 'collector') THEN
+    PERFORM public.catalog_raise('SAC05', 'recording owner must hold an enabled collector role');
   END IF;
   IF TG_OP = 'UPDATE' THEN
     IF (NEW.id, NEW.owner_user_id, NEW.client_recording_id, NEW.capture_format,
@@ -332,19 +334,19 @@ BEGIN
        IS DISTINCT FROM
        (OLD.id, OLD.owner_user_id, OLD.client_recording_id, OLD.capture_format,
         OLD.rgb_profile, OLD.started_at, OLD.device, OLD.created_at) THEN
-      PERFORM catalog_raise('SAC01', 'recording identity is immutable');
+      PERFORM public.catalog_raise('SAC01', 'recording identity is immutable');
     END IF;
     IF OLD.source_manifest_file_id IS NOT NULL AND
        (NEW.source_manifest_file_id, NEW.source_manifest_sha256)
        IS DISTINCT FROM (OLD.source_manifest_file_id, OLD.source_manifest_sha256) THEN
-      PERFORM catalog_raise('SAC01', 'sealed source manifest is immutable');
+      PERFORM public.catalog_raise('SAC01', 'sealed source manifest is immutable');
     END IF;
     NEW.updated_at := now();
   END IF;
   IF NEW.source_manifest_file_id IS NOT NULL
      AND (TG_OP = 'INSERT' OR OLD.source_manifest_file_id IS NULL)
-     AND NOT catalog_file_is_closed(NEW.source_manifest_file_id, 'source_manifest') THEN
-    PERFORM catalog_raise('SAC04', 'source manifest must be a completed source_manifest file');
+     AND NOT public.catalog_file_is_closed(NEW.source_manifest_file_id, 'source_manifest') THEN
+    PERFORM public.catalog_raise('SAC04', 'source manifest must be a completed source_manifest file');
   END IF;
   RETURN NEW;
 END $$;
@@ -352,23 +354,23 @@ CREATE TRIGGER recordings_guard BEFORE INSERT OR UPDATE ON recordings
   FOR EACH ROW EXECUTE FUNCTION recordings_guard();
 
 CREATE FUNCTION files_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   parent_state text;
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF NEW.state <> 'reserved' OR NEW.transport_epoch <> 1 THEN
-      PERFORM catalog_raise('SAC04', 'files start reserved at transport epoch 1');
+      PERFORM public.catalog_raise('SAC04', 'files start reserved at transport epoch 1');
     END IF;
     IF NEW.purpose = 'source' THEN
-      SELECT status INTO parent_state FROM recordings WHERE id = NEW.recording_id;
+      SELECT status INTO parent_state FROM public.recordings WHERE id = NEW.recording_id;
       IF parent_state NOT IN ('registered', 'uploading') THEN
-        PERFORM catalog_raise('SAC04', 'recording no longer accepts source files');
+        PERFORM public.catalog_raise('SAC04', 'recording no longer accepts source files');
       END IF;
     ELSE
-      SELECT state INTO parent_state FROM jobs WHERE id = NEW.job_id;
+      SELECT state INTO parent_state FROM public.jobs WHERE id = NEW.job_id;
       IF parent_state NOT IN ('running', 'result_pending') THEN
-        PERFORM catalog_raise('SAC04', 'job no longer accepts output files');
+        PERFORM public.catalog_raise('SAC04', 'job no longer accepts output files');
       END IF;
     END IF;
     RETURN NEW;
@@ -380,7 +382,7 @@ BEGIN
      (OLD.id, OLD.recording_id, OLD.job_id, OLD.purpose, OLD.role, OLD.required,
       OLD.client_upload_id, OLD.request_digest, OLD.size_bytes, OLD.sha256,
       OLD.part_size_bytes, OLD.created_at) THEN
-    PERFORM catalog_raise('SAC01', 'logical file identity is immutable');
+    PERFORM public.catalog_raise('SAC01', 'logical file identity is immutable');
   END IF;
   IF OLD.state IN ('completed', 'verified') THEN
     IF (NEW.object_key, NEW.provider_upload_id, NEW.transport_epoch, NEW.part_count,
@@ -389,21 +391,21 @@ BEGIN
        (OLD.object_key, OLD.provider_upload_id, OLD.transport_epoch, OLD.part_count,
         OLD.observed_size_bytes, OLD.completed_at)
        OR NOT (NEW.state = OLD.state OR (OLD.state = 'completed' AND NEW.state = 'verified')) THEN
-      PERFORM catalog_raise('SAC01', 'completed file transport is closed');
+      PERFORM public.catalog_raise('SAC01', 'completed file transport is closed');
     END IF;
   ELSIF OLD.state IN ('cancelled', 'failed', 'expired') THEN
     IF ROW(NEW.*) IS DISTINCT FROM ROW(OLD.*) THEN
-      PERFORM catalog_raise('SAC01', 'terminal file rows are immutable');
+      PERFORM public.catalog_raise('SAC01', 'terminal file rows are immutable');
     END IF;
   ELSIF NEW.transport_epoch <> OLD.transport_epoch THEN
     -- Restart only after the old provider upload is retired by the API.
     IF NEW.transport_epoch <> OLD.transport_epoch + 1
        OR NEW.object_key = OLD.object_key
        OR NEW.provider_upload_id IS NOT DISTINCT FROM OLD.provider_upload_id THEN
-      PERFORM catalog_raise('SAC03', 'transport restart needs the next epoch and a new key/upload');
+      PERFORM public.catalog_raise('SAC03', 'transport restart needs the next epoch and a new key/upload');
     END IF;
   ELSIF NEW.object_key <> OLD.object_key THEN
-    PERFORM catalog_raise('SAC03', 'object key changes only with a new transport epoch');
+    PERFORM public.catalog_raise('SAC03', 'object key changes only with a new transport epoch');
   END IF;
   NEW.updated_at := now();
   RETURN NEW;
@@ -412,11 +414,11 @@ CREATE TRIGGER files_guard BEFORE INSERT OR UPDATE ON files
   FOR EACH ROW EXECUTE FUNCTION files_guard();
 
 CREATE FUNCTION jobs_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     IF NEW.state <> 'queued' OR NEW.result_manifest_file_id IS NOT NULL THEN
-      PERFORM catalog_raise('SAC04', 'jobs start queued without a result');
+      PERFORM public.catalog_raise('SAC04', 'jobs start queued without a result');
     END IF;
     RETURN NEW;
   END IF;
@@ -425,10 +427,10 @@ BEGIN
      IS DISTINCT FROM
      (OLD.id, OLD.kind, OLD.recording_id, OLD.previous_job_id,
       OLD.source_manifest_sha256, OLD.profile_revision, OLD.created_at) THEN
-    PERFORM catalog_raise('SAC01', 'job identity and input are immutable');
+    PERFORM public.catalog_raise('SAC01', 'job identity and input are immutable');
   END IF;
   IF OLD.state IN ('succeeded', 'failed', 'cancelled') THEN
-    PERFORM catalog_raise('SAC01', 'finished jobs are immutable');
+    PERFORM public.catalog_raise('SAC01', 'finished jobs are immutable');
   END IF;
   IF (OLD.result_manifest_file_id IS NOT NULL AND
       (NEW.result_manifest_file_id, NEW.result_manifest_sha256)
@@ -436,12 +438,12 @@ BEGIN
      OR (OLD.invocation_nonce IS NOT NULL AND NEW.invocation_nonce IS DISTINCT FROM OLD.invocation_nonce)
      OR (OLD.execution_call_id IS NOT NULL AND NEW.execution_call_id IS DISTINCT FROM OLD.execution_call_id)
      OR (OLD.workflow_run_ref IS NOT NULL AND NEW.workflow_run_ref IS DISTINCT FROM OLD.workflow_run_ref) THEN
-    PERFORM catalog_raise('SAC01', 'recorded job references are immutable');
+    PERFORM public.catalog_raise('SAC01', 'recorded job references are immutable');
   END IF;
   IF NEW.result_manifest_file_id IS NOT NULL
      AND OLD.result_manifest_file_id IS NULL
-     AND NOT catalog_file_is_closed(NEW.result_manifest_file_id, 'result_manifest') THEN
-    PERFORM catalog_raise('SAC04', 'result manifest must be a completed result_manifest file');
+     AND NOT public.catalog_file_is_closed(NEW.result_manifest_file_id, 'result_manifest') THEN
+    PERFORM public.catalog_raise('SAC04', 'result manifest must be a completed result_manifest file');
   END IF;
   NEW.updated_at := now();
   RETURN NEW;
@@ -450,18 +452,18 @@ CREATE TRIGGER jobs_guard BEFORE INSERT OR UPDATE ON jobs
   FOR EACH ROW EXECUTE FUNCTION jobs_guard();
 
 CREATE FUNCTION clips_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
-  IF (SELECT state FROM jobs WHERE id = NEW.job_id) <> 'result_pending' THEN
-    PERFORM catalog_raise('SAC04', 'clips are inserted only while accepting a pending result');
+  IF (SELECT state FROM public.jobs WHERE id = NEW.job_id) <> 'result_pending' THEN
+    PERFORM public.catalog_raise('SAC04', 'clips are inserted only while accepting a pending result');
   END IF;
-  IF NOT (catalog_file_is_closed(NEW.rgb_mp4_file_id, 'clip_mp4')
-      AND catalog_file_is_closed(NEW.hand_arrays_file_id, 'hand_arrays_npz')
-      AND catalog_file_is_closed(NEW.hand_observations_file_id, 'hand_observations_json')
-      AND catalog_file_is_closed(NEW.frame_map_file_id, 'frame_map_json')
-      AND catalog_file_is_closed(NEW.thumbnail_file_id, 'thumbnail_jpeg')
-      AND catalog_file_is_closed(NEW.viewer_rrd_file_id, 'viewer_rrd')) THEN
-    PERFORM catalog_raise('SAC04', 'clip files must be completed same-job outputs of the matching role');
+  IF NOT (public.catalog_file_is_closed(NEW.rgb_mp4_file_id, 'clip_mp4')
+      AND public.catalog_file_is_closed(NEW.hand_arrays_file_id, 'hand_arrays_npz')
+      AND public.catalog_file_is_closed(NEW.hand_observations_file_id, 'hand_observations_json')
+      AND public.catalog_file_is_closed(NEW.frame_map_file_id, 'frame_map_json')
+      AND public.catalog_file_is_closed(NEW.thumbnail_file_id, 'thumbnail_jpeg')
+      AND public.catalog_file_is_closed(NEW.viewer_rrd_file_id, 'viewer_rrd')) THEN
+    PERFORM public.catalog_raise('SAC04', 'clip files must be completed same-job outputs of the matching role');
   END IF;
   RETURN NEW;
 END $$;
@@ -471,25 +473,25 @@ CREATE TRIGGER clips_immutable BEFORE UPDATE OR DELETE ON clips
   FOR EACH ROW EXECUTE FUNCTION catalog_forbid_change();
 
 CREATE FUNCTION catalog_latest_decision(clip uuid) RETURNS text
-LANGUAGE sql STABLE AS $$
-  SELECT decision FROM reviews WHERE clip_id = clip ORDER BY revision DESC LIMIT 1;
+LANGUAGE sql STABLE SET search_path = pg_catalog, public, pg_temp AS $$
+  SELECT decision FROM public.reviews WHERE clip_id = clip ORDER BY revision DESC LIMIT 1;
 $$;
 
 CREATE FUNCTION reviews_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   latest integer;
 BEGIN
-  PERFORM catalog_lock_clip(NEW.clip_id);
-  IF (SELECT state FROM jobs WHERE id = NEW.job_id) <> 'succeeded' THEN
-    PERFORM catalog_raise('SAC04', 'reviews target an exact successful job result');
+  PERFORM public.catalog_lock_clip(NEW.clip_id);
+  IF (SELECT state FROM public.jobs WHERE id = NEW.job_id) <> 'succeeded' THEN
+    PERFORM public.catalog_raise('SAC04', 'reviews target an exact successful job result');
   END IF;
-  IF NOT catalog_has_role(NEW.reviewer_user_id, 'staff') THEN
-    PERFORM catalog_raise('SAC05', 'reviewer must hold an enabled staff role');
+  IF NOT public.catalog_has_role(NEW.reviewer_user_id, 'staff') THEN
+    PERFORM public.catalog_raise('SAC05', 'reviewer must hold an enabled staff role');
   END IF;
-  SELECT max(revision) INTO latest FROM reviews WHERE clip_id = NEW.clip_id;
+  SELECT max(revision) INTO latest FROM public.reviews WHERE clip_id = NEW.clip_id;
   IF NEW.revision <> coalesce(latest, 0) + 1 THEN
-    PERFORM catalog_raise('SAC03', 'review revision must append to the latest revision');
+    PERFORM public.catalog_raise('SAC03', 'review revision must append to the latest revision');
   END IF;
   RETURN NEW;
 END $$;
@@ -501,11 +503,11 @@ CREATE TRIGGER reviews_append_only BEFORE UPDATE OR DELETE ON reviews
 -- A non-approved decision must leave no working memberships behind; the
 -- review transaction removes them before appending (same clip lock).
 CREATE FUNCTION reviews_membership_check() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
   IF NEW.decision <> 'approved'
-     AND EXISTS (SELECT 1 FROM dataset_clips WHERE clip_id = NEW.clip_id) THEN
-    PERFORM catalog_raise('SAC02', 'remove dataset memberships before a non-approved review');
+     AND EXISTS (SELECT 1 FROM public.dataset_clips WHERE clip_id = NEW.clip_id) THEN
+    PERFORM public.catalog_raise('SAC02', 'remove dataset memberships before a non-approved review');
   END IF;
   RETURN NULL;
 END $$;
@@ -513,14 +515,14 @@ CREATE TRIGGER reviews_membership_check AFTER INSERT ON reviews
   FOR EACH ROW EXECUTE FUNCTION reviews_membership_check();
 
 CREATE FUNCTION dataset_clips_insert_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
-  IF NOT catalog_has_role(NEW.added_by, 'staff') THEN
-    PERFORM catalog_raise('SAC05', 'only enabled staff may change dataset membership');
+  IF NOT public.catalog_has_role(NEW.added_by, 'staff') THEN
+    PERFORM public.catalog_raise('SAC05', 'only enabled staff may change dataset membership');
   END IF;
-  PERFORM catalog_lock_clip(NEW.clip_id);
-  IF catalog_latest_decision(NEW.clip_id) IS DISTINCT FROM 'approved' THEN
-    PERFORM catalog_raise('SAC02', 'only clips whose latest review is approved may join a dataset');
+  PERFORM public.catalog_lock_clip(NEW.clip_id);
+  IF public.catalog_latest_decision(NEW.clip_id) IS DISTINCT FROM 'approved' THEN
+    PERFORM public.catalog_raise('SAC02', 'only clips whose latest review is approved may join a dataset');
   END IF;
   RETURN NEW;
 END $$;
@@ -530,22 +532,22 @@ CREATE TRIGGER dataset_clips_no_update BEFORE UPDATE ON dataset_clips
   FOR EACH ROW EXECUTE FUNCTION catalog_forbid_change();
 
 CREATE FUNCTION datasets_guard() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
-  IF NOT catalog_has_role(NEW.updated_by, 'staff') THEN
-    PERFORM catalog_raise('SAC05', 'only enabled staff may change datasets');
+  IF NOT public.catalog_has_role(NEW.updated_by, 'staff') THEN
+    PERFORM public.catalog_raise('SAC05', 'only enabled staff may change datasets');
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW.revision <> 1 OR NEW.created_by <> NEW.updated_by THEN
-      PERFORM catalog_raise('SAC04', 'datasets start at revision 1');
+      PERFORM public.catalog_raise('SAC04', 'datasets start at revision 1');
     END IF;
     RETURN NEW;
   END IF;
   IF (NEW.id, NEW.created_by, NEW.created_at) IS DISTINCT FROM (OLD.id, OLD.created_by, OLD.created_at) THEN
-    PERFORM catalog_raise('SAC01', 'dataset identity is immutable');
+    PERFORM public.catalog_raise('SAC01', 'dataset identity is immutable');
   END IF;
   IF NEW.revision <> OLD.revision + 1 THEN
-    PERFORM catalog_raise('SAC03', 'each dataset change advances its revision by one');
+    PERFORM public.catalog_raise('SAC03', 'each dataset change advances its revision by one');
   END IF;
   NEW.updated_at := now();
   RETURN NEW;
@@ -560,18 +562,18 @@ CREATE TRIGGER datasets_no_delete BEFORE DELETE ON datasets
 CREATE FUNCTION catalog_set_dataset_access(
   p_dataset_id uuid, p_user_id text, p_enabled boolean,
   p_actor_user_id text, p_evidence_ref text
-) RETURNS dataset_access
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+) RETURNS public.dataset_access
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
-  result dataset_access;
+  result public.dataset_access;
 BEGIN
-  IF NOT catalog_has_role(p_actor_user_id, 'staff') THEN
-    PERFORM catalog_raise('SAC05', 'only enabled staff may change dataset access');
+  IF NOT public.catalog_has_role(p_actor_user_id, 'staff') THEN
+    PERFORM public.catalog_raise('SAC05', 'only enabled staff may change dataset access');
   END IF;
-  IF p_enabled AND NOT catalog_has_role(p_user_id, 'customer') THEN
-    PERFORM catalog_raise('SAC05', 'dataset access is granted to enabled customers');
+  IF p_enabled AND NOT public.catalog_has_role(p_user_id, 'customer') THEN
+    PERFORM public.catalog_raise('SAC05', 'dataset access is granted to enabled customers');
   END IF;
-  INSERT INTO dataset_access AS d (dataset_id, user_id, enabled, granted_by, permission_evidence_ref)
+  INSERT INTO public.dataset_access AS d (dataset_id, user_id, enabled, granted_by, permission_evidence_ref)
   VALUES (p_dataset_id, p_user_id, p_enabled, p_actor_user_id, p_evidence_ref)
   ON CONFLICT (dataset_id, user_id) DO UPDATE
     SET enabled = EXCLUDED.enabled, granted_by = EXCLUDED.granted_by,
@@ -585,30 +587,37 @@ REVOKE ALL ON FUNCTION catalog_set_dataset_access(uuid, text, boolean, text, tex
 -- Least privilege for the restricted web role. The migrator calls this after
 -- every migration run (idempotent); it replaces, never widens, earlier grants.
 CREATE FUNCTION stateaction_grant_app_role(app_role name) RETURNS void
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   t text;
 BEGIN
   EXECUTE format('REVOKE CREATE ON SCHEMA public FROM %I', app_role);
+  -- No TEMP objects for the web role: they could shadow catalog relations.
+  IF (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()) = current_user THEN
+    EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+    EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM %I', current_database(), app_role);
+  ELSE
+    RAISE EXCEPTION 'migration owner must own the database to revoke TEMPORARY';
+  END IF;
   EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', app_role);
   FOREACH t IN ARRAY ARRAY[
     'platform_schema_migrations', 'user', 'session', 'account', 'verification',
     'access', 'recordings', 'files', 'jobs', 'clips', 'reviews', 'datasets',
     'dataset_clips', 'dataset_access'
   ] LOOP
-    EXECUTE format('REVOKE ALL ON TABLE %I FROM %I', t, app_role);
-    EXECUTE format('GRANT SELECT ON TABLE %I TO %I', t, app_role);
+    EXECUTE format('REVOKE ALL ON TABLE public.%I FROM %I', t, app_role);
+    EXECUTE format('GRANT SELECT ON TABLE public.%I TO %I', t, app_role);
   END LOOP;
   -- Better Auth manages its own rows.
   FOREACH t IN ARRAY ARRAY['user', 'session', 'account', 'verification'] LOOP
-    EXECUTE format('GRANT INSERT, UPDATE, DELETE ON TABLE %I TO %I', t, app_role);
+    EXECUTE format('GRANT INSERT, UPDATE, DELETE ON TABLE public.%I TO %I', t, app_role);
   END LOOP;
-  EXECUTE format('GRANT INSERT ON TABLE recordings, files, jobs, clips, reviews, datasets, dataset_clips TO %I', app_role);
-  EXECUTE format('GRANT DELETE ON TABLE dataset_clips TO %I', app_role);
-  EXECUTE format('GRANT UPDATE (status, source_manifest_file_id, source_manifest_sha256, current_job_id, deleted_at, updated_at) ON TABLE recordings TO %I', app_role);
-  EXECUTE format('GRANT UPDATE (state, observed_size_bytes, transport_epoch, object_key, provider_upload_id, part_count, transport_expires_at, completed_at, updated_at) ON TABLE files TO %I', app_role);
-  EXECUTE format('GRANT UPDATE (state, controller_lease_owner, controller_lease_expires_at, workflow_run_ref, submission_intent_at, execution_call_id, invocation_nonce, capability_token_sha256, start_deadline, execution_deadline, result_manifest_file_id, result_manifest_sha256, error_code, error_message, updated_at, finished_at) ON TABLE jobs TO %I', app_role);
-  EXECUTE format('GRANT UPDATE (name, revision, updated_by, updated_at) ON TABLE datasets TO %I', app_role);
-  EXECUTE format('GRANT EXECUTE ON FUNCTION catalog_set_dataset_access(uuid, text, boolean, text, text) TO %I', app_role);
+  EXECUTE format('GRANT INSERT ON TABLE public.recordings, public.files, public.jobs, public.clips, public.reviews, public.datasets, public.dataset_clips TO %I', app_role);
+  EXECUTE format('GRANT DELETE ON TABLE public.dataset_clips TO %I', app_role);
+  EXECUTE format('GRANT UPDATE (status, source_manifest_file_id, source_manifest_sha256, current_job_id, deleted_at, updated_at) ON TABLE public.recordings TO %I', app_role);
+  EXECUTE format('GRANT UPDATE (state, observed_size_bytes, transport_epoch, object_key, provider_upload_id, part_count, transport_expires_at, completed_at, updated_at) ON TABLE public.files TO %I', app_role);
+  EXECUTE format('GRANT UPDATE (state, controller_lease_owner, controller_lease_expires_at, workflow_run_ref, submission_intent_at, execution_call_id, invocation_nonce, capability_token_sha256, start_deadline, execution_deadline, result_manifest_file_id, result_manifest_sha256, error_code, error_message, updated_at, finished_at) ON TABLE public.jobs TO %I', app_role);
+  EXECUTE format('GRANT UPDATE (name, revision, updated_by, updated_at) ON TABLE public.datasets TO %I', app_role);
+  EXECUTE format('GRANT EXECUTE ON FUNCTION public.catalog_set_dataset_access(uuid, text, boolean, text, text) TO %I', app_role);
 END $$;
 REVOKE ALL ON FUNCTION stateaction_grant_app_role(name) FROM PUBLIC;

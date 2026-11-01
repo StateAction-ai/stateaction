@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
+import pg from "pg";
 import {
   acceptProcessingResult,
   addClipsToDataset,
@@ -952,5 +953,112 @@ describe("append-only reviews and approved-only datasets", () => {
       listInternalClips(db.app, { viewerUserId: actors.customer }),
       "forbidden",
     );
+  });
+});
+
+describe("session TEMP objects cannot shadow catalog relations", () => {
+  test("the app role cannot create TEMP tables, and even with TEMP re-granted, shadows do not bypass triggers or the grant routine", async () => {
+    const p = await processedRecording(db.app, actors, 2);
+    await acceptProcessingResult(db.app, {
+      jobId: p.jobId,
+      manifestFileId: p.manifestFileId,
+      manifestSha256: p.manifestSha256,
+      clips: p.clips,
+    });
+    const [pendingClip, otherClip] = p.clips.map((c) => c.clipId) as [
+      string,
+      string,
+    ];
+    const d = randomUUID();
+    await createDataset(db.app, {
+      datasetId: d,
+      name: "Shadow target",
+      actorUserId: actors.staff,
+    });
+    const app = new pg.Client({ connectionString: db.appUrl });
+    await app.connect();
+    try {
+      await expectCode(
+        app.query(
+          "CREATE TEMP TABLE reviews (clip_id uuid, revision int, decision text)",
+        ),
+        "42501",
+      );
+      // Simulate a misconfigured grant; function search_path must still win.
+      await db.owner.query(
+        `GRANT TEMPORARY ON DATABASE ${db.name} TO stateaction_app`,
+      );
+      const shadow = new pg.Client({ connectionString: db.appUrl });
+      await shadow.connect();
+      try {
+        await shadow.query(
+          "CREATE TEMP TABLE reviews (clip_id uuid, revision int, decision text, task_label text)",
+        );
+        await shadow.query(
+          "INSERT INTO pg_temp.reviews VALUES ($1, 1, 'approved', 'fake')",
+          [pendingClip],
+        );
+        await shadow.query(
+          "CREATE TEMP TABLE access (user_id text, role text, enabled boolean)",
+        );
+        await shadow.query(
+          "INSERT INTO pg_temp.access VALUES ($1, 'staff', true), ($2, 'staff', true)",
+          [actors.customer, actors.collector],
+        );
+        await expectCode(
+          shadow.query(
+            "INSERT INTO public.dataset_clips (dataset_id, clip_id, added_by) VALUES ($1, $2, $3)",
+            [d, pendingClip, actors.staff],
+          ),
+          "SAC02",
+        );
+        await expectCode(
+          shadow.query(
+            `INSERT INTO public.reviews (id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id, decision, task_label)
+             VALUES (gen_random_uuid(), $1, $2, $3, 1, $4, 'approved', 'x')`,
+            [otherClip, p.jobId, p.manifestSha256, actors.customer],
+          ),
+          "SAC05",
+        );
+        await expectCode(
+          shadow.query(
+            "SELECT public.catalog_set_dataset_access($1, $2, true, $3, 'x')",
+            [d, actors.customer, actors.collector],
+          ),
+          "SAC05",
+        );
+        await expectCode(
+          shadow.query(
+            "INSERT INTO public.dataset_clips (dataset_id, clip_id, added_by) VALUES ($1, $2, $3)",
+            [d, otherClip, actors.customer],
+          ),
+          "SAC05",
+        );
+      } finally {
+        await shadow.end();
+      }
+      const members = await db.owner.query(
+        "SELECT count(*)::int AS n FROM dataset_clips WHERE dataset_id = $1",
+        [d],
+      );
+      assert.equal(members.rows[0].n, 0);
+      const grants = await db.owner.query(
+        "SELECT count(*)::int AS n FROM dataset_access WHERE dataset_id = $1",
+        [d],
+      );
+      assert.equal(grants.rows[0].n, 0);
+    } finally {
+      await db.owner.query(
+        "SELECT stateaction_grant_app_role('stateaction_app')",
+      );
+      await app.end();
+    }
+    const again = new pg.Client({ connectionString: db.appUrl });
+    await again.connect();
+    try {
+      await expectCode(again.query("CREATE TEMP TABLE x (id int)"), "42501");
+    } finally {
+      await again.end();
+    }
   });
 });

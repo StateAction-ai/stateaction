@@ -176,6 +176,7 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
       "INSERT INTO dataset_access (dataset_id, user_id, granted_by, permission_evidence_ref) VALUES (gen_random_uuid(), 'x', 'x', 'x')",
       "SELECT stateaction_grant_app_role('stateaction_app')",
       "INSERT INTO platform_schema_migrations (version) VALUES (99)",
+      "CREATE TEMP TABLE reviews (id int)",
     ];
     const results: Record<string, string> = {};
     for (const sql of denied) {
