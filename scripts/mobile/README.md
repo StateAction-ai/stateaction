@@ -36,6 +36,14 @@ The Android job removes only unused .NET, Haskell/GHCup, CodeQL and Swift
 installation directories from the ephemeral GitHub-hosted Ubuntu 24.04 image;
 the helper refuses local hosts, self-hosted runners and other jobs. These fixed
 paths come from the official [runner-image installers](https://github.com/actions/runner-images/tree/main/images/ubuntu/scripts/build).
+Within the fixed preinstalled SDK, it also removes unused numeric side-by-side
+NDK version directories while preserving the configured NDK 28.2.13676358,
+unknown entries and symlinks. Foreign or symlinked SDK roots are refused.
+Android supports selecting the required version through
+[`ndkVersion`](https://developer.android.com/studio/projects/install-ndk);
+API platforms, build-tools, SDK managers and Java remain installed. The job
+also sets `ANDROID_NDK`, `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT` to that pinned
+version so native-asset tooling does not select a removed runner default.
 After SDK setup it requires 20 GiB for the build plus a real 1 GiB log reserve.
 During the build, a monitor stops its process group at 2 GiB free, releases the
 reserve and fails the check so runner diagnostics can finish. The reserve is

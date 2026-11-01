@@ -18,11 +18,110 @@ HOSTED = {
     "RUNNER_OS": "Linux",
     "ImageOS": "ubuntu24",
     "GITHUB_JOB": "android",
+    "ANDROID_HOME": "/usr/local/lib/android/sdk",
 }
 UBUNTU = {"ID": "ubuntu", "VERSION_ID": "24.04"}
 
 
 class RunnerDiskTests(unittest.TestCase):
+    def test_pinned_ndk_environment_appends_exact_values_and_preserves_content(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "github-env"
+            output.write_text("EXISTING=value\n")
+            with patch.dict(
+                os.environ, {"GITHUB_ENV": str(output), "PATH": "preserve-this-path"}
+            ):
+                runner_disk.publish_pinned_ndk(runner_disk.ANDROID_SDK, "28.2.13676358")
+                expected = "/usr/local/lib/android/sdk/ndk/28.2.13676358"
+                self.assertEqual(
+                    output.read_text(),
+                    "EXISTING=value\n"
+                    + "".join(
+                        f"{name}={expected}\n"
+                        for name in (
+                            "ANDROID_NDK",
+                            "ANDROID_NDK_HOME",
+                            "ANDROID_NDK_ROOT",
+                        )
+                    ),
+                )
+                for name in ("ANDROID_NDK", "ANDROID_NDK_HOME", "ANDROID_NDK_ROOT"):
+                    self.assertEqual(os.environ[name], expected)
+                self.assertEqual(os.environ["PATH"], "preserve-this-path")
+
+    def test_real_ndk_tree_selects_only_unused_numeric_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            sdk = Path(temporary)
+            ndk = sdk / "ndk"
+            ndk.mkdir()
+            for name in (
+                "28.2.13676358",
+                "27.3.13750724",
+                "29.0.14206865",
+                "30.0.14904198",
+                "keep-me",
+                ".staging",
+                "31.0.123-preview",
+            ):
+                (ndk / name).mkdir()
+                (ndk / name / "sentinel").write_text("preserve unless selected")
+            (ndk / "32.0.123").symlink_to(ndk / "keep-me", target_is_directory=True)
+            (ndk / "33.0.123").write_text("numeric file, not an SDK directory")
+            selected = runner_disk.unused_ndk_directories(sdk, "28.2.13676358")
+            self.assertEqual(
+                [path.name for path in selected],
+                ["27.3.13750724", "29.0.14206865", "30.0.14904198"],
+            )
+            # Exercise deletion only in this disposable tree, using selected paths.
+            for path in selected:
+                shutil.rmtree(path)
+            self.assertEqual(
+                sorted(path.name for path in ndk.iterdir()),
+                [
+                    ".staging",
+                    "28.2.13676358",
+                    "31.0.123-preview",
+                    "32.0.123",
+                    "33.0.123",
+                    "keep-me",
+                ],
+            )
+            self.assertEqual(
+                (ndk / "28.2.13676358/sentinel").read_text(), "preserve unless selected"
+            )
+            self.assertTrue((ndk / "32.0.123").is_symlink())
+
+    def test_symlinked_sdk_or_ndk_root_and_invalid_pin_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "real").mkdir()
+            (root / "sdk").symlink_to(root / "real", target_is_directory=True)
+            with self.assertRaisesRegex(SystemExit, "symlinked"):
+                runner_disk.unused_ndk_directories(root / "sdk", "28.2.13676358")
+            (root / "real/ndk").symlink_to(root / "real", target_is_directory=True)
+            with self.assertRaisesRegex(SystemExit, "symlinked"):
+                runner_disk.unused_ndk_directories(root / "real", "28.2.13676358")
+            with self.assertRaisesRegex(SystemExit, "strict numeric"):
+                runner_disk.unused_ndk_directories(root / "real", "../../foreign")
+
+    def test_foreign_sdk_environment_is_rejected_before_any_cleanup(self):
+        for changed in (
+            {"ANDROID_HOME": "/another/sdk"},
+            {"ANDROID_HOME": ""},
+            {"ANDROID_SDK_ROOT": "/another/sdk"},
+        ):
+            with (
+                self.subTest(changed=changed),
+                patch.dict(os.environ, HOSTED | changed, clear=True),
+                patch.object(
+                    runner_disk.platform, "freedesktop_os_release", return_value=UBUNTU
+                ),
+                patch.object(runner_disk.subprocess, "run") as command,
+            ):
+                with self.assertRaisesRegex(SystemExit, "foreign or missing"):
+                    runner_disk.prepare(Path("/workspace"))
+                command.assert_not_called()
+
     def test_grandchild_group_stops_after_parent_has_already_exited(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -89,6 +188,13 @@ class RunnerDiskTests(unittest.TestCase):
                 runner_disk.platform, "freedesktop_os_release", return_value=UBUNTU
             ),
             patch.object(Path, "exists", return_value=True),
+            patch.object(
+                runner_disk,
+                "validate_preinstalled_sdk",
+                return_value=runner_disk.ANDROID_SDK,
+            ),
+            patch.object(runner_disk, "unused_ndk_directories", return_value=[]),
+            patch.object(runner_disk, "publish_pinned_ndk"),
             patch.object(runner_disk.subprocess, "run") as command,
         ):
             runner_disk.prepare(Path("/workspace"))
@@ -119,6 +225,13 @@ class RunnerDiskTests(unittest.TestCase):
                 runner_disk.platform, "freedesktop_os_release", return_value=UBUNTU
             ),
             patch.object(Path, "exists", return_value=False),
+            patch.object(
+                runner_disk,
+                "validate_preinstalled_sdk",
+                return_value=runner_disk.ANDROID_SDK,
+            ),
+            patch.object(runner_disk, "unused_ndk_directories", return_value=[]),
+            patch.object(runner_disk, "publish_pinned_ndk"),
             patch.object(Path, "is_symlink", return_value=False),
             patch.object(runner_disk.subprocess, "run") as command,
         ):

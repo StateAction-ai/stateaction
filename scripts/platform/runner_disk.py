@@ -2,8 +2,10 @@
 """Disk headroom for this repository's ephemeral Ubuntu Android CI job only."""
 
 import argparse
+import json
 import os
 import platform
+import re
 import shutil
 import signal
 import subprocess
@@ -15,6 +17,9 @@ GIB = 1024**3
 MINIMUM_FREE = 20 * GIB
 LOG_RESERVE = GIB
 STOP_FREE = 2 * GIB
+ANDROID_SDK = Path("/usr/local/lib/android/sdk")
+TOOLCHAIN = Path(__file__).resolve().parents[2] / "config/mobile-toolchain.json"
+NDK_VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
 # Official runner-images installers own these fixed, unused language/tool paths.
 # Never derive a deletion path from repository input or environment variables.
 UNUSED_TOOLS = (
@@ -55,10 +60,68 @@ def require_space(workspace: Path, required: int) -> None:
         )
 
 
+def validate_preinstalled_sdk() -> Path:
+    for name in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
+        value = os.environ.get(name)
+        if (name == "ANDROID_HOME" and not value) or (
+            value and Path(value) != ANDROID_SDK
+        ):
+            raise SystemExit(
+                "Refusing NDK cleanup for a foreign or missing Android SDK path"
+            )
+    if not ANDROID_SDK.is_dir() or ANDROID_SDK.resolve() != ANDROID_SDK:
+        raise SystemExit("Refusing NDK cleanup through a missing or symlinked SDK")
+    return ANDROID_SDK
+
+
+def unused_ndk_directories(sdk: Path, pinned: str) -> list[Path]:
+    """Select real immediate version directories; preserve pins and unknown data."""
+    if not isinstance(pinned, str) or NDK_VERSION.fullmatch(pinned) is None:
+        raise SystemExit("Refusing NDK cleanup without a strict numeric pinned version")
+    ndk = sdk / "ndk"
+    if sdk.is_symlink() or ndk.is_symlink():
+        raise SystemExit("Refusing NDK cleanup through a symlinked SDK or NDK root")
+    if not ndk.is_dir():
+        return []
+    return sorted(
+        path
+        for path in ndk.iterdir()
+        if path.name != pinned
+        and NDK_VERSION.fullmatch(path.name)
+        and not path.is_symlink()
+        and path.is_dir()
+    )
+
+
+def publish_pinned_ndk(sdk: Path, pinned: str) -> None:
+    output = os.environ.get("GITHUB_ENV")
+    if not output:
+        raise SystemExit(
+            "Refusing NDK cleanup without the GitHub environment output file"
+        )
+    values = {
+        name: str(sdk / "ndk" / pinned)
+        for name in ("ANDROID_NDK", "ANDROID_NDK_HOME", "ANDROID_NDK_ROOT")
+    }
+    with Path(output).open("a") as destination:
+        for name, value in values.items():
+            destination.write(f"{name}={value}\n")
+    os.environ.update(values)
+
+
 def prepare(workspace: Path) -> None:
     require_ephemeral_android_job()
+    sdk = validate_preinstalled_sdk()
+    pinned_ndk = json.loads(TOOLCHAIN.read_text())["ndk"]
+    unused_ndks = unused_ndk_directories(sdk, pinned_ndk)
+    publish_pinned_ndk(sdk, pinned_ndk)
     report(workspace, "before removing unused preinstalled tooling")
+    print(
+        f"Preserving pinned NDK {pinned_ndk}; unused side-by-side NDKs: {[path.name for path in unused_ndks]}",
+        flush=True,
+    )
     present = [str(path) for path in UNUSED_TOOLS if path.exists() or path.is_symlink()]
+    present.extend(str(path) for path in unused_ndks)
     if present:
         subprocess.run(["du", "-sh", "--", *present], check=False)
         subprocess.run(["sudo", "-n", "rm", "-rf", "--", *present], check=True)
