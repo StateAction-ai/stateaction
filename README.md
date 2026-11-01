@@ -1,18 +1,20 @@
-# Robotics data collection
+# StateAction.ai
 
 StateAction.ai monorepo for the Flutter collector, native recorder, local processing, and collection/review platform design. Android is the first implementation target.
 
 ## Platform implementation plan
 
-The [technical design](docs/technical-design.md) and [engineering handoff](docs/README.md) define the upcoming monorepo, Render local/cloud workflows, cloud processing, login and review/delivery UI. The existing mobile app and recorder now live in `apps/mobile` and `packages/stera_recorder`. Backend/cloud deployment remains planned. [Android spike results](docs/spikes/android-feasibility.md) separate local/emulator checks from physical qualification.
+The [technical design](docs/technical-design.md) and [engineering handoff](docs/README.md) define the Render local/cloud workflows, cloud processing, login and review UI. The [platform foundation](docs/components/platform-foundations.md) is runnable locally; product auth/upload, durable processing and cloud deployment remain planned. The mobile app and recorder live in `apps/mobile` and `packages/stera_recorder`. [Android spike results](docs/spikes/android-feasibility.md) separate local/emulator checks from physical qualification.
+
+Repository: [timothywangdev/stateaction](https://github.com/timothywangdev/stateaction). Work is tracked in the [StateAction Linear project](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e). PR titles use a ticket ID, for example `SA-11: Scaffold platform foundations`; see the [delivery standards](docs/project-management/delivery-standards.md).
 
 ## Reproduce this workspace
 
 The mobile app and native recorder are ordinary tracked source in this repository; a normal clone includes them:
 
 ```bash
-git clone https://github.com/timothywangdev/robotics-data-collection.git
-cd robotics-data-collection
+git clone https://github.com/timothywangdev/stateaction.git
+cd stateaction
 ```
 
 Authentication is required for the private workspace repository. The optional `stera-sdk` submodule is used only by historical inspection/research scripts; initialize it with `git submodule update --init stera-sdk` when using those scripts. Phone captures,

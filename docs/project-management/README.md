@@ -2,6 +2,8 @@
 
 [Open the Linear project](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e). Linear is the live source of truth for issue status, assignees, native estimates, dates and decisions.
 
+Canonical GitHub repository: [timothywangdev/stateaction](https://github.com/timothywangdev/stateaction), private. The existing repository was renamed to preserve history. PR titles carry the primary Linear ID; native integration and hosted-check evidence must be verified on actual published PRs.
+
 The imported baseline covers the collection/review MVP: **six milestones, 40 implementation and qualification tickets**. The source plan and native Linear IDs are retained here for traceability, not as a second live task tracker. Application implementation and paid deployment remain separate work.
 
 The subsequent [mobile implementation update](mobile-implementation-update.md) added **10 tickets** and amended **14 existing tickets**, producing a verified 50-ticket/90-dependency plan. It specifies H.264-in-MCAP, complete sensor/clock/calibration evidence, native Android/iOS capture and upload work, paired Rerun 0.41.0, and physical-device qualification. [Live mobile specification](https://linear.app/hw-personal-projects/document/mobile-implementation-h264-capture-and-reliable-upload-5677599f65bd). Its [remote receipt](linear-mobile-update-receipt.json) records publication/readback separately from the original baseline.
