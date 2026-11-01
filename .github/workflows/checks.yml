@@ -57,12 +57,14 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "dispatched_pr=$dispatched_pr" >> "$GITHUB_OUTPUT"
   checks:
-    name: Affected checks
+    name: Affected server and tooling checks
     needs: resolve
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       integration: ${{ steps.scope.outputs.integration }}
+      android: ${{ steps.scope.outputs.android }}
+      mobile_projects: ${{ steps.scope.outputs.mobile_projects }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,20 +96,55 @@ jobs:
             echo "NX_HEAD=$HEAD_SHA" >> "$GITHUB_ENV"
             projects=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --withTarget=integration --json)
             if [[ "$projects" == '[]' ]]; then echo "integration=false" >> "$GITHUB_OUTPUT"; else echo "integration=true" >> "$GITHUB_OUTPUT"; fi
+            mobile=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --json)
           else
             # The first tooling PR has no Nx graph/lockfile on its base.
             echo "mode=all" >> "$GITHUB_OUTPUT"
             echo "integration=true" >> "$GITHUB_OUTPUT"
+            mobile=$(pnpm exec nx show projects --json)
           fi
+          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder")] | join(",")' <<< "$mobile")
+          echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
+          if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build, typecheck, syntax, test and format
         env:
           MODE: ${{ steps.scope.outputs.mode }}
         run: |
           if [[ "$MODE" == affected ]]; then
-            pnpm exec nx affected -t build,typecheck,syntax,test,format --outputStyle=static
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder --outputStyle=static
           else
-            pnpm exec nx run-many -t build,typecheck,syntax,test,format --outputStyle=static
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder --outputStyle=static
           fi
+  android:
+    name: Affected Android and Dart checks
+    needs: [resolve, checks]
+    if: needs.checks.outputs.android == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.head }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.2
+          package-manager-cache: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21.0.12.1+1
+          check-latest: false
+      - run: npm install --global pnpm@10.33.0
+      - run: pnpm install --frozen-lockfile
+      - name: Install verified Flutter and Android build tools
+        run: python3 scripts/platform/install-mobile-toolchain.py
+      - name: Check actual staged Dart through installed hooks
+        run: node --test scripts/platform/check-staged-dart.test.mjs
+      - name: Analyze, test, format and build affected Android sources
+        env:
+          MOBILE_PROJECTS: ${{ needs.checks.outputs.mobile_projects }}
+        run: pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
   integration:
     name: Local runtime smoke
     needs: [resolve, checks]
@@ -136,7 +173,7 @@ jobs:
   required:
     name: Required checks
     if: always()
-    needs: [resolve, checks, integration]
+    needs: [resolve, checks, android, integration]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every applicable job to succeed
@@ -145,9 +182,18 @@ jobs:
           CHECKS_RESULT: ${{ needs.checks.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           INTEGRATION_REQUIRED: ${{ needs.checks.outputs.integration }}
+          ANDROID_RESULT: ${{ needs.android.result }}
+          ANDROID_REQUIRED: ${{ needs.checks.outputs.android }}
         run: |
           [[ "$RESOLVE_RESULT" == success ]] || exit 1
           [[ "$CHECKS_RESULT" == success ]] || exit 1
+          if [[ "$ANDROID_REQUIRED" == true ]]; then
+            [[ "$ANDROID_RESULT" == success ]] || exit 1
+          elif [[ "$ANDROID_REQUIRED" == false ]]; then
+            [[ "$ANDROID_RESULT" == skipped || "$ANDROID_RESULT" == success ]] || exit 1
+          else
+            exit 1
+          fi
           if [[ "$INTEGRATION_REQUIRED" == true ]]; then
             [[ "$INTEGRATION_RESULT" == success ]] || exit 1
           elif [[ "$INTEGRATION_REQUIRED" == false ]]; then

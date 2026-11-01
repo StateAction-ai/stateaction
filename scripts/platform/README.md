@@ -2,7 +2,7 @@
 
 Nx 24.0.3 owns the dependency graph, affected selection and local task cache. pnpm remains the TypeScript package manager; uv remains the Python package/build manager. Explicit `project.json` targets call native commands, so no language-specific Nx plugin or Nx Cloud is required. Exact pins and primary-source links are in [the toolchain receipt](../../config/platform-toolchain.json).
 
-The graph currently contains web, jobs, server, contracts, processing, tooling, infra and automation tests. Mobile is not imported in this ticket. Its later `mobile` and `recorder` projects will call Flutter/pub and Gradle directly, retain native lockfiles, depend on capture contracts and declare generated outputs. Emulator/device tasks must be uncached; no imaginary Flutter targets run now.
+The graph contains web, jobs, server, contracts, processing, tooling, infra, automation, mobile, stera-recorder and mobile-tooling. The [mobile setup](../mobile/README.md) uses real Flutter/pub/Gradle targets and native lockfiles. Android checks run when mobile or its hook/toolchain inputs are affected and feed the same required CI gate. APK builds stay uncached because Flutter bundles local configuration; device tasks must also remain uncached.
 
 ## Setup and checks
 

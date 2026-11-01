@@ -53,6 +53,28 @@
       "{workspaceRoot}/scripts/platform/ci-smoke.sh",
       "{workspaceRoot}/scripts/platform/install-render.py",
       "{workspaceRoot}/scripts/platform/web.mjs"
+    ],
+    "flutterSources": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/build/**/*",
+      "!{projectRoot}/.dart_tool/**/*",
+      "!{projectRoot}/.flutter-plugins*",
+      "!{projectRoot}/android/.gradle/**/*",
+      "!{projectRoot}/android/local.properties",
+      "!{projectRoot}/.env",
+      "!{projectRoot}/.env.*",
+      "sharedGlobals",
+      "{workspaceRoot}/.tool-versions",
+      "{workspaceRoot}/scripts/mobile/**/*",
+      "{workspaceRoot}/scripts/platform/install-mobile-toolchain.py",
+      "{workspaceRoot}/scripts/android_personal_device.py",
+      "{workspaceRoot}/tests/test_android_personal_device.py",
+      "{workspaceRoot}/scripts/platform/check-staged.mjs",
+      "{workspaceRoot}/scripts/platform/check-staged-dart.test.mjs",
+      "{workspaceRoot}/scripts/platform/hook-fixtures.mjs",
+      "{workspaceRoot}/scripts/platform/check-staged.test.mjs",
+      "!{projectRoot}/android/.kotlin/**/*",
+      "!{projectRoot}/**/.cxx/**/*"
     ]
   },
   "targetDefaults": {

@@ -1,0 +1,58 @@
+{
+  "name": "mobile-tooling",
+  "root": "scripts/mobile",
+  "projectType": "library",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": [],
+      "options": {
+        "commands": [
+          "python3 -m unittest discover -s scripts/mobile -p 'test_*.py' -v",
+          "python3 -m unittest discover -s tests -p test_android_personal_device.py -v"
+        ],
+        "parallel": false
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/android_personal_device.py",
+        "{workspaceRoot}/tests/test_android_personal_device.py",
+        "{workspaceRoot}/docs/validation/sa-10-import.json",
+        "{workspaceRoot}/docs/validation/mobile-source-import.json",
+        "{workspaceRoot}/third_party/stera-app/**/*"
+      ]
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/mobile scripts/android_personal_device.py tests/test_android_personal_device.py"
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/android_personal_device.py",
+        "{workspaceRoot}/tests/test_android_personal_device.py",
+        "{workspaceRoot}/docs/validation/sa-10-import.json",
+        "{workspaceRoot}/docs/validation/mobile-source-import.json",
+        "{workspaceRoot}/third_party/stera-app/**/*"
+      ]
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml scripts/mobile scripts/android_personal_device.py tests/test_android_personal_device.py",
+          "pnpm exec prettier --check scripts/mobile/project.json scripts/mobile/README.md docs/validation/sa-10-import.json third_party/stera-app/IMPORT.md"
+        ],
+        "parallel": false
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/android_personal_device.py",
+        "{workspaceRoot}/tests/test_android_personal_device.py",
+        "{workspaceRoot}/docs/validation/sa-10-import.json",
+        "{workspaceRoot}/docs/validation/mobile-source-import.json",
+        "{workspaceRoot}/third_party/stera-app/**/*"
+      ]
+    }
+  }
+}

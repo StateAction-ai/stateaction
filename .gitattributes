@@ -1,0 +1,2 @@
+# Official Windows bootstrap scripts retain CRLF bytes.
+*.bat whitespace=cr-at-eol

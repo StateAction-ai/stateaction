@@ -1,0 +1,59 @@
+# Mobile source and checks
+
+The existing collector is `apps/mobile`; its reusable recorder is
+`packages/stera_recorder`. Both are real Nx projects using Flutter/pub and Gradle,
+not Node packages. Imported upstream ancestry and source evidence are retained in
+[the import record](../../third_party/stera-app/IMPORT.md) and
+[historical receipt](../../docs/validation/mobile-source-import.json). Current
+SA-10 checks and intentional import adaptations are in the
+[qualification record](../../docs/validation/sa-10-import.json).
+
+Use the pinned [mobile toolchain](../../config/mobile-toolchain.json): Flutter
+3.44.6/Dart 3.12.2, JDK 21, Android SDK 36, NDK 28.2.13676358 and Gradle 8.14.
+Use [the platform setup](../platform/README.md) for pinned Node/pnpm/uv. On a clean
+Linux clone, install the pinned Temurin 21.0.12.1+1 JDK and set `JAVA_HOME` to its
+installation, then run:
+
+From the repository root:
+
+```sh
+python3 scripts/platform/install-mobile-toolchain.py
+source artifacts/platform-tools/mobile/env.sh
+make install
+make check
+pnpm affected --base=origin/main --head=HEAD
+```
+
+The bootstrap verifies official archive checksums and Android package revisions.
+The [Android CI job](../../.github/workflows/checks.yml) uses the same toolchain.
+On this existing development host only, `source scripts/env.sh` exposes the
+previously installed SDKs. CI does not source that host-specific file.
+
+`prepare` runs locked pub resolution, including the retained recorder example.
+It creates only a missing `.env` asset with
+`NO_AUTH_MODE=true`; an existing private asset is preserved. Keep both app and
+recorder and recorder-example `pubspec.lock` files committed. The app depends on the recorder in the
+Nx graph. Native JVM tests and instrumentation APK assembly complete before the
+actual app APK build, avoiding concurrent Gradle writes. They do not run or
+install instrumentation on a device. Gradle has a 3 GB heap, 1 GB metaspace cap,
+two workers and a 512 MB Kotlin daemon heap to fit the small Linux CI runner.
+
+Format targets check Git-visible Dart and supported config/docs throughout each
+project, including tools and examples. Generated build/SDK state is excluded;
+the Dart language floor and formatter match the installed staged hook.
+
+The app APK target has caching disabled: Flutter bundles `.env`, and private
+configuration must never enter the Nx cache. Generated Flutter/Gradle state,
+private assets and build outputs are excluded from source inputs. Analysis,
+unit tests and public native fixture outputs use declared source/toolchain
+inputs. Real device/capture checks must always run uncached.
+
+The inherited recorder uses JPEG messages in MCAP. H.264 processing, cloud
+workers, auth/upload replacement and UI changes belong to subsequent tickets.
+The synthetic checked-in MCAP regression fixture is not contributor footage.
+
+Before any physical test, finish local checks and follow the
+[personal-profile rules](../../AGENTS.md) and
+[guarded helper](../ANDROID_PERSONAL_DEVICE.md). This source import performs no
+device operation, and no passing host build qualifies physical camera behavior,
+thermal performance or iOS signing.

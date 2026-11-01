@@ -26,3 +26,6 @@ dist/
 /apps/web/next-env.d.ts
 /.lefthook-hooks/
 !.env.workflows.example
+
+# The imported app is ordinary source; preserve any old checkout locally.
+/stera-app/
