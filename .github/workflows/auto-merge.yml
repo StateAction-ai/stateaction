@@ -1,0 +1,42 @@
+name: Merge passing ticket PRs
+on:
+  workflow_run:
+    workflows: [CI, PR policy]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Recheck an existing PR
+        required: true
+        type: string
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+# Repository-wide serialization also covers branch updates after another merge.
+concurrency:
+  group: stateaction-ticket-merger
+  cancel-in-progress: false
+jobs:
+  merge:
+    name: Guarded merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # workflow_run uses the default branch SHA. Never use a PR ref, artifacts,
+      # dependency installation, or caches in this privileged job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/heads/main
+          persist-credentials: false
+      - name: Revalidate current metadata and exact-head CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            python3 scripts/automation/auto_merge.py --pr "$PR_NUMBER"
+          else
+            python3 scripts/automation/auto_merge.py
+          fi

@@ -1,0 +1,35 @@
+{
+  "name": "contracts",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "root": "packages/contracts",
+  "sourceRoot": "packages/contracts/src",
+  "projectType": "library",
+  "implicitDependencies": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm --filter @stateaction/contracts build"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm --filter @stateaction/contracts typecheck"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm --filter @stateaction/contracts test"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec prettier --check \"packages/contracts/api/**/*\" \"packages/contracts/src/**/*\" \"packages/contracts/test/**/*\" \"packages/contracts/*.json\""
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f5f6f8;
+  color: #182330;
+  font-family: system-ui, sans-serif;
+}
+main {
+  max-width: 54rem;
+  margin: 12vh auto;
+  padding: 2rem;
+}
+.brand {
+  font-weight: 700;
+}
+h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  letter-spacing: -0.04em;
+}
+p {
+  max-width: 40rem;
+  line-height: 1.65;
+}

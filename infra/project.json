@@ -1,0 +1,28 @@
+{
+  "name": "infra",
+  "root": "infra",
+  "projectType": "application",
+  "implicitDependencies": ["web", "jobs", "processing"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md}\""
+      }
+    },
+    "integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": [
+        {
+          "target": "build",
+          "projects": ["web", "jobs", "processing"]
+        }
+      ],
+      "options": {
+        "command": "bash scripts/platform/ci-smoke.sh"
+      },
+      "inputs": ["default", "runtimeTooling"]
+    }
+  }
+}

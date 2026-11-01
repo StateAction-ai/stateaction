@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "stateaction-local",
+      "credentials": [
+        {
+          "accessKey": "stateaction-local",
+          "secretKey": "stateaction-local-only-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "List", "Write", "Tagging"]
+    }
+  ]
+}

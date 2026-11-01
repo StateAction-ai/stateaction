@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: false
+  commands:
+    staged-content:
+      run: node scripts/platform/check-staged.mjs
+      stage_fixed: false
+pre-push:
+  commands:
+    protect-main:
+      run: node scripts/platform/check-push.mjs
+      use_stdin: true

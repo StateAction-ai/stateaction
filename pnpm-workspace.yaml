@@ -1,0 +1,13 @@
+packages:
+  - apps/web
+  - apps/jobs
+  - packages/server
+  - packages/contracts
+
+onlyBuiltDependencies:
+  - sharp
+  - esbuild
+  - nx
+
+ignoredBuiltDependencies:
+  - lefthook

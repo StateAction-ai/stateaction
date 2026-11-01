@@ -1,0 +1,58 @@
+{
+  "verifiedOn": "2026-11-01",
+  "node": "24.22.2",
+  "pnpm": "10.33.0",
+  "python": "3.12.13",
+  "uv": "0.13.6",
+  "renderCli": "2.34.0",
+  "renderSdk": "1.6.0",
+  "next": "16.4.3",
+  "react": "19.3.1",
+  "typescript": "5.9.3",
+  "sources": {
+    "node": "https://nodejs.org/dist/v24.22.2/SHASUMS256.txt",
+    "pnpm": "https://registry.npmjs.org/pnpm/10.33.0",
+    "next": "https://registry.npmjs.org/next/16.4.3",
+    "react": "https://registry.npmjs.org/react/19.3.1",
+    "renderSdk": "https://registry.npmjs.org/@renderinc%2fsdk/1.6.0",
+    "renderCli": "https://github.com/render-oss/cli/releases/tag/v2.34.0",
+    "localRuntime": "https://render.com/docs/workflows-local-development",
+    "taskApi": "https://render.com/docs/workflows-sdk-typescript",
+    "python": "https://www.python.org/downloads/release/python-31213/",
+    "uv": "https://pypi.org/project/uv/0.13.6/",
+    "seaweedfs": "https://github.com/seaweedfs/seaweedfs/releases/tag/4.51",
+    "seaweedfsLicense": "https://github.com/seaweedfs/seaweedfs/blob/4.51/LICENSE",
+    "seaweedfsS3": "https://github.com/seaweedfs/seaweedfs/wiki/Amazon-S3-API",
+    "minioStatus": "https://github.com/minio/minio",
+    "nx": "https://registry.npmjs.org/nx/24.0.3",
+    "nxInputs": "https://nx.dev/docs/reference/nx-json",
+    "nxAffected": "https://nx.dev/docs/features/ci-features/affected",
+    "lefthook": "https://registry.npmjs.org/lefthook/2.2.2",
+    "lefthookInstall": "https://lefthook.dev/usage/commands/install.html",
+    "lefthookStdin": "https://lefthook.dev/configuration/use_stdin.html",
+    "ruff": "https://pypi.org/project/ruff/0.17.3/"
+  },
+  "localStorageDecision": "Official MinIO Docker Hub and Quay pinned image pulls fail; archived upstream is no longer maintained. Use official SeaweedFS Apache-2.0 image for local S3 transport only. Production R2 is unchanged. Local health does not qualify multipart/presigning/CORS/provider semantics.",
+  "renderLinuxAmd64ArchiveSha256": "6774a558bc3972b3487d851873d8ea6eeeb5a2b003a4696e6ba5c6a7f20736ad",
+  "nodeLinuxX64ArchiveSha256": "48cc0e21e048790e54c0cf5749c2725005313d652651c40b7a21feb9697aaf75",
+  "nx": "24.0.3",
+  "lefthook": "2.2.2",
+  "ruff": "0.17.3",
+  "githubActions": {
+    "checkout": {
+      "version": "v7.0.1",
+      "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "source": "https://github.com/actions/checkout/releases/tag/v7.0.1"
+    },
+    "setup-node": {
+      "version": "v7.1.0",
+      "sha": "949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "source": "https://github.com/actions/setup-node/releases/tag/v7.1.0"
+    },
+    "setup-uv": {
+      "version": "v10.3.3",
+      "sha": "68559e99cc807c1eb7e9238fd43a15bba460eec2",
+      "source": "https://github.com/astral-sh/setup-uv/releases/tag/v10.3.3"
+    }
+  }
+}
