@@ -106,7 +106,7 @@
     "sha256": "c3cdb83580232b281404dc9ea74cbb8ddce166ef275ea326daaf81fe1cd6d087"
   },
   "close_200_digit_count": {
-    "description": "Close frames.acquired is a 200-digit decimal (exceeds int64 and the 19-character bound).",
+    "description": "Close frames.acquired is a 200-digit decimal (far beyond int64).",
     "expect": "reject",
     "expected_errors": [
       "E_SCHEMA_MALFORMED"
