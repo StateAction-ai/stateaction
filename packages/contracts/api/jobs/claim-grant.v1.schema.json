@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/claim-grant.v1.json",
+  "title": "Authoritative claim response v1",
+  "description": "Claim data payload. No database URL or general storage credentials. capability.token is a secret: never log or persist it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "invocationNonce",
+    "kind",
+    "startDeadline",
+    "executionDeadline",
+    "digests",
+    "limits",
+    "inputs",
+    "capability"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "kind": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobKind"
+    },
+    "startDeadline": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "executionDeadline": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceManifestSha256",
+        "codeRevision",
+        "imageDigest",
+        "modelSha256",
+        "configSha256"
+      ],
+      "properties": {
+        "sourceManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "codeRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "imageDigest": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "modelSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "configSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxOutputFiles",
+        "maxOutputBytes",
+        "maxControlDocumentBytes"
+      ],
+      "properties": {
+        "maxOutputFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "maxOutputBytes": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/byteCount"
+        },
+        "maxControlDocumentBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "role",
+          "sizeBytes",
+          "sha256",
+          "readUrl",
+          "expiresAt"
+        ],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "readUrl": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 4096,
+            "pattern": "^https?://[^\\s]+$"
+          },
+          "expiresAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 2000
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "expiresAt"],
+      "properties": {
+        "token": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43,256}$"
+        },
+        "expiresAt": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        }
+      }
+    }
+  }
+}

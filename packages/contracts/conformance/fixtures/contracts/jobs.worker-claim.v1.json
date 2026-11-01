@@ -1,0 +1,101 @@
+{
+  "contract": "jobs.worker-claim.v1",
+  "cases": [
+    {
+      "name": "local executor",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "executor": {
+            "kind": "local",
+            "localExecutionRef": "pid:4242:boot-7"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "modal executor",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "executor": {
+            "kind": "modal",
+            "functionCallId": "fc-01JABCDEF0123456789"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "modal claim without call id",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "executor": {
+            "kind": "modal"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/executor"
+        ]
+      }
+    },
+    {
+      "name": "short nonce",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "abc",
+          "executor": {
+            "kind": "local",
+            "localExecutionRef": "pid:4242:boot-7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/invocationNonce"
+        ]
+      }
+    },
+    {
+      "name": "schema version as string",
+      "input": {
+        "document": {
+          "schemaVersion": "1",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "executor": {
+            "kind": "local",
+            "localExecutionRef": "pid:4242:boot-7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    }
+  ]
+}

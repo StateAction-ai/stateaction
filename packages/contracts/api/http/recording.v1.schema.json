@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording.v1.json",
+  "title": "Recording response v1",
+  "description": "GET /api/v1/recordings/{recordingId} data payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "status",
+    "createdAt",
+    "files",
+    "missingRequiredRoles"
+  ],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "uploading",
+        "sealed",
+        "uploaded",
+        "processing",
+        "reviewable",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "role",
+          "sizeBytes",
+          "sha256",
+          "required",
+          "state"
+        ],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "uploading",
+              "completing",
+              "completed",
+              "verified",
+              "cancelled",
+              "failed",
+              "expired"
+            ]
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000
+    },
+    "missingRequiredRoles": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+      },
+      "minItems": 0,
+      "maxItems": 3,
+      "uniqueItems": true
+    }
+  }
+}

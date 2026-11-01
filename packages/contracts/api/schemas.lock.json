@@ -1,0 +1,31 @@
+{
+  "lock": "stateaction.contracts.schemas-lock.v1",
+  "policy": "Published files are immutable; breaking or additive changes add a new vN file.",
+  "files": {
+    "artifacts/frame-map.v1.schema.json": "eabb6a3cfa214f47b7432c31693772fedc0eb4df37564d73a68b5d2053187f5d",
+    "artifacts/hand-observations.v1.schema.json": "90f7685d6b49b7b7e84285230a3b33804e2da0c615095724197c3ba00783314d",
+    "artifacts/processing-result.v1.schema.json": "fc8d0f8a41ddc53b9ec3bae92b3189241cbdd6cafeeaa1ee2cab1dfb6625d59c",
+    "artifacts/recording-source.v1.schema.json": "7557e79a72d05d366264084f0e960c803e51df05d3151d5b14a1318bf10e5268",
+    "catalog.v1.json": "35235ac03d1f970be61266e0848f238c1e37093794255300f80dab94ae88f0fa",
+    "common.v1.schema.json": "29ef14b3a7fadba2c5fda4b6a900d555bbdb388c7f4930475ff73d5b4b2907f0",
+    "http/error-envelope.v1.schema.json": "7bfeb5d2fb42bc011b719e0f1d81b1739d430c6231a6af2dc3bed39e82ea5737",
+    "http/parts-receipts.v1.schema.json": "697d66dfbc134529408a87d2fea71429aa8d6a30764c9667d503bbacceb8eb0f",
+    "http/parts-sign.v1.schema.json": "783b88d6f5c5803d649d290b15ebe75a856946add6f0b3d23f48f9fd95e06976",
+    "http/parts-signed.v1.schema.json": "927ce8912c167f31b5387111589f1f39f5e6ccabc2e87889baccf7186a31250c",
+    "http/recording-create.v1.schema.json": "2a13ec6192a2cda23424c4bb6d89844e4cb174008b8fdfe7c5a6f4fe17af2c11",
+    "http/recording-seal.v1.schema.json": "a157332a22eafb71941f241331af18fa7d1495f152ee76b2409bf77118608e5f",
+    "http/recording.v1.schema.json": "42dbf5d411fcf9cb5ca491358f29708cb073acddf7f67a32455aaf7a7c3ffdb6",
+    "http/success-envelope.v1.schema.json": "cf560496b08afb227c4e9e4f95e5f168e8265555b9445ef45fa055c8605c7415",
+    "http/upload-create.v1.schema.json": "d6a9f004f1f06a7c9590735c86988d62166519bca2ddb38ca39325dc41596ce2",
+    "http/upload-plan.v1.schema.json": "d30d4d5e3b6d7239aa5a75560bd40ea9533370f2d0b6029341ad5c47050096ad",
+    "http/upload-transition.v1.schema.json": "0abbe7c987fc8e2025490ef67947979b4fc71bdb9222d3e4aade05509df1c853",
+    "jobs/claim-grant.v1.schema.json": "763e6238d5b157c56312240c2e807ad2b09c02f8921753282042b0de9dfbcd4e",
+    "jobs/controller-input.v1.schema.json": "0ea0570b479959e431b95575bd49672d909173dd117b4a3a22f1dd3e45bc9544",
+    "jobs/heartbeat.v1.schema.json": "24954e9d83eba272f61df26bec4c8cb8ae7ce289030d6c5129f2cafe1d35c860",
+    "jobs/job-status.v1.schema.json": "65c9117ee64826371580eabfaef2cd41ba59e55ec74cadc94ac6c14159433b94",
+    "jobs/result-candidate.v1.schema.json": "328fe3dbaca9cbb691dc6032258454911ab74551840c1ba6f9d6315ef41f8e37",
+    "jobs/task-input.v1.schema.json": "0b793ebee963990802d23644f94499a7c69ed0d8460f8cf1c68f6e605003428d",
+    "jobs/worker-claim.v1.schema.json": "a2e0fae16d66ea54bd899c98ef206d7d14439821870460f93f7e397205e57fb5",
+    "platform-verify.v1.schema.json": "171bc49bd9a786d923dfbb14bccabe40a7d4c8281a2caddb5fd0f04f05864080"
+  }
+}

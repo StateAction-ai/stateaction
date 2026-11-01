@@ -1,0 +1,851 @@
+{
+  "contract": "artifacts.frame-map.v1",
+  "cases": [
+    {
+      "name": "stored frame map with int64 timestamps",
+      "input": {
+        "file": "artifacts/frame-map.v1.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "timestamp beyond int64",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036854775808",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rows/2/timestamp_ns"
+        ]
+      }
+    },
+    {
+      "name": "timestamp as JSON number",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": 1000,
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rows/0/timestamp_ns"
+        ]
+      }
+    },
+    {
+      "name": "frame count disagrees with rows",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 4,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/rows"
+        ]
+      }
+    },
+    {
+      "name": "frame index gap",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 5,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/rows/1/frame_index"
+        ]
+      }
+    },
+    {
+      "name": "clip pts not rebased from first source pts",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6001",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "clock_mismatch",
+        "paths": [
+          "/rows/2/clip_pts"
+        ]
+      }
+    },
+    {
+      "name": "mixed clock domains in one clip",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.sensor_event",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "clock_mismatch",
+        "paths": [
+          "/rows/1/clock_domain"
+        ]
+      }
+    },
+    {
+      "name": "non-increasing timestamp",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/rows/2/timestamp_ns"
+        ]
+      }
+    },
+    {
+      "name": "crop outside raster",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 90000
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 1,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/rows/0/transform/crop"
+        ]
+      }
+    },
+    {
+      "name": "time base zero denominator",
+      "input": {
+        "document": {
+          "schema": "stateaction.frame_map.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "clip_id": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "frame_count": 3,
+          "time_base": {
+            "num": 1,
+            "den": 0
+          },
+          "rows": [
+            {
+              "frame_index": 0,
+              "source_frame_id": "4294967296",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036000000000",
+              "source_pts": "9000000000",
+              "clip_pts": "0",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 1,
+              "source_frame_id": "4294967297",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036033333333",
+              "source_pts": "9000003000",
+              "clip_pts": "3000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": true
+            },
+            {
+              "frame_index": 2,
+              "source_frame_id": "4294967298",
+              "clock_domain": "android.elapsed_realtime",
+              "timestamp_ns": "9223372036066666666",
+              "source_pts": "9000006000",
+              "clip_pts": "6000",
+              "raster": {
+                "width": 1920,
+                "height": 1080
+              },
+              "transform": {
+                "rotation_degrees": 90,
+                "mirrored": false,
+                "crop": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                }
+              },
+              "timing_verified": false
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/time_base/den"
+        ]
+      }
+    }
+  ]
+}

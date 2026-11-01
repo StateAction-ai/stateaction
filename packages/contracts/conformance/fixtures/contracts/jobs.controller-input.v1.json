@@ -1,0 +1,111 @@
+{
+  "contract": "jobs.controller-input.v1",
+  "cases": [
+    {
+      "name": "job id only",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "secrets are not task input",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "bootstrapToken": "ccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "NaN literal",
+      "input": {
+        "json": "{\"jobId\": NaN}"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "overflowing number",
+      "input": {
+        "json": "{\"jobId\": 1e400}"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "invalid UTF-8",
+      "input": {
+        "base64": "eyJqb2JJZCI6ICL/In0="
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "UTF-8 byte order mark",
+      "input": {
+        "base64": "77u/eyJqb2JJZCI6ICIwMTlhNGIyYy0zZDRlLTdmNTAtOGE2Yi03YzhkOWUwZjFhMmIifQ=="
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "lone surrogate escape",
+      "input": {
+        "json": "{\"jobId\": \"\\ud800\"}"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "trailing garbage",
+      "input": {
+        "json": "{\"jobId\": \"019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b\"} x"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "nesting deeper than 32",
+      "input": {
+        "json": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    },
+    {
+      "name": "raw bytes form of valid input",
+      "input": {
+        "json": "{\"jobId\":\"019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b\"}"
+      },
+      "expect": {
+        "valid": true
+      }
+    }
+  ]
+}

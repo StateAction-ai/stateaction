@@ -1,0 +1,11 @@
+name: stateaction_contracts
+description: StateAction v1 API, task and artifact contract validators for Dart and Flutter.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  crypto: ^3.0.7
+  json_schema: 5.2.2

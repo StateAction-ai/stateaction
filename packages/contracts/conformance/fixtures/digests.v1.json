@@ -1,0 +1,160 @@
+{
+  "encoding": "sa-cjson-v1",
+  "requestDigests": [
+    {
+      "name": "keys sorted, whitespace removed",
+      "json": "{ \"b\": 1, \"a\": [true, false, null], \"c\": {\"z\": \"\", \"y\": -0} }",
+      "canonical": "{\"a\":[true,false,null],\"b\":1,\"c\":{\"y\":0,\"z\":\"\"}}",
+      "sha256": "32df2f7cac0cac925af2b46ba899a90e49a0f1b79ccda19d8f7fb52ab507ce86"
+    },
+    {
+      "name": "UTF-16 key order differs from code point order",
+      "json": "{\"\\ue000\": 1, \"\\ud83d\\ude00\": 2, \"a\": 3, \"\\u00e9\": 4}",
+      "canonical": "{\"a\":3,\"é\":4,\"😀\":2,\"\":1}",
+      "sha256": "c7d51d7c7ebe01fb868b18e3a7adc3b4923dadbca70f762c512c45d262fa3ca7"
+    },
+    {
+      "name": "string escapes",
+      "json": "{\"s\": \"quote\\\" backslash\\\\ slash\\/ ctl\\u0001\\u001f tab\\t nl\\n cr\\r bs\\b ff\\f del\\u007f ls\\u2028\"}",
+      "canonical": "{\"s\":\"quote\\\" backslash\\\\ slash/ ctl\\u0001\\u001f tab\\t nl\\n cr\\r bs\\b ff\\f del ls \"}",
+      "sha256": "88fff58de36f06fab0dce3ba51b9df0bd152df890937c7fb06123ec5b85810f8"
+    },
+    {
+      "name": "non-ASCII stays literal UTF-8",
+      "json": "{\"name\": \"Gr\\u00fc\\u00dfe 日本 🤚\"}",
+      "canonical": "{\"name\":\"Grüße 日本 🤚\"}",
+      "sha256": "042498558c8f5f1ae11c3828da2317265dac7c1f9a7595c6bd82c3b27a97e479"
+    },
+    {
+      "name": "safe integer extremes and decimal strings",
+      "json": "{\"max\": 9007199254740991, \"min\": -9007199254740991, \"bytes\": \"107374182400\", \"ts\": \"9223372036854775807\"}",
+      "canonical": "{\"bytes\":\"107374182400\",\"max\":9007199254740991,\"min\":-9007199254740991,\"ts\":\"9223372036854775807\"}",
+      "sha256": "125ad0e492dd3bd76a40ab6bb158e36e8748c1a56238efa3bc450adb1fe50cef"
+    },
+    {
+      "name": "integral number spellings normalize to integers",
+      "json": "{\"a\": 1.0, \"b\": 1e3, \"c\": -0.0}",
+      "canonical": "{\"a\":1,\"b\":1000,\"c\":0}",
+      "sha256": "b5d2c1733260a15c8be3fe97ccb9acb87072de63b2f1d6c1cd5ead60b0ee8ffe"
+    },
+    {
+      "name": "nested arrays keep order",
+      "json": "[3, [2, 1], {\"k\": [{\"b\": 2, \"a\": 1}]}]",
+      "canonical": "[3,[2,1],{\"k\":[{\"a\":1,\"b\":2}]}]",
+      "sha256": "23c89fe7c095cacede375620ce7410ffecb1137778b771d2cf640d27f03b2773"
+    },
+    {
+      "name": "create recording request",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:05.123456789Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}}",
+      "canonical": "{\"captureFormat\":\"stateaction.capture.v1\",\"clientRecordingId\":\"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\",\"device\":{\"appVersion\":\"0.1.0+7\",\"model\":\"Pixel 9 Pro\",\"osVersion\":\"Android 16\"},\"rgbProfile\":\"h264_mcap_v1\",\"startedAt\":\"2026-11-01T18:04:05.123456789Z\"}",
+      "sha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9"
+    },
+    {
+      "name": "fractional number",
+      "json": "{\"a\": 1.5}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "integer above safe range",
+      "json": "{\"a\": 9007199254740992}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "integer below safe range",
+      "json": "{\"a\": -9007199254740992}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "exponent producing fraction",
+      "json": "{\"a\": 25e-1}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "lone surrogate",
+      "json": "{\"a\": \"\\udc00\"}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "overflowing exponent",
+      "json": "{\"a\": 1e400}",
+      "error": "noncanonical_value"
+    },
+    {
+      "name": "NaN literal",
+      "json": "{\"a\": NaN}",
+      "error": "malformed_json"
+    },
+    {
+      "name": "trailing comma",
+      "json": "{\"a\": 1,}",
+      "error": "malformed_json"
+    }
+  ],
+  "idempotency": [
+    {
+      "name": "exact replay with different key order and whitespace",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\n    \"device\": {\n        \"model\": \"Pixel 9 Pro\",\n        \"osVersion\": \"Android 16\",\n        \"appVersion\": \"0.1.0+7\"\n    },\n    \"startedAt\": \"2026-11-01T18:04:05.123456789Z\",\n    \"rgbProfile\": \"h264_mcap_v1\",\n    \"captureFormat\": \"stateaction.capture.v1\",\n    \"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\"\n}",
+      "expect": "replay"
+    },
+    {
+      "name": "changed content under same idempotency key",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:06Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}}",
+      "expect": "idempotency_conflict"
+    },
+    {
+      "name": "added field under same key",
+      "storedSha256": "7a528bd1c01833a1f2b0d06dea1bad5417f3cec40fec60c22ed79abd0e1298f9",
+      "json": "{\"clientRecordingId\": \"0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\", \"captureFormat\": \"stateaction.capture.v1\", \"rgbProfile\": \"h264_mcap_v1\", \"startedAt\": \"2026-11-01T18:04:05.123456789Z\", \"device\": {\"model\": \"Pixel 9 Pro\", \"osVersion\": \"Android 16\", \"appVersion\": \"0.1.0+7\"}, \"note\": \"x\"}",
+      "expect": "idempotency_conflict"
+    }
+  ],
+  "manifestBytes": [
+    {
+      "name": "stored processing-result bytes",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256": "717e0fdf23520613652d2bd35f9cb2560aebf744973c18ce01737540d881fd1b",
+      "expect": "match"
+    },
+    {
+      "name": "stored recording-source bytes",
+      "file": "artifacts/recording-source.v1.json",
+      "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+      "expect": "match"
+    },
+    {
+      "name": "stored frame-map bytes",
+      "file": "artifacts/frame-map.v1.json",
+      "sha256": "6138caf6408642a0b7639784d6f95318cf57945ae8f2e373b8b31f50880d3fbe",
+      "expect": "match"
+    },
+    {
+      "name": "stored hand-observations bytes",
+      "file": "artifacts/hand-observations.v1.json",
+      "sha256": "4801aab979a3b9d52cea69ff001a78b56e8b528fa12582fd58e570cc1a4f1b6e",
+      "expect": "match"
+    },
+    {
+      "name": "result candidate digest matches stored manifest bytes",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256From": {
+        "file": "artifacts/result-candidate.v1.json",
+        "pointer": "/manifestSha256"
+      },
+      "expect": "match"
+    },
+    {
+      "name": "same JSON value re-serialized compactly has different bytes",
+      "file": "artifacts/processing-result.compact.json",
+      "sha256": "717e0fdf23520613652d2bd35f9cb2560aebf744973c18ce01737540d881fd1b",
+      "expect": "digest_mismatch"
+    },
+    {
+      "name": "changed declared digest",
+      "file": "artifacts/processing-result.v1.json",
+      "sha256": "717e0fdf23520613652d2bd35f9cb2560aebf744973c18ce01737540d881fd10",
+      "expect": "digest_mismatch"
+    }
+  ]
+}

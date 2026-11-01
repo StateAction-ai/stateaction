@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/parts-receipts.v1.json",
+  "title": "Journal part receipts request v1",
+  "description": "PUT /api/v1/uploads/{fileId}/parts/receipts. partNumber values must be unique. ETags are provider receipts, not content digests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expectedTransportEpoch", "receipts"],
+  "properties": {
+    "expectedTransportEpoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["partNumber", "etag", "sizeBytes"],
+        "properties": {
+          "partNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "etag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 130,
+            "pattern": "^\"?[A-Za-z0-9-]{1,128}\"?$"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 32
+    }
+  }
+}

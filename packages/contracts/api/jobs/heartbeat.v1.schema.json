@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/heartbeat.v1.json",
+  "title": "Worker heartbeat v1",
+  "description": "POST /internal/v1/jobs/{jobId}/heartbeat. Unknown totals are null, never fabricated. Heartbeats never extend hard deadlines.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId", "invocationNonce", "phase"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "hashing_source",
+        "decoding",
+        "inference",
+        "writing_outputs",
+        "uploading",
+        "sealing"
+      ]
+    },
+    "processedFrames": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "totalFrames": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

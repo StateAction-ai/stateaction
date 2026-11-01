@@ -1,0 +1,61 @@
+{
+  "contract": "jobs.heartbeat.v1",
+  "cases": [
+    {
+      "name": "unknown total is null",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "phase": "inference",
+          "processedFrames": "1800",
+          "totalFrames": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "processed exceeds total",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "phase": "inference",
+          "processedFrames": "1800",
+          "totalFrames": "1799"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "progress_mismatch",
+        "paths": [
+          "/processedFrames"
+        ]
+      }
+    },
+    {
+      "name": "float frame count",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "invocationNonce": "q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9z0x1c",
+          "phase": "inference",
+          "processedFrames": 1800.0,
+          "totalFrames": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/processedFrames"
+        ]
+      }
+    }
+  ]
+}

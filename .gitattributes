@@ -1,2 +1,4 @@
 # Official Windows bootstrap scripts retain CRLF bytes.
 *.bat whitespace=cr-at-eol
+# Contract fixtures are digest-covered exact bytes; never convert line endings.
+packages/contracts/conformance/fixtures/** -text

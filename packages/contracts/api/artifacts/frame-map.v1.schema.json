@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/frame-map.v1.json",
+  "title": "Clip frame map shard v1",
+  "description": "One row per clip frame, in clip order. Preserves the native frame identity and its integer timestamp in its own clock domain; clip_pts = source_pts - first source_pts in time_base ticks. Clocks are never merged or converted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "clip_id",
+    "frame_count",
+    "time_base",
+    "rows"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.frame_map.v1"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clip_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7200
+    },
+    "time_base": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timeBase"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "frame_index",
+          "source_frame_id",
+          "clock_domain",
+          "timestamp_ns",
+          "source_pts",
+          "clip_pts",
+          "raster",
+          "transform",
+          "timing_verified"
+        ],
+        "properties": {
+          "frame_index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 7199
+          },
+          "source_frame_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          },
+          "clock_domain": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+          },
+          "timestamp_ns": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+          },
+          "source_pts": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          },
+          "clip_pts": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          },
+          "raster": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/raster"
+          },
+          "transform": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["rotation_degrees", "mirrored", "crop"],
+            "properties": {
+              "rotation_degrees": {
+                "type": "integer",
+                "enum": [0, 90, 180, 270]
+              },
+              "mirrored": {
+                "type": "boolean"
+              },
+              "crop": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["x", "y", "width", "height"],
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 16383
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 16383
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16384
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16384
+                  }
+                }
+              }
+            }
+          },
+          "timing_verified": {
+            "type": "boolean"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 7200
+    }
+  }
+}

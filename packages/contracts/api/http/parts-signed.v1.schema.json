@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/parts-signed.v1.json",
+  "title": "Signed upload parts response v1",
+  "description": "Server-issued part URLs. URLs are short-lived bearer capabilities: never log, persist in manifests or cache them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["transportEpoch", "parts"],
+  "properties": {
+    "transportEpoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "partNumber",
+          "method",
+          "url",
+          "headers",
+          "offsetBytes",
+          "lengthBytes",
+          "expiresAt"
+        ],
+        "properties": {
+          "partNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "method": {
+            "const": "PUT"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 4096,
+            "pattern": "^https?://[^\\s]+$"
+          },
+          "headers": {
+            "type": "object",
+            "maxProperties": 8,
+            "propertyNames": {
+              "pattern": "^[A-Za-z0-9-]{1,64}$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 256
+            }
+          },
+          "offsetBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/byteCount"
+          },
+          "lengthBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "expiresAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 32
+    }
+  }
+}

@@ -1,0 +1,51 @@
+// Generated listing of the published schema files; keep in sync with api/catalog.v1.json (checked by tests).
+import catalog from "../api/catalog.v1.json" with { type: "json" };
+import common from "../api/common.v1.schema.json" with { type: "json" };
+import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
+import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
+import s2 from "../api/artifacts/processing-result.v1.schema.json" with { type: "json" };
+import s3 from "../api/artifacts/recording-source.v1.schema.json" with { type: "json" };
+import s4 from "../api/http/error-envelope.v1.schema.json" with { type: "json" };
+import s5 from "../api/http/parts-receipts.v1.schema.json" with { type: "json" };
+import s6 from "../api/http/parts-sign.v1.schema.json" with { type: "json" };
+import s7 from "../api/http/parts-signed.v1.schema.json" with { type: "json" };
+import s8 from "../api/http/recording-create.v1.schema.json" with { type: "json" };
+import s9 from "../api/http/recording-seal.v1.schema.json" with { type: "json" };
+import s10 from "../api/http/recording.v1.schema.json" with { type: "json" };
+import s11 from "../api/http/success-envelope.v1.schema.json" with { type: "json" };
+import s12 from "../api/http/upload-create.v1.schema.json" with { type: "json" };
+import s13 from "../api/http/upload-plan.v1.schema.json" with { type: "json" };
+import s14 from "../api/http/upload-transition.v1.schema.json" with { type: "json" };
+import s15 from "../api/jobs/claim-grant.v1.schema.json" with { type: "json" };
+import s16 from "../api/jobs/controller-input.v1.schema.json" with { type: "json" };
+import s17 from "../api/jobs/heartbeat.v1.schema.json" with { type: "json" };
+import s18 from "../api/jobs/job-status.v1.schema.json" with { type: "json" };
+import s19 from "../api/jobs/result-candidate.v1.schema.json" with { type: "json" };
+import s20 from "../api/jobs/task-input.v1.schema.json" with { type: "json" };
+import s21 from "../api/jobs/worker-claim.v1.schema.json" with { type: "json" };
+export { catalog };
+export const commonSchema: object = common;
+export const contractSchemas: Readonly<Record<string, object>> = {
+  "artifacts.frame-map.v1": s0,
+  "artifacts.hand-observations.v1": s1,
+  "artifacts.processing-result.v1": s2,
+  "artifacts.recording-source.v1": s3,
+  "http.error-envelope.v1": s4,
+  "http.parts-receipts.v1": s5,
+  "http.parts-sign.v1": s6,
+  "http.parts-signed.v1": s7,
+  "http.recording-create.v1": s8,
+  "http.recording-seal.v1": s9,
+  "http.recording.v1": s10,
+  "http.success-envelope.v1": s11,
+  "http.upload-create.v1": s12,
+  "http.upload-plan.v1": s13,
+  "http.upload-transition.v1": s14,
+  "jobs.claim-grant.v1": s15,
+  "jobs.controller-input.v1": s16,
+  "jobs.heartbeat.v1": s17,
+  "jobs.job-status.v1": s18,
+  "jobs.result-candidate.v1": s19,
+  "jobs.task-input.v1": s20,
+  "jobs.worker-claim.v1": s21,
+};

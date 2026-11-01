@@ -1,0 +1,145 @@
+{
+  "contract": "http.parts-sign.v1",
+  "cases": [
+    {
+      "name": "sign three parts",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 1,
+          "partNumbers": [
+            1,
+            2,
+            10000
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "duplicate part numbers",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 1,
+          "partNumbers": [
+            1,
+            1
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partNumbers"
+        ]
+      }
+    },
+    {
+      "name": "part zero",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 1,
+          "partNumbers": [
+            0
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partNumbers/0"
+        ]
+      }
+    },
+    {
+      "name": "more than 32 parts",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 1,
+          "partNumbers": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partNumbers"
+        ]
+      }
+    },
+    {
+      "name": "missing epoch",
+      "input": {
+        "document": {
+          "partNumbers": [
+            1,
+            2,
+            10000
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "unsafe integer part number",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 1,
+          "partNumbers": [
+            9007199254740993
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partNumbers/0"
+        ]
+      }
+    }
+  ]
+}

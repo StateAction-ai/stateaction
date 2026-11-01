@@ -1,0 +1,141 @@
+{
+  "contract": "http.upload-plan.v1",
+  "cases": [
+    {
+      "name": "three 64 MiB parts for 128 MiB + 1 byte",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 3,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "100 GiB plan uses 1600 parts",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "107374182400",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 1600,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "part count disagrees with size",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 2,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "part_plan_mismatch",
+        "paths": [
+          "/partCount"
+        ]
+      }
+    },
+    {
+      "name": "part size is fixed at 64 MiB",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "5242880",
+          "partCount": 3,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partSizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "over 10000 parts",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1,
+          "partSizeBytes": "67108864",
+          "partCount": 10001,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/partCount"
+        ]
+      }
+    },
+    {
+      "name": "epoch must be integer",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "transportEpoch": 1.5,
+          "partSizeBytes": "67108864",
+          "partCount": 3,
+          "state": "uploading",
+          "transportExpiresAt": "2026-11-08T18:04:05Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/transportEpoch"
+        ]
+      }
+    }
+  ]
+}
