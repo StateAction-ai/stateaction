@@ -1,0 +1,129 @@
+{
+  "contract": "native.capture-capabilities.v1",
+  "cases": [
+    {
+      "name": "accepted profile",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "accepted",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "unsupportedReasons": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unsupported encoder",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "unsupported",
+          "acceptedProfile": null,
+          "unsupportedReasons": [
+            "encoder_unavailable",
+            "low_storage"
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "accepted without profile",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "accepted",
+          "acceptedProfile": null,
+          "unsupportedReasons": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/acceptedProfile"
+        ]
+      }
+    },
+    {
+      "name": "accepted with reasons",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "accepted",
+          "acceptedProfile": {
+            "captureFormat": "stateaction.capture.v1",
+            "rgbProfile": "h264_mcap_v1",
+            "profileRevision": "h264-mcap-1",
+            "captureConfigSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+          },
+          "unsupportedReasons": [
+            "low_battery"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/unsupportedReasons"
+        ]
+      }
+    },
+    {
+      "name": "unsupported without reasons",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "unsupported",
+          "acceptedProfile": null,
+          "unsupportedReasons": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/unsupportedReasons"
+        ]
+      }
+    },
+    {
+      "name": "duplicate reason",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "outcome": "unsupported",
+          "acceptedProfile": null,
+          "unsupportedReasons": [
+            "low_storage",
+            "low_storage"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/unsupportedReasons"
+        ]
+      }
+    }
+  ]
+}

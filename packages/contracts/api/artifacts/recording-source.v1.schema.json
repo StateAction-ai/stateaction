@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/recording-source.v1.json",
+  "title": "Recording source declaration v1",
+  "description": "Client-declared source inventory, uploaded as the sealed file with role source_manifest. Written after every other source file is closed and hashed. files lists exactly the other sealed files and never this declaration (no source_manifest entry, no self-hash). SHA-256 of the exact stored bytes is the recording's sourceManifestSha256 / source_manifest_sha256. Capture-format details (channels/clocks/profile fields) are owned by the capture contracts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "client_recording_id",
+    "owner_user_id",
+    "capture_format",
+    "rgb_profile",
+    "capture_config_sha256",
+    "close_status",
+    "files",
+    "clock_domains",
+    "channels",
+    "counts",
+    "collection_permission_ref",
+    "source_verification"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording_source.v1"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "client_recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "owner_user_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "capture_format": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgb_profile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1"]
+    },
+    "capture_config_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "close_status": {
+      "type": "string",
+      "enum": ["closed_clean", "closed_after_recovery"]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "role", "required", "size_bytes", "sha256"],
+        "properties": {
+          "file_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2000
+    },
+    "clock_domains": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "message_encoding",
+          "schema_name",
+          "clock_domain",
+          "message_count"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^/[A-Za-z0-9_/.-]{1,127}$"
+          },
+          "message_encoding": {
+            "type": "string",
+            "enum": ["protobuf", "cdr", "json"]
+          },
+          "schema_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,127}$"
+          },
+          "clock_domain": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+          },
+          "message_count": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["video_frames", "dropped_video_frames", "motion_events"],
+      "properties": {
+        "video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "dropped_video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "motion_events": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        }
+      }
+    },
+    "collection_permission_ref": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    },
+    "source_verification": {
+      "const": "pending"
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-seal.v1.json",
+  "title": "Seal recording inventory request v1",
+  "description": "POST /api/v1/recordings/{recordingId}/seal. Freezes the exact logical file inventory; changed replay is 409 idempotency_conflict. fileId values are unique. The inventory holds exactly one required source_manifest (the uploaded recording-source/v1 bytes) plus exactly the files that declaration lists: one required source_mcap and at least one required recorder_metadata. The API checks the stored manifest bytes against this seal with checkSealedInventory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["files"],
+  "properties": {
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fileId", "role", "sizeBytes", "sha256", "required"],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "if": {
+          "required": ["role"],
+          "properties": {
+            "role": {
+              "const": "source_manifest"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "sizeBytes": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 2000
+    }
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/native/capture-command.v1.json",
+  "title": "Native capture bridge command v1",
+  "description": "Dart -> native capture command. Replaying a commandId with identical sa-cjson-v1 content returns the existing state; changed content returns capture-error command_conflict. Take commands return native.capture-snapshot.v1 on success; failure returns native.capture-error.v1. Frames, encoded payloads and high-rate samples never cross the bridge. get_capabilities and list_recoverable_captures return their own documents. Transfer/upload bridge commands are not part of v1.",
+  "$defs": {
+    "profileRequest": {
+      "description": "Requested capture profile identity. Detailed requested settings live in the capture Profile contract (SA-50).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captureFormat", "rgbProfile", "profileRevision"],
+      "properties": {
+        "captureFormat": {
+          "const": "stateaction.capture.v1"
+        },
+        "rgbProfile": {
+          "type": "string",
+          "enum": ["h264_mcap_v1"]
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        }
+      }
+    },
+    "acceptedProfile": {
+      "description": "Profile accepted by native capability negotiation. captureConfigSha256 hashes the exact accepted capture Profile document (SA-50).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captureFormat",
+        "rgbProfile",
+        "profileRevision",
+        "captureConfigSha256"
+      ],
+      "properties": {
+        "captureFormat": {
+          "const": "stateaction.capture.v1"
+        },
+        "rgbProfile": {
+          "type": "string",
+          "enum": ["h264_mcap_v1"]
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "captureConfigSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "description": "Probe device, permission and encoder support. Never creates a capture. Returns native.capture-capabilities.v1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "commandId", "operation", "profileRequest"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "get_capabilities"
+        },
+        "profileRequest": {
+          "$ref": "#/$defs/profileRequest"
+        }
+      }
+    },
+    {
+      "description": "List takes needing recovery or still finalizing after relaunch. Returns native.capture-recoverable.v1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "commandId", "operation"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "list_recoverable_captures"
+        }
+      }
+    },
+    {
+      "description": "Revalidate the accepted profile and persist owner/start identity before any sensor write.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "operation",
+        "clientRecordingId",
+        "ownerUserId",
+        "collectionPermissionRef",
+        "acceptedProfile"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "start_capture"
+        },
+        "clientRecordingId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "ownerUserId": {
+          "description": "Verified owner pinned at capture start.",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+        },
+        "collectionPermissionRef": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "acceptedProfile": {
+          "$ref": "#/$defs/acceptedProfile"
+        }
+      }
+    },
+    {
+      "description": "Idempotently enter finalizing; finalized is reported only after encoder drain, writer close and inventory persistence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "operation",
+        "clientRecordingId",
+        "reason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "stop_capture"
+        },
+        "clientRecordingId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "user_requested",
+            "low_storage",
+            "low_battery",
+            "thermal_limit",
+            "camera_interrupted",
+            "app_terminating",
+            "account_change"
+          ]
+        }
+      }
+    },
+    {
+      "description": "Read the authoritative durable state after relaunch or missed events.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "operation",
+        "clientRecordingId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "get_capture_snapshot"
+        },
+        "clientRecordingId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        }
+      }
+    },
+    {
+      "description": "Inspect an interrupted take; never mutates sealed sources or claims success from a trailing-magic check.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "commandId",
+        "operation",
+        "clientRecordingId"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "operation": {
+          "const": "recover_capture"
+        },
+        "clientRecordingId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        }
+      }
+    }
+  ]
+}

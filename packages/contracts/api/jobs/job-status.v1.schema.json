@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/job-status.v1.json",
+  "title": "Job status v1",
+  "description": "Compact job state for staff/controller reads. A processing retry is a new job linked by previousJobId.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "kind",
+    "targetId",
+    "state",
+    "previousJobId",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "kind": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobKind"
+    },
+    "targetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "state": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobState"
+    },
+    "previousJobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "updatedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  }
+}

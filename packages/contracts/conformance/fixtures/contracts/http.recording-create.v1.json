@@ -1,0 +1,223 @@
+{
+  "contract": "http.recording-create.v1",
+  "cases": [
+    {
+      "name": "canonical create",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "owner cannot be supplied",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          },
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "uppercase uuid rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0D9E8F7A-1B2C-4D3E-8F4A-5B6C7D8E9F00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/clientRecordingId"
+        ]
+      }
+    },
+    {
+      "name": "uuid with trailing newline rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00\n",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/clientRecordingId"
+        ]
+      }
+    },
+    {
+      "name": "unknown capture format",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v2",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/captureFormat"
+        ]
+      }
+    },
+    {
+      "name": "non-UTC wall time rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05+01:00",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startedAt"
+        ]
+      }
+    },
+    {
+      "name": "missing device",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-11-01T18:04:05.123456789Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "February 31 rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-02-31T18:04:05Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startedAt"
+        ]
+      }
+    },
+    {
+      "name": "April 31 rejected",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2026-04-31T18:04:05Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startedAt"
+        ]
+      }
+    },
+    {
+      "name": "February 29 accepted (leap year not checked)",
+      "input": {
+        "document": {
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "captureFormat": "stateaction.capture.v1",
+          "rgbProfile": "h264_mcap_v1",
+          "startedAt": "2028-02-29T00:00:00.000000001Z",
+          "device": {
+            "model": "Pixel 9 Pro",
+            "osVersion": "Android 16",
+            "appVersion": "0.1.0+7"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "contract": "http.upload-transition.v1",
+  "cases": [
+    {
+      "name": "complete with expected epoch",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 3
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "client completion list rejected",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 3,
+          "parts": [
+            {
+              "partNumber": 1,
+              "etag": "x"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "epoch zero",
+      "input": {
+        "document": {
+          "expectedTransportEpoch": 0
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedTransportEpoch"
+        ]
+      }
+    },
+    {
+      "name": "integer token beyond double range",
+      "input": {
+        "json": "{\"expectedTransportEpoch\": 1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000}"
+      },
+      "expect": {
+        "valid": false,
+        "code": "malformed_json"
+      }
+    }
+  ]
+}

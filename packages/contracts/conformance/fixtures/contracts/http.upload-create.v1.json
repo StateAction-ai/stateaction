@@ -1,0 +1,110 @@
+{
+  "contract": "http.upload-create.v1",
+  "cases": [
+    {
+      "name": "allocate",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "client chooses part size",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "partSizeBytes": "5242880"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "client supplies object key",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "objectKey": "uploads/x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "bad role",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "viewer_rrd",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "allocate source manifest",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "source_manifest",
+          "sizeBytes": "1671",
+          "sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "source manifest over 1 MiB",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientUploadId": "6b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b",
+          "role": "source_manifest",
+          "sizeBytes": "1048577",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

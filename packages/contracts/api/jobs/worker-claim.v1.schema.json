@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/worker-claim.v1.json",
+  "title": "Worker claim request v1",
+  "description": "POST /internal/v1/jobs/{jobId}/claim, authenticated by the private bootstrap capability (not in the body).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId", "invocationNonce", "executor"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "executor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "localExecutionRef"],
+          "properties": {
+            "kind": {
+              "const": "local"
+            },
+            "localExecutionRef": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "functionCallId"],
+          "properties": {
+            "kind": {
+              "const": "modal"
+            },
+            "functionCallId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "pattern": "^fc-[A-Za-z0-9]{1,77}$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "ticket": "SA-12",
+  "recorded": "2026-11-01",
+  "scope": "Local qualification of the v1 contract package. Hosted CI is reported on the PR, not here.",
+  "toolchain": {
+    "node": "24.22.2",
+    "pnpm": "10.33.0",
+    "nx": "24.0.3",
+    "uv": "0.13.6",
+    "python": "3.12.13",
+    "dart": "3.12.2 (Flutter 3.44.6)",
+    "validators": {
+      "typescript": "ajv 8.20.0 Ajv2020 strict",
+      "python": "jsonschema 4.26.0 Draft202012Validator",
+      "dart": "json_schema 5.2.2 draft2020_12"
+    }
+  },
+  "contracts": 27,
+  "fixtureCases": {
+    "total": 242,
+    "outcomes": {
+      "clock_mismatch": 3,
+      "dimension_mismatch": 6,
+      "document_too_large": 1,
+      "duplicate_identity": 9,
+      "inventory_incomplete": 12,
+      "malformed_json": 9,
+      "mask_mismatch": 2,
+      "ordering_violation": 5,
+      "outcome_mismatch": 12,
+      "part_plan_mismatch": 1,
+      "progress_mismatch": 6,
+      "reference_mismatch": 5,
+      "schema_violation": 109,
+      "unsupported_version": 6,
+      "valid": 56
+    }
+  },
+  "crossLanguage": {
+    "identicalOutcomes": true,
+    "outcomeReportSha256": "cb0f55a6cbd3801bfa11cde43e7cbd781f3b9e356b103a6f03e7c261b6749f2e",
+    "typescript": "42 node:test tests passed",
+    "python": "8 unittest tests (per-case subtests) passed, including generate_fixtures --check",
+    "dart": "475 conformance checks passed (242 fixture cases)",
+    "reviewProbes": "Reviewer's 36-case adversarial harness (/tmp/sa12-review) re-run through all three validateBytes: 0 code divergences (previously 4: URL NEL/FS/ZWNBSP and >double-range integer tokens).",
+    "mutationCheck": "22 mutations, all killed: each new rule disabled per adapter (TS claim_grant, sealed_inventory, checkSealedInventory, result_candidate, capture snapshot, recoverable state, manifest self-exclusion; Python sealed_inventory, deadline ordering, integer-overflow fix, check_sealed_inventory, frame duplicate id, capabilities; Dart capture snapshot, handedness shape, checkSealedInventory, verified_sources duplicate, clip file sharing), the URL pattern reverted to [^\\s] (all three runners), a flipped fixture expectation (all three) and a wrong chain digest pointer (all three). Files restored; generator --check reproducible.",
+    "finalizedSnapshotMutationCheck": "Disabling only the finalized reconciliation constraint (unresolved == 0 and written + dropped == acquired) was run once per adapter: TS 1 of 42 tests failed, Python unittest FAILED (failures=2), Dart 4 of 475 checks failed; sources restored. The earlier 22-mutation record predates the cardinality and finalized-snapshot fixtures and was not re-run.",
+    "outcomeReportNote": "outcomeReportSha256 is the SHA-256 of the Dart conformance report (packages/contracts/dart/build/conformance-report.json) after the finalized-snapshot reconciliation fixtures; the 234-case total in earlier evidence predates the exactly-one-MCAP cardinality fixtures. TS and Python assert the same per-case expectations from the shared fixtures."
+  },
+  "digests": {
+    "requestEncoding": "sa-cjson-v1 (project-defined; no RFC 8785 conformance claim)",
+    "goldenCases": 8,
+    "rejectionCases": 8,
+    "idempotencyCases": 3,
+    "manifestByteCases": 14,
+    "sealedInventoryCases": 9
+  },
+  "commands": [
+    "pnpm exec nx run-many -p contracts,contracts-python,contracts-dart -t build,typecheck,test,format --skip-nx-cache (Node 24.22.2, pnpm 10.33.0, uv 0.13.6, Dart 3.12.2/Flutter 3.44.6; contracts-dart:prepare plus 12 tasks passed) after the finalized-snapshot reconciliation change; python3 packages/contracts/conformance/generate_fixtures.py --check reproducible (38 fixture files)",
+    "Earlier affected-run and wheel-install commands from the previous record were not re-run for this follow-up change."
+  ],
+  "notRunLocally": [
+    "mobile and stera-recorder Flutter/Gradle targets (unchanged by this ticket; hosted CI runs them because checks.yml is a shared input)",
+    "infra:integration (hosted CI)"
+  ],
+  "limitations": [
+    "Metric 3D branch is metadata/shape validation only; no profile is qualified for metric claims.",
+    "Route handlers, persistence and provider behaviour are out of scope; these are contract definitions and conformance only.",
+    "Capture bridge documents are contracts and fixtures only; no Kotlin/Swift/Dart channel binding or native recorder integration is claimed (SA-18/SA-51).",
+    "February 29 is accepted in every year (leap years are not checked by the pattern).",
+    "Role-conditional (if/then) size-bound failures are reported at adapter-dependent depths; those fixtures pin the code only."
+  ],
+  "schemaLockSha256": "99fd162e72752207174e67407ee822a7bf92bcbafb3874e031726f81d621bcce"
+}

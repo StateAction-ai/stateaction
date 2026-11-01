@@ -1,0 +1,229 @@
+{
+  "contract": "native.capture-recoverable.v1",
+  "cases": [
+    {
+      "name": "one take needs recovery",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "captures": [
+            {
+              "schemaVersion": 1,
+              "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+              "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+              "state": "recovery_required",
+              "containerState": "unclosed",
+              "captureOutcome": null,
+              "eventSequence": "9007199254740993",
+              "counters": {
+                "videoFramesAcquired": "108003",
+                "videoFramesSubmitted": "108001",
+                "videoFramesWritten": "108000",
+                "videoFramesDropped": "2",
+                "videoFramesUnresolved": "1",
+                "motionEventsWritten": "1440000",
+                "sourceBytesWritten": "134217729"
+              },
+              "lastError": null
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "nothing to recover",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "captures": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "finalized take is not recoverable",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "captures": [
+            {
+              "schemaVersion": 1,
+              "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+              "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+              "state": "finalized",
+              "containerState": "closed",
+              "captureOutcome": "interrupted",
+              "eventSequence": "9007199254740993",
+              "counters": {
+                "videoFramesAcquired": "108003",
+                "videoFramesSubmitted": "108001",
+                "videoFramesWritten": "108000",
+                "videoFramesDropped": "3",
+                "videoFramesUnresolved": "0",
+                "motionEventsWritten": "1440000",
+                "sourceBytesWritten": "134217729"
+              },
+              "lastError": {
+                "schemaVersion": 1,
+                "code": "thermal_limit",
+                "retryable": true,
+                "message": "Recording stopped to protect the phone from overheating.",
+                "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+                "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/captures/0/state"
+        ]
+      }
+    },
+    {
+      "name": "duplicate take",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "captures": [
+            {
+              "schemaVersion": 1,
+              "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+              "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+              "state": "recovery_required",
+              "containerState": "unclosed",
+              "captureOutcome": null,
+              "eventSequence": "9007199254740993",
+              "counters": {
+                "videoFramesAcquired": "108003",
+                "videoFramesSubmitted": "108001",
+                "videoFramesWritten": "108000",
+                "videoFramesDropped": "2",
+                "videoFramesUnresolved": "1",
+                "motionEventsWritten": "1440000",
+                "sourceBytesWritten": "134217729"
+              },
+              "lastError": null
+            },
+            {
+              "schemaVersion": 1,
+              "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+              "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+              "state": "recovery_required",
+              "containerState": "unclosed",
+              "captureOutcome": null,
+              "eventSequence": "9007199254740993",
+              "counters": {
+                "videoFramesAcquired": "108003",
+                "videoFramesSubmitted": "108001",
+                "videoFramesWritten": "108000",
+                "videoFramesDropped": "2",
+                "videoFramesUnresolved": "1",
+                "motionEventsWritten": "1440000",
+                "sourceBytesWritten": "134217729"
+              },
+              "lastError": null
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/captures/1/clientRecordingId"
+        ]
+      }
+    },
+    {
+      "name": "nested snapshot rules apply",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+          "captures": [
+            {
+              "schemaVersion": 1,
+              "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+              "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+              "state": "recovery_required",
+              "containerState": "closed",
+              "captureOutcome": null,
+              "eventSequence": "9007199254740993",
+              "counters": {
+                "videoFramesAcquired": "108003",
+                "videoFramesSubmitted": "108001",
+                "videoFramesWritten": "108000",
+                "videoFramesDropped": "2",
+                "videoFramesUnresolved": "1",
+                "motionEventsWritten": "1440000",
+                "sourceBytesWritten": "134217729"
+              },
+              "lastError": null
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/captures/0/containerState"
+        ]
+      }
+    },
+    {
+      "name": "more than 64 takes",
+      "input": {
+        "repeat": {
+          "document": {
+            "schemaVersion": 1,
+            "commandId": "1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9",
+            "captures": [
+              {
+                "schemaVersion": 1,
+                "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+                "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+                "state": "recovery_required",
+                "containerState": "unclosed",
+                "captureOutcome": null,
+                "eventSequence": "9007199254740993",
+                "counters": {
+                  "videoFramesAcquired": "108003",
+                  "videoFramesSubmitted": "108001",
+                  "videoFramesWritten": "108000",
+                  "videoFramesDropped": "2",
+                  "videoFramesUnresolved": "1",
+                  "motionEventsWritten": "1440000",
+                  "sourceBytesWritten": "134217729"
+                },
+                "lastError": null
+              }
+            ]
+          },
+          "pointer": "/captures",
+          "count": 65
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/captures"
+        ]
+      }
+    }
+  ]
+}

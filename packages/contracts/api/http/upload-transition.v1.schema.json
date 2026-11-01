@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/upload-transition.v1.json",
+  "title": "Upload transport transition request v1",
+  "description": "POST /api/v1/uploads/{fileId}/{reconcile,complete,cancel,restart}. Clients never supply completion lists or object keys; stale epochs return 409. Every transition responds with a success envelope whose data is http.upload-plan.v1 (the file's current plan/state; restart returns the new transportEpoch).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expectedTransportEpoch"],
+  "properties": {
+    "expectedTransportEpoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    }
+  }
+}

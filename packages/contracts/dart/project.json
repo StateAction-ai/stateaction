@@ -1,0 +1,52 @@
+{
+  "name": "contracts-dart",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "root": "packages/contracts/dart",
+  "projectType": "library",
+  "implicitDependencies": ["contracts"],
+  "namedInputs": {
+    "dartSources": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/.dart_tool/**/*",
+      "!{projectRoot}/build/**/*",
+      "{workspaceRoot}/config/mobile-toolchain.json"
+    ],
+    "contractData": [
+      "{workspaceRoot}/packages/contracts/api/**/*",
+      "{workspaceRoot}/packages/contracts/conformance/**/*"
+    ]
+  },
+  "targets": {
+    "prepare": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "python3 packages/contracts/dart/tool/nx.py prepare"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["prepare"],
+      "inputs": ["dartSources"],
+      "options": {
+        "command": "python3 packages/contracts/dart/tool/nx.py typecheck"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["prepare"],
+      "inputs": ["dartSources", "contractData"],
+      "options": {
+        "command": "python3 packages/contracts/dart/tool/nx.py test"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["prepare"],
+      "inputs": ["dartSources"],
+      "options": {
+        "command": "python3 packages/contracts/dart/tool/nx.py format"
+      }
+    }
+  }
+}

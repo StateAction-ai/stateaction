@@ -1,0 +1,106 @@
+{
+  "contract": "jobs.task-input.v1",
+  "cases": [
+    {
+      "name": "process recording",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "profileRevision": "cpu-mediapipe-1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "export release",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "export_release",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "selectionSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "profileRevision": "export-1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unsupported schema version",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "profileRevision": "cpu-mediapipe-1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    },
+    {
+      "name": "process task with selection digest",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "selectionSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "unknown kind",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "train_model",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "profileRevision": "cpu-mediapipe-1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "stored chain task input bytes",
+      "input": {
+        "file": "chain/task-input.v1.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    }
+  ]
+}
