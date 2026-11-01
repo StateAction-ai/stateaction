@@ -1,0 +1,112 @@
+{
+  "description": "Synthetic identity/time fixture, not physical camera evidence",
+  "FrameEvent": [
+    {
+      "recording_id": "contract-fixture",
+      "stream_id": "rgb",
+      "source_frame_id": "0",
+      "state": "acquired",
+      "native_timestamp_ns": "1000000007",
+      "native_clock_id": "android.camera.sensor_timestamp",
+      "mapped_capture_time_ns": "1800000000000000007",
+      "clock_mapping_revision": "android_elapsed_to_unix_v1",
+      "calibration_id": "rgb_0",
+      "encoder_pts_us": "0",
+      "encoder_time_base": {
+        "numerator": 1,
+        "denominator": 1000000
+      },
+      "native_timestamps": {
+        "arcore_frame_timestamp_ns": "999999991",
+        "arcore_image_timestamp_ns": "999999997",
+        "metadata_sensor_timestamp_ns": "1000000007"
+      }
+    },
+    {
+      "recording_id": "contract-fixture",
+      "stream_id": "rgb",
+      "source_frame_id": "0",
+      "state": "submitted",
+      "native_timestamp_ns": "1000000007",
+      "native_clock_id": "android.camera.sensor_timestamp",
+      "mapped_capture_time_ns": "1800000000000000007",
+      "clock_mapping_revision": "android_elapsed_to_unix_v1",
+      "calibration_id": "rgb_0",
+      "encoder_pts_us": "0",
+      "encoder_time_base": {
+        "numerator": 1,
+        "denominator": 1000000
+      },
+      "native_timestamps": {
+        "arcore_frame_timestamp_ns": "999999991",
+        "arcore_image_timestamp_ns": "999999997",
+        "metadata_sensor_timestamp_ns": "1000000007"
+      }
+    },
+    {
+      "recording_id": "contract-fixture",
+      "stream_id": "rgb",
+      "source_frame_id": "0",
+      "state": "written",
+      "native_timestamp_ns": "1000000007",
+      "native_clock_id": "android.camera.sensor_timestamp",
+      "mapped_capture_time_ns": "1800000000000000007",
+      "clock_mapping_revision": "android_elapsed_to_unix_v1",
+      "calibration_id": "rgb_0",
+      "encoder_pts_us": "0",
+      "encoder_time_base": {
+        "numerator": 1,
+        "denominator": 1000000
+      },
+      "native_timestamps": {
+        "arcore_frame_timestamp_ns": "999999991",
+        "arcore_image_timestamp_ns": "999999997",
+        "metadata_sensor_timestamp_ns": "1000000007"
+      },
+      "output_channel": "/camera/rgb/video",
+      "output_sequence": 0,
+      "is_idr": true
+    },
+    {
+      "recording_id": "contract-fixture",
+      "stream_id": "rgb",
+      "source_frame_id": "1",
+      "state": "dropped",
+      "native_timestamp_ns": "1000000007",
+      "native_clock_id": "android.camera.sensor_timestamp",
+      "mapped_capture_time_ns": "1800000000000000007",
+      "clock_mapping_revision": "android_elapsed_to_unix_v1",
+      "calibration_id": "rgb_0",
+      "encoder_pts_us": "0",
+      "encoder_time_base": {
+        "numerator": 1,
+        "denominator": 1000000
+      },
+      "native_timestamps": {
+        "arcore_frame_timestamp_ns": "999999991",
+        "arcore_image_timestamp_ns": "999999997",
+        "metadata_sensor_timestamp_ns": "1000000007"
+      },
+      "reason": "codec_input_backpressure"
+    }
+  ],
+  "MotionEvent": [
+    {
+      "recording_id": "contract-fixture",
+      "stream_id": "accel",
+      "event_id": "0",
+      "native_timestamp_ns": "1000000001",
+      "native_clock_id": "android.elapsed_realtime",
+      "mapped_capture_time_ns": "1800000000000000001",
+      "clock_mapping_revision": "android_elapsed_to_unix_v1",
+      "callback_elapsed_ns": "1000000011",
+      "accuracy": 3,
+      "x": 0.0,
+      "y": 9.8,
+      "z": 0.0,
+      "unit": "m/s^2",
+      "includes_gravity": true,
+      "axes": "android_device"
+    }
+  ]
+}

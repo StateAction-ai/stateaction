@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/Inventory",
+  "title": "stateaction.capture.Inventory.v1",
+  "required": ["recording_id", "sensors", "calibrations"],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sensors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "sensor_id",
+          "kind",
+          "requested",
+          "supported",
+          "enabled",
+          "observed",
+          "observed_count"
+        ],
+        "properties": {
+          "sensor_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requested": {
+            "enum": ["yes", "no", "unknown", "unavailable"]
+          },
+          "supported": {
+            "enum": ["yes", "no", "unknown", "unavailable"]
+          },
+          "enabled": {
+            "enum": ["yes", "no", "unknown", "unavailable"]
+          },
+          "observed": {
+            "enum": ["yes", "no", "unknown", "unavailable"]
+          },
+          "observed_count": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]*)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "native_clock_id": {
+            "type": ["string", "null"]
+          },
+          "unavailable_reason": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "calibrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["calibration_id", "stream_id", "state"],
+        "properties": {
+          "calibration_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stream_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "state": {
+            "enum": ["yes", "no", "unknown", "unavailable"]
+          },
+          "model": {
+            "type": ["string", "null"]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

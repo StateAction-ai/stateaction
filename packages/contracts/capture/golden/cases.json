@@ -1,0 +1,158 @@
+{
+  "b_frame": {
+    "description": "Real x264 main-profile stream containing B slices.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_B_FRAME"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "b87624d00784f1eebca7dfadd5fd20c5215b5eac9f36732d9f2563c232e9e495"
+  },
+  "calibration_reset": {
+    "description": "Calibration reset supersedes rgb_0 at frame 2 but later frames keep rgb_0.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_RESET_UNMARKED"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "40b9252f7b64d928beb16426d4c40de20c768fcf0fc4c065375ccba114b92004"
+  },
+  "close_count_mismatch": {
+    "description": "Final close counts disagree with observed lifecycle events.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "6a65f097e77c79f583fc77b1982d1c49bd2da840234618fa445da415e1a14fe1"
+  },
+  "config_only": {
+    "description": "First video message carries only SPS/PPS, not an image.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CONFIG_ONLY"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "a620aefc7158e815ff19163a9333ca6c37f0155e4bd50499541f678dfa686c90"
+  },
+  "delayed": {
+    "description": "Same capture times; a 400 ms encoder/output stall after frame 1 delays delivery and terminal frame events (logged after later acquisitions). Capture time is preserved.",
+    "expect": "accept",
+    "expected_errors": [],
+    "expected_outcome": "accept",
+    "sha256": "8672425ad69a5519d415d677a2a6ed4dc5cee17a08ad2069fe6884bb0d5c6a70"
+  },
+  "descriptor_hash": {
+    "description": "Embedded Protobuf descriptor bytes differ from the pinned complete descriptor.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DESCRIPTOR_HASH"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "b5ad388313652185784c0df6936222925bb35e1bb6a66f4ae46f0d8c345dd86a"
+  },
+  "duplicate_pts": {
+    "description": "Two source frames share one encoder PTS.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DUPLICATE_PTS"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "0c4e914c2132809341e9beef6e811fac70bb8a9292ec9a30a2c3548d32a1395e"
+  },
+  "idr_with_config": {
+    "description": "Single complete IDR access unit including SPS/PPS.",
+    "expect": "accept",
+    "expected_errors": [],
+    "expected_outcome": "accept",
+    "sha256": "d7e6b6ba5bd0ee94d1fd23b48a230796b212ec5c6205f2562a225e18326889a2"
+  },
+  "legacy_jpeg": {
+    "description": "Historical sensor_msgs CompressedImage JPEG capture; explicitly classified, never admitted as h264_mcap_v1.",
+    "expect": "legacy_jpeg",
+    "expected_errors": [
+      "E_LEGACY_JPEG"
+    ],
+    "expected_outcome": "legacy_jpeg",
+    "sha256": "c3eb5b022235262f027c301a880d900a7b97f6fbec3f57a13cb7100bc7eb1ac4"
+  },
+  "missing_config": {
+    "description": "IDR access unit without SPS.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MISSING_PARAMETER_SETS"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "a94958a6c7fd69d8d3dc08c9e647cdc4b034cab1800cadc6e506b70f4c09e2a6"
+  },
+  "missing_pts": {
+    "description": "A frame event omits its encoder PTS.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MISSING_PTS"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "340169297fa96367a6e332eeafdc1df96f7727db01fd717933dd293f5fd5a741"
+  },
+  "partial_two_access_units": {
+    "description": "One message carries two access units (an access unit must be exactly one image).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_PARTIAL_ACCESS_UNIT"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "b66e765f5d9675ead89fd9411d835b83493cbeb78cbd11667fa60cb808d1cfd6"
+  },
+  "ros2_profile": {
+    "description": "Mixed Protobuf/CDR/JSON file falsely claims the ROS2 MCAP profile.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_PROFILE_NOT_EMPTY"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "7321bb1f5dc98a1d7538786ad7b94a630b54131ac3dd5ce8af46fa00e152c1ae"
+  },
+  "tracking_loss": {
+    "description": "A pose marked lost is still presented as valid.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_TRACKING_LOSS_UNMARKED"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "0654a772eecb885cd44bdc3151664b5b576b60a4541af18afea22ae87a1245b4"
+  },
+  "truncated_before_footer": {
+    "description": "Cut inside the footer record.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_TRUNCATED"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "35a4f37e50ef3807b28a22dc7263780b16ed305179f878ab29359a0f54debdcb"
+  },
+  "truncated_mid_record": {
+    "description": "Cut inside the final record: no footer.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_TRUNCATED"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "6af539617272cb9b9faf8e4def1a2c1af1789209f6154c4a59e0ca81e94e4acc"
+  },
+  "unequal_clock": {
+    "description": "Frame events use a native clock other than the declared rgb stream clock.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "expected_outcome": "reject",
+    "sha256": "2baf197ab4f719e5c2bea9404d46095fe51489a74df0534288d9a13cae36f971"
+  },
+  "valid": {
+    "description": "Baseline Annex B IDR+P stream, one dropped frame, independent IMU clocks, CDR pose, tracking-loss marked invalid.",
+    "expect": "accept",
+    "expected_errors": [],
+    "expected_outcome": "accept",
+    "sha256": "705cfd42c05626b38e7c06ac3f8da20d81c59992919d8964716898f4d4bb2696"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "ticket": "SA-50",
+  "wire_contract_revision": "stateaction.capture.v1.1",
+  "date": "2026-11-01",
+  "local_results": {
+    "python": "passed",
+    "typescript": "passed",
+    "dart": "passed",
+    "kotlin": "passed",
+    "swift": "passed"
+  },
+  "golden_cases": 18,
+  "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+  "native_assets_match": true,
+  "independent_decode": {
+    "delayed": {
+      "json_messages": 27,
+      "video": 5,
+      "ffmpeg_decoded_frames": 5
+    },
+    "idr_with_config": {
+      "json_messages": 13,
+      "video": 1,
+      "ffmpeg_decoded_frames": 1
+    },
+    "valid": {
+      "json_messages": 27,
+      "video": 5,
+      "ffmpeg_decoded_frames": 5
+    }
+  },
+  "tool_versions": {
+    "node": "v24.22.2",
+    "dart": "Dart SDK version: 3.12.2 (stable) (Tue Jun 9 01:11:39 2026 -0700) on \"linux_x64\"",
+    "swift": "6.1.2 (swift-6.1.2-RELEASE, Linux x86_64, ubuntu24.04 toolchain on Ubuntu 26.04; tarball sha256 d749d5fe2d6709ee988e96b16f02bca7b53304d09925e31063fd5ec56019de9f)",
+    "kotlin": "2.1.0 via Gradle 8.14, JDK 21 (JVM-only project; production CaptureProtocol.kt/VideoWire.kt)"
+  },
+  "not_proven": [
+    "Apple-platform (iOS/AVFoundation/VideoToolbox) Swift behaviour",
+    "physical device capture or clock accuracy",
+    "Kotlin native enforcement of descriptor/clock/tracking/calibration/close/profile/truncation rules (SA-51+)",
+    "hosted CI (reported separately)",
+    "model-relative 3D data is never metric ground truth"
+  ],
+  "sa12_shared_contract_integration": "pending SA-12 merge"
+}

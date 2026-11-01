@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/MotionEvent",
+  "title": "stateaction.capture.MotionEvent.v1",
+  "required": [
+    "recording_id",
+    "event_id",
+    "native_timestamp_ns",
+    "native_clock_id",
+    "unit"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "native_timestamp_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "native_clock_id": {
+      "const": "android.elapsed_realtime"
+    },
+    "unit": {
+      "enum": ["m/s^2", "rad/s"]
+    },
+    "mapped_capture_time_ns": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "accuracy": {},
+    "values": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "axes": {},
+    "includes_gravity": {
+      "type": ["boolean", "null"]
+    }
+  }
+}

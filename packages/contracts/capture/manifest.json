@@ -1,0 +1,16 @@
+{
+  "wire_contract_revision": "stateaction.capture.v1.1",
+  "files": {
+    "Clocks.schema.json": "0853a41c7f8df25377e598b28845f9898675455effdc203a2d3296c92d0bad67",
+    "Close.schema.json": "91875011405c4b70e6e4aa0cc9d4dd6b54316c933160d252290ca5207de5311e",
+    "FrameEvent.schema.json": "b6b2d72947f0aa11c52bc44c7af509d54abd0c45db673876bf993d24d06c02cc",
+    "Inventory.schema.json": "367ea175cd52fb30a7b5177ec0d30640e7ad73bec1463458a05b68108fdcffdc",
+    "LICENSE-FOXGLOVE-SCHEMAS": "da11235665c17d4c1634072dae92b8ba1b38d6fdde2ccf19a6bbede33253f58d",
+    "LICENSE-PROTOBUF": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+    "MotionEvent.schema.json": "b364808778bcbe2278cba1a419d2fa329cc16d0d9d12eb32386266d55c1bffc6",
+    "Profile.schema.json": "e0d3aa2143a788d7d26321ee4cf5dc2e883335365989a9b663b6df4a5e5f5e40",
+    "SensorEvent.schema.json": "44d8921ed98035745d2912f485a7edf94a4afa4661d9aa7700221d0bf986a78c",
+    "foxglove-compressed-video.desc": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+    "schema-provenance.json": "81ba562a1ea18df9b4aebd59dbdd1028f256137c11c6a427e08fff0bfb85405c"
+  }
+}

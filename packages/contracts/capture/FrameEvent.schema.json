@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/FrameEvent",
+  "title": "stateaction.capture.FrameEvent.v1",
+  "required": ["recording_id", "stream_id", "source_frame_id", "state"],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "native_clock_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clock_mapping_revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "calibration_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_frame_id": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "native_timestamp_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "mapped_capture_time_ns": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "encoder_pts_us": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "stream_id": {
+      "const": "rgb"
+    },
+    "state": {
+      "enum": ["acquired", "submitted", "written", "dropped"]
+    },
+    "native_timestamps": {
+      "type": "object"
+    },
+    "encoder_time_base": {
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
+    },
+    "is_idr": {
+      "type": "boolean"
+    },
+    "output_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "output_channel": {
+      "const": "/camera/rgb/video"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": ["acquired", "written"]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "native_timestamp_ns",
+          "native_clock_id",
+          "mapped_capture_time_ns",
+          "clock_mapping_revision",
+          "calibration_id",
+          "encoder_pts_us",
+          "encoder_time_base",
+          "native_timestamps"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "written"
+          }
+        }
+      },
+      "then": {
+        "required": ["output_channel", "output_sequence", "is_idr"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "dropped"
+          }
+        }
+      },
+      "then": {
+        "required": ["reason"]
+      }
+    }
+  ]
+}

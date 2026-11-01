@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "$id": "https://stateaction.ai/schemas/capture/v1/Close",
+  "title": "stateaction.capture.Close.v1",
+  "required": [
+    "recording_id",
+    "outcome",
+    "frames",
+    "video_messages",
+    "drops",
+    "motion_events",
+    "sensor_events"
+  ],
+  "properties": {
+    "recording_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome": {
+      "enum": ["completed", "failed", "aborted", "unknown"]
+    },
+    "failure_reason": {
+      "type": ["string", "null"]
+    },
+    "frames": {
+      "type": "object",
+      "required": ["acquired", "submitted", "written", "dropped", "unresolved"],
+      "properties": {
+        "acquired": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "submitted": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "written": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "dropped": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "unresolved": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "video_messages": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "motion_events": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      }
+    },
+    "sensor_events": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "drops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["reason", "count"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "count": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
