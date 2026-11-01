@@ -16,6 +16,7 @@ let custom: [String: String] = [
 let magic: [UInt8] = [0x89, 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a]
 
 struct Truncated: Error {}
+struct Malformed: Error {}
 
 // MARK: JSON value (keeps bool/int/string distinct)
 indirect enum J: Decodable, Equatable {
@@ -106,7 +107,7 @@ struct Schema { var name: String; var encoding: String; var data: [UInt8] }
 struct Mcap {
     var profile: String? = nil
     var schemas: [Int: Schema] = [:]
-    var channels: [Int: (schemaId: Int, topic: String)] = [:]
+    var channels: [Int: (schemaId: Int, topic: String, encoding: String)] = [:]
     var messages: [Message] = []
 }
 
@@ -142,10 +143,13 @@ func readMcap(_ d: [UInt8]) throws -> Mcap {
             let (name, o1) = try readStr(body, 2)
             let (enc, o2) = try readStr(body, o1)
             let n = Int(try le(body, o2, UInt32.self))
+            guard o2 + 4 + n <= body.count else { throw Truncated() }
             out.schemas[Int(try le(body, 0, UInt16.self))] = Schema(name: name, encoding: enc, data: Array(body[(o2 + 4)..<(o2 + 4 + n)]))
         case 0x04:
-            out.channels[Int(try le(body, 0, UInt16.self))] = (Int(try le(body, 2, UInt16.self)), try readStr(body, 4).0)
+            let (topic, o1) = try readStr(body, 4)
+            out.channels[Int(try le(body, 0, UInt16.self))] = (Int(try le(body, 2, UInt16.self)), topic, try readStr(body, o1).0)
         case 0x05:
+            guard out.channels[Int(try le(body, 0, UInt16.self))] != nil else { throw Malformed() }
             out.messages.append(Message(channel: Int(try le(body, 0, UInt16.self)), sequence: try le(body, 2, UInt32.self), logTime: try le(body, 6, UInt64.self), data: Array(body[22...])))
         case 0x02:
             guard pos + 8 == d.count, Array(d[pos...]) == magic else { throw Truncated() }
@@ -156,9 +160,10 @@ func readMcap(_ d: [UInt8]) throws -> Mcap {
 }
 
 // MARK: Protobuf CompressedVideo
-func varint(_ b: [UInt8], _ pos: inout Int) -> UInt64 {
+func varint(_ b: [UInt8], _ pos: inout Int) throws -> UInt64 {
     var shift: UInt64 = 0, v: UInt64 = 0
     while true {
+        guard pos < b.count, shift <= 63 else { throw Malformed() }
         let x = b[pos]; pos += 1
         v |= UInt64(x & 0x7f) << shift
         if x & 0x80 == 0 { return v }
@@ -168,25 +173,26 @@ func varint(_ b: [UInt8], _ pos: inout Int) -> UInt64 {
 
 struct Video { var sec: UInt64 = 0, nanos: UInt64 = 0; var frameId = "", format = ""; var data: [UInt8] = [] }
 
-func decodeVideo(_ b: [UInt8]) -> Video {
+func decodeVideo(_ b: [UInt8]) throws -> Video {
     var v = Video(); var pos = 0
     while pos < b.count {
-        let key = varint(b, &pos)
+        let key = try varint(b, &pos)
         let field = key >> 3, wire = key & 7
         if wire == 2 {
-            let n = Int(varint(b, &pos))
+            let n = Int(try varint(b, &pos))
+            guard n >= 0, pos + n <= b.count else { throw Malformed() }
             let chunk = Array(b[pos..<(pos + n)]); pos += n
             if field == 1 {
                 var p = 0
                 while p < chunk.count {
-                    let k = varint(chunk, &p); let val = varint(chunk, &p)
+                    let k = try varint(chunk, &p); let val = try varint(chunk, &p)
                     if k >> 3 == 1 { v.sec = val } else { v.nanos = val }
                 }
             } else if field == 2 { v.frameId = String(decoding: chunk, as: UTF8.self) }
             else if field == 3 { v.data = chunk }
             else if field == 4 { v.format = String(decoding: chunk, as: UTF8.self) }
-        } else if wire == 0 { _ = varint(b, &pos) }
-        else { fatalError("wire type") }
+        } else if wire == 0 { _ = try varint(b, &pos) }
+        else { throw Malformed() }
     }
     return v
 }
@@ -231,7 +237,9 @@ func classifyAu(_ d: [UInt8]) -> ([String], Bool) {
     if slices.isEmpty { return (["E_CONFIG_ONLY"], false) }
     var errors: [String] = []
     let headers = slices.map(sliceHeader)
-    if headers.contains(where: { $0 == nil }) || headers.filter({ $0!.0 == 0 }).count != 1 { errors.append("E_PARTIAL_ACCESS_UNIT") }
+    let firsts = headers.filter { $0 != nil && $0!.0 == 0 }.count
+    if headers.contains(where: { $0 == nil }) || firsts == 0 { errors.append("E_PARTIAL_ACCESS_UNIT") }
+    else if firsts > 1 { errors.append("E_MULTIPLE_ACCESS_UNITS") }
     else if headers.contains(where: { $0!.1 % 5 == 1 }) { errors.append("E_B_FRAME") }
     let idr = types.contains(5)
     if idr {
@@ -243,18 +251,64 @@ func classifyAu(_ d: [UInt8]) -> ([String], Bool) {
 }
 
 func decodePose(_ d: [UInt8]) throws -> [String: J] {
-    guard try le(d, 0, UInt32.self) == 0x0000_0100 else { fatalError("CDR header") }
+    guard d.count >= 16, try le(d, 0, UInt32.self) == 0x0000_0100 else { throw Malformed() }
     let n = Int(try le(d, 12, UInt32.self))
+    guard 16 + max(n - 1, 0) <= d.count else { throw Malformed() }
     return ["sec": .int(Int64(try le(d, 4, Int32.self))), "nanosec": .int(Int64(try le(d, 8, UInt32.self))),
-            "frame_id": .str(String(decoding: d[16..<(16 + n - 1)], as: UTF8.self))]
+            "frame_id": .str(String(decoding: d[16..<(16 + max(n - 1, 0))], as: UTF8.self))]
 }
 
 // MARK: Checker
+let poseSchema = "geometry_msgs/msg/PoseStamped"
+let poseSchemaFile = "geometry_msgs-PoseStamped.ros2msg"
+// topic -> (schema name, schema encoding, message encoding): the reviewed channel table.
+let channelTable: [String: (String, String, String)] = [
+    "/stateaction/capture_profile": ("stateaction.capture.Profile.v1", "jsonschema", "json"),
+    "/stateaction/clocks": ("stateaction.capture.Clocks.v1", "jsonschema", "json"),
+    "/stateaction/inventory": ("stateaction.capture.Inventory.v1", "jsonschema", "json"),
+    "/stateaction/frame_events": ("stateaction.capture.FrameEvent.v1", "jsonschema", "json"),
+    "/stateaction/imu/accel": ("stateaction.capture.MotionEvent.v1", "jsonschema", "json"),
+    "/stateaction/imu/gyro": ("stateaction.capture.MotionEvent.v1", "jsonschema", "json"),
+    "/stateaction/sensor_events": ("stateaction.capture.SensorEvent.v1", "jsonschema", "json"),
+    "/stateaction/close": ("stateaction.capture.Close.v1", "jsonschema", "json"),
+    videoTopic: ("foxglove.CompressedVideo", "protobuf", "protobuf"),
+    "/tracking/pose": (poseSchema, "ros2msg", "cdr"),
+]
+let identityKeys = ["recording_id", "stream_id", "native_timestamp_ns", "native_clock_id", "mapped_capture_time_ns",
+                    "clock_mapping_revision", "calibration_id", "encoder_pts_us", "encoder_time_base", "native_timestamps"]
+let frameStates = ["acquired", "submitted", "written", "dropped"]
+
+func isDecimal(_ v: J?) -> Bool {
+    guard let s = v?.s, !s.isEmpty, s.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }) else { return false }
+    return s == "0" || s.first != "0"
+}
+func nonEmpty(_ v: J?) -> Bool { if let s = v?.s { return !s.isEmpty }; return false }
+func isObj(_ v: J?) -> Bool { if case .obj? = v { return true }; return false }
+func same(_ a: J?, _ b: J?) -> Bool { canonical(a ?? .null) == canonical(b ?? .null) }
+
+func frameEventShapeOk(_ e: J) -> Bool {
+    guard case .obj = e, let st = e["state"]?.s, frameStates.contains(st) else { return false }
+    for k in ["recording_id", "stream_id", "native_clock_id", "clock_mapping_revision", "calibration_id"] where !nonEmpty(e[k]) { return false }
+    for k in ["source_frame_id", "native_timestamp_ns", "mapped_capture_time_ns"] where !isDecimal(e[k]) { return false }
+    if !isObj(e["native_timestamps"]) { return false }
+    if st == "dropped" && !nonEmpty(e["reason"]) { return false }
+    if st == "written" {
+        guard e["output_channel"]?.s == videoTopic, let seq = e["output_sequence"]?.i, seq >= 0, case .bool? = e["is_idr"] else { return false }
+    }
+    return true
+}
+
+func rejectWith(_ errors: Set<String>) -> J {
+    .obj(["outcome": .str("reject"), "errors": .arr(errors.sorted().map { .str($0) }), "facts": .obj([:])])
+}
+
 func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     var errors = Set<String>()
     let f: Mcap
     do { f = try readMcap(data) } catch is Truncated {
         return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_TRUNCATED")]), "facts": .obj([:])])
+    } catch is Malformed {
+        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_MALFORMED_MESSAGE")]), "facts": .obj([:])])
     }
     if f.profile != "" { errors.insert("E_PROFILE_NOT_EMPTY") }
     var byTopic: [String: [Message]] = [:]
@@ -267,58 +321,107 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         facts["legacy_log_times_ns"] = .arr(img.map { .str(String($0.logTime)) })
         return .obj(["outcome": .str("legacy_jpeg"), "errors": .arr([.str("E_LEGACY_JPEG")]), "facts": .obj(facts)])
     }
+    // Exact per-channel encodings and reviewed schema identity.
+    for ch in f.channels.values {
+        if let schema = f.schemas[ch.schemaId], let want = channelTable[ch.topic],
+           schema.name == want.0, schema.encoding == want.1, ch.encoding == want.2 {
+            if schema.name == poseSchema && sha256Hex(schema.data) != manifest[poseSchemaFile] { errors.insert("E_CHANNEL_ENCODING") }
+        } else { errors.insert("E_CHANNEL_ENCODING") }
+    }
     var hashes: [String: J] = [:]
     for s in f.schemas.values {
         let digest = sha256Hex(s.data)
         hashes[s.name] = .str(digest)
         if s.name == "foxglove.CompressedVideo" {
-            if digest != manifest["foxglove-compressed-video.desc"] || s.encoding != "protobuf" { errors.insert("E_DESCRIPTOR_HASH") }
+            if digest != manifest["foxglove-compressed-video.desc"] { errors.insert("E_DESCRIPTOR_HASH") }
         } else if let file = custom[s.name] {
-            if digest != manifest[file] || s.encoding != "jsonschema" { errors.insert("E_SCHEMA_MISMATCH") }
+            if digest != manifest[file] { errors.insert("E_SCHEMA_MISMATCH") }
         }
     }
     facts["schema_sha256"] = .obj(hashes)
-    func js(_ t: String) -> [J] {
-        (byTopic[t] ?? []).map { try! JSONDecoder().decode(J.self, from: Data($0.data)) }
+    // Decode every message once; an undecodable message is a defined reject.
+    var jsonDecoded: [String: [J]] = [:]
+    var videoDecoded: [Video] = []
+    var poseDecoded: [[String: J]] = []
+    do {
+        for (topic, msgs) in byTopic {
+            guard let want = channelTable[topic] else { continue }
+            if want.2 == "json" {
+                let parsed = try msgs.map { m -> J in
+                    guard let v = try? JSONDecoder().decode(J.self, from: Data(m.data)), isObj(v) else { throw Malformed() }
+                    return v
+                }
+                jsonDecoded[topic] = parsed
+            } else if want.2 == "protobuf" { videoDecoded = try msgs.map { try decodeVideo($0.data) } }
+            else { poseDecoded = try msgs.map { try decodePose($0.data) } }
+        }
+    } catch is Malformed {
+        errors.insert("E_MALFORMED_MESSAGE")
+        return rejectWith(errors)
     }
+    func js(_ t: String) -> [J] { jsonDecoded[t] ?? [] }
     let clocks = js("/stateaction/clocks").first?["stream_clocks"] ?? .obj([:])
+    var knownCalibrations = Set<String>()
+    if case .arr(let cs)? = js("/stateaction/inventory").first?["calibrations"] {
+        for c in cs { if let id = c["calibration_id"]?.s { knownCalibrations.insert(id) } }
+    }
     let frames = js("/stateaction/frame_events")
-    var ptsSeen = Set<String>(), acquired = Set<String>(), written: [String: J] = [:], state: [String: String] = [:]
+    var ptsSeen = Set<String>(), acquired: [String: J] = [:], written: [String: J] = [:], state: [String: String] = [:]
+    var submitted = Set<String>(), dropReasons: [String: Int] = [:]
     var counts: [String: Int64] = ["acquired": 0, "submitted": 0, "written": 0, "dropped": 0]
     for e in frames {
+        if !frameEventShapeOk(e) { errors.insert("E_SCHEMA_MALFORMED"); continue }
         let sid = e["source_frame_id"]!.s!, st = e["state"]!.s!
+        // Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
+        // every later event repeats the acquired identity (clock, PTS, calibration, time base).
+        if st == "acquired" {
+            if acquired[sid] != nil { errors.insert("E_FRAME_IDENTITY") }
+        } else if acquired[sid] == nil || ["written", "dropped"].contains(state[sid] ?? "") || (st == "submitted" && submitted.contains(sid)) {
+            errors.insert("E_FRAME_IDENTITY")
+        } else if identityKeys.contains(where: { !same(e[$0], acquired[sid]![$0]) }) {
+            errors.insert("E_FRAME_IDENTITY")
+        }
+        let tb = e["encoder_time_base"]
+        if !(tb?["numerator"]?.i == 1 && tb?["denominator"]?.i == 1_000_000) { errors.insert("E_TIME_BASE") }
+        if e["encoder_pts_us"] != nil && !isDecimal(e["encoder_pts_us"]) { errors.insert("E_PTS_INVALID") }
         if (st == "acquired" || st == "written") && clocks[e["stream_id"]!.s!]?.s != e["native_clock_id"]?.s { errors.insert("E_CLOCK_MISMATCH") }
         if (st == "acquired" || st == "written") && e["encoder_pts_us"] == nil { errors.insert("E_MISSING_PTS") }
         if st == "acquired" {
-            if let p = e["encoder_pts_us"]?.s { if !ptsSeen.insert(p).inserted { errors.insert("E_DUPLICATE_PTS") } }
-            acquired.insert(sid)
+            if isDecimal(e["encoder_pts_us"]), let p = e["encoder_pts_us"]?.s { if !ptsSeen.insert(p).inserted { errors.insert("E_DUPLICATE_PTS") } }
+            if !knownCalibrations.contains(e["calibration_id"]!.s!) { errors.insert("E_CALIBRATION_UNKNOWN") }
+            if acquired[sid] == nil { acquired[sid] = e }
         }
-        if st == "written" { written[sid] = e }
+        if st == "submitted" { submitted.insert(sid) }
+        if st == "written" && written[sid] == nil { written[sid] = e }
+        if st == "dropped" { dropReasons[e["reason"]!.s!, default: 0] += 1 }
         counts[st]! += 1
-        state[sid] = st
+        if acquired[sid] != nil { state[sid] = st }
     }
     facts["frame_event_counts"] = .obj(counts.mapValues { .int($0) })
     let video = byTopic[videoTopic] ?? []
+    let writtenSeqs = written.values.map { $0["output_sequence"]!.i! }
+    let videoSeqs = video.map { Int64($0.sequence) }
+    if Set(writtenSeqs).count != writtenSeqs.count || Set(videoSeqs).count != videoSeqs.count || Set(writtenSeqs) != Set(videoSeqs) {
+        errors.insert("E_SEQUENCE")
+    }
     var bySeq: [Int64: J] = [:]
     for e in written.values { bySeq[e["output_sequence"]!.i!] = e }
     var vf: [J] = []
     for (i, m) in video.enumerated() {
-        let v = decodeVideo(m.data)
+        let v = videoDecoded[i]
         let (auErrors, idr) = classifyAu(v.data)
         auErrors.forEach { errors.insert($0) }
         if i == 0 && !idr && auErrors.isEmpty { errors.insert("E_FIRST_NOT_IDR") }
         let ts = v.sec * 1_000_000_000 + v.nanos
         let ev = bySeq[Int64(m.sequence)]
         if v.frameId != frameIdName || v.format != "h264" { errors.insert("E_VIDEO_FIELDS") }
-        if ev == nil { errors.insert("E_MISSING_PTS") }
-        else if String(ts) != ev!["mapped_capture_time_ns"]?.s || ev!["is_idr"]!.b != idr { errors.insert("E_VIDEO_TIMESTAMP_MISMATCH") }
+        if let ev = ev, String(ts) != ev["mapped_capture_time_ns"]?.s || ev["is_idr"]!.b != idr { errors.insert("E_VIDEO_TIMESTAMP_MISMATCH") }
         vf.append(.obj(["sequence": .int(Int64(m.sequence)), "capture_time_ns": .str(String(ts)), "log_time_ns": .str(String(m.logTime)),
                         "frame_id": .str(v.frameId), "format": .str(v.format), "bytes": .int(Int64(v.data.count)),
                         "idr": .bool(idr), "sha256": .str(sha256Hex(v.data)),
                         "source_frame_id": ev?["source_frame_id"] ?? .null, "encoder_pts_us": ev?["encoder_pts_us"] ?? .null]))
     }
     facts["video"] = .arr(vf)
-    if Int64(video.count) != counts["written"]! { errors.insert("E_MISSING_PTS") }
     var motion: [String: J] = [:]
     for topic in ["/stateaction/imu/accel", "/stateaction/imu/gyro"] {
         let evs = js(topic)
@@ -333,40 +436,127 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         if e["source_kind"]?.s == "calibration_reset" { resetAt[e["supersedes_calibration_id"]!.s!] = e["association_source_frame_id"]?.s }
     }
     var cals = Set<String>()
-    for e in frames where e["state"]?.s == "acquired" {
+    for e in acquired.values {
         cals.insert(e["calibration_id"]!.s!)
         if let at = resetAt[e["calibration_id"]!.s!], let atId = at, UInt64(e["source_frame_id"]!.s!)! >= UInt64(atId)! { errors.insert("E_CALIBRATION_RESET_UNMARKED") }
     }
     facts["sensor_events"] = .arr(sensors.map { .obj(["event_id": $0["event_id"]!, "source_kind": $0["source_kind"]!, "native_timestamp_ns": $0["native_timestamp_ns"]!, "tracking_state": $0["tracking_state"] ?? .null]) })
     facts["calibrations_used"] = .arr(cals.sorted().map { .str($0) })
-    facts["cdr_poses"] = .arr(try (byTopic["/tracking/pose"] ?? []).map { m in
-        var p = try decodePose(m.data); p["log_time_ns"] = .str(String(m.logTime)); return .obj(p) })
+    let poseMessages = byTopic["/tracking/pose"] ?? []
+    facts["cdr_poses"] = .arr(poseDecoded.enumerated().map { i, p in
+        var q = p; q["log_time_ns"] = .str(String(poseMessages[i].logTime)); return .obj(q) })
     if let close = js("/stateaction/close").last {
         let dropped = state.values.filter { $0 == "dropped" }.count
-        var expect = counts.mapValues { String($0) }
-        expect["unresolved"] = String(acquired.count - written.count - dropped)
-        let cf = close["frames"]!
-        if ["acquired", "dropped", "submitted", "unresolved", "written"].contains(where: { cf[$0]?.s != expect[$0] }) || close["video_messages"]?.s != String(video.count) { errors.insert("E_COUNT_MISMATCH") }
-        facts["close_outcome"] = close["outcome"]!
+        let unresolved = acquired.count - written.count - dropped
+        var expect = counts.mapValues { J.str(String($0)) }
+        expect["unresolved"] = .str(String(unresolved))
+        let expectMotion: J = .obj(["accel": .str(String(js("/stateaction/imu/accel").count)), "gyro": .str(String(js("/stateaction/imu/gyro").count))])
+        let expectDrops: J = .arr(dropReasons.keys.sorted().map { .obj(["reason": .str($0), "count": .str(String(dropReasons[$0]!))]) })
+        var closeDrops: J? = nil
+        if case .arr(let d)? = close["drops"] {
+            closeDrops = .arr(d.filter { isObj($0) }.sorted { ($0["reason"]?.s ?? "") < ($1["reason"]?.s ?? "") })
+        }
+        if !same(close["frames"], .obj(expect)) || close["video_messages"]?.s != String(video.count)
+            || !same(close["motion_events"], expectMotion) || close["sensor_events"]?.s != String(sensors.count)
+            || closeDrops == nil || !same(closeDrops, expectDrops) { errors.insert("E_COUNT_MISMATCH") }
+        let outcome = close["outcome"]?.s
+        if !["completed", "failed", "aborted", "unknown"].contains(outcome ?? "") { errors.insert("E_SCHEMA_MALFORMED") }
+        else if outcome == "completed" && unresolved != 0 { errors.insert("E_OUTCOME_MISMATCH") }
+        else if outcome == "failed" && !nonEmpty(close["failure_reason"]) { errors.insert("E_OUTCOME_MISMATCH") }
+        facts["close_outcome"] = close["outcome"] ?? .null
+        facts["unresolved_frames"] = .int(Int64(unresolved))
     } else { errors.insert("E_COUNT_MISMATCH") }
     let list = errors.sorted()
     return .obj(["outcome": .str(list.isEmpty ? "accept" : "reject"), "errors": .arr(list.map { .str($0) }), "facts": .obj(list.isEmpty ? facts : [:])])
+}
+
+// MARK: Encoder buffer sequences (MediaCodec flags: CODEC_CONFIG=2, END_OF_STREAM=4, PARTIAL_FRAME=8)
+let startCode: [UInt8] = [0, 0, 0, 1]
+
+func encoderBufferData(_ buf: J, _ sources: [String: [[UInt8]]]) -> [UInt8] {
+    guard case .arr(let range)? = buf["nals"], let first = range[0].i, let last = range[1].i, let source = buf["source"]?.s else { return [] }
+    var data: [UInt8] = []
+    for n in sources[source]![Int(first)..<Int(last)] { data += startCode + n }
+    if case .arr(let slice)? = buf["bytes"] { data = Array(data[Int(slice[0].i!)..<Int(slice[1].i!)]) }
+    return data
+}
+
+func assembleEncoderBuffers(_ buffers: [J], _ sources: [String: [[UInt8]]]) -> J {
+    var errors = Set<String>()
+    var aus: [J] = []
+    var config: [UInt8] = []
+    var pending: (pts: String, data: [UInt8])? = nil
+    var finished = false
+    for buf in buffers {
+        let flags = buf["flags"]!.i!
+        let data = encoderBufferData(buf, sources)
+        if flags & 2 != 0 {
+            if pending != nil { errors.insert("E_INCOMPLETE_AU"); finished = true; break }
+            config = data
+            continue
+        }
+        if flags & 4 != 0 && data.isEmpty {
+            if pending != nil { errors.insert("E_INCOMPLETE_AU") }
+            finished = true
+            break
+        }
+        guard isDecimal(buf["pts_us"]), let pts = buf["pts_us"]?.s else { errors.insert("E_PTS_INVALID"); finished = true; break }
+        if let p = pending, p.pts != pts { errors.insert("E_PARTIAL_PTS_MISMATCH"); finished = true; break }
+        var acc = (pending?.data ?? []) + data
+        if flags & 8 != 0 { pending = (pts, acc); continue }
+        pending = nil
+        if let units = nals(acc), units.contains(where: { $0[0] & 31 == 5 }) {
+            let types = units.map { Int($0[0] & 31) }
+            let before = types[0..<types.firstIndex { $0 == 1 || $0 == 5 }!]
+            if (!before.contains(7) || !before.contains(8)) && !config.isEmpty { acc = config + acc }
+        }
+        let (auErrors, idr) = classifyAu(acc)
+        if !auErrors.isEmpty { auErrors.forEach { errors.insert($0) }; finished = true; break }
+        aus.append(.obj(["pts_us": .str(pts), "idr": .bool(idr), "bytes": .int(Int64(acc.count)), "sha256": .str(sha256Hex(acc))]))
+    }
+    if !finished && pending != nil { errors.insert("E_INCOMPLETE_AU") }
+    if !errors.isEmpty { return .obj(["outcome": .str("reject"), "errors": .arr(errors.sorted().map { .str($0) }), "aus": .arr([])]) }
+    return .obj(["outcome": .str("accept"), "errors": .arr([]), "aus": .arr(aus)])
 }
 
 let cap = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "../..").standardizedFileURL.path
 let manifestRaw = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/manifest.json")))
 var manifest: [String: String] = [:]
 if case .obj(let files)? = manifestRaw["files"] { for (k, v) in files { manifest[k] = v.s } }
+let declared = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/golden/cases.json")))
 let names = try FileManager.default.contentsOfDirectory(atPath: "\(cap)/golden").filter { $0.hasSuffix(".mcap") }.map { String($0.dropLast(5)) }.sorted()
 var failed = 0
+func fail(_ message: String) {
+    failed += 1
+    FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
+}
+if case .obj(let d) = declared, Set(d.keys) != Set(names) { fail("golden/*.mcap and cases.json disagree") }
 for name in names {
     let data = try [UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/golden/\(name).mcap")))
-    let actual = canonical(try check(data, manifest)) + "\n"
+    let result = try check(data, manifest)
+    let actual = canonical(result) + "\n"
     let expected = try String(contentsOfFile: "\(cap)/golden/expected/\(name).json", encoding: .utf8)
-    if actual != expected {
-        failed += 1
-        FileHandle.standardError.write("MISMATCH \(name)\n  actual:   \(actual.prefix(300))\n  expected: \(expected.prefix(300))\n".data(using: .utf8)!)
+    if actual != expected { fail("MISMATCH \(name)\n  actual:   \(actual.prefix(300))\n  expected: \(expected.prefix(300))") }
+    // The independently declared outcome and error codes are the oracle for rejections.
+    if let want = declared[name] {
+        if result["outcome"]?.s != want["expect"]?.s || !same(result["errors"], want["expected_errors"]) {
+            fail("DECLARED \(name): got \(canonical(result["errors"] ?? .null)); declared \(canonical(want["expected_errors"] ?? .null))")
+        }
     }
 }
-print("{\"runner\":\"swift\",\"cases\":\(names.count),\"failed\":\(failed)}")
+let fixture = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/encoder_buffers.json")))
+var sources: [String: [[UInt8]]] = [:]
+if case .obj(let s)? = fixture["sources"] {
+    for (k, v) in s { sources[k] = nals([UInt8](try Data(contentsOf: URL(fileURLWithPath: "\(cap)/\(v.s!)"))))! }
+}
+var fixtureCases = 0
+if case .obj(let cases)? = fixture["cases"] {
+    for (name, c) in cases {
+        fixtureCases += 1
+        guard case .arr(let buffers)? = c["buffers"] else { continue }
+        let got = assembleEncoderBuffers(buffers, sources)
+        if !same(got, c["expect"]) { fail("ENCODER BUFFERS \(name): \(canonical(got))") }
+    }
+}
+print("{\"runner\":\"swift\",\"cases\":\(names.count),\"encoder_buffer_cases\":\(fixtureCases),\"failed\":\(failed)}")
 exit(failed == 0 ? 0 : 1)

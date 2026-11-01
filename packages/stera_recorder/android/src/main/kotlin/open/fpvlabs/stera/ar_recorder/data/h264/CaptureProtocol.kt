@@ -82,11 +82,11 @@ class H264FrameLedger(private val recordingId: String) {
                 require(id > lastId) { "Duplicate/nonmonotonic source frame ID" }
                 require(pending.size < CaptureProtocol.MAX_PENDING) { "Pending H.264 frame bound exhausted" }
                 require(CaptureProtocol.decimal(event, "encoder_pts_us") > lastPts) { "Duplicate/nonmonotonic encoder PTS" }
-                require(CaptureProtocol.decimal(event, "native_timestamp_ns") > 0)
-                require(CaptureProtocol.decimal(event, "mapped_capture_time_ns") > 0)
+                require(CaptureProtocol.decimal(event, "native_timestamp_ns") > 0) { "Native timestamp must be positive" }
+                require(CaptureProtocol.decimal(event, "mapped_capture_time_ns") > 0) { "Mapped capture time must be positive" }
                 for (key in listOf("native_clock_id", "clock_mapping_revision", "calibration_id")) require(event[key] is String && (event[key] as String).isNotBlank()) { "Missing $key" }
                 require(event["native_timestamps"] is Map<*, *>) { "Original native timestamps required" }
-                require(event["encoder_time_base"] == CaptureProtocol.TIME_BASE)
+                require(event["encoder_time_base"] == CaptureProtocol.TIME_BASE) { "Frame time base is not 1/1000000" }
             }
             "submitted", "dropped" -> {
                 require(id in pending) { "Unknown or duplicate terminal source frame ID" }
@@ -120,8 +120,8 @@ class H264FrameLedger(private val recordingId: String) {
 
     fun writtenEvent(id: Long, captureNs: Long, ptsUs: Long, sequence: Int, idr: Boolean): Map<String, Any?> {
         val frame = checkNotNull(pending[id]) { "Unknown or duplicate output source frame ID" }
-        require(CaptureProtocol.decimal(frame, "encoder_pts_us") == ptsUs)
-        require(CaptureProtocol.decimal(frame, "mapped_capture_time_ns") == captureNs)
+        require(CaptureProtocol.decimal(frame, "encoder_pts_us") == ptsUs) { "Written PTS differs from the acquired PTS" }
+        require(CaptureProtocol.decimal(frame, "mapped_capture_time_ns") == captureNs) { "Written capture time differs from the acquired capture time" }
         require(ptsUs > lastWrittenPts) { "Output PTS regressed or repeated" }
         if (written == 0L) require(idr) { "Video must start at an actual IDR" }
         return frame + mapOf("state" to "written", "output_channel" to CaptureProtocol.VIDEO, "output_sequence" to sequence, "is_idr" to idr)

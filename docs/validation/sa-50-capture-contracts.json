@@ -9,7 +9,7 @@
     "kotlin": "passed",
     "swift": "passed"
   },
-  "golden_cases": 18,
+  "golden_cases": 44,
   "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
   "native_assets_match": true,
   "independent_decode": {
@@ -38,9 +38,19 @@
   "not_proven": [
     "Apple-platform (iOS/AVFoundation/VideoToolbox) Swift behaviour",
     "physical device capture or clock accuracy",
-    "Kotlin native enforcement of descriptor/clock/tracking/calibration/close/profile/truncation rules (SA-51+)",
-    "hosted CI (reported separately)",
+    "Kotlin native enforcement of 28 rejecting cases (descriptor/channel/clock/tracking/calibration reset/close counts/outcome/sequence/malformed/profile/truncation) is portable-reader only; recorder wiring is SA-51+",
+    "MediaCodec producer of encoder buffers (SA-51)",
+    "JSON-Schema validation inside the TypeScript/Dart/Swift/Kotlin readers (strict subset only)",
+    "hosted CI result and hosted Swift (reported separately)",
     "model-relative 3D data is never metric ground truth"
   ],
-  "sa12_shared_contract_integration": "pending SA-12 merge"
+  "sa12_shared_contract_integration": "pending SA-12 merge (draft PR5)",
+  "encoder_buffer_cases": 9,
+  "kotlin_scope": {
+    "portable_contract_reader_cases": 44,
+    "native_replay_accepted": 5,
+    "native_replay_rejected": 11,
+    "portable_only_rejects": 28
+  },
+  "hosted_ci": "capture-conformance (server job) and capture-conformance-mobile (Android/Dart job) wired in checks.yml; Swift not run hosted (no toolchain on runner)"
 }

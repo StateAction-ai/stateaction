@@ -1,12 +1,17 @@
 {
+  "aborted_unresolved": {
+    "description": "Recording aborted while the last frame was still in the encoder: acquired+submitted with no terminal event and no video message; Close says aborted with unresolved=1.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "d1a115153d7743a6b876e6208352c6f232861702b344852c5857f96f93abb854"
+  },
   "b_frame": {
     "description": "Real x264 main-profile stream containing B slices.",
     "expect": "reject",
     "expected_errors": [
       "E_B_FRAME"
     ],
-    "expected_outcome": "reject",
-    "sha256": "b87624d00784f1eebca7dfadd5fd20c5215b5eac9f36732d9f2563c232e9e495"
+    "sha256": "14165db6191a959a591c4a6406ecdb57665313b25a1b371ac77a4d72fff5ddd6"
   },
   "calibration_reset": {
     "description": "Calibration reset supersedes rgb_0 at frame 2 but later frames keep rgb_0.",
@@ -14,17 +19,71 @@
     "expected_errors": [
       "E_CALIBRATION_RESET_UNMARKED"
     ],
-    "expected_outcome": "reject",
-    "sha256": "40b9252f7b64d928beb16426d4c40de20c768fcf0fc4c065375ccba114b92004"
+    "sha256": "8c940b92bb17404210d53b373b0d6c5e78f624d73fb1e5d8618cee5caca80672"
+  },
+  "channel_encoding_cdr_message": {
+    "description": "Pose channel message encoding is CDR, not cdr.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "f04250df63d08d88bbd2565e41c752ee447ba67681e362860f0e9adb4ffa54de"
+  },
+  "channel_encoding_cdr_schema": {
+    "description": "Pose channel schema encoding is ros2idl, not ros2msg.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "63f770fc1eb0011ec7a8ea16a88d597fad7df42cb05054d08504d4678de127eb"
+  },
+  "channel_encoding_json_message": {
+    "description": "FrameEvent channel message encoding is JSON, not json.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "8128c498a73189a5eca267c83306228577fdeba93e5ff70cd25a6d51f4c09ce9"
+  },
+  "channel_encoding_json_schema": {
+    "description": "FrameEvent channel schema encoding is JSONSCHEMA, not jsonschema.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "7619a132e0fdf91e91bd3188b4985cdb2cc299cf5cb2ea22f078e175cb544335"
+  },
+  "channel_encoding_video_message": {
+    "description": "Video channel message encoding is PROTOBUF, not protobuf.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "7e2fc467affcafe1fe99a964606854bbeeb4ef342a5c03d102032150d1c703a7"
+  },
+  "channel_encoding_video_schema": {
+    "description": "Video channel schema encoding is flatbuffer, not protobuf.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "7374820956aee7dd0dc2248835ae42ff7ccf6e9b9cbb3b9b3376d4d6ad9d21ea"
   },
   "close_count_mismatch": {
-    "description": "Final close counts disagree with observed lifecycle events.",
+    "description": "Final close frame counts disagree with observed lifecycle events.",
     "expect": "reject",
     "expected_errors": [
       "E_COUNT_MISMATCH"
     ],
-    "expected_outcome": "reject",
-    "sha256": "6a65f097e77c79f583fc77b1982d1c49bd2da840234618fa445da415e1a14fe1"
+    "sha256": "6fa67ed7e9cf6faf01c3d85196c2df9d97f96aeb63b338bcd2a8e915ca36ee58"
+  },
+  "completed_with_unresolved": {
+    "description": "Close says completed although the last frame never reached a terminal state.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "d05977b34f9cc3f19e147dd78a30958f3bf2634687632d07ff1a99f5e01c9070"
   },
   "config_only": {
     "description": "First video message carries only SPS/PPS, not an image.",
@@ -32,15 +91,13 @@
     "expected_errors": [
       "E_CONFIG_ONLY"
     ],
-    "expected_outcome": "reject",
-    "sha256": "a620aefc7158e815ff19163a9333ca6c37f0155e4bd50499541f678dfa686c90"
+    "sha256": "d264976b061b1dba5c618795147ca973bf344f364a44e32d9f4c93c67b55f14d"
   },
   "delayed": {
     "description": "Same capture times; a 400 ms encoder/output stall after frame 1 delays delivery and terminal frame events (logged after later acquisitions). Capture time is preserved.",
     "expect": "accept",
     "expected_errors": [],
-    "expected_outcome": "accept",
-    "sha256": "8672425ad69a5519d415d677a2a6ed4dc5cee17a08ad2069fe6884bb0d5c6a70"
+    "sha256": "7023a7443bc301894dbd761c87a6fb0958ab8cc9da3cb8a418efba428b4f89dd"
   },
   "descriptor_hash": {
     "description": "Embedded Protobuf descriptor bytes differ from the pinned complete descriptor.",
@@ -48,8 +105,32 @@
     "expected_errors": [
       "E_DESCRIPTOR_HASH"
     ],
-    "expected_outcome": "reject",
-    "sha256": "b5ad388313652185784c0df6936222925bb35e1bb6a66f4ae46f0d8c345dd86a"
+    "sha256": "d8c5166f085f28d41173340e14c2803b4b8964eb4aa7b03adede3481a5c398e6"
+  },
+  "drop_reason_mismatch": {
+    "description": "Close attributes the dropped frame to a different reason than its dropped event.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "b73b0641d5648b2a0144006636a38d9d6b802280d591571f208c69709bbffdfb"
+  },
+  "dropped_identity_mismatch": {
+    "description": "Dropped FrameEvent for source frame 3 changes the native clock id of the acquired event.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_FRAME_IDENTITY"
+    ],
+    "sha256": "9cff44ffd978bdf8028309369eebde5b7bab7b63b4568350123efaa7a8edd16b"
+  },
+  "duplicate_output_sequence": {
+    "description": "Two written frames share MCAP output sequence 1 (and two video messages share it).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SEQUENCE",
+      "E_VIDEO_TIMESTAMP_MISMATCH"
+    ],
+    "sha256": "4dc78b7d2033b7b49300566b4d9949665538795a421ba0844f4f9d2380adca65"
   },
   "duplicate_pts": {
     "description": "Two source frames share one encoder PTS.",
@@ -57,15 +138,27 @@
     "expected_errors": [
       "E_DUPLICATE_PTS"
     ],
-    "expected_outcome": "reject",
-    "sha256": "0c4e914c2132809341e9beef6e811fac70bb8a9292ec9a30a2c3548d32a1395e"
+    "sha256": "6c5eec26e0a14981d115a2de588473d2c0d625fb282e5e354d44750fd931dd89"
+  },
+  "failed_unresolved": {
+    "description": "Encoder failure left the last frame unresolved; Close says failed with a failure_reason.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "03ce38ebd70e5befaaa94c9fbf8f7a1d63e54b1fc3b7e5c5eb54c281f667b923"
+  },
+  "failed_without_reason": {
+    "description": "Close outcome failed without a failure_reason.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "4168e76102c9defd4a1064490530ead63920e30f4ca937b7b128b7b6a32c19fc"
   },
   "idr_with_config": {
     "description": "Single complete IDR access unit including SPS/PPS.",
     "expect": "accept",
     "expected_errors": [],
-    "expected_outcome": "accept",
-    "sha256": "d7e6b6ba5bd0ee94d1fd23b48a230796b212ec5c6205f2562a225e18326889a2"
+    "sha256": "050b044b9946a63262706fc005f3ce6d139464b77b93b6f62fcfed3d5e507be3"
   },
   "legacy_jpeg": {
     "description": "Historical sensor_msgs CompressedImage JPEG capture; explicitly classified, never admitted as h264_mcap_v1.",
@@ -73,8 +166,39 @@
     "expected_errors": [
       "E_LEGACY_JPEG"
     ],
-    "expected_outcome": "legacy_jpeg",
     "sha256": "c3eb5b022235262f027c301a880d900a7b97f6fbec3f57a13cb7100bc7eb1ac4"
+  },
+  "malformed_cdr": {
+    "description": "Pose message has an invalid CDR encapsulation header.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "5197695f04b3c50e03f00c9bbebc01fb7f84f80f473e1787354d015eee626890"
+  },
+  "malformed_json": {
+    "description": "Inventory evidence message is not valid JSON.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "70ba8f4b57954958d68564897d3049dbe365a5a4f60f1ae39727cf83ddf97e56"
+  },
+  "malformed_protobuf_length": {
+    "description": "Video message declares a 1000-byte data field but ends after one byte.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "794bc8d4c940fdab98a239807333df5104bebbf10e3bda7020e9242cc4141b69"
+  },
+  "malformed_protobuf_wire_type": {
+    "description": "Video message uses the unsupported Protobuf wire type 7.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "7c104f12ec1beb209af3ed031d9d25308f9251ba059b437ba94efd65907d8871"
   },
   "missing_config": {
     "description": "IDR access unit without SPS.",
@@ -82,8 +206,7 @@
     "expected_errors": [
       "E_MISSING_PARAMETER_SETS"
     ],
-    "expected_outcome": "reject",
-    "sha256": "a94958a6c7fd69d8d3dc08c9e647cdc4b034cab1800cadc6e506b70f4c09e2a6"
+    "sha256": "2c689c0267cdd607dc4031ea41368715637f148fa997755f3237194c389f59bc"
   },
   "missing_pts": {
     "description": "A frame event omits its encoder PTS.",
@@ -91,17 +214,39 @@
     "expected_errors": [
       "E_MISSING_PTS"
     ],
-    "expected_outcome": "reject",
-    "sha256": "340169297fa96367a6e332eeafdc1df96f7727db01fd717933dd293f5fd5a741"
+    "sha256": "abfa8676f8a1026dab35b70e485863eeb0d32faa8b63c97303efecebed6caed2"
   },
-  "partial_two_access_units": {
-    "description": "One message carries two access units (an access unit must be exactly one image).",
+  "motion_count_mismatch": {
+    "description": "Close reports 3 accelerometer events but only 2 were recorded.",
     "expect": "reject",
     "expected_errors": [
-      "E_PARTIAL_ACCESS_UNIT"
+      "E_COUNT_MISMATCH"
     ],
-    "expected_outcome": "reject",
-    "sha256": "b66e765f5d9675ead89fd9411d835b83493cbeb78cbd11667fa60cb808d1cfd6"
+    "sha256": "473bcb6eb4eac2cda62f5fc7e84e66a13595f76178cdd56bb3b24443fc37bfbf"
+  },
+  "multiple_access_units": {
+    "description": "One message carries two complete access units (an access unit must be exactly one image).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MULTIPLE_ACCESS_UNITS"
+    ],
+    "sha256": "ad6f32afffbd1027902ed9ae12d4660c1ac5eea9771d09fd6e2fab0ca73a6ddc"
+  },
+  "pose_schema_identity": {
+    "description": "PoseStamped ros2msg text differs from the reviewed pinned definition.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "705cfd42c05626b38e7c06ac3f8da20d81c59992919d8964716898f4d4bb2696"
+  },
+  "pts_not_integer": {
+    "description": "Encoder PTS of source frame 2 is the non-integer string 33333.5 in every event.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_PTS_INVALID"
+    ],
+    "sha256": "874176cc4f9fca3874156536fa26fd214f8e7f8fe437ad8a1abbbec829448a36"
   },
   "ros2_profile": {
     "description": "Mixed Protobuf/CDR/JSON file falsely claims the ROS2 MCAP profile.",
@@ -109,8 +254,32 @@
     "expected_errors": [
       "E_PROFILE_NOT_EMPTY"
     ],
-    "expected_outcome": "reject",
-    "sha256": "7321bb1f5dc98a1d7538786ad7b94a630b54131ac3dd5ce8af46fa00e152c1ae"
+    "sha256": "c216fcc93fdd9f23fc38007684ee3525974594f4ba379c49eb426413380c3484"
+  },
+  "schema_malformed_frame_event": {
+    "description": "A submitted FrameEvent carries native_timestamp_ns as a JSON number instead of a decimal string.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH",
+      "E_SCHEMA_MALFORMED"
+    ],
+    "sha256": "166fd15e1b062cdbddd818b3f5aee4877c3932fee96dabbef0fc34325cde4127"
+  },
+  "sensor_count_mismatch": {
+    "description": "Close reports 5 sensor events but 2 were recorded.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "0ffa70ed9370b69bdc33dec97941d6f6d0417852116efdfd3b0d172c39053e43"
+  },
+  "time_base_mismatch": {
+    "description": "All events of source frame 2 declare time base 1/90000 instead of 1/1000000.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_TIME_BASE"
+    ],
+    "sha256": "1232a8a266268f8e04b384316057bcc1c38f5848bcb1a03031875eb8296b7234"
   },
   "tracking_loss": {
     "description": "A pose marked lost is still presented as valid.",
@@ -118,8 +287,7 @@
     "expected_errors": [
       "E_TRACKING_LOSS_UNMARKED"
     ],
-    "expected_outcome": "reject",
-    "sha256": "0654a772eecb885cd44bdc3151664b5b576b60a4541af18afea22ae87a1245b4"
+    "sha256": "651822edd490f8c606d1f8854a64d7da7179e26ac7e7b7184732166cc495ac21"
   },
   "truncated_before_footer": {
     "description": "Cut inside the footer record.",
@@ -127,8 +295,7 @@
     "expected_errors": [
       "E_TRUNCATED"
     ],
-    "expected_outcome": "reject",
-    "sha256": "35a4f37e50ef3807b28a22dc7263780b16ed305179f878ab29359a0f54debdcb"
+    "sha256": "673845babad7868e9157ab943c818a37720cc05a1d5f8c5b945cefc4d33a6c20"
   },
   "truncated_mid_record": {
     "description": "Cut inside the final record: no footer.",
@@ -136,8 +303,7 @@
     "expected_errors": [
       "E_TRUNCATED"
     ],
-    "expected_outcome": "reject",
-    "sha256": "6af539617272cb9b9faf8e4def1a2c1af1789209f6154c4a59e0ca81e94e4acc"
+    "sha256": "6e86cd96288dec079999e09b5b12f42672df93aea0ca1f82b78b6a3fd606ec0f"
   },
   "unequal_clock": {
     "description": "Frame events use a native clock other than the declared rgb stream clock.",
@@ -145,14 +311,37 @@
     "expected_errors": [
       "E_CLOCK_MISMATCH"
     ],
-    "expected_outcome": "reject",
-    "sha256": "2baf197ab4f719e5c2bea9404d46095fe51489a74df0534288d9a13cae36f971"
+    "sha256": "f495cc2f2309a4b8636213aa06ff2421383593119299bf31c19796a146b00362"
   },
   "valid": {
     "description": "Baseline Annex B IDR+P stream, one dropped frame, independent IMU clocks, CDR pose, tracking-loss marked invalid.",
     "expect": "accept",
     "expected_errors": [],
-    "expected_outcome": "accept",
-    "sha256": "705cfd42c05626b38e7c06ac3f8da20d81c59992919d8964716898f4d4bb2696"
+    "sha256": "e58d256552d14b933a23da542a7eec5fac1f0c103a0b23eef8646c5cdeb6ed94"
+  },
+  "written_calibration_mismatch": {
+    "description": "Written FrameEvent switches to calibration rgb_1 without a reset event.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_FRAME_IDENTITY"
+    ],
+    "sha256": "6528c3c54377fb1df9518e1d3c9fa6730f3fa156a9e8d8606380dcc9f7bb461d"
+  },
+  "written_capture_time_mismatch": {
+    "description": "Written FrameEvent changes the mapped capture time by 1 ns; the video message still carries the acquired time.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_FRAME_IDENTITY",
+      "E_VIDEO_TIMESTAMP_MISMATCH"
+    ],
+    "sha256": "15246443e5045072aceb58b0aabff4c7ffa4e0b291026d8909a0f7892f3499f6"
+  },
+  "written_pts_mismatch": {
+    "description": "Written FrameEvent for source frame 1 carries encoder PTS 33334 instead of the acquired 33333.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_FRAME_IDENTITY"
+    ],
+    "sha256": "35eb19cab5c6141d000de99908085e492bfbdfedc040d49724bea841dfa28c86"
   }
 }

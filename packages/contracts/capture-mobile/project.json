@@ -1,0 +1,35 @@
+{
+  "name": "capture-conformance-mobile",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "root": "packages/contracts/capture-mobile",
+  "projectType": "library",
+  "implicitDependencies": ["capture-conformance"],
+  "namedInputs": {
+    "captureContract": [
+      "{workspaceRoot}/packages/contracts/capture/**/*",
+      "!{workspaceRoot}/packages/contracts/capture/**/__pycache__/**/*",
+      "!{workspaceRoot}/packages/contracts/capture/conformance/kotlin/build/**/*",
+      "!{workspaceRoot}/packages/contracts/capture/conformance/kotlin/.gradle/**/*",
+      "!{workspaceRoot}/packages/contracts/capture/conformance/kotlin/.kotlin/**/*",
+      "{workspaceRoot}/packages/stera_recorder/android/src/main/assets/stateaction/capture/**/*",
+      "{workspaceRoot}/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/h264/**/*",
+      "sharedGlobals"
+    ]
+  },
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "inputs": ["captureContract"],
+      "options": {
+        "command": "dart format --output=none --set-exit-if-changed --language-version=3.9 packages/contracts/capture/conformance/dart/capture_conformance.dart"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": ["captureContract"],
+      "options": {
+        "command": "python3 packages/contracts/capture/conformance/run_all.py --only dart,kotlin --require dart,kotlin"
+      }
+    }
+  }
+}

@@ -11,6 +11,7 @@
     "Profile.schema.json": "e0d3aa2143a788d7d26321ee4cf5dc2e883335365989a9b663b6df4a5e5f5e40",
     "SensorEvent.schema.json": "44d8921ed98035745d2912f485a7edf94a4afa4661d9aa7700221d0bf986a78c",
     "foxglove-compressed-video.desc": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
-    "schema-provenance.json": "81ba562a1ea18df9b4aebd59dbdd1028f256137c11c6a427e08fff0bfb85405c"
+    "geometry_msgs-PoseStamped.ros2msg": "eaf9fa742b6bff36539ea75c51434b40a162611c8afbba4b6a7434706fec38aa",
+    "schema-provenance.json": "da77ee9e2021f948c3123c563fc66653810100cd1a403d0ed85bb5ab910377f4"
   }
 }

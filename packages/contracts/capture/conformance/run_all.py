@@ -22,9 +22,9 @@ CAP = Path(__file__).resolve().parents[1]
 HERE = Path(__file__).resolve().parent
 
 
-def run(cmd, cwd=None, env=None):
+def run(cmd, cwd=None, env=None, stdout_only=False):
     r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
-    return r.returncode, (r.stdout + r.stderr).strip()
+    return r.returncode, (r.stdout if stdout_only else r.stdout + r.stderr).strip()
 
 
 def python_runner():
@@ -44,11 +44,16 @@ def python_runner():
             "protobuf==6.33.0",
             "python",
             str(CAP / "verify.py"),
-        ]
+        ],
+        stdout_only=True,
     )
-    return ("passed" if code == 0 else "failed"), (
-        json.loads(out)["golden_cases"].keys().__len__() if code == 0 else out[-2000:]
-    )
+    if code != 0:
+        return "failed", out[-2000:]
+    report = json.loads(out)
+    return "passed", {
+        "golden_cases": len(report["golden_cases"]),
+        "encoder_buffer_cases": report["encoder_buffer_cases"],
+    }
 
 
 def ts_runner():
@@ -70,19 +75,24 @@ def dart_runner():
 
 
 def kotlin_runner():
+    # Prefer an explicit/installed Gradle; otherwise the repository's pinned Gradle wrapper
+    # (apps/mobile/android/gradlew), which is already provisioned on the mobile CI runners.
+    wrapper = CAP.parents[2] / "apps/mobile/android/gradlew"
     gradle = os.environ.get("GRADLE_BIN") or shutil.which("gradle")
+    gradle = gradle or (str(wrapper) if wrapper.exists() else None)
     java_home = os.environ.get("JAVA_HOME")
-    if (
-        not gradle
-        or not java_home
-        or "21" not in Path(java_home).name
-        and "21" not in (java_home or "")
-    ):
-        return "unavailable", "gradle and a JDK 21 JAVA_HOME are required"
+    if not gradle or not java_home or "21" not in java_home:
+        return (
+            "unavailable",
+            "gradle (or the Gradle wrapper) and a JDK 21 JAVA_HOME are required",
+        )
     code, out = run(
-        [gradle, "--console=plain", "-q", "test", "--rerun-tasks"], cwd=HERE / "kotlin"
+        [gradle, "--console=plain", "--no-daemon", "test", "--rerun-tasks"],
+        cwd=HERE / "kotlin",
     )
-    return ("passed" if code == 0 else "failed"), out[-2000:] or "gradle test ok"
+    if code != 0:
+        return "failed", out[-2000:]
+    return "passed", [line.strip() for line in out.splitlines() if "kotlin-" in line]
 
 
 def swift_runner():

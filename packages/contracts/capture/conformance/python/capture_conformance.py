@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import struct
 from pathlib import Path
 
@@ -34,12 +35,23 @@ class Truncated(Exception):
     pass
 
 
+class Malformed(Exception):
+    """A record or message that cannot be decoded; a defined reject, never a crash."""
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
 # ---------------------------------------------------------------- MCAP (unchunked) reader
 def read_mcap(data: bytes) -> dict:
+    try:
+        return _read_mcap(data)
+    except (struct.error, UnicodeDecodeError, IndexError):
+        raise Truncated("record fields") from None
+
+
+def _read_mcap(data: bytes) -> dict:
     if not data.startswith(MAGIC):
         raise Truncated("magic")
     pos, end = len(MAGIC), len(data)
@@ -70,6 +82,8 @@ def read_mcap(data: bytes) -> dict:
             name, off = _string(body, 2)
             enc, off = _string(body, off)
             (n,) = struct.unpack_from("<I", body, off)
+            if off + 4 + n > len(body):
+                raise Truncated("schema data")
             out["schemas"][sid] = {
                 "name": name,
                 "encoding": enc,
@@ -82,6 +96,8 @@ def read_mcap(data: bytes) -> dict:
             out["channels"][cid] = {"schema_id": sid, "topic": topic, "encoding": menc}
         elif op == 0x05:
             cid, seq, log, pub = struct.unpack_from("<HIQQ", body, 0)
+            if cid not in out["channels"]:
+                raise Malformed("message for undeclared channel")
             out["messages"].append(
                 {
                     "channel": cid,
@@ -109,6 +125,8 @@ def _string(buf: bytes, off: int):
 def _varint(buf: bytes, pos: int):
     shift = value = 0
     while True:
+        if pos >= len(buf) or shift > 63:
+            raise ValueError("varint")
         b = buf[pos]
         pos += 1
         value |= (b & 0x7F) << shift
@@ -124,6 +142,8 @@ def decode_video(buf: bytes) -> dict:
         field, wire = key >> 3, key & 7
         if wire == 2:
             n, pos = _varint(buf, pos)
+            if pos + n > len(buf):
+                raise ValueError("length-delimited field overruns message")
             chunk, pos = buf[pos : pos + n], pos + n
             if field == 1:
                 p = 0
@@ -140,7 +160,7 @@ def decode_video(buf: bytes) -> dict:
         elif wire == 0:
             _, pos = _varint(buf, pos)
         else:
-            raise ValueError("wire type")
+            raise ValueError("unsupported wire type")
     return out
 
 
@@ -207,8 +227,13 @@ def classify_au(data: bytes):
         return ["E_CONFIG_ONLY"], False
     errors = []
     headers = [slice_header(n) for n in slices]
-    if any(h is None for h in headers) or sum(1 for h in headers if h[0] == 0) != 1:
-        errors.append("E_PARTIAL_ACCESS_UNIT")
+    firsts = sum(1 for h in headers if h is not None and h[0] == 0)
+    if any(h is None for h in headers) or firsts == 0:
+        errors.append("E_PARTIAL_ACCESS_UNIT")  # no first slice: not a whole image
+    elif firsts > 1:
+        errors.append(
+            "E_MULTIPLE_ACCESS_UNITS"
+        )  # several complete images in one message
     elif any(h[1] % 5 == 1 for h in headers):
         errors.append("E_B_FRAME")
     idr = 5 in types
@@ -222,7 +247,7 @@ def classify_au(data: bytes):
 # ---------------------------------------------------------------- CDR (reviewed sensors)
 def decode_cdr_pose(data: bytes) -> dict:
     """geometry_msgs/msg/PoseStamped, little-endian CDR."""
-    if data[:4] != b"\x00\x01\x00\x00":
+    if data[:4] != b"\x00\x01\x00\x00" or len(data) < 16:
         raise ValueError("CDR header")
     sec, nanos, n = struct.unpack_from("<iII", data, 4)
     frame = data[16 : 16 + n - 1].decode()
@@ -239,16 +264,119 @@ def decode_cdr_pose(data: bytes) -> dict:
 
 
 # ---------------------------------------------------------------- Checker
+VIDEO_SCHEMA = "foxglove.CompressedVideo"
+POSE_SCHEMA = "geometry_msgs/msg/PoseStamped"
+POSE_SCHEMA_FILE = "geometry_msgs-PoseStamped.ros2msg"
+# topic -> (schema name, schema encoding, message encoding): the reviewed channel table.
+CHANNELS = {
+    "/stateaction/capture_profile": (
+        "stateaction.capture.Profile.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/clocks": ("stateaction.capture.Clocks.v1", "jsonschema", "json"),
+    "/stateaction/inventory": (
+        "stateaction.capture.Inventory.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/frame_events": (
+        "stateaction.capture.FrameEvent.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/imu/accel": (
+        "stateaction.capture.MotionEvent.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/imu/gyro": (
+        "stateaction.capture.MotionEvent.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/sensor_events": (
+        "stateaction.capture.SensorEvent.v1",
+        "jsonschema",
+        "json",
+    ),
+    "/stateaction/close": ("stateaction.capture.Close.v1", "jsonschema", "json"),
+    VIDEO_CHANNEL: (VIDEO_SCHEMA, "protobuf", "protobuf"),
+    "/tracking/pose": (POSE_SCHEMA, "ros2msg", "cdr"),
+}
+TIME_BASE = {"numerator": 1, "denominator": 1_000_000}
+DECIMAL = re.compile(r"^(0|[1-9][0-9]*)$")
+IDENTITY_KEYS = (
+    "recording_id",
+    "stream_id",
+    "native_timestamp_ns",
+    "native_clock_id",
+    "mapped_capture_time_ns",
+    "clock_mapping_revision",
+    "calibration_id",
+    "encoder_pts_us",
+    "encoder_time_base",
+    "native_timestamps",
+)
+STATES = ("acquired", "submitted", "written", "dropped")
+
+
+def _decimal(value) -> bool:
+    return isinstance(value, str) and DECIMAL.match(value) is not None
+
+
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _frame_event_shape_ok(e) -> bool:
+    """Strict-schema subset every runner enforces: required keys and decimal-string integers."""
+    if not isinstance(e, dict) or e.get("state") not in STATES:
+        return False
+    for key in (
+        "recording_id",
+        "stream_id",
+        "native_clock_id",
+        "clock_mapping_revision",
+        "calibration_id",
+    ):
+        if not isinstance(e.get(key), str) or not e[key]:
+            return False
+    for key in ("source_frame_id", "native_timestamp_ns", "mapped_capture_time_ns"):
+        if not _decimal(e.get(key)):
+            return False
+    if not isinstance(e.get("native_timestamps"), dict):
+        return False
+    if e["state"] == "dropped" and not (
+        isinstance(e.get("reason"), str) and e["reason"]
+    ):
+        return False
+    if e["state"] == "written" and not (
+        e.get("output_channel") == VIDEO_CHANNEL
+        and _is_int(e.get("output_sequence"))
+        and e["output_sequence"] >= 0
+        and isinstance(e.get("is_idr"), bool)
+    ):
+        return False
+    return True
+
+
 def check(data: bytes, manifest: dict | None = None) -> dict:
     manifest = (
         manifest or json.loads((CAPTURE_DIR / "manifest.json").read_text())["files"]
     )
     errors: set[str] = set()
     facts: dict = {}
+
+    def reject():
+        return {"outcome": "reject", "errors": sorted(errors), "facts": {}}
+
     try:
         f = read_mcap(data)
     except Truncated:
         return {"outcome": "reject", "errors": ["E_TRUNCATED"], "facts": {}}
+    except Malformed:
+        return {"outcome": "reject", "errors": ["E_MALFORMED_MESSAGE"], "facts": {}}
     if f["profile"] != "":
         errors.add("E_PROFILE_NOT_EMPTY")
     schemas = f["schemas"]
@@ -268,54 +396,139 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         ]
         return {"outcome": "legacy_jpeg", "errors": ["E_LEGACY_JPEG"], "facts": facts}
 
+    # Exact per-channel encodings and reviewed schema identity.
+    for ch in chans.values():
+        schema = schemas.get(ch["schema_id"])
+        want = CHANNELS.get(ch["topic"])
+        if (
+            schema is None
+            or want is None
+            or (schema["name"], schema["encoding"], ch["encoding"]) != want
+        ):
+            errors.add("E_CHANNEL_ENCODING")
+        elif (
+            schema["name"] == POSE_SCHEMA
+            and sha256(schema["data"]) != manifest[POSE_SCHEMA_FILE]
+        ):
+            errors.add("E_CHANNEL_ENCODING")
     descriptor = manifest["foxglove-compressed-video.desc"]
     facts["schema_sha256"] = {}
     for s in schemas.values():
         digest = sha256(s["data"])
         facts["schema_sha256"][s["name"]] = digest
-        if s["name"] == "foxglove.CompressedVideo":
-            if digest != descriptor or s["encoding"] != "protobuf":
+        if s["name"] == VIDEO_SCHEMA:
+            if digest != descriptor:
                 errors.add("E_DESCRIPTOR_HASH")
         elif s["name"] in CUSTOM:
-            if digest != manifest[CUSTOM[s["name"]]] or s["encoding"] != "jsonschema":
+            if digest != manifest[CUSTOM[s["name"]]]:
                 errors.add("E_SCHEMA_MISMATCH")
     facts["schema_sha256"] = dict(sorted(facts["schema_sha256"].items()))
 
+    # Decode every message once; an undecodable message is a defined reject.
+    decoded: dict[str, list] = {}
+    try:
+        for topic, msgs in by_topic.items():
+            want = CHANNELS.get(topic)
+            if want is None:
+                continue
+            if want[2] == "json":
+                decoded[topic] = [json.loads(m["data"]) for m in msgs]
+            elif want[2] == "protobuf":
+                decoded[topic] = [decode_video(m["data"]) for m in msgs]
+            else:
+                decoded[topic] = [decode_cdr_pose(m["data"]) for m in msgs]
+    except (ValueError, IndexError, struct.error, UnicodeDecodeError):
+        errors.add("E_MALFORMED_MESSAGE")
+        return reject()
+    if any(
+        not isinstance(x, dict)
+        for t, v in decoded.items()
+        if CHANNELS[t][2] == "json"
+        for x in v
+    ):
+        errors.add("E_MALFORMED_MESSAGE")
+        return reject()
+
     def js(topic):
-        return [json.loads(m["data"]) for m in by_topic.get(topic, [])]
+        return decoded.get(topic, [])
 
     clocks = (js("/stateaction/clocks") or [{}])[0].get("stream_clocks", {})
+    inventory = (js("/stateaction/inventory") or [{}])[0]
+    known_calibrations = {
+        c.get("calibration_id")
+        for c in inventory.get("calibrations", [])
+        if isinstance(c, dict)
+    }
     frames = js("/stateaction/frame_events")
-    pts_seen, pts_by_frame, acquired, written_ev = set(), {}, {}, {}
+    pts_seen, acquired, written_ev = set(), {}, {}
     counts = {"acquired": 0, "submitted": 0, "written": 0, "dropped": 0}
     state: dict[str, str] = {}
+    submitted_ids: set[str] = set()
+    drop_reasons: dict[str, int] = {}
     for e in frames:
+        if not _frame_event_shape_ok(e):
+            errors.add("E_SCHEMA_MALFORMED")
+            continue
         sid = e["source_frame_id"]
-        if clocks.get(e["stream_id"]) != e.get("native_clock_id") and e["state"] in (
+        st = e["state"]
+        # Lifecycle: acquired once, then at most one submit and exactly one terminal outcome;
+        # every later event repeats the acquired identity (clock, PTS, calibration, time base).
+        if st == "acquired":
+            if sid in acquired:
+                errors.add("E_FRAME_IDENTITY")
+        elif (
+            sid not in acquired
+            or state[sid] in ("written", "dropped")
+            or (st == "submitted" and sid in submitted_ids)
+        ):
+            errors.add("E_FRAME_IDENTITY")
+        else:
+            original = acquired[sid]
+            if any(e.get(k) != original.get(k) for k in IDENTITY_KEYS):
+                errors.add("E_FRAME_IDENTITY")
+        if e.get("encoder_time_base") != TIME_BASE:
+            errors.add("E_TIME_BASE")
+        if "encoder_pts_us" in e and not _decimal(e["encoder_pts_us"]):
+            errors.add("E_PTS_INVALID")
+        if clocks.get(e["stream_id"]) != e.get("native_clock_id") and st in (
             "acquired",
             "written",
         ):
             errors.add("E_CLOCK_MISMATCH")
-        if e["state"] in ("acquired", "written") and "encoder_pts_us" not in e:
+        if st in ("acquired", "written") and "encoder_pts_us" not in e:
             errors.add("E_MISSING_PTS")
-        if e["state"] == "acquired":
-            if "encoder_pts_us" in e:
+        if st == "acquired":
+            if _decimal(e.get("encoder_pts_us")):
                 if e["encoder_pts_us"] in pts_seen:
                     errors.add("E_DUPLICATE_PTS")
                 pts_seen.add(e["encoder_pts_us"])
-                pts_by_frame[sid] = e["encoder_pts_us"]
-            acquired[sid] = e
-        if e["state"] == "written":
-            written_ev[sid] = e
-        counts[e["state"]] += 1
-        state[sid] = e["state"]
+            if e["calibration_id"] not in known_calibrations:
+                errors.add("E_CALIBRATION_UNKNOWN")
+            acquired.setdefault(sid, e)
+        if st == "submitted":
+            submitted_ids.add(sid)
+        if st == "written":
+            written_ev.setdefault(sid, e)
+        if st == "dropped":
+            drop_reasons[e["reason"]] = drop_reasons.get(e["reason"], 0) + 1
+        counts[st] += 1
+        if sid in acquired:
+            state[sid] = st
     facts["frame_event_counts"] = counts
 
     video = by_topic.get(VIDEO_CHANNEL, [])
+    video_decoded = js(VIDEO_CHANNEL)
+    written_seqs = [e["output_sequence"] for e in written_ev.values()]
+    video_seqs = [m["sequence"] for m in video]
+    if (
+        len(set(written_seqs)) != len(written_seqs)
+        or len(set(video_seqs)) != len(video_seqs)
+        or set(written_seqs) != set(video_seqs)
+    ):
+        errors.add("E_SEQUENCE")
     by_seq = {e["output_sequence"]: e for e in written_ev.values()}
     video_facts = []
-    for i, m in enumerate(video):
-        v = decode_video(m["data"])
+    for i, (m, v) in enumerate(zip(video, video_decoded)):
         au_errors, idr = classify_au(v["data"])
         errors.update(au_errors)
         if i == 0 and not idr and not au_errors:
@@ -324,9 +537,9 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         ev = by_seq.get(m["sequence"])
         if v["frame_id"] != FRAME_ID or v["format"] != "h264":
             errors.add("E_VIDEO_FIELDS")
-        if ev is None:
-            errors.add("E_MISSING_PTS")
-        elif str(ts_ns) != ev["mapped_capture_time_ns"] or bool(ev["is_idr"]) != idr:
+        if ev is not None and (
+            str(ts_ns) != ev["mapped_capture_time_ns"] or bool(ev["is_idr"]) != idr
+        ):
             errors.add("E_VIDEO_TIMESTAMP_MISMATCH")
         video_facts.append(
             {
@@ -343,8 +556,6 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
             }
         )
     facts["video"] = video_facts
-    if len(video) != counts["written"]:
-        errors.add("E_MISSING_PTS")
 
     motion = {}
     for topic in ("/stateaction/imu/accel", "/stateaction/imu/gyro"):
@@ -363,8 +574,7 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
     facts["motion"] = motion
 
     sensors = js("/stateaction/sensor_events")
-    cals = {e["calibration_id"] for e in frames if e["state"] == "acquired"}
-    superseded = set()
+    cals = {e["calibration_id"] for e in acquired.values()}
     reset_at = {}
     for e in sensors:
         if (
@@ -374,10 +584,9 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         ):
             errors.add("E_TRACKING_LOSS_UNMARKED")
         if e["source_kind"] == "calibration_reset":
-            superseded.add(e["supersedes_calibration_id"])
             reset_at[e["supersedes_calibration_id"]] = e["association_source_frame_id"]
-    for e in frames:
-        if e["state"] == "acquired" and e["calibration_id"] in reset_at:
+    for e in acquired.values():
+        if e["calibration_id"] in reset_at:
             # frames at or after the reset boundary may not keep the superseded calibration
             if reset_at[e["calibration_id"]] is not None and int(
                 e["source_frame_id"]
@@ -395,8 +604,7 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
     facts["calibrations_used"] = sorted(cals)
 
     poses = []
-    for m in by_topic.get("/tracking/pose", []):
-        p = decode_cdr_pose(m["data"])
+    for m, p in zip(by_topic.get("/tracking/pose", []), js("/tracking/pose")):
         poses.append(
             {
                 "sec": p["sec"],
@@ -409,15 +617,43 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
 
     close = (js("/stateaction/close") or [None])[-1]
     if close is not None:
-        expect = {k: str(v) for k, v in counts.items()}
-        expect["unresolved"] = str(
+        unresolved = (
             len(acquired)
             - len(written_ev)
             - sum(1 for s in state.values() if s == "dropped")
         )
-        if close["frames"] != expect or close["video_messages"] != str(len(video)):
+        expect = {k: str(v) for k, v in counts.items()}
+        expect["unresolved"] = str(unresolved)
+        expect_motion = {t.rsplit("/", 1)[1]: str(len(js(t))) for t in motion}
+        expect_drops = sorted(
+            ({"reason": r, "count": str(n)} for r, n in drop_reasons.items()),
+            key=lambda d: d["reason"],
+        )
+        close_drops = close.get("drops")
+        if (
+            close.get("frames") != expect
+            or close.get("video_messages") != str(len(video))
+            or close.get("motion_events") != expect_motion
+            or close.get("sensor_events") != str(len(sensors))
+            or not isinstance(close_drops, list)
+            or sorted(
+                (d for d in close_drops if isinstance(d, dict)),
+                key=lambda d: str(d.get("reason")),
+            )
+            != expect_drops
+        ):
             errors.add("E_COUNT_MISMATCH")
-        facts["close_outcome"] = close["outcome"]
+        outcome = close.get("outcome")
+        if outcome not in ("completed", "failed", "aborted", "unknown"):
+            errors.add("E_SCHEMA_MALFORMED")
+        elif outcome == "completed" and unresolved != 0:
+            errors.add("E_OUTCOME_MISMATCH")
+        elif outcome == "failed" and not (
+            isinstance(close.get("failure_reason"), str) and close["failure_reason"]
+        ):
+            errors.add("E_OUTCOME_MISMATCH")
+        facts["close_outcome"] = outcome
+        facts["unresolved_frames"] = unresolved
     else:
         errors.add("E_COUNT_MISMATCH")
     return {
@@ -425,6 +661,76 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         "errors": sorted(errors),
         "facts": facts if not errors else {},
     }
+
+
+# ---------------------------------------------------------------- Encoder buffer sequences
+CODEC_CONFIG, PARTIAL_FRAME, END_OF_STREAM = 2, 8, 4  # MediaCodec buffer-flag values
+START = b"\x00\x00\x00\x01"
+
+
+def encoder_buffer_data(buf: dict, sources: dict) -> bytes:
+    """Resolve a fixture buffer: NAL range of a public source stream, optional byte slice."""
+    if "nals" not in buf:
+        return b""
+    first, last = buf["nals"]
+    data = b"".join(START + n for n in sources[buf["source"]][first:last])
+    if "bytes" in buf:
+        data = data[buf["bytes"][0] : buf["bytes"][1]]
+    return data
+
+
+def assemble_encoder_buffers(buffers: list, sources: dict) -> dict:
+    """Assemble MediaCodec-style output buffers into whole access units.
+
+    CODEC_CONFIG buffers never become images; they are prepended to an IDR access unit that lacks
+    SPS/PPS. PARTIAL_FRAME buffers (same PTS) accumulate until a buffer without the flag completes
+    the access unit. Result: accept with the assembled units, or reject with sorted codes.
+    """
+    errors: set[str] = set()
+    aus, config, pending = [], b"", None
+    for buf in buffers:
+        flags, data = buf["flags"], encoder_buffer_data(buf, sources)
+        if flags & CODEC_CONFIG:
+            if pending is not None:
+                errors.add("E_INCOMPLETE_AU")
+                break
+            config = data
+            continue
+        if flags & END_OF_STREAM and not data:
+            if pending is not None:
+                errors.add("E_INCOMPLETE_AU")
+            break
+        pts = buf["pts_us"]
+        if not _decimal(pts):
+            errors.add("E_PTS_INVALID")
+            break
+        if pending is not None and pending[0] != pts:
+            errors.add("E_PARTIAL_PTS_MISMATCH")
+            break
+        acc = (pending[1] if pending is not None else b"") + data
+        if flags & PARTIAL_FRAME:
+            pending = (pts, acc)
+            continue
+        pending = None
+        units = nals(acc)
+        if units is not None and any(n[0] & 31 == 5 for n in units):
+            types = [n[0] & 31 for n in units]
+            before = types[: next(i for i, t in enumerate(types) if t in (1, 5))]
+            if (7 not in before or 8 not in before) and config:
+                acc = config + acc
+        au_errors, idr = classify_au(acc)
+        if au_errors:
+            errors.update(au_errors)
+            break
+        aus.append(
+            {"pts_us": pts, "idr": idr, "bytes": len(acc), "sha256": sha256(acc)}
+        )
+    else:
+        if pending is not None:
+            errors.add("E_INCOMPLETE_AU")
+    if errors:
+        return {"outcome": "reject", "errors": sorted(errors), "aus": []}
+    return {"outcome": "accept", "errors": [], "aus": aus}
 
 
 def canonical(result: dict) -> str:

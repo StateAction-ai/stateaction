@@ -72,9 +72,14 @@ def decode(path: Path) -> dict:
                 capture_output=True,
                 text=True,
             )
+            ffprobe = shutil.which("ffprobe")
+            if ffprobe is None:  # ffmpeg without ffprobe: decode check only
+                out["decoded_frames"] = None
+                out["ffmpeg_errors"] = r.stderr.strip()
+                return out
             probe = subprocess.run(
                 [
-                    shutil.which("ffprobe"),
+                    ffprobe,
                     "-v",
                     "error",
                     "-count_frames",

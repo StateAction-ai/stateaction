@@ -54,9 +54,11 @@ def main() -> None:
             f"Contract hash mismatch: {name}"
         )
         assert (native / name).read_bytes() == source, f"Native asset drift: {name}"
-    disk = {p.name for p in ROOT.glob("*.schema.json")} | {
-        "foxglove-compressed-video.desc"
-    }
+    disk = (
+        {p.name for p in ROOT.glob("*.schema.json")}
+        | {p.name for p in ROOT.glob("*.ros2msg")}
+        | {"foxglove-compressed-video.desc"}
+    )
     assert disk <= set(manifest["files"]), (
         f"Unpinned contract files: {disk - set(manifest['files'])}"
     )
@@ -102,7 +104,7 @@ def main() -> None:
             f"Reference result differs from golden/expected/{name}.json"
         )
         assert (
-            result["outcome"] == entry["expect"] == entry["expected_outcome"]
+            result["outcome"] == entry["expect"]
             and result["errors"] == entry["expected_errors"]
         )
         if result["outcome"] == "accept":
@@ -136,6 +138,13 @@ def main() -> None:
             }
         else:
             summary[name] = result["errors"]
+    # encoder-output buffer contract: the reference assembler reproduces every declared expectation
+    buffers = json.loads((ROOT / "fixtures/encoder_buffers.json").read_text())
+    units = {k: cc.nals((ROOT / v).read_bytes()) for k, v in buffers["sources"].items()}
+    for name, case in buffers["cases"].items():
+        assert cc.assemble_encoder_buffers(case["buffers"], units) == case["expect"], (
+            f"encoder buffer case {name}"
+        )
     actual_counts, sources = {}, []
     for path in args.mcap:
         from mcap.reader import make_reader
@@ -181,6 +190,7 @@ def main() -> None:
                 "rejected_mutations": 4,
                 "native_assets_match": True,
                 "golden_cases": summary,
+                "encoder_buffer_cases": len(buffers["cases"]),
                 "sources": sources,
                 "actual_messages": actual_counts,
                 "descriptor_sha256": manifest["files"][
