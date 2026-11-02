@@ -70,3 +70,14 @@ Until SA-28 lands, "accepted" means the catalog's own `succeeded` current job wh
 ## Validation
 
 `packages/server/test-integration/datasets*.test.ts` (restricted-role Postgres: invariants, races, counts/paging, grant/revocation, cross-customer, broker, real signed fetch), `apps/web/test-e2e/datasets.e2e.test.mjs` (production Next with real sessions). Release export, geometry, iOS and hosted deployment are out of scope.
+
+## Atomic review command (SA-36)
+
+Staff-only, no migration. `GET /api/v1/clips/{clipId}/review` returns the review state (immutable `jobId` + `resultManifestSha256`, current revision/decision/task label/notes, bounded history, persisted memberships with dataset revisions, and the available dataset picker context; `membershipsTruncated` / `availableDatasetsTruncated` are never silent). `POST` on the same path is one bounded command (`reviewId` = idempotency key, `expectedReviewRevision`, immutable job/result identity, `decision` approved|rejected, label ≤200, notes ≤4000, optional `datasetSelection`) executed by `catalog.appendReview` in one transaction.
+
+- Lock order: staff role, clip lock, replay lookup, dataset rows `FOR UPDATE` sorted by UUID, recipient evidence `FOR SHARE` (`dataset_sharing_ok`, the same predicate as member add). `lock_timeout` 5 s maps to a retryable 409.
+- Omitted `datasetSelection` preserves memberships; explicit `datasetIds: []` clears them all. `expectedRevisions` must name exactly the datasets the change touches (desired set plus current memberships). A stale value, blank label, changed job/result, superseded result or clearance failure changes nothing.
+- Rejection (also a withdrawal of an approval; there is no separate DB decision) removes every working membership and bumps each affected dataset once; reapproval never restores them.
+- Replay of an identical command (same reviewer, clip, job, hash, decision, label, notes, omitted-vs-explicit selection) returns the stored review (200) without a new revision or reapplication, even after newer reviews. Any change under the same `reviewId` is `idempotency_conflict`.
+- Customers have no review route and never receive notes or internal identity. There is no per-episode customer accept/reject route.
+- Contracts: `http.clip-review-command.v1`, `http.clip-review.v1`, `http.clip-review-state.v1` (catalog v10 registration pending the v9 checkpoint).

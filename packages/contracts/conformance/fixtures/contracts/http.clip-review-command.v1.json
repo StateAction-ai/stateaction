@@ -1,0 +1,474 @@
+{
+  "contract": "http.clip-review-command.v1",
+  "cases": [
+    {
+      "name": "approval with selection",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "rejection (also a withdrawal)",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "rejected"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "omitted selection preserves memberships",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "x"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "explicit empty selection clears all",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [],
+            "expectedRevisions": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "label at the bound",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "label too long",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/taskLabel"
+        ]
+      }
+    },
+    {
+      "name": "notes at the bound",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "notes too long",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/notes"
+        ]
+      }
+    },
+    {
+      "name": "decision is approved or rejected",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "withdrawn",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/decision"
+        ]
+      }
+    },
+    {
+      "name": "reviewId is a UUID",
+      "input": {
+        "document": {
+          "reviewId": "nope",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/reviewId"
+        ]
+      }
+    },
+    {
+      "name": "revision is not negative",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": -1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedReviewRevision"
+        ]
+      }
+    },
+    {
+      "name": "result hash is sha256",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "xyz",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/resultManifestSha256"
+        ]
+      }
+    },
+    {
+      "name": "job identity required",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "selection needs revisions",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/datasetSelection"
+        ]
+      }
+    },
+    {
+      "name": "revision map keys are UUIDs",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "x": 1
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/datasetSelection/expectedRevisions"
+        ]
+      }
+    },
+    {
+      "name": "dataset IDs are unique",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d001"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/datasetSelection/datasetIds"
+        ]
+      }
+    },
+    {
+      "name": "reviewer identity is never client supplied",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "expectedReviewRevision": 0,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": "clean grasp",
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          },
+          "reviewerUserId": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

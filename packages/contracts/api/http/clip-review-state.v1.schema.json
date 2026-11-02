@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/clip-review-state.v1.json",
+  "title": "Clip review state v1 (staff only)",
+  "description": "Data payload of GET /api/v1/clips/{clipId}/review (staff only; customers never receive notes, QC or internal identity and have no review route). jobId and resultManifestSha256 are the immutable result identity the next command must echo. current is false when the job is no longer the recording's current accepted result (capabilities.canReview is then false). Collections are bounded and never silently truncated: membershipsTruncated / availableDatasetsTruncated are true when more exist (a rejection still removes every membership; use GET /api/v1/datasets for a full picker); availableDatasets lists the most recently updated datasets and marks whether the clip is already a member and whether the dataset has enabled recipients (a shared dataset additionally requires per-recipient clearance, enforced by the server at commit).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "qualityChecks",
+    "clipId",
+    "recordingId",
+    "jobId",
+    "resultManifestSha256",
+    "current",
+    "capabilities",
+    "review",
+    "history",
+    "memberships",
+    "membershipsTruncated",
+    "availableDatasets",
+    "availableDatasetsTruncated"
+  ],
+  "properties": {
+    "qualityChecks": {
+      "description": "Staff-only. Allowlisted check codes with the producer status preserved (measured = recorded coverage/accuracy numbers, not a pass; not_evaluated = no evidence) and bounded numeric/boolean measurements; never raw provider messages, storage paths or URLs. Top-level not_evaluated (empty checks) when no persisted evidence exists (legacy results).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "checks"],
+          "properties": {
+            "status": {
+              "const": "not_evaluated"
+            },
+            "checks": {
+              "type": "array",
+              "maxItems": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "checks"],
+          "properties": {
+            "status": {
+              "const": "evaluated"
+            },
+            "checks": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "status"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                  },
+                  "status": {
+                    "enum": [
+                      "pass",
+                      "warn",
+                      "fail",
+                      "measured",
+                      "not_evaluated",
+                      "unknown"
+                    ]
+                  },
+                  "ruleRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "measurements": {
+                    "type": "object",
+                    "maxProperties": 16,
+                    "propertyNames": {
+                      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "pattern": "^-?[0-9]{1,19}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "clipId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "resultManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "current": {
+      "type": "boolean"
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canReview"],
+      "properties": {
+        "canReview": {
+          "type": "boolean"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "decision", "taskLabel", "notes", "reviewedAt"],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "decision": {
+          "enum": ["approved", "rejected", null]
+        },
+        "taskLabel": {
+          "type": ["string", "null"],
+          "maxLength": 200
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "maxLength": 4000
+        },
+        "reviewedAt": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "decision",
+          "taskLabel",
+          "notes",
+          "reviewedAt"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "decision": {
+            "enum": ["approved", "rejected"]
+          },
+          "taskLabel": {
+            "type": ["string", "null"],
+            "maxLength": 200
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "maxLength": 4000
+          },
+          "reviewedAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        }
+      }
+    },
+    "memberships": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["datasetId", "name", "revision", "addedAt"],
+        "properties": {
+          "datasetId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "addedAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        }
+      }
+    },
+    "membershipsTruncated": {
+      "type": "boolean"
+    },
+    "availableDatasets": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["datasetId", "name", "revision", "member", "shared"],
+        "properties": {
+          "datasetId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "member": {
+            "type": "boolean"
+          },
+          "shared": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "availableDatasetsTruncated": {
+      "type": "boolean"
+    }
+  }
+}
