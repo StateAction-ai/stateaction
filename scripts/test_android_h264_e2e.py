@@ -209,6 +209,23 @@ def main() -> None:
         "completed": validate(mcaps(completed), "completed", output, "completed"),
         "writer_failure": validate(mcaps(failed), "failed", output, "writer-failure"),
     }
+    depth_take = [
+        t["directory"]
+        for t in receipts["h264-lifecycle-result.json"]["takes"]
+        if t["label"] == "depth_requested_declared"
+    ]
+    depth_run = subprocess.run(
+        [
+            "uv", "run", "-q", "--no-project", "--with", "mcap==1.6.0", "python", "-I",
+            str(ROOT / "scripts/check_depth_declaration.py"),
+            *map(str, mcaps(depth_take)),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    (output / "depth-declaration.json").write_text(depth_run.stdout)
+    if depth_run.returncode != 0:
+        raise RuntimeError(f"Depth declaration check failed: {depth_run.stderr[-1500:]}")
     startup_run = subprocess.run(
         VALIDATOR
         + ["--profile", "h264_mcap_simulation_v1", *map(str, mcaps([startup]))],
@@ -223,6 +240,7 @@ def main() -> None:
         "install": install,
         "instrumentation": receipts,
         "validation": results,
+        "depth_declaration": json.loads(depth_run.stdout),
         "startup_failure_container": json.loads(startup_run.stdout)["files"][0],
         "output": str(output),
         "physical_device_touched": False,

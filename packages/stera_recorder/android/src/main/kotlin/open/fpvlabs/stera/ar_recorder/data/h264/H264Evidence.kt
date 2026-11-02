@@ -9,6 +9,7 @@ object H264Evidence {
     /** SensorEvent clock of SA-53's independent raw motion (`MOTION_NATIVE_CLOCK_ID`). */
     const val MOTION_CLOCK = "android.elapsed_realtime"
     /** One declared RGB calibration. Its values are not stored by this profile revision (SA-54 owns saved calibration). */
+    const val DEPTH_NOT_RECORDED_REASON = "depth_payload_not_in_contract_revision"
     const val RGB_CALIBRATION = "rgb_arcore_image_intrinsics"
 
     /** Fixed elapsed-realtime to Unix anchor, bracketed by two elapsed readings around one wall-clock reading. */
@@ -76,7 +77,10 @@ object H264Evidence {
                 "native_clock_id" to plan.rgbClock, "unavailable_reason" to null),
             motion("accel", plan.accelSupported, accelEvents),
             motion("gyro", plan.gyroSupported, gyroEvents),
-            absent("depth", "depth", plan.depthRequested, plan.depthSupported, "depth_not_in_profile_revision"),
+            // SA-55: depth is never silently omitted or zero-filled. Until the strict contract carries a depth channel the
+            // entry says exactly why no depth was recorded: not requested (no reason), device unsupported, or supported
+            // but the contract revision has no depth payload.
+            absent("depth", "depth", plan.depthRequested, plan.depthSupported, DEPTH_NOT_RECORDED_REASON),
         )
         val calibrations = listOf(mapOf("calibration_id" to RGB_CALIBRATION, "stream_id" to "rgb", "state" to "unknown", "model" to "pinhole"))
         return sensors to calibrations

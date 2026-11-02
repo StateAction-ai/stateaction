@@ -61,7 +61,7 @@ close the take as `failed`.
 
 ## Not in this revision
 
-Depth and confidence (SA-55), saved calibration values and calibration resets (SA-54; the one declared calibration is
+Depth bytes/confidence recording (SA-55 adds explicit declarations and a tested model only; see [android-depth-provenance](android-depth-provenance.md)), saved calibration values and calibration resets (SA-54; the one declared calibration is
 `state=unknown`), durable finalization and recovery (SA-56), inventory hashing/manifest (SA-18), iOS.
 
 ## Reproduce locally

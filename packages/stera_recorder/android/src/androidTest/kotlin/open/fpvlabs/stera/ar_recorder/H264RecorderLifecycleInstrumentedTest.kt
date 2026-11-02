@@ -179,6 +179,15 @@ class H264RecorderLifecycleInstrumentedTest {
             assertEquals(retried.toString(), true, retried["success"])
             assertEquals("Caller recording identity not preserved", "6f1c2b9e-0d4a-4f7e-8a3b-2c5d9e1f0a7b", retried["recordingId"])
             receipt.getJSONArray("takes").put(take(retried, "after_cancel_with_caller_id"))
+            // SA-55: depth requested on a device where ARCore may or may not support it. Whatever the device reports, the
+            // take must complete with RGB/IMU/pose intact and the Inventory must declare depth explicitly (validated on the host).
+            val withDepth = recorder.startRecording(config + ("recordDepth" to true))
+            assertEquals(withDepth.toString(), true, withDepth["success"])
+            SystemClock.sleep(3000)
+            val depthStop = recorder.stopRecording()
+            assertEquals(depthStop.toString(), true, depthStop["success"])
+            assertTrue("No actual frames: $depthStop", (depthStop["framesRecorded"] as Number).toInt() > 10)
+            receipt.getJSONArray("takes").put(take(depthStop, "depth_requested_declared"))
             receipt.put("cancel_deleted_session", true).put("status", "passed")
         } finally {
             File(instrumentation.context.filesDir, "h264-lifecycle-result.json").writeText(receipt.toString(2))
