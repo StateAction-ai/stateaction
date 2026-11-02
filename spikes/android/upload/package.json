@@ -1,0 +1,12 @@
+{
+  "name": "stateaction-android-upload-spike",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "fixture": "node --experimental-strip-types fixture.ts",
+    "test": "node --experimental-strip-types --test fixture.test.ts"
+  }
+}

@@ -1,0 +1,15 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'ai.stateaction.spike.upload'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'ai.stateaction.spike.upload'
+        minSdk 34
+        targetSdk 35
+        versionCode 1
+        versionName '0.1-spike'
+        testInstrumentationRunner 'ai.stateaction.spike.upload.SpikeInstrumentation'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { release { minifyEnabled false } }
+}

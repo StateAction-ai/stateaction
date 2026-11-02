@@ -1,0 +1,26 @@
+{
+  "name": "android-upload-spike-native",
+  "root": "spikes/android/upload/app",
+  "projectType": "application",
+  "tags": ["spike", "android", "simulation-only", "mobile-toolchain"],
+  "implicitDependencies": ["android-upload-spike"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": [],
+      "inputs": [
+        "default",
+        "{workspaceRoot}/spikes/android/upload/*.gradle",
+        "{workspaceRoot}/spikes/android/upload/gradle.properties",
+        "{workspaceRoot}/spikes/android/upload/build.sh",
+        "{workspaceRoot}/apps/mobile/android/gradle/wrapper/gradle-wrapper.properties",
+        "{workspaceRoot}/config/mobile-toolchain.json"
+      ],
+      "outputs": [],
+      "options": {
+        "command": "flock /tmp/stateaction-mobile-validation.lock bash spikes/android/upload/build.sh"
+      }
+    }
+  }
+}

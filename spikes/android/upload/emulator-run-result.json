@@ -1,0 +1,122 @@
+{
+  "recordedAt": "2026-11-01T22:22:48.255806+00:00",
+  "executionMode": "emulator",
+  "simulated": {
+    "auth": "synthetic_fixture_not_better_auth",
+    "provider": "local_files_not_s3_or_r2"
+  },
+  "realGoogle": false,
+  "realBetterAuth": false,
+  "realProvider": false,
+  "physicalDevice": false,
+  "personalUser": 0,
+  "device": {
+    "serial": "emulator-5580",
+    "api": 35,
+    "model": "sdk_gphone64_x86_64",
+    "abi": "x86_64"
+  },
+  "sourceBytes": 134230073,
+  "apks": {
+    "app": {
+      "sha256": "1c214402020a829a81d85aa8726b948d5292b1e83e87691f4206926adf93614d",
+      "bytes": 61737
+    },
+    "instrumentation": {
+      "sha256": "e779700f60f4c0dc86d6adc02567c48f8e433d80d7584c71ea0a25681317e863",
+      "bytes": 28430
+    }
+  },
+  "scenarios": {
+    "native_engine_direct": {
+      "output": {
+        "journal": "{\"schema\":\"stateaction.upload.spike.v1\",\"simulatedSource\":true,\"ownerId\":\"synthetic-a\",\"clientRecordingId\":\"7af2e1c1-541a-49a5-b02e-001f136fe361\",\"clientUploadId\":\"63c7a5cf-fec6-4a4b-89fb-4aa1ff1ec9cd\",\"sourceName\":\"synthetic-source.bin\",\"sizeBytes\":\"134230073\",\"sha256\":\"efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be\",\"sourceModifiedMs\":\"1793571715784\",\"transportEpoch\":1,\"state\":\"uploaded\",\"receipts\":{\"2\":{\"partNumber\":2,\"etag\":\"\\\"f0876ba3b091f36ba31de6846822974b\\\"\",\"sizeBytes\":\"67108864\"},\"3\":{\"partNumber\":3,\"etag\":\"\\\"c6ac64a436080b7a90524f32fc35f392\\\"\",\"sizeBytes\":\"12345\"},\"1\":{\"partNumber\":1,\"etag\":\"\\\"f0876ba3b091f36ba31de6846822974b\\\"\",\"sizeBytes\":\"67108864\"}},\"attempts\":{\"1\":2,\"2\":1,\"3\":1},\"metrics\":{\"reconciliations\":1,\"maxTemporaryBytes\":134230073,\"maxActivePuts\":2,\"maxTemporaryChunks\":3,\"expiredUrlRenewals\":1,\"apiCompletions\":1},\"reason\":\"fixture_sha256_verified_not_provider_qualification\",\"updatedAtMs\":\"1793571726047\",\"executionMode\":\"direct_instrumentation\",\"fileId\":\"30d6300f-36f2-4483-8020-ea82a85141d9\",\"partCount\":3,\"retryAfterMs\":{\"1\":\"1793571724836\",\"2\":\"1793571720407\",\"3\":\"1793571721692\"},\"expiryInjected\":true}",
+        "mode": "direct_native_engine_not_uidt",
+        "realGoogle": "false",
+        "realProvider": "false",
+        "result": "PASS"
+      },
+      "passed": true,
+      "fixtureCounters": {
+        "session_rotations": 14,
+        "reconciliations": 1,
+        "sign_requests": 4,
+        "provider_puts": 3,
+        "receipt_batches": 3,
+        "expired_urls": 1,
+        "api_completions": 1
+      },
+      "fixtureUploads": [
+        {
+          "state": "uploaded",
+          "sizeBytes": "134230073",
+          "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be"
+        }
+      ],
+      "exactlyOneCompletionThreePuts": true
+    },
+    "interrupt_account_switch_resume": {
+      "output": {
+        "firstRunOutcome": "paused",
+        "journal": "{\"schema\":\"stateaction.upload.spike.v1\",\"simulatedSource\":true,\"ownerId\":\"synthetic-a\",\"clientRecordingId\":\"18908ce0-63d3-4b07-9ffb-ade23e7b4672\",\"clientUploadId\":\"89215bfe-b17e-49b3-9bf3-4dbebaa1b4d5\",\"sourceName\":\"synthetic-source.bin\",\"sizeBytes\":\"134230073\",\"sha256\":\"efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be\",\"sourceModifiedMs\":\"1793571727664\",\"transportEpoch\":1,\"state\":\"uploaded\",\"receipts\":{\"2\":{\"partNumber\":2,\"etag\":\"\\\"f0876ba3b091f36ba31de6846822974b\\\"\",\"sizeBytes\":\"67108864\"},\"3\":{\"partNumber\":3,\"etag\":\"\\\"c6ac64a436080b7a90524f32fc35f392\\\"\",\"sizeBytes\":\"12345\"},\"1\":{\"partNumber\":1,\"etag\":\"\\\"f0876ba3b091f36ba31de6846822974b\\\"\",\"sizeBytes\":\"67108864\"}},\"attempts\":{\"1\":3,\"2\":1,\"3\":1},\"metrics\":{\"reconciliations\":2,\"maxTemporaryBytes\":134230073,\"maxActivePuts\":2,\"maxTemporaryChunks\":3,\"expiredUrlRenewals\":1,\"networkRetries\":2,\"apiCompletions\":1},\"fileId\":\"40e15951-5e74-4987-a523-8366573de0ce\",\"partCount\":3,\"reason\":\"fixture_sha256_verified_not_provider_qualification\",\"updatedAtMs\":\"1793571757267\",\"retryAfterMs\":{\"1\":\"1793571744089\",\"2\":\"1793571730397\",\"3\":\"1793571743203\"},\"expiryInjected\":true}",
+        "landedPartsBeforeResume": "1",
+        "mode": "direct_native_engine_interrupt_resume_not_uidt",
+        "realGoogle": "false",
+        "realProvider": "false",
+        "result": "PASS"
+      },
+      "passed": true,
+      "fixtureCounters": {
+        "session_rotations": 15,
+        "reconciliations": 2,
+        "sign_requests": 5,
+        "expired_urls": 1,
+        "provider_puts": 3,
+        "receipt_batches": 2,
+        "api_completions": 1
+      },
+      "fixtureUploads": [
+        {
+          "state": "uploaded",
+          "sizeBytes": "134230073",
+          "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be"
+        }
+      ],
+      "exactlyOneCompletionThreePuts": true
+    },
+    "uidt_home": {
+      "passed": true,
+      "userInitiatedApproved": true,
+      "journalState": "uploaded",
+      "executionMode": "uidt",
+      "metrics": {
+        "reconciliations": 1,
+        "maxTemporaryBytes": 134230073,
+        "maxActivePuts": 2,
+        "maxTemporaryChunks": 3,
+        "expiredUrlRenewals": 1,
+        "apiCompletions": 1
+      },
+      "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be",
+      "sizeBytes": "134230073",
+      "fixtureCounters": {
+        "session_rotations": 11,
+        "reconciliations": 1,
+        "sign_requests": 4,
+        "expired_urls": 1,
+        "provider_puts": 3,
+        "receipt_batches": 3,
+        "api_completions": 1
+      },
+      "fixtureUploads": [
+        {
+          "state": "uploaded",
+          "sizeBytes": "134230073",
+          "sha256": "efb8dcc75aec0417b3663f09fd2ba21dc93d2511d9f84c6df46fa669345466be"
+        }
+      ],
+      "exactlyOneCompletionThreePuts": true
+    }
+  },
+  "passed": true
+}
