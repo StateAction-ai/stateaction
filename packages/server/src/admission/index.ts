@@ -7,3 +7,5 @@ export {
   type AuthenticateCollector,
   type RecordingRoutesDeps,
 } from "./http.js";
+export * from "./object-reader.js";
+export * from "./runtime.js";

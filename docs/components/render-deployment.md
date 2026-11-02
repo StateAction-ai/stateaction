@@ -47,9 +47,10 @@ Render one-off jobs inherit the service's environment (no per-job injection), so
 | web            | `S3_ENDPOINT`                              | `https://<account>.r2.cloudflarestorage.com`                          |
 | web            | `S3_BUCKET`                                | production bucket (never `stateaction-dev`)                           |
 | web            | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | production bucket-scoped R2 token (not the dev token)                 |
+| web            | `PROCESSING_PROFILE_REVISION`              | processing profile revision pinned on admitted jobs (operator choice) |
 | operator shell | `MIGRATION_DATABASE_URL`                   | owner external URL; never stored in Render env                        |
 
-`BETTER_AUTH_SECRET` is `generateValue: true` (distinct per environment, web only). Literal config in the Blueprint: `NODE_VERSION=24.22.2`, `APP_ENV=production`, `S3_REGION=auto`; `DATABASE_HOST/PORT/NAME` come from `fromDatabase`. R2 credentials are backend-only and never reach the mobile app or the workflow.
+`BETTER_AUTH_SECRET` is `generateValue: true` (distinct per environment, web only). Literal config in the Blueprint: `NODE_VERSION=24.22.2`, `APP_ENV=production`, `S3_REGION=auto`, `SUPPORTED_RGB_PROFILES=h264_mcap_v1`; `PROCESSING_PROFILE_REVISION` is prompted (`sync: false`, web only) because the pinned processing profile revision is an operator decision per environment, and preflight refuses to start without it; `DATABASE_HOST/PORT/NAME` come from `fromDatabase`. R2 credentials are backend-only and never reach the mobile app or the workflow.
 
 ## Authentication settings (web only)
 

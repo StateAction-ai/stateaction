@@ -88,7 +88,8 @@ test ! -e .env
 HOSTED_ENV=(env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production APP_ENV=production PORT="$WEB_PORT"
   DATABASE_HOST="$DB_HOST" DATABASE_PORT=5432 DATABASE_NAME=stateaction APP_DB_PASSWORD="$APP_PW"
   S3_REGION=auto S3_ENDPOINT=https://smokeaccount.r2.cloudflarestorage.com S3_BUCKET=stateaction-smoke
-  S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real)
+  S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real
+  PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1)
 "${HOSTED_ENV[@]}" pnpm --filter @stateaction/server hosted:preflight
 setsid "${HOSTED_ENV[@]}" pnpm --filter @stateaction/web start > artifacts/hosted-smoke/web.log 2>&1 &
 web_pid=$!
