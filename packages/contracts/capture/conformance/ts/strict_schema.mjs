@@ -49,8 +49,35 @@ const isObject = (v) =>
   v !== null && typeof v === "object" && !Array.isArray(v);
 const isNumber = (v) => typeof v === "number";
 
-/** Strict parse: invalid UTF-8, duplicate keys, NaN/Infinity and numbers overflowing a double are malformed. */
+export const MAX_DEPTH = 32;
+
+/** Reject strings/keys holding an unpaired surrogate (only reachable through \u escapes). */
+function checkScalars(value) {
+  const stack = [value];
+  while (stack.length) {
+    const v = stack.pop();
+    if (typeof v === "string") {
+      if (!v.isWellFormed())
+        throw new MalformedJson("unpaired surrogate escape");
+    } else if (Array.isArray(v)) for (const x of v) stack.push(x);
+    else if (isObject(v))
+      for (const [k, x] of Object.entries(v)) stack.push(k, x);
+  }
+}
+
+/**
+ * Strict RFC 8259 / RFC 7493 parse (rules in strict_schema.py): a leading UTF-8 BOM, invalid UTF-8, more than
+ * MAX_DEPTH open arrays/objects, duplicate keys (exact UTF-16 = code point sequences, never normalized),
+ * unpaired surrogate escapes, NaN/Infinity and numbers overflowing a double are malformed.
+ */
 export function parseJson(bytes) {
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0xef &&
+    bytes[1] === 0xbb &&
+    bytes[2] === 0xbf
+  )
+    throw new MalformedJson("UTF-8 byte order mark");
   let text;
   try {
     text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
@@ -82,9 +109,10 @@ export function parseJson(bytes) {
       }
       continue;
     }
-    if (c === "{") stack.push(new Set());
-    else if (c === "[") stack.push(null);
-    else if (c === "}" || c === "]") stack.pop();
+    if (c === "{" || c === "[") {
+      stack.push(c === "{" ? new Set() : null);
+      if (stack.length > MAX_DEPTH) throw new MalformedJson("nesting");
+    } else if (c === "}" || c === "]") stack.pop();
     else if (c === "-" || (c >= "0" && c <= "9")) {
       let j = i;
       while (j < text.length && "0123456789eE+-.".includes(text[j])) j++;
@@ -95,11 +123,14 @@ export function parseJson(bytes) {
     }
     i++;
   }
+  let value;
   try {
-    return JSON.parse(text);
+    value = JSON.parse(text);
   } catch {
     throw new MalformedJson("syntax");
   }
+  checkScalars(value);
+  return value;
 }
 
 const SAFE = /^[A-Za-z0-9._-]$/;

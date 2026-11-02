@@ -30,8 +30,58 @@ const types = {
   'null',
 };
 
-/// Strict parse: invalid UTF-8, duplicate keys, NaN/Infinity and numbers overflowing a double are malformed.
+const maxDepth = 32;
+
+/// Strict UTF-8 decode that keeps a leading U+FEFF: Dart's utf8 decoder silently drops a leading BOM, which
+/// would make Dart see different text (topics, frame names, JSON) than every other reader.
+String decodeUtf8Exact(List<int> bytes) {
+  final bom =
+      bytes.length >= 3 &&
+      bytes[0] == 0xef &&
+      bytes[1] == 0xbb &&
+      bytes[2] == 0xbf;
+  final text = utf8.decode(bytes);
+  return bom ? '\uFEFF$text' : text;
+}
+
+/// Reject strings/keys holding an unpaired surrogate (only reachable through \u escapes).
+void _checkScalars(Object? value) {
+  final stack = <Object?>[value];
+  while (stack.isNotEmpty) {
+    final v = stack.removeLast();
+    if (v is String) {
+      for (var i = 0; i < v.length; i++) {
+        final u = v.codeUnitAt(i);
+        if (u >= 0xd800 && u <= 0xdbff) {
+          if (i + 1 < v.length &&
+              v.codeUnitAt(i + 1) >= 0xdc00 &&
+              v.codeUnitAt(i + 1) <= 0xdfff) {
+            i++;
+            continue;
+          }
+          throw MalformedJson();
+        }
+        if (u >= 0xdc00 && u <= 0xdfff) throw MalformedJson();
+      }
+    } else if (v is List) {
+      stack.addAll(v);
+    } else if (v is Map) {
+      stack.addAll(v.keys);
+      stack.addAll(v.values);
+    }
+  }
+}
+
+/// Strict RFC 8259 / RFC 7493 parse (rules in strict_schema.py): a leading UTF-8 BOM, invalid UTF-8, more
+/// than [maxDepth] open arrays/objects, duplicate keys (exact UTF-16 = code point sequences, never
+/// normalized), unpaired surrogate escapes, NaN/Infinity and numbers overflowing a double are malformed.
 Object? parseJson(Uint8List bytes) {
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xef &&
+      bytes[1] == 0xbb &&
+      bytes[2] == 0xbf) {
+    throw MalformedJson();
+  }
   final String text;
   try {
     text = utf8.decode(bytes);
@@ -67,10 +117,9 @@ Object? parseJson(Uint8List bytes) {
       }
       continue;
     }
-    if (c == '{') {
-      stack.add(<String>{});
-    } else if (c == '[') {
-      stack.add(null);
+    if (c == '{' || c == '[') {
+      stack.add(c == '{' ? <String>{} : null);
+      if (stack.length > maxDepth) throw MalformedJson();
     } else if (c == '}' || c == ']') {
       if (stack.isNotEmpty) stack.removeLast();
     } else if (c == '-' || (c.codeUnitAt(0) >= 48 && c.codeUnitAt(0) <= 57)) {
@@ -85,11 +134,14 @@ Object? parseJson(Uint8List bytes) {
     }
     i++;
   }
+  final Object? value;
   try {
-    return jsonDecode(text);
+    value = jsonDecode(text);
   } on FormatException {
     throw MalformedJson();
   }
+  _checkScalars(value);
+  return value;
 }
 
 final _safe = RegExp(r'^[A-Za-z0-9._-]$');

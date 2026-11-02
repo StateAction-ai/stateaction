@@ -49,6 +49,16 @@ object ContractReader {
     class Malformed : Exception()
     class Unsupported : Exception()
     class CrcMismatch : Exception()
+    class DefinitionOrder : Exception()
+    class DefinitionConflict : Exception()
+
+    /** Strict UTF-8 (decodeToString would substitute U+FFFD): record strings are truncated, message strings malformed. */
+    private fun utf8(b: ByteArray, onError: () -> Exception): String = try {
+        Charsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(ByteBuffer.wrap(b)).toString()
+    } catch (e: java.nio.charset.CharacterCodingException) {
+        throw onError()
+    }
     private val SINGLETON_TOPICS = listOf("/stateaction/capture_profile", "/stateaction/clocks", "/stateaction/inventory", "/stateaction/close")
     private val schemaCache = HashMap<String, StrictSchema>()
     var captureDir: java.io.File = java.io.File(System.getProperty("capture.dir") ?: "../..")
@@ -109,11 +119,14 @@ object ContractReader {
         if (b.position() + 4 > limit) throw Truncated()
         val n = b.int
         if (n < 0 || b.position() + n > limit) throw Truncated()
-        return ByteArray(n).also { b.get(it) }.decodeToString()
+        return utf8(ByteArray(n).also { b.get(it) }) { Truncated() }
     }
 
     // Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
     // DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
+    // Definitions are checked in file order: a Channel's nonzero schema id and a Message's channel id must
+    // already be defined (E_DEFINITION_ORDER); a repeated Schema/Channel id must repeat the identical record
+    // body and Schema id 0 is reserved (E_DEFINITION_CONFLICT).
     fun readMcap(data: ByteArray): Mcap {
         val out = try {
             readRecords(data)
@@ -122,7 +135,6 @@ object ContractReader {
         } catch (e: IndexOutOfBoundsException) {
             throw Truncated()
         }
-        if (out.messages.any { it.channel !in out.channels }) throw Malformed()
         return out
     }
 
@@ -131,6 +143,12 @@ object ContractReader {
         val out = Mcap()
         var pos = 8
         var dataEnd = false
+        val raw = mapOf(0x03 to HashMap<Int, ByteArray>(), 0x04 to HashMap<Int, ByteArray>()) // id -> exact body
+        fun define(op: Int, id: Int, body: ByteArray) {
+            val prior = raw.getValue(op)[id]
+            if (prior != null && !prior.contentEquals(body)) throw DefinitionConflict()
+            raw.getValue(op)[id] = body
+        }
         while (true) {
             if (pos == data.size || pos + 9 > data.size) throw Truncated()
             val recordStart = pos
@@ -151,19 +169,26 @@ object ContractReader {
                     val enc = str(body, limit)
                     val n = body.int
                     if (n < 0 || body.position() + n > limit) throw Truncated()
-                    out.schemas[id] = Schema(name, enc, ByteArray(n).also { body.get(it) })
+                    val schemaData = ByteArray(n).also { body.get(it) }
+                    if (id == 0) throw DefinitionConflict()
+                    define(op, id, data.copyOfRange(start, start + limit))
+                    out.schemas[id] = Schema(name, enc, schemaData)
                 }
                 0x04 -> {
                     val id = body.short.toInt() and 0xffff
                     val schemaId = body.short.toInt() and 0xffff
                     val topic = str(body, limit)
-                    out.channels[id] = Channel(schemaId, topic, str(body, limit))
+                    val encoding = str(body, limit)
+                    if (schemaId != 0 && schemaId !in out.schemas) throw DefinitionOrder()
+                    define(op, id, data.copyOfRange(start, start + limit))
+                    out.channels[id] = Channel(schemaId, topic, encoding)
                 }
                 0x05 -> {
                     val ch = body.short.toInt() and 0xffff
                     val seq = body.int.toLong() and 0xffffffffL
                     val log = body.long
                     body.long
+                    if (ch !in out.channels) throw DefinitionOrder()
                     out.messages.add(Msg(ch, seq, log, ByteArray(limit - 22).also { body.get(it) }))
                 }
                 0x0f -> {
@@ -222,9 +247,9 @@ object ContractReader {
                             if ((k shr 3).toInt() == 1) v.sec = value else v.nanos = value
                         }
                     }
-                    2 -> v.frameId = chunk.decodeToString()
+                    2 -> v.frameId = utf8(chunk) { Malformed() }
                     3 -> v.data = chunk
-                    4 -> v.format = chunk.decodeToString()
+                    4 -> v.format = utf8(chunk) { Malformed() }
                 }
             } else if (wire == 0) c.varint() else throw Malformed()
         }
@@ -294,7 +319,7 @@ object ContractReader {
         val n = b.getInt(12)
         val end = 16 + maxOf(n - 1, 0)
         if (n < 0 || end > d.size) throw Malformed()
-        return mapOf("sec" to b.getInt(4), "nanosec" to (b.getInt(8).toLong() and 0xffffffffL), "frame_id" to d.copyOfRange(16, end).decodeToString())
+        return mapOf("sec" to b.getInt(4), "nanosec" to (b.getInt(8).toLong() and 0xffffffffL), "frame_id" to utf8(d.copyOfRange(16, end)) { Malformed() })
     }
 
     // ------------------------------------------------------------------ checker
@@ -317,8 +342,10 @@ object ContractReader {
             return reject(setOf("E_UNSUPPORTED_LAYOUT"))
         } catch (e: CrcMismatch) {
             return reject(setOf("E_DATA_CRC"))
-        } catch (e: Malformed) {
-            return reject(setOf("E_MALFORMED_MESSAGE"))
+        } catch (e: DefinitionOrder) {
+            return reject(setOf("E_DEFINITION_ORDER"))
+        } catch (e: DefinitionConflict) {
+            return reject(setOf("E_DEFINITION_CONFLICT"))
         }
         if (f.profile != "") errors.add("E_PROFILE_NOT_EMPTY")
         val byTopic = java.util.TreeMap<String, MutableList<Msg>>()

@@ -105,7 +105,13 @@ def differential_messages(data: bytes, diff, rng) -> dict:
     """Validate every parseable JSON message (and mutations of it) with both validators."""
     try:
         f = cc.read_mcap(data)
-    except (cc.Truncated, cc.Unsupported, cc.CrcMismatch, cc.Malformed):
+    except (
+        cc.Truncated,
+        cc.Unsupported,
+        cc.CrcMismatch,
+        cc.DefinitionOrder,
+        cc.DefinitionConflict,
+    ):
         return {}
     counts = {}
     for m in f["messages"]:
@@ -139,6 +145,31 @@ def official_crc_status(path: Path) -> str:
     except (McapError, ValueError, EOFError, struct_error()) as e:
         return f"unreadable:{type(e).__name__}"
     return "ok"
+
+
+def official_topics(path: Path):
+    """Topic -> message count as the official mcap reader interprets the file, or the error type."""
+    from mcap.exceptions import McapError
+    from mcap.reader import make_reader
+
+    try:
+        with path.open("rb") as source:
+            counts: dict[str, int] = {}
+            for _, channel, _ in make_reader(
+                source, validate_crcs=True
+            ).iter_messages():
+                counts[channel.topic] = counts.get(channel.topic, 0) + 1
+            return dict(sorted(counts.items()))
+    except (McapError, ValueError, EOFError, KeyError, struct_error()) as e:
+        return f"error:{type(e).__name__}"
+
+
+# Why definition order/conflicts are rejects: the official reader errors on use-before-definition and
+# silently follows the latest redefinition, so the same bytes would mean different topics to other tools.
+OFFICIAL_DEFINITION = {
+    "channel_after_messages": "error:McapError",
+    "schema_after_channel": "error:McapError",
+}
 
 
 def struct_error():
@@ -246,6 +277,17 @@ def main() -> None:
         )
         assert stripped == entry.get("expected_violations", []), name
         counts = differential_messages(data, diff, rng)
+        if name in OFFICIAL_DEFINITION:
+            got = official_topics(ROOT / "golden" / f"{name}.mcap")
+            assert got == OFFICIAL_DEFINITION[name], (name, got)
+        if name == "bogus_channel_redefined_after_messages":
+            got = official_topics(ROOT / "golden" / f"{name}.mcap")
+            assert got.get("/bogus/topic", 0) > 0, (name, got)
+            assert "/stateaction/frame_events" not in got, (name, got)
+        if name == "identical_duplicate_definitions":
+            assert official_topics(ROOT / "golden" / f"{name}.mcap") == official_topics(
+                ROOT / "golden/valid.mcap"
+            ), name
         crc = official_crc_status(ROOT / "golden" / f"{name}.mcap")
         if name.startswith("data_crc_") and name != "data_crc_zero":
             assert crc == "crc_error", (name, crc)

@@ -23,6 +23,10 @@ class Truncated implements Exception {}
 
 class Malformed implements Exception {}
 
+class DefinitionOrder implements Exception {}
+
+class DefinitionConflict implements Exception {}
+
 class Unsupported implements Exception {}
 
 class CrcMismatch implements Exception {}
@@ -189,11 +193,14 @@ String readStr(ByteData bd, Uint8List b, int off, List<int> next) {
   final n = bd.getUint32(off, Endian.little);
   if (off + 4 + n > b.length) throw Truncated();
   next[0] = off + 4 + n;
-  return utf8.decode(b.sublist(off + 4, off + 4 + n));
+  return decodeUtf8Exact(b.sublist(off + 4, off + 4 + n));
 }
 
 // Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
 // DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
+// Definitions are checked in file order: a Channel's nonzero schema id and a Message's channel id must
+// already be defined (E_DEFINITION_ORDER); a repeated Schema/Channel id must repeat the identical record
+// body and Schema id 0 is reserved (E_DEFINITION_CONFLICT).
 Mcap readMcap(Uint8List data) {
   final Mcap out;
   try {
@@ -202,9 +209,6 @@ Mcap readMcap(Uint8List data) {
     throw Truncated();
   } on FormatException {
     throw Truncated();
-  }
-  if (out.messages.any((m) => !out.channels.containsKey(m.channel))) {
-    throw Malformed();
   }
   return out;
 }
@@ -218,6 +222,22 @@ Mcap readMcapRecords(Uint8List data) {
   var pos = 8;
   final all = ByteData.sublistView(data);
   var dataEnd = false;
+  final raw = {
+    3: <int, Uint8List>{},
+    4: <int, Uint8List>{},
+  }; // id -> exact body
+  void define(int op, int id, Uint8List body) {
+    final prior = raw[op]![id];
+    if (prior != null) {
+      var same = prior.length == body.length;
+      for (var i = 0; same && i < body.length; i++) {
+        same = prior[i] == body[i];
+      }
+      if (!same) throw DefinitionConflict();
+    }
+    raw[op]![id] = body;
+  }
+
   for (;;) {
     if (pos == data.length || pos + 9 > data.length) throw Truncated();
     final recordStart = pos;
@@ -238,27 +258,41 @@ Mcap readMcapRecords(Uint8List data) {
       final enc = readStr(bd, body, nx[0], nx);
       final n = bd.getUint32(nx[0], Endian.little);
       if (nx[0] + 4 + n > body.length) throw Truncated();
-      out.schemas[bd.getUint16(0, Endian.little)] = (
+      final sid = bd.getUint16(0, Endian.little);
+      if (sid == 0) throw DefinitionConflict();
+      define(3, sid, body);
+      out.schemas[sid] = (
         name: name,
         encoding: enc,
         data: Uint8List.sublistView(body, nx[0] + 4, nx[0] + 4 + n),
       );
     } else if (op == 0x04) {
       final topic = readStr(bd, body, 4, nx);
-      out.channels[bd.getUint16(0, Endian.little)] = (
-        schemaId: bd.getUint16(2, Endian.little),
+      final encoding = readStr(bd, body, nx[0], nx);
+      final cid = bd.getUint16(0, Endian.little);
+      final schemaId = bd.getUint16(2, Endian.little);
+      if (schemaId != 0 && !out.schemas.containsKey(schemaId)) {
+        throw DefinitionOrder();
+      }
+      define(4, cid, body);
+      out.channels[cid] = (
+        schemaId: schemaId,
         topic: topic,
-        encoding: readStr(bd, body, nx[0], nx),
+        encoding: encoding,
       );
     } else if (op == 0x05) {
-      out.messages.add(
-        Message(
-          bd.getUint16(0, Endian.little),
-          bd.getUint32(2, Endian.little),
-          bd.getUint64(6, Endian.little),
-          Uint8List.sublistView(body, 22),
-        ),
+      final message = Message(
+        bd.getUint16(0, Endian.little),
+        bd.getUint32(2, Endian.little),
+        bd.getUint64(6, Endian.little),
+        Uint8List.sublistView(body, 22),
       );
+      bd.getUint64(
+        14,
+        Endian.little,
+      ); // publish_time: a short record is truncated in every reader
+      if (!out.channels.containsKey(message.channel)) throw DefinitionOrder();
+      out.messages.add(message);
     } else if (op == 0x0f) {
       final crc = bd.getUint32(0, Endian.little);
       dataEnd = true;
@@ -324,11 +358,11 @@ Video decodeVideo(Uint8List b) {
           }
         }
       } else if (field == 2) {
-        v.frameId = utf8.decode(chunk);
+        v.frameId = decodeUtf8Exact(chunk);
       } else if (field == 3) {
         v.data = chunk;
       } else if (field == 4) {
-        v.format = utf8.decode(chunk);
+        v.format = decodeUtf8Exact(chunk);
       }
     } else if (wire == 0) {
       pos = varint(b, pos).$2;
@@ -434,7 +468,7 @@ Map<String, Object?> decodePose(Uint8List d) {
   return {
     'sec': bd.getInt32(4, Endian.little),
     'nanosec': bd.getUint32(8, Endian.little),
-    'frame_id': utf8.decode(d.sublist(16, 16 + n - 1)),
+    'frame_id': decodeUtf8Exact(d.sublist(16, 16 + n - 1)),
   };
 }
 
@@ -527,10 +561,16 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       'errors': ['E_DATA_CRC'],
       'facts': <String, Object?>{},
     };
-  } on Malformed {
+  } on DefinitionOrder {
     return {
       'outcome': 'reject',
-      'errors': ['E_MALFORMED_MESSAGE'],
+      'errors': ['E_DEFINITION_ORDER'],
+      'facts': <String, Object?>{},
+    };
+  } on DefinitionConflict {
+    return {
+      'outcome': 'reject',
+      'errors': ['E_DEFINITION_CONFLICT'],
       'facts': <String, Object?>{},
     };
   }

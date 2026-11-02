@@ -6,8 +6,13 @@ import Foundation
 struct MalformedJson: Error {}
 struct SchemaUnsupported: Error { let message: String }
 
-/// Strict parse: invalid UTF-8, duplicate keys, NaN/Infinity and numbers overflowing a double are malformed.
+let maxJsonDepth = 32
+
+/// Strict RFC 8259 / RFC 7493 parse (rules in strict_schema.py): a leading UTF-8 BOM, invalid UTF-8, more than
+/// maxJsonDepth open arrays/objects, duplicate keys (exact scalar sequences via JKey, never canonical
+/// equivalence), unpaired surrogate escapes, NaN/Infinity and numbers overflowing a double are malformed.
 func parseStrictJson(_ bytes: [UInt8]) throws -> J {
+    if bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF { throw MalformedJson() }
     guard let text = String(validating: bytes, as: UTF8.self) else { throw MalformedJson() }
     var p = StrictParser(Array(text.unicodeScalars))
     p.ws()
@@ -24,10 +29,11 @@ private struct StrictParser {
     mutating func ws() { while i < s.count, [" ", "\t", "\n", "\r"].contains(s[i]) { i += 1 } }
     func peek(_ c: Unicode.Scalar) -> Bool { i < s.count && s[i] == c }
     mutating func value(depth: Int) throws -> J {
-        guard i < s.count, depth < 10_000 else { throw MalformedJson() }
+        guard i < s.count else { throw MalformedJson() }
         switch s[i] {
-        case "{": return try object(depth: depth)
-        case "[": return try array(depth: depth)
+        // depth = containers already open; opening one more may not exceed maxJsonDepth.
+        case "{": guard depth < maxJsonDepth else { throw MalformedJson() }; return try object(depth: depth)
+        case "[": guard depth < maxJsonDepth else { throw MalformedJson() }; return try array(depth: depth)
         case "\"": return .str(try string())
         case "t": return try literal("true", .bool(true))
         case "f": return try literal("false", .bool(false))
@@ -41,13 +47,13 @@ private struct StrictParser {
     }
     mutating func object(depth: Int) throws -> J {
         i += 1
-        var out: [String: J] = [:]
+        var out: [JKey: J] = [:]
         ws()
         if peek("}") { i += 1; return .obj(out) }
         while true {
             ws()
             guard peek("\"") else { throw MalformedJson() }
-            let k = try string()
+            let k = JKey(try string())
             ws()
             guard peek(":") else { throw MalformedJson() }
             i += 1
@@ -101,14 +107,17 @@ private struct StrictParser {
             case "t": out.append("\t")
             case "u":
                 var v = try hex4()
-                if (0xD800..<0xDC00).contains(v), i + 6 <= s.count, s[i] == "\\", s[i + 1] == "u" {
-                    let save = i
+                // RFC 7493: a surrogate escape must be a high+low pair; anything else is malformed (never U+FFFD).
+                if (0xDC00..<0xE000).contains(v) { throw MalformedJson() }
+                if (0xD800..<0xDC00).contains(v) {
+                    guard i + 6 <= s.count, s[i] == "\\", s[i + 1] == "u" else { throw MalformedJson() }
                     i += 2
                     let lo = try hex4()
-                    if (0xDC00..<0xE000).contains(lo) { v = 0x10000 + ((v - 0xD800) << 10) + (lo - 0xDC00) } else { i = save }
+                    guard (0xDC00..<0xE000).contains(lo) else { throw MalformedJson() }
+                    v = 0x10000 + ((v - 0xD800) << 10) + (lo - 0xDC00)
                 }
-                // A lone surrogate cannot exist in a Swift String: U+FFFD keeps the code-point count.
-                out.append(Unicode.Scalar(v) ?? "\u{FFFD}")
+                guard let scalar = Unicode.Scalar(v) else { throw MalformedJson() }
+                out.append(scalar)
             default: throw MalformedJson()
             }
         }
@@ -177,7 +186,7 @@ func jsonEqual(_ a: J?, _ b: J?) -> Bool {
     case (.bool(let x), .bool(let y)): return x == y
     case (.int(let x), .int(let y)): return x == y
     case (.int, .dbl), (.dbl, .int), (.dbl, .dbl): return numberValue(a) == numberValue(b)
-    case (.str(let x), .str(let y)): return x == y
+    case (.str(let x), .str(let y)): return exact(x, y)
     case (.arr(let x), .arr(let y)): return x.count == y.count && zip(x, y).allSatisfy { jsonEqual($0, $1) }
     case (.obj(let x), .obj(let y)): return x.count == y.count && x.allSatisfy { k, v in y[k] != nil && jsonEqual(v, y[k]) }
     default: return false
@@ -185,7 +194,7 @@ func jsonEqual(_ a: J?, _ b: J?) -> Bool {
 }
 
 final class StrictSchema {
-    let root: [String: J]
+    let root: [JKey: J]
     private var patterns: [String: NSRegularExpression] = [:]
 
     init(_ root: J) throws {
@@ -197,13 +206,14 @@ final class StrictSchema {
     private func check(_ schema: J, _ at: String) throws {
         func fail(_ m: String) -> SchemaUnsupported { SchemaUnsupported(message: "\(at): \(m)") }
         guard case .obj(let s) = schema else { throw fail("schema must be an object") }
-        for k in s.keys {
+        for key in s.keys {
+            let k = key.s
             guard supportedKeywords.contains(k) else { throw fail("unsupported keyword \(k)") }
             if k == "$defs" && at != "#" { throw fail("$defs only at the root") }
         }
         if case .obj(let defs)? = s["$defs"] { for (n, sub) in defs { try check(sub, "\(at)/$defs/\(n)") } }
         if let r = s["$ref"] {
-            guard let ref = r.s, ref.hasPrefix("#/$defs/"), case .obj(let defs)? = root["$defs"], defs[String(ref.dropFirst(8))] != nil else {
+            guard let ref = r.s, ref.hasPrefix("#/$defs/"), case .obj(let defs)? = root["$defs"], defs[JKey(String(ref.dropFirst(8)))] != nil else {
                 throw fail("unresolvable or non-local $ref")
             }
         }
@@ -219,18 +229,18 @@ final class StrictSchema {
             }
             patterns[pat] = try NSRegularExpression(pattern: pat)
         }
-        for k in ["minProperties", "maxProperties", "minItems", "maxItems", "minLength", "maxLength"] {
+        for k: JKey in ["minProperties", "maxProperties", "minItems", "maxItems", "minLength", "maxLength"] {
             if let v = s[k] { guard case .int(let n) = v, n >= 0 else { throw fail("\(k) must be a non-negative integer") } }
         }
-        for k in ["minimum", "maximum"] { if let v = s[k] { guard numberValue(v) != nil else { throw fail("\(k) must be a number") } } }
+        for k: JKey in ["minimum", "maximum"] { if let v = s[k] { guard numberValue(v) != nil else { throw fail("\(k) must be a number") } } }
         if let props = s["properties"] {
             guard case .obj(let p) = props else { throw fail("properties must be an object") }
             for (n, sub) in p { try check(sub, "\(at)/properties/\(n)") }
         }
         if let ap = s["additionalProperties"], ap != .bool(false) { try check(ap, "\(at)/additionalProperties") }
-        for k in ["propertyNames", "items", "if", "then"] { if let sub = s[k] { try check(sub, "\(at)/\(k)") } }
+        for k: JKey in ["propertyNames", "items", "if", "then"] { if let sub = s[k] { try check(sub, "\(at)/\(k)") } }
         if s["then"] != nil && s["if"] == nil { throw fail("then without if") }
-        for k in ["anyOf", "allOf"] {
+        for k: JKey in ["anyOf", "allOf"] {
             if let list = s[k] {
                 guard case .arr(let a) = list, !a.isEmpty else { throw fail("\(k) must be a non-empty array") }
                 for (i, sub) in a.enumerated() { try check(sub, "\(at)/\(k)/\(i)") }
@@ -255,7 +265,7 @@ final class StrictSchema {
     private func v(_ schema: J, _ x: J, _ path: String, _ out: inout Set<String>) {
         guard case .obj(let s) = schema else { return }
         func err(_ kw: String) { out.insert("\(path):\(kw)") }
-        if let ref = s["$ref"]?.s, case .obj(let defs)? = root["$defs"], let target = defs[String(ref.dropFirst(8))] {
+        if let ref = s["$ref"]?.s, case .obj(let defs)? = root["$defs"], let target = defs[JKey(String(ref.dropFirst(8)))] {
             v(target, x, path, &out)
         }
         if let t = s["type"] {
@@ -284,17 +294,17 @@ final class StrictSchema {
             if let items = s["items"] { for (i, item) in a.enumerated() { v(items, item, "\(path)/\(i)", &out) } }
         }
         if case .obj(let o) = x {
-            if case .arr(let req)? = s["required"], req.contains(where: { o[$0.s!] == nil }) { err("required") }
+            if case .arr(let req)? = s["required"], req.contains(where: { o[JKey($0.s!)] == nil }) { err("required") }
             if s["minProperties"] != nil && Int64(o.count) < int(s["minProperties"]) { err("minProperties") }
             if s["maxProperties"] != nil && Int64(o.count) > int(s["maxProperties"]) { err("maxProperties") }
-            let props: [String: J] = { if case .obj(let p)? = s["properties"] { return p }; return [:] }()
-            for (k, value) in o { if let sub = props[k] { v(sub, value, "\(path)/\(pointerToken(k))", &out) } }
+            let props: [JKey: J] = { if case .obj(let p)? = s["properties"] { return p }; return [:] }()
+            for (k, value) in o { if let sub = props[k] { v(sub, value, "\(path)/\(pointerToken(k.s))", &out) } }
             if let ap = s["additionalProperties"] {
                 let extra = o.keys.filter { props[$0] == nil }
                 if ap == .bool(false) { if !extra.isEmpty { err("additionalProperties") } }
-                else { for k in extra { v(ap, o[k]!, "\(path)/\(pointerToken(k))", &out) } }
+                else { for k in extra { v(ap, o[k]!, "\(path)/\(pointerToken(k.s))", &out) } }
             }
-            if let names = s["propertyNames"] { for k in o.keys { v(names, .str(k), path, &out) } }
+            if let names = s["propertyNames"] { for k in o.keys { v(names, .str(k.s), path, &out) } }
         }
         if case .arr(let all)? = s["allOf"] { for sub in all { v(sub, x, path, &out) } }
         if case .arr(let any)? = s["anyOf"], !any.contains(where: { valid($0, x) }) { err("anyOf") }

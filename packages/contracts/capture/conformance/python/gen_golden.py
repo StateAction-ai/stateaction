@@ -981,6 +981,8 @@ def case_models():
         mm_["raw_patch"] = fn
         cases[name] = (desc, mm_, "reject", ["E_MALFORMED_MESSAGE"])
     cases.update(layout_cases())
+    cases.update(definition_cases())
+    cases.update(json_text_cases())
     return cases
 
 
@@ -1495,6 +1497,258 @@ def gen_encoder_buffers():
     (CAP / "fixtures/encoder_buffers.json").write_text(
         json.dumps(fixture, indent=2, sort_keys=True) + "\n"
     )
+
+
+def mcap_records(data: bytes) -> list[tuple[int, bytes]]:
+    """Split an unchunked golden MCAP into (opcode, body) records between the two magics."""
+    pos, out = len(cc.MAGIC), []
+    while pos < len(data) - len(cc.MAGIC):
+        op = data[pos]
+        (n,) = struct.unpack_from("<Q", data, pos + 1)
+        out.append((op, data[pos + 9 : pos + 9 + n]))
+        pos += 9 + n
+    return out
+
+
+def mcap_rebuild(records: list[tuple[int, bytes]]) -> bytes:
+    """Reassemble records, recomputing the DataEnd CRC so only the intended defect remains."""
+    out = bytearray(cc.MAGIC)
+    for op, body in records:
+        if op == cc.OP_DATA_END:
+            body = struct.pack("<I", zlib.crc32(bytes(out)))
+        out += rec(op, body)
+    return bytes(out + cc.MAGIC)
+
+
+def _channel_index(records, topic: str) -> int:
+    return next(
+        i
+        for i, (op, b) in enumerate(records)
+        if op == cc.OP_CHANNEL
+        and b[8 : 8 + struct.unpack_from("<I", b, 4)[0]] == topic.encode()
+    )
+
+
+def _schema_index(records, sid: int) -> int:
+    return next(
+        i
+        for i, (op, b) in enumerate(records)
+        if op == cc.OP_SCHEMA and struct.unpack_from("<H", b, 0)[0] == sid
+    )
+
+
+def _data_end_index(records) -> int:
+    return next(i for i, (op, _) in enumerate(records) if op == cc.OP_DATA_END)
+
+
+def definition_cases():
+    """MCAP definition order and id consistency, enforced while streaming (official-reader semantics)."""
+    topic = "/stateaction/frame_events"
+
+    def records_patch(fn):
+        def apply(data):
+            out = mcap_rebuild(fn(mcap_records(data)))
+            assert out != data
+            return out
+
+        return apply
+
+    def channel_parts(records):
+        ci = _channel_index(records, topic)
+        body = records[ci][1]
+        cid, sid = struct.unpack_from("<HH", body, 0)
+        return ci, body, cid, sid
+
+    def bogus_channel(body, cid, sid):
+        (n,) = struct.unpack_from("<I", body, 4)
+        return (
+            cc.OP_CHANNEL,
+            struct.pack("<HH", cid, sid) + s("/bogus/topic") + body[8 + n :],
+        )
+
+    def channel_after_messages(r):
+        ci = channel_parts(r)[0]
+        moved = r.pop(ci)
+        r.insert(_data_end_index(r), moved)
+        return r
+
+    def schema_after_channel(r):
+        ci, _, _, sid = channel_parts(r)
+        si = _schema_index(r, sid)
+        moved = r.pop(si)
+        r.insert(_channel_index(r, topic) + 1, moved)
+        return r
+
+    def conflicting_channel(r):
+        ci, body, cid, sid = channel_parts(r)
+        r.insert(ci, bogus_channel(body, cid, sid))
+        return r
+
+    def conflicting_schema(r):
+        _, _, _, sid = channel_parts(r)
+        si = _schema_index(r, sid)
+        body = r[si][1]
+        (n,) = struct.unpack_from("<I", body, 2)
+        name = body[6 : 6 + n].decode()
+        data = b'{"type":"object"}'
+        alt = (
+            struct.pack("<H", sid)
+            + s(name)
+            + s("jsonschema")
+            + struct.pack("<I", len(data))
+            + data
+        )
+        r.insert(si, (cc.OP_SCHEMA, alt))
+        return r
+
+    def bogus_then_real(r):
+        ci, body, cid, sid = channel_parts(r)
+        real = r[ci]
+        r[ci] = bogus_channel(body, cid, sid)
+        r.insert(_data_end_index(r), real)
+        return r
+
+    def identical_duplicates(r):
+        ci, _, _, sid = channel_parts(r)
+        r.insert(ci + 1, r[ci])
+        r.insert(ci + 2, r[_schema_index(r, sid)])
+        return r
+
+    def schema_id_zero(r):
+        _, _, _, sid = channel_parts(r)
+        si = _schema_index(r, sid)
+        r.insert(si, (cc.OP_SCHEMA, struct.pack("<H", 0) + r[si][1][2:]))
+        return r
+
+    out = {}
+    for name, fn, expect, codes, desc in (
+        (
+            "channel_after_messages",
+            channel_after_messages,
+            "reject",
+            ["E_DEFINITION_ORDER"],
+            "The frame_events Channel record is moved after its Messages (just before DataEnd); the official reader fails with 'no channel record found'.",
+        ),
+        (
+            "schema_after_channel",
+            schema_after_channel,
+            "reject",
+            ["E_DEFINITION_ORDER"],
+            "The FrameEvent Schema record is moved to just after the Channel that refers to it.",
+        ),
+        (
+            "conflicting_duplicate_channel",
+            conflicting_channel,
+            "reject",
+            ["E_DEFINITION_CONFLICT"],
+            "A Channel record with the frame_events channel id but topic /bogus/topic precedes the real definition.",
+        ),
+        (
+            "conflicting_duplicate_schema",
+            conflicting_schema,
+            "reject",
+            ["E_DEFINITION_CONFLICT"],
+            "A Schema record with the FrameEvent schema id but different data precedes the real definition.",
+        ),
+        (
+            "bogus_channel_redefined_after_messages",
+            bogus_then_real,
+            "reject",
+            ["E_DEFINITION_CONFLICT"],
+            "The frame_events channel id is first defined as /bogus/topic and redefined correctly only after its Messages; the official reader reads every FrameEvent on /bogus/topic.",
+        ),
+        (
+            "schema_id_zero",
+            schema_id_zero,
+            "reject",
+            ["E_DEFINITION_CONFLICT"],
+            "A Schema record uses id 0, which MCAP reserves for channels without a schema.",
+        ),
+        (
+            "identical_duplicate_definitions",
+            identical_duplicates,
+            "accept",
+            [],
+            "The frame_events Channel and FrameEvent Schema records are each repeated byte for byte (allowed by MCAP); facts equal valid.",
+        ),
+    ):
+        mod = model()
+        mod["post_patch"] = records_patch(fn)
+        out[name] = (desc, mod, expect, codes)
+    return out
+
+
+def json_text_cases():
+    """Strict JSON text rules (BOM, nesting bound, unpaired surrogates) inside an otherwise valid file."""
+    topic = "/stateaction/inventory"
+
+    def extra(member: bytes):
+        def apply(t, n, data):
+            if t != topic:
+                return data
+            assert data.endswith(b"}")
+            return data[:-1] + b"," + member + b"}"
+
+        return apply
+
+    def nested(depth: int) -> bytes:
+        return b'"deep":' + b"[" * depth + b"]" * depth
+
+    def video_frame_bom(t, n, data):
+        if t != cc.VIDEO_CHANNEL or n != 0:
+            return data
+        old = b"\x12" + bytes([len(cc.FRAME_ID)]) + cc.FRAME_ID.encode()
+        new = (
+            b"\x12"
+            + bytes([len(cc.FRAME_ID) + 3])
+            + b"\xef\xbb\xbf"
+            + cc.FRAME_ID.encode()
+        )
+        assert data.count(old) == 1
+        return data.replace(old, new)
+
+    out = {}
+    for name, patch, codes, viol, desc in (
+        (
+            "video_frame_id_bom",
+            video_frame_bom,
+            ["E_VIDEO_FIELDS"],
+            None,
+            "The first video frame_id is U+FEFF + camera_optical_frame: decoders must keep a leading BOM in every string.",
+        ),
+        (
+            "json_bom",
+            lambda t, n, data: b"\xef\xbb\xbf" + data if t == topic else data,
+            ["E_MALFORMED_MESSAGE"],
+            None,
+            "The Inventory JSON message starts with a UTF-8 byte order mark (EF BB BF).",
+        ),
+        (
+            "json_nesting_at_limit",
+            extra(nested(31)),
+            ["E_SCHEMA_MALFORMED"],
+            ["/stateaction/inventory:additionalProperties"],
+            "An unknown Inventory member holds 31 nested arrays: 32 open containers, the parse limit, so it parses and fails the closed schema.",
+        ),
+        (
+            "json_nesting_over_limit",
+            extra(nested(32)),
+            ["E_MALFORMED_MESSAGE"],
+            None,
+            "An unknown Inventory member holds 32 nested arrays: 33 open containers exceed the 32 nesting limit.",
+        ),
+        (
+            "json_lone_surrogate",
+            extra(b'"\\ud800":1'),
+            ["E_MALFORMED_MESSAGE"],
+            None,
+            "An unknown Inventory key is the unpaired surrogate escape \\ud800 (RFC 7493 I-JSON).",
+        ),
+    ):
+        mod = model()
+        mod["raw_patch"] = patch
+        out[name] = (desc, mod, "reject", codes) + ((viol,) if viol else ())
+    return out
 
 
 def independent_video_facts(m: dict) -> list[dict]:

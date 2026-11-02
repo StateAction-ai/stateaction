@@ -13,8 +13,18 @@ import java.util.regex.Pattern
 object StrictJson {
     class MalformedJson(message: String) : Exception(message)
 
-    /** Objects are LinkedHashMap<String, Any?>, arrays List, integers Long/BigInteger, other numbers Double. */
+    const val MAX_DEPTH = 32
+
+    /**
+     * Strict RFC 8259 / RFC 7493 parse (rules in strict_schema.py): a leading UTF-8 BOM, invalid UTF-8, more than
+     * MAX_DEPTH open arrays/objects, duplicate keys (exact UTF-16 = code point sequences, never normalized), unpaired
+     * surrogate escapes, NaN/Infinity and numbers overflowing a double are malformed.
+     * Objects are LinkedHashMap<String, Any?>, arrays List, integers Long/BigInteger, other numbers Double.
+     */
     fun parse(bytes: ByteArray): Any? {
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+            throw MalformedJson("UTF-8 byte order mark")
+        }
         val text = try {
             Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
@@ -22,26 +32,24 @@ object StrictJson {
             throw MalformedJson("invalid UTF-8")
         }
         val p = Parser(text)
-        try {
-            p.ws()
-            val v = p.value()
-            p.ws()
-            if (p.i != text.length) throw MalformedJson("trailing data")
-            return v
-        } catch (e: StackOverflowError) {
-            throw MalformedJson("nesting")
-        }
+        p.ws()
+        val v = p.value(0)
+        p.ws()
+        if (p.i != text.length) throw MalformedJson("trailing data")
+        return v
     }
 
     private class Parser(val s: String) {
         var i = 0
         fun ws() { while (i < s.length && s[i] in " \t\n\r") i++ }
         fun fail(m: String): Nothing = throw MalformedJson("$m at $i")
-        fun value(): Any? {
+        /** [depth] = containers already open; opening one more may not exceed MAX_DEPTH. */
+        fun value(depth: Int): Any? {
             if (i >= s.length) fail("eof")
+            if ((s[i] == '{' || s[i] == '[') && depth >= MAX_DEPTH) fail("nesting deeper than $MAX_DEPTH")
             return when (s[i]) {
-                '{' -> obj()
-                '[' -> arr()
+                '{' -> obj(depth + 1)
+                '[' -> arr(depth + 1)
                 '"' -> str()
                 't' -> lit("true", true)
                 'f' -> lit("false", false)
@@ -50,7 +58,7 @@ object StrictJson {
             }
         }
         fun lit(word: String, v: Any?): Any? { if (!s.startsWith(word, i)) fail("literal"); i += word.length; return v }
-        fun obj(): Map<String, Any?> {
+        fun obj(depth: Int): Map<String, Any?> {
             i++
             val out = LinkedHashMap<String, Any?>()
             ws()
@@ -64,21 +72,21 @@ object StrictJson {
                 i++
                 ws()
                 if (out.containsKey(k)) fail("duplicate key")
-                out[k] = value()
+                out[k] = value(depth)
                 ws()
                 if (i < s.length && s[i] == ',') { i++; continue }
                 if (i < s.length && s[i] == '}') { i++; return out }
                 fail("object")
             }
         }
-        fun arr(): List<Any?> {
+        fun arr(depth: Int): List<Any?> {
             i++
             val out = ArrayList<Any?>()
             ws()
             if (i < s.length && s[i] == ']') { i++; return out }
             while (true) {
                 ws()
-                out.add(value())
+                out.add(value(depth))
                 ws()
                 if (i < s.length && s[i] == ',') { i++; continue }
                 if (i < s.length && s[i] == ']') { i++; return out }
@@ -101,10 +109,17 @@ object StrictJson {
                             'b' -> b.append('\b'); 'f' -> b.append('\u000c'); 'n' -> b.append('\n')
                             'r' -> b.append('\r'); 't' -> b.append('\t')
                             'u' -> {
-                                if (i + 4 > s.length) fail("unicode escape")
-                                val hex = s.substring(i, i + 4)
-                                if (!hex.all { it in "0123456789abcdefABCDEF" }) fail("unicode escape")
-                                b.append(hex.toInt(16).toChar()); i += 4
+                                val code = hex4()
+                                // RFC 7493: a surrogate escape must be a high+low pair; anything else is malformed.
+                                if (code in 0xDC00..0xDFFF) fail("unpaired low surrogate")
+                                b.append(code.toChar())
+                                if (code in 0xD800..0xDBFF) {
+                                    if (i + 2 > s.length || s[i] != '\\' || s[i + 1] != 'u') fail("unpaired high surrogate")
+                                    i += 2
+                                    val low = hex4()
+                                    if (low !in 0xDC00..0xDFFF) fail("unpaired high surrogate")
+                                    b.append(low.toChar())
+                                }
                             }
                             else -> fail("escape $e")
                         }
@@ -112,6 +127,13 @@ object StrictJson {
                     else -> b.append(c)
                 }
             }
+        }
+        fun hex4(): Int {
+            if (i + 4 > s.length) fail("unicode escape")
+            val hex = s.substring(i, i + 4)
+            if (!hex.all { it in "0123456789abcdefABCDEF" }) fail("unicode escape")
+            i += 4
+            return hex.toInt(16)
         }
         fun num(): Any {
             val start = i

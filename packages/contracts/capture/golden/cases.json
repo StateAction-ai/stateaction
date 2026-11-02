@@ -13,6 +13,14 @@
     ],
     "sha256": "ec80007fc0d6d68e319b81240eaed77eb397bdb64f52d5e1ae071a4c44cce055"
   },
+  "bogus_channel_redefined_after_messages": {
+    "description": "The frame_events channel id is first defined as /bogus/topic and redefined correctly only after its Messages; the official reader reads every FrameEvent on /bogus/topic.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_CONFLICT"
+    ],
+    "sha256": "1371dc801d9469b743b0d0a0b398c6cec7b96d2e98a61574e7a2d32e4fb3efb8"
+  },
   "calibration_reset": {
     "description": "Calibration reset supersedes rgb_0 at frame 2 but later frames keep rgb_0.",
     "expect": "reject",
@@ -20,6 +28,14 @@
       "E_CALIBRATION_RESET_UNMARKED"
     ],
     "sha256": "11acc85241a18654f3ea06dfafcfc9d065c554d8695bb07951abc01c28be771b"
+  },
+  "channel_after_messages": {
+    "description": "The frame_events Channel record is moved after its Messages (just before DataEnd); the official reader fails with 'no channel record found'.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_ORDER"
+    ],
+    "sha256": "4c8b84b2d169bcaeb343f46ac465b856b63671e157ab509cbe0bc6953332fa27"
   },
   "channel_encoding_cdr_message": {
     "description": "Pose channel message encoding is CDR, not cdr.",
@@ -206,6 +222,22 @@
     ],
     "sha256": "d0bbab68607d626338d1773b4a4d0d18256118d40e562f5f624e5c5370206bdc"
   },
+  "conflicting_duplicate_channel": {
+    "description": "A Channel record with the frame_events channel id but topic /bogus/topic precedes the real definition.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_CONFLICT"
+    ],
+    "sha256": "c398dab639674bed4bcc84aae49be6ffb65e789c5105bd0ca51293cf91bb28aa"
+  },
+  "conflicting_duplicate_schema": {
+    "description": "A Schema record with the FrameEvent schema id but different data precedes the real definition.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_CONFLICT"
+    ],
+    "sha256": "6f956bfb67ef743c7b681d0e93bd756403299730a97a0c5e0c70a5c4d6ac2ffd"
+  },
   "data_crc_header_corrupt": {
     "description": "One byte of the Header library string changed after the DataEnd CRC was computed.",
     "expect": "reject",
@@ -337,6 +369,12 @@
     ],
     "sha256": "6641b4f38a06fd51ab888831bfdcf4fc08f4142a09dfc8e00d79256a2fe64f9b"
   },
+  "identical_duplicate_definitions": {
+    "description": "The frame_events Channel and FrameEvent Schema records are each repeated byte for byte (allowed by MCAP); facts equal valid.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "30f1b0626049dba200ebb6b8896c9de9aa7b8f90b70b0b402ad8ea2b9a7a99ec"
+  },
   "idr_with_config": {
     "description": "Single complete IDR access unit including SPS/PPS.",
     "expect": "accept",
@@ -364,6 +402,41 @@
       "/stateaction/inventory/sensors:maxItems"
     ],
     "sha256": "4f6f1726038829c10e9910671834f3d9e9193eff0bd4bb1ec0a50aa05d768312"
+  },
+  "json_bom": {
+    "description": "The Inventory JSON message starts with a UTF-8 byte order mark (EF BB BF).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "a685c1f7201d1ca2ef6e253927af1ef90d98d9d109c907b6c0f2258a509e1359"
+  },
+  "json_lone_surrogate": {
+    "description": "An unknown Inventory key is the unpaired surrogate escape \\ud800 (RFC 7493 I-JSON).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "94c36349152498abe4e40ce22eeb4711c45f87286f793baf8de5ea5c8e05d151"
+  },
+  "json_nesting_at_limit": {
+    "description": "An unknown Inventory member holds 31 nested arrays: 32 open containers, the parse limit, so it parses and fails the closed schema.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/inventory:additionalProperties"
+    ],
+    "sha256": "f27ee5caf607c8b014427f64998b51f6f5c3d9b5ef17fec8c3233551eab015ce"
+  },
+  "json_nesting_over_limit": {
+    "description": "An unknown Inventory member holds 32 nested arrays: 33 open containers exceed the 32 nesting limit.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "3a0a450ff5666e0080a274af3301579fea0a7514459bb4c82fc0c3a2bb70432c"
   },
   "json_number_overflow": {
     "description": "Accelerometer value 1e400 overflows an IEEE-754 double.",
@@ -527,6 +600,22 @@
     ],
     "sha256": "0751fa936793d220a0d50eb5eefbb5c87ffb3ebcb72dd31b7b9a0615eea13ac5"
   },
+  "schema_after_channel": {
+    "description": "The FrameEvent Schema record is moved to just after the Channel that refers to it.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_ORDER"
+    ],
+    "sha256": "02dbccf09e6d842ed4566119a805c4d3800184de5b9fa6ee903be525521ad96e"
+  },
+  "schema_id_zero": {
+    "description": "A Schema record uses id 0, which MCAP reserves for channels without a schema.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEFINITION_CONFLICT"
+    ],
+    "sha256": "cfec549a1873d6f6ce6ac66abfa61e7eaa4d46af39b5bc2aab821bad16cc28c2"
+  },
   "schema_malformed_frame_event": {
     "description": "A submitted FrameEvent carries native_timestamp_ns as a JSON number instead of a decimal string.",
     "expect": "reject",
@@ -607,6 +696,14 @@
     "expect": "accept",
     "expected_errors": [],
     "sha256": "47b9653485b1b63020d8138faf165765622f6dd3ba75a57af435ebc6d7f7772e"
+  },
+  "video_frame_id_bom": {
+    "description": "The first video frame_id is U+FEFF + camera_optical_frame: decoders must keep a leading BOM in every string.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_VIDEO_FIELDS"
+    ],
+    "sha256": "79ca316a9f8aea4748858ea2ba6eb0c59647d174f8c63cf94deb31b5b8e2ccaa"
   },
   "written_calibration_mismatch": {
     "description": "Written FrameEvent switches to calibration rgb_1 without a reset event.",

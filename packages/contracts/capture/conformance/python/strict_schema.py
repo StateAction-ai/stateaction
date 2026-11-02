@@ -17,8 +17,10 @@ Semantics (identical in every port):
   `allOf`, `$ref`, `if/then`, `properties`, `items` and map `additionalProperties` report the nested
   errors; `additionalProperties: false` is one error at the object; `propertyNames` errors are reported at
   the object with the nested keyword; `required` reports once per object.
-JSON text is parsed strictly: duplicate object keys, NaN/Infinity and numbers that overflow a double are
-malformed (see parse_json).
+JSON text is parsed strictly (identical in every port; see parse_json): a leading UTF-8 BOM, invalid UTF-8,
+nesting deeper than MAX_DEPTH (32) open arrays/objects, duplicate object keys (compared as exact code point
+sequences, never Unicode-normalized), \\u escapes that leave an unpaired surrogate (RFC 7493 I-JSON),
+NaN/Infinity and numbers that overflow a double are malformed.
 """
 
 from __future__ import annotations
@@ -68,8 +70,49 @@ class MalformedJson(ValueError):
     pass
 
 
+MAX_DEPTH = 32
+BOM = b"\xef\xbb\xbf"
+
+
+def nesting_exceeds(text: str, limit: int = MAX_DEPTH) -> bool:
+    """True when more than `limit` arrays/objects are open at once (string contents are skipped).
+
+    Runs before the recursive parse so the depth bound, not the runtime stack, decides the outcome.
+    """
+    depth, i, n = 0, 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            i += 1
+            while i < n and text[i] != '"':
+                i += 2 if text[i] == "\\" else 1
+        elif c in "[{":
+            depth += 1
+            if depth > limit:
+                return True
+        elif c in "]}":
+            depth -= 1
+        i += 1
+    return False
+
+
+def _check_scalars(value) -> None:
+    """Reject strings/keys holding an unpaired surrogate (only reachable through \\u escapes)."""
+    stack = [value]
+    while stack:
+        v = stack.pop()
+        if isinstance(v, str):
+            if any(0xD800 <= ord(ch) <= 0xDFFF for ch in v):
+                raise MalformedJson("unpaired surrogate escape")
+        elif isinstance(v, list):
+            stack.extend(v)
+        elif isinstance(v, dict):
+            stack.extend(v.keys())
+            stack.extend(v.values())
+
+
 def parse_json(data: bytes):
-    """Strict RFC 8259 parse: duplicate keys and non-finite numbers are malformed."""
+    """Strict RFC 8259 / RFC 7493 parse (rules in the module docstring)."""
 
     def pairs(items):
         out = {}
@@ -96,9 +139,14 @@ def parse_json(data: bytes):
             raise MalformedJson(f"number overflows a double: {text[:20]}...") from None
         return value
 
+    if data.startswith(BOM):
+        raise MalformedJson("UTF-8 byte order mark")
     try:
-        return json.loads(
-            data.decode("utf-8"),
+        text = data.decode("utf-8")
+        if nesting_exceeds(text):
+            raise MalformedJson(f"nesting deeper than {MAX_DEPTH}")
+        value = json.loads(
+            text,
             object_pairs_hook=pairs,
             parse_constant=bad_constant,
             parse_float=finite,
@@ -106,6 +154,8 @@ def parse_json(data: bytes):
         )
     except (UnicodeDecodeError, ValueError, RecursionError) as e:
         raise MalformedJson(str(e)) from None
+    _check_scalars(value)
+    return value
 
 
 def token(key) -> str:

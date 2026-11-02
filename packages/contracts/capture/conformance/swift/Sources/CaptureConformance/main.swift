@@ -19,10 +19,27 @@ struct Truncated: Error {}
 struct Malformed: Error {}
 struct Unsupported: Error {}
 struct CrcMismatch: Error {}
+struct DefinitionOrder: Error {}
+struct DefinitionConflict: Error {}
+
+/// JSON object key compared by its exact Unicode scalar sequence. Swift String equality (and so a
+/// [String: J] dictionary) uses canonical equivalence, which would merge distinct JSON names such as
+/// U+00E9 and e+U+0301; JSON and every other reader treat them as different keys.
+struct JKey: Hashable, ExpressibleByStringLiteral, CustomStringConvertible {
+    let s: String
+    let scalars: [UInt32]
+    init(_ s: String) { self.s = s; scalars = s.unicodeScalars.map { $0.value } }
+    init(stringLiteral v: String) { self.init(v) }
+    static func == (a: JKey, b: JKey) -> Bool { a.scalars == b.scalars }
+    func hash(into h: inout Hasher) { h.combine(scalars) }
+    var description: String { s }
+}
+
+func jobj(_ d: [String: J]) -> J { .obj(Dictionary(uniqueKeysWithValues: d.map { (JKey($0.key), $0.value) })) }
 
 // MARK: JSON value (keeps bool/int/string distinct)
 indirect enum J: Decodable, Equatable {
-    case null, bool(Bool), int(Int64), dbl(Double), str(String), arr([J]), obj([String: J])
+    case null, bool(Bool), int(Int64), dbl(Double), str(String), arr([J]), obj([JKey: J])
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if c.decodeNil() { self = .null }
@@ -31,9 +48,9 @@ indirect enum J: Decodable, Equatable {
         else if let v = try? c.decode(Double.self) { self = .dbl(v) }
         else if let v = try? c.decode(String.self) { self = .str(v) }
         else if let v = try? c.decode([J].self) { self = .arr(v) }
-        else { self = .obj(try c.decode([String: J].self)) }
+        else { self = jobj(try c.decode([String: J].self)) }
     }
-    subscript(_ k: String) -> J? { if case .obj(let o) = self { return o[k] }; return nil }
+    subscript(_ k: String) -> J? { if case .obj(let o) = self { return o[JKey(k)] }; return nil }
     var s: String? { if case .str(let v) = self { return v }; return nil }
     var i: Int64? { if case .int(let v) = self { return v }; return nil }
     var b: Bool { if case .bool(let v) = self { return v }; return false }
@@ -63,7 +80,7 @@ func canonical(_ v: J) -> String {
     case .dbl(let d): return String(d)
     case .str(let s): return quote(s)
     case .arr(let a): return "[" + a.map(canonical).joined(separator: ",") + "]"
-    case .obj(let o): return "{" + o.keys.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }.map { quote($0) + ":" + canonical(o[$0]!) }.joined(separator: ",") + "}"
+    case .obj(let o): return "{" + o.keys.sorted { Array($0.s.utf8).lexicographicallyPrecedes(Array($1.s.utf8)) }.map { quote($0.s) + ":" + canonical(o[$0]!) }.joined(separator: ",") + "}"
     }
 }
 
@@ -124,22 +141,28 @@ func le<T: FixedWidthInteger>(_ b: [UInt8], _ off: Int, _ t: T.Type) throws -> T
 func readStr(_ b: [UInt8], _ off: Int) throws -> (String, Int) {
     let n = Int(try le(b, off, UInt32.self))
     guard off + 4 + n <= b.count else { throw Truncated() }
-    return (String(decoding: b[(off + 4)..<(off + 4 + n)], as: UTF8.self), off + 4 + n)
+    // Strict UTF-8, as every reader: invalid bytes are a truncated/undecodable record, never U+FFFD.
+    guard let text = String(validating: b[(off + 4)..<(off + 4 + n)], as: UTF8.self) else { throw Truncated() }
+    return (text, off + 4 + n)
 }
 
 // Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
 // DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
-func readMcap(_ d: [UInt8]) throws -> Mcap {
-    let out = try readMcapRecords(d)
-    guard out.messages.allSatisfy({ out.channels[$0.channel] != nil }) else { throw Malformed() }
-    return out
-}
+// Definitions are checked in file order: a Channel's nonzero schema id and a Message's channel id must already
+// be defined (E_DEFINITION_ORDER); a repeated Schema/Channel id must repeat the identical record body and Schema
+// id 0 is reserved (E_DEFINITION_CONFLICT).
+func readMcap(_ d: [UInt8]) throws -> Mcap { try readMcapRecords(d) }
 
 func readMcapRecords(_ d: [UInt8]) throws -> Mcap {
     guard d.count >= 8, Array(d[0..<8]) == magic else { throw Truncated() }
     var pos = 8
     var out = Mcap()
     var dataEnd = false
+    var raw: [UInt8: [Int: [UInt8]]] = [0x03: [:], 0x04: [:]]  // id -> exact record body
+    func define(_ op: UInt8, _ id: Int, _ body: [UInt8]) throws {
+        if let prior = raw[op]![id], prior != body { throw DefinitionConflict() }
+        raw[op]![id] = body
+    }
     while true {
         if pos == d.count || pos + 9 > d.count { throw Truncated() }
         let recordStart = pos
@@ -159,12 +182,22 @@ func readMcapRecords(_ d: [UInt8]) throws -> Mcap {
             let (enc, o2) = try readStr(body, o1)
             let n = Int(try le(body, o2, UInt32.self))
             guard o2 + 4 + n <= body.count else { throw Truncated() }
-            out.schemas[Int(try le(body, 0, UInt16.self))] = Schema(name: name, encoding: enc, data: Array(body[(o2 + 4)..<(o2 + 4 + n)]))
+            let sid = Int(try le(body, 0, UInt16.self))
+            if sid == 0 { throw DefinitionConflict() }
+            try define(0x03, sid, body)
+            out.schemas[sid] = Schema(name: name, encoding: enc, data: Array(body[(o2 + 4)..<(o2 + 4 + n)]))
         case 0x04:
             let (topic, o1) = try readStr(body, 4)
-            out.channels[Int(try le(body, 0, UInt16.self))] = (Int(try le(body, 2, UInt16.self)), topic, try readStr(body, o1).0)
+            let encoding = try readStr(body, o1).0
+            let cid = Int(try le(body, 0, UInt16.self)), schemaId = Int(try le(body, 2, UInt16.self))
+            if schemaId != 0 && out.schemas[schemaId] == nil { throw DefinitionOrder() }
+            try define(0x04, cid, body)
+            out.channels[cid] = (schemaId, topic, encoding)
         case 0x05:
-            out.messages.append(Message(channel: Int(try le(body, 0, UInt16.self)), sequence: try le(body, 2, UInt32.self), logTime: try le(body, 6, UInt64.self), data: Array(body[22...])))
+            let m = Message(channel: Int(try le(body, 0, UInt16.self)), sequence: try le(body, 2, UInt32.self), logTime: try le(body, 6, UInt64.self), data: [])
+            _ = try le(body, 14, UInt64.self)  // publish_time: a short record is truncated in every reader
+            if out.channels[m.channel] == nil { throw DefinitionOrder() }
+            out.messages.append(Message(channel: m.channel, sequence: m.sequence, logTime: m.logTime, data: Array(body[22...])))
         case 0x0f:
             let crc = try le(body, 0, UInt32.self)
             dataEnd = true
@@ -191,6 +224,12 @@ func varint(_ b: [UInt8], _ pos: inout Int) throws -> UInt64 {
     }
 }
 
+/// Strict UTF-8 for message strings (invalid bytes are E_MALFORMED_MESSAGE, never U+FFFD).
+func strictUtf8<C: Collection>(_ b: C) throws -> String where C.Element == UInt8 {
+    guard let s = String(validating: b, as: UTF8.self) else { throw Malformed() }
+    return s
+}
+
 struct Video { var sec: UInt64 = 0, nanos: UInt64 = 0; var frameId = "", format = ""; var data: [UInt8] = [] }
 
 func decodeVideo(_ b: [UInt8]) throws -> Video {
@@ -208,9 +247,9 @@ func decodeVideo(_ b: [UInt8]) throws -> Video {
                     let k = try varint(chunk, &p); let val = try varint(chunk, &p)
                     if k >> 3 == 1 { v.sec = val } else { v.nanos = val }
                 }
-            } else if field == 2 { v.frameId = String(decoding: chunk, as: UTF8.self) }
+            } else if field == 2 { v.frameId = try strictUtf8(chunk) }
             else if field == 3 { v.data = chunk }
-            else if field == 4 { v.format = String(decoding: chunk, as: UTF8.self) }
+            else if field == 4 { v.format = try strictUtf8(chunk) }
         } else if wire == 0 { _ = try varint(b, &pos) }
         else { throw Malformed() }
     }
@@ -270,12 +309,12 @@ func classifyAu(_ d: [UInt8]) -> ([String], Bool) {
     return (errors, idr)
 }
 
-func decodePose(_ d: [UInt8]) throws -> [String: J] {
+func decodePose(_ d: [UInt8]) throws -> [JKey: J] {
     guard d.count >= 16, try le(d, 0, UInt32.self) == 0x0000_0100 else { throw Malformed() }
     let n = Int(try le(d, 12, UInt32.self))
     guard 16 + max(n - 1, 0) <= d.count else { throw Malformed() }
     return ["sec": .int(Int64(try le(d, 4, Int32.self))), "nanosec": .int(Int64(try le(d, 8, UInt32.self))),
-            "frame_id": .str(String(decoding: d[16..<(16 + max(n - 1, 0))], as: UTF8.self))]
+            "frame_id": .str(try strictUtf8(d[16..<(16 + max(n - 1, 0))]))]
 }
 
 // MARK: Checker
@@ -294,6 +333,11 @@ let channelTable: [String: (String, String, String)] = [
     videoTopic: ("foxglove.CompressedVideo", "protobuf", "protobuf"),
     "/tracking/pose": (poseSchema, "ros2msg", "cdr"),
 ]
+// Exact (scalar-sequence) string identity: Swift String == is canonical equivalence, the other readers compare
+// code points.
+func exact(_ a: String, _ b: String) -> Bool { a.unicodeScalars.elementsEqual(b.unicodeScalars) }
+let exactTable = Dictionary(uniqueKeysWithValues: channelTable.map { (JKey($0.key), $0.value) })
+func tableEntry(_ topic: String) -> (String, String, String)? { exactTable[JKey(topic)] }
 let identityKeys = ["recording_id", "stream_id", "native_timestamp_ns", "native_clock_id", "mapped_capture_time_ns",
                     "clock_mapping_revision", "calibration_id", "encoder_pts_us", "encoder_time_base", "native_timestamps"]
 
@@ -329,14 +373,16 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_UNSUPPORTED_LAYOUT")]), "facts": .obj([:])])
     } catch is CrcMismatch {
         return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_DATA_CRC")]), "facts": .obj([:])])
-    } catch is Malformed {
-        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_MALFORMED_MESSAGE")]), "facts": .obj([:])])
+    } catch is DefinitionOrder {
+        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_DEFINITION_ORDER")]), "facts": .obj([:])])
+    } catch is DefinitionConflict {
+        return .obj(["outcome": .str("reject"), "errors": .arr([.str("E_DEFINITION_CONFLICT")]), "facts": .obj([:])])
     }
     if f.profile != "" { errors.insert("E_PROFILE_NOT_EMPTY") }
-    var byTopic: [String: [Message]] = [:]
-    for m in f.messages { byTopic[f.channels[m.channel]!.topic, default: []].append(m) }
-    let names = Set(f.schemas.values.map { $0.name })
-    var facts: [String: J] = ["channel_counts": .obj(byTopic.mapValues { .int(Int64($0.count)) })]
+    var byTopic: [JKey: [Message]] = [:]
+    for m in f.messages { byTopic[JKey(f.channels[m.channel]!.topic), default: []].append(m) }
+    let names = Set(f.schemas.values.map { JKey($0.name) })
+    var facts: [JKey: J] = ["channel_counts": .obj(byTopic.mapValues { .int(Int64($0.count)) })]
     if names.contains("sensor_msgs/msg/CompressedImage") && !names.contains("foxglove.CompressedVideo") {
         let img = byTopic["/camera/rgb/image/compressed"] ?? []
         facts["legacy_images"] = .int(Int64(img.count))
@@ -345,15 +391,15 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     }
     // Exact per-channel encodings and reviewed schema identity.
     for ch in f.channels.values {
-        if let schema = f.schemas[ch.schemaId], let want = channelTable[ch.topic],
-           schema.name == want.0, schema.encoding == want.1, ch.encoding == want.2 {
+        if let schema = f.schemas[ch.schemaId], let want = tableEntry(ch.topic),
+           exact(schema.name, want.0), exact(schema.encoding, want.1), exact(ch.encoding, want.2) {
             if schema.name == poseSchema && sha256Hex(schema.data) != manifest[poseSchemaFile] { errors.insert("E_CHANNEL_ENCODING") }
         } else { errors.insert("E_CHANNEL_ENCODING") }
     }
-    var hashes: [String: J] = [:]
+    var hashes: [JKey: J] = [:]
     for s in f.schemas.values {
         let digest = sha256Hex(s.data)
-        hashes[s.name] = .str(digest)
+        hashes[JKey(s.name)] = .str(digest)
         if s.name == "foxglove.CompressedVideo" {
             if digest != manifest["foxglove-compressed-video.desc"] { errors.insert("E_DESCRIPTOR_HASH") }
         } else if let file = custom[s.name] {
@@ -364,10 +410,11 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     // Decode every message once; an undecodable message is a defined reject.
     var jsonDecoded: [String: [J]] = [:]
     var videoDecoded: [Video] = []
-    var poseDecoded: [[String: J]] = []
+    var poseDecoded: [[JKey: J]] = []
     do {
-        for (topic, msgs) in byTopic {
-            guard let want = channelTable[topic] else { continue }
+        for (key, msgs) in byTopic {
+            let topic = key.s
+            guard let want = tableEntry(topic) else { continue }
             if want.2 == "json" {
                 jsonDecoded[topic] = try msgs.map { m -> J in
                     do { return try parseStrictJson(m.data) } catch { throw Malformed() }
@@ -428,8 +475,8 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         counts[st]! += 1
         if acquired[sid] != nil { state[sid] = st }
     }
-    facts["frame_event_counts"] = .obj(counts.mapValues { .int($0) })
-    let video = byTopic[videoTopic] ?? []
+    facts["frame_event_counts"] = jobj(counts.mapValues { .int($0) })
+    let video = byTopic[JKey(videoTopic)] ?? []
     let writtenSeqs = written.values.map { $0["output_sequence"]!.i! }
     let videoSeqs = video.map { Int64($0.sequence) }
     if Set(writtenSeqs).count != writtenSeqs.count || Set(videoSeqs).count != videoSeqs.count || Set(writtenSeqs) != Set(videoSeqs) {
@@ -453,10 +500,10 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
                         "source_frame_id": ev?["source_frame_id"] ?? .null, "encoder_pts_us": ev?["encoder_pts_us"] ?? .null]))
     }
     facts["video"] = .arr(vf)
-    var motion: [String: J] = [:]
+    var motion: [JKey: J] = [:]
     for topic in ["/stateaction/imu/accel", "/stateaction/imu/gyro"] {
         let evs = js(topic)
-        motion[topic] = .arr(evs.map { .obj(["event_id": $0["event_id"]!, "native_timestamp_ns": $0["native_timestamp_ns"]!, "mapped_capture_time_ns": $0["mapped_capture_time_ns"] ?? .null]) })
+        motion[JKey(topic)] = .arr(evs.map { .obj(["event_id": $0["event_id"]!, "native_timestamp_ns": $0["native_timestamp_ns"]!, "mapped_capture_time_ns": $0["mapped_capture_time_ns"] ?? .null]) })
         for e in evs where clocks[String(topic.split(separator: "/").last!)]?.s != e["native_clock_id"]?.s { errors.insert("E_CLOCK_MISMATCH") }
     }
     facts["motion"] = .obj(motion)
@@ -487,7 +534,7 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         if case .arr(let d)? = close["drops"] {
             closeDrops = d.sorted { Array($0["reason"]!.s!.utf8).lexicographicallyPrecedes(Array($1["reason"]!.s!.utf8)) }
         }
-        if !same(close["frames"], .obj(expect)) || close["video_messages"]?.s != String(video.count)
+        if !same(close["frames"], jobj(expect)) || close["video_messages"]?.s != String(video.count)
             || !same(close["motion_events"], expectMotion) || close["sensor_events"]?.s != String(sensors.count)
             || !same(.arr(closeDrops), expectDrops) { errors.insert("E_COUNT_MISMATCH") }
         let outcome = close["outcome"]?.s
@@ -553,7 +600,7 @@ let cap = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arg
 captureDir = cap
 let manifestRaw = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/manifest.json")))
 var manifest: [String: String] = [:]
-if case .obj(let files)? = manifestRaw["files"] { for (k, v) in files { manifest[k] = v.s } }
+if case .obj(let files)? = manifestRaw["files"] { for (k, v) in files { manifest[k.s] = v.s } }
 let declared = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/golden/cases.json")))
 let names = try FileManager.default.contentsOfDirectory(atPath: "\(cap)/golden").filter { $0.hasSuffix(".mcap") }.map { String($0.dropLast(5)) }.sorted()
 var failed = 0
@@ -561,7 +608,7 @@ func fail(_ message: String) {
     failed += 1
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
 }
-if case .obj(let d) = declared, Set(d.keys) != Set(names) { fail("golden/*.mcap and cases.json disagree") }
+if case .obj(let d) = declared, Set(d.keys.map { $0.s }) != Set(names) { fail("golden/*.mcap and cases.json disagree") }
 for name in names {
     let data = try [UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/golden/\(name).mcap")))
     let result = try check(data, manifest)
@@ -610,7 +657,7 @@ if case .arr(let us)? = schemaCases["unsupported_schemas"] {
 let fixture = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/encoder_buffers.json")))
 var sources: [String: [[UInt8]]] = [:]
 if case .obj(let s)? = fixture["sources"] {
-    for (k, v) in s { sources[k] = nals([UInt8](try Data(contentsOf: URL(fileURLWithPath: "\(cap)/\(v.s!)"))))! }
+    for (k, v) in s { sources[k.s] = nals([UInt8](try Data(contentsOf: URL(fileURLWithPath: "\(cap)/\(v.s!)"))))! }
 }
 var fixtureCases = 0
 if case .obj(let cases)? = fixture["cases"] {

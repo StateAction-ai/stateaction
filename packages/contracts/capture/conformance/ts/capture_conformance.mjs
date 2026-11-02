@@ -30,6 +30,8 @@ class Truncated extends Error {}
 class Malformed extends Error {}
 class Unsupported extends Error {}
 class CrcMismatch extends Error {}
+class DefinitionOrder extends Error {}
+class DefinitionConflict extends Error {}
 
 function str(buf, off) {
   if (off + 4 > buf.length) throw new Truncated();
@@ -40,6 +42,9 @@ function str(buf, off) {
 
 // Supported layout (see capture_conformance.py): Header first; only Schema/Channel/Message records; one
 // DataEnd with a nonzero CRC-32 of every preceding byte; a Footer without summary; the closing magic.
+// Definitions are checked in file order: a Channel's nonzero schema id and a Message's channel id must already
+// be defined (E_DEFINITION_ORDER); a repeated Schema/Channel id must repeat the identical record body and Schema
+// id 0 is reserved (E_DEFINITION_CONFLICT).
 export function readMcap(data) {
   let out;
   try {
@@ -48,8 +53,6 @@ export function readMcap(data) {
     if (e instanceof RangeError) throw new Truncated();
     throw e;
   }
-  if (out.messages.some((m) => !out.channels.has(m.channel)))
-    throw new Malformed();
   return out;
 }
 
@@ -67,6 +70,13 @@ function readMcapRecords(data) {
     messages: [],
   };
   let dataEnd = false;
+  const raw = { 3: new Map(), 4: new Map() }; // id -> exact record body
+  const define = (op, id, body) => {
+    const prior = raw[op].get(id);
+    if (prior !== undefined && !prior.equals(body))
+      throw new DefinitionConflict();
+    raw[op].set(id, body);
+  };
   for (;;) {
     if (pos === data.length || pos + 9 > data.length) throw new Truncated();
     const recordStart = pos;
@@ -85,25 +95,34 @@ function readMcapRecords(data) {
       const [encoding, o2] = str(body, o1);
       const n = body.readUInt32LE(o2);
       if (o2 + 4 + n > body.length) throw new Truncated();
-      out.schemas.set(body.readUInt16LE(0), {
+      const sid = body.readUInt16LE(0);
+      if (sid === 0) throw new DefinitionConflict();
+      define(3, sid, body);
+      out.schemas.set(sid, {
         name,
         encoding,
         data: body.subarray(o2 + 4, o2 + 4 + n),
       });
     } else if (op === 0x04) {
       const [topic, o1] = str(body, 4);
-      out.channels.set(body.readUInt16LE(0), {
-        schemaId: body.readUInt16LE(2),
-        topic,
-        encoding: str(body, o1)[0],
-      });
+      const encoding = str(body, o1)[0];
+      const cid = body.readUInt16LE(0);
+      const schemaId = body.readUInt16LE(2);
+      if (schemaId !== 0 && !out.schemas.has(schemaId))
+        throw new DefinitionOrder();
+      define(4, cid, body);
+      out.channels.set(cid, { schemaId, topic, encoding });
     } else if (op === 0x05) {
-      out.messages.push({
-        channel: body.readUInt16LE(0),
+      const channel = body.readUInt16LE(0);
+      const message = {
+        channel,
         sequence: body.readUInt32LE(2),
         logTime: body.readBigUInt64LE(6),
         data: body.subarray(22),
-      });
+      };
+      body.readBigUInt64LE(14); // publish_time: a short record is truncated in every reader
+      if (!out.channels.has(channel)) throw new DefinitionOrder();
+      out.messages.push(message);
     } else if (op === 0x0f) {
       const crc = body.readUInt32LE(0);
       dataEnd = true;
@@ -352,8 +371,14 @@ export function check(
       return { outcome: "reject", errors: ["E_UNSUPPORTED_LAYOUT"], facts: {} };
     if (e instanceof CrcMismatch)
       return { outcome: "reject", errors: ["E_DATA_CRC"], facts: {} };
-    if (e instanceof Malformed)
-      return { outcome: "reject", errors: ["E_MALFORMED_MESSAGE"], facts: {} };
+    if (e instanceof DefinitionOrder)
+      return { outcome: "reject", errors: ["E_DEFINITION_ORDER"], facts: {} };
+    if (e instanceof DefinitionConflict)
+      return {
+        outcome: "reject",
+        errors: ["E_DEFINITION_CONFLICT"],
+        facts: {},
+      };
     throw e;
   }
   if (f.profile !== "") errors.add("E_PROFILE_NOT_EMPTY");

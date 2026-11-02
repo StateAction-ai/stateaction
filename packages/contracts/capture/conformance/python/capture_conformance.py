@@ -38,10 +38,6 @@ class Truncated(Exception):
     pass
 
 
-class Malformed(Exception):
-    """A record or message that cannot be decoded; a defined reject, never a crash."""
-
-
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -52,8 +48,14 @@ def sha256(data: bytes) -> str:
 # (leading magic included, as the official MCAP readers compute it), then a Footer with no summary
 # section (summary_start = summary_offset_start = summary_crc = 0) and the closing magic.
 # Chunks, indexes, attachments, metadata, summary records or a missing DataEnd are E_UNSUPPORTED_LAYOUT;
-# a zero or mismatched CRC is E_DATA_CRC. Production chunked/indexed files are checked by verify.py
-# --mcap with the official reader and validate_crcs=True, never reported complete by these readers.
+# a zero or mismatched CRC is E_DATA_CRC.
+# Definitions are checked while streaming, in file order (the MCAP rules the official readers rely on): a
+# Channel's nonzero schema_id must name a Schema record already read, and a Message's channel_id a Channel
+# already read (E_DEFINITION_ORDER). A repeated Schema/Channel id must repeat the identical record body
+# (E_DEFINITION_CONFLICT); identical repeats are allowed. Schema id 0 is reserved for "no schema" and is
+# never a valid Schema record id (E_DEFINITION_CONFLICT).
+# Production chunked/indexed files are checked by verify.py --mcap with the official reader and
+# validate_crcs=True, never reported complete by these readers.
 OP_HEADER, OP_FOOTER, OP_SCHEMA, OP_CHANNEL, OP_MESSAGE, OP_DATA_END = 1, 2, 3, 4, 5, 15
 
 
@@ -65,14 +67,19 @@ class CrcMismatch(Exception):
     pass
 
 
+class DefinitionOrder(Exception):
+    """A Channel/Message refers to a Schema/Channel id that no earlier record defined."""
+
+
+class DefinitionConflict(Exception):
+    """A Schema/Channel id is redefined with different record bytes, or a Schema uses reserved id 0."""
+
+
 def read_mcap(data: bytes) -> dict:
     try:
         out = _read_mcap(data)
     except (struct.error, UnicodeDecodeError, IndexError):
         raise Truncated("record fields") from None
-    for m in out["messages"]:
-        if m["channel"] not in out["channels"]:
-            raise Malformed("message for undeclared channel")
     return out
 
 
@@ -88,6 +95,17 @@ def _read_mcap(data: bytes) -> dict:
         "footer": False,
     }
     data_end = False
+    raw = {
+        OP_SCHEMA: {},
+        OP_CHANNEL: {},
+    }  # id -> exact record body, for redefinition checks
+
+    def define(kind: int, ident: int, body: bytes) -> None:
+        prior = raw[kind].get(ident)
+        if prior is not None and prior != body:
+            raise DefinitionConflict(f"record 0x{kind:02x} id {ident} redefined")
+        raw[kind][ident] = body
+
     while True:
         if pos == end:
             raise Truncated("no footer")
@@ -115,6 +133,9 @@ def _read_mcap(data: bytes) -> dict:
             (n,) = struct.unpack_from("<I", body, off)
             if off + 4 + n > len(body):
                 raise Truncated("schema data")
+            if sid == 0:
+                raise DefinitionConflict("schema id 0 is reserved")
+            define(OP_SCHEMA, sid, body)
             out["schemas"][sid] = {
                 "name": name,
                 "encoding": enc,
@@ -124,9 +145,14 @@ def _read_mcap(data: bytes) -> dict:
             cid, sid = struct.unpack_from("<HH", body, 0)
             topic, off = _string(body, 4)
             menc, off = _string(body, off)
+            if sid != 0 and sid not in out["schemas"]:
+                raise DefinitionOrder("channel before its schema")
+            define(OP_CHANNEL, cid, body)
             out["channels"][cid] = {"schema_id": sid, "topic": topic, "encoding": menc}
         elif op == OP_MESSAGE:
             cid, seq, log, pub = struct.unpack_from("<HIQQ", body, 0)
+            if cid not in out["channels"]:
+                raise DefinitionOrder("message before its channel")
             out["messages"].append(
                 {
                     "channel": cid,
@@ -401,8 +427,10 @@ def check(data: bytes, manifest: dict | None = None) -> dict:
         return {"outcome": "reject", "errors": ["E_UNSUPPORTED_LAYOUT"], "facts": {}}
     except CrcMismatch:
         return {"outcome": "reject", "errors": ["E_DATA_CRC"], "facts": {}}
-    except Malformed:
-        return {"outcome": "reject", "errors": ["E_MALFORMED_MESSAGE"], "facts": {}}
+    except DefinitionOrder:
+        return {"outcome": "reject", "errors": ["E_DEFINITION_ORDER"], "facts": {}}
+    except DefinitionConflict:
+        return {"outcome": "reject", "errors": ["E_DEFINITION_CONFLICT"], "facts": {}}
     if f["profile"] != "":
         errors.add("E_PROFILE_NOT_EMPTY")
     schemas = f["schemas"]
