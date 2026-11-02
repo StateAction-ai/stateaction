@@ -262,7 +262,10 @@ class ArRecorderImpl(
                 )
             }
 
-            applyRgbTargets(RecordingConfig.fromMap(arguments))
+            // Reject unusable saved settings before any session/EGL/sensor side effect.
+            applyRgbTargets(try { RecordingConfig.fromMap(arguments) } catch (e: InvalidRecordingConfig) {
+                return createErrorResult("Invalid capture settings: ${e.message}")
+            })
 
             currentState = ArRecordingState.INITIALIZING
             println("📷 ArRecorderImpl: Initializing session...")
@@ -480,8 +483,12 @@ class ArRecorderImpl(
                 return createErrorResult("Tracking not stable. Wait for TRACKING state.")
             }
 
-            val recordingConfig = RecordingConfig.fromMap(arguments)
+            // Validate the saved profile first: nothing below (state, writers, producers) may run for an invalid one.
+            val recordingConfig = try { RecordingConfig.fromMap(arguments) } catch (e: InvalidRecordingConfig) {
+                return createErrorResult("Invalid capture settings: ${e.message}")
+            }
             applyRgbTargets(recordingConfig)
+            frameOrchestrator.channels = recordingConfig
 
             println("📷 ArRecorderImpl: Starting recording...")
             currentState = ArRecordingState.RECORDING
@@ -558,6 +565,7 @@ class ArRecorderImpl(
                 "JPEG capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/compressed"
             )
 
+            datasetWriter.logSystem("Capture settings requested vs effective: ${recordingConfig.effective()}")
             motionCapture.start(motionScheduler(), DEFAULT_MOTION_RATE_HZ)
             isRecording.set(true)
             isPaused.set(false)
