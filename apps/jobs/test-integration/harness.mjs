@@ -29,6 +29,8 @@ const { PutObjectCommand } = serverRequire("@aws-sdk/client-s3");
 const dist = (p) => import(new URL(`dist/${p}`, `file://${serverDir}`).href);
 const cat = await dist("catalog/catalog.js");
 const { establishFixtureAdmission } = await dist("admission/fixtures.js");
+const { admitNextJob } = await dist("jobs/service.js");
+const { jobsConfigFromEnv } = await dist("jobs/config.js");
 const { issueControllerCapability } = await dist("jobs/credentials.js");
 const { storageClient } = await dist("storage.js");
 const nextBin = createRequire(join(webDir, "package.json")).resolve(
@@ -295,6 +297,18 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     if (res.status !== 200) throw new Error(`reconcile failed: ${res.text}`);
     return res.json.data;
   }
+  /**
+   * Fixture admission with a SHORT initial immutable deadline: the real library
+   * admission seam (as the restricted-PG tests use) with only the deadline
+   * config substituted. The deadline is never rewritten afterwards.
+   */
+  async function admitWithDeadline(seconds) {
+    const cfg = {
+      ...jobsConfigFromEnv(env),
+      executionDeadlineSeconds: seconds,
+    };
+    return admitNextJob({ pool: app, config: cfg, presignRead: undefined });
+  }
   const row = async (jobId) =>
     (
       await owner.query(
@@ -315,6 +329,7 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     users,
     queuedJob,
     admit,
+    admitWithDeadline,
     row,
     workflow,
     cron,
@@ -323,6 +338,12 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     expireLease: (jobId) =>
       owner.query(
         "UPDATE jobs SET controller_lease_expires_at = now() - interval '1 second' WHERE id = $1",
+        [jobId],
+      ),
+    /** Lease lapsed beyond the repair lease grace (default 60 s) without waiting for it. */
+    lapseLease: (jobId) =>
+      owner.query(
+        "UPDATE jobs SET controller_lease_expires_at = now() - interval '10 minutes' WHERE id = $1",
         [jobId],
       ),
     stop: teardown,

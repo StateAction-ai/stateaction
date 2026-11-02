@@ -768,14 +768,32 @@ async function acceptVerified(
   });
 }
 
-/** Evidence recorded but the worker never reported: fail after the finite grace. */
+/**
+ * Evidence recorded but the worker never reported: fail after the finite grace.
+ * A needs_attention job (flagged while the controller was lost, evidence
+ * arriving later) is settled as soon as authoritative evidence exists: the
+ * state itself has already closed reporting (candidates are recorded only
+ * while 'running' and accepted from 'result_pending'), so no grace applies.
+ * An existing candidate is always preserved and wins. Without evidence nothing
+ * is settled and the slot stays held.
+ */
 async function settleMissingResult(
   deps: Pick<AcceptanceDeps, "pool" | "config">,
   st: State,
 ): Promise<void> {
-  if (st.job.state !== "running" || !st.evidenceAt || st.candidate) return;
+  const lateProof = st.job.state === "needs_attention";
+  if (
+    (st.job.state !== "running" && !lateProof) ||
+    !st.evidenceAt ||
+    st.candidate
+  )
+    return;
   const graceEnd = st.evidenceAt.getTime() + deps.config.graceSeconds * 1000;
-  if (Date.now() < graceEnd && Date.now() < st.job.execution_deadline.getTime())
+  if (
+    !lateProof &&
+    Date.now() < graceEnd &&
+    Date.now() < st.job.execution_deadline.getTime()
+  )
     return;
   await run(deps.pool, async (tx) => {
     await tx.query("SELECT 1 FROM recordings WHERE id = $1 FOR UPDATE", [
@@ -789,12 +807,23 @@ async function settleMissingResult(
       "SELECT 1 FROM job_result_candidates WHERE job_id = $1",
       [st.job.id],
     );
-    if (job.rows[0]?.state !== "running" || cand.rows[0]) return;
+    // Recheck state, candidate and evidence under the recording -> job locks.
+    const proof = await tx.query(
+      "SELECT 1 FROM job_execution_evidence WHERE job_id = $1",
+      [st.job.id],
+    );
+    const now = job.rows[0]?.state;
+    if (
+      (now !== "running" && !(lateProof && now === "needs_attention")) ||
+      cand.rows[0] ||
+      !proof.rows[0]
+    )
+      return;
     await tx.query(
       `UPDATE jobs SET state = 'failed', error_code = 'worker_exited_without_result',
          error_message = 'The physical execution ended without reporting a result', finished_at = now()
-       WHERE id = $1`,
-      [st.job.id],
+       WHERE id = $1 AND state = $2`,
+      [st.job.id, now],
     );
   });
 }
@@ -843,7 +872,9 @@ export async function repairResults(
   const { rows } = await deps.pool.query<{ id: string }>(
     `SELECT j.id FROM jobs j
      WHERE j.state = 'result_pending'
-        OR (j.state = 'running' AND EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id))
+        OR (j.state IN ('running', 'needs_attention')
+            AND EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id)
+            AND NOT EXISTS (SELECT 1 FROM job_result_candidates c WHERE c.job_id = j.id))
      ORDER BY j.updated_at LIMIT $1`,
     [limit],
   );
