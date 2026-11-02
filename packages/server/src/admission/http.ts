@@ -108,18 +108,28 @@ async function readContractBody(
   const chunks: Uint8Array[] = [];
   let total = 0;
   const reader = request.body?.getReader();
-  if (reader)
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_BODY_BYTES) {
-        // Stop reading (nothing more is buffered); the host drains/closes.
-        reader.releaseLock();
-        throw new BodyError("payload_too_large", "Request body is too large");
+  if (reader) {
+    let complete = false;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          complete = true;
+          break;
+        }
+        total += value.byteLength;
+        if (total > MAX_BODY_BYTES)
+          throw new BodyError("payload_too_large", "Request body is too large");
+        chunks.push(value);
       }
-      chunks.push(value);
+    } finally {
+      if (!complete)
+        // Oversized or failed read: cancel the source explicitly so no more
+        // bytes are pulled; never drain an arbitrary remainder.
+        await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
     }
+  }
   const bytes = new Uint8Array(total);
   let offset = 0;
   for (const c of chunks) {

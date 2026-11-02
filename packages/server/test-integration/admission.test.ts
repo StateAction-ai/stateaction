@@ -1384,6 +1384,10 @@ describe("HTTP route shapes (test-only adapter, injected auth)", () => {
         validateValue("http.recording.v1", envelope.data.recording).valid,
         true,
       );
+      assert.equal(
+        validateValue("http.recording-registration.v1", envelope.data).valid,
+        true,
+      );
       assert.deepEqual(Object.keys(envelope.data).sort(), [
         "collectionPermissionRef",
         "recording",

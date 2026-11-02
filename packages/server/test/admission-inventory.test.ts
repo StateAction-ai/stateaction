@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   requestSha256,
@@ -257,22 +256,7 @@ test("admission settings are explicit configuration", () => {
   );
 });
 
-test("the proposed registration response schema wraps the unchanged recording.v1 shape", () => {
-  const schema = JSON.parse(
-    readFileSync(
-      new URL(
-        "../contracts-proposed/http/recording-registration.v1.schema.json",
-        import.meta.url,
-      ),
-      "utf8",
-    ),
-  );
-  assert.equal(
-    schema.properties.recording.$ref,
-    "https://stateaction.ai/schemas/http/recording.v1.json",
-  );
-  assert.deepEqual(schema.required, ["recording", "collectionPermissionRef"]);
-  assert.equal(schema.additionalProperties, false);
+test("the published registration response wraps the unchanged recording.v1 shape", () => {
   const recording = {
     recordingId: randomUUID(),
     clientRecordingId: randomUUID(),
@@ -287,4 +271,19 @@ test("the proposed registration response schema wraps the unchanged recording.v1
     ],
   };
   assert.equal(validateValue("http.recording.v1", recording).valid, true);
+  const response = { recording, collectionPermissionRef: "pilot-1" };
+  assert.equal(
+    validateValue("http.recording-registration.v1", response).valid,
+    true,
+  );
+  // A client cannot smuggle authority, and the ref is a revision label.
+  for (const bad of [
+    { recording },
+    { ...response, permissionGranted: true },
+    { ...response, collectionPermissionRef: "any text" },
+  ])
+    assert.equal(
+      validateValue("http.recording-registration.v1", bad).valid,
+      false,
+    );
 });

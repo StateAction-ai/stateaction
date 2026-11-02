@@ -2365,7 +2365,86 @@ def contract_cases():
         },
     ]
     c["http.me.v1"] = me_cases()
+    c["http.recording-registration.v1"] = registration_cases()
     return c
+
+
+# ------------------------------------- Recording registration response (SA-19)
+registration = {"recording": recording, "collectionPermissionRef": "pilot-2026-11.r1"}
+
+
+def registration_cases():
+    # Old/new parity: the embedded recording is the unchanged http.recording.v1
+    # document, so every recording.v1 rule still applies inside it.
+    return [
+        ok("created or replayed registration", registration),
+        mut(
+            "freshly registered recording with every role missing",
+            registration,
+            [
+                ("/recording/status", "registered"),
+                ("/recording/files", []),
+                (
+                    "/recording/missingRequiredRoles",
+                    ["source_manifest", "source_mcap", "recorder_metadata"],
+                ),
+            ],
+            None,
+        ),
+        bad(
+            "permission ref is required",
+            {"recording": recording},
+            "schema_violation",
+            "",
+        ),
+        bad(
+            "recording is required",
+            {"collectionPermissionRef": "pilot-2026-11.r1"},
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "permission ref is a revision label, not free text",
+            registration,
+            [("/collectionPermissionRef", "pilot approval 1")],
+            "schema_violation",
+            "/collectionPermissionRef",
+        ),
+        mut(
+            "permission ref may not be empty",
+            registration,
+            [("/collectionPermissionRef", "")],
+            "schema_violation",
+            "/collectionPermissionRef",
+        ),
+        mut(
+            "embedded recording keeps the recording.v1 status vocabulary",
+            registration,
+            [("/recording/status", "done")],
+            "schema_violation",
+            "/recording/status",
+        ),
+        mut(
+            "embedded recording stays closed",
+            registration,
+            [("/recording/permissionRef", "pilot-2026-11.r1")],
+            "schema_violation",
+            "/recording",
+        ),
+        mut(
+            "clients cannot add authority fields",
+            registration,
+            [("/permissionGranted", True)],
+            "schema_violation",
+            "",
+        ),
+        bad(
+            "a bare recording.v1 document is not a registration response",
+            recording,
+            "schema_violation",
+            "",
+        ),
+    ]
 
 
 # ------------------------------------------------- Signed-in identity (SA-15)
