@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-registration.v2.json",
+  "title": "Recording registration response v2",
+  "description": "POST /api/v1/recordings success data for a recording-create.v2 request (Content-Type application/vnd.stateaction.recording.v2+json): 201 when created, 200 for an exact replay. `recording` is http.recording.v2. `collectionPermissionRef` keeps its v1 meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording", "collectionPermissionRef"],
+  "properties": {
+    "recording": {
+      "$ref": "https://stateaction.ai/schemas/http/recording.v2.json"
+    },
+    "collectionPermissionRef": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    }
+  }
+}

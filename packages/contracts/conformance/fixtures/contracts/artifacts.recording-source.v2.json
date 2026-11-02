@@ -1,0 +1,2003 @@
+{
+  "contract": "artifacts.recording-source.v2",
+  "cases": [
+    {
+      "name": "hardware document needs no marker",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "simulation profile with explicit marker",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "simulation profile requires the marker",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "hardware profile forbids the marker",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "v1 schema value is not v2",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v1",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schema"
+        ]
+      }
+    },
+    {
+      "name": "future schema version",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v3",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schema"
+        ]
+      }
+    },
+    {
+      "name": "unknown rgb profile",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v2",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rgb_profile"
+        ]
+      }
+    },
+    {
+      "name": "marker cannot claim production qualification",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": true,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/simulation/production_qualified"
+        ]
+      }
+    },
+    {
+      "name": "marker camelCase is refused in the durable manifest",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mappedTimelineSemantics": "simulation_transport_only",
+            "productionQualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/simulation"
+        ]
+      }
+    },
+    {
+      "name": "source verification cannot be pre-claimed",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "verified",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/source_verification"
+        ]
+      }
+    },
+    {
+      "name": "missing required recorder metadata",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "calibration",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "inventory_incomplete",
+        "paths": [
+          "/files"
+        ]
+      }
+    },
+    {
+      "name": "channel clock must be declared",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_simulation_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.other",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "stateaction.capture.MotionEvent",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mapped_timeline_semantics": "simulation_transport_only",
+            "production_qualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/channels/0/clock_domain"
+        ]
+      }
+    },
+    {
+      "name": "ROS slash schema name geometry_msgs/msg/PoseStamped",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "two segment ROS-style name",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "dotted names stay valid",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "traversal segment",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/../PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "parent directory only",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "../PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "empty segment",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs//PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "leading slash",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "/geometry_msgs/PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "trailing slash",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "four segments",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "a/b/c/d",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "segment starts with a digit",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/9msg/PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "control character",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/Pose\nStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "trailing newline",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/PoseStamped\n",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "backslash separator",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs\\msg\\PoseStamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "space",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/Pose Stamped",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "overlong segment",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "overlong total",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    },
+    {
+      "name": "non-ascii",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording_source.v2",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "client_recording_id": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "owner_user_id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "capture_format": "stateaction.capture.v1",
+          "rgb_profile": "h264_mcap_v1",
+          "capture_config_sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "close_status": "closed_clean",
+          "files": [
+            {
+              "file_id": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "size_bytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "file_id": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "size_bytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "clock_domains": [
+            "android.elapsed_realtime",
+            "android.sensor_event"
+          ],
+          "channels": [
+            {
+              "topic": "/camera/rgb/h264",
+              "message_encoding": "protobuf",
+              "schema_name": "foxglove.CompressedVideo",
+              "clock_domain": "android.elapsed_realtime",
+              "message_count": "108000"
+            },
+            {
+              "topic": "/imu/motion",
+              "message_encoding": "json",
+              "schema_name": "geometry_msgs/msg/Posé",
+              "clock_domain": "android.sensor_event",
+              "message_count": "1440000"
+            }
+          ],
+          "counts": {
+            "video_frames": "108000",
+            "dropped_video_frames": "0",
+            "motion_events": "1440000"
+          },
+          "collection_permission_ref": "pilot-consent-2026-10",
+          "source_verification": "pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/channels/1/schema_name"
+        ]
+      }
+    }
+  ]
+}

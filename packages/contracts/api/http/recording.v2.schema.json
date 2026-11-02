@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording.v2.json",
+  "title": "Recording response v2",
+  "description": "GET /api/v1/recordings/{recordingId} data payload for clients that send Accept application/vnd.stateaction.recording.v2+json. Adds rgbProfile and, for simulated recordings only, the explicit `simulation` marker. A simulated recording is never served as v1 (v1 has no field that could conceal it).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "status",
+    "rgbProfile",
+    "createdAt",
+    "files",
+    "missingRequiredRoles"
+  ],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "uploading",
+        "sealed",
+        "uploaded",
+        "processing",
+        "reviewable",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "role",
+          "sizeBytes",
+          "sha256",
+          "required",
+          "state"
+        ],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "uploading",
+              "completing",
+              "completed",
+              "verified",
+              "cancelled",
+              "failed",
+              "expired"
+            ]
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000
+    },
+    "missingRequiredRoles": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+      },
+      "minItems": 0,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}

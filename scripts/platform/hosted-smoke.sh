@@ -94,6 +94,11 @@ HOSTED_ENV=(env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production APP_ENV=product
   S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real
   PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1)
 "${HOSTED_ENV[@]}" pnpm --filter @stateaction/server hosted:preflight
+# SA-71: the development-only simulated capture flag must make hosted preflight fail.
+if "${HOSTED_ENV[@]}" ALLOW_SIMULATED_CAPTURE_INPUTS=true pnpm --filter @stateaction/server hosted:preflight >/dev/null 2>&1; then
+  echo "hosted preflight must refuse ALLOW_SIMULATED_CAPTURE_INPUTS" >&2; exit 1
+fi
+echo "hosted preflight refuses ALLOW_SIMULATED_CAPTURE_INPUTS"
 setsid "${HOSTED_ENV[@]}" pnpm --filter @stateaction/web start > artifacts/hosted-smoke/web.log 2>&1 &
 web_pid=$!
 LAN_IP="$(python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.connect(('192.0.2.1',9));print(s.getsockname()[0])")"

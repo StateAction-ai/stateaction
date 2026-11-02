@@ -1,3 +1,4 @@
+import { simulatedCaptureInputsEnabled } from "./admission/simulation.js";
 export type AppEnv = "local" | "development" | "production";
 export type ServerConfig = {
   appEnv: AppEnv;
@@ -65,6 +66,10 @@ export const APP_DB_ROLE = "stateaction_app";
 export function serverConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ServerConfig {
+  // SA-71: the development-only simulated-capture flag is refused by every
+  // entry point that loads configuration (health, preflight, storage, routes),
+  // not only by the lazily built admission runtime.
+  simulatedCaptureInputsEnabled(env);
   const required = (key: string): string => {
     const value = env[key];
     if (!value) throw new Error(`Missing server setting: ${key}`);

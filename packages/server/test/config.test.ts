@@ -125,3 +125,27 @@ test("outside local the public presigning origin must equal the private R2 origi
     /HTTPS Cloudflare R2/,
   );
 });
+test("the development-only simulated capture flag is refused centrally outside local/development and on Render", () => {
+  // SA-71: serverConfig is the shared loader (health, preflight, storage).
+  const flag = { ALLOW_SIMULATED_CAPTURE_INPUTS: "true" };
+  assert.throws(() => serverConfig({ ...hosted, ...flag }), /refused/);
+  assert.throws(
+    () => serverConfig({ ...hosted, ALLOW_SIMULATED_CAPTURE_INPUTS: "false" }),
+    /refused/,
+  );
+  assert.throws(
+    () => serverConfig({ ...local, ...flag, RENDER: "true" }),
+    /refused/,
+  );
+  assert.throws(
+    () => serverConfig({ ...local, ...flag, RENDER_SERVICE_ID: "srv-1" }),
+    /refused/,
+  );
+  assert.throws(
+    () => serverConfig({ ...local, ...flag, APP_ENV: "staging" }),
+    /refused|APP_ENV/,
+  );
+  // Local/development with the explicit flag, and hosted without it, still load.
+  assert.equal(serverConfig({ ...local, ...flag }).appEnv, "local");
+  assert.equal(serverConfig(hosted).appEnv, "production");
+});

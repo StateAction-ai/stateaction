@@ -1,5 +1,7 @@
 # Recording registration, seal and admission (SA-19)
 
+> SA-71 adds explicitly labelled simulated capture (migration 006, `catalog.v6` v2 contracts, a development-only runtime gate); this document describes the frozen v1 hardware path, which is unchanged. See [simulated-capture-admission.md](simulated-capture-admission.md).
+
 Server module `packages/server/src/admission/` with additive migration `004_ingest_admission.sql`. It registers recordings, freezes the declared source inventory and runs the one eligibility transaction that queues the first processing job once every required input is uploaded. It runs no processing (no Render Workflow or Modal call). Its only storage-provider call is the bounded GET of the completed source manifest (≤ 1 MiB); it never reads MCAP/media and never proxies source bytes. Multipart reservation/signing/completion transport belongs to SA-20/SA-21; claims and execution belong to SA-25.
 
 ## Permission evidence
