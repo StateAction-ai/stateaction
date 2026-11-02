@@ -37,12 +37,30 @@ import type {
  */
 const ts = (column: string) => TS.replace("%s", column);
 
+function filterText(value: string | undefined): string {
+  if (value === undefined) return "";
+  if (
+    typeof value !== "string" ||
+    value.length > 160 ||
+    /[\u0000-\u001f\u007f]/.test(value)
+  )
+    throw new CatalogError(
+      "invalid_request",
+      "Search must be at most 160 characters",
+    );
+  return value.trim();
+}
+function searchPattern(value: string | undefined): string {
+  const text = filterText(value);
+  return text ? `%${text.replace(/[\\%_]/g, "\\$&")}%` : "";
+}
+
 /**
  * Job/recording/latest-review facts for the clip alias `c`. The current-job
  * gate and the latest review are LATERAL primary-key probes per candidate row
  * (never flattened into a join the planner may reorder ahead of the ordered
- * membership/clip index scan), so a page stays bounded by its LIMIT however
- * many jobs and recordings exist.
+ * membership/clip index scan). Rejected or non-current candidates may still
+ * require additional index reads before a page fills.
  */
 const CORE = `
   JOIN LATERAL (
@@ -121,6 +139,7 @@ const DATASET_SELECT = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.d
 /** Params: viewer, after-timestamp, after-id, limit + 1. */
 export const LIST_DATASETS_SQL = `${DATASET_SELECT}
        WHERE ${DATASET_GATE}
+         AND ($5::text = '' OR d.name ILIKE $5 ESCAPE '\\')
          AND ($2::timestamptz IS NULL OR (d.created_at, d.id) < ($2::timestamptz, $3::uuid))
        ORDER BY d.created_at DESC, d.id DESC LIMIT $4`;
 function datasetView(row: DatasetRow): DatasetView {
@@ -138,7 +157,7 @@ function datasetView(row: DatasetRow): DatasetView {
 /** Datasets visible to the viewer; counts use the member gate above. */
 export async function listDatasets(
   pool: Queryable,
-  input: { viewerUserId: string; cursor?: string; limit?: number },
+  input: { viewerUserId: string; cursor?: string; limit?: number; q?: string },
 ): Promise<Page<DatasetView>> {
   const limit = pageSize(input.limit);
   const [afterTs, afterId] = decodeCursor(input.cursor);
@@ -148,6 +167,7 @@ export async function listDatasets(
       afterTs,
       afterId,
       limit + 1,
+      searchPattern(input.q),
     ]);
     const page = rows.slice(0, limit);
     return {
@@ -235,6 +255,8 @@ function clipView(row: ClipRow, datasetId: string | null): DatasetClipView {
 export const DATASET_CLIPS_SQL = `SELECT ${CLIP_COLUMNS}, ${ts("dc.added_at")} AS ts
        FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id ${CORE} ${MEDIA}
        WHERE dc.dataset_id = $2 AND ${memberGate("dc.dataset_id")}
+         AND ($6::text = '' OR c.title ILIKE $6 ESCAPE '\\' OR lr.task_label ILIKE $6 ESCAPE '\\')
+         AND ($7::text = '' OR lower(lr.task_label) = lower($7))
          AND ($3::timestamptz IS NULL OR (dc.added_at, dc.clip_id) < ($3::timestamptz, $4::uuid))
        ORDER BY dc.added_at DESC, dc.clip_id DESC LIMIT $5`;
 
@@ -246,6 +268,8 @@ export async function listDatasetClips(
     datasetId: string;
     cursor?: string;
     limit?: number;
+    q?: string;
+    label?: string;
   },
 ): Promise<Page<DatasetClipView>> {
   const limit = pageSize(input.limit);
@@ -258,6 +282,8 @@ export async function listDatasetClips(
       afterTs,
       afterId,
       limit + 1,
+      searchPattern(input.q),
+      filterText(input.label),
     ]);
     if (!rows.length && !input.cursor)
       await getDataset(pool, { viewerUserId: input.viewerUserId, datasetId });
@@ -314,6 +340,8 @@ export async function listStaffClips(
     reviewStatus?: "pending" | "approved" | "rejected";
     cursor?: string;
     limit?: number;
+    q?: string;
+    label?: string;
   },
 ): Promise<Page<StaffClipView>> {
   const limit = pageSize(input.limit);
@@ -325,6 +353,8 @@ export async function listStaffClips(
               (SELECT count(*) FROM dataset_clips x WHERE x.clip_id = c.id)::int AS dataset_count
        FROM clips c ${CORE} ${MEDIA}
        WHERE catalog_has_role($1, 'staff')
+         AND ($7::text = '' OR c.title ILIKE $7 ESCAPE '\\' OR lr.task_label ILIKE $7 ESCAPE '\\')
+         AND ($8::text = '' OR lower(lr.task_label) = lower($8))
          AND ($2::uuid IS NULL OR c.recording_id = $2)
          AND ($3::text IS NULL OR coalesce(lr.decision, 'pending') = $3)
          AND ($4::timestamptz IS NULL OR (c.created_at, c.id) < ($4::timestamptz, $5::uuid))
@@ -336,6 +366,8 @@ export async function listStaffClips(
         afterTs,
         afterId,
         limit + 1,
+        searchPattern(input.q),
+        filterText(input.label),
       ],
     );
     const page = rows.slice(0, limit);
