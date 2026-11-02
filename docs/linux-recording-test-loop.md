@@ -80,14 +80,14 @@ scripts/start_capture_emulator.sh --ar -no-window   # pinned API33 ARCore target
 scripts/start_capture_emulator.sh --ar --verify-only # check the running instance only
 ```
 
-| Option          | Effect                                                                                                           |
-| --------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `--ar`          | Pinned API33 x86_64 `stera_ar_api33`, emulator 36.4.10, port 5582, Vulkan off                                    |
-| `--quick-boot`  | Opt-in snapshots for ordinary app tests; camera, lifecycle and recovery tests keep the default cold boot         |
+| Option               | Effect                                                                                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--ar`               | Pinned API33 x86_64 `stera_ar_api33`, emulator 36.4.10, port 5582, Vulkan off                                                                                                     |
+| `--quick-boot`       | Opt-in snapshots for ordinary app tests; camera, lifecycle and recovery tests keep the default cold boot                                                                          |
 | `--force-cold-start` | Stop and cold-boot the dedicated emulator even if the warm one is healthy; use for camera, lifecycle and recovery cold-start cases (default warm reuse is fine for routine loops) |
-| `--replace`     | Stop and relaunch the dedicated emulator if it fails verification (never done silently)                          |
-| `--verify-only` | Verify and exit                                                                                                  |
-| `--software`    | Explicit CI/compatibility override: SwiftShader, labeled `software-rendering-not-accelerated`, never accelerated |
+| `--replace`          | Stop and relaunch the dedicated emulator if it fails verification (never done silently)                                                                                           |
+| `--verify-only`      | Verify and exit                                                                                                                                                                   |
+| `--software`         | Explicit CI/compatibility override: SwiftShader, labeled `software-rendering-not-accelerated`, never accelerated                                                                  |
 
 A launch or reuse succeeds only when [`emulator_acceleration.py`](../scripts/mobile/emulator_acceleration.py) proves, and writes to `artifacts/emulator-verification/<serial>.json`:
 
