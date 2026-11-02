@@ -83,13 +83,21 @@ class SessionLifecycleManager {
         onRelease(null)
     }
 
-    fun stopThreads(frameThread: HandlerThread?, writerThread: HandlerThread?) {
+    /**
+     * Asks both threads to quit and waits at most [joinMs] each. Returns false when either is still alive: the caller
+     * must then treat the session as uncertain and must not release writer state or start another take.
+     */
+    fun stopThreads(frameThread: HandlerThread?, writerThread: HandlerThread?, joinMs: Long = THREAD_JOIN_MS): Boolean {
         frameThread?.quitSafely()
         writerThread?.quitSafely()
         try {
-            frameThread?.join()
-            writerThread?.join()
+            frameThread?.join(joinMs)
+            writerThread?.join(joinMs)
         } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
+        return frameThread?.isAlive != true && writerThread?.isAlive != true
     }
+
+    companion object { const val THREAD_JOIN_MS = 5_000L }
 }

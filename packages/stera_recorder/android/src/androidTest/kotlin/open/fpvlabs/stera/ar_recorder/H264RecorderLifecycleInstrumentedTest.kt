@@ -24,6 +24,9 @@ import open.fpvlabs.stera.ar_recorder.data.MCAPDatasetWriter
 
 /** Keeps the real MCAP writer; only adds deliberate faults through its own failure path. */
 class FaultInjectingDatasetWriter(val actual: DatasetWriter) : DatasetWriter by actual {
+    /** Container fsync probe (SA-56): runs INSTEAD of the plain fsync; call stream.fd.sync() inside it to keep real durability. */
+    @Volatile var containerSyncProbe: ((java.io.FileOutputStream) -> Unit)? = null
+    init { (actual as? MCAPDatasetWriter)?.containerSyncHook = { stream -> containerSyncProbe?.invoke(stream) ?: stream.fd.sync() } }
     @Volatile var failNextInitialization = false
     override fun initializeWriters(): Boolean {
         val initialized = actual.initializeWriters()

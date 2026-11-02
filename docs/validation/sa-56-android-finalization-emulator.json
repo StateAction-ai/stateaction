@@ -1,0 +1,51 @@
+{
+  "ticket": "SA-56",
+  "scope": "android_emulator_simulation_only",
+  "emulator": "emulator-5582 accelerated-kvm-host-gpu (reviewed sa-67 launcher --verify-only)",
+  "personal_user": 0,
+  "physical_device_touched": false,
+  "hardware_qualified": false,
+  "reasoned_stops": [
+    {
+      "reason": "low_storage",
+      "directory": "session_20261101_230913_135_c3c35dd3",
+      "frames_written": 92
+    },
+    {
+      "reason": "critical_thermal",
+      "directory": "session_20261101_230916_290_c0e6d93f",
+      "frames_written": 88
+    }
+  ],
+  "phase_fault_quarantines": [
+    "STOPPING",
+    "DRAINING_ENCODER",
+    "CLOSING_CONTAINER",
+    "FINALIZING_METADATA"
+  ],
+  "crash": {
+    "mcap_reader_state": "unclosed:RecordLengthLimitExceeded",
+    "marker_reason": "journal_phase_capturing",
+    "salvage": {
+      "derived_recording_id": "3a295e99-b7d5-3543-955e-9e1a0bf563d4",
+      "derivation": "byte_copy_no_repair_no_reencode",
+      "capture_outcome": "salvaged_unverified",
+      "auto_admit": false
+    }
+  },
+  "independent_validation": {
+    "interrupted_files_passed": 2,
+    "completed_files_passed": 5
+  },
+  "jvm_tests": "88 passed, 0 failed",
+  "regression": "SA-51 h264 lifecycle emulator harness passed (5 completed, 1 failed-by-design)",
+  "review_fixes": {
+    "receipt_dir_ignored": "artifacts/android-finalization-e2e/20261102T043717Z",
+    "container_fsync": "real FileOutputStream.fd.sync() observed while journal was CLOSING_CONTAINER, before final sidecar/FINALIZED; session directory fsync forced on the emulator filesystem; injected sync failure => container_state unclosed, quarantined, journal not FINALIZED, error ack",
+    "zero_frame_h264": "capture_outcome=failed, recovery_state=quarantined, capture_result_valid=false, journal stays FINALIZING_METADATA with marker; error returned",
+    "first_stop_journal_write_failure": "producers gated off first; uncertain latch set; Start refused; journal left at CAPTURING with marker",
+    "slow_close": "close phase wait bounded (15.0 s on emulator); late worker cannot publish FINALIZED (journal stays CLOSING_CONTAINER, sidecar container_state=closing)",
+    "independent_validation": "official mcap reader + SA-50 checker on 6 completed + 2 interrupted takes; faulted takes verified non-final with recovery marker"
+  },
+  "durability_limits": "Container bytes are fsynced and the directory entry is forced where the filesystem supports it; physical power-loss behaviour, eMMC/UFS write-cache and filesystem-specific guarantees are NOT qualified. A stalled uninterruptible syscall cannot be cancelled: the coordinator wait is bounded and the stop reports uncertain, not closed."
+}
