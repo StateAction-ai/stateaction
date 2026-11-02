@@ -24,6 +24,17 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
         private const val TARGET_SENSOR_HEIGHT = 1080
     }
 
+    private var targetWidth = TARGET_SENSOR_WIDTH
+    private var targetHeight = TARGET_SENSOR_HEIGHT
+    private var exactCamera = false
+    override fun configureCameraTarget(width: Int, height: Int, exact: Boolean) {
+        if (session != null) {
+            if (exact) check(session!!.cameraConfig.imageSize.let { it.width == width && it.height == height }) { "Reinitialize camera session for requested native H.264 raster ${width}x${height}" }
+            return
+        }
+        targetWidth = width; targetHeight = height; exactCamera = exact
+    }
+
     override var session: Session? = null
         private set
 
@@ -80,17 +91,19 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
                 EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30)
             )
             val supportedConfigs = sessionInstance.getSupportedCameraConfigs(fpsFilter)
-            if (supportedConfigs.isNotEmpty()) {
-                val bestConfig = supportedConfigs.minWithOrNull(
+            val eligible = if (exactCamera) supportedConfigs.filter { it.imageSize.width == targetWidth && it.imageSize.height == targetHeight } else supportedConfigs
+            check(!exactCamera || eligible.isNotEmpty()) { "ARCore has no exact native ${targetWidth}x${targetHeight} 30fps camera configuration; refusing resize/fallback" }
+            if (eligible.isNotEmpty()) {
+                val bestConfig = eligible.minWithOrNull(
                     compareBy<CameraConfig> {
                         val size = it.imageSize
-                        kotlin.math.abs(size.width - TARGET_SENSOR_WIDTH) +
-                            kotlin.math.abs(size.height - TARGET_SENSOR_HEIGHT)
+                        kotlin.math.abs(size.width - targetWidth) +
+                            kotlin.math.abs(size.height - targetHeight)
                     }.thenByDescending { config ->
                         val size = config.imageSize
                         size.width * size.height
                     }
-                ) ?: supportedConfigs.first()
+                ) ?: eligible.first()
                 sessionInstance.cameraConfig = bestConfig
                 val imageSize = sessionInstance.cameraConfig.imageSize
                 selectedCameraResolution = "${imageSize.width}x${imageSize.height}"

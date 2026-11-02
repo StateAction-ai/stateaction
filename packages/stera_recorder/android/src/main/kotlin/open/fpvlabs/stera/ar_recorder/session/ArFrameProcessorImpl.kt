@@ -40,16 +40,13 @@ class ArFrameProcessorImpl : ArFrameProcessor {
     private var pointCloudReleaseCount: Int = 0
     private var depthImageAcquireCount: Int = 0
     private var depthImageCloseCount: Int = 0
-    private var pointCloudPoolCapacity: Int = DEFAULT_POINTCLOUD_POOL_CAPACITY
-    private var depthPoolCapacity: Int = DEFAULT_DEPTH_POOL_CAPACITY
+    private var pointCloudPoolCapacity: Int = 0
+    private var depthPoolCapacity: Int = 0
 
-    init {
-        prepareForRecording(
-            pointCloudPoolCapacity = DEFAULT_POINTCLOUD_POOL_CAPACITY,
-            depthPoolCapacity = DEFAULT_DEPTH_POOL_CAPACITY,
-            pointCloudBufferSize = DEFAULT_POINTCLOUD_BUFFER_SIZE,
-            depthBufferSize = DEFAULT_DEPTH_BUFFER_SIZE
-        )
+    /** Allocate only when a recording enables a stream, and release after its writer barrier. */
+    override fun releaseRecordingBuffers() {
+        synchronized(pointCloudPool) { pointCloudPool.clear(); pointCloudPoolCapacity = 0 }
+        synchronized(depthPool) { depthPool.clear(); depthPoolCapacity = 0 }
     }
 
     override fun resetAllocationCounters() {
@@ -76,8 +73,8 @@ class ArFrameProcessorImpl : ArFrameProcessor {
         depthBufferSize: Int
     ) {
         resetAllocationCounters()
-        val pcCapacity = pointCloudPoolCapacity.coerceAtLeast(1)
-        val dCapacity = depthPoolCapacity.coerceAtLeast(1)
+        val pcCapacity = pointCloudPoolCapacity.coerceAtLeast(0)
+        val dCapacity = depthPoolCapacity.coerceAtLeast(0)
         this.pointCloudPoolCapacity = pcCapacity
         this.depthPoolCapacity = dCapacity
         pointCloudPoolBufferSize = pointCloudBufferSize

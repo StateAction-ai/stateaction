@@ -12,6 +12,7 @@ interface ArSessionManager {
     val selectedCameraResolution: String
     val selectedFocusMode: String
 
+    fun configureCameraTarget(width: Int, height: Int, exact: Boolean) {}
     fun checkAvailability(callback: (ArCoreApk.Availability) -> Unit)
     fun createSession(activity: Activity)
     fun resume()

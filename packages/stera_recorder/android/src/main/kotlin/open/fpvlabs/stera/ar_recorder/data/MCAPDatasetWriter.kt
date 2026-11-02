@@ -15,7 +15,11 @@ import java.io.FileWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
+import android.util.AtomicFile
+import open.fpvlabs.stera.ar_recorder.data.h264.H264CaptureSetup
+import open.fpvlabs.stera.ar_recorder.data.H264CaptureWriter
 
 /**
  * MCAP-based dataset writer that writes spatial data as ROS2-compatible MCAP messages.
@@ -65,6 +69,37 @@ class MCAPDatasetWriter(
     private var systemLogWriter: BufferedWriter? = null
 
     private var isInitialized = false
+    private var h264Setup: H264CaptureSetup? = null
+    private var h264Writer: H264CaptureWriter? = null
+    private var h264ClockAnchorElapsedNs = 0L
+    private var h264ClockAnchorEpochNs = 0L
+
+    @Synchronized override fun configureH264Capture(setup: H264CaptureSetup?) {
+        check(!isInitialized && mcapWriter == null) { "Capture profile can only change between sessions" }
+        h264Setup = setup
+    }
+
+    override fun h264Capture(): H264CaptureWriter? = h264Writer
+
+    /** Inventory/Close for the open H.264 session; ignored when none is open or it already closed. */
+    @Synchronized override fun closeH264Capture(outcome: String, failureReason: String?) {
+        val capture = h264Writer ?: return
+        if (capture.closed) return
+        try {
+            val (sensors, calibrations) = checkNotNull(h264Setup).inventory(capture.acquiredCount(),
+                capture.motionCount(open.fpvlabs.stera.ar_recorder.sensors.MotionSensorKind.ACCEL),
+                capture.motionCount(open.fpvlabs.stera.ar_recorder.sensors.MotionSensorKind.GYRO))
+            capture.close(outcome, failureReason, sensors, calibrations)
+        } catch (e: Exception) {
+            recordWriteFailure("Failed to close H.264 capture evidence", e)
+        }
+    }
+
+    /** Recorder transport clock for evidence log times: fixed elapsed-realtime to wall anchor per session. */
+    private fun transportNow(): Long = h264ClockAnchorEpochNs + (SystemClock.elapsedRealtimeNanos() - h264ClockAnchorElapsedNs)
+
+    /** Legacy CDR/JPEG streams are outside the H.264 contract channel table and are not written there. */
+    private val legacyStreams: Boolean get() = h264Writer == null
     private val firstWriteFailure = AtomicReference<String?>(null)
 
     // Channel IDs
@@ -123,10 +158,12 @@ class MCAPDatasetWriter(
                 return null
             }
 
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            sessionDir = File(outputBase, "session_$timestamp").apply { mkdirs() }
-
-            if (sessionDir == null) return null
+            check(!isInitialized && mcapWriter == null) { "Close the current recording before creating another" }
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+            // Atomic mkdir must succeed; a fast retry never reopens or truncates an earlier recording.
+            val directory = File(outputBase, "session_${timestamp}_${UUID.randomUUID().toString().take(8)}")
+            check(directory.mkdir()) { "Could not create a unique session directory" }
+            sessionDir = directory
 
             freeStorageBeforeBytes = sessionDir?.usableSpace ?: 0L
             println("Session directory created: ${sessionDir?.absolutePath}")
@@ -167,6 +204,7 @@ class MCAPDatasetWriter(
     }
 
     override fun initializeWriters(): Boolean {
+        if (isInitialized || mcapWriter != null) return false
         return try {
             val session = sessionDir ?: return false
 
@@ -178,13 +216,24 @@ class MCAPDatasetWriter(
             val file = File(session, "session_data_$sessionTimestamp.mcap")
             mcapFile = file
             val writer = MCAPWriter()
-            if (!writer.open(file, profile = "ros2", library = "fpv_labs/1.0")) {
+            val setup = h264Setup
+            // The H.264 profile mixes Protobuf, CDR and JSON: its header profile is generic (empty), never ros2.
+            if (!writer.open(file, profile = if (setup == null) "ros2" else "", library = if (setup == null) "fpv_labs/1.0" else "stateaction/stera_recorder/sa-51")) {
                 return false
             }
             mcapWriter = writer
 
-            captureRecordingId = java.util.UUID.randomUUID().toString()
-            registerSchemasAndChannels()
+            if (setup == null) {
+                captureRecordingId = java.util.UUID.randomUUID().toString()
+                registerSchemasAndChannels()
+            } else {
+                h264ClockAnchorElapsedNs = SystemClock.elapsedRealtimeNanos()
+                h264ClockAnchorEpochNs = System.currentTimeMillis() * 1_000_000L
+                h264Writer = H264CaptureWriter(writer, setup.profile, setup.clocks,
+                    { name -> context.assets.open("stateaction/capture/$name").use { it.readBytes() } }, ::transportNow).also { it.open() }
+                // Raw motion shares the H.264 recording identity and its contract channels.
+                captureRecordingId = h264Writer?.recordingId
+            }
 
             isInitialized = true
             logSystem("MCAP session log initialized")
@@ -192,6 +241,11 @@ class MCAPDatasetWriter(
             logSystem("Android: $androidVersion")
             true
         } catch (e: Exception) {
+            recordWriteFailure("Failed to initialize MCAP writers", e)
+            try { mcapWriter?.finish() } catch (close: Exception) { recordWriteFailure("Failed to close partial MCAP initialization", close) }
+            mcapWriter = null
+            h264Writer = null
+            isInitialized = false
             println("Failed to initialize MCAP writers: ${e.message}")
             e.printStackTrace()
             false
@@ -318,7 +372,7 @@ class MCAPDatasetWriter(
         thermalState: Int,
         thermalStateStr: String
     ) {
-        if (!isInitialized || writersPaused) return
+        if (!isInitialized || writersPaused || !legacyStreams) return
         val logTime = timestampNs
         val data = CDRSerializer.serializeDeviceMetrics(
             timestampNs = timestampNs,
@@ -338,6 +392,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writePoseRow(timestamp: Long, pose: FloatArray, trackingState: String) {
+        if (!legacyStreams) return
         if (!isInitialized || writersPaused) return
         val startNs = SystemClock.elapsedRealtimeNanos()
         try {
@@ -385,6 +440,21 @@ class MCAPDatasetWriter(
     override fun writeMotionEvents(events: List<RawMotionEvent>): MotionWriteResult {
         if (events.isEmpty()) return MotionWriteResult()
         if (writersPaused) return MotionWriteResult(paused = events)
+        h264Writer?.let { capture ->
+            val startNs = SystemClock.elapsedRealtimeNanos()
+            try {
+                // Log time is the native elapsed timestamp on the session's fixed transport anchor, so motion and
+                // video share one MCAP log timeline; the payload keeps SA-53's original native semantics.
+                val (result, error) = capture.motionEvents(events, { native -> h264ClockAnchorEpochNs + (native - h264ClockAnchorElapsedNs) }) {
+                    totalBytesWritten += it
+                }
+                imuSampleCount += result.written.size
+                if (error != null) recordWriteFailure("Failed to write raw motion events", error)
+                return result
+            } finally {
+                recordWriterLatency(startNs)
+            }
+        }
         val writer = mcapWriter
         val recordingId = captureRecordingId
         if (!isInitialized || writer == null || recordingId == null || motionChannelIds.size != 2) {
@@ -454,6 +524,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long) {
+        if (!legacyStreams) { recordWriteFailure("JPEG cannot be written to an H.264 recording"); return }
         if (!isInitialized || writersPaused) return
         // Save first JPEG frame as thumbnail
         if (!thumbnailSaved) {
@@ -486,6 +557,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writeCaptureFrameInfo(timestampNs: Long, info: Map<String, Any?>) {
+        if (!legacyStreams) return
         if (!isInitialized || writersPaused) return
         try {
             val data = CDRSerializer.serializeString(toJsonValue(info, 0))
@@ -527,6 +599,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writePointCloud(timestamp: Long, frameData: PointCloudFrameData?) {
+        if (!legacyStreams) return
         if (frameData == null) return
         if (!isInitialized || writersPaused) {
             frameData.release()
@@ -569,6 +642,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?, associationTimestampNs: Long): Boolean {
+        if (!legacyStreams) return false
         if (frameData == null) return false
         if (!isInitialized || writersPaused) {
             frameData.release()
@@ -611,6 +685,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writeIntrinsics(timestampNs: Long, intrinsics: Map<String, Any>) {
+        if (!legacyStreams) return
         if (!isInitialized) return
 
         try {
@@ -638,6 +713,7 @@ class MCAPDatasetWriter(
     }
 
     override fun writeDepthIntrinsics(timestampNs: Long, intrinsics: Map<String, Any>) {
+        if (!legacyStreams) return
         if (!isInitialized) return
 
         try {
@@ -668,7 +744,8 @@ class MCAPDatasetWriter(
         try {
             val flat = mutableMapOf<String, String>()
             flattenMetadata(metadata, "", flat)
-            mcapWriter?.addMetadata("session_metadata", flat)
+            // The H.264 MCAP carries only contract channels; its metadata lives in the sidecar.
+            if (legacyStreams) mcapWriter?.addMetadata("session_metadata", flat)
         } catch (e: Exception) {
             recordWriteFailure("Failed to write MCAP metadata", e)
         }
@@ -680,7 +757,10 @@ class MCAPDatasetWriter(
                 persisted["finalization_complete"] = false
             }
             val json = toJsonValue(persisted, 0)
-            File(session, "metadata.json").writeText(json)
+            val sidecar = AtomicFile(File(session, "metadata.json"))
+            val stream = sidecar.startWrite()
+            try { stream.write(json.toByteArray(Charsets.UTF_8)); sidecar.finishWrite(stream) }
+            catch (error: Exception) { sidecar.failWrite(stream); throw error }
             totalBytesWritten += json.toByteArray().size.toLong()
             logSystem("metadata.json written")
         } catch (e: Exception) {
@@ -724,7 +804,7 @@ class MCAPDatasetWriter(
     override fun getSessionDirectory(): String? = sessionDir?.absolutePath
 
     override fun getRecordingStats(): Map<String, Any> = mapOf(
-        "rgbFrameCount" to rgbFrameCount,
+        "rgbFrameCount" to (h264Writer?.let { (it.stats()["video_messages"] as Long).toInt() } ?: rgbFrameCount),
         "poseCount" to poseCount,
         "imuSampleCount" to imuSampleCount,
         "pointCloudCount" to pointCloudCount,
@@ -770,6 +850,10 @@ class MCAPDatasetWriter(
             // Write end-of-session messages
             writeEndOfSessionMessages()
 
+            if (h264Writer?.closed == false) {
+                val failure = getWriteFailure()
+                closeH264Capture(if (failure != null) "failed" else "aborted", failure ?: "recording_ended_without_stop")
+            }
             // Finalize MCAP
             mcapWriter?.finish()
             mcapWriter = null
@@ -789,11 +873,16 @@ class MCAPDatasetWriter(
     }
 
     override fun finalize() {
+        if (h264Writer?.closed == false) {
+            val failure = getWriteFailure()
+            closeH264Capture(if (failure != null) "failed" else "aborted", failure ?: "recording_ended_without_stop")
+        }
         try {
             frameLogWriter?.flush(); frameLogWriter?.close(); frameLogWriter = null
             systemLogWriter?.flush(); systemLogWriter?.close(); systemLogWriter = null
             writeEndOfSessionMessages()
             mcapWriter?.finish(); mcapWriter = null
+            h264Writer = null
             freeStorageAfterBytes = sessionDir?.usableSpace ?: 0L
             isInitialized = false
             println("MCAP dataset writers finalized")
@@ -842,6 +931,7 @@ class MCAPDatasetWriter(
     }
 
     private fun writeEndOfSessionMessages() {
+        if (!legacyStreams) return
         val lastTimestamp = trajectoryPoses.lastOrNull()?.timestampNs ?: return
 
         // Always write one final snapshot so stop captures the latest pose list.

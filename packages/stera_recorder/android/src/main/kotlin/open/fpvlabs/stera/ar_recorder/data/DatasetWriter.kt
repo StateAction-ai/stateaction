@@ -6,6 +6,14 @@ import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
 import java.io.File
 
 interface DatasetWriter {
+    /** Opt-in for the next session only; null keeps the historical JPEG profile. */
+    fun configureH264Capture(setup: open.fpvlabs.stera.ar_recorder.data.h264.H264CaptureSetup?) {
+        require(setup == null) { "This dataset writer does not support H.264 MCAP" }
+    }
+    /** The open contract writer of an initialized H.264 session, else null. Use it only on the writer thread. */
+    fun h264Capture(): open.fpvlabs.stera.ar_recorder.data.H264CaptureWriter? = null
+    /** Writes Inventory/Close once; later calls are ignored. */
+    fun closeH264Capture(outcome: String, failureReason: String?) {}
     fun createSessionDirectory(baseDir: File? = null): File?
     fun pauseWriters()
     fun resumeWriters()

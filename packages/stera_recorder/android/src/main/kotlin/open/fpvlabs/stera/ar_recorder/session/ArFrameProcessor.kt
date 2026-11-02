@@ -26,6 +26,7 @@ data class DepthFrameData(
 )
 
 interface ArFrameProcessor {
+    fun releaseRecordingBuffers() {}
     fun resetAllocationCounters()
     fun prepareForRecording(
         pointCloudPoolCapacity: Int = 20,

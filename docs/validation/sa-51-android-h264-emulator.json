@@ -1,0 +1,368 @@
+{
+  "ticket": "SA-51",
+  "date": "2026-11-02",
+  "kind": "emulator_simulation_only",
+  "hardware_qualified": false,
+  "physical_device_touched": false,
+  "base": "origin/main 998930e (includes SA-53 raw motion 678cd7f and SA-60 3e7ddea)",
+  "emulator": {
+    "avd": "stera_ar_api33 (Android 13, google_apis x86_64, ARCore virtual scene, swiftshader)",
+    "serial": "emulator-5582",
+    "users": "single full.SYSTEM user 0"
+  },
+  "instrumentation_apk_sha256": "c8323fa4957cb7ad752603243cf0d8696376303017d9cbb5a223ec1c4dc78bc1",
+  "instrumentation": "OK (2 tests): H264RecorderLifecycleInstrumentedTest",
+  "profile": "h264_mcap_simulation_v1",
+  "encoder_identity": {
+    "codec_name": "c2.android.avc.encoder",
+    "hardware": false,
+    "sps_profile_idc": 77,
+    "sps_level_idc": 31,
+    "input_color_format": 2135033992,
+    "output_format": {
+      "width": 640,
+      "height": 480,
+      "color_standard": 0,
+      "color_range": 0,
+      "color_transfer": 0,
+      "profile": 2,
+      "level": 512
+    },
+    "requested": {
+      "profile": "h264_mcap_simulation_v1",
+      "width": 640,
+      "height": 480,
+      "fps": 30,
+      "bitrate": 4000000,
+      "avc_profile": "main",
+      "avc_level": "3.1",
+      "b_frames": 0,
+      "idr_interval_seconds": 1
+    }
+  },
+  "camera_clock": {
+    "source_realtime": false,
+    "native_clock": "android.elapsed_realtime_receipt",
+    "note": "emulator camera timestamp source is not REALTIME; disclosed simulation receipt clock"
+  },
+  "integrity_counters_first_take": {
+    "cpu_image_frame_timestamp_mismatches": 26,
+    "cpu_image_frame_mismatch_policy": "recorded_simulation_only",
+    "repeated_cpu_images_skipped": 0,
+    "metadata_timestamp_stale": 0,
+    "metadata_timestamp_ahead": 0,
+    "pre_acquisition_backpressure_skips": 0,
+    "codec_input_drops": 0,
+    "peak_queued_encoded_bytes": 65089,
+    "max_queued_encoded_bytes": 16777216,
+    "peak_queued_writes": 4,
+    "max_queued_writes": 128,
+    "unresolved_encoder_identities": 0
+  },
+  "hardware_profile_on_emulator": "H.264 preflight failed: Camera CPU image 640x480 is not the required 1920x1080",
+  "lifecycle": [
+    "pause/resume take",
+    "stop-while-paused take",
+    "cancel deletes its session",
+    "retry with caller recordingId preserved",
+    "startup failure closes failed + immediate retry",
+    "mid-take writer failure auto-stops, closes failed with 1 unresolved frame",
+    "recovery take"
+  ],
+  "validator": "scripts/validate_h264_capture.py: official mcap 1.6.0 validate_crcs + indexed summary; in-memory flatten -> SA-50 capture_conformance.check accept; ffprobe/ffmpeg 8.0.1 decode",
+  "completed_takes": [
+    {
+      "sha256": "32bbd4e2efff6606125838102e557bef2a396124bb394cb06e6f3d5d9401beb1",
+      "bytes": 1024614,
+      "frames": {
+        "acquired": 28,
+        "submitted": 28,
+        "written": 28,
+        "dropped": 0
+      },
+      "video_messages": 28,
+      "motion_events": {
+        "accel": "556",
+        "gyro": "575"
+      },
+      "idr_written": 5,
+      "max_idr_gap_ms": 1760.8,
+      "capture_span_ms": 5758.7,
+      "close_outcome": "completed",
+      "failure_reason": null,
+      "unresolved": "0",
+      "tracking_states": ["paused", "tracking"],
+      "decoded": {
+        "profile": "Main",
+        "level": 31,
+        "raster": "640x480",
+        "pix_fmt": "yuv420p",
+        "pict_types": {
+          "I": 5,
+          "P": 23
+        }
+      },
+      "topics": {
+        "/camera/rgb/video": 28,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 84,
+        "/stateaction/imu/accel": 556,
+        "/stateaction/imu/gyro": 575,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 28,
+        "/tracking/pose": 13
+      }
+    },
+    {
+      "sha256": "f5d8971f08394c91d00ae72d4cffcc4f9b6f00e5785b239c2651c8583a39ce9f",
+      "bytes": 721884,
+      "frames": {
+        "acquired": 20,
+        "submitted": 20,
+        "written": 20,
+        "dropped": 0
+      },
+      "video_messages": 20,
+      "motion_events": {
+        "accel": "349",
+        "gyro": "357"
+      },
+      "idr_written": 4,
+      "max_idr_gap_ms": 1141.9,
+      "capture_span_ms": 3353.9,
+      "close_outcome": "completed",
+      "failure_reason": null,
+      "unresolved": "0",
+      "tracking_states": ["paused", "tracking"],
+      "decoded": {
+        "profile": "Main",
+        "level": 31,
+        "raster": "640x480",
+        "pix_fmt": "yuv420p",
+        "pict_types": {
+          "I": 4,
+          "P": 16
+        }
+      },
+      "topics": {
+        "/camera/rgb/video": 20,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 60,
+        "/stateaction/imu/accel": 349,
+        "/stateaction/imu/gyro": 357,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 20,
+        "/tracking/pose": 12
+      }
+    },
+    {
+      "sha256": "3e544781b05fac4dac2ee34dce2f99a2c3b8455b16437f2eb8107184bd6fa7f0",
+      "bytes": 587945,
+      "frames": {
+        "acquired": 15,
+        "submitted": 15,
+        "written": 15,
+        "dropped": 0
+      },
+      "video_messages": 15,
+      "motion_events": {
+        "accel": "323",
+        "gyro": "324"
+      },
+      "idr_written": 3,
+      "max_idr_gap_ms": 1127.7,
+      "capture_span_ms": 2893.4,
+      "close_outcome": "completed",
+      "failure_reason": null,
+      "unresolved": "0",
+      "tracking_states": ["paused", "tracking"],
+      "decoded": {
+        "profile": "Main",
+        "level": 31,
+        "raster": "640x480",
+        "pix_fmt": "yuv420p",
+        "pict_types": {
+          "I": 3,
+          "P": 12
+        }
+      },
+      "topics": {
+        "/camera/rgb/video": 15,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 45,
+        "/stateaction/imu/accel": 323,
+        "/stateaction/imu/gyro": 324,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 15,
+        "/tracking/pose": 4
+      }
+    },
+    {
+      "sha256": "46b6d49cb36667bdfdabdfae9707a1f50bf4ad713c5412b8783799975d7cbe48",
+      "bytes": 452699,
+      "frames": {
+        "acquired": 12,
+        "submitted": 12,
+        "written": 12,
+        "dropped": 0
+      },
+      "video_messages": 12,
+      "motion_events": {
+        "accel": "246",
+        "gyro": "258"
+      },
+      "idr_written": 2,
+      "max_idr_gap_ms": 1803.5,
+      "capture_span_ms": 2264.5,
+      "close_outcome": "completed",
+      "failure_reason": null,
+      "unresolved": "0",
+      "tracking_states": ["paused", "tracking"],
+      "decoded": {
+        "profile": "Main",
+        "level": 31,
+        "raster": "640x480",
+        "pix_fmt": "yuv420p",
+        "pict_types": {
+          "I": 2,
+          "P": 10
+        }
+      },
+      "topics": {
+        "/camera/rgb/video": 12,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 36,
+        "/stateaction/imu/accel": 246,
+        "/stateaction/imu/gyro": 258,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 12,
+        "/tracking/pose": 3
+      }
+    },
+    {
+      "sha256": "c284f7f025f867ca936ada4e01a647a635e16f7811bdd535fcb03419810a276b",
+      "bytes": 470346,
+      "frames": {
+        "acquired": 10,
+        "submitted": 10,
+        "written": 10,
+        "dropped": 0
+      },
+      "video_messages": 10,
+      "motion_events": {
+        "accel": "245",
+        "gyro": "250"
+      },
+      "idr_written": 3,
+      "max_idr_gap_ms": 1315.2,
+      "capture_span_ms": 2478.2,
+      "close_outcome": "completed",
+      "failure_reason": null,
+      "unresolved": "0",
+      "tracking_states": ["paused", "tracking"],
+      "decoded": {
+        "profile": "Main",
+        "level": 31,
+        "raster": "640x480",
+        "pix_fmt": "yuv420p",
+        "pict_types": {
+          "I": 3,
+          "P": 7
+        }
+      },
+      "topics": {
+        "/camera/rgb/video": 10,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 30,
+        "/stateaction/imu/accel": 245,
+        "/stateaction/imu/gyro": 250,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 10,
+        "/tracking/pose": 4
+      }
+    }
+  ],
+  "writer_failure_take": {
+    "sha256": "f206007f0a5db3369e2223d379959551e27bff796aa9465edaef6b8a1a7085d4",
+    "bytes": 307776,
+    "frames": {
+      "acquired": 8,
+      "submitted": 8,
+      "written": 7,
+      "dropped": 0
+    },
+    "video_messages": 7,
+    "motion_events": {
+      "accel": "177",
+      "gyro": "183"
+    },
+    "idr_written": 2,
+    "max_idr_gap_ms": 1179.5,
+    "capture_span_ms": 1187.2,
+    "close_outcome": "failed",
+    "failure_reason": "injected writer failure during an active take",
+    "unresolved": "1",
+    "tracking_states": ["paused", "tracking"],
+    "decoded": {
+      "profile": "Main",
+      "level": 31,
+      "raster": "640x480",
+      "pix_fmt": "yuv420p",
+      "pict_types": {
+        "I": 2,
+        "P": 5
+      }
+    },
+    "topics": {
+      "/camera/rgb/video": 7,
+      "/stateaction/capture_profile": 1,
+      "/stateaction/clocks": 1,
+      "/stateaction/close": 1,
+      "/stateaction/frame_events": 23,
+      "/stateaction/imu/accel": 177,
+      "/stateaction/imu/gyro": 183,
+      "/stateaction/inventory": 1,
+      "/stateaction/sensor_events": 8,
+      "/tracking/pose": 5
+    }
+  },
+  "startup_failure_take": {
+    "sha256": "fd2a63c346b5dba527b758eebc0a6c0e9e46c6eea7cdf36b6087d3c9ebd374ff",
+    "close": {
+      "recording_id": "dbced096-bccc-4839-8bde-09f6515fd989",
+      "outcome": "failed",
+      "failure_reason": "Recording start failed: IllegalStateException: injected after real MCAP initialization",
+      "frames": {
+        "acquired": "0",
+        "submitted": "0",
+        "written": "0",
+        "dropped": "0",
+        "unresolved": "0"
+      },
+      "video_messages": "0",
+      "drops": [],
+      "motion_events": {
+        "accel": "0",
+        "gyro": "0"
+      },
+      "sensor_events": "0"
+    }
+  },
+  "limits": [
+    "emulator ~5 fps camera cadence and software encoder: no throughput, thermal or hardware-encoder claim",
+    "no physical evidence yet for REALTIME camera clock, Image==Frame timestamp identity, hardware Main 4.0 1080p encoder or an ARCore 1920x1080 CPU camera config",
+    "depth, saved calibration and durable recovery are other tickets",
+    "Flutter UI Start/Stop with real login pending SA-17 merge"
+  ],
+  "raw_captures": "kept in ignored artifacts/android-h264-e2e/, never in Git"
+}

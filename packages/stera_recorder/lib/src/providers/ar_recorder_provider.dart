@@ -263,13 +263,10 @@ class ArRecorderProvider extends ChangeNotifier {
 
       final initConfig = configOverride ?? recordingConfig;
       final result = await ArRecorderService.initializeSession(
-        preferences: {
-          "rgbVideoHeight": initConfig.rgbVideoResolution.nominalHeight,
-          "autoFocus": initConfig.autoFocus,
-          "autoExposure": initConfig.autoExposure,
-          "arkitFps": initConfig.arkitFps,
-          "enableInertialDerived": initConfig.enableInertialDerived,
-        },
+        // Initialize the same native camera/profile that Start will request.
+        // Selecting only legacy settings here silently initializes a JPEG
+        // session before an explicitly selected H.264 take.
+        preferences: initConfig.toMap(),
       );
 
       if (result == null) {
@@ -331,6 +328,7 @@ class ArRecorderProvider extends ChangeNotifier {
       if (result["success"] == true) {
         _isRecording = true;
         _isPaused = false;
+        _errorMessage = null;
         _state = ArRecorderState.recording;
         _outputDirectory = result["outputDirectory"] as String?;
         _isLowQualityMode = result["isLowQualityMode"] as bool? ?? false;
@@ -643,6 +641,17 @@ class ArRecorderProvider extends ChangeNotifier {
       _previewWidth = result["previewWidth"] as int? ?? _previewWidth;
       _previewHeight = result["previewHeight"] as int? ?? _previewHeight;
       _errorMessage = result["error"] as String? ?? _errorMessage;
+      if (wasRecording && !_isRecording && result["error"] is String) {
+        // Native required-stream failures finalize without a Dart Stop call.
+        // Keep failed bytes available to native diagnostics, never as a saved
+        // successful output in the collector.
+        _outputDirectory = null;
+        _lastFramesRecorded = 0;
+        _recordingStartTime = null;
+        _pausedStartedAt = null;
+        _pausedDuration = Duration.zero;
+        _recordingDuration = Duration.zero;
+      }
 
       // Update duration if recording
       if (_isRecording && _recordingStartTime != null) {
