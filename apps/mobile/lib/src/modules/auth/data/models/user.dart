@@ -5,7 +5,8 @@ import "dart:convert";
 /// Fields map to the fpv-auth `GET /api/v1/auth/me` response:
 ///   { id, email, fullName, avatarUrl, platformRole, contributor }
 class User {
-  final String id; // profiles.id (UUID)
+  /// Opaque Better Auth user id (not a UUID).
+  final String id;
   final String? email;
   final String? phone;
   final String? name; // profiles.full_name
@@ -16,6 +17,9 @@ class User {
   final int? age;
   final bool isContributor; // contributor row exists (not null)
   final DateTime? createdAt;
+
+  /// Server access status (`active`/`pending`/`disabled`) or `offline`.
+  final String? accessStatus;
 
   User({
     required this.id,
@@ -29,6 +33,7 @@ class User {
     this.avatarUrl,
     this.platformRole,
     this.createdAt,
+    this.accessStatus,
   });
 
   /// Parses both the backend response shape and the cached JSON shape.
@@ -51,6 +56,7 @@ class User {
       country: map["country"] as String?,
       age: map["age"] as int?,
       isContributor: isContributor,
+      accessStatus: map["accessStatus"] as String?,
       createdAt: map["createdAt"] != null
           ? DateTime.parse(map["createdAt"] as String)
           : (map["contributor"] is Map<String, dynamic> &&
@@ -77,6 +83,7 @@ class User {
       "age": age,
       "contributor": isContributor ? <String, dynamic>{} : null,
       if (createdAt != null) "createdAt": createdAt!.toIso8601String(),
+      if (accessStatus != null) "accessStatus": accessStatus,
     };
   }
 
@@ -105,6 +112,7 @@ class User {
       age: age ?? this.age,
       isContributor: isContributor ?? this.isContributor,
       createdAt: createdAt,
+      accessStatus: accessStatus,
     );
   }
 }

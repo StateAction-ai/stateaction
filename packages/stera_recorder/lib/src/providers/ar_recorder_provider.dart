@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 
 import "../config/recorder_permissions.dart";
 import "../config/recorder_preferences.dart";
+import "../config/recording_start_gate.dart";
 import "../data/enums/ar_recorder_state.dart";
 import "../data/enums/ar_tracking_state.dart";
 import "../data/models/recording_config.dart";
@@ -23,16 +24,20 @@ class ArRecorderProvider extends ChangeNotifier {
   /// [InMemoryRecorderPreferences] to run on the built-in defaults.
   /// [permissions] is only ever *queried*; requesting camera access stays the
   /// host app's responsibility.
+  /// [startGate] runs before every native Start; the default allows it.
   ArRecorderProvider({
     required RecorderPreferences preferences,
     required RecorderPermissions permissions,
+    RecordingStartGate startGate = const OpenRecordingStartGate(),
   }) : _config = ArRecordingConfigManager(preferences: preferences),
-       _permissions = permissions {
+       _permissions = permissions,
+       _startGate = startGate {
     _config.addListener(notifyListeners);
   }
 
   final ArRecordingConfigManager _config;
   final RecorderPermissions _permissions;
+  final RecordingStartGate _startGate;
   ArRecorderState _state = ArRecorderState.uninitialized;
   ArRecorderState get state => _state;
 
@@ -314,6 +319,22 @@ class ArRecorderProvider extends ChangeNotifier {
 
     debugPrint("📷 ArRecorderProvider: Starting recording...");
 
+    final RecordingStartClearance clearance;
+    try {
+      clearance = await _startGate.clearStart();
+    } catch (e) {
+      _errorMessage = "Recording could not be authorized.";
+      debugPrint("❌ ArRecorderProvider: start gate failed: $e");
+      notifyListeners();
+      return;
+    }
+    if (clearance is RecordingStartDenied) {
+      _errorMessage = clearance.message;
+      notifyListeners();
+      return;
+    }
+
+    var started = false;
     try {
       final result = await ArRecorderService.startRecording(
         config: recordingConfig,
@@ -321,11 +342,13 @@ class ArRecorderProvider extends ChangeNotifier {
 
       if (result == null) {
         _errorMessage = "Failed to start - no response";
+        await _startGate.recordingStartFailed(clearance);
         notifyListeners();
         return;
       }
 
       if (result["success"] == true) {
+        started = true;
         _isRecording = true;
         _isPaused = false;
         _errorMessage = null;
@@ -343,6 +366,7 @@ class ArRecorderProvider extends ChangeNotifier {
         _recordingDuration = Duration.zero;
 
         debugPrint("✅ ArRecorderProvider: Recording started");
+        await _startGate.recordingStarted(clearance, _outputDirectory);
       } else {
         _errorMessage =
             result["error"] as String? ?? "Failed to start recording";
@@ -351,6 +375,13 @@ class ArRecorderProvider extends ChangeNotifier {
     } catch (e) {
       _errorMessage = _friendlyErrorMessage(e);
       debugPrint("❌ ArRecorderProvider: Error starting: $e");
+    }
+    if (!started) {
+      try {
+        await _startGate.recordingStartFailed(clearance);
+      } catch (e) {
+        debugPrint("❌ ArRecorderProvider: start gate abort failed: $e");
+      }
     }
 
     notifyListeners();

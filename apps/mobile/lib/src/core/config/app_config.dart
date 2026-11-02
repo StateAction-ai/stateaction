@@ -1,5 +1,6 @@
 import "package:flutter/foundation.dart";
 import "package:flutter_dotenv/flutter_dotenv.dart";
+import "package:stera/src/modules/auth/session/backend_origin.dart";
 
 class AppConfig {
   static ConfigModel? _configCache;
@@ -53,32 +54,28 @@ class AppConfig {
     return config.environment == Environment.dev || kDebugMode;
   }
 
-  static String get host {
-    switch (config.environment) {
-      case Environment.dev:
-        return config.devHost;
-      case Environment.prod:
-        return config.prodHost;
-    }
-  }
+  /// Exact backend origin (`scheme://host[:port]`) shared by Better Auth
+  /// (`/api/auth`) and the API (`/api/v1`). Null when unset or invalid, which
+  /// makes every network call fail closed instead of guessing a host.
+  static BackendOrigin? get backendOrigin =>
+      BackendOrigin.tryParse(switch (config.environment) {
+        Environment.dev => config.devBackendOrigin,
+        Environment.prod => config.prodBackendOrigin,
+      });
 
-  /// Better Auth base URL (`…/api/auth`). Same origin as the API in v1.
-  static String get authBaseUrl {
-    switch (config.environment) {
-      case Environment.dev:
-        return config.devAuthBaseUrl;
-      case Environment.prod:
-        return config.prodAuthBaseUrl;
-    }
-  }
+  @visibleForTesting
+  static bool? debugOverrideLocalPasswordAuth;
 
-  static String get apiVersion {
-    switch (config.environment) {
-      case Environment.dev:
-        return config.devApiVersion;
-      case Environment.prod:
-        return config.prodApiVersion;
+  /// Opt-in local email/password sign-in against the same Better Auth
+  /// instance (seeded pilot users, no mail service). Off unless `.env` sets
+  /// `LOCAL_PASSWORD_AUTH=true`; never implied by environment.
+  static bool get localPasswordAuth {
+    if (debugOverrideLocalPasswordAuth != null) {
+      return debugOverrideLocalPasswordAuth!;
     }
+    if (!dotenv.isInitialized) return false;
+    final raw = dotenv.env["LOCAL_PASSWORD_AUTH"]?.trim().toLowerCase();
+    return raw == "true" || raw == "1";
   }
 }
 
@@ -97,23 +94,15 @@ extension EnvX on Environment {
 
 class ConfigModel {
   final Environment environment;
-  final String prodHost;
-  final String prodAuthBaseUrl;
-  final String prodApiVersion;
-  final String devHost;
-  final String devAuthBaseUrl;
-  final String devApiVersion;
+  final String prodBackendOrigin;
+  final String devBackendOrigin;
   final String googleWebClientId;
   final String googleIosClientId;
 
   ConfigModel(
     this.environment,
-    this.prodHost,
-    this.prodAuthBaseUrl,
-    this.prodApiVersion,
-    this.devHost,
-    this.devAuthBaseUrl,
-    this.devApiVersion,
+    this.prodBackendOrigin,
+    this.devBackendOrigin,
     this.googleWebClientId,
     this.googleIosClientId,
   );
@@ -126,16 +115,12 @@ class ConfigModel {
 
     // Missing keys fall back to "" rather than throwing. `NO_AUTH_MODE` builds
     // ship a `.env` holding nothing but the flag, and even in the authed build
-    // a hostless URL surfaces as a `Failure.networkError()` at request time,
+    // a missing origin surfaces as a `Failure.networkError()` at request time,
     // which beats a `TypeError` thrown out of a `build()` method at boot.
     return ConfigModel(
       environment,
-      map["PROD_HOST"] ?? "",
-      map["PROD_AUTH_BASE_URL"] ?? "",
-      map["PROD_API_VERSION"] ?? "",
-      map["DEV_HOST"] ?? "",
-      map["DEV_AUTH_BASE_URL"] ?? "",
-      map["DEV_API_VERSION"] ?? "",
+      map["PROD_BACKEND_ORIGIN"] ?? "",
+      map["DEV_BACKEND_ORIGIN"] ?? "",
       map["GOOGLE_WEB_CLIENT_ID"] ?? "",
       map["GOOGLE_IOS_CLIENT_ID"] ?? "",
     );

@@ -1,14 +1,11 @@
 import "dart:io";
 
-import "package:better_auth_flutter/better_auth_flutter.dart" as ba;
-
 /// Returns true if the given error is a network-related exception
 /// (DNS failure, TLS handshake failure, connection reset, etc.).
 bool isNetworkError(Object e) {
   if (e is SocketException || e is HandshakeException || e is HttpException) {
     return true;
   }
-  if (e is ba.BetterError && e.isNetworkError) return true;
   final msg = e.toString();
   return msg.contains("SocketException") ||
       msg.contains("HandshakeException") ||
@@ -28,9 +25,9 @@ final _upstreamOutageMessage = RegExp(r"error code: 5\d\d");
 /// connectivity. Distinguished from [isNetworkError] so callers can tell the
 /// user the service is down instead of blaming their connection.
 bool isUpstreamOutage(Object e) {
-  if (e is ba.BetterError) {
-    final code = e.statusCode;
-    if (code != null && _upstreamOutageCodes.contains(code)) return true;
+  if (e is UpstreamStatusException &&
+      _upstreamOutageCodes.contains(e.statusCode)) {
+    return true;
   }
   return _upstreamOutageMessage.hasMatch(e.toString());
 }
@@ -53,4 +50,12 @@ Future<T> retryOnNetworkError<T>(
       await Future.delayed(delay * attempts);
     }
   }
+}
+
+/// An HTTP status from an upstream origin, for [isUpstreamOutage].
+class UpstreamStatusException implements Exception {
+  const UpstreamStatusException(this.statusCode);
+  final int statusCode;
+  @override
+  String toString() => "UpstreamStatusException($statusCode)";
 }

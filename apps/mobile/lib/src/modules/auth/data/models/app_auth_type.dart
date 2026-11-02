@@ -1,1 +1,1 @@
-enum AppAuthType { google, apple, phone }
+enum AppAuthType { google, apple, localPassword, phone }

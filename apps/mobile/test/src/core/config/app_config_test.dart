@@ -7,18 +7,15 @@ void main() {
     dotenv.clean();
     AppConfig.debugResetConfigCache();
     AppConfig.debugOverrideNoAuthMode = null;
+    AppConfig.debugOverrideLocalPasswordAuth = null;
   });
 
   group("ConfigModel.fromMap", () {
     test("missing keys fall back to empty strings rather than throwing", () {
       final config = ConfigModel.fromMap(const {});
 
-      expect(config.prodHost, "");
-      expect(config.prodAuthBaseUrl, "");
-      expect(config.prodApiVersion, "");
-      expect(config.devHost, "");
-      expect(config.devAuthBaseUrl, "");
-      expect(config.devApiVersion, "");
+      expect(config.prodBackendOrigin, "");
+      expect(config.devBackendOrigin, "");
       expect(config.googleWebClientId, "");
       expect(config.googleIosClientId, "");
     });
@@ -41,20 +38,20 @@ void main() {
       expect(dotenv.isInitialized, isFalse);
 
       expect(() => AppConfig.config, returnsNormally);
-      expect(AppConfig.config.prodHost, "");
-      expect(AppConfig.host, "");
-      expect(AppConfig.authBaseUrl, "");
-      expect(AppConfig.apiVersion, "");
+      expect(AppConfig.config.prodBackendOrigin, "");
+      expect(AppConfig.backendOrigin, isNull);
     });
 
     test("a pre-load read does not poison the cache", () {
       // Reading first, then loading, is the ordering that a naive `_cache ??=`
       // would freeze an empty model for the rest of the process.
-      expect(AppConfig.config.prodHost, "");
+      expect(AppConfig.config.prodBackendOrigin, "");
 
-      dotenv.loadFromString(envString: "PROD_HOST=api.example.com");
+      dotenv.loadFromString(
+        envString: "PROD_BACKEND_ORIGIN=https://api.example.com",
+      );
 
-      expect(AppConfig.config.prodHost, "api.example.com");
+      expect(AppConfig.config.prodBackendOrigin, "https://api.example.com");
     });
   });
 
@@ -104,8 +101,40 @@ void main() {
       dotenv.loadFromString(envString: "NO_AUTH_MODE=true");
 
       expect(AppConfig.noAuthMode, isTrue);
-      expect(() => AppConfig.host, returnsNormally);
-      expect(AppConfig.host, "");
+      expect(() => AppConfig.backendOrigin, returnsNormally);
+      expect(AppConfig.backendOrigin, isNull);
+    });
+  });
+  group("AppConfig.backendOrigin", () {
+    test("selects the environment origin and rejects unsafe values", () {
+      dotenv.loadFromString(
+        envString:
+            "ENVIRONMENT=dev\n"
+            "DEV_BACKEND_ORIGIN=https://tim-work-pc.taila68f99.ts.net:8444\n"
+            "PROD_BACKEND_ORIGIN=https://api.example.com",
+      );
+      expect(
+        AppConfig.backendOrigin?.value,
+        "https://tim-work-pc.taila68f99.ts.net:8444",
+      );
+
+      dotenv.clean();
+      AppConfig.debugResetConfigCache();
+      dotenv.loadFromString(
+        envString: "ENVIRONMENT=dev\nDEV_BACKEND_ORIGIN=http://example.com",
+      );
+      expect(AppConfig.backendOrigin, isNull);
+    });
+  });
+
+  group("AppConfig.localPasswordAuth", () {
+    test("is opt-in only", () {
+      expect(AppConfig.localPasswordAuth, isFalse);
+      dotenv.loadFromString(envString: "ENVIRONMENT=dev");
+      expect(AppConfig.localPasswordAuth, isFalse);
+      dotenv.clean();
+      dotenv.loadFromString(envString: "LOCAL_PASSWORD_AUTH=true");
+      expect(AppConfig.localPasswordAuth, isTrue);
     });
   });
 }

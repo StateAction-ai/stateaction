@@ -3,6 +3,7 @@ import "package:stera/src/core/config/app_config.dart";
 import "package:stera/src/modules/demo/providers/demo_video_preload_provider.dart";
 import "package:stera/src/modules/ar_recorder/adapters/recorder_host_adapters.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
+import "package:stera/src/modules/auth/session/auth_services.dart";
 import "package:stera/src/modules/home/providers/navigation_provider.dart";
 import "package:stera/src/modules/onboarding/providers/onboarding_provider.dart";
 import "package:stera/src/modules/profile/providers/profile_provider.dart";
@@ -50,6 +51,13 @@ ChangeNotifierProvider<ArRecorderProvider> _arRecorderProvider() =>
       create: (context) => ArRecorderProvider(
         preferences: const KvStoreRecorderPreferences(),
         permissions: const AppRecorderPermissions(),
+        // The authenticated build stamps a verified owner before every Start
+        // and refuses Start without one. The auth-free harness keeps its
+        // honest ownerless behavior (those captures need explicit recovery
+        // if later opened in an authenticated build).
+        startGate: AppConfig.noAuthMode
+            ? const OpenRecordingStartGate()
+            : AuthServices.lazyCaptureGate(),
       ),
     );
 

@@ -1,7 +1,6 @@
 import "dart:async";
 import "dart:developer" as dev;
 
-import "package:better_auth_flutter/better_auth_flutter.dart" as ba;
 import "package:flutter/widgets.dart";
 import "package:google_sign_in/google_sign_in.dart";
 import "package:provider/provider.dart";
@@ -11,13 +10,18 @@ import "package:stera/src/modules/auth/data/models/app_auth_type.dart";
 import "package:stera/src/modules/auth/data/models/user.dart";
 import "package:stera/src/modules/auth/data/repo/auth_repo.dart";
 import "package:stera/src/modules/auth/data/repo/user_repo.dart";
+import "package:stera/src/modules/auth/session/auth_http_client.dart";
+import "package:stera/src/modules/auth/session/auth_services.dart";
+import "package:stera/src/modules/auth/session/auth_session_controller.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
-import "package:stera/src/services/api/token_service.dart";
 import "package:stera/src/services/kv_store/kv_store.dart";
 
+/// UI-facing auth state, derived from [AuthSessionController].
 class AuthProvider extends ChangeNotifier {
+  AuthSessionController? _controller;
+
   User? _user;
   User? get user => _user;
   set user(User? value) {
@@ -25,7 +29,24 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True for a server-verified session and for a recently verified owner
+  /// who is offline/expired (capture allowed, networking paused).
   bool get isLoggedIn => user != null;
+
+  AuthSessionState get sessionState =>
+      _controller?.state ?? const AuthSignedOut();
+
+  /// Networking is paused and a fresh sign-in is needed to resume it.
+  bool get reauthRequired => switch (sessionState) {
+    AuthOfflineEligible(:final reauthRequired) => reauthRequired,
+    _ => false,
+  };
+
+  /// Signed in but the server has not granted an active collector role.
+  bool get awaitingAccess => switch (sessionState) {
+    AuthActive(:final identity) => !identity.canCollect,
+    _ => false,
+  };
 
   bool _isNewUser = false;
   bool get isNewUser => _isNewUser;
@@ -41,9 +62,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Name returned by Sign in with Apple on first auth. Used by onboarding to
-  /// skip the name screen — Apple HIG forbids re-asking for info Authentication
-  /// Services already provided.
+  /// Name returned by Sign in with Apple on first auth.
   String? _pendingDisplayName;
   String? get pendingDisplayName => _pendingDisplayName;
   set pendingDisplayName(String? value) {
@@ -51,101 +70,101 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _attach() {
+    final controller = AuthServices.maybeInstance?.controller;
+    if (controller == null || identical(controller, _controller)) return;
+    _controller?.removeListener(_syncFromSession);
+    _controller = controller..addListener(_syncFromSession);
+  }
+
+  void _syncFromSession() {
+    final state = sessionState;
+    _user = switch (state) {
+      AuthActive(:final identity) => UserRepo.fromIdentity(identity),
+      AuthOfflineEligible() => UserRepo.fromOffline(state),
+      _ => null,
+    };
+    notifyListeners();
+  }
+
   Future<Failure?> onAuth({
     required AppAuthType type,
     GoogleSignInAuthenticationEvent? event,
-    String? phoneNumber,
-    String? otp,
+    String? email,
+    String? password,
   }) async {
-    switch (type) {
-      case AppAuthType.google:
-        if (event == null) {
+    _attach();
+    loading = true;
+    try {
+      switch (type) {
+        case AppAuthType.google:
+          if (event == null) {
+            return Failure(
+              code: ErrorType.validation,
+              message: "Google sign-in event is required.",
+            );
+          }
+          final err = await AuthRepo.signInWithGoogle(event);
+          if (err != null) return err;
+        case AppAuthType.apple:
+          final (appleFullName, err) = await AuthRepo.signInWithApple();
+          if (err != null) return err;
+          if (appleFullName != null) _pendingDisplayName = appleFullName;
+        case AppAuthType.localPassword:
+          if (email == null || password == null) {
+            return Failure(
+              code: ErrorType.validation,
+              message: "Email and password are required.",
+            );
+          }
+          final err = await AuthRepo.signInWithEmail(
+            email: email,
+            password: password,
+          );
+          if (err != null) return err;
+        case AppAuthType.phone:
           return Failure(
             code: ErrorType.validation,
-            message: "Google sign-in event is required.",
+            message: "Phone sign-in is no longer supported.",
           );
-        }
-        loading = true;
-        try {
-          final (res, err) = await AuthRepo.signInWithGoogle(event);
-          if (err != null) return err;
-          if (res == null && !ba.BetterAuthFlutter.authState.isAuthenticated) {
-            return Failure(
-              code: ErrorType.unknown,
-              message: "Verification failed. Please try again.",
-            );
-          }
-          if (!ba.BetterAuthFlutter.authState.isAuthenticated) {
-            await ba.BetterAuthFlutter.refreshSession();
-          }
-          return await _hydrateUserAfterSignIn();
-        } finally {
-          loading = false;
-        }
-      case AppAuthType.apple:
-        loading = true;
-        try {
-          final (res, appleFullName, err) = await AuthRepo.signInWithApple();
-          if (err != null) return err;
-          if (res == null && !ba.BetterAuthFlutter.authState.isAuthenticated) {
-            return Failure(
-              code: ErrorType.unknown,
-              message: "Verification failed. Please try again.",
-            );
-          }
-          if (!ba.BetterAuthFlutter.authState.isAuthenticated) {
-            await ba.BetterAuthFlutter.refreshSession();
-          }
-          if (appleFullName != null) _pendingDisplayName = appleFullName;
-          return await _hydrateUserAfterSignIn();
-        } finally {
-          loading = false;
-        }
-      case AppAuthType.phone:
-        return Failure(
-          code: ErrorType.validation,
-          message: "Phone sign-in is no longer supported.",
-        );
+      }
+      return _afterSignIn();
+    } finally {
+      loading = false;
     }
   }
 
-  Future<Failure?> _hydrateUserAfterSignIn() async {
-    final (fetchedUser, fetchErr) = await UserRepo.upsertProfile();
-
-    if (fetchErr != null || fetchedUser == null) {
-      dev.log("AUTH: profile hydrate failed: ${fetchErr?.message}");
-      await ba.BetterAuthFlutter.client.signOut();
-      await ba.BetterAuthFlutter.clearCookies();
-      return fetchErr ??
-          Failure(
-            code: ErrorType.unknown,
-            message: "Could not connect to server. Please try again.",
-          );
+  Future<Failure?> _afterSignIn() async {
+    _syncFromSession();
+    if (_user == null) {
+      return Failure(
+        code: ErrorType.unknown,
+        message: "Could not verify this account. Please try again.",
+      );
     }
-
-    user = fetchedUser;
     isNewUser = !(KvStore.get<bool>(KvStoreKeys.onboardingComplete) ?? false);
 
     final ctx = AppRouter.navigatorKey.currentContext;
     if (ctx != null && ctx.mounted) {
       unawaited(ctx.read<UploadProvider>().picker.recoverOrphanedSessions());
     }
-
     return null;
   }
 
   Future<void> forceRefreshUser() async {
     try {
-      final cachedUser = await UserRepo.loadCachedUser();
-      user ??= cachedUser;
-
       final (updatedUser, err) = await UserRepo.getMe();
       if (err != null) return;
       user = updatedUser;
     } catch (e) {
-      dev.log("AUTH: forceRefreshUser error: $e");
-      await logout();
+      dev.log("AUTH: forceRefreshUser error: ${e.runtimeType}");
     }
+  }
+
+  /// A human route returned 401: pause networking, keep owner data.
+  Future<void> onSessionEnded() async {
+    _attach();
+    await _controller?.reportUnauthorized();
   }
 
   Future<Failure?> updateCurrentUserProfile({
@@ -171,57 +190,33 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  Future<void> logout() async {
+  /// Explicit logout. Returns `unconfirmed` when the server could not be
+  /// reached; local credentials and offline eligibility are cleared anyway.
+  Future<SignOutConfirmation> logout() async {
+    _pendingDisplayName = null;
+    final confirmation = await AuthRepo.logout();
     user = null;
     isNewUser = false;
-    _pendingDisplayName = null;
-
-    await AuthRepo.logout();
     _clearLocalCaches();
+    return confirmation;
   }
 
   Future<Failure?> delete() async {
     if (_user == null) {
       return Failure(code: ErrorType.unknown, message: "User not found");
     }
-
-    final err = await AuthRepo.deleteAccount();
-
-    if (err != null) return err;
-
-    user = null;
-    isNewUser = false;
-    _pendingDisplayName = null;
-
-    _clearLocalCaches();
-
-    return null;
+    return AuthRepo.deleteAccount();
   }
 
   Future<void> init() async {
-    if (!ba.BetterAuthFlutter.authState.isAuthenticated) {
-      await ba.BetterAuthFlutter.refreshSession();
+    _attach();
+    final controller = _controller;
+    if (controller == null) return;
+    await controller.restore();
+    _syncFromSession();
+    if (_user != null) {
+      isNewUser = !(KvStore.get<bool>(KvStoreKeys.onboardingComplete) ?? false);
     }
-
-    if (!ba.BetterAuthFlutter.authState.isAuthenticated) {
-      return;
-    }
-
-    final hasProfile = TokenService.hasAppUserId();
-
-    if (!hasProfile) {
-      isNewUser = true;
-      return;
-    }
-
-    user = await UserRepo.loadCachedUser();
-
-    final (fetchedUser, err) = await UserRepo.getMe();
-    if (err == null && fetchedUser != null) {
-      user = fetchedUser;
-    }
-
-    isNewUser = !(KvStore.get<bool>(KvStoreKeys.onboardingComplete) ?? false);
   }
 
   void _clearLocalCaches() {
@@ -230,10 +225,17 @@ class AuthProvider extends ChangeNotifier {
     PaintingBinding.instance.imageCache.clearLiveImages();
   }
 
+  /// In-memory reset only (used by [AuthHelper]); never touches the session.
   void reset() {
-    user = null;
+    _user = null;
     isNewUser = false;
     loading = false;
     _pendingDisplayName = null;
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_syncFromSession);
+    super.dispose();
   }
 }
