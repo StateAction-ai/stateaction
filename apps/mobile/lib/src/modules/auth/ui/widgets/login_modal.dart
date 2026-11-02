@@ -11,12 +11,14 @@ import "package:stera/src/core/common/utils/extensions.dart";
 import "package:stera/src/core/common/widgets/app_button/app_button.dart";
 import "package:stera/src/core/common/widgets/app_button/enums/button_type.dart";
 import "package:stera/src/core/common/widgets/app_toast.dart";
+import "package:stera/src/core/config/app_config.dart";
 import "package:stera/src/core/config/constants/app_constants.dart";
 import "package:stera/src/core/constants/app_assets.dart";
 import "package:stera/src/core/router/app_router.dart";
 import "package:stera/src/modules/auth/data/models/app_auth_type.dart";
 import "package:stera/src/modules/auth/data/repo/auth_repo.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
+import "package:stera/src/modules/auth/ui/widgets/local_password_sign_in_form.dart";
 import "package:stera/src/modules/home/ui/navigation_page.dart";
 import "package:stera/src/modules/onboarding/ui/onboarding_page.dart";
 import "package:stera/src/core/theme/app_radii.dart";
@@ -223,6 +225,13 @@ class _LoginModalState extends State<LoginModal> {
                       );
                     },
                   ),
+                  if (AppConfig.localPasswordAuth) ...[
+                    const SizedBox(height: AppSpacing.lgPlus),
+                    LocalPasswordSignInForm(
+                      onSignedIn: () =>
+                          _routeAfterAuth(context.read<AuthProvider>()),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lgPlus),
                   Center(
                     child: Text.rich(

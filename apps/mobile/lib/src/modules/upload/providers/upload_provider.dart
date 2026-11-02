@@ -1,4 +1,5 @@
 import "dart:async";
+import "package:stera/src/modules/capture_ownership/owner_fence.dart";
 import "package:stera/src/core/router/app_router.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
 import "package:stera/src/modules/upload/providers/managers/upload_progress_manager.dart";
@@ -285,7 +286,12 @@ class UploadProvider extends ChangeNotifier {
     );
   }
 
-  void _onUploadsChanged(List<Upload> allUploads) {
+  void _onUploadsChanged(List<Upload> unfiltered) {
+    // Rows of other accounts and ownerless rows stay in the journal untouched
+    // but are never listed, resumed or selected by this account.
+    final allUploads = unfiltered
+        .where((u) => OwnerFence.isVisible(u.filepath))
+        .toList();
     // Get IDs of uploads currently in the database
     final currentIds = allUploads.map((u) => u.id).toSet();
 

@@ -1,5 +1,7 @@
 import "dart:io";
 
+import "package:flutter/foundation.dart";
+
 import "package:path/path.dart" as p;
 import "package:path_provider/path_provider.dart";
 import "package:stera/src/core/config/app_config.dart";
@@ -32,6 +34,12 @@ class AuthServices {
   SessionCookieJar get jar => client.jar;
 
   static AuthServices? _instance;
+
+  @visibleForTesting
+  static void debugReset() {
+    _instance?.client.close();
+    _instance = null;
+  }
 
   /// Null in the auth-free build and before startup completes; callers must
   /// fail closed (no cookies, no owner, no networking).

@@ -4,6 +4,7 @@ import "dart:developer" as dev;
 import "package:flutter/widgets.dart";
 import "package:google_sign_in/google_sign_in.dart";
 import "package:provider/provider.dart";
+import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/common/widgets/video_thumbnail/video_thumbnail.dart";
 import "package:stera/src/core/router/app_router.dart";
 import "package:stera/src/modules/auth/data/models/app_auth_type.dart";
@@ -198,6 +199,13 @@ class AuthProvider extends ChangeNotifier {
     user = null;
     isNewUser = false;
     _clearLocalCaches();
+    if (confirmation == SignOutConfirmation.unconfirmed) {
+      AppToast.show(
+        title:
+            "Signed out on this device. The server could not be reached, so "
+            "session revocation is unconfirmed.",
+      );
+    }
     return confirmation;
   }
 
