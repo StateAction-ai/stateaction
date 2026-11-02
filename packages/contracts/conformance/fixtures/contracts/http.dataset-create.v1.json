@@ -1,0 +1,109 @@
+{
+  "contract": "http.dataset-create.v1",
+  "cases": [
+    {
+      "name": "create",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "name at the bound",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "name too long",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/name"
+        ]
+      }
+    },
+    {
+      "name": "name required non-empty",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": ""
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/name"
+        ]
+      }
+    },
+    {
+      "name": "client chooses a UUID",
+      "input": {
+        "document": {
+          "datasetId": "not-a-uuid",
+          "name": "Kitchen pours"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/datasetId"
+        ]
+      }
+    },
+    {
+      "name": "datasetId required",
+      "input": {
+        "document": {
+          "name": "Kitchen pours"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "closed object",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "createdBy": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

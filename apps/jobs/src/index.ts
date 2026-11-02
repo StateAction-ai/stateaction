@@ -4,6 +4,7 @@ import {
   type PlatformVerifyResult,
 } from "@stateaction/contracts";
 import { LocalExecutor } from "./local-executor.js";
+export { processRecording } from "./process-recording.js";
 // This foundation probe is intentionally separate from the future durable processing task.
 export const verifyPlatform = task(
   {

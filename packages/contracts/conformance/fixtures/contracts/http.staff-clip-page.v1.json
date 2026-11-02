@@ -1,0 +1,178 @@
+{
+  "contract": "http.staff-clip-page.v1",
+  "cases": [
+    {
+      "name": "pending clip",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "reviewRevision": 0,
+              "reviewStatus": "pending",
+              "datasetCount": 0
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "approved in two datasets",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "reviewRevision": 1,
+              "reviewStatus": "approved",
+              "datasetCount": 2
+            }
+          ],
+          "nextCursor": "x"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "status is closed",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "reviewRevision": 0,
+              "reviewStatus": "maybe",
+              "datasetCount": 0
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "staff fields required",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "reviewRevision": 0,
+              "reviewStatus": "pending",
+              "datasetCount": 0
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "no internal notes even for staff",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "reviewRevision": 0,
+              "reviewStatus": "pending",
+              "datasetCount": 0,
+              "notes": "qc"
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

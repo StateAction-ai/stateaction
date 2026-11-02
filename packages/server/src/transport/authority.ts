@@ -35,11 +35,12 @@ export type FileRow = {
   part_count: number;
   transport_expires_at: Date | null;
   created_at: Date;
+  updated_at: Date;
 };
 
 export const FILE_COLUMNS = `f.id, f.recording_id, f.job_id, f.purpose, f.role, f.size_bytes::text, f.sha256,
   f.state, f.transport_epoch, f.object_key, f.provider_upload_id, f.part_size_bytes::text,
-  f.part_count, f.transport_expires_at, f.created_at`;
+  f.part_count, f.transport_expires_at, f.created_at, f.updated_at`;
 
 type Db = pg.Pool | pg.PoolClient;
 const forbidden = () =>

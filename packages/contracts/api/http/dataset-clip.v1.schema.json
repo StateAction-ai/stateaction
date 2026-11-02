@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-clip.v1.json",
+  "title": "Dataset clip view v1",
+  "description": "Data payload of GET .../clips/{clipId}. A closed customer-safe whitelist: no collector, owner, internal notes/QC, hashes, object keys or backend paths exist in this shape. recordingId, jobId and reviewRevision are staff-only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clipId",
+    "title",
+    "taskLabel",
+    "durationNs",
+    "raster",
+    "frameCount",
+    "simulation",
+    "media"
+  ],
+  "properties": {
+    "clipId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "datasetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "taskLabel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "durationNs": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "raster": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/raster"
+    },
+    "frameCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "simulation": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["simulated", "qualification", "productionQualified"],
+          "properties": {
+            "simulated": {
+              "const": true
+            },
+            "qualification": {
+              "const": "simulation_only"
+            },
+            "productionQualified": {
+              "const": false
+            }
+          },
+          "description": "Customer-safe simulation-only marker. A simulated clip is never hardware evidence."
+        }
+      ]
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thumbnail", "viewer"],
+      "properties": {
+        "thumbnail": {
+          "type": "boolean"
+        },
+        "viewer": {
+          "type": "boolean"
+        }
+      },
+      "description": "Whether a read can currently be brokered for each derived target."
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid",
+      "description": "Staff only."
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid",
+      "description": "Staff only."
+    },
+    "reviewRevision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647,
+      "description": "Staff only."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/clip-read-create.v1.json",
+  "title": "Clip read request v1",
+  "description": "POST .../reads body. Only the two derived roles can ever be brokered; raw, source and every other output role have no path.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role"],
+  "properties": {
+    "role": {
+      "enum": ["thumbnail_jpeg", "viewer_rrd"]
+    }
+  }
+}

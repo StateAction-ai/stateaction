@@ -2,3 +2,5 @@
 *.bat whitespace=cr-at-eol
 # Contract fixtures are digest-covered exact bytes; never convert line endings.
 packages/contracts/conformance/fixtures/** -text
+# Real worker RRD fixture for the viewer test: exact bytes.
+apps/web/test-e2e/fixtures/*.rrd -text binary

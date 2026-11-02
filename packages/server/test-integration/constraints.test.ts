@@ -8,15 +8,13 @@ import {
   appendReview,
   createDataset,
   createProcessingJob,
-  listDatasetClips,
-  listDatasets,
   listInternalClips,
   registerRecording,
   renameDataset,
   reserveSourceFile,
   sealRecording,
-  setDatasetAccess,
 } from "../src/catalog/catalog.js";
+import { listDatasetClips, listDatasets } from "../src/datasets/queries.js";
 import { verifyCredentialPassword } from "../src/catalog/password.js";
 import { SEED, seedLocalCatalog, seedSha } from "../src/catalog/seed.js";
 import {
@@ -100,15 +98,22 @@ describe("local seed", () => {
         [SEED.clips.private]: "approved",
         [SEED.clips.both]: "approved",
       });
-      const visible = async (user: string, dataset: string) =>
-        (
-          await listDatasetClips(seedDb.app, {
-            viewerUserId: user,
-            datasetId: dataset,
-          })
-        ).clips
-          .map((c) => c.clipId)
-          .sort();
+      const visible = async (user: string, dataset: string) => {
+        try {
+          return (
+            await listDatasetClips(seedDb.app, {
+              viewerUserId: user,
+              datasetId: dataset,
+            })
+          ).items
+            .map((c) => c.clipId)
+            .sort();
+        } catch (error) {
+          // An invisible dataset is "not found": no signal it exists.
+          if ((error as { code?: string }).code === "not_found") return [];
+          throw error;
+        }
+      };
       const { shared, internal } = SEED.datasets;
       assert.deepEqual(
         await visible(SEED.users.customer.id, shared.id),
@@ -125,7 +130,7 @@ describe("local seed", () => {
         viewerUserId: SEED.users.customer.id,
       });
       assert.deepEqual(
-        customerDatasets.datasets.map((d) => [
+        customerDatasets.items.map((d) => [
           d.datasetId,
           d.clipCount,
           d.durationNs,
@@ -135,7 +140,7 @@ describe("local seed", () => {
       const staffDatasets = await listDatasets(seedDb.app, {
         viewerUserId: SEED.users.staff.id,
       });
-      assert.equal(staffDatasets.datasets.length, 2);
+      assert.equal(staffDatasets.items.length, 2);
       const first = await listDatasets(seedDb.app, {
         viewerUserId: SEED.users.staff.id,
         limit: 1,
@@ -146,8 +151,8 @@ describe("local seed", () => {
         cursor: first.nextCursor!,
       });
       assert.deepEqual(
-        [...first.datasets, ...second.datasets].map((d) => d.datasetId),
-        staffDatasets.datasets.map((d) => d.datasetId),
+        [...first.items, ...second.items].map((d) => d.datasetId),
+        staffDatasets.items.map((d) => d.datasetId),
       );
       assert.equal(second.nextCursor, null);
       await writeArtifact("seed-summary.json", {
@@ -923,109 +928,8 @@ describe("append-only reviews and approved-only datasets", () => {
       "conflict",
     );
   });
-
-  test("customer access needs an enabled customer role, a live grant and a latest approved review", async () => {
-    const p = await processedRecording(db.app, actors, 1);
-    await acceptProcessingResult(db.app, {
-      jobId: p.jobId,
-      manifestFileId: p.manifestFileId,
-      manifestSha256: p.manifestSha256,
-      clips: p.clips,
-    });
-    const clipId = p.clips[0]!.clipId;
-    const d = randomUUID();
-    await createDataset(db.app, {
-      datasetId: d,
-      name: "Delivery",
-      actorUserId: actors.staff,
-    });
-    await approve(db.app, p, clipId, 0, {
-      datasetSelection: { datasetIds: [d], expectedRevisions: { [d]: 1 } },
-    });
-    const sees = async (user: string) =>
-      (await listDatasetClips(db.app, { viewerUserId: user, datasetId: d }))
-        .clips.length;
-    assert.equal(await sees(actors.customer), 0, "no grant yet");
-    await expectCode(
-      setDatasetAccess(db.app, {
-        datasetId: d,
-        userId: actors.customer,
-        enabled: true,
-        actorUserId: actors.customer,
-        permissionEvidenceRef: "x",
-      }),
-      "forbidden",
-    );
-    await expectCode(
-      setDatasetAccess(db.app, {
-        datasetId: d,
-        userId: actors.collector,
-        enabled: true,
-        actorUserId: actors.staff,
-        permissionEvidenceRef: "x",
-      }),
-      "forbidden",
-    );
-    await setDatasetAccess(db.app, {
-      datasetId: d,
-      userId: actors.customer,
-      enabled: true,
-      actorUserId: actors.staff,
-      permissionEvidenceRef: "pilot:1",
-    });
-    assert.equal(await sees(actors.customer), 1);
-    assert.equal(await sees(actors.outsider), 0);
-    await db.owner.query(
-      "UPDATE access SET enabled = false WHERE user_id = $1 AND role = 'customer'",
-      [actors.customer],
-    );
-    assert.equal(await sees(actors.customer), 0, "disabled role");
-    await db.owner.query(
-      "UPDATE access SET enabled = true WHERE user_id = $1 AND role = 'customer'",
-      [actors.customer],
-    );
-    await setDatasetAccess(db.app, {
-      datasetId: d,
-      userId: actors.customer,
-      enabled: false,
-      actorUserId: actors.staff,
-      permissionEvidenceRef: "pilot:1",
-    });
-    assert.equal(await sees(actors.customer), 0, "revoked grant");
-    await setDatasetAccess(db.app, {
-      datasetId: d,
-      userId: actors.customer,
-      enabled: true,
-      actorUserId: actors.staff,
-      permissionEvidenceRef: "pilot:2",
-    });
-    await approve(db.app, p, clipId, 1, {
-      decision: "rejected",
-      taskLabel: undefined,
-    });
-    assert.equal(await sees(actors.customer), 0, "latest review rejected");
-    // Bounded pagination parameters.
-    await expectCode(
-      listDatasetClips(db.app, {
-        viewerUserId: actors.staff,
-        datasetId: d,
-        limit: 101,
-      }),
-      "invalid_request",
-    );
-    await expectCode(
-      listDatasetClips(db.app, {
-        viewerUserId: actors.staff,
-        datasetId: d,
-        cursor: "garbage",
-      }),
-      "invalid_request",
-    );
-    await expectCode(
-      listInternalClips(db.app, { viewerUserId: actors.customer }),
-      "forbidden",
-    );
-  });
+  // Customer access (grant, evidence, clearance, revocation) is covered by
+  // datasets.test.ts against the SA-35 read rules.
 });
 
 describe("session TEMP objects cannot shadow catalog relations", () => {
@@ -1097,7 +1001,7 @@ describe("session TEMP objects cannot shadow catalog relations", () => {
             "SELECT public.catalog_set_dataset_access($1, $2, true, $3, 'x')",
             [d, actors.customer, actors.collector],
           ),
-          "SAC05",
+          "42501", // operator-only: the web role holds no EXECUTE
         );
         await expectCode(
           shadow.query(

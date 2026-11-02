@@ -1,0 +1,81 @@
+{
+  "contract": "http.dataset-update.v1",
+  "cases": [
+    {
+      "name": "rename",
+      "input": {
+        "document": {
+          "name": "Renamed",
+          "expectedRevision": 3
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "revision is positive",
+      "input": {
+        "document": {
+          "name": "Renamed",
+          "expectedRevision": 0
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedRevision"
+        ]
+      }
+    },
+    {
+      "name": "revision is an integer",
+      "input": {
+        "document": {
+          "name": "Renamed",
+          "expectedRevision": 1.5
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedRevision"
+        ]
+      }
+    },
+    {
+      "name": "revision required",
+      "input": {
+        "document": {
+          "name": "Renamed"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "closed object",
+      "input": {
+        "document": {
+          "name": "Renamed",
+          "expectedRevision": 3,
+          "admin": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

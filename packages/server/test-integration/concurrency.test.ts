@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import pg from "pg";
+import { recordSharingPermission } from "../src/datasets/operator.js";
 import {
   acceptProcessingResult,
   addClipsToDataset,
@@ -660,6 +661,13 @@ test("a dataset grant waits on the dataset row lock", async () => {
     name: "Grant lock",
     actorUserId: actors.staff,
   });
+  await recordSharingPermission(db.owner, {
+    permissionRef: `lock-${datasetId.slice(0, 8)}`,
+    datasetId,
+    recipientUserId: actors.customer,
+    evidenceRef: "doc:lock",
+    recordedBy: "operator",
+  });
   const holder = new pg.Client({ connectionString: db.appUrl });
   await holder.connect();
   try {
@@ -668,11 +676,12 @@ test("a dataset grant waits on the dataset row lock", async () => {
       datasetId,
     ]);
     let done = false;
-    const grant = db.app
-      .query("SELECT catalog_set_dataset_access($1, $2, true, $3, 'lock')", [
+    const grant = db.owner
+      .query("SELECT catalog_set_dataset_access($1, $2, true, $3, $4)", [
         datasetId,
         actors.customer,
         actors.staff,
+        `lock-${datasetId.slice(0, 8)}`,
       ])
       .then(() => {
         done = true;
@@ -683,7 +692,7 @@ test("a dataset grant waits on the dataset row lock", async () => {
     await grant;
     assert.equal(done, true);
     await expectCode(
-      db.app.query(
+      db.owner.query(
         "SELECT catalog_set_dataset_access(gen_random_uuid(), $1, true, $2, 'x')",
         [actors.customer, actors.staff],
       ),

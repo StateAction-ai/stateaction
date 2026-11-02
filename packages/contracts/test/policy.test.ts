@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v7.json is the current registry; catalog.v1.json through
-// catalog.v6.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v7.json"));
+// catalog.v8.json is the current registry; catalog.v1.json through
+// catalog.v7.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v8.json"));
+const catalogV7 = JSON.parse(text("catalog.v7.json"));
 const catalogV6 = JSON.parse(text("catalog.v6.json"));
 const catalogV5 = JSON.parse(text("catalog.v5.json"));
 const catalogV4 = JSON.parse(text("catalog.v4.json"));
@@ -329,10 +330,10 @@ const V7_ADDED = [
 ];
 
 test("catalog v7 (SA-25) is an exact superset of catalog v6 adding only internal job-control contracts", () => {
-  assertExactSuperset(catalog, catalogV6, ["v6", "v7"], V7_ADDED);
-  assert.equal(Object.keys(catalog.contracts).length, 45);
+  assertExactSuperset(catalogV7, catalogV6, ["v6", "v7"], V7_ADDED);
+  assert.equal(Object.keys(catalogV7.contracts).length, 45);
   for (const id of V7_ADDED) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV7.contracts[id];
     assert.equal(entry.casing, "camelCase", id);
     assert.deepEqual(entry.version, { path: "/internal/v1" }, id);
     assert.deepEqual(entry.rules, [], id);
@@ -345,7 +346,7 @@ test("catalog v7 (SA-25) is an exact superset of catalog v6 adding only internal
     "jobs.job-status.v1",
     "jobs.task-input.v1",
   ])
-    assert.deepEqual(catalog.contracts[id], catalogV6.contracts[id], id);
+    assert.deepEqual(catalogV7.contracts[id], catalogV6.contracts[id], id);
 });
 
 /** Lock entries published with SA-25 (catalog v7). Frozen once released. */
@@ -370,6 +371,67 @@ test("v7 lock entries are unchanged and every v7 file keeps its exact bytes", ()
     assert.equal(sha256(file), hash, `${file}: published bytes changed`);
   }
   assert.equal(Object.keys(PUBLISHED_V7_LOCK).length, 6);
+});
+
+const V8_ADDED = [
+  "http.clip-read-create.v1",
+  "http.clip-read.v1",
+  "http.dataset-change.v1",
+  "http.dataset-clip-page.v1",
+  "http.dataset-clip.v1",
+  "http.dataset-create.v1",
+  "http.dataset-members-add.v1",
+  "http.dataset-page.v1",
+  "http.dataset-update.v1",
+  "http.dataset.v1",
+  "http.staff-clip-page.v1",
+];
+
+test("catalog v8 (SA-35) is an exact superset of catalog v7 adding only dataset and read-broker contracts", () => {
+  assertExactSuperset(catalog, catalogV7, ["v7", "v8"], V8_ADDED);
+  assert.equal(Object.keys(catalog.contracts).length, 56);
+  for (const id of V8_ADDED) {
+    const entry = catalog.contracts[id];
+    assert.equal(entry.casing, "camelCase", id);
+    assert.deepEqual(entry.version, { path: "/api/v1" }, id);
+    assert.deepEqual(entry.rules, [], id);
+  }
+});
+
+/** Lock entries published with SA-35 (catalog v8). Frozen once released. */
+const PUBLISHED_V8_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v8.json":
+    "e2c70cf7e157d953fc3fbc1ec5f80a74575f7419d481b544de021ef9a475d589",
+  "http/clip-read-create.v1.schema.json":
+    "fa846c30d4d722b1f7cb12e3a9ae19ab0343cb652a869ecbe4b9a2e31c97ace4",
+  "http/clip-read.v1.schema.json":
+    "2123afcd386cc0d66ad1ad7ae28e29b32d29ed3b28d1306309fff27157532175",
+  "http/dataset-change.v1.schema.json":
+    "6c219fbf03069f152e4f1572ea7d7e921747ad79dd796e4556be762832d05277",
+  "http/dataset-clip-page.v1.schema.json":
+    "fb837b68ec18bde4568951c01eef8300d634ec7b8f1c1f4ddd57fd8a2692ca07",
+  "http/dataset-clip.v1.schema.json":
+    "9b1eaf5f2555b51662a6dc100a9ce36b559742dc790a2515596a3d420480fcd9",
+  "http/dataset-create.v1.schema.json":
+    "5ae948fc71e24004bb3e11a4e93597415d38fae33e33625f507dd5f9f8514157",
+  "http/dataset-members-add.v1.schema.json":
+    "3cbafb14e570575c3131da438c25c73738e0e6fb607af8d40a8f2ebc969c0d03",
+  "http/dataset-page.v1.schema.json":
+    "a95d27cc5705ddff8f2537d41eb4765770add8d813bf50bc9cc4ec52c581c92b",
+  "http/dataset-update.v1.schema.json":
+    "3c54db3058b699193c0fc35f5f99b969fdebd55b80a603a793f33d62d1324b66",
+  "http/dataset.v1.schema.json":
+    "308501c6595c59a8057af24a5783513f89ccdcd5018f9047c537a145c0056965",
+  "http/staff-clip-page.v1.schema.json":
+    "5b9c2d69f23cb57202086e1e4f5b9cfe6902f69f16a035433520fb32e60d5e6c",
+};
+
+test("v8 lock entries are unchanged and every v8 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V8_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V8_LOCK).length, 12);
 });
 
 test("published schema bytes match the immutability lock", () => {

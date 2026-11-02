@@ -17,7 +17,7 @@ The web/API and workflow scaffold that runs locally is the same source Render bu
 ## Process model
 
 - **web** (`stateaction-web`): `node` runtime, build `corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter "@stateaction/web..." build`; start binds `0.0.0.0:$PORT`. `healthCheckPath: /api/v1/live` is dependency-free so an R2 or database blip cannot restart healthy instances; `/api/v1/health` is the readiness report (503 when degraded).
-- **workflow** (`stateaction-workflow`): the same `@stateaction/jobs` task code that the local official runner loads. Its env has no database, storage or Render API credentials. `verify-platform` refuses to run outside `APP_ENV=local`; the production processor (Modal) is deferred and is not represented by any health smoke.
+- **workflow** (`stateaction-workflow`): the same `@stateaction/jobs` task code that the local official runner loads. Its env has no database, storage or Render API credentials; SA-26 adds only `STATEACTION_API_URL` and the operator-issued `CONTROLLER_CAPABILITY_TOKEN` (jobs:status, jobs:reconcile), and `EXECUTION_BACKEND=modal` is refused (fail closed) until a qualified ModalExecutor exists. `verify-platform` refuses to run outside `APP_ENV=local`; the production processor (Modal) is deferred and is not represented by any health smoke.
 - **Postgres** (`stateaction-db`): `ipAllowList: []`.
 - Region `ohio` for all three (listed as valid for workflows in the current Blueprint spec). Plans are proposals: `starter` web, `basic-256mb` Postgres; check current pricing before applying.
 

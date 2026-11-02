@@ -4,4 +4,4 @@ The module-level `verify-platform` task uses the real `@renderinc/sdk` registrat
 
 `LocalExecutor` launches the installed Python worker with an argument array, bounded stdio and a 10-second smoke deadline. It passes no database/storage/provider credentials. The task verifies request identity and reports Render's actual task run ID.
 
-This probe is separate from the future `process-recording` task. Durable jobs, controller leases, recovery, scoped worker capabilities, output multipart uploads and Modal execution are not implemented here. Local Render history is memory-only.
+`process-recording` (SA-26) is the production task: shared controller, local journal and detached Python child. See `docs/components/job-orchestration.md`. Output acceptance (SA-28), operator repair (SA-27), the hand-pose extractor stack and Modal are not here. Local Render history is memory-only.

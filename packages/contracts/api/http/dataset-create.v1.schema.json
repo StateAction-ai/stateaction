@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-create.v1.json",
+  "title": "Create dataset request v1",
+  "description": "POST /api/v1/datasets body (staff only). The client chooses datasetId; an exact replay by the same creator returns 200, a different name conflicts. Names are shared metadata: use customer-appropriate names.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["datasetId", "name"],
+  "properties": {
+    "datasetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    }
+  }
+}

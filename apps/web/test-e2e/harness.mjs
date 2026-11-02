@@ -10,7 +10,7 @@ import { createServer, request } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
-import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
+import { startCatalogFixture, startStorageFixture } from "./fixtures.mjs";
 
 export const webDir = fileURLToPath(new URL("..", import.meta.url));
 const serverDir = fileURLToPath(
@@ -49,9 +49,10 @@ export class Jar {
   }
 }
 
-export async function startStack() {
+export async function startStack({ storage = false, extraEnv = {} } = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
-  const db = await startCatalogPostgres();
+  const db = await startCatalogFixture();
+  const s3 = storage ? await startStorageFixture() : undefined;
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const env = {
@@ -66,6 +67,16 @@ export async function startStack() {
     BETTER_AUTH_SECRET: randomBytes(32).toString("base64url"),
     AUTH_LOCAL_PASSWORD: "true",
     NEXT_TELEMETRY_DISABLED: "1",
+    ...(s3 && {
+      S3_ENDPOINT: s3.endpoint,
+      S3_REGION: "us-east-1",
+      S3_BUCKET: s3.bucket ?? "stateaction-sa21-e2e",
+      S3_ACCESS_KEY_ID: s3.accessKeyId,
+      S3_SECRET_ACCESS_KEY: s3.secretAccessKey,
+      PROCESSING_PROFILE_REVISION: "sa21-e2e-1",
+      SUPPORTED_RGB_PROFILES: "h264_mcap_v1",
+    }),
+    ...extraEnv,
   };
   let logs = "";
   let next;
@@ -76,7 +87,8 @@ export async function startStack() {
       } catch {}
       await sleep(500);
     }
-    db.stop();
+    await db.stop();
+    await s3?.stop();
   };
   try {
     const boot = spawnSync(
@@ -129,7 +141,7 @@ export async function startStack() {
         throw new Error(`next start failed:\n${logs}`);
       await sleep(500);
     }
-    return { db, origin, env, users, password, stop, logs: () => logs };
+    return { db, s3, origin, env, users, password, stop, logs: () => logs };
   } catch (error) {
     await stop();
     throw error;

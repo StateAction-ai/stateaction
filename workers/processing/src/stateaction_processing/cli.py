@@ -31,7 +31,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("health")
-    parser.parse_args()
+    run_job = commands.add_parser("run-job")
+    run_job.add_argument("--execution-ref", required=True)
+    args = parser.parse_args()
+    if args.command == "run-job":
+        # Stdlib-only until the claim is won; see run_job.py.
+        from .run_job import main as run_job_main
+
+        raise SystemExit(run_job_main(args.execution_ref))
     try:
         raw = sys.stdin.buffer.read(4097)
         if len(raw) > 4096:

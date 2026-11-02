@@ -7,6 +7,12 @@ import {
 import type { Authority } from "./authority.js";
 import { TransportError } from "./errors.js";
 import {
+  cancelTransport,
+  completeTransport,
+  reconcileTransport,
+  restartTransport,
+} from "./recovery.js";
+import {
   allocateJobOutput,
   allocateSourceUpload,
   getUploadPlan,
@@ -150,7 +156,43 @@ const need = (authority: Authority, kind: Authority["kind"]) => {
  * added with SA-19 admission; the handlers themselves are the final logic.
  */
 export function transportHandlers(deps: TransportDeps) {
+  /**
+   * POST .../{reconcile,complete,cancel,restart}: the frozen
+   * http.upload-transition.v1 request; every transition answers with the
+   * file's current plan, checked against the contract for the caller.
+   */
+  const transition = (
+    run: (
+      deps: TransportDeps,
+      authority: Authority,
+      fileId: string,
+      body: { expectedTransportEpoch: unknown },
+    ) => Promise<unknown>,
+  ) =>
+    route(async (request, authority, fileId) =>
+      parseContract(
+        authority.kind === "job"
+          ? "http.output-plan.v1"
+          : "http.upload-plan.v1",
+        await run(
+          deps,
+          authority,
+          fileId ?? "",
+          (await readBoundedJson(request, "http.upload-transition.v1")) as {
+            expectedTransportEpoch: unknown;
+          },
+        ),
+      ),
+    );
   return {
+    /** POST /uploads/{fileId}/reconcile (human and job-scoped) */
+    reconcileUpload: transition(reconcileTransport),
+    /** POST /uploads/{fileId}/complete */
+    completeUpload: transition(completeTransport),
+    /** POST /uploads/{fileId}/cancel */
+    cancelUpload: transition(cancelTransport),
+    /** POST /uploads/{fileId}/restart: new epoch, full retransmission */
+    restartUpload: transition(restartTransport),
     /** POST /api/v1/uploads */
     createSourceUpload: route(async (request, authority) => {
       need(authority, "owner");

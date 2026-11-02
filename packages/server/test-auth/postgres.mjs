@@ -1,7 +1,8 @@
 // Throwaway Postgres for auth runtime tests: a uniquely named, labelled
 // container on an ephemeral loopback port with tmpfs data. It shares no
 // Compose project, port, volume or data with other work and is always removed.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -99,6 +100,7 @@ export async function startPostgres() {
  * the owner and run Better Auth and the access store as `stateaction_app`.
  */
 export async function startCatalogPostgres() {
+  if (process.env.CATALOG_TEST_ADMIN_URL) return externalCatalogPostgres();
   const name = `stateaction-sa15-catalog-${randomBytes(6).toString("hex")}`;
   const secret = () => randomBytes(18).toString("hex");
   const admin = secret();
@@ -201,4 +203,63 @@ export async function startCatalogPostgres() {
     stop();
     throw error;
   }
+}
+
+/**
+ * Same layout on an already running, resource-guarded local Postgres (no
+ * Docker): CATALOG_TEST_{ADMIN,OWNER,APP}_URL point at a server where the
+ * migration_owner and stateaction_app roles exist. A uniquely named database
+ * owned by migration_owner is created and force-dropped on stop.
+ */
+async function externalCatalogPostgres() {
+  const { default: pg } = await import("pg");
+  const name = `sa_e2e_${randomBytes(6).toString("hex")}`;
+  const withDb = (url) => {
+    const u = new URL(url);
+    u.pathname = `/${name}`;
+    return u.toString();
+  };
+  const admin = new pg.Client({
+    connectionString: process.env.CATALOG_TEST_ADMIN_URL,
+  });
+  await admin.connect();
+  await admin.query(`CREATE DATABASE ${name} OWNER migration_owner`);
+  await admin.end();
+  const ownerUrl = withDb(process.env.CATALOG_TEST_OWNER_URL);
+  const appUrl = withDb(process.env.CATALOG_TEST_APP_URL);
+  let stopped = false;
+  return {
+    name,
+    ownerUrl,
+    appUrl,
+    /** Owner-credential SQL; unaligned rows like `psql -qAt`. */
+    ownerSql: (sql) => {
+      // Synchronous like the Docker psql helper (existing tests rely on it).
+      const out = spawnSync(
+        process.execPath,
+        [
+          "-e",
+          `const pg=require("pg");(async()=>{const c=new pg.Client({connectionString:process.env.OWNER_URL});await c.connect();try{const r=await c.query({text:process.env.SQL,rowMode:"array"});process.stdout.write((r.rows??[]).map(x=>x.join("|")).join("\\n"))}finally{await c.end()}})().catch(e=>{console.error(e.message);process.exit(1)})`,
+        ],
+        {
+          cwd: fileURLToPath(new URL("..", import.meta.url)),
+          env: { PATH: process.env.PATH, OWNER_URL: ownerUrl, SQL: sql },
+          encoding: "utf8",
+        },
+      );
+      if (out.status !== 0) throw new Error(out.stderr);
+      return out.stdout.trim();
+    },
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      const a = new pg.Client({
+        connectionString: process.env.CATALOG_TEST_ADMIN_URL,
+      });
+      a.connect()
+        .then(() => a.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`))
+        .catch(() => undefined)
+        .finally(() => a.end().catch(() => undefined));
+    },
+  };
 }

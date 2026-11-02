@@ -44,6 +44,9 @@ importers:
       "@radix-ui/react-slot":
         specifier: 1.5.0
         version: 1.5.0(@types/react@19.2.7)(react@19.3.1)
+      "@rerun-io/web-viewer":
+        specifier: 0.41.0
+        version: 0.41.0
       "@stateaction/contracts":
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -392,6 +395,12 @@ packages:
     resolution:
       {
         integrity: sha512-U6SlDt/GUWtK2JAxS/NhdoYTEim+EL1G5byz2TUj83KjLZBUpYzb5SmX0aXaCnbGkAjFKnV/o/0+cyXMbEcqqg==,
+      }
+
+  "@bufbuild/protobuf@2.16.0":
+    resolution:
+      {
+        integrity: sha512-FWa0sPlqYGJgpTs6OxBRcL/AW4JT0OIO+W1ajerluoTVh8CV0B7XM1qsNCRgnkSCkRCgOICKHRQlY17jrsm0+Q==,
       }
 
   "@clack/core@1.4.3":
@@ -1561,6 +1570,12 @@ packages:
         integrity: sha512-Mv9N7tP4T3hsQpebqwfJgwrgb1LgLgcQ8GPfBVe8GsZ/h5Mhs90bYV/nfc9wHEZVeMcMlVnNfQmtUGPQFg5IhA==,
       }
     engines: { node: ">=18.0.0" }
+
+  "@rerun-io/web-viewer@0.41.0":
+    resolution:
+      {
+        integrity: sha512-QNNLSf5DoJPYJCWP/RbdECJRWNK0FP4Y/+NwIa1Cev6qzmPIMW2b+Zgna4gY8lGqzXAOPWC3OnhUSaJi7k/sIg==,
+      }
 
   "@smithy/core@3.38.1":
     resolution:
@@ -3423,6 +3438,8 @@ snapshots:
 
   "@better-fetch/fetch@1.3.3": {}
 
+  "@bufbuild/protobuf@2.16.0": {}
+
   "@clack/core@1.4.3":
     dependencies:
       fast-wrap-ansi: 0.2.0
@@ -4012,6 +4029,10 @@ snapshots:
     transitivePeerDependencies:
       - "@node-rs/xxhash"
       - "@opentelemetry/api"
+
+  "@rerun-io/web-viewer@0.41.0":
+    dependencies:
+      "@bufbuild/protobuf": 2.16.0
 
   "@smithy/core@3.38.1":
     dependencies:

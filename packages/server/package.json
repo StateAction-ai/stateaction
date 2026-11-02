@@ -13,9 +13,17 @@
       "types": "./dist/auth/index.d.ts",
       "default": "./dist/auth/index.js"
     },
+    "./pipeline": {
+      "types": "./dist/pipeline/next.d.ts",
+      "default": "./dist/pipeline/next.js"
+    },
     "./recordings": {
       "types": "./dist/admission/next.d.ts",
       "default": "./dist/admission/next.js"
+    },
+    "./datasets": {
+      "types": "./dist/datasets/next.d.ts",
+      "default": "./dist/datasets/next.js"
     },
     "./uploads": {
       "types": "./dist/transport/next.d.ts",
@@ -43,6 +51,7 @@
     "hosted:storage-check": "node dist/cli.js storage-check",
     "storage:presign": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts presign-check",
     "hosted:presign-check": "node dist/cli.js presign-check",
+    "dataset-sharing": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/dataset-sharing-cli.ts",
     "ingest-permission": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ingest-permission-cli.ts"
   },
   "dependencies": {
