@@ -1,0 +1,26 @@
+{
+  "name": "android-processing-spike",
+  "root": "spikes/android/processing",
+  "projectType": "application",
+  "implicitDependencies": ["contracts"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --locked python -m unittest discover -s tests -v",
+        "cwd": "spikes/android/processing"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --project spikes/android/processing --locked --group dev ruff check --config workers/processing/pyproject.toml spikes/android/processing",
+          "uv run --project spikes/android/processing --locked --group dev ruff format --check --config workers/processing/pyproject.toml spikes/android/processing"
+        ],
+        "parallel": false,
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

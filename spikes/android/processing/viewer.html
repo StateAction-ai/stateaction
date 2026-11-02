@@ -1,0 +1,112 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>SA-61 probe · actual Rerun 0.41.0 web viewer</title>
+<style>
+  body {
+    margin: 0;
+    background: #111827;
+    color: #e5e7eb;
+    font: 14px system-ui;
+  }
+  header {
+    padding: 10px 16px;
+  }
+  #viewer {
+    height: calc(100vh - 42px);
+  }
+</style>
+<header>
+  SA-61 isolated probe · @rerun-io/web-viewer 0.41.0 · model-relative 3D is not
+  metric
+</header>
+<div id="viewer"></div>
+<script type="module">
+  import { WebViewer } from "./node_modules/@rerun-io/web-viewer/index.js";
+  const telemetry = (window.telemetry = {
+    errors: [],
+    decoded: [],
+    decodeInputs: [],
+    configs: [],
+    decodeCalls: 0,
+    ready: false,
+  });
+  window.addEventListener("error", (e) =>
+    telemetry.errors.push(String(e.error || e.message)),
+  );
+  window.addEventListener("unhandledrejection", (e) =>
+    telemetry.errors.push(String(e.reason)),
+  );
+  if (window.VideoDecoder) {
+    const Native = window.VideoDecoder;
+    // Observe (never replace) the actual WebCodecs decoder Rerun uses.
+    window.VideoDecoder = class extends Native {
+      constructor(options) {
+        super({
+          ...options,
+          output(frame) {
+            telemetry.decoded.push({
+              timestamp: frame.timestamp,
+              width: frame.displayWidth,
+              height: frame.displayHeight,
+              codedWidth: frame.codedWidth,
+              codedHeight: frame.codedHeight,
+            });
+            options.output(frame);
+          },
+          error(error) {
+            telemetry.errors.push(String(error));
+            options.error(error);
+          },
+        });
+      }
+      configure(config) {
+        telemetry.configs.push(config);
+        return super.configure(config);
+      }
+      decode(chunk) {
+        telemetry.decodeCalls += 1;
+        telemetry.decodeInputs.push(chunk.timestamp);
+        return super.decode(chunk);
+      }
+    };
+  }
+  const file = new URL(location.href).searchParams.get("file");
+  window.viewer = new WebViewer();
+  // WebViewer.start needs an absolute URL; a bare relative string is parsed as a host.
+  await window.viewer.start(
+    new URL(file, location.href).href,
+    document.getElementById("viewer"),
+    {
+      width: "100%",
+      height: "100%",
+      render_backend: "webgl",
+      theme: "dark",
+      hide_welcome_screen: true,
+      check_for_updates_on_startup: false,
+      memory_limit: "512MB",
+    },
+  );
+  telemetry.ready = true;
+  window.seekNs = async (ns) =>
+    window.viewer.set_time({
+      timeline: "clip_time",
+      duration_nanos: BigInt(ns),
+      play_state: "paused",
+    });
+  window.memory = () =>
+    performance.memory
+      ? {
+          usedJSHeapSize: performance.memory.usedJSHeapSize,
+          totalJSHeapSize: performance.memory.totalJSHeapSize,
+        }
+      : null;
+  window.snapshotEvidence = async () => ({
+    telemetry,
+    memory: window.memory(),
+    state: await viewer.get_state(),
+    schema: await viewer.get_recording_schema({ max_entities: 100 }),
+    logs: await viewer.get_logs(),
+  });
+  window.safeJson = (value) =>
+    JSON.stringify(value, (_, v) => (typeof v === "bigint" ? v.toString() : v));
+</script>

@@ -1,0 +1,9 @@
+{
+  "name": "stateaction-sa61-rerun-viewer-probe",
+  "private": true,
+  "type": "module",
+  "description": "Isolated SA-61 browser probe; not part of the pnpm workspace or apps/web.",
+  "dependencies": {
+    "@rerun-io/web-viewer": "0.41.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "MediaPipe Hand Landmarker (full), float16, task bundle version 1",
+  "file": "hand_landmarker.task",
+  "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+  "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "bytes": 7819105,
+  "license": "Apache-2.0",
+  "license_evidence": "Official model card PDF, 'LICENSED UNDER: Apache License, Version 2.0' (re-read 2026-11-01)",
+  "model_card_url": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Hand%20Tracking%20%28Lite_Full%29%20with%20Fairness%20Oct%202021.pdf",
+  "model_card_sha256": "43127ff8a92e22717f0d8c30dab3efef4641a29cbf50b15ae3de001be94ab76b",
+  "overview_url": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
+  "runtime": "mediapipe==1.2.0 Python Tasks API, CPU delegate",
+  "config": {
+    "min_hand_detection_confidence": 0.5,
+    "min_hand_presence_confidence": 0.5
+  },
+  "outputs": "21 normalized image landmarks + 21 model-relative 3D (hand_world_landmarks, metres, hand-centred) + handedness per detected hand",
+  "redistribution": "Not committed; fetched to ~/.cache/mediapipe and hash-verified (fetch_model.sh)."
+}
