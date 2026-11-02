@@ -1,6 +1,8 @@
 import type pg from "pg";
 import { serverConfig, type ServerConfig } from "../config.js";
 import { storageClient } from "../storage.js";
+import { admissionDepsFromEnv } from "../admission/runtime.js";
+import type { AdmissionDeps } from "../admission/recordings.js";
 import { S3MultipartProvider } from "./provider.js";
 import type { TransportDeps } from "./service.js";
 import {
@@ -23,7 +25,13 @@ export function transportDepsFromEnv(
   pool: pg.Pool,
   env: NodeJS.ProcessEnv = process.env,
 ): TransportDeps {
-  return { pool, provider: providerFromConfig(serverConfig(env)) };
+  let admission: AdmissionDeps | undefined;
+  return {
+    pool,
+    provider: providerFromConfig(serverConfig(env)),
+    // Same admission settings as the recording routes, resolved on first use.
+    admission: () => (admission ??= admissionDepsFromEnv(pool, env)),
+  };
 }
 export function providerFromConfig(config: ServerConfig): S3MultipartProvider {
   return new S3MultipartProvider(
