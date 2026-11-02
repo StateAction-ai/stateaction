@@ -26,6 +26,14 @@ struct RecordingConfig {
     let autoExposure: Bool
     let arkitFps: Int
     let enableInertialDerived: Bool
+    /// Opt-in RGB capture profile. nil keeps the legacy JPEG-in-MCAP path;
+    /// `h264_mcap_v1` selects VideoToolbox hardware H.264 (SA-52). Any other
+    /// value is rejected at prepare time, never silently replaced.
+    let rgbProfile: String?
+    let h264EncoderProfile: H264ProfileName
+    let h264Bitrate: Int
+    /// False when `h264EncoderProfile` named an unsupported profile.
+    let h264EncoderProfileValid: Bool
 
     var rgbLandscapeWidth: Int {
         if rgbVideoHeight >= 2160 { return 3840 }
@@ -97,7 +105,10 @@ struct RecordingConfig {
         autoFocus: Bool = true,
         autoExposure: Bool = true,
         arkitFps: Int = 60,
-        enableInertialDerived: Bool = true
+        enableInertialDerived: Bool = true,
+        rgbProfile: String? = nil,
+        h264EncoderProfile: H264ProfileName = .baseline,
+        h264Bitrate: Int = 8_000_000
     ) {
         self.recordImu = recordImu
         self.recordDepth = recordDepth
@@ -113,6 +124,10 @@ struct RecordingConfig {
         self.autoExposure = autoExposure
         self.arkitFps = Self.sanitizedArkitFps(arkitFps)
         self.enableInertialDerived = enableInertialDerived
+        self.rgbProfile = rgbProfile
+        self.h264EncoderProfile = h264EncoderProfile
+        self.h264Bitrate = h264Bitrate
+        self.h264EncoderProfileValid = true
     }
 
     init(from dict: [String: Any]?) {
@@ -131,5 +146,10 @@ struct RecordingConfig {
         self.autoExposure = dict?["autoExposure"] as? Bool ?? true
         self.arkitFps = Self.sanitizedArkitFps(dict?["arkitFps"] as? Int ?? 60)
         self.enableInertialDerived = dict?["enableInertialDerived"] as? Bool ?? true
+        self.rgbProfile = dict?["rgbProfile"] as? String
+        let requestedProfile = dict?["h264Profile"] as? String ?? H264ProfileName.baseline.rawValue
+        self.h264EncoderProfile = H264ProfileName(rawValue: requestedProfile) ?? .baseline
+        self.h264EncoderProfileValid = H264ProfileName(rawValue: requestedProfile) != nil
+        self.h264Bitrate = min(max(dict?["h264Bitrate"] as? Int ?? 8_000_000, 100_000), 100_000_000)
     }
 }

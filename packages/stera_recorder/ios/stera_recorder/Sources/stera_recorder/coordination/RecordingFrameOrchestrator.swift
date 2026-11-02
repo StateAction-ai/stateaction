@@ -40,6 +40,9 @@ class RecordingFrameOrchestrator {
 
     /// Recording configuration — controls which data channels are captured.
     var config = RecordingConfig.defaultConfig
+    /// Opt-in SA-52 hardware H.264 capture; when set, sampled RGB frames go to
+    /// the encoder instead of the legacy JPEG path.
+    var h264Capture: IOSH264CaptureRecorder?
 
     // Backpressure: limit pending writerQueue closures to prevent memory buildup
     private var _pendingWriteLock = os_unfair_lock()
@@ -219,7 +222,13 @@ class RecordingFrameOrchestrator {
 
             // JPEG capture
             var jpegElapsedMs: Double = 0.0
-            if shouldSampleRgb {
+            if shouldSampleRgb, let h264 = h264Capture {
+                h264.submit(frame: frame)
+                encoded = true
+                metrics.rgbTimestampRange.record(timestampNs: timestampNs)
+                metrics.addTimestampWithCap(store: &metrics.rgbFrameTimestamps, timestampNs: timestampNs)
+                metrics.incrementSubmittedToEncoderFrameCount()
+            } else if shouldSampleRgb {
                 let jpegStartNs = Int64(ProcessInfo.processInfo.systemUptime * 1_000_000_000)
                 jpegData = captureJpeg(pixelBuffer: frame.capturedImage)
                 jpegElapsedMs = Double(Int64(ProcessInfo.processInfo.systemUptime * 1_000_000_000) - jpegStartNs) / 1_000_000.0

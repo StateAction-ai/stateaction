@@ -599,6 +599,34 @@ class ArRecorderImpl: NSObject, ArRecorder, ArSessionManagerDelegate {
             return createErrorResult("Failed to initialize writers")
         }
 
+        // SA-52: opt-in hardware H.264 RGB capture. Rejections are explicit;
+        // there is no fallback to JPEG, software encoding or another profile.
+        frameOrchestrator.h264Capture = nil
+        if let profile = config.rgbProfile {
+            guard profile == H264CaptureConfiguration.rgbProfile, config.h264EncoderProfileValid else {
+                currentState = .error
+                return createErrorResult("Unsupported RGB capture profile request: \(profile)")
+            }
+            guard let size = sessionManager.session?.configuration?.videoFormat.imageResolution,
+                  let request = IOSH264CaptureRecorder.request(
+                      from: config, rasterWidth: Int(size.width), rasterHeight: Int(size.height))
+            else {
+                currentState = .error
+                return createErrorResult("H.264 capture rejected: camera video format unavailable")
+            }
+            do {
+                frameOrchestrator.h264Capture = try IOSH264CaptureRecorder(
+                    sessionDirectory: sessionDir, recordingId: IOSH264CaptureRecorder.newRecordingId(), request: request)
+                datasetWriter.logSystem(message: "H.264 capture: \(request.profile.rawValue) \(request.width)x\(request.height)@\(request.fps) hardware required")
+            } catch let error as H264EncoderStartError {
+                currentState = .error
+                return createErrorResult("H.264 capture rejected: \(error.reason) \(error)")
+            } catch {
+                currentState = .error
+                return createErrorResult("H.264 capture rejected: \(error.localizedDescription)")
+            }
+        }
+
         let arkitVersion = "ARKit \(ProcessInfo.processInfo.operatingSystemVersion.majorVersion)"
         datasetWriter.logSystem(message: "Session start time: \(Date())")
         datasetWriter.logSystem(message: "Storage path: \(sessionDir.path)")
@@ -784,6 +812,11 @@ class ArRecorderImpl: NSObject, ArRecorder, ArSessionManagerDelegate {
             "ArRecorderImpl: waitForProcessingQueueToDrain - start (processingFrameCount=\(processingFrameCount))"
         )
         waitForProcessingQueueToDrain()
+        if let h264 = frameOrchestrator.h264Capture {
+            let summary = h264.finish(outcome: .completed)
+            datasetWriter.logSystem(message: "H.264 capture closed: \(summary?.outcome ?? "write_failed") written=\(summary?.written ?? 0) dropped=\(summary?.dropped ?? 0)")
+            frameOrchestrator.h264Capture = nil
+        }
         let drainElapsed = CFAbsoluteTimeGetCurrent() - drainStart
         print(
             "ArRecorderImpl: waitForProcessingQueueToDrain - done in \(String(format: "%.2f", drainElapsed))s"
@@ -1028,6 +1061,8 @@ class ArRecorderImpl: NSObject, ArRecorder, ArSessionManagerDelegate {
         }
 
         waitForProcessingQueueToDrain()
+        frameOrchestrator.h264Capture?.finish(outcome: .aborted("recorder_released"))
+        frameOrchestrator.h264Capture = nil
 
         currentState = .disposed
 

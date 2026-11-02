@@ -29,7 +29,10 @@ behind the `ar_recorder` method channel and the ARRecorderInterop FFI surface.
   s.public_header_files = 'stera_recorder/Sources/stera_recorder_objc/include/**/*.h'
   s.dependency 'Flutter'
   s.platform = :ios, '14.0'
-  s.frameworks = 'ARKit', 'AVFoundation', 'Accelerate', 'CoreImage', 'CoreMotion', 'CoreVideo', 'ImageIO'
+  s.frameworks = 'ARKit', 'AVFoundation', 'Accelerate', 'CoreImage', 'CoreMedia', 'CoreMotion', 'CoreVideo', 'ImageIO', 'VideoToolbox'
+  # Exact capture-contract schema bytes embedded in h264_mcap_v1 files (SA-52);
+  # a folder reference keeps the stateaction/capture layout in the bundle.
+  s.resources = ['stera_recorder/Sources/stera_recorder/Resources/stateaction']
   # MCAP CRCs go through zlib (`import zlib` in DatasetWriterImpl).
   s.libraries = 'z'
 

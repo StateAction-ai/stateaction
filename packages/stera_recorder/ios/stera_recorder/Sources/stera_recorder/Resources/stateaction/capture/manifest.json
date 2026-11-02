@@ -1,0 +1,17 @@
+{
+  "wire_contract_revision": "stateaction.capture.v1.1",
+  "files": {
+    "Clocks.schema.json": "554c2078789e9b0490aa061ba8343134fb39813f99ca8f965c8ad9517ba6f4a2",
+    "Close.schema.json": "832e67d3706db9138c8d189348a94d957d5e41980dc660e698e55db2296ad171",
+    "FrameEvent.schema.json": "977c2e3c4b111b48740a632c117104aa615dbeb0c6fa96fe0e14af9f2b7da8da",
+    "Inventory.schema.json": "9f3d6b25b1308897a86a1ba7304ee54daaeaa1ab57c3a65859647ace9a9e708a",
+    "LICENSE-FOXGLOVE-SCHEMAS": "da11235665c17d4c1634072dae92b8ba1b38d6fdde2ccf19a6bbede33253f58d",
+    "LICENSE-PROTOBUF": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+    "MotionEvent.schema.json": "22938cce69bc54f1bd81260658aba56438f66b867af50cdf8065617c64e052b2",
+    "Profile.schema.json": "2fe975811ed3fc61ffce4ff8851d2377f3a9dc1adf0b24f7175b7a482f1eef14",
+    "SensorEvent.schema.json": "c2e667342f39338967f8a3f530cd50228a7425ead116574871deb4432ebe23e9",
+    "foxglove-compressed-video.desc": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+    "geometry_msgs-PoseStamped.ros2msg": "eaf9fa742b6bff36539ea75c51434b40a162611c8afbba4b6a7434706fec38aa",
+    "schema-provenance.json": "da77ee9e2021f948c3123c563fc66653810100cd1a403d0ed85bb5ab910377f4"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "source": "foxglove-schemas-protobuf",
+  "version": "0.4.0",
+  "schema_name": "foxglove.CompressedVideo",
+  "includes": ["google/protobuf/timestamp.proto"],
+  "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+  "upstream_artifacts": {
+    "foxglove_schemas_protobuf-0.4.0-py3-none-any.whl": "e6a35df574f4c10ea455e8660abd09af028ea00d90e01c78f8696972e2decc95",
+    "foxglove_schemas_protobuf-0.4.0.tar.gz": "3fc9610d7ec6cc4b4029f746ab9699a4ad396bdd7551b99d2a37509d13ef3cc2"
+  },
+  "reproduce": "uv run --no-project --with foxglove-schemas-protobuf==0.4.0 --with protobuf==6.33.0 python packages/contracts/capture/conformance/python/build_descriptor.py",
+  "ros2msg": {
+    "geometry_msgs-PoseStamped.ros2msg": "Copied verbatim from the native recorder's ROS2SchemaDefinitions.POSE_STAMPED_SCHEMA (packages/stera_recorder); pinned by manifest.json"
+  }
+}

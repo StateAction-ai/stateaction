@@ -26,6 +26,10 @@ let package = Package(
                 .product(name: "FlutterFramework", package: "FlutterFramework"),
                 "stera_recorder_objc",
             ],
+            // Byte copies of packages/contracts/capture used to embed the exact
+            // hash-pinned schemas in h264_mcap_v1 files (SA-52). Identity with the
+            // contract directory is verified by ios/portable_h264.
+            resources: [.copy("Resources/stateaction")],
             linkerSettings: [
                 // MCAP CRCs go through zlib (`import zlib` in DatasetWriterImpl).
                 .linkedLibrary("z")

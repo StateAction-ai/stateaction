@@ -109,6 +109,11 @@ class MCAPWriter {
     /// face-blur rewriter must disable it because it replays logTimes captured
     /// on an earlier boot, which can legitimately exceed 2× the current uptime.
     private var validateLogTimes = true
+    /// Explicit recorder-time policy for the plausibility guard (SA-52). The
+    /// legacy recorder MCAP keeps native uptime log times (`.nativeUptime`, the
+    /// original 2x-uptime rule). Epoch-mapped capture files must pass
+    /// `.epochMapped(anchor)` instead; the uptime-only rule would reject them.
+    private var logTimePolicy: CaptureLogTimePolicy = .nativeUptime
 
     // MARK: - Open / Close
 
@@ -117,10 +122,12 @@ class MCAPWriter {
         url: URL,
         profile: String = "ros2",
         library: String = "fpv_labs",
-        validateLogTimes: Bool = true
+        validateLogTimes: Bool = true,
+        logTimePolicy: CaptureLogTimePolicy = .nativeUptime
     ) -> Bool {
         os_unfair_lock_lock(&lock); defer { os_unfair_lock_unlock(&lock) }
         self.validateLogTimes = validateLogTimes
+        self.logTimePolicy = logTimePolicy
         FileManager.default.createFile(atPath: url.path, contents: nil)
         guard let fh = try? FileHandle(forWritingTo: url) else { return false }
         fileHandle = fh
@@ -203,11 +210,13 @@ class MCAPWriter {
         // `Date().timeIntervalSince1970 * 1e9` (epoch ns, ≈10¹⁸) would corrupt
         // `messageEndTime`, which in turn makes `mcapDurationMs` ~55 years and
         // poisons `metadata.json["session_duration_seconds"]`.
+        // The rule now lives in the explicit `CaptureLogTimePolicy` so the
+        // uptime and epoch-mapped recorder-time policies are tested together
+        // (ios/portable_h264 ClockPolicyTests); `.nativeUptime` is unchanged.
         if validateLogTimes {
             let uptimeNs = UInt64(ProcessInfo.processInfo.systemUptime * 1_000_000_000)
-            let implausibleThresholdNs = uptimeNs &* 2  // 2× uptime — generous
-            if logTime > implausibleThresholdNs && implausibleThresholdNs > 0 {
-                print("MCAPWriter: rejecting addMessage on channel \(channelId) with implausible logTime=\(logTime) (uptimeNs=\(uptimeNs))")
+            if !logTimePolicy.isPlausible(logTimeNs: logTime, currentUptimeNs: uptimeNs) {
+                print("MCAPWriter: rejecting addMessage on channel \(channelId) with implausible logTime=\(logTime) (uptimeNs=\(uptimeNs), policy=\(logTimePolicy))")
                 return
             }
         }

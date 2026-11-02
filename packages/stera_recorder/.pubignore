@@ -6,3 +6,4 @@ package.json
 example/android/
 example/ios/
 example/.metadata
+ios/portable_h264/

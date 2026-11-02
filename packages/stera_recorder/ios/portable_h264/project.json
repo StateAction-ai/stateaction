@@ -1,0 +1,55 @@
+{
+  "name": "stera-recorder-ios-h264",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "root": "packages/stera_recorder/ios/portable_h264",
+  "projectType": "library",
+  "implicitDependencies": ["capture-conformance"],
+  "namedInputs": {
+    "iosH264": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/.build/**/*",
+      "!{projectRoot}/.swiftpm/**/*",
+      "!{projectRoot}/**/__pycache__/**/*",
+      "{workspaceRoot}/packages/stera_recorder/ios/stera_recorder/Sources/stera_recorder/**/*",
+      "{workspaceRoot}/packages/contracts/capture/**/*",
+      "!{workspaceRoot}/packages/contracts/capture/**/__pycache__/**/*",
+      "sharedGlobals"
+    ]
+  },
+  "targets": {
+    "syntax": {
+      "executor": "nx:run-commands",
+      "inputs": ["iosH264"],
+      "options": {
+        "command": "python3 -c \"import ast,sys; [ast.parse(open(p).read(), p) for p in sys.argv[1:]]\" packages/stera_recorder/ios/portable_h264/tool/check_ios_h264_static.py packages/stera_recorder/ios/portable_h264/tool/check_ios_h264_capture.py"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "inputs": ["iosH264"],
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml packages/stera_recorder/ios/portable_h264/tool",
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml packages/stera_recorder/ios/portable_h264/tool",
+          "pnpm exec prettier --check packages/stera_recorder/ios/portable_h264/project.json packages/stera_recorder/ios/portable_h264/README.md"
+        ],
+        "parallel": false
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": ["iosH264"],
+      "options": {
+        "command": "python3 packages/stera_recorder/ios/portable_h264/tool/check_ios_h264_static.py"
+      }
+    },
+    "swift-test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": ["iosH264"],
+      "options": {
+        "command": "python3 packages/stera_recorder/ios/portable_h264/tool/check_ios_h264_capture.py --require-ffmpeg"
+      }
+    }
+  }
+}
