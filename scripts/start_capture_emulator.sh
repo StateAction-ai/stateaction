@@ -17,6 +17,9 @@
 set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/env.sh"
+# Applies across all AVDs/ports/worktrees, including warm reuse. SDK entrypoints
+# are installed behind the same singleton/cgroup guard; no raw fallback.
+python3 "$script_dir/mobile/resource_guard.py" check-emulator >/dev/null
 export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
 emulator="$ANDROID_HOME/emulator/emulator"
 capture_avd=stera_ar_api35
@@ -54,6 +57,13 @@ verify_args=(verify --serial "$serial" --avd "$capture_avd" --port "$capture_por
   --profile "$profile" --expect-gpu "${CAPTURE_EMULATOR_EXPECT_GPU:-NVIDIA}" --out "$state_dir/$serial.json")
 ((quick_boot)) && verify_args+=(--requested-quick-boot)
 
+require_launch_supervisor() {
+  if ! python3 -c 'from pathlib import Path; import sys; sys.exit(0 if "/agent-service-emulator-control.scope" in Path("/proc/self/cgroup").read_text() else 1)'; then
+    echo "Launch through scripts/supervise_capture_emulator.sh. A transient build scope reaps its SDK supervisor when the build ends." >&2
+    exit 75
+  fi
+}
+
 if [[ "$profile" == software-rendering-not-accelerated ]]; then
   echo "################################################################" >&2
   echo "# SOFTWARE RENDERING (NOT ACCELERATED): evidence must say so.   #" >&2
@@ -82,6 +92,7 @@ if timeout 20 adb -s "$serial" get-state >/dev/null 2>&1; then
     echo "Running $serial failed verification for $profile; rerun with --replace to restart it." >&2
     exit 1
   fi
+  require_launch_supervisor
   echo "Stopping $serial before relaunch ($( ((force_cold)) && echo --force-cold-start || echo "failed verification, --replace" ))." >&2
   timeout 20 adb -s "$serial" emu kill >/dev/null 2>&1 || true
   for _ in $(seq 30); do timeout 20 adb -s "$serial" get-state >/dev/null 2>&1 || break; sleep 1; done
@@ -89,6 +100,8 @@ if timeout 20 adb -s "$serial" get-state >/dev/null 2>&1; then
     echo "$serial did not stop; refusing to start a second instance." >&2
     exit 1
   fi
+  # ADB disconnects before QEMU and its guarded supervisor finish teardown.
+  python3 "$script_dir/mobile/resource_guard.py" wait-emulator-gone
 elif ((verify_only)); then
   echo "$serial is not running." >&2
   exit 1
@@ -102,11 +115,14 @@ if [[ "$profile" == accelerated-kvm-host-gpu ]]; then
   }
   eval "$display_exports" # process-local DISPLAY/XAUTHORITY; no cookie is read
 fi
+require_launch_supervisor
 snapshot_args=(-no-snapshot)
 ((quick_boot && !force_cold)) && snapshot_args=()
 mkdir -p "$state_dir"
 log="$state_dir/$serial.log"
+python3 "$script_dir/mobile/resource_guard.py" verify-binary --binary "$emulator"
 nohup setsid "$emulator" -avd "$capture_avd" -port "$capture_port" \
+  -cores 2 -memory 2048 \
   -camera-back virtualscene -camera-front none -no-audio "${snapshot_args[@]}" \
   -accel "$accel" -gpu "$gpu" "${capture_extra[@]}" "$@" >"$log" 2>&1 &
 launcher_pid=$!

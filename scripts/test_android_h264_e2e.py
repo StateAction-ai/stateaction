@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the actual Stera recorder H.264 path on an explicitly selected emulator, then validate every take.
 
-Source scripts/env.sh first and start the AR emulator (scripts/start_capture_emulator.sh --ar -no-window).
+Source scripts/env.sh first and start the AR emulator (bash scripts/supervise_capture_emulator.sh --ar -no-window).
 Only an ``emulator-NNNN`` serial of a dedicated single-user emulator is accepted; every app mutation is scoped to
 its verified user 0 through scripts/android_personal_device.py. No physical device, paid service or upload is used.
 
