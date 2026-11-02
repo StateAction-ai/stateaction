@@ -1,5 +1,23 @@
 # StateAction.ai agent instructions
 
+## Current delivery scope: simple hand-pose pipeline
+
+The user requires Android capture/upload, backend processing and web preview to
+work end to end. Initial processing is only video decode, hand-pose estimation,
+necessary encode/format conversion and Rerun preview in the web UI. Keep it
+simple; geometry/depth/mesh processing and iOS work are deferred. Preserve raw
+source, frame/timestamp identity and truthful no-hand/failed results. Do not
+fabricate detections or silently weaken thresholds. Keep the same implementation
+deployable on Render and do not create paid resources without authorization.
+
+## Enforced workstation resource limits
+
+- Exactly one Android emulator across all projects, AVDs, ports and agents. Use the shared guarded SDK/launcher; never invoke `emulator.agent-vendor` directly or bypass the machine-wide lock.
+- Run every local heavy build/test/probe through `agent-resource run -- <command>`. This includes newly generated Flutter projects and direct Gradle commands. `scripts/mobile/run.py` enters the guard automatically. If the guard is missing or refuses admission, stop; no unbounded retry.
+- On this workstation the shared cgroup has zero swap and a dynamic hard RAM cap of at most 24 GiB, with 6 GiB each for the sole emulator and one heavy job (1 GiB per service). Host usage must stay under 80% of MemTotal: the cap is `min(24 GiB, our anon memory + (MemAvailable - 20% reserve))`, kept at 12 GiB until the current-policy watchdog heartbeats, so other applications are accounted for and agents never take 80% on top of them. Admission requires the 20% reserve plus 8 GiB available (20 GiB at 60 GiB RAM); the watchdog stops our workloads below the 20% reserve plus 1 GiB and tightens the cap if other apps grow. Limits cover descendants and leftover daemons.
+- Use pinned JDK21, Gradle heap at most 2 GiB, two workers, in-process Kotlin compilation and no persistent Gradle/Kotlin daemons. The guard overrides generated 8 GiB template defaults. Check and clean our leftover processes after tests.
+- Preserve KVM/x86_64/host-GPU verification and personal-profile-only physical-device rules. See `docs/components/workstation-resource-guard.md` for installation and proof.
+
 ## Cost-effective models and orchestration
 
 - Default to the most cost-effective model capable of completing the task reliably, including subagents and orchestration workers.
@@ -39,7 +57,7 @@ Capture on the physical phone requires an intentional user Start action. Raw rec
 
 ## Accelerated emulator defaults: mandatory
 
-Use [`scripts/start_capture_emulator.sh`](scripts/start_capture_emulator.sh) for every emulator task; do not hand-start `emulator`. On this Linux x86_64 workstation the default is KVM (`-accel on`), an x86_64 guest and host GPU rendering (`-gpu host`, the RTX 3090). Software rendering is never a silent default or fallback.
+Launch with [`scripts/supervise_capture_emulator.sh`](scripts/supervise_capture_emulator.sh) in a persistent terminal; it enters its own bounded control scope and keeps the guarded SDK supervisor alive across heavy jobs. Do not nest it under `agent-resource run`. Use `agent-resource run -- bash scripts/start_capture_emulator.sh --ar --verify-only` to verify the warm API33 instance; do not hand-start `emulator`. On this Linux x86_64 workstation the default is KVM (`-accel on`), an x86_64 guest and host GPU rendering (`-gpu host`, the RTX 3090). Software rendering is never a silent default or fallback.
 
 - ARCore work uses `--ar`: the pinned API33 x86_64 AVD `stera_ar_api33` (`emulator-5582`) with emulator 36.4.10 and Vulkan off. Do not reset or reinstall the AVD, update the global SDK, or replace the pinned emulator for speed. Keep the separate API35 `stera_ar_api35` (`emulator-5580`) for ordinary tests.
 - Reuse one warm dedicated emulator. The launcher reuses a running instance only after verification: a `/dev/kvm` descriptor open in the qemu process, `-accel on -gpu host`, and a guest renderer (`dumpsys SurfaceFlinger` GLES line) naming the host NVIDIA GPU with no SwiftShader, llvmpipe or lavapipe. A running instance that fails is not reused; `--replace` restarts only the dedicated emulator. `nvidia-smi` alone is not proof.

@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -112,6 +113,26 @@ def prepare(project: str) -> None:
 
 
 def main() -> None:
+    # Hosted CI has its own ephemeral-runner limits. Local runs must use the
+    # installed shared cgroup, also for generated Flutter/Gradle spike projects.
+    hosted = (
+        os.environ.get("GITHUB_ACTIONS") == "true"
+        and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+        and str(ROOT).startswith("/home/runner/work/")
+    )
+    if not hosted:
+        from resource_guard import inside_guard
+
+        if not inside_guard():
+            guard = Path.home() / ".local/bin/agent-resource"
+            if not guard.is_file():
+                raise RuntimeError(
+                    "Install scripts/mobile/resource_guard.py first; no unbounded local builds"
+                )
+            os.execv(
+                str(guard),
+                [str(guard), "run", "--", sys.executable, str(__file__), *sys.argv[1:]],
+            )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", choices=PROJECTS)
     parser.add_argument(

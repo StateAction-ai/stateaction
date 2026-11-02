@@ -68,15 +68,15 @@ source scripts/env.sh
 export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
 "$ANDROID_HOME/emulator/emulator" -accel-check
 "$ANDROID_HOME/emulator/emulator" -list-avds
-scripts/start_capture_emulator.sh -no-window
+bash scripts/supervise_capture_emulator.sh -no-window
 ```
 
-The [launcher](../scripts/start_capture_emulator.sh) defaults to `stera_ar_api35`, port 5580, rear `virtualscene`, no front camera/audio, a cold boot (`-no-snapshot`), **KVM (`-accel on`) and host GPU rendering (`-gpu host`)**. It accepts extra emulator arguments such as `-no-window` for headless use and runs the emulator detached with its log in the ignored `artifacts/emulator-verification/`. The first API35 launch reached **`sys.boot_completed=1`**. Google Play Services for AR **1.57.262640093** installed successfully from the 1.57.0 x86 emulator APK, SHA-256 `92741f6f873c232a07173b50adeee6b1c2f5a048bc071c80cf741b0cde0f73c4`. Linux VM acceleration uses KVM. [Acceleration](https://developer.android.com/studio/run/emulator-acceleration), [emulator CLI](https://developer.android.com/studio/run/emulator-commandline).
+The [launcher](../scripts/start_capture_emulator.sh) defaults to `stera_ar_api35`, port 5580, rear `virtualscene`, no front camera/audio, a cold boot (`-no-snapshot`), **KVM (`-accel on`) and host GPU rendering (`-gpu host`)**. It accepts extra emulator arguments such as `-no-window` for headless use and keeps a guarded control terminal running for warm reuse, with its log in the ignored `artifacts/emulator-verification/`. The first API35 launch reached **`sys.boot_completed=1`**. Google Play Services for AR **1.57.262640093** installed successfully from the 1.57.0 x86 emulator APK, SHA-256 `92741f6f873c232a07173b50adeee6b1c2f5a048bc071c80cf741b0cde0f73c4`. Linux VM acceleration uses KVM. [Acceleration](https://developer.android.com/studio/run/emulator-acceleration), [emulator CLI](https://developer.android.com/studio/run/emulator-commandline).
 
 ### Accelerated defaults, warm reuse and verification
 
 ```sh
-scripts/start_capture_emulator.sh --ar -no-window   # pinned API33 ARCore target, emulator-5582
+bash scripts/supervise_capture_emulator.sh --ar -no-window   # pinned API33 ARCore target, emulator-5582
 scripts/start_capture_emulator.sh --ar --verify-only # check the running instance only
 ```
 
@@ -113,7 +113,7 @@ flutter build apk --debug --target-platform android-x64
 
 Our separate `stera_ar_api33` AVD uses API33 Google APIs x86_64 revision17, pinned emulator36.4.10, ARCore1.57 and disabled Vulkan. The measurements in this paragraph were taken with software OpenGL (`swiftshader_indirect`; historical, now `--software`); the default launcher now uses host GPU rendering. It runs as `emulator-5582`. The actual app now initializes, configures and resumes ARCore and receives camera `0` frames, resolving the earlier session-creation blocker. Tracking still stays `PAUSED`. Logs show visual-inertial processing around 2.5–3.1Hz and `RESOURCE_EXHAUSTED`/initialization failures, including after reducing the UI to 720×1280 and stopping the API35 emulator. Host OpenGL could not initialize in this headless environment because `DISPLAY` was unset. These observations do not establish a single remaining cause. **No live app MCAP was saved and the end-to-end live app test has not passed.** The app was stopped after testing. [Local emulator validation receipt](linux-emulator-validation.json).
 
-Launch this separate compatibility target with `scripts/start_capture_emulator.sh --ar -no-window`.
+Launch this separate compatibility target with `bash scripts/supervise_capture_emulator.sh --ar -no-window`.
 
 Preserve both AVD configurations: API35 already supports the native instrumented codec tests, while API33 is the current live-AR investigation target. Host graphics are the default and are verified on this host (see above). Do not confuse the test APK's synthetic writer fixture with a recording made by the live app.
 

@@ -154,6 +154,10 @@ class LauncherTest(unittest.TestCase):
             (root / "scripts" / "mobile").mkdir(parents=True)
             for name in ("start_capture_emulator.sh", "env.sh"):
                 shutil.copy(SCRIPTS / name, root / "scripts" / name)
+            shutil.copy(
+                SCRIPTS / "mobile/resource_guard.py",
+                root / "scripts/mobile/resource_guard.py",
+            )
             (root / "scripts" / "mobile" / "emulator_acceleration.py").write_text(
                 "import sys\nsys.exit(3)\n"
             )
