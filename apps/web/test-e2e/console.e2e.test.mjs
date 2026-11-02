@@ -418,10 +418,9 @@ describe("server-confirmed sign-out", () => {
   });
 });
 
-// PROPOSED wire contracts (packages/contracts/proposed/profile): real service
-// bytes validated against the proposed request/response schemas. They are not
-// published; catalog.v4 follows SA-19's catalog.v3 merge.
-describe("own-profile service matches the proposed wire contracts", () => {
+// Published wire contracts (catalog.v4): real service bytes validated against
+// http.profile-update.v1 / http.profile.v1 and their conformance fixtures.
+describe("own-profile service matches the published wire contracts", () => {
   const contractsDir = new URL("../../../packages/contracts/", import.meta.url);
   const { Ajv2020 } = createRequire(new URL("package.json", contractsDir))(
     "ajv/dist/2020.js",
@@ -435,18 +434,14 @@ describe("own-profile service matches the proposed wire contracts", () => {
     validateFormats: false,
   });
   ajv.addSchema(readJson("api/common.v1.schema.json"));
-  const requestSchema = readJson(
-    "proposed/profile/http/profile-update.v1.schema.json",
-  );
-  const responseSchema = readJson(
-    "proposed/profile/http/profile.v1.schema.json",
-  );
+  const requestSchema = readJson("api/http/profile-update.v1.schema.json");
+  const responseSchema = readJson("api/http/profile.v1.schema.json");
   ajv.addSchema(requestSchema);
   ajv.addSchema(responseSchema);
   const validRequest = ajv.getSchema(requestSchema.$id);
   const validResponse = ajv.getSchema(responseSchema.$id);
   const responseCases = readJson(
-    "proposed/profile/fixtures/http.profile.v1.json",
+    "conformance/fixtures/contracts/http.profile.v1.json",
   ).cases;
   const rejectedNames = responseCases
     .filter(

@@ -75,8 +75,8 @@ function bodyName(value: unknown): unknown {
  * other field are never read from the request. Better Auth's broad
  * `/update-user` stays disabled.
  *
- * Proposed contract (NOT published conformance; schemas in packages/contracts/proposed/profile; a v4 registry superset
- * follows backend SA-19's catalog.v3 merge): request `{ "name": string }`,
+ * Published contracts (catalog.v4: `http.profile-update.v1` request and
+ * `http.profile.v1` response data): request `{ "name": string }`,
  * response `{ data: { user: { id, email, name } }, requestId }`.
  */
 export function profileRoute(

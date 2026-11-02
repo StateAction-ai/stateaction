@@ -27,7 +27,7 @@
       "name": "non-latin and astral code points",
       "input": {
         "document": {
-          "name": "\u674e\u96f7 \ud83d\ude00"
+          "name": "李雷 😀"
         }
       },
       "expect": {
