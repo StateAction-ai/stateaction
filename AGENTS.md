@@ -37,6 +37,18 @@ The existing Stera checkout is **our temporary work**, not another engineer's ac
 
 Capture on the physical phone requires an intentional user Start action. Raw recordings and captured images stay in ignored local directories, never in Git.
 
+## Accelerated emulator defaults: mandatory
+
+Use [`scripts/start_capture_emulator.sh`](scripts/start_capture_emulator.sh) for every emulator task; do not hand-start `emulator`. On this Linux x86_64 workstation the default is KVM (`-accel on`), an x86_64 guest and host GPU rendering (`-gpu host`, the RTX 3090). Software rendering is never a silent default or fallback.
+
+- ARCore work uses `--ar`: the pinned API33 x86_64 AVD `stera_ar_api33` (`emulator-5582`) with emulator 36.4.10 and Vulkan off. Do not reset or reinstall the AVD, update the global SDK, or replace the pinned emulator for speed. Keep the separate API35 `stera_ar_api35` (`emulator-5580`) for ordinary tests.
+- Reuse one warm dedicated emulator. The launcher reuses a running instance only after verification: a `/dev/kvm` descriptor open in the qemu process, `-accel on -gpu host`, and a guest renderer (`dumpsys SurfaceFlinger` GLES line) naming the host NVIDIA GPU with no SwiftShader, llvmpipe or lavapipe. A running instance that fails is not reused; `--replace` restarts only the dedicated emulator. `nvidia-smi` alone is not proof.
+- Camera, lifecycle and recovery tests keep the default cold boot (`-no-snapshot`). `--quick-boot` is opt-in for ordinary app tests only. Default warm reuse is fine for routine loops; for a cold-start case (camera, lifecycle, recovery) pass explicit `--force-cold-start`, which stops and restarts even a healthy warm dedicated instance (and overrides `--quick-boot`).
+- Display: honor a caller-provided `DISPLAY`/`XAUTHORITY`; otherwise the launcher discovers a working same-user display using `xdpyinfo` and fails closed with instructions. Never `xhost +`, change display-server or desktop policy, read or print authority cookies, or hardcode an authority file name.
+- `--software` (or `CAPTURE_EMULATOR_PROFILE=software`) is the explicit CI/compatibility override. Its output and evidence carry the label `software-rendering-not-accelerated` and must never be cited as accelerated evidence. Earlier software-rendered results stay valid but labeled as such.
+- Report acceleration as rendering only: the guest video encoder stays software, and emulator results are never physical-device qualification. Make no speedup claim without comparable timings of the same task.
+- Run expensive emulator, Flutter and Gradle work under `flock /tmp/stateaction-mobile-validation.lock`, use incremental builds, and do not weaken recorder assertions for speed. Verification evidence is written to the ignored `artifacts/emulator-verification/`.
+
 ## Linear and pull request traceability
 
 - Canonical private repository: `timothywangdev/stateaction`. Verify the active GitHub account before changing remote settings or publishing. When several CLI accounts/sessions exist, pin each repository mutation to the `timothywangdev` credential; do not print or persist its token.

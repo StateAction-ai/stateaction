@@ -71,7 +71,37 @@ export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
 scripts/start_capture_emulator.sh -no-window
 ```
 
-The [launcher](../scripts/start_capture_emulator.sh) defaults to `stera_ar_api35`, port 5580, rear `virtualscene`, no front camera/audio/snapshots, and `swiftshader_indirect` graphics. It accepts `-no-window` for headless use. The launch reached **`sys.boot_completed=1`**. Google Play Services for AR **1.57.262640093** installed successfully from the 1.57.0 x86 emulator APK, SHA-256 `92741f6f873c232a07173b50adeee6b1c2f5a048bc071c80cf741b0cde0f73c4`. Linux VM acceleration uses KVM. [Acceleration](https://developer.android.com/studio/run/emulator-acceleration), [emulator CLI](https://developer.android.com/studio/run/emulator-commandline).
+The [launcher](../scripts/start_capture_emulator.sh) defaults to `stera_ar_api35`, port 5580, rear `virtualscene`, no front camera/audio, a cold boot (`-no-snapshot`), **KVM (`-accel on`) and host GPU rendering (`-gpu host`)**. It accepts extra emulator arguments such as `-no-window` for headless use and runs the emulator detached with its log in the ignored `artifacts/emulator-verification/`. The first API35 launch reached **`sys.boot_completed=1`**. Google Play Services for AR **1.57.262640093** installed successfully from the 1.57.0 x86 emulator APK, SHA-256 `92741f6f873c232a07173b50adeee6b1c2f5a048bc071c80cf741b0cde0f73c4`. Linux VM acceleration uses KVM. [Acceleration](https://developer.android.com/studio/run/emulator-acceleration), [emulator CLI](https://developer.android.com/studio/run/emulator-commandline).
+
+### Accelerated defaults, warm reuse and verification
+
+```sh
+scripts/start_capture_emulator.sh --ar -no-window   # pinned API33 ARCore target, emulator-5582
+scripts/start_capture_emulator.sh --ar --verify-only # check the running instance only
+```
+
+| Option          | Effect                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--ar`          | Pinned API33 x86_64 `stera_ar_api33`, emulator 36.4.10, port 5582, Vulkan off                                    |
+| `--quick-boot`  | Opt-in snapshots for ordinary app tests; camera, lifecycle and recovery tests keep the default cold boot         |
+| `--force-cold-start` | Stop and cold-boot the dedicated emulator even if the warm one is healthy; use for camera, lifecycle and recovery cold-start cases (default warm reuse is fine for routine loops) |
+| `--replace`     | Stop and relaunch the dedicated emulator if it fails verification (never done silently)                          |
+| `--verify-only` | Verify and exit                                                                                                  |
+| `--software`    | Explicit CI/compatibility override: SwiftShader, labeled `software-rendering-not-accelerated`, never accelerated |
+
+A launch or reuse succeeds only when [`emulator_acceleration.py`](../scripts/mobile/emulator_acceleration.py) proves, and writes to `artifacts/emulator-verification/<serial>.json`:
+
+1. the qemu process (not the launcher wrapper) holds an open `/dev/kvm` descriptor and was started with `-accel on`;
+2. it was started with `-gpu host` and the guest ABI is `x86_64`;
+3. the guest's own renderer (`dumpsys SurfaceFlinger`, `GLES:` line) names the NVIDIA GPU (vendor from `CAPTURE_EMULATOR_EXPECT_GPU`, default `NVIDIA`) and is not SwiftShader, llvmpipe, lavapipe or other software.
+
+`nvidia-smi` showing a working GPU is not evidence that the emulator uses it, and the host-side "Graphics Adapter" log line is only a hint; the guest renderer line is the proof. A running emulator that fails these checks is reported and left alone unless `--replace` is given; it is never reused silently.
+
+**Display access.** Host GPU emulation needs an X display even with `-no-window`. The launcher uses the caller's `DISPLAY`/`XAUTHORITY` when set. Otherwise it only considers X sockets in `/tmp/.X11-unix` owned by the current user and, as authority, the same user's private (`0600`) `$XDG_RUNTIME_DIR/.mutter-Xwaylandauth.*` file, testing each combination with `xdpyinfo` (a path is passed to `xdpyinfo`; no cookie is read or printed). The ephemeral authority file name is never stored in the repository. If nothing works it exits with instructions. Never use `xhost +`, alter the display server or desktop session policy, or kill Xwayland. Without a desktop session, use `--software` and keep the label.
+
+**What acceleration does and does not cover.** The GPU accelerates emulator graphics only. The guest `c2.android.avc.encoder` remains software, ARCore depth stays unsupported, and nothing here replaces a Pixel recording. Do not quote a speedup unless the same task was timed in both profiles.
+
+**Historical results.** Everything below that mentions `swiftshader_indirect` or ~2.5–5 fps was measured with software rendering and stays labeled as such; compare it with new results only through a recorded renderer and profile.
 
 Prefer an `android-x64` app build for this AVD to avoid relying on native-library translation. This specific system image advertises both x86_64 and arm64-v8a, with `libndk_translation.so`. **Both the ARM64 and native x64 builds failed AR session creation**, reporting unknown camera device `0` while the emulator HAL exposed rear ID `10`. Logs verify that the x64 attempt loaded x86_64 ARCore native libraries, so ARM translation does not explain that failure. In `apps/mobile`, after sourcing the environment:
 
@@ -81,15 +111,11 @@ flutter build apk --debug --target-platform android-x64
 
 **The targeted compatibility experiment achieved partial progress locally.** A firsthand report in the official ARCore tracker encountered this camera-ID failure on API 35/36, but camera `0` existed on API 33 revision 17. Its working Linux configuration used emulator 36.4.10 build 15004761, ARCore's 1.56 emulator APK, host OpenGL and Vulkan disabled; newer emulator versions had a separate camera-timestamp regression. Another reporter independently found API 33 workable. [ARCore issue 1788](https://github.com/google-ar/arcore-android-sdk/issues/1788), [API 33 report in issue 1647](https://github.com/google-ar/arcore-android-sdk/issues/1647#issuecomment-3478556035).
 
-Our separate `stera_ar_api33` AVD uses API33 Google APIs x86_64 revision17, pinned emulator36.4.10, ARCore1.57, software OpenGL (`swiftshader_indirect`) and disabled Vulkan. It runs as `emulator-5582`. The actual app now initializes, configures and resumes ARCore and receives camera `0` frames, resolving the earlier session-creation blocker. Tracking still stays `PAUSED`. Logs show visual-inertial processing around 2.5–3.1Hz and `RESOURCE_EXHAUSTED`/initialization failures, including after reducing the UI to 720×1280 and stopping the API35 emulator. Host OpenGL could not initialize in this headless environment because `DISPLAY` was unset. These observations do not establish a single remaining cause. **No live app MCAP was saved and the end-to-end live app test has not passed.** The app was stopped after testing. [Local emulator validation receipt](linux-emulator-validation.json).
+Our separate `stera_ar_api33` AVD uses API33 Google APIs x86_64 revision17, pinned emulator36.4.10, ARCore1.57 and disabled Vulkan. The measurements in this paragraph were taken with software OpenGL (`swiftshader_indirect`; historical, now `--software`); the default launcher now uses host GPU rendering. It runs as `emulator-5582`. The actual app now initializes, configures and resumes ARCore and receives camera `0` frames, resolving the earlier session-creation blocker. Tracking still stays `PAUSED`. Logs show visual-inertial processing around 2.5–3.1Hz and `RESOURCE_EXHAUSTED`/initialization failures, including after reducing the UI to 720×1280 and stopping the API35 emulator. Host OpenGL could not initialize in this headless environment because `DISPLAY` was unset. These observations do not establish a single remaining cause. **No live app MCAP was saved and the end-to-end live app test has not passed.** The app was stopped after testing. [Local emulator validation receipt](linux-emulator-validation.json).
 
-Launch this separate compatibility target with:
+Launch this separate compatibility target with `scripts/start_capture_emulator.sh --ar -no-window`.
 
-```sh
-scripts/start_capture_emulator.sh --ar -no-window
-```
-
-Preserve both AVD configurations: API35 already supports the native instrumented codec tests, while API33 is the current live-AR investigation target. `CAPTURE_EMULATOR_GPU=host` selects host graphics when a usable display/GPU is available; that configuration is not verified on this host. Do not confuse the test APK's synthetic writer fixture with a recording made by the live app.
+Preserve both AVD configurations: API35 already supports the native instrumented codec tests, while API33 is the current live-AR investigation target. Host graphics are the default and are verified on this host (see above). Do not confuse the test APK's synthetic writer fixture with a recording made by the live app.
 
 **Proposed acceptance run:** record a 20-second virtual-scene session, pause/resume once, stop, pull the MCAP and inspect it. Require at least one decoded RGB frame initially; then measure expected versus actual frame counts, valid JPEG dimensions, per-frame calibration, explicit timestamp fields and final file readability. Report missing depth as expected emulator behavior. Do not fake depth or disable production geometry rejection to make this run pass.
 
