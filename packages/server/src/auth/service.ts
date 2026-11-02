@@ -18,6 +18,8 @@ export const SERVICE_SCOPES = [
   "job:claim",
   "job:heartbeat",
   "job:result",
+  // Processing worker: reserve/sign/journal its own job's output uploads.
+  "job:output",
 ] as const;
 export type ServiceScope = (typeof SERVICE_SCOPES)[number];
 

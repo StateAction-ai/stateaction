@@ -55,8 +55,8 @@ else
   docker run -d --rm --name "$storage_name" -p 127.0.0.1::9000 \
     -v "$storage_dir/s3.json:/etc/seaweedfs/s3.json:ro" \
     -v "$root/infra/seaweedfs-master.toml:/etc/seaweedfs/master.toml:ro" \
-    --tmpfs /data:rw,size=512m \
-    "$storage_image" server -ip=127.0.0.1 -ip.bind=0.0.0.0 -dir=/data -volume.max=8 \
+    --tmpfs /data:rw,size=2g \
+    "$storage_image" server -ip=127.0.0.1 -ip.bind=0.0.0.0 -dir=/data -volume.max=32 \
     -master.volumeSizeLimitMB=64 -filer -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json >/dev/null
   for _ in {1..60}; do
     docker exec "$name" pg_isready -U bootstrap -d postgres -h 127.0.0.1 >/dev/null 2>&1 && break
@@ -81,6 +81,7 @@ else
   docker exec "$name" postgres --version > "$out/server-version.txt"
   default_concurrency=4
 fi
+export TRANSPORT_TEST_S3_ENDPOINT="$STORAGE_TEST_ENDPOINT" TRANSPORT_TEST_S3_ACCESS_KEY="$STORAGE_TEST_ACCESS_KEY_ID" TRANSPORT_TEST_S3_SECRET_KEY="$STORAGE_TEST_SECRET_ACCESS_KEY"
 timeout --kill-after=30 "${CATALOG_INTEGRATION_TIMEOUT:-1800}" \
   node --conditions=react-server --import tsx --test --test-concurrency="${CATALOG_TEST_CONCURRENCY:-$default_concurrency}" \
   --test-reporter=spec --test-reporter-destination=stdout \

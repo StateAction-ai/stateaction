@@ -129,6 +129,13 @@ export async function grantAppRole(
   );
   if (!rowCount) return false;
   await client.query("SELECT stateaction_grant_app_role($1)", [role]);
+  // Later additive migrations contribute their own grant helper (one per
+  // feature); the SA-13 helper above stays the unchanged baseline.
+  const { rowCount: transport } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_transport(name)') IS NOT NULL",
+  );
+  if (transport)
+    await client.query("SELECT stateaction_grant_transport($1)", [role]);
   return true;
 }
 

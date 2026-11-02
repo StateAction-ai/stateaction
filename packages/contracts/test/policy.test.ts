@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v4.json is the current registry; catalog.v1.json, catalog.v2.json and
-// catalog.v3.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v4.json"));
+// catalog.v5.json is the current registry; catalog.v1.json through
+// catalog.v4.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v5.json"));
+const catalogV4 = JSON.parse(text("catalog.v4.json"));
 const catalogV3 = JSON.parse(text("catalog.v3.json"));
 const catalogV2 = JSON.parse(text("catalog.v2.json"));
 const catalogV1 = JSON.parse(text("catalog.v1.json"));
@@ -181,12 +182,53 @@ test("v3 lock entries are unchanged and every v3 file keeps its exact bytes", ()
 
 test("catalog v4 is an exact superset of catalog v3", () => {
   assertExactSuperset(
-    catalog,
+    catalogV4,
     catalogV3,
     ["v3", "v4"],
     ["http.profile-update.v1", "http.profile.v1"],
   );
-  assert.equal(Object.keys(catalog.contracts).length, 31);
+  assert.equal(Object.keys(catalogV4.contracts).length, 31);
+});
+
+/** Lock entries published with SA-16 (catalog v4). Frozen. */
+const PUBLISHED_V4_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v4.json":
+    "beef2a5f78e8bc294e666879997acc9792bc52ec2bf50214b307a9d904e110b4",
+  "http/profile-update.v1.schema.json":
+    "8af6302756bb767ca51632d83a427b35752d87d18cfc87bc6c4018b73a55ef60",
+  "http/profile.v1.schema.json":
+    "325b8fd28084a98f7464969db99e19280b9861d7b3c6606b15156bdcff191513",
+};
+
+test("v4 lock entries are unchanged and every v4 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V4_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+});
+
+test("catalog v5 is an exact superset of catalog v4", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV4,
+    ["v4", "v5"],
+    ["http.output-create.v1", "http.output-plan.v1"],
+  );
+  assert.equal(Object.keys(catalog.contracts).length, 33);
+});
+
+test("v5 output contracts are internal-path, closed and byte-capped", () => {
+  for (const [id, maxBytes] of [
+    ["http.output-create.v1", 4096],
+    ["http.output-plan.v1", 16384],
+  ] as const) {
+    const entry = catalog.contracts[id];
+    assert.equal(entry.version.path, "/internal/v1", id);
+    assert.equal(entry.maxBytes, maxBytes, id);
+  }
+  assert.deepEqual(catalog.contracts["http.output-plan.v1"].rules, [
+    "upload_plan",
+  ]);
 });
 
 test("published schema bytes match the immutability lock", () => {
