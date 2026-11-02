@@ -50,3 +50,7 @@ This isolated smoke creates its own local settings and dedicated `stateaction-sa
 For interactive development, copy `.env.example` and `.env.workflows.example` to their ignored local counterparts, replace `LOCAL_SMOKE_TOKEN`, then run `make infra-up migrate storage-init`, `make web` and `make workflows` in separate terminals. Database/storage credentials stay out of the workflow environment. [Official local runtime](https://render.com/docs/workflows-local-development)
 
 `verify-platform` is a probe, not a production processing job. Authentication, durable job claims, uploads, Modal, R2 transport and review are later tickets. Local storage is Apache-2.0 SeaweedFS because official MinIO images are unavailable and its upstream is archived. The local roundtrip does not qualify multipart/CORS/presigned URLs or long recordings.
+
+## Hosted (Render) mode
+
+`APP_ENV=production` start reads only injected environment variables, binds `0.0.0.0:$PORT` and rejects mixed local/hosted settings; `scripts/platform/hosted-smoke.sh` proves this on `PORT=10000` against a disposable Postgres with a restricted role, then registers the workflow tasks without database/storage credentials. See [Render deployment](../../docs/components/render-deployment.md). Nothing is deployed.

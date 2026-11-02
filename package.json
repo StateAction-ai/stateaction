@@ -22,7 +22,8 @@
     "graph": "nx graph",
     "prepare": "node scripts/platform/install-hooks.mjs",
     "hooks:install": "node scripts/platform/install-hooks.mjs",
-    "syntax": "nx run-many -t syntax"
+    "syntax": "nx run-many -t syntax",
+    "storage:presign": "pnpm --filter @stateaction/server storage:presign"
   },
   "devDependencies": {
     "prettier": "3.6.2",

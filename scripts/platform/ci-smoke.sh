@@ -53,6 +53,8 @@ docker compose -f infra/compose.yaml up -d --wait
 pnpm db:migrate
 pnpm storage:init
 pnpm storage:check
+printf 'S3_PUBLIC_ENDPOINT=http://localhost:9000\n' >> .env # differs from S3_ENDPOINT: signing origin test
+pnpm storage:presign
 setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!
 setsid artifacts/platform-tools/render/render workflows dev --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev > artifacts/platform-ci/workflows.log 2>&1 &

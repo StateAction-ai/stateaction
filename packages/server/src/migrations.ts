@@ -103,11 +103,26 @@ export async function applyMigrations(
   return report;
 }
 
+/**
+ * Restricted app role names are plain unquoted lowercase identifiers. Every
+ * helper validates the name before issuing any query, so a hostile value can
+ * never reach SQL text (it is also bound/%I-quoted downstream).
+ */
+export const SAFE_ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
+export function assertSafeRoleName(role: string): string {
+  if (typeof role !== "string" || !SAFE_ROLE_NAME.test(role))
+    throw new Error(
+      "App database role must match ^[a-z_][a-z0-9_]{0,62}$ (plain unquoted identifier)",
+    );
+  return role;
+}
+
 /** Re-applies least-privilege grants when the restricted role exists. */
 export async function grantAppRole(
   client: pg.ClientBase,
   role: string = APP_DB_ROLE,
 ): Promise<boolean> {
+  assertSafeRoleName(role);
   const { rowCount } = await client.query(
     "SELECT 1 FROM pg_roles WHERE rolname = $1",
     [role],
@@ -117,10 +132,61 @@ export async function grantAppRole(
   return true;
 }
 
-/** Owner-credential migration in one transaction. */
+/**
+ * Creates the restricted application role if absent and (re)sets its password.
+ * Privileges are NOT granted here: stateaction_grant_app_role() is the single
+ * source of grants, so no broad or default ACLs are ever introduced. The name
+ * is validated before any query and, like the password, passed as a bound
+ * transaction-local setting (never interpolated into SQL text). A fresh role is
+ * a plain LOGIN role. A pre-existing role fails closed unless it is plain
+ * LOGIN: no SUPERUSER/CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS and no
+ * membership in any other role. (The CREATEROLE owner's own automatic ADMIN
+ * membership *in* the app role is the reverse direction and is allowed.)
+ */
+export async function ensureAppRole(
+  client: pg.ClientBase,
+  password: string,
+  role: string = APP_DB_ROLE,
+): Promise<void> {
+  assertSafeRoleName(role);
+  if (password.length < 16)
+    throw new Error("APP_DB_PASSWORD must have at least 16 characters");
+  await client.query(
+    "SELECT set_config('stateaction.app_password', $1, true), set_config('stateaction.app_role', $2, true)",
+    [password, role],
+  );
+  await client.query(
+    `DO $$
+DECLARE r name := current_setting('stateaction.app_role');
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = r) THEN
+    EXECUTE format('CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS', r);
+  END IF;
+  -- A CREATEROLE (non-superuser) owner cannot touch attribute flags it does not
+  -- hold, so verify rather than reset them: a pre-existing privileged role fails closed.
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = r AND (rolsuper OR rolcreatedb
+       OR rolcreaterole OR rolreplication OR rolbypassrls OR NOT rolcanlogin)) THEN
+    RAISE EXCEPTION 'Role % must be a plain LOGIN role (no SUPERUSER/CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS)', r;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m JOIN pg_catalog.pg_roles a ON a.oid = m.member
+             WHERE a.rolname = r) THEN
+    RAISE EXCEPTION 'Role % must not be a member of other roles', r;
+  END IF;
+  EXECUTE format('ALTER ROLE %I PASSWORD %L', r, current_setting('stateaction.app_password'));
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), r);
+END $$`,
+  );
+}
+
+/**
+ * Owner-credential migration in one transaction: schema, optional restricted
+ * role creation/password, then the exact least-privilege grant helper.
+ */
 export async function migrateDatabase(options: {
   ownerUrl: string;
   appRole?: string;
+  /** Hosted/dev: create or rotate the restricted role inside the transaction. */
+  appRolePassword?: string;
   migrations?: Migration[];
 }): Promise<MigrationReport> {
   const client = new pg.Client({
@@ -131,6 +197,8 @@ export async function migrateDatabase(options: {
   try {
     await client.query("BEGIN");
     const report = await applyMigrations(client, options.migrations);
+    if (options.appRolePassword)
+      await ensureAppRole(client, options.appRolePassword, options.appRole);
     const appRoleGranted = await grantAppRole(client, options.appRole);
     await client.query("COMMIT");
     return { ...report, appRoleGranted };

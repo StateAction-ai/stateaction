@@ -7,7 +7,7 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md}\""
+        "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md,mjs}\" render.yaml docs/components/render-deployment.md"
       }
     },
     "integration": {
@@ -20,9 +20,21 @@
         }
       ],
       "options": {
-        "command": "bash scripts/platform/ci-smoke.sh"
+        "command": "bash scripts/platform/ci-smoke.sh && bash scripts/platform/hosted-smoke.sh"
       },
       "inputs": ["default", "runtimeTooling"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --test infra/test/*.test.mjs"
+      }
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node --check infra/test/blueprint.test.mjs && bash -n scripts/platform/hosted-smoke.sh"
+      }
     }
   }
 }

@@ -16,7 +16,12 @@
     "seed": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts seed",
     "integration": "bash scripts/catalog-integration.sh",
     "storage:init": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-init",
-    "storage:check": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-check"
+    "storage:check": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-check",
+    "hosted:migrate": "node dist/cli.js migrate",
+    "hosted:preflight": "node dist/cli.js preflight",
+    "hosted:storage-check": "node dist/cli.js storage-check",
+    "storage:presign": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts presign-check",
+    "hosted:presign-check": "node dist/cli.js presign-check"
   },
   "dependencies": {
     "@stateaction/contracts": "workspace:*",

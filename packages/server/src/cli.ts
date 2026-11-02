@@ -5,28 +5,46 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
-import { serverConfig } from "./config.js";
-import { initializeStorage, storageClient } from "./storage.js";
+import { appEnv, serverConfig } from "./config.js";
 import { migrateDatabase } from "./migrations.js";
 import { seedLocalCatalog } from "./catalog/seed.js";
-const config = serverConfig();
-if (process.env.APP_ENV !== "local")
-  throw new Error("This bootstrap CLI is local-only");
-for (const address of [config.databaseUrl, config.endpoint]) {
-  if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(address).hostname))
-    throw new Error("Local bootstrap refuses non-loopback endpoints");
-}
-if (process.argv[2] === "migrate") {
-  // Local owner path; hosted runs use the separate owner URL (SA-14 wiring).
-  const report = await migrateDatabase({ ownerUrl: config.databaseUrl });
+import { initializeStorage, presignObject, storageClient } from "./storage.js";
+const LOOPBACK = ["127.0.0.1", "localhost", "[::1]"];
+const command = process.argv[2];
+const env = appEnv();
+const requireLoopback = (addresses: string[]) => {
+  for (const address of addresses)
+    if (!LOOPBACK.includes(new URL(address).hostname))
+      throw new Error("Local bootstrap refuses non-loopback endpoints");
+};
+if (command === "migrate") {
+  // Owner path. Hosted/dev use MIGRATION_DATABASE_URL (never present in the web
+  // or workflow services); local bootstrap reuses the single local DATABASE_URL.
+  const ownerUrl =
+    process.env.MIGRATION_DATABASE_URL ??
+    (env === "local" ? process.env.DATABASE_URL : undefined);
+  if (!ownerUrl)
+    throw new Error("Missing server setting: MIGRATION_DATABASE_URL");
+  if (env === "local") requireLoopback([ownerUrl]);
+  else if (!process.env.APP_DB_PASSWORD)
+    throw new Error("Missing server setting: APP_DB_PASSWORD");
+  const appRolePassword = process.env.APP_DB_PASSWORD;
+  const report = await migrateDatabase(
+    appRolePassword ? { ownerUrl, appRolePassword } : { ownerUrl },
+  );
   console.log(
     `Schema ready: applied [${report.applied.join(",")}], already applied [${report.alreadyApplied.join(",")}], checksum adopted [${report.adopted.join(",")}], app role grants ${report.appRoleGranted ? "applied" : "skipped (role absent)"}`,
   );
-} else if (process.argv[2] === "seed") {
+} else if (command === "seed") {
+  // Local-only fixtures through the single local DATABASE_URL.
+  if (env !== "local") throw new Error("Seeding is local-only");
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("Missing server setting: DATABASE_URL");
+  requireLoopback([url]);
   const password = process.env.LOCAL_SEED_PASSWORD;
   if (password !== undefined && password.length < 12)
     throw new Error("LOCAL_SEED_PASSWORD must have at least 12 characters");
-  const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 2 });
+  const pool = new pg.Pool({ connectionString: url, max: 2 });
   try {
     const report = await seedLocalCatalog(pool, password ? { password } : {});
     console.log(
@@ -37,11 +55,23 @@ if (process.argv[2] === "migrate") {
   } finally {
     await pool.end();
   }
-} else if (process.argv[2] === "storage-init") {
+} else if (command === "preflight") {
+  // Configuration and environment-isolation check before a hosted web process
+  // listens. Database readiness is reported by /api/v1/health, not startup.
+  serverConfig();
+  console.log(`Preflight passed (${env})`);
+} else if (command === "storage-init") {
+  const config = serverConfig();
+  if (env !== "local")
+    throw new Error("Buckets are created out of band outside local");
+  requireLoopback([config.endpoint]);
   await initializeStorage(config);
   console.log("Local bucket ready");
-} else if (process.argv[2] === "storage-check") {
+} else if (command === "storage-check") {
+  const config = serverConfig();
+  if (env === "local") requireLoopback([config.endpoint]);
   const client = storageClient(config, 30000);
+  // Tiny owned prefix, removed even on failure.
   const key = `platform-check/${randomUUID()}`;
   try {
     await client.send(
@@ -56,11 +86,61 @@ if (process.argv[2] === "migrate") {
     );
     if ((await object.Body?.transformToString()) !== "stateaction-platform")
       throw new Error("Stored bytes changed");
-    console.log("Local S3 Put/Get verified");
+    console.log(`${env} S3 Put/Get verified`);
   } finally {
     await client.send(
       new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
     );
     client.destroy();
   }
-} else throw new Error("Expected migrate, seed, storage-init or storage-check");
+} else if (command === "presign-check") {
+  // Proves URLs are signed for the origin clients use and honoured by the store.
+  const config = serverConfig();
+  const key = `platform-check/${randomUUID()}`;
+  const body = "stateaction-presign";
+  const put = await presignObject(config, { method: "PUT", key });
+  const get = await presignObject(config, { method: "GET", key });
+  for (const url of [put, get])
+    if (new URL(url).origin !== new URL(config.publicEndpoint).origin)
+      throw new Error("Presigned URL does not use the public endpoint origin");
+  const client = storageClient(config, 30000);
+  try {
+    const stored = await fetch(put, { method: "PUT", body });
+    if (!stored.ok)
+      throw new Error(
+        `Presigned PUT failed: ${stored.status} ${(await stored.text()).slice(0, 200)}`,
+      );
+    const read = await fetch(get);
+    if (!read.ok || (await read.text()) !== body)
+      throw new Error(`Presigned GET failed: ${read.status}`);
+    const unsigned = new URL(get);
+    unsigned.search = "";
+    if ((await fetch(unsigned)).ok)
+      throw new Error("Unsigned access to the private object succeeded");
+    // A URL signed for one origin must not validate at another (the host is
+    // part of the SigV4 signature). Only possible where an alias exists
+    // (loopback localhost <-> 127.0.0.1); real R2 has a single host.
+    const signed = new URL(get);
+    const alias =
+      signed.hostname === "localhost"
+        ? "127.0.0.1"
+        : signed.hostname === "127.0.0.1"
+          ? "localhost"
+          : undefined;
+    if (alias) {
+      const crossOrigin = new URL(get);
+      crossOrigin.hostname = alias;
+      if ((await fetch(crossOrigin)).ok)
+        throw new Error("URL signed for another origin was accepted");
+    }
+    console.log(`${env} presigned PUT/GET verified at ${new URL(put).origin}`);
+  } finally {
+    await client.send(
+      new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
+    );
+    client.destroy();
+  }
+} else
+  throw new Error(
+    "Expected migrate, seed, preflight, storage-init, storage-check or presign-check",
+  );
