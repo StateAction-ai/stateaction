@@ -25,6 +25,10 @@ class MotionCaptureController(
         private set
 
     fun start(scheduler: MotionScheduler, requestedRateHz: Int = DEFAULT_MOTION_RATE_HZ) {
+        // A previous uncertain stop must not leak old callbacks into this recording's source.
+        collector.getStopFailureReason()?.let { previous ->
+            check(collector.reinitialize()) { "IMU producer is not safe to reuse: $previous" }
+        }
         stopReason = null
         collector.configure(requestedRateHz) { reason -> postToMain(Runnable { onSaturated(reason) }) }
         collector.start()
@@ -38,9 +42,13 @@ class MotionCaptureController(
         return { drain.flushAll() }
     }
 
-    /** Returns the stop reason instead of resuming when capture was stopped for motion loss. */
+    /**
+     * Returns a reason instead of resuming when capture was stopped for motion loss or the
+     * pause could not prove that sensor callbacks ended.
+     */
     fun resume(scheduler: MotionScheduler): String? {
         stopReason?.let { return it }
+        collector.getStopFailureReason()?.let { return it }
         collector.start()
         drain.start(scheduler)
         return null

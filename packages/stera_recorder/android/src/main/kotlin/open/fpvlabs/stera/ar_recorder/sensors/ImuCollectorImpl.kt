@@ -24,6 +24,8 @@ class ImuCollectorImpl(
     private val queueCapacityPerSensor: Int = DEFAULT_MOTION_QUEUE_CAPACITY,
     private val elapsedRealtimeNanos: () -> Long = SystemClock::elapsedRealtimeNanos,
     private val stopBarrierOverride: ((Handler?) -> Unit)? = null,
+    /** Waits for the old sensor thread to end; true only when it provably terminated. */
+    private val awaitThreadEnd: (HandlerThread) -> Boolean = { thread -> thread.join(5_000); !thread.isAlive },
 ) : ImuCollector, SensorEventListener {
 
     private var sensorManager: SensorManager? = null
@@ -81,10 +83,12 @@ class ImuCollectorImpl(
 
     override fun configure(requestedRateHz: Int, onSaturated: (String) -> Unit) {
         check(!isCollecting) { "Cannot reconfigure IMU collection while it is running" }
+        // An uncertain stop may leave a callback in flight on the old sensor thread; a new
+        // recording must not share that producer. Only reinitialize() can clear it.
+        stopFailure.get()?.let { throw IllegalStateException("IMU producer is not safe to reuse: $it") }
         require(requestedRateHz in 1..1_000) { "Requested IMU rate out of range" }
         this.requestedRateHz = requestedRateHz
         saturationListener = onSaturated
-        stopFailure.set(null)
         buffer.reset(requestedRateHz)
         generationStarted = false
         for (kind in MotionSensorKind.values()) {
@@ -95,6 +99,7 @@ class ImuCollectorImpl(
 
     override fun start() {
         if (isCollecting) return
+        stopFailure.get()?.let { throw IllegalStateException("IMU producer is not safe to resume: $it") }
         val manager = sensorManager ?: return
         if (generationStarted) buffer.beginSegment() else { buffer.beginSegment(); generationStarted = true }
         isCollecting = true
@@ -144,6 +149,32 @@ class ImuCollectorImpl(
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         val kind = sensors.entries.firstOrNull { it.value == sensor }?.key ?: return
         buffer.stats.getValue(kind).accuracyChanges.incrementAndGet()
+    }
+
+    override fun reinitialize(): Boolean {
+        check(!isCollecting) { "Cannot reinitialize IMU collection while it is running" }
+        try {
+            sensorManager?.unregisterListener(this)
+        } catch (e: Exception) {
+            // The old thread's termination below is the actual barrier.
+        }
+        val old = handlerThread
+        old?.quitSafely()
+        val ended = try {
+            old == null || awaitThreadEnd(old)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        // Without proof that the old producer thread ended, the uncertainty stays.
+        if (!ended) return false
+        handlerThread = null
+        handler = null
+        sensors.clear()
+        availability.clear()
+        buffer.drain()
+        stopFailure.set(null)
+        return initialize()
     }
 
     override fun drainMotion(maxPerSensor: Int): List<RawMotionEvent> = buffer.drain(maxPerSensor)

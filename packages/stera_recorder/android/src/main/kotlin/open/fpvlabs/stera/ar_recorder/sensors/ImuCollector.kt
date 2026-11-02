@@ -9,12 +9,18 @@ interface ImuCollector {
     fun initialize(): Boolean
 
     /**
-     * Starts a new recording generation: clears queues, counts and a previous stop failure.
-     * Pause/resume use [start]/[stop] and keep this generation's evidence.
+     * Starts a new recording generation: clears queues and counts. Refuses (throws) while a
+     * previous stop is uncertain. Pause/resume use [start]/[stop] and keep this evidence.
      */
     fun configure(requestedRateHz: Int = DEFAULT_MOTION_RATE_HZ, onSaturated: (String) -> Unit = {})
+    /** Refuses (throws) after an uncertain stop until [reinitialize] succeeds. */
     fun start()
     fun stop()
+    /**
+     * Replaces the sensor thread and registrations after an uncertain stop. Returns true only
+     * when the old producer thread provably ended; otherwise the uncertainty is kept.
+     */
+    fun reinitialize(): Boolean
     fun drainMotion(maxPerSensor: Int = Int.MAX_VALUE): List<RawMotionEvent>
     fun recordWritten(events: List<RawMotionEvent>)
     fun recordWriteFailed(events: List<RawMotionEvent>)

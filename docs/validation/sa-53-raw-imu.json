@@ -10,12 +10,12 @@
   "local_evidence": {
     "android_jvm_tests": {
       "command": "./gradlew :stera_recorder:testDebugUnitTest (apps/mobile/android)",
-      "result": "45 tests, 0 failures",
+      "result": "46 tests, 0 failures",
       "new_suites": {
         "RawMotionBufferTest": 5,
         "ImuCollectorImplTest": 7,
         "RawMotionMcapRoundTripTest": 3,
-        "MotionCaptureControllerTest": 4
+        "MotionCaptureControllerTest": 5
       }
     },
     "jvm_round_trip_fixture": {
@@ -32,28 +32,43 @@
       "sensors": "Goldfish 3-axis Accelerometer / Goldfish gyroscope (virtual)",
       "result": "OK (1 test)",
       "duration_s": 3,
-      "video_frames_written": 54,
-      "video_frames_dropped": 27,
       "slow_video_write_ms": 150,
-      "mcap_sha256": "3e7b9c7549974e0f5a242d395b034b6083798f1e7b336d50f049d2fe0fca3909",
       "official_reader_check": "ok with --metadata and --require-both",
       "accel": {
-        "delivered": 303,
-        "written": 303,
         "dropped": 0,
         "effective_rate_hz": 100.0,
         "gaps_over_threshold": 0
       },
       "gyro": {
-        "delivered": 302,
-        "written": 302,
         "dropped": 0,
         "effective_rate_hz": 100.0,
         "gaps_over_threshold": 0
       },
-      "note": "Accelerometer and gyroscope timestamps have distinct phases (first 48908107189 ns vs 48917728404 ns), confirming independent delivery rather than pairing. The ARCore camera loop itself was not run on the emulator."
+      "note": "Both runs: every delivered event written, 0 drops, 0 gaps, 100.0 Hz effective per sensor, distinct per-sensor timestamp phases (independent delivery, no pairing). The ARCore camera loop itself was not run on the emulator.",
+      "runs": [
+        {
+          "source": "fa23537",
+          "mcap_sha256": "3e7b9c7549974e0f5a242d395b034b6083798f1e7b336d50f049d2fe0fca3909",
+          "accel_delivered_written": 303,
+          "gyro_delivered_written": 302,
+          "video_frames_written": 54,
+          "video_frames_dropped": 27
+        },
+        {
+          "source": "d9ba48e (final lifecycle fix)",
+          "mcap_sha256": "2a906624952dcf750d1732d7b5a4834a616bda7463701c5f7be3f32838adaf54",
+          "accel_delivered_written": 302,
+          "gyro_delivered_written": 302,
+          "video_frames_written": 55,
+          "video_frames_dropped": 27,
+          "first_native_timestamp_ns": {
+            "accel": "34384142851",
+            "gyro": "34382755403"
+          }
+        }
+      ]
     },
-    "recorder_lifecycle": "MotionCaptureController (delegated to by ArRecorderImpl) is tested with the production collector, drain, MCAPDatasetWriter and RecordingMetricsState.captureFailureReason: saturation halts capture with a reason, refuses resume, writes every admitted event (IDs 0..7) and counts the 4 rejected; the recording is classified failed. An uncertain IMU stop fails the recording; pause flushes before writers pause; a clean stop writes everything without failure."
+    "recorder_lifecycle": "MotionCaptureController (delegated to by ArRecorderImpl) is tested with the production collector, drain, MCAPDatasetWriter and RecordingMetricsState.captureFailureReason: saturation halts capture with a reason, refuses resume, writes every admitted event (IDs 0..7) and counts the 4 rejected; the recording is classified failed. An uncertain IMU stop fails the recording; pause flushes before writers pause; a clean stop writes everything without failure. An uncertain stop or pause refuses resume and new-recording reuse of the producer; reinitialize() clears it only after the old sensor thread provably ended, and the next recording then starts clean (event IDs from 0, no old callbacks)."
   },
   "remaining_gates": [
     "Physical Android: effective rates, gravity sign/axes, accuracy states, long-run saturation and thermal behaviour on real hardware (root-coordinated, personal profile only).",

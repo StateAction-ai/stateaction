@@ -8,6 +8,8 @@ import android.hardware.SensorManager
 import android.os.Handler
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -137,21 +139,39 @@ class ImuCollectorImplTest {
         assertEquals(4, imu.drainMotion().size)
     }
 
-    @Test fun failedStopRemainsObservableAcrossResumeAndClearsOnlyForNewRecording() {
+    @Test fun uncertainStopRefusesResumeAndReuseUntilTheOldThreadProvablyEnded() {
         var failBarrier = true
+        var threadEnded = false
+        Mockito.`when`(context.getSystemService(Context.SENSOR_SERVICE)).thenReturn(manager)
         val imu = collector(barrier = { if (failBarrier) throw IllegalStateException("injected stop barrier timeout") })
-        imu.initialize(); imu.configure(); imu.start()
-        imu.stop()
-        val failure = imu.getStopFailureReason()
+        val guarded = ImuCollectorImpl(context, DEFAULT_MOTION_QUEUE_CAPACITY, { now },
+            { if (failBarrier) throw IllegalStateException("injected stop barrier timeout") }, { threadEnded }).also { collectors += it }
+        for (subject in listOf(imu, guarded)) { subject.initialize(); subject.configure(); subject.start(); subject.stop() }
+        val failure = guarded.getStopFailureReason()
         assertNotNull(failure)
         assertTrue(failure!!.contains("injected stop barrier timeout"))
         @Suppress("UNCHECKED_CAST")
-        val inventory = imu.motionEvidence()["inventory"] as List<Map<String, Any?>>
+        val inventory = guarded.motionEvidence()["inventory"] as List<Map<String, Any?>>
         assertTrue(inventory.all { it["observed"] == "unknown" && it["observed_count"] == null })
         failBarrier = false
-        imu.start(); imu.stop()
-        assertEquals(failure, imu.getStopFailureReason())
-        imu.configure()
+        // Neither resuming nor configuring a new recording may reuse the uncertain producer.
+        assertThrows(IllegalStateException::class.java) { guarded.start() }
+        assertThrows(IllegalStateException::class.java) { guarded.configure() }
+        guarded.onSensorChanged(event(accel, 9L, 3, 0f, 0f, 0f))
+        assertTrue(guarded.drainMotion().isEmpty())
+        // Without proof that the old sensor thread ended, the uncertainty is kept.
+        assertFalse(guarded.reinitialize())
+        assertEquals(failure, guarded.getStopFailureReason())
+        threadEnded = true
+        assertTrue(guarded.reinitialize())
+        assertNull(guarded.getStopFailureReason())
+        guarded.configure(); guarded.start()
+        guarded.onSensorChanged(event(accel, 10L, 3, 1f, 2f, 3f))
+        assertEquals(listOf(0L), guarded.drainMotion().map { it.eventId })
+        guarded.stop()
+        assertNull(guarded.getStopFailureReason())
+        // The real HandlerThread join path also proves termination.
+        assertTrue(imu.reinitialize())
         assertNull(imu.getStopFailureReason())
     }
 }
