@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-registration.v1.json",
+  "title": "Recording registration response v1 (proposed, unpublished)",
+  "description": "POST /api/v1/recordings success data: 201 when created, 200 for an exact replay. recording is the unchanged http.recording.v1 shape. collectionPermissionRef is the server-bound operator approval recorded for the authenticated owner at registration; the phone copies it into recording-source/v1 collection_permission_ref. It identifies server state and is never accepted from a client as authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording", "collectionPermissionRef"],
+  "properties": {
+    "recording": {
+      "$ref": "https://stateaction.ai/schemas/http/recording.v1.json"
+    },
+    "collectionPermissionRef": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    }
+  }
+}

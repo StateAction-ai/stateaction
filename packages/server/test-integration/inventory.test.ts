@@ -17,6 +17,7 @@ import { seedSha } from "../src/catalog/seed.js";
 import {
   createActors,
   expectCode,
+  fixtureAdmission,
   freshDatabase,
   writeArtifact,
   type Actors,
@@ -127,6 +128,16 @@ const job = (recordingId: string) =>
     recordingId,
     profileRevision: "test-1",
   });
+/** First job with explicit fixture evidence for the SA-19 jobs trigger. */
+const admittedJob = async (recordingId: string) => {
+  const jobId = randomUUID();
+  await fixtureAdmission(db.app, recordingId, jobId);
+  return createProcessingJob(db.app, {
+    jobId,
+    recordingId,
+    profileRevision: "test-1",
+  });
+};
 const rawJob = (recordingId: string) =>
   db.app.query(
     `INSERT INTO jobs (id, kind, recording_id, source_manifest_sha256, profile_revision)
@@ -194,7 +205,7 @@ describe("sealed source inventory is frozen (N1)", () => {
     await expectCode(job(rec), "conflict");
     await complete(calibration);
     // Optional files never gate admission, but stay declared.
-    await job(rec);
+    await admittedJob(rec);
     assert.equal(await liveJobs(rec), 1);
 
     const states = await fileStates(rec);
@@ -226,7 +237,7 @@ describe("sealed source inventory is frozen (N1)", () => {
     const replacement = await reserve(rec, "recorder_metadata");
     await seal(rec, manifest);
     for (const id of [manifest, mcap, replacement]) await complete(id);
-    await job(rec);
+    await admittedJob(rec);
     assert.equal(await liveJobs(rec), 1);
     evidence.preSealReplacement = await recordingRow(rec);
   });

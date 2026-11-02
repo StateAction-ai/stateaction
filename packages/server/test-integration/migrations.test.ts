@@ -18,8 +18,12 @@ const TABLES = [
   "dataset_clips",
   "datasets",
   "files",
+  "ingest_permissions",
   "jobs",
   "platform_schema_migrations",
+  "recording_admissions",
+  "recording_registrations",
+  "recording_seals",
   "recordings",
   "reviews",
   "session",
@@ -39,7 +43,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3],
+      applied: [1, 2, 3, 4],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -52,7 +56,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3],
+      alreadyApplied: [1, 2, 3, 4],
       adopted: [],
       appRoleGranted: true,
     });
@@ -97,8 +101,8 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const broken = [
       ...files,
       {
-        version: 4,
-        name: "004_broken.sql",
+        version: 5,
+        name: "005_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -110,7 +114,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const left = await db.owner.query(
       "SELECT to_regclass('releases') AS t, max(version) AS v FROM platform_schema_migrations",
     );
-    assert.deepEqual(left.rows[0], { t: null, v: 3 });
+    assert.deepEqual(left.rows[0], { t: null, v: 4 });
   } finally {
     await db.close();
   }
@@ -126,7 +130,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3],
+      applied: [2, 3, 4],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -144,9 +148,9 @@ test("concurrent migrators serialize and apply each version once", async () => {
         migrateDatabase({ ownerUrl: db.ownerUrl }),
       ),
     );
-    assert.equal(reports.filter((r) => r.applied.length === 3).length, 1);
+    assert.equal(reports.filter((r) => r.applied.length === 4).length, 1);
     assert.equal(
-      reports.filter((r) => r.alreadyApplied.length === 3).length,
+      reports.filter((r) => r.alreadyApplied.length === 4).length,
       3,
     );
   } finally {
@@ -180,6 +184,16 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
       "UPDATE access SET enabled = true",
       "INSERT INTO dataset_access (dataset_id, user_id, granted_by, permission_evidence_ref) VALUES (gen_random_uuid(), 'x', 'x', 'x')",
       "SELECT stateaction_grant_app_role('stateaction_app')",
+      "SELECT stateaction_grant_app_role_003('stateaction_app')",
+      "INSERT INTO ingest_permissions (id, permission_ref, owner_user_id, pilot_scope, covers_capture, covers_processing, evidence_ref, recorded_by) VALUES (gen_random_uuid(), 'self', 'x', 'x', true, true, 'x', 'x')",
+      "UPDATE ingest_permissions SET status = 'active'",
+      "DELETE FROM ingest_permissions",
+      "UPDATE recording_registrations SET permission_ref = 'x'",
+      "DELETE FROM recording_registrations",
+      "UPDATE recording_seals SET inventory = '[]'",
+      "DELETE FROM recording_seals",
+      "UPDATE recording_admissions SET outcome = 'admitted'",
+      "DELETE FROM recording_admissions",
       "INSERT INTO platform_schema_migrations (version) VALUES (99)",
       "CREATE TEMP TABLE reviews (id int)",
     ];

@@ -12,6 +12,7 @@ import {
 } from "../src/catalog/catalog.js";
 import { seedSha } from "../src/catalog/seed.js";
 import { migrateDatabase } from "../src/migrations.js";
+import { establishFixtureAdmission } from "../src/admission/fixtures.js";
 
 const env = (key: string) => {
   const value = process.env[key];
@@ -60,7 +61,9 @@ export async function freshDatabase(
     owner,
     app,
     async close() {
-      await Promise.all([owner.end(), app.end()]);
+      const fixtureOwner = ownerPools.get(name);
+      ownerPools.delete(name);
+      await Promise.all([owner.end(), app.end(), fixtureOwner?.end()]);
     },
   };
 }
@@ -70,6 +73,47 @@ export async function writeArtifact(name: string, value: unknown) {
     `${env("CATALOG_TEST_ARTIFACTS")}/${name}`,
     `${JSON.stringify(value, null, 2)}\n`,
   );
+}
+
+const ownerPools = new Map<string, pg.Pool>();
+/**
+ * Owner-credential pool for the same throwaway database as `app` (explicit
+ * operator/fixture writes such as ingest permission evidence).
+ */
+export function ownerPoolFor(app: pg.Pool): pg.Pool {
+  const db = new URL(
+    (
+      app as unknown as { options: { connectionString: string } }
+    ).options.connectionString,
+  ).pathname.slice(1);
+  let pool = ownerPools.get(db);
+  if (!pool) {
+    pool = new pg.Pool({
+      connectionString: withDb(env("CATALOG_TEST_OWNER_URL"), db),
+      max: 4,
+    });
+    ownerPools.set(db, pool);
+  }
+  return pool;
+}
+export async function closeOwnerPools() {
+  await Promise.all([...ownerPools.values()].map((p) => p.end()));
+  ownerPools.clear();
+}
+
+/**
+ * Explicit SA-13 fixture step: synthetic ingest evidence (owner credential)
+ * so the fail-closed jobs trigger admits `jobId` as the first attempt.
+ */
+export async function fixtureAdmission(
+  app: pg.Pool,
+  recordingId: string,
+  jobId: string,
+) {
+  await establishFixtureAdmission(ownerPoolFor(app), {
+    recordingId,
+    firstJobId: jobId,
+  });
 }
 
 export type Actors = {
@@ -166,6 +210,7 @@ export async function processedRecording(
     manifestFileId,
   });
   const jobId = randomUUID();
+  await fixtureAdmission(app, recordingId, jobId);
   await createProcessingJob(app, {
     jobId,
     recordingId,
