@@ -103,8 +103,10 @@ export async function getClipReviewState(
       }>(
         `SELECT c.recording_id, c.job_id, j.result_manifest_sha256 AS sha,
                 (SELECT jc.verified_checks FROM job_result_candidates jc
-                  WHERE jc.job_id = c.job_id AND jc.status IN ('verified', 'accepted')
-                    AND jc.manifest_sha256 = j.result_manifest_sha256) AS checks,
+                  WHERE jc.job_id = c.job_id AND jc.status = 'accepted'
+                    AND jc.manifest_sha256 = j.result_manifest_sha256
+                    AND j.state = 'succeeded' AND rec.current_job_id = c.job_id
+                    AND rec.deleted_at IS NULL) AS checks,
                 (j.state = 'succeeded' AND rec.current_job_id = c.job_id
                  AND rec.deleted_at IS NULL) AS current
          FROM clips c

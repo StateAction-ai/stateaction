@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptProcessingResult } from "../src/catalog/catalog.js";
 import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { getClipReviewState } from "../src/datasets/review.js";
 import {
   advanceResult,
   closeOutputs,
@@ -136,6 +137,39 @@ test("result first, evidence later: one atomic acceptance and only then is the s
     // A replay changes nothing.
     await advanceResult(s.accept, s.job.jobId);
     assert.equal((await state(s.db, s.job.jobId)).clips, 1);
+    // The staff read model must use the non-empty checks from the actual
+    // hash-verified manifest, not callback counts or synthetic seed evidence.
+    const readReview = () =>
+      getClipReviewState(s.db.app, {
+        viewerUserId: s.db.actors.staff,
+        clipId: doc.clips[0].clip_id,
+      });
+    const review = await readReview();
+    assert.equal(review.current, true);
+    assert.equal(review.jobId, s.job.jobId);
+    assert.equal(review.resultManifestSha256, manifest.sha);
+    assert.equal(review.qualityChecks.status, "evaluated");
+    assert.ok(doc.checks.length > 0);
+    assert.deepEqual(
+      review.qualityChecks.checks.map((check) => check.id),
+      doc.checks.map((check: { code: string }) => check.code),
+    );
+    assert.ok(
+      review.qualityChecks.checks.every(
+        (check) => !Object.hasOwn(check, "message"),
+      ),
+    );
+    // A legitimate soft deletion makes the result ineligible immediately;
+    // historical checks must not masquerade as the selected live result.
+    await s.db.app.query("UPDATE recordings SET deleted_at=now() WHERE id=$1", [
+      s.job.recordingId,
+    ]);
+    const deleted = await readReview();
+    assert.equal(deleted.current, false);
+    assert.deepEqual(deleted.qualityChecks, {
+      status: "not_evaluated",
+      checks: [],
+    });
   } finally {
     await s.db.close();
   }
