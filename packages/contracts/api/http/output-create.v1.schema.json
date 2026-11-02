@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stateaction.ai/schemas/http/output-create.v1.json",
-  "title": "Reserve job output request v1 (PROPOSAL)",
+  "title": "Reserve job output request v1",
   "description": "POST /internal/v1/jobs/{jobId}/outputs. Authenticated by the job-bound worker credential (scope job:output). The slot is the idempotency identity within the job: a repeat with identical fields returns the same plan, a different size, hash or role is a conflict. The server chooses the private object key, part size and part count; the worker cannot.",
   "type": "object",
   "additionalProperties": false,

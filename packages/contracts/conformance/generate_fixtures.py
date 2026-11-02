@@ -229,6 +229,14 @@ upload_plan = {
     "transportExpiresAt": "2026-11-08T18:04:05Z",
 }
 upload_plan_max = dict(upload_plan, sizeBytes=FILE_MAX, partCount=1600)
+output_create = {
+    "slot": "clips/0001/rgb.mp4",
+    "role": "clip_mp4",
+    "sizeBytes": "134217729",
+    "sha256": H["mcap"],
+}
+output_plan = dict(upload_plan, role="clip_mp4")
+output_plan_max = dict(output_plan, sizeBytes=FILE_MAX, partCount=1600)
 sign = {"expectedTransportEpoch": 1, "partNumbers": [1, 2, 10000]}
 signed = {
     "transportEpoch": 1,
@@ -2364,11 +2372,60 @@ def contract_cases():
             },
         },
     ]
+    c["http.output-create.v1"] = output_create_cases()
+    c["http.output-plan.v1"] = output_plan_cases()
     c["http.me.v1"] = me_cases()
     c["http.profile-update.v1"] = profile_update_cases()
     c["http.profile.v1"] = profile_response_cases()
     c["http.recording-registration.v1"] = registration_cases()
     return c
+
+
+# ------------------------------------------ Job output reservation (SA-20)
+def output_create_cases():
+    return [
+        ok("worker output clip", output_create),
+        ok("largest output file", dict(output_create, sizeBytes=FILE_MAX)),
+        ok("tiny output is still a multipart plan", dict(output_create, sizeBytes="1")),
+        mut("zero-byte output", output_create, [("/sizeBytes", "0")], "schema_violation", "/sizeBytes"),
+        mut("over the file cap", output_create, [("/sizeBytes", FILE_OVER)], "schema_violation", "/sizeBytes"),
+        mut("source role is not an output role", output_create, [("/role", "source_mcap")], "schema_violation", "/role"),
+        mut("unknown role", output_create, [("/role", "other")], "schema_violation", "/role"),
+        mut("dot-dot slot", output_create, [("/slot", "../x")], "schema_violation", "/slot"),
+        mut("absolute slot", output_create, [("/slot", "/etc/x")], "schema_violation", "/slot"),
+        mut("slot over eight segments", output_create, [("/slot", "a/b/c/d/e/f/g/h/i")], "schema_violation", "/slot"),
+        mut("client supplies object key", output_create, [("/objectKey", "jobs/x")], "schema_violation", ""),
+        mut("client supplies owner", output_create, [("/ownerUserId", OWNER)], "schema_violation", ""),
+        mut("client supplies job", output_create, [("/jobId", U["recording"])], "schema_violation", ""),
+        mut("client supplies recording", output_create, [("/recordingId", U["recording"])], "schema_violation", ""),
+        mut("missing slot", output_create, [("/slot", DELETE)], "schema_violation", ""),
+        mut("missing sha256", output_create, [("/sha256", DELETE)], "schema_violation", ""),
+        mut("uppercase sha256", output_create, [("/sha256", H["mcap"].upper())], "schema_violation", "/sha256"),
+        mut("numeric size", output_create, [("/sizeBytes", 10)], "schema_violation", "/sizeBytes"),
+        {
+            "name": "body over the byte cap",
+            "input": {"json": '{"slot": "a", "pad": "' + "x" * 4096 + '"}'},
+            "expect": {"valid": False, "code": "document_too_large"},
+        },
+    ]
+
+
+def output_plan_cases():
+    return [
+        ok("three 64 MiB parts for 128 MiB + 1 byte", output_plan),
+        ok("100 GiB output plan uses 1600 parts", output_plan_max),
+        ok("every output role", dict(output_plan, role="viewer_rrd")),
+        mut("part count disagrees with size", output_plan, [("/partCount", 2)], "part_plan_mismatch", "/partCount"),
+        mut("part size is fixed at 64 MiB", output_plan, [("/partSizeBytes", "5242880")], "schema_violation", "/partSizeBytes"),
+        mut("over 10000 parts", output_plan, [("/partCount", 10001)], "schema_violation", "/partCount"),
+        mut("source role is not an output role", output_plan, [("/role", "source_mcap")], "schema_violation", "/role"),
+        mut("source manifest role is not an output role", output_plan, [("/role", "source_manifest")], "schema_violation", "/role"),
+        mut("object key never leaves the server", output_plan, [("/objectKey", "jobs/x")], "schema_violation", ""),
+        mut("provider upload id never leaves the server", output_plan, [("/providerUploadId", "u")], "schema_violation", ""),
+        mut("missing recording", output_plan, [("/recordingId", DELETE)], "schema_violation", ""),
+        mut("epoch must be integer", output_plan, [("/transportEpoch", 1.5)], "schema_violation", "/transportEpoch"),
+        mut("unknown state", output_plan, [("/state", "done")], "schema_violation", "/state"),
+    ]
 
 
 # ------------------------------------- Recording registration response (SA-19)

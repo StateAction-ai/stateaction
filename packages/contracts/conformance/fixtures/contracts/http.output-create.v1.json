@@ -1,0 +1,329 @@
+{
+  "contract": "http.output-create.v1",
+  "cases": [
+    {
+      "name": "worker output clip",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "largest output file",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "107374182400",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "tiny output is still a multipart plan",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "1",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "zero-byte output",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "0",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "over the file cap",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "107374182401",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "source role is not an output role",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "unknown role",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "other",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "dot-dot slot",
+      "input": {
+        "document": {
+          "slot": "../x",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/slot"
+        ]
+      }
+    },
+    {
+      "name": "absolute slot",
+      "input": {
+        "document": {
+          "slot": "/etc/x",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/slot"
+        ]
+      }
+    },
+    {
+      "name": "slot over eight segments",
+      "input": {
+        "document": {
+          "slot": "a/b/c/d/e/f/g/h/i",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/slot"
+        ]
+      }
+    },
+    {
+      "name": "client supplies object key",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "objectKey": "jobs/x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "client supplies owner",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "client supplies job",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "jobId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "client supplies recording",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "missing slot",
+      "input": {
+        "document": {
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "missing sha256",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "uppercase sha256",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "D3690131C737F212505F230D86EA322E788DB598FD0162F5500F7E22AB7005BC"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sha256"
+        ]
+      }
+    },
+    {
+      "name": "numeric size",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": 10,
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "body over the byte cap",
+      "input": {
+        "json": "{\"slot\": \"a\", \"pad\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+      },
+      "expect": {
+        "valid": false,
+        "code": "document_too_large"
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import test, { after, before } from "node:test";
+import { validateValue } from "@stateaction/contracts";
 import {
   allocateJobOutput,
   getUploadPlan,
@@ -73,7 +74,10 @@ const output = (slot: string, over: object = {}) => ({
 
 test("worker outputs use multipart even when tiny, under server-chosen job keys", async () => {
   const plan = await allocateJobOutput(deps, job, output("clips/0001/rgb.mp4"));
-  // http.upload-plan.v1 enumerates source roles only; output plans share its shape.
+  // Output plans are the published http.output-plan.v1 (output roles); the
+  // source http.upload-plan.v1 stays source-role only and refuses them.
+  assert.equal(validateValue("http.output-plan.v1", plan).valid, true);
+  assert.equal(validateValue("http.upload-plan.v1", plan).valid, false);
   assert.equal(plan.role, "clip_mp4");
   assert.equal(plan.recordingId, recordingId);
   assert.equal(plan.partCount, 1);

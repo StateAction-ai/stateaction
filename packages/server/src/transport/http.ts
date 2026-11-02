@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { validateBytes } from "@stateaction/contracts";
+import {
+  contractMaxBytes,
+  parseContract,
+  validateBytes,
+} from "@stateaction/contracts";
 import type { Authority } from "./authority.js";
 import { TransportError } from "./errors.js";
 import {
@@ -23,7 +27,7 @@ export const MAX_CONTROL_BODY_BYTES = 16 * 1024;
 
 export async function readBoundedJson(
   request: Request,
-  contract: string | null,
+  contract: string,
   maxBytes = MAX_CONTROL_BODY_BYTES,
 ): Promise<unknown> {
   const type = request.headers.get("content-type") ?? "";
@@ -65,19 +69,6 @@ export async function readBoundedJson(
   for (const chunk of chunks) {
     bytes.set(chunk, at);
     at += chunk.byteLength;
-  }
-  if (contract === null) {
-    // Unregistered control body (job output reservation): strict JSON object.
-    try {
-      const value: unknown = JSON.parse(
-        new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-      );
-      if (typeof value !== "object" || value === null || Array.isArray(value))
-        throw new Error();
-      return value;
-    } catch {
-      throw new TransportError("invalid_request", "Body must be a JSON object");
-    }
   }
   const result = validateBytes(contract, bytes);
   if (!result.valid)
@@ -158,15 +149,25 @@ export function transportHandlers(deps: TransportDeps) {
         request,
         "http.upload-create.v1",
       )) as SourceUploadRequest;
-      return allocateSourceUpload(
-        deps,
-        authority as Extract<Authority, { kind: "owner" }>,
-        body,
+      return parseContract(
+        "http.upload-plan.v1",
+        await allocateSourceUpload(
+          deps,
+          authority as Extract<Authority, { kind: "owner" }>,
+          body,
+        ),
       );
     }),
     /** GET /api/v1/uploads/{fileId} and the job-scoped equivalent */
     getUpload: route(async (_request, authority, fileId) =>
-      getUploadPlan(deps, authority, fileId ?? ""),
+      // Responses are checked against the published contract for the caller:
+      // source roles for the human route, output roles for the job route.
+      parseContract(
+        authority.kind === "job"
+          ? "http.output-plan.v1"
+          : "http.upload-plan.v1",
+        await getUploadPlan(deps, authority, fileId ?? ""),
+      ),
     ),
     /** POST /uploads/{fileId}/parts/sign (human and job-scoped) */
     signParts: route(async (request, authority, fileId) =>
@@ -189,17 +190,18 @@ export function transportHandlers(deps: TransportDeps) {
     /** POST /internal/v1/jobs/{jobId}/outputs */
     createJobOutput: route(async (request, authority) => {
       need(authority, "job");
-      const body = (await readBoundedJson(request, null)) as OutputRequest;
-      const keys = Object.keys(body).sort().join(",");
-      if (keys !== "role,sha256,sizeBytes,slot")
-        throw new TransportError(
-          "invalid_request",
-          "Unexpected output reservation fields",
-        );
-      return allocateJobOutput(
-        deps,
-        authority as Extract<Authority, { kind: "job" }>,
-        body,
+      const body = (await readBoundedJson(
+        request,
+        "http.output-create.v1",
+        contractMaxBytes("http.output-create.v1"),
+      )) as OutputRequest;
+      return parseContract(
+        "http.output-plan.v1",
+        await allocateJobOutput(
+          deps,
+          authority as Extract<Authority, { kind: "job" }>,
+          body,
+        ),
       );
     }),
   };

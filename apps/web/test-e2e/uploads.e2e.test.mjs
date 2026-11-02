@@ -850,6 +850,17 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     assert.equal(created.status, 200, created.text);
     assertNoStore(created, "output create");
     const plan = created.json.data;
+    // The published (catalog.v5) contracts, not a private validator.
+    const { validateValue } = await import(
+      new URL("../../../packages/contracts/dist/index.js", import.meta.url).href
+    );
+    assert.equal(validateValue("http.output-create.v1", out).valid, true);
+    assert.equal(validateValue("http.output-plan.v1", plan).valid, true);
+    assert.equal(
+      validateValue("http.upload-plan.v1", plan).valid,
+      false,
+      "output role is not a source plan",
+    );
     const row = (
       await owner.query(
         "SELECT object_key, purpose, job_id FROM files WHERE id = $1",
@@ -883,15 +894,31 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
         400,
         JSON.stringify(bad),
       );
-    const one = `${base}/${plan.fileId}`;
+    // Owner/job identity fields and an oversized body are refused by the contract cap.
+    for (const extra of [{ jobId: other.jobId }, { ownerUserId: "x" }])
+      assert.equal(
+        (await call(base, workerPost(job.token, { ...out, ...extra }))).status,
+        400,
+        JSON.stringify(extra),
+      );
     assert.equal(
       (
-        await call(one, {
-          method: "GET",
-          headers: { authorization: `Bearer ${job.token}` },
-        })
+        await call(
+          base,
+          workerPost(job.token, { ...out, pad: "x".repeat(5000) }),
+        )
       ).status,
-      200,
+      413,
+    );
+    const one = `${base}/${plan.fileId}`;
+    const fetched = await call(one, {
+      method: "GET",
+      headers: { authorization: `Bearer ${job.token}` },
+    });
+    assert.equal(fetched.status, 200);
+    assert.equal(
+      validateValue("http.output-plan.v1", fetched.json.data).valid,
+      true,
     );
     assert.equal(
       (
@@ -908,6 +935,10 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
       workerPost(job.token, { expectedTransportEpoch: 1, partNumbers: [1] }),
     );
     assert.equal(signed.status, 200, signed.text);
+    assert.equal(
+      validateValue("http.parts-signed.v1", signed.json.data).valid,
+      true,
+    );
     const put = await directPut(signed.json.data.parts[0], bytes);
     const rec = await call(
       `${one}/parts/receipts`,

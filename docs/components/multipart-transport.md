@@ -1,6 +1,6 @@
 # Multipart transport (SA-20)
 
-Status, 2026-11-02: **control plane implemented and bound to Next routes on top of merged SA-19 (`cb5edee`, migration 004).** Tested against real Postgres (restricted role), real SeaweedFS and the production `next start` build with real Better Auth sessions. Real R2 behaviour is not qualified by this ticket's workers; the root runs the scoped R2 probe. The worker output contract is an **unpublished proposal** (`docs/proposals/output-contract/`) until the profile/catalog.v4 work merges.
+Status, 2026-11-02: **control plane implemented and bound to Next routes on top of merged SA-19 (`cb5edee`, migration 004).** Tested against real Postgres (restricted role), real SeaweedFS and the production `next start` build with real Better Auth sessions. Real R2 behaviour is not qualified by this ticket's workers; the root runs the scoped R2 probe. The worker output contracts are **published in `catalog.v5`** (`http.output-create.v1`, `http.output-plan.v1`) on top of merged SA-16 `catalog.v4`.
 
 All media moves directly between the client and private object storage through short-lived presigned `UploadPart` PUTs. The API only handles bounded JSON control bodies.
 
@@ -42,7 +42,7 @@ Migration: `packages/server/migrations/005_multipart_transport.sql` (see [Migrat
 - **ETags and the R2 multipart ETag are provider receipts**, not the whole-file SHA-256. The declared `sha256` is stored immutably and verified later by processing (SA-21/22). Nothing here marks a file `verified`.
 - Completion, reconcile, cancel and restart are SA-21. These tests complete an object directly with the SDK only to prove the journal is usable.
 - SeaweedFS lists a re-uploaded part number more than once, so a receipt is corroborated by any exactly matching entry. S3 and R2 list one entry per part. Qualify R2 behaviour separately.
-- `http.upload-plan.v1` enumerates source roles only and stays exactly as published. Output plans use the proposed closed `http.output-create.v1` / `http.output-plan.v1` in `docs/proposals/output-contract/`; they are not registered in `catalog.v3` and no shared registry or lock changed. Publication is a later catalog revision after the profile/catalog.v4 PR merges.
+- `http.upload-plan.v1` enumerates source roles only and stays exactly as published. Worker outputs use the closed `http.output-create.v1` request (`{slot, role, sizeBytes, sha256}`, 4 KiB cap; the job comes from the path and credential, never the body) and `http.output-plan.v1` response (the upload-plan shape with `outputFileRole`, 16 KiB cap, same `upload_plan` part-count rule), added by the additive `catalog.v5` (`/internal/v1`). The Next handlers read the request with `http.output-create.v1` and check every plan they return against `http.upload-plan.v1` (human) or `http.output-plan.v1` (job); there is no unregistered body path. Server-enforced limits the schema cannot express: 32 GiB per file, 64 GiB and 512 files per job, slot idempotency (same slot with different content is `409`).
 - Remaining outside this ticket: real R2 qualification (root probe), hosted CI and the Render deployment of the routes. No new environment variables or services are needed.
 
 ## Migration

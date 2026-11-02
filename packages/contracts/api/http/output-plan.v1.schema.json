@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://stateaction.ai/schemas/http/output-plan.v1.json",
-  "title": "Output upload plan response v1 (PROPOSAL)",
-  "description": "POST/GET /internal/v1/jobs/{jobId}/outputs data payload. Same shape as http.upload-plan.v1 with an output role. partCount must equal ceil(sizeBytes / partSizeBytes).",
+  "title": "Output upload plan response v1",
+  "description": "POST /internal/v1/jobs/{jobId}/outputs and GET /internal/v1/jobs/{jobId}/outputs/{fileId} data payload, carried as `data` inside http.success-envelope.v1. Same shape as http.upload-plan.v1 with an output role and no source-manifest rule. partCount must equal ceil(sizeBytes / partSizeBytes).",
   "type": "object",
   "additionalProperties": false,
   "required": [
