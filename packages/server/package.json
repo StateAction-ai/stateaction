@@ -16,6 +16,10 @@
     "./recordings": {
       "types": "./dist/admission/next.d.ts",
       "default": "./dist/admission/next.js"
+    },
+    "./uploads": {
+      "types": "./dist/transport/next.d.ts",
+      "default": "./dist/transport/next.js"
     }
   },
   "types": "./dist/index.d.ts",

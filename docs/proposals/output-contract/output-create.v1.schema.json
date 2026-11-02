@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/output-create.v1.json",
+  "title": "Reserve job output request v1 (PROPOSAL)",
+  "description": "POST /internal/v1/jobs/{jobId}/outputs. Authenticated by the job-bound worker credential (scope job:output). The slot is the idempotency identity within the job: a repeat with identical fields returns the same plan, a different size, hash or role is a conflict. The server chooses the private object key, part size and part count; the worker cannot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["slot", "role", "sizeBytes", "sha256"],
+  "properties": {
+    "slot": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/safeRelativePath"
+    },
+    "role": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/outputFileRole"
+    },
+    "sizeBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+    },
+    "sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    }
+  }
+}

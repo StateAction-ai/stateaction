@@ -37,8 +37,8 @@ docker run -d --rm --name "$name" \
 docker run -d --rm --name "$storage_name" -p 127.0.0.1::9000 \
   -v "$storage_dir/s3.json:/etc/seaweedfs/s3.json:ro" \
   -v "$root/infra/seaweedfs-master.toml:/etc/seaweedfs/master.toml:ro" \
-  --tmpfs /data:rw,size=512m \
-  "$storage_image" server -ip=127.0.0.1 -ip.bind=0.0.0.0 -dir=/data -volume.max=8 \
+  --tmpfs /data:rw,size=2g \
+  "$storage_image" server -ip=127.0.0.1 -ip.bind=0.0.0.0 -dir=/data -volume.max=32 \
   -master.volumeSizeLimitMB=64 -filer -s3 -s3.port=9000 -s3.config=/etc/seaweedfs/s3.json >/dev/null
 for _ in {1..60}; do
   docker exec "$name" pg_isready -U bootstrap -d postgres -h 127.0.0.1 >/dev/null 2>&1 && break
@@ -60,6 +60,7 @@ for _ in {1..60}; do
 done
 export STORAGE_TEST_ENDPOINT="http://127.0.0.1:$s3_port"
 export STORAGE_TEST_ACCESS_KEY_ID="$s3_key" STORAGE_TEST_SECRET_ACCESS_KEY="$s3_secret"
+export TRANSPORT_TEST_S3_ENDPOINT="$STORAGE_TEST_ENDPOINT" TRANSPORT_TEST_S3_ACCESS_KEY="$s3_key" TRANSPORT_TEST_S3_SECRET_KEY="$s3_secret"
 docker exec "$name" postgres --version > "$out/server-version.txt"
 node --conditions=react-server --import tsx --test --test-concurrency=4 \
   --test-reporter=spec --test-reporter-destination=stdout \
