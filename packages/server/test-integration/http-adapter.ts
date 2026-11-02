@@ -1,5 +1,4 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { Readable } from "node:stream";
 import type { AddressInfo } from "node:net";
 import {
   recordingRoutes,
@@ -70,9 +69,45 @@ function toRequest(req: IncomingMessage): Request {
     headers,
     ...(hasBody
       ? {
-          body: Readable.toWeb(req) as unknown as ReadableStream,
+          body: requestBody(req),
           duplex: "half",
         }
       : {}),
   } as RequestInit);
+}
+
+/**
+ * Request body over the incoming message WITHOUT Readable.toWeb: its cancel
+ * destroys the IncomingMessage, which tears down the socket before the 413 for
+ * an oversized upload is written (client sees ECONNRESET). Cancelling here only
+ * stops pulling and discards the remainder so the response can still be sent;
+ * the production Next routes keep the bounded cancellation behavior.
+ */
+function requestBody(req: IncomingMessage): ReadableStream<Uint8Array> {
+  let cancelled = false;
+  return new ReadableStream<Uint8Array>(
+    {
+      start(controller) {
+        req.on("data", (chunk: Buffer) => {
+          if (cancelled) return;
+          controller.enqueue(new Uint8Array(chunk));
+          if ((controller.desiredSize ?? 1) <= 0) req.pause();
+        });
+        req.on("end", () => {
+          if (!cancelled) controller.close();
+        });
+        req.on("error", (error) => {
+          if (!cancelled) controller.error(error);
+        });
+      },
+      pull() {
+        req.resume();
+      },
+      cancel() {
+        cancelled = true;
+        req.resume();
+      },
+    },
+    { highWaterMark: 0 },
+  );
 }

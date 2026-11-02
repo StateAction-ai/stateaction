@@ -2,6 +2,8 @@ import "dart:async";
 import "dart:convert";
 import "dart:io";
 
+import "package:path/path.dart" as p;
+
 import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/router/app_router.dart";
 import "package:stera/src/modules/ar_recorder/helpers/ar_recorder_launcher.dart";
@@ -11,6 +13,8 @@ import "package:stera/src/modules/home/data/models/video_metadata.dart";
 import "package:stera/src/modules/upload/providers/managers/upload_selection_manager.dart";
 import "package:stera/src/modules/upload/ui/widgets/duplicate_videos_bottomsheet.dart";
 import "package:stera/src/modules/uploaded_videos/providers/uploaded_videos_provider.dart";
+import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
+import "package:stera/src/modules/capture_ownership/owner_fence.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
 import "package:stera/src/services/db/db.dart";
@@ -101,6 +105,19 @@ class VideoSourceManager extends ChangeNotifier {
     String? subtaskName,
     String source = "ar_session",
   }) async {
+    // Only the capture's verified owner may queue it. Foreign and ownerless
+    // (recovery) sessions are never adopted into this account's queue.
+    if (!OwnerFence.isSessionVisible(p.basename(sessionDir))) {
+      return (
+        null,
+        Failure(
+          code: ErrorType.forbidden,
+          message:
+              "This recording belongs to another account or needs ownership "
+              "recovery.",
+        ),
+      );
+    }
     try {
       // Find session_data_*.mcap in the session directory.
       // Finalization runs in the background, so poll until the mcap is
@@ -260,6 +277,30 @@ class VideoSourceManager extends ChangeNotifier {
     final List<Upload> uploads = <Upload>[];
 
     for (final uri in uris) {
+      // Picked videos are stamped for the verified network owner before the
+      // row exists; without one, nothing is queued.
+      bool stamped;
+      try {
+        stamped = await OwnerFence.stampUploadSource(uri);
+      } on OwnerConflict {
+        // Already stamped by another account: never adopt, reassign or delete.
+        errors.add(
+          Failure(
+            code: ErrorType.unauthorized,
+            message: "This video belongs to another account on this device.",
+          ),
+        );
+        continue;
+      }
+      if (!stamped) {
+        errors.add(
+          Failure(
+            code: ErrorType.unauthorized,
+            message: "Sign in again before adding uploads.",
+          ),
+        );
+        break;
+      }
       final (upload, err) = await VideoPickerService.instance.createUpload(
         uriString: uri,
         existingVideos: existingVideos,
@@ -274,6 +315,20 @@ class VideoSourceManager extends ChangeNotifier {
         }
         errors.add(err);
       } else if (upload != null) {
+        if (upload.filepath != uri) {
+          try {
+            await OwnerFence.stampUploadSource(upload.filepath);
+          } on OwnerConflict {
+            errors.add(
+              Failure(
+                code: ErrorType.unauthorized,
+                message:
+                    "This video belongs to another account on this device.",
+              ),
+            );
+            continue;
+          }
+        }
         uploads.add(upload);
       }
     }
@@ -314,6 +369,11 @@ class VideoSourceManager extends ChangeNotifier {
           );
 
       for (final sessionDir in sessionDirs) {
+        // Never sweep another account's or an ownerless capture into this
+        // account's queue.
+        if (!OwnerFence.isSessionVisible(p.basename(sessionDir.path))) {
+          continue;
+        }
         try {
           final mcapFile = sessionDir
               .listSync(followLinks: false)

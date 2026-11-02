@@ -10,6 +10,7 @@ export "src/channels/ar_recorder_channels.dart";
 export "src/config/recorder_permissions.dart";
 export "src/config/recorder_pref_keys.dart";
 export "src/config/recorder_preferences.dart";
+export "src/config/recording_start_gate.dart";
 export "src/data/enums/ar_recorder_state.dart";
 export "src/data/enums/ar_tracking_state.dart";
 export "src/data/enums/rgb_video_resolution.dart";

@@ -2,7 +2,10 @@ import "dart:developer" as dev;
 
 import "package:flutter/widgets.dart";
 import "package:provider/provider.dart";
+import "package:stera/src/core/common/widgets/app_confirmation_dialog.dart";
 import "package:stera/src/core/common/widgets/app_toast.dart";
+import "package:stera/src/modules/capture_ownership/owner_fence.dart";
+import "package:stera/src/services/recordings_service/recordings_service.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 
 /// Header overflow action on AddUploadPage that scans
@@ -18,12 +21,45 @@ import "package:stera/src/modules/upload/providers/upload_provider.dart";
 class RecoverRecordingsAction {
   RecoverRecordingsAction._();
 
+  /// Ownerless captures (recorded before ownership, by the auth-free build,
+  /// or interrupted between Start and owner binding) are never adopted
+  /// automatically. This asks the verified active collector to claim them
+  /// explicitly; declining leaves them untouched on disk.
+  static Future<void> _offerOwnerlessClaim(BuildContext context) async {
+    if (!OwnerFence.mayRecover) return;
+    final sessions = await RecordingsService.listSessions();
+    final ownerless = OwnerFence.ownerlessSessions(
+      sessions.map((s) => s.directoryName),
+    );
+    if (ownerless.isEmpty || !context.mounted) return;
+    final n = ownerless.length;
+    final noun = n == 1 ? "recording has" : "recordings have";
+    final confirmed = await AppConfirmationDialog.show(
+      context,
+      title: "Claim recordings without an owner?",
+      message:
+          "$n $noun no recorded owner on this device. Claim only footage you "
+          "captured yourself. Claiming binds them to this account "
+          "permanently; nothing is deleted if you skip.",
+      confirmText: "Claim $n",
+      cancelText: "Skip",
+    );
+    if (!confirmed) return;
+    final claimed = await OwnerFence.claimOwnerless(ownerless);
+    AppToast.info(
+      title: "Claimed $claimed recording${claimed == 1 ? "" : "s"}",
+      holdDuration: 4,
+    );
+  }
+
   static bool _busy = false;
 
   static Future<void> run(BuildContext context) async {
     if (_busy) return;
     _busy = true;
     try {
+      await _offerOwnerlessClaim(context);
+      if (!context.mounted) return;
       final recovered = await context
           .read<UploadProvider>()
           .picker

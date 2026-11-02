@@ -1,6 +1,8 @@
 import "dart:async";
 import "dart:io";
 
+import "package:stera/src/modules/auth/session/auth_services.dart";
+import "package:stera/src/modules/capture_ownership/owner_fence.dart";
 import "package:stera/src/modules/upload/providers/managers/upload_progress_manager.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
@@ -38,6 +40,38 @@ class UploadQueueManager extends ChangeNotifier {
       false; // set when we're about to call _processNext() to prevent races
 
   bool _isWatching = false;
+
+  ChangeNotifier? _session;
+
+  /// Uploads parked by the owner fence (expiry/logout/account switch), resumed
+  /// automatically only when the same verified owner may use the network.
+  final Set<int> _fencePausedIds = <int>{};
+
+  Future<void> _onSessionChanged() async {
+    final current = _currentUpload;
+    if (current != null &&
+        _isProcessing &&
+        !OwnerFence.mayUpload(current.filepath)) {
+      _fencePausedIds.add(current.id);
+      // Stops after the in-flight chunk batch; multipart state is preserved.
+      // Already-issued presigned part URLs are not revoked by this.
+      await pauseUpload(current.id);
+    }
+    for (final id in _fencePausedIds.toList()) {
+      final row = await _db.getById(id);
+      if (row == null) {
+        _fencePausedIds.remove(id);
+      } else if (OwnerFence.mayUpload(row.filepath)) {
+        _fencePausedIds.remove(id);
+        await resumeUpload(id);
+      }
+    }
+    if (!_isProcessing && _pendingQueue.isNotEmpty && !_isPaused) {
+      _willProcess = true;
+      unawaited(_processNext());
+    }
+  }
+
   bool get isWatching => _isWatching;
 
   bool _isCancelling = false;
@@ -552,6 +586,8 @@ class UploadQueueManager extends ChangeNotifier {
 
     _isWatching = true;
     debugPrint("📋 UploadQueueManager: Started watching DB");
+    _session = AuthServices.maybeInstance?.controller
+      ?..addListener(_onSessionChanged);
     _dbSubscription = _db.watch().listen(_onDatabaseUpdate);
 
     // Subscribe to connectivity changes for auto-pause/resume
@@ -675,6 +711,8 @@ class UploadQueueManager extends ChangeNotifier {
     if (!_isWatching) return;
 
     _isWatching = false;
+    _session?.removeListener(_onSessionChanged);
+    _session = null;
     _dbSubscription?.cancel();
     _dbSubscription = null;
     connectivitySubscription?.cancel();
@@ -789,6 +827,10 @@ class UploadQueueManager extends ChangeNotifier {
         // Skip rows paused individually — the DB watcher may not have
         // dropped them from the queue yet.
         if (_pausedUploadIds.contains(u.id)) continue;
+        // Owner fence: only the server-verified active owner's rows may use
+        // the network. Expiry, logout, offline eligibility and other
+        // accounts' rows all stay parked with their journals intact.
+        if (!OwnerFence.mayUpload(u.filepath)) continue;
         if (!_isCoolingDown(u.id, now)) {
           upload = u;
           break;

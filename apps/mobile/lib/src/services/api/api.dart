@@ -1,8 +1,9 @@
 import "dart:convert";
 import "dart:developer";
+import "dart:io" show Platform;
 
 import "package:stera/src/core/config/app_config.dart";
-import "package:stera/src/core/config/constants/app_constants.dart";
+import "package:stera/src/modules/auth/session/auth_http_client.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/enums/method_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
@@ -18,8 +19,6 @@ class Api {
   static Future<(dynamic, Failure?)> sendRequest(
     String path, {
     required MethodType method,
-    String? host,
-    String? apiVersion,
     Map<String, String>? headers,
     Map<String, dynamic>? queryParameters,
     Map<String, dynamic>? body,
@@ -43,22 +42,29 @@ class Api {
     headers ??= {};
     queryParameters ??= {};
     body ??= {};
-    host ??= AppConfig.host;
-    apiVersion ??= AppConfig.apiVersion;
 
-    // Split host:port if port is included (e.g., for local dev)
-    final hostParts = host.split(":");
-    final hostName = hostParts[0];
-    final port = hostParts.length > 1 ? int.tryParse(hostParts[1]) : null;
+    final origin = AppConfig.backendOrigin;
+    if (origin == null) {
+      return (
+        null,
+        Failure(
+          code: ErrorType.serviceUnavailable,
+          message: "The server address is not configured.",
+        ),
+      );
+    }
+    // Human API routes reject bearer credentials; only the session cookie is
+    // ever attached, and only for the exact backend origin.
+    headers.removeWhere((k, _) => k.toLowerCase() == "authorization");
 
-    final uri = Uri(
-      scheme: AppConstants.scheme,
-      host: hostName,
-      port: port,
-      path: apiVersion + path,
-      queryParameters: queryParameters.isNotEmpty ? queryParameters : null,
+    final uri = origin.resolve(
+      AuthHttpClient.apiBasePath + path,
+      queryParameters.isEmpty
+          ? null
+          : queryParameters.map((k, v) => MapEntry(k, "$v")),
     );
 
+    final generation = TokenService.currentGeneration();
     if (authenticated) {
       final (cookieHeaders, tokenFailure) = await TokenService.getAuthHeaders(
         uri: uri,
@@ -71,6 +77,7 @@ class Api {
       }
     }
 
+    headers[AuthHttpClient.clientHeader] = Platform.isIOS ? "ios" : "android";
     headers.addAll({"Content-Type": "application/json"});
 
     final http.Response response;
@@ -117,6 +124,7 @@ class Api {
     await TokenService.saveCookiesFromResponse(
       uri,
       response.headersSplitValues["set-cookie"] ?? const [],
+      generation: generation,
     );
 
     switch (response.statusCode) {
@@ -168,7 +176,7 @@ class Api {
       case 401:
         log("Api: Received 401, session expired");
         if (authenticated && !suppressSessionExpiry) {
-          await TokenService.handleSessionExpired();
+          await TokenService.handleSessionExpired(generation: generation);
         }
         return (null, Failure.unAuthorized());
       case 429:

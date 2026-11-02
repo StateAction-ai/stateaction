@@ -36,7 +36,6 @@ dependencies:
   shared_preferences: ^2.2.2
   sign_in_with_apple: ^8.1.0
   solar_icons: ^0.1.0
-  better_auth_flutter: ^0.1.0
   toastification: ^3.0.3
   upgrader: ^13.6.0
   url_launcher: ^6.2.2
@@ -45,6 +44,8 @@ dependencies:
   wakelock_plus: ^1.4.0
   stera_recorder:
     path: ../../packages/stera_recorder
+  stateaction_contracts:
+    path: ../../packages/contracts/dart
 
 dev_dependencies:
   build_runner: ^2.10.4

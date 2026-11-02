@@ -13,6 +13,7 @@ class KvStoreKeys {
   static const String themeMode = "theme_mode";
   static const String homeDemoVideoPlayCount = "home_demo_video_play_count";
   static const String keepScreenAwake = "keep_screen_awake";
+  static const String localDisplayName = "local_display_name";
 }
 
 class KvStore {

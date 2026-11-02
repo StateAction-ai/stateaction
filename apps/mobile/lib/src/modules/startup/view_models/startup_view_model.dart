@@ -1,13 +1,12 @@
 import "dart:async";
 import "dart:io";
 
-import "package:better_auth_flutter/better_auth_flutter.dart" as ba;
-import "package:flutter/foundation.dart";
 import "package:flutter/services.dart";
 import "package:flutter/widgets.dart";
 import "package:stera/src/core/config/app_config.dart";
 import "package:stera/src/core/theme/theme_notifier.dart";
 import "package:stera/src/modules/auth/data/repo/auth_repo.dart";
+import "package:stera/src/modules/auth/session/auth_services.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
 import "package:stera/src/modules/keep_awake/helpers/keep_awake_controller.dart";
 import "package:stera/src/modules/startup/data/app_state.dart";
@@ -78,10 +77,10 @@ class StartupViewModel {
     // the whole boot down into `StartupErrorView`; the upload steps are the only
     // bootstrap calls that open Drift at all.
     if (!AppConfig.noAuthMode) {
-      await ba.BetterAuthFlutter.initialize(
-        url: AppConfig.authBaseUrl,
-        enableLogging: kDebugMode,
-      );
+      // One origin-bound cookie jar, session controller and owner ledger.
+      // Throws on a missing/unsafe backend origin so the app shows a
+      // configuration error instead of running without a session.
+      await AuthServices.initialize();
       await AuthRepo.init();
       // Sole consumer is `UploadQueueManager`, so with no uploads this would be
       // a permanent subscription nothing reads.
