@@ -5,6 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
+    "./display-name": {
+      "types": "./dist/auth/display-name.d.ts",
+      "default": "./dist/auth/display-name.js"
+    },
     "./auth": {
       "types": "./dist/auth/index.d.ts",
       "default": "./dist/auth/index.js"
