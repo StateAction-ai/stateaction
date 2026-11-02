@@ -12,8 +12,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  actions: write
-# Repository-wide serialization also covers branch updates after another merge.
+  # Read-only: the merger never dispatches workflows or refreshes branches.
+  actions: read
+# Repository-wide serialization: one guarded squash merge at a time.
 concurrency:
   group: stateaction-ticket-merger
   cancel-in-progress: false

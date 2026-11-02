@@ -149,6 +149,14 @@ def validate_pr(pr: dict, repo: str, all_prs: list[dict]) -> str:
     return ticket
 
 
+def primary_declaration(pr: dict) -> str:
+    """The single validated Refs/Fixes line, normalized for the squash commit."""
+    declarations = list(DECLARATION.finditer(visible_body(pr)))
+    if len(declarations) != 1:
+        raise PolicyError("PR must have exactly one primary ticket declaration.")
+    return f"{declarations[0][1].capitalize()} {declarations[0][2]}"
+
+
 def get_validated_pr(api, number: int) -> tuple[dict, str]:
     pr = api.request("GET", f"pulls/{number}")
     all_prs = api.pages("pulls", state="all", sort="created", direction="asc")
