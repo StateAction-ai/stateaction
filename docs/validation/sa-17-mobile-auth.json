@@ -13,7 +13,7 @@
   },
   "localChecks": {
     "appAnalyze": "flutter analyze: no issues",
-    "appTests": "194 passed (156 pre-existing + 38 new)",
+    "appTests": "197 passed (156 pre-existing + 41 new; +3 stale-401 empty-jar/failed-exchange regressions)",
     "recorderAnalyze": "flutter analyze lib test: no issues",
     "recorderTests": "12 passed (9 pre-existing + 3 new start-gate tests)",
     "newSuites": [

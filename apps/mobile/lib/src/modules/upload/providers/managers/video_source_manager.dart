@@ -13,6 +13,7 @@ import "package:stera/src/modules/home/data/models/video_metadata.dart";
 import "package:stera/src/modules/upload/providers/managers/upload_selection_manager.dart";
 import "package:stera/src/modules/upload/ui/widgets/duplicate_videos_bottomsheet.dart";
 import "package:stera/src/modules/uploaded_videos/providers/uploaded_videos_provider.dart";
+import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
 import "package:stera/src/modules/capture_ownership/owner_fence.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
@@ -278,7 +279,20 @@ class VideoSourceManager extends ChangeNotifier {
     for (final uri in uris) {
       // Picked videos are stamped for the verified network owner before the
       // row exists; without one, nothing is queued.
-      if (!await OwnerFence.stampUploadSource(uri)) {
+      bool stamped;
+      try {
+        stamped = await OwnerFence.stampUploadSource(uri);
+      } on OwnerConflict {
+        // Already stamped by another account: never adopt, reassign or delete.
+        errors.add(
+          Failure(
+            code: ErrorType.unauthorized,
+            message: "This video belongs to another account on this device.",
+          ),
+        );
+        continue;
+      }
+      if (!stamped) {
         errors.add(
           Failure(
             code: ErrorType.unauthorized,
@@ -302,7 +316,18 @@ class VideoSourceManager extends ChangeNotifier {
         errors.add(err);
       } else if (upload != null) {
         if (upload.filepath != uri) {
-          await OwnerFence.stampUploadSource(upload.filepath);
+          try {
+            await OwnerFence.stampUploadSource(upload.filepath);
+          } on OwnerConflict {
+            errors.add(
+              Failure(
+                code: ErrorType.unauthorized,
+                message:
+                    "This video belongs to another account on this device.",
+              ),
+            );
+            continue;
+          }
         }
         uploads.add(upload);
       }

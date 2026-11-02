@@ -221,8 +221,18 @@ class AuthSessionController extends ChangeNotifier {
     try {
       // A previous session is revoked and its cookies dropped first, so no
       // response from it can land in the new account's jar.
-      if (await _client.jar.hasCredentials) await _client.signOut();
+      // Unconditional: the jar may be empty (expired/deleted cookies) while an
+      // older session's request is still in flight, and signOut() always bumps
+      // the jar generation so that request's late 401 cannot wipe the new one.
+      await _client.signOut();
       if (epoch != _epoch) return _superseded();
+      // Cookies are gone, so the previous account must not keep network
+      // ownership while the exchange runs or if it fails. Offline capture
+      // eligibility is preserved only if still legitimately fresh.
+      if (_state is AuthActive || _state is AuthUnverified) {
+        await _fallBackToEligibility(epoch, reauthRequired: true);
+        if (epoch != _epoch) return _superseded();
+      }
       final signedIn = await exchange();
       if (epoch != _epoch) return _superseded();
       switch (signedIn) {
