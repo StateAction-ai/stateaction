@@ -73,7 +73,7 @@ export function call(origin, path, { method = "GET", body, token } = {}) {
 }
 
 /** A private world: database, bucket, Next API, credentials and a sealed recording per job. */
-export async function startWorld() {
+export async function startWorld(extraEnv = {}) {
   const admin = new pg.Client({
     connectionString: need("CATALOG_TEST_ADMIN_URL"),
   });
@@ -115,6 +115,7 @@ export async function startWorld() {
     PROCESSING_MODEL_SHA256: sha("model"),
     PROCESSING_CONFIG_SHA256: sha("config"),
     NEXT_TELEMETRY_DISABLED: "1",
+    ...extraEnv,
   };
   const boot = spawnSync(
     process.execPath,

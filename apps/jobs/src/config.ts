@@ -58,8 +58,9 @@ function secretFrom(fileVar: string, tokenVar: string): string {
 
 export const controllerToken = (): string =>
   secretFrom("CONTROLLER_CAPABILITY_FILE", "CONTROLLER_CAPABILITY_TOKEN");
-export const dispatchToken = (): string =>
-  secretFrom("DISPATCH_CAPABILITY_FILE", "DISPATCH_CAPABILITY_TOKEN");
+/** Repair-cron capability (scope jobs:repair only). */
+export const repairToken = (): string =>
+  secretFrom("REPAIR_CAPABILITY_FILE", "REPAIR_CAPABILITY_TOKEN");
 
 const int = (name: string, fallback: number, min: number, max: number) => {
   const raw = process.env[name];
@@ -127,30 +128,4 @@ export function controllerSettings(): ControllerSettings {
       ? { fixtureHoldSeconds: int("WORKER_FIXTURE_HOLD_SECONDS", 0, 0, 600) }
       : {}),
   };
-}
-
-/**
- * Task slug for startTask. Hosted Render requires `<workflow-slug>/process-recording`
- * (explicit, never guessed); the bare task name is valid only for the explicit
- * local runner (APP_ENV=local with RENDER_USE_LOCAL_DEV or RENDER_LOCAL_DEV_URL).
- * Idempotency keys are scoped by Render to one workflow VERSION for 24 h, so
- * duplicate-start safety across deploys rests on the database run/claim fences.
- */
-export function taskSlug(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env.PROCESS_RECORDING_TASK_SLUG;
-  const local =
-    env.APP_ENV === "local" &&
-    (env.RENDER_USE_LOCAL_DEV === "true" || !!env.RENDER_LOCAL_DEV_URL);
-  if (!configured) {
-    if (local) return "process-recording";
-    throw new Error("PROCESS_RECORDING_TASK_SLUG is required outside local");
-  }
-  const pattern = local
-    ? /^(?:[a-z0-9][a-z0-9-]{0,62}\/)?process-recording$/
-    : /^[a-z0-9][a-z0-9-]{0,62}\/process-recording$/;
-  if (!pattern.test(configured))
-    throw new Error(
-      "PROCESS_RECORDING_TASK_SLUG must be <workflow-slug>/process-recording",
-    );
-  return configured;
 }

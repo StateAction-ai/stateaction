@@ -1,0 +1,198 @@
+{
+  "contract": "http.job-control-result.v1",
+  "cases": [
+    {
+      "name": "retry result",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "replayed retry",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": true,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "cancel result has no retry job",
+      "input": {
+        "document": {
+          "action": "cancel",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "cancel_requested",
+          "retryJobId": null,
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "retryJobId is a UUID or null",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "x",
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/retryJobId"
+        ]
+      }
+    },
+    {
+      "name": "replayed is boolean",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": "no",
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/replayed"
+        ]
+      }
+    },
+    {
+      "name": "guidance code is known",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": false,
+          "guidance": {
+            "code": "clear_slot",
+            "instruction": "Termination is proven. Retry creates a new job."
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/guidance/code"
+        ]
+      }
+    },
+    {
+      "name": "guidance instruction is bounded",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/guidance/instruction"
+        ]
+      }
+    },
+    {
+      "name": "guidance instruction is not empty",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": ""
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/guidance/instruction"
+        ]
+      }
+    },
+    {
+      "name": "unknown field",
+      "input": {
+        "document": {
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "state": "failed",
+          "retryJobId": "00000000-0000-4000-8000-00000000f001",
+          "replayed": false,
+          "guidance": {
+            "code": "retry_available",
+            "instruction": "Termination is proven. Retry creates a new job."
+          },
+          "extra": 1
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

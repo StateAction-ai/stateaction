@@ -418,6 +418,45 @@ export type ClipReviewState = {
   }[];
   availableDatasetsTruncated: boolean;
 };
+// SA-27 staff job control (catalog.v11, /api/v1). Staff only.
+export type JobControlAction = "cancel" | "retry" | "reconcile";
+export type JobControlState =
+  | "queued"
+  | "submitting"
+  | "submit_unknown"
+  | "running"
+  | "result_pending"
+  | "succeeded"
+  | "failed"
+  | "cancel_requested"
+  | "cancelled"
+  | "needs_attention";
+export type JobControlCommand = {
+  requestId: Uuid;
+  action: JobControlAction;
+  jobId: Uuid;
+  expectedState: JobControlState;
+};
+export type JobControlResult = {
+  action: JobControlAction;
+  jobId: Uuid;
+  state: JobControlState;
+  retryJobId: Uuid | null;
+  replayed: boolean;
+  guidance: {
+    code:
+      | "none"
+      | "in_progress"
+      | "cancel_pending_termination"
+      | "unknown_spawn"
+      | "needs_operator"
+      | "retry_available"
+      | "reupload_required"
+      | "retry_blocked_termination_unproven"
+      | "superseded";
+    instruction: string;
+  };
+};
 export type DatasetChange = {
   revision: number;
   datasetId?: Uuid;

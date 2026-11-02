@@ -76,6 +76,9 @@
     "catalog.v10.json": "71f14a6157c9bbad89944658c36d5d473d77c6088dbba99b2fbf7017083b780e",
     "http/clip-review-command.v1.schema.json": "191d79248b951deb9c8023fa3aa411e50c32a10deb416658305205739a23c5b8",
     "http/clip-review-state.v1.schema.json": "a4a818467b10c95e4d7ffb7655361286595b7da65460d23bea485d57bae14c8d",
-    "http/clip-review.v1.schema.json": "c8d884f08cf6516d7b90e64877fbbbfaccf6d3ae45b9910e7a93f0ca8eac8565"
+    "http/clip-review.v1.schema.json": "c8d884f08cf6516d7b90e64877fbbbfaccf6d3ae45b9910e7a93f0ca8eac8565",
+    "catalog.v11.json": "60e83cc9cabdd87cb9ee398c0de4e175ca6d33e7cd115a0d8b9a13311af613d8",
+    "http/job-control-command.v1.schema.json": "72c7c78ec195bd098c597fa2b70e2121b8d52394a97894c09481a035eb835cc5",
+    "http/job-control-result.v1.schema.json": "d3f1ca0c45a501fe17029791cf91afee4072452e7659e95057cbde3e783d6960"
   }
 }

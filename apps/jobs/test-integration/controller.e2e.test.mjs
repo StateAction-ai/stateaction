@@ -28,8 +28,25 @@ const need = (k) => {
 };
 const RENDER_CLI = need("RENDER_CLI");
 const PYTHON = need("PYTHON_EXECUTABLE");
-const { JobsApi } = await import("../dist/api-client.js");
-const { dispatchOnce } = await import("../dist/dispatcher.js");
+// SA-27: the API owns the Render start in production. This harness's API has no Render
+// settings, so this helper plays the API starter against the official local runner with the
+// same fixed `job:{id}` idempotency key; the API-side start is covered by SA-27's own tests.
+async function dispatchOnce(w, render) {
+  const result = await w.admit();
+  const dispatched = [];
+  for (const pending of result.pendingDispatches) {
+    const run = await render.startTask(
+      "process-recording",
+      [{ jobId: pending.jobId }],
+      {
+        idempotencyKey: pending.dispatchKey,
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    dispatched.push({ jobId: pending.jobId, taskRunId: run.taskRunId });
+  }
+  return { admission: result.admission, dispatched };
+}
 const worlds = [];
 const procs = [];
 const evidence = {};
@@ -48,8 +65,8 @@ const workers = (ref) =>
     })
     .map(Number);
 
-async function world() {
-  const w = await startWorld();
+async function world(extraEnv = {}) {
+  const w = await startWorld(extraEnv);
   worlds.push(w);
   w.state = join(w.secretsDir, "state");
   mkdirSync(w.state, { mode: 0o700 });
@@ -106,8 +123,8 @@ async function until(what, fn, ms = 60_000) {
     await sleep(250);
   }
 }
-async function startRunner(w, hold) {
-  const port = await freePort();
+async function startRunner(w, hold, fixedPort) {
+  const port = fixedPort ?? (await freePort());
   const envFile = join(w.secretsDir, `runner-${port}.env`);
   writeFileSync(
     envFile,
@@ -171,12 +188,7 @@ async function startRunner(w, hold) {
     },
   };
 }
-const dispatch = (w, runner) =>
-  dispatchOnce(
-    new JobsApi(w.origin, w.cron.token, 15000),
-    runner.render.workflows,
-    "process-recording",
-  );
+const dispatch = (w, runner) => dispatchOnce(w, runner.render.workflows);
 async function finished(runner, taskRunId, ms = 120_000) {
   return until(
     "task run result",
@@ -201,6 +213,51 @@ after(async () => {
   for (const w of worlds) await w.stop().catch(() => {});
   if (process.env.SA26_E2E_EVIDENCE)
     process.stdout.write(`SA26_E2E_EVIDENCE ${JSON.stringify(evidence)}\n`);
+});
+
+describe("SA-27 API-owned dispatch: the cron client only calls the API", () => {
+  test("a repair pass admits and the API starts the official runner task once; a second pass starts nothing", async () => {
+    const { JobsApi } = await import("../dist/api-client.js");
+    const { repairOnce } = await import("../dist/repair.js");
+    const port = await freePort();
+    const w = await world({
+      RENDER_USE_LOCAL_DEV: "true",
+      RENDER_LOCAL_DEV_URL: `http://127.0.0.1:${port}`,
+    });
+    const job = await w.queuedJob();
+    const runner = await startRunner(w, 1, port);
+    // The cron client holds only the API origin and the repair-scoped token.
+    const cron = new JobsApi(w.origin, w.cron.token, 55_000);
+    assert.deepEqual(await repairOnce(cron), {
+      admission: "admitted",
+      pendingDispatches: 1,
+    });
+    const row = await until(
+      "controller to record the run and evidence",
+      async () => {
+        const r = await w.row(job.jobId);
+        return r.workflow_run_ref && r.evidence ? r : undefined;
+      },
+      120_000,
+    );
+    assert.equal(
+      row.slot_holder,
+      job.jobId,
+      "evidence alone never frees the slot",
+    );
+    assert.match(row.evidence, /^local_child_reaped:/);
+    const second = await repairOnce(cron);
+    assert.equal(
+      second.pendingDispatches,
+      0,
+      "run recorded: nothing left to start",
+    );
+    assert.equal(
+      (await w.row(job.jobId)).workflow_run_ref,
+      row.workflow_run_ref,
+    );
+    runner.kill();
+  });
 });
 
 describe("SA-26 controller on the official Render local runner with real API, Postgres and a real child", () => {

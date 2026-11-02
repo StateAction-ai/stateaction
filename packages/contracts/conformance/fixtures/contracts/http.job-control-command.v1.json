@@ -1,0 +1,149 @@
+{
+  "contract": "http.job-control-command.v1",
+  "cases": [
+    {
+      "name": "retry request",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "failed"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "cancel request",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "cancel",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "running"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "reconcile request",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "reconcile",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "submit_unknown"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown action",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "resubmit",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "failed"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/action"
+        ]
+      }
+    },
+    {
+      "name": "unknown state",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "stopped"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedState"
+        ]
+      }
+    },
+    {
+      "name": "requestId is a UUID",
+      "input": {
+        "document": {
+          "requestId": "nope",
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "failed"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/requestId"
+        ]
+      }
+    },
+    {
+      "name": "jobId is a UUID",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "retry",
+          "jobId": "nope",
+          "expectedState": "failed"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/jobId"
+        ]
+      }
+    },
+    {
+      "name": "unknown field",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedState": "failed",
+          "force": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "missing state",
+      "input": {
+        "document": {
+          "requestId": "00000000-0000-4000-8000-00000000f001",
+          "action": "retry",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -19,6 +19,9 @@ import {
   RUNNING_WORKER_SCOPES,
 } from "./credentials.js";
 import { jobsConfigFromEnv } from "./config.js";
+import { renderTaskStarterFromEnv } from "./dispatch.js";
+import { datasetAuthenticator } from "../datasets/next.js";
+import { jobControlRoutes } from "./control.js";
 import { jobHandlers, type JobHandlers } from "./http.js";
 import type { JobsDeps } from "./service.js";
 
@@ -38,6 +41,19 @@ const notFound = () =>
     },
   );
 
+/** A malformed Render setting disables dispatch only; it must not take down every job route. */
+function starterFromEnv(env: NodeJS.ProcessEnv) {
+  try {
+    return renderTaskStarterFromEnv(env);
+  } catch (error) {
+    console.error(
+      "[jobs] dispatch disabled:",
+      error instanceof Error ? error.message : "invalid Render settings",
+    );
+    return null;
+  }
+}
+
 export function jobsDepsFromEnv(
   pool: AuthRuntime["pool"],
   env: NodeJS.ProcessEnv = process.env,
@@ -46,6 +62,7 @@ export function jobsDepsFromEnv(
   return {
     pool,
     config: jobsConfigFromEnv(env),
+    taskStarter: starterFromEnv(env),
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
     acceptance: {
@@ -125,7 +142,7 @@ export function jobRouteHandlers(
         null,
         controller,
         { kinds: ["cron", "workflow"], scope: "jobs:repair" },
-        (h) => h.reconcile(request),
+        (h, principal) => h.reconcile(request, principal),
       ),
     status: (request: Request, jobId: string) =>
       guarded(
@@ -193,5 +210,45 @@ export function jobRouteHandlers(
             (h) => h.inputRead(request, jobId, fileId),
           )
         : Promise.resolve(notFound()),
+  };
+}
+
+const CONTROL_KEY = Symbol.for("stateaction.jobs.control");
+/**
+ * Staff job-control route binding (/api/v1/jobs/{jobId}/control): the same
+ * Better Auth staff session guard as the dataset routes, restricted pool, no
+ * owner credential and no Render or storage credential in this path.
+ */
+export function jobControlRouteHandlers(get: () => AuthRuntime = authRuntime) {
+  return {
+    control: (request: Request, jobId: string): Promise<Response> => {
+      const holder = globalThis as {
+        [CONTROL_KEY]?: ReturnType<typeof jobControlRoutes>;
+      };
+      let routes = holder[CONTROL_KEY];
+      if (!routes) {
+        try {
+          const pool = get().pool;
+          routes = holder[CONTROL_KEY] = jobControlRoutes({
+            pool,
+            config: {},
+            authenticate: datasetAuthenticator(get),
+          });
+        } catch (error) {
+          console.error(
+            "[jobs] control unavailable:",
+            error instanceof Error ? error.message : "error",
+          );
+          return Promise.resolve(
+            authError(
+              "provider_unavailable",
+              "Job service is temporarily unavailable",
+              newRequestId(),
+            ),
+          );
+        }
+      }
+      return routes.control(request, jobId);
+    },
   };
 }

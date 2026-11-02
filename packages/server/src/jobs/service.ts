@@ -42,6 +42,12 @@ export type JobsDeps = {
   presignRead: PresignRead;
   taskInput?: TaskInputBuilder;
   /**
+   * Render task start used by the repair pass (the API's authority; the cron
+   * holds none). Absent/null: dispatch is reported unavailable and nothing is
+   * started.
+   */
+  taskStarter?: import("./dispatch.js").TaskStarter | null;
+  /**
    * Storage-backed verification used by SA-28 output acceptance (manifest
    * reader, streaming hasher, finite budgets). Absent in tests that do not
    * exercise acceptance; the result routes then fail closed.
@@ -76,6 +82,57 @@ async function run<T>(pool: pg.Pool, work: (tx: Tx) => Promise<T>): Promise<T> {
   try {
     return await inTransaction(pool, work);
   } catch (error) {
+    if (error instanceof CatalogError)
+      throw new TransportError(
+        error.code === "idempotency_conflict" ? "conflict" : error.code,
+        error.message,
+        { cause: error },
+      );
+    throw error;
+  }
+}
+
+export { run as runJobTx };
+
+/** Finite, transaction-local waits for the SA-27 recovery mutation paths only. */
+export const RECOVERY_LOCK_TIMEOUT_MS = 5_000;
+export const RECOVERY_STATEMENT_TIMEOUT_MS = 15_000;
+
+/**
+ * Like `run`, but the transaction sets LOCAL lock and statement timeouts first
+ * (nothing global changes), and a lock/statement timeout or deadlock becomes a
+ * retryable `provider_unavailable` instead of a request that waits forever.
+ * The pool checkout itself is bounded only by the pool's own settings.
+ */
+export async function boundedRun<T>(
+  pool: pg.Pool,
+  work: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  try {
+    return await inTransaction(pool, async (tx) => {
+      await tx.query(
+        "SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
+        [
+          String(RECOVERY_LOCK_TIMEOUT_MS),
+          String(RECOVERY_STATEMENT_TIMEOUT_MS),
+        ],
+      );
+      return work(tx);
+    });
+  } catch (error) {
+    // inTransaction already mapped 55P03/40P01 to a CatalogError that keeps the
+    // SQLSTATE; 57014 (statement timeout) stays a raw driver error. Decide on the
+    // SQLSTATE BEFORE the generic lifecycle mapping below.
+    const state =
+      error instanceof CatalogError
+        ? error.sqlstate
+        : (error as { code?: unknown })?.code;
+    if (state === "55P03" || state === "57014" || state === "40P01")
+      throw new TransportError(
+        "provider_unavailable",
+        "busy: the job is locked by another operation; retry shortly",
+        { cause: error },
+      );
     if (error instanceof CatalogError)
       throw new TransportError(
         error.code === "idempotency_conflict" ? "conflict" : error.code,
@@ -510,9 +567,10 @@ export async function recordExecutionRef(
 export async function requestJobCancel(
   deps: Pick<JobsDeps, "pool">,
   jobId: string,
+  guard: { expectedState?: string; requireCurrent?: boolean } = {},
 ): Promise<{ state: "cancelled" | "cancel_requested" }> {
   uuid(jobId, "jobId");
-  return run(deps.pool, async (tx) => {
+  return boundedRun(deps.pool, async (tx) => {
     const rec = await tx.query<{ recording_id: string }>(
       "SELECT recording_id FROM jobs WHERE id = $1",
       [jobId],
@@ -527,6 +585,19 @@ export async function requestJobCancel(
       [jobId],
     );
     const state = rows[0]!.state;
+    // Operator requests are bound to the exact current job and state they saw.
+    if (guard.requireCurrent) {
+      const cur = await tx.query<{ current: boolean }>(
+        "SELECT current_job_id = $2 AS current FROM recordings WHERE id = $1",
+        [rec.rows[0].recording_id, jobId],
+      );
+      if (!cur.rows[0]?.current)
+        throw conflict("stale_current_job: the recording has a newer job");
+    }
+    if (guard.expectedState !== undefined && guard.expectedState !== state)
+      throw conflict(
+        `stale_state: job is ${state}, not ${guard.expectedState}`,
+      );
     if (state === "queued") {
       await tx.query(
         "UPDATE jobs SET state = 'cancelled', finished_at = now() WHERE id = $1",

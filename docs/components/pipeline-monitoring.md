@@ -51,13 +51,14 @@ Error text is humanized from `error_code` and a sanitized, truncated
 - **Review clips** appears only when the current job is `succeeded` with
   accepted clips and links to `/data-browser?recordingId=<UUID>` with no
   `reviewStatus` (SA-37 consumes it).
-- **Cancel / check cancellation / Retry / re-upload guidance / reconcile** are
-  behind the `JobControlCapabilities` seam. The only provider is
-  `noJobControl`, so no such control renders; a future provider's answer is
-  discarded unless it names the exact current job and expected state.
-  **Lifecycle gate:** these require the Jobs API (SA-27 dispatch/cancel and
-  SA-28 result acceptance), which is not implemented; nothing here fakes
-  completion or enables a control.
+- **Cancel / check cancellation / Retry / re-upload guidance / reconcile** come
+  from the `JobControlCapabilities` seam. The Pipeline reads now inject SA-27's
+  `jobControlCapabilities`, which answers from live rows and advertises a
+  control only if its authenticated mutation (`POST /api/v1/jobs/{jobId}/control`)
+  is wired; an answer is discarded unless it names the exact current job and
+  expected state. Cancel is a request (not a stop); Retry appears only after
+  exact termination evidence; a failed source hash shows corrected-source
+  guidance instead of a retry. See [job orchestration](job-orchestration.md).
 
 ## Validation
 

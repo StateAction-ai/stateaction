@@ -19,12 +19,12 @@ import {
 } from "../acceptance/service.js";
 import { TransportError } from "../transport/errors.js";
 import { errorResponse, readBoundedJson } from "../transport/http.js";
+import { runRepair } from "./recovery.js";
 import {
   admitNextJob,
   claimControllerLease,
   claimWorker,
   getJobStatus,
-  listPendingDispatches,
   markSubmissionUnknown,
   parseExecutor,
   recordExecutionEvidence,
@@ -113,15 +113,43 @@ async function advanceQuietly(d: JobsDeps, jobId: string): Promise<void> {
  */
 export function jobHandlers(deps: () => JobsDeps) {
   return {
-    /** Cron/controller repair: admit the next queued job; list undelivered dispatches. */
-    reconcile: (_request: Request) =>
+    /**
+     * Cron repair pass (jobs:repair). Bounded and finite: finalize proven
+     * cancellations, fail jobs whose dispatch is provably lost, surface
+     * uncertain executions, admit the next queued job and (re)start the Render
+     * task for undelivered dispatches with the fixed `job:{id}` key. The caller
+     * holds only this API capability; the Render start authority is the API's.
+     */
+    reconcile: (_request: Request, principalId = "repair") =>
       respond(async () => {
+        const passStart = Date.now();
         const d = deps();
         // Repair first: a result whose facts are now complete frees the slot
         // before this pass tries to admit the next job.
         if (d.acceptance) await repairResults(acceptanceOf(d));
-        const admission = await admitNextJob(d);
-        const pendingDispatches = await listPendingDispatches(d);
+        const { report, pending, admission } = await runRepair(
+          d,
+          {
+            recordedBy: `repair:${principalId}`.slice(0, 200),
+            startedAt: passStart,
+          },
+          () => admitNextJob(d),
+        );
+        // Counts and IDs only: no tokens, URLs or credentials.
+        console.log(
+          "[jobs] repair",
+          JSON.stringify({
+            ran: report.ran,
+            cancelled: report.cancelled.length,
+            failedUndispatched: report.failedUndispatched.length,
+            markedUnknown: report.markedUnknown.length,
+            markedAttention: report.markedAttention.length,
+            dispatchAvailable: report.dispatch.available,
+            started: report.dispatch.started.length,
+            ambiguous: report.dispatch.ambiguous,
+            pending: pending.length,
+          }),
+        );
         return checked<ReconcileResult>("jobs.reconcile-result.v1", {
           admission:
             admission.state === "admitted"
@@ -132,7 +160,7 @@ export function jobHandlers(deps: () => JobsDeps) {
                   executionDeadline: iso(admission.job.executionDeadline),
                 }
               : admission,
-          pendingDispatches,
+          pendingDispatches: pending,
         });
       }),
 

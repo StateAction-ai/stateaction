@@ -74,6 +74,14 @@ services:
         sync: false
       - key: PROCESSING_MODEL_SHA256
         value: fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1
+      # Dispatch authority (SA-27, web only). The API alone starts the process-recording
+      # Render task (idempotency key job:{jobId}); the repair cron holds neither this key
+      # nor any database or Modal credential. Unset = dispatch reported unavailable, nothing
+      # starts. The slug is <workflow-slug>/process-recording.
+      - key: RENDER_API_KEY
+        sync: false
+      - key: PROCESS_RECORDING_TASK_SLUG
+        sync: false
       # Authentication (web only; SA-15 owns the implementation, not yet merged). One Better
       # Auth instance. BETTER_AUTH_URL is this service's public HTTPS origin (the onrender.com
       # or custom-domain URL, known only after creation). The secret is generated per
@@ -113,4 +121,26 @@ services:
       - key: CONTROLLER_CAPABILITY_TOKEN
         sync: false
       - key: EXECUTION_BACKEND
+        sync: false
+  # SA-27 minute repair pass: one bounded call to the API's repair endpoint, then exit.
+  # Credentials: a repair-scoped API capability ONLY (scope jobs:repair, max 24 h, issued with
+  # issue-service-capability --kind cron). No database, Render-start, Modal or storage secret.
+  # Render runs at most one cron instance at a time; the schedule is UTC.
+  - type: cron
+    name: stateaction-repair
+    runtime: node
+    region: ohio
+    plan: starter
+    schedule: "* * * * *"
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter "@stateaction/jobs..." build
+    startCommand: pnpm --filter @stateaction/jobs repair
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.2
+      - key: APP_ENV
+        value: production
+      - key: STATEACTION_API_URL
+        sync: false # https origin of stateaction-web
+      - key: REPAIR_CAPABILITY_TOKEN
         sync: false

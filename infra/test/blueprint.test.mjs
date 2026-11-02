@@ -15,9 +15,9 @@ const blocks = Object.fromEntries(
 );
 const envKeys = (block) =>
   [...block.matchAll(/- key: ([A-Z0-9_]+)/g)].map((match) => match[1]);
-test("topology is web + workflow with a private database and no scheduled migrator", () => {
-  assert.deepEqual(Object.keys(blocks).sort(), ["web", "workflow"]);
-  assert.doesNotMatch(text, /type: cron/);
+test("topology is web + workflow + one repair cron with a private database and no scheduled migrator", () => {
+  assert.deepEqual(Object.keys(blocks).sort(), ["cron", "web", "workflow"]);
+  assert.equal((text.match(/type: cron/g) ?? []).length, 1);
   assert.match(text, /ipAllowList: \[\]/);
 });
 test("no literal secrets and no owner connection string in runtime services", () => {
@@ -49,8 +49,23 @@ test("auth settings are web-only and unsupported or local-only overrides are nev
   for (const key of keys.filter((k) => /AUTH|GOOGLE/.test(k)))
     assert.ok(!envKeys(blocks.workflow).includes(key));
 });
-test("no Render API key is provisioned until a dispatch feature needs it", () => {
-  assert.doesNotMatch(text, /RENDER_API_KEY/);
+test("the Render start key lives on the API only; the repair cron has an API capability and nothing else (SA-27)", () => {
+  assert.match(blocks.web, /key: RENDER_API_KEY\n\s+sync: false/);
+  assert.match(blocks.web, /key: PROCESS_RECORDING_TASK_SLUG\n\s+sync: false/);
+  assert.ok(!envKeys(blocks.workflow).includes("RENDER_API_KEY"));
+  assert.deepEqual(envKeys(blocks.cron).sort(), [
+    "APP_ENV",
+    "NODE_VERSION",
+    "REPAIR_CAPABILITY_TOKEN",
+    "STATEACTION_API_URL",
+  ]);
+  for (const key of ["REPAIR_CAPABILITY_TOKEN", "STATEACTION_API_URL"])
+    assert.match(blocks.cron, new RegExp(`key: ${key}\\n\\s+sync: false`));
+  assert.match(blocks.cron, /schedule: "\* \* \* \* \*"/);
+  assert.doesNotMatch(
+    blocks.cron,
+    /DATABASE|S3_|RENDER_API_KEY|MODAL|fromDatabase/,
+  );
 });
 test("workflow tasks receive no database, storage or dispatch credentials", () => {
   const keys = envKeys(blocks.workflow);
@@ -65,7 +80,10 @@ test("workflow tasks receive no database, storage or dispatch credentials", () =
   for (const key of ["CONTROLLER_CAPABILITY_TOKEN", "STATEACTION_API_URL"])
     assert.match(blocks.workflow, new RegExp(`key: ${key}\\n\\s+sync: false`));
   assert.ok(!envKeys(blocks.web).includes("CONTROLLER_CAPABILITY_TOKEN"));
-  assert.doesNotMatch(blocks.workflow, /DATABASE|S3_|DISPATCH_CAPABILITY/);
+  assert.doesNotMatch(
+    blocks.workflow,
+    /DATABASE|S3_|DISPATCH_CAPABILITY|REPAIR_CAPABILITY/,
+  );
 });
 test("web binds through the health-checked Render start path", () => {
   assert.match(blocks.web, /healthCheckPath: \/api\/v1\/live/);
