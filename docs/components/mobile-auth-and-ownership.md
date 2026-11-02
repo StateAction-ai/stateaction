@@ -100,6 +100,25 @@ reached, the user is told revocation is **unconfirmed**. Logout no longer
 clears the upload database, KV store or secure store wholesale; captures,
 journals, receipts and recorder settings are preserved.
 
+### Concurrency and call-time checks
+
+- Every sign-in and logout starts a new **auth epoch**. A `/me` refresh or
+  sign-in whose epoch is stale when its response arrives is discarded, so a
+  late response cannot resurrect a logged-out session, reinstall eligibility
+  or replace a newer account (A→B switch).
+- The jar has a **generation** incremented by every clear. Requests capture it
+  first; a late `Set-Cookie` or 401 from an older generation is ignored
+  (cannot reinstall cookies or wipe the newer session). Logout and account
+  switch drop cookies locally _before_ the server sign-out call, which uses a
+  snapshot of the old cookie.
+- Secure-store writes for cookies and eligibility are serialized, so a clear
+  issued after a write is always applied after it.
+- Owner answers are evaluated **at the moment of use** (`captureOwnerAt(now)`,
+  `networkOwnerAt(now)`): offline eligibility stops authorizing Start after
+  its window even without a refresh, an active session stops networking at
+  its `sessionExpiresAt` and capture seven days after the last verification,
+  and a verification time in the future (clock rollback) fails closed.
+
 ## Immutable capture ownership
 
 `CaptureOwnerLedger` is an app-private, write-ahead JSON journal

@@ -1,0 +1,82 @@
+{
+  "ticket": "SA-17",
+  "recorded": "2026-11-02",
+  "scope": "Independent mobile client preparation: local email/password via Better Auth, origin-bound secure cookies, server /me identity, offline eligibility, immutable capture ownership and owner-fenced uploads. Local fixtures and emulator only; hosted CI is reported on the PR.",
+  "toolchain": {
+    "flutter": "3.44.6",
+    "dart": "3.12.2",
+    "node": "24.22.2",
+    "pnpm": "10.33.0",
+    "jdk": "21",
+    "androidEmulator": "36.4.10 (pinned host install)",
+    "systemImage": "android-33 google_apis x86_64"
+  },
+  "localChecks": {
+    "appAnalyze": "flutter analyze: no issues",
+    "appTests": "192 passed (156 pre-existing + 36 new)",
+    "recorderAnalyze": "flutter analyze lib test: no issues",
+    "recorderTests": "12 passed (9 pre-existing + 3 new start-gate tests)",
+    "newSuites": [
+      "apps/mobile/test/src/modules/auth/session/session_cookie_jar_test.dart",
+      "apps/mobile/test/src/modules/auth/session/auth_ownership_flow_test.dart",
+      "apps/mobile/test/src/modules/auth/session/auth_session_races_test.dart",
+      "apps/mobile/test/src/modules/auth/local_password_sign_in_form_test.dart",
+      "apps/mobile/test/src/modules/capture_ownership/capture_owner_ledger_test.dart",
+      "packages/stera_recorder/test/recording_start_gate_test.dart"
+    ],
+    "fixture": "fake_better_auth_server.dart: ephemeral loopback HTTP test double with Better Auth-like cookies and the draft SA-15 /me envelope. Not Better Auth, not Google, not the real backend."
+  },
+  "emulatorSimulation": {
+    "bypass": "NO_AUTH_MODE=false, LOCAL_PASSWORD_AUTH=true, DEV_BACKEND_ORIGIN=http://10.0.2.2:18444 (host loopback fixture)",
+    "build": "flutter build apk --debug --target-platform android-x64 (uncached, not committed)",
+    "device": "private temporary AVD (hw keyboard, 4 GB), user 0 verified; no physical device",
+    "renderingLimitation": "On this headless host the emulator process segfaulted (exit 139) whenever the Flutter app rendered through the emulator GPU paths (swiftshader_indirect and guest, emulator 36.4.10 and 37.x); a control session typing into system Settings did not crash. Launching with the Flutter debug engine flags enable-software-rendering=true, enable-impeller=false avoided it. Real-device GPU rendering is unaffected by this host limitation and is not qualified here.",
+    "steps": [
+      {
+        "step": "cold launch, no cookies",
+        "observed": "login modal with opt-in Development sign-in form; no network request before user action"
+      },
+      {
+        "step": "wrong password",
+        "observed": "POST /api/auth/sign-in/email (cookie=false, authorization=false, origin=http://10.0.2.2:18444, client=android); UI shows 'Email or password is incorrect.' and clears the password"
+      },
+      {
+        "step": "correct seeded password",
+        "observed": "POST sign-in/email then GET /api/v1/me with cookie=true, authorization=false; app proceeds to onboarding as a verified collector"
+      },
+      {
+        "step": "force-stop and relaunch online",
+        "observed": "GET /api/v1/me cookie=true authorization=false: session restored from Android Keystore-backed secure storage"
+      },
+      {
+        "step": "fixture stopped, force-stop and relaunch offline",
+        "observed": "app stays signed in (offline eligibility) instead of dropping to login"
+      },
+      {
+        "step": "logout while offline",
+        "observed": "toast 'Signed out on this device. The server could not be reached, so session revocation is unconfirmed.'; login modal shown"
+      }
+    ],
+    "notExercisedOnEmulator": [
+      "AR capture Start/stop (ARCore tracking is not available on this emulator setup; covered by recorder/provider and ledger/gate tests)",
+      "Upload networking against real presigned storage"
+    ],
+    "screenshotsSha256Prefix16": {
+      "01-launch": "ace8ce2e0b7eec7c",
+      "02-wrong-password": "fd7da1c46343ec9d",
+      "03-signed-in": "e1d184c980181383",
+      "04-restart-online": "9b9bd0ed59a5ec47",
+      "05-restart-offline": "09e7f5b76f8496d3",
+      "06-offline-logout": "20283fe7795e96cc"
+    },
+    "screenshotsStored": "local /tmp only; not committed"
+  },
+  "notQualified": [
+    "Real SA-15 backend runtime (password sign-in, /me, rotation, sign-out, 401) and the published http.me.v1 Dart binding",
+    "Signed Android build with native Google ID token, audience and nonce verification",
+    "Physical-device login/expiry/account-switch with retained journals",
+    "Native owner-aware upload pause/cancel (SA-57) including the iOS background URLSession uploader; issued presigned URLs are not revoked",
+    "Owner embedded in capture/MCAP metadata; natively driven starts remain ownerless",
+    "iOS build/signing; hosted Render HTTPS __Secure- cookie behavior"
+  ]
+}
