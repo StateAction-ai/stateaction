@@ -43,7 +43,7 @@ make render-cli
 pnpm exec nx run infra:integration --skip-nx-cache
 ```
 
-`pnpm exec nx run server:integration` separately runs the catalog migration/constraint/concurrency tests on a throwaway Postgres bound to an ephemeral loopback port ([catalog](../../docs/components/catalog.md)); CI runs every affected `integration` target in the Local runtime smoke job.
+`pnpm exec nx run server:integration` separately runs the catalog migration/constraint/concurrency tests on a throwaway Postgres bound to an ephemeral loopback port ([catalog](../../docs/components/catalog.md)); CI runs every affected `integration`, `auth-integration` (server) and `auth-e2e` (web) target in the Local runtime smoke job. All three are uncached and run again on every selection; the two auth targets use their own throwaway loopback Postgres containers.
 
 This isolated smoke creates its own local settings and dedicated `stateaction-sa11-smoke` Compose services. It refuses occupied ports/existing settings, proves a real Postgres migration and S3 Put/Get/Delete, then executes Next API → official Render local runner → Node LocalExecutor → installed Python health worker. It stops its own processes/services and retains its own named test volumes. It never deploys or dispatches to cloud Render.
 

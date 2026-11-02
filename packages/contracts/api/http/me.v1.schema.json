@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/me.v1.json",
+  "title": "Signed-in identity v1",
+  "description": "GET /api/v1/me success data, carried as `data` inside http.success-envelope.v1. Identity comes from the server session; access status and roles come only from operator-managed server state, never from the client. `user.id` is the opaque Better Auth ID. `user.name` is untrusted display text. Active identities have at least one role; pending and disabled identities have none. Roles appear once each, in the canonical order collector, staff, customer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["user", "access", "session"],
+  "properties": {
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "email", "name"],
+      "properties": {
+        "id": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+        },
+        "email": {
+          "description": "Sign-in email as stored by the identity provider; not re-validated as an address.",
+          "type": "string",
+          "maxLength": 320,
+          "pattern": "^[^@]+@[^@]+$"
+        },
+        "name": {
+          "description": "Untrusted display text (seed or Google profile). Render escaped; never an operator label.",
+          "type": "string",
+          "maxLength": 256
+        }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "roles"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["active", "pending", "disabled"]
+        },
+        "roles": {
+          "description": "Enabled roles, unique, in canonical order.",
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["collector", "staff", "customer"]
+          },
+          "enum": [
+            [],
+            ["collector"],
+            ["staff"],
+            ["customer"],
+            ["collector", "staff"],
+            ["collector", "customer"],
+            ["staff", "customer"],
+            ["collector", "staff", "customer"]
+          ]
+        }
+      },
+      "if": {
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "const": "active"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "roles": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "roles": {
+            "type": "array",
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expiresAt"],
+      "properties": {
+        "expiresAt": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        }
+      }
+    }
+  }
+}

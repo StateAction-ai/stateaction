@@ -2364,7 +2364,161 @@ def contract_cases():
             },
         },
     ]
+    c["http.me.v1"] = me_cases()
     return c
+
+
+# ------------------------------------------------- Signed-in identity (SA-15)
+me_active = {
+    "user": {
+        "id": OWNER,
+        "email": "staff.pilot@example.test",
+        "name": "Pilot Staff",
+    },
+    "access": {"status": "active", "roles": ["collector", "staff", "customer"]},
+    "session": {"expiresAt": "2026-11-08T23:59:59.123Z"},
+}
+me_pending = {
+    "user": {"id": OWNER, "email": "new.user@example.test", "name": ""},
+    "access": {"status": "pending", "roles": []},
+    "session": {"expiresAt": "2026-11-08T00:00:00Z"},
+}
+
+
+def me_cases():
+    # The status/roles if-then rule is located at /access by Dart and at
+    # /access/roles by Python, so those cases assert the code only.
+    over = json.dumps(me_active) + " " * (16384 - len(json.dumps(me_active)) + 1)
+    return [
+        ok("active with every role in canonical order", me_active),
+        mut("active with one role", me_active, [("/access/roles", ["staff"])], None),
+        mut(
+            "active collector and customer",
+            me_active,
+            [("/access/roles", ["collector", "customer"])],
+            None,
+        ),
+        ok("pending has no roles; names may be empty", me_pending),
+        mut(
+            "disabled has no roles",
+            me_pending,
+            [("/access/status", "disabled")],
+            None,
+        ),
+        mut(
+            "Better Auth IDs are opaque, not UUIDs",
+            me_active,
+            [("/user/id", "Q7zXy0pLm3NcVb8Rt2Wk5Hs9Jd4Fg6Ae")],
+            None,
+        ),
+        mut(
+            "active with no roles",
+            me_active,
+            [("/access/roles", [])],
+            "schema_violation",
+        ),
+        mut(
+            "pending with a role",
+            me_pending,
+            [("/access/roles", ["collector"])],
+            "schema_violation",
+        ),
+        mut(
+            "disabled with a role",
+            me_pending,
+            [("/access/status", "disabled"), ("/access/roles", ["staff"])],
+            "schema_violation",
+        ),
+        mut(
+            "unknown role",
+            me_active,
+            [("/access/roles", ["admin"])],
+            "schema_violation",
+            "/access/roles",
+        ),
+        mut(
+            "duplicate role",
+            me_active,
+            [("/access/roles", ["staff", "staff"])],
+            "schema_violation",
+            "/access/roles",
+        ),
+        mut(
+            "roles out of canonical order",
+            me_active,
+            [("/access/roles", ["staff", "collector"])],
+            "schema_violation",
+            "/access/roles",
+        ),
+        mut(
+            "unknown access status",
+            me_active,
+            [("/access/status", "suspended")],
+            "schema_violation",
+            "/access/status",
+        ),
+        mut(
+            "clients cannot add fields",
+            me_active,
+            [("/role", "staff")],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "user object is closed",
+            me_active,
+            [("/user/roles", ["staff"])],
+            "schema_violation",
+            "/user",
+        ),
+        mut(
+            "session is required",
+            me_active,
+            [("/session", DELETE)],
+            "schema_violation",
+            "",
+        ),
+        mut(
+            "expiry must be UTC with Z",
+            me_active,
+            [("/session/expiresAt", "2026-11-08T23:59:59+00:00")],
+            "schema_violation",
+            "/session/expiresAt",
+        ),
+        mut(
+            "user ID must be an opaque token",
+            me_active,
+            [("/user/id", "has space")],
+            "schema_violation",
+            "/user/id",
+        ),
+        mut(
+            "user ID is bounded",
+            me_active,
+            [("/user/id", "a" * 129)],
+            "schema_violation",
+            "/user/id",
+        ),
+        mut(
+            "email needs one @",
+            me_active,
+            [("/user/email", "not-an-email")],
+            "schema_violation",
+            "/user/email",
+        ),
+        mut(
+            "display name is bounded",
+            me_active,
+            [("/user/name", "n" * 257)],
+            "schema_violation",
+            "/user/name",
+        ),
+        {
+            "name": "document over 16 KiB",
+            "input": {"json": over},
+            "expect": {"valid": False, "code": "document_too_large"},
+        },
+    ]
 
 
 def candidate_doc():

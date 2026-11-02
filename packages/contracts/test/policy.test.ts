@@ -5,8 +5,82 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-const catalog = JSON.parse(text("catalog.v1.json"));
+// catalog.v2.json is the current registry; catalog.v1.json stays published.
+const catalog = JSON.parse(text("catalog.v2.json"));
+const catalogV1 = JSON.parse(text("catalog.v1.json"));
 const lock = JSON.parse(text("schemas.lock.json"));
+const sha256 = (path: string) =>
+  createHash("sha256")
+    .update(readFileSync(new URL(path, api)))
+    .digest("hex");
+
+/**
+ * The lock as published with SA-12 (catalog v1). These values are frozen
+ * here so an edit to schemas.lock.json cannot silently re-bless changed v1
+ * bytes: the lock may only gain entries.
+ */
+const PUBLISHED_V1_LOCK: Readonly<Record<string, string>> = {
+  "artifacts/frame-map.v1.schema.json":
+    "b15626799d5fc2f2da01374406caabbd3fe11dfc95061f6bc1f56074f4ed00bc",
+  "artifacts/hand-observations.v1.schema.json":
+    "90f7685d6b49b7b7e84285230a3b33804e2da0c615095724197c3ba00783314d",
+  "artifacts/processing-result.v1.schema.json":
+    "cdb5c982a9d916a41cb7a4c37632eb09ff1a06a2dc156cf848a16114f4505ad6",
+  "artifacts/recording-source.v1.schema.json":
+    "090caf78c965c1ea1328eb56b094f58242035ffe4cdebff54f6174e655429dec",
+  "catalog.v1.json":
+    "77dda8c10cb74618fbe627f4b22397541dcf9a138df8d2a9ad9b4867b1ba7243",
+  "common.v1.schema.json":
+    "2014e8f1c2d44fc85c0a2efb3e4413e37088b96931e29fc0f1676b311e1d3eeb",
+  "http/error-envelope.v1.schema.json":
+    "7bfeb5d2fb42bc011b719e0f1d81b1739d430c6231a6af2dc3bed39e82ea5737",
+  "http/parts-receipts.v1.schema.json":
+    "98abc2516e8b3c62596a56f6a1c7fe150b789e31077b8aad0deb74c6d7e1bd84",
+  "http/parts-sign.v1.schema.json":
+    "783b88d6f5c5803d649d290b15ebe75a856946add6f0b3d23f48f9fd95e06976",
+  "http/parts-signed.v1.schema.json":
+    "2d5b5d45125aedc34374744303d20f9c1cc3a727d7c1f0669ca9eadca7d578c5",
+  "http/recording-create.v1.schema.json":
+    "2a13ec6192a2cda23424c4bb6d89844e4cb174008b8fdfe7c5a6f4fe17af2c11",
+  "http/recording-seal.v1.schema.json":
+    "01cdaffce1480332cdfe66af40e36fb7495f4a950d22c05aeff7ba887def70d3",
+  "http/recording.v1.schema.json":
+    "42dbf5d411fcf9cb5ca491358f29708cb073acddf7f67a32455aaf7a7c3ffdb6",
+  "http/success-envelope.v1.schema.json":
+    "cf560496b08afb227c4e9e4f95e5f168e8265555b9445ef45fa055c8605c7415",
+  "http/upload-create.v1.schema.json":
+    "e0b4cc4b7d401e1591fa061110857b3584142b598fea7c5ca71fdf4f0faaa471",
+  "http/upload-plan.v1.schema.json":
+    "ef8407a6576deece43f37987a6ed51ce68d3505ab3184f22995d193f2c888a19",
+  "http/upload-transition.v1.schema.json":
+    "115f96a1b945430bb9c5b1aa978293cdada70861d0e77602cf0b701f2165c480",
+  "jobs/claim-grant.v1.schema.json":
+    "46af17214aaaa474b1e71f2aeb2477ef899a496e0e7c3024ee00122fac33ea50",
+  "jobs/controller-input.v1.schema.json":
+    "0ea0570b479959e431b95575bd49672d909173dd117b4a3a22f1dd3e45bc9544",
+  "jobs/heartbeat.v1.schema.json":
+    "24954e9d83eba272f61df26bec4c8cb8ae7ce289030d6c5129f2cafe1d35c860",
+  "jobs/job-status.v1.schema.json":
+    "65c9117ee64826371580eabfaef2cd41ba59e55ec74cadc94ac6c14159433b94",
+  "jobs/result-candidate.v1.schema.json":
+    "8b0a1aeeb01585809e8324f2bc8a251965b862d00264d2bb63f3067b8ea34c09",
+  "jobs/task-input.v1.schema.json":
+    "c3904eb5a866aaaf02fc7dec1274729e0a6fdcf58e17b2f5d0913f7bef9c1f75",
+  "jobs/worker-claim.v1.schema.json":
+    "a2e0fae16d66ea54bd899c98ef206d7d14439821870460f93f7e397205e57fb5",
+  "native/capture-capabilities.v1.schema.json":
+    "25e3a2f0072dbace71c97b98fa58b21e54efd37eee15b94b9533c2bab115a07f",
+  "native/capture-command.v1.schema.json":
+    "4a2fd3871a7f5d1e38f3fac4bc56914af024f4d748daa1ade1afcd28d5bf5649",
+  "native/capture-error.v1.schema.json":
+    "a8b68e808c6adfa39ffb7a2cabf93037b1d24e72c3a6713b161c2099ab6d2682",
+  "native/capture-recoverable.v1.schema.json":
+    "1f88e79f5ad18330108e1a6b39a551851e1f6fae9371624bd2472741a1f3cdcf",
+  "native/capture-snapshot.v1.schema.json":
+    "da8ef57c927bad2f114e7e5df663c2135b420596ea43a442922ac340af1773dc",
+  "platform-verify.v1.schema.json":
+    "171bc49bd9a786d923dfbb14bccabe40a7d4c8281a2caddb5fd0f04f05864080",
+};
 
 function files(dir = ""): string[] {
   return readdirSync(new URL(dir, api)).flatMap((name) =>
@@ -24,6 +98,29 @@ test("catalog lists every published contract schema exactly once", () => {
     .map((c: any) => c.schema)
     .sort();
   assert.deepEqual(listed, schemas);
+});
+
+test("v1 lock entries are unchanged and every v1 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V1_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V1_LOCK).length, 30);
+});
+
+test("catalog v2 is an exact superset of catalog v1", () => {
+  assert.equal(catalogV1.catalog, "stateaction.contracts.catalog.v1");
+  assert.equal(catalog.catalog, "stateaction.contracts.catalog.v2");
+  for (const key of ["common", "errorCodes", "maxDepth"])
+    assert.deepEqual(catalog[key], catalogV1[key], key);
+  assert.deepEqual(Object.keys(catalog).sort(), Object.keys(catalogV1).sort());
+  for (const [id, entry] of Object.entries(catalogV1.contracts))
+    assert.deepEqual(catalog.contracts[id], entry, `${id} differs in v2`);
+  const added = Object.keys(catalog.contracts).filter(
+    (id) => !(id in catalogV1.contracts),
+  );
+  assert.deepEqual(added, ["http.me.v1"]);
+  assert.equal(Object.keys(catalogV1.contracts).length, 27);
 });
 
 test("published schema bytes match the immutability lock", () => {

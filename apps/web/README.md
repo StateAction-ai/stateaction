@@ -5,3 +5,7 @@ Node 24 / Next.js App Router. From the repository root, `pnpm --filter @stateact
 `GET /api/v1/health` checks migrated Postgres and the configured S3 bucket. It returns only readiness booleans, never credentials/provider errors. `POST /api/v1/development/workflows/verify` is a bounded, bearer-protected local smoke endpoint. It refuses production and non-loopback workflow endpoints. It is not product authentication or a recording job API.
 
 Start with `make web` after the setup in [local tooling](../../scripts/platform/README.md). `@stateaction/server` uses Next's `server-only` guard; provider code must not be imported into client components.
+
+## Authentication (SA-15)
+
+`/login`, `/` and sign-out use the single Better Auth instance at `/api/auth/*` (from `@stateaction/server/auth`). `GET /api/v1/me` returns the server identity, access status (`active`/`pending`/`disabled`) and roles; roles never come from the client. Browser mutations send `X-StateAction-Client` and JSON. Set the auth values from `.env.example` (replace `BETTER_AUTH_SECRET`) before `make web`; until then sign-in reports itself unavailable. `pnpm exec nx run web:auth-e2e` runs the production build against an isolated Postgres. Design, settings map and open gates: [auth and access](../../docs/components/auth-and-access.md).

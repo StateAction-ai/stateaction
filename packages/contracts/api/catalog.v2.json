@@ -1,0 +1,317 @@
+{
+  "catalog": "stateaction.contracts.catalog.v2",
+  "common": "common.v1.schema.json",
+  "errorCodes": [
+    "document_too_large",
+    "malformed_json",
+    "unsupported_version",
+    "schema_violation",
+    "duplicate_identity",
+    "part_plan_mismatch",
+    "dimension_mismatch",
+    "mask_mismatch",
+    "ordering_violation",
+    "clock_mismatch",
+    "reference_mismatch",
+    "inventory_incomplete",
+    "progress_mismatch",
+    "outcome_mismatch"
+  ],
+  "maxDepth": 32,
+  "contracts": {
+    "artifacts.frame-map.v1": {
+      "schema": "artifacts/frame-map.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/frame-map.v1.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": ["stateaction.frame_map.v1"]
+      },
+      "maxBytes": 16777216,
+      "rules": ["frame_map"]
+    },
+    "artifacts.hand-observations.v1": {
+      "schema": "artifacts/hand-observations.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/hand-observations.v1.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": ["stateaction.hand_observations.v1"]
+      },
+      "maxBytes": 16777216,
+      "rules": ["hand_observations"]
+    },
+    "artifacts.processing-result.v1": {
+      "schema": "artifacts/processing-result.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/processing-result.v1.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": ["stateaction.processing_result.v1"]
+      },
+      "maxBytes": 1048576,
+      "rules": ["processing_result"]
+    },
+    "artifacts.recording-source.v1": {
+      "schema": "artifacts/recording-source.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/recording-source.v1.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": ["stateaction.recording_source.v1"]
+      },
+      "maxBytes": 1048576,
+      "rules": ["recording_source"]
+    },
+    "http.error-envelope.v1": {
+      "schema": "http/error-envelope.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/error-envelope.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1|/internal/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.me.v1": {
+      "schema": "http/me.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/me.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 16384,
+      "rules": []
+    },
+    "http.parts-receipts.v1": {
+      "schema": "http/parts-receipts.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/parts-receipts.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": ["unique_part_numbers"]
+    },
+    "http.parts-sign.v1": {
+      "schema": "http/parts-sign.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/parts-sign.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.parts-signed.v1": {
+      "schema": "http/parts-signed.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/parts-signed.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-create.v1": {
+      "schema": "http/recording-create.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-create.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-seal.v1": {
+      "schema": "http/recording-seal.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-seal.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": ["unique_file_ids", "sealed_inventory"]
+    },
+    "http.recording.v1": {
+      "schema": "http/recording.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.success-envelope.v1": {
+      "schema": "http/success-envelope.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1|/internal/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.upload-create.v1": {
+      "schema": "http/upload-create.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-create.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.upload-plan.v1": {
+      "schema": "http/upload-plan.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-plan.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": ["upload_plan"]
+    },
+    "http.upload-transition.v1": {
+      "schema": "http/upload-transition.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-transition.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "jobs.claim-grant.v1": {
+      "schema": "jobs/claim-grant.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/claim-grant.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 1048576,
+      "rules": ["claim_grant"]
+    },
+    "jobs.controller-input.v1": {
+      "schema": "jobs/controller-input.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/controller-input.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "render-task:process-recording|export-release"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "jobs.heartbeat.v1": {
+      "schema": "jobs/heartbeat.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/heartbeat.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 1048576,
+      "rules": ["heartbeat_progress"]
+    },
+    "jobs.job-status.v1": {
+      "schema": "jobs/job-status.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/job-status.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/internal/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "jobs.result-candidate.v1": {
+      "schema": "jobs/result-candidate.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/result-candidate.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 1048576,
+      "rules": ["result_candidate"]
+    },
+    "jobs.task-input.v1": {
+      "schema": "jobs/task-input.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/task-input.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "jobs.worker-claim.v1": {
+      "schema": "jobs/worker-claim.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/jobs/worker-claim.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "native.capture-capabilities.v1": {
+      "schema": "native/capture-capabilities.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-capabilities.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": ["capture_capabilities"]
+    },
+    "native.capture-command.v1": {
+      "schema": "native/capture-command.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-command.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": []
+    },
+    "native.capture-error.v1": {
+      "schema": "native/capture-error.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-error.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": []
+    },
+    "native.capture-recoverable.v1": {
+      "schema": "native/capture-recoverable.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-recoverable.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 262144,
+      "rules": ["capture_recoverable"]
+    },
+    "native.capture-snapshot.v1": {
+      "schema": "native/capture-snapshot.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/native/capture-snapshot.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schemaVersion",
+        "accepted": [1]
+      },
+      "maxBytes": 65536,
+      "rules": ["capture_snapshot"]
+    }
+  }
+}
