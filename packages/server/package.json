@@ -11,7 +11,10 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --conditions=react-server --import tsx --test test/*.test.ts",
+    "test:catalog": "node --conditions=react-server --import tsx --test --test-concurrency=4 test-integration/*.test.ts",
     "migrate": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts migrate",
+    "seed": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts seed",
+    "integration": "bash scripts/catalog-integration.sh",
     "storage:init": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-init",
     "storage:check": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts storage-check"
   },

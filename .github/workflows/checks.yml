@@ -63,6 +63,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       integration: ${{ steps.scope.outputs.integration }}
+      integration_projects: ${{ steps.scope.outputs.integration_projects }}
       android: ${{ steps.scope.outputs.android }}
       mobile_projects: ${{ steps.scope.outputs.mobile_projects }}
     steps:
@@ -101,8 +102,10 @@ jobs:
             # The first tooling PR has no Nx graph/lockfile on its base.
             echo "mode=all" >> "$GITHUB_OUTPUT"
             echo "integration=true" >> "$GITHUB_OUTPUT"
+            projects=$(pnpm exec nx show projects --withTarget=integration --json)
             mobile=$(pnpm exec nx show projects --json)
           fi
+          echo "integration_projects=$(jq -r 'join(",")' <<< "$projects")" >> "$GITHUB_OUTPUT"
           mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile")] | join(",")' <<< "$mobile")
           echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
           if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
@@ -195,8 +198,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --project workers/processing --locked
       - run: python3 scripts/platform/install-render.py
-      - name: Real Next, Render local runner, Python and storage
-        run: pnpm exec nx run infra:integration --skip-nx-cache --outputStyle=static
+      - name: Real Next, Render local runner, Python, storage and catalog integration
+        env:
+          INTEGRATION_PROJECTS: ${{ needs.checks.outputs.integration_projects }}
+        run: pnpm exec nx run-many -t integration --projects="$INTEGRATION_PROJECTS" --parallel=1 --skip-nx-cache --outputStyle=static
   required:
     name: Required checks
     if: always()

@@ -1,0 +1,22 @@
+{
+  "ticket": "SA-13",
+  "date": "2026-11-01",
+  "betterAuthVersion": "1.7.15",
+  "method": "Scratch install outside the repository (npm better-auth@1.7.15, pg). Database A: Better Auth getMigrations().runMigrations() with emailAndPassword enabled. Database B: repository CLI `migrate` (001-003) then `seed` with LOCAL_SEED_PASSWORD. Both on postgres:17.9 from infra/compose.yaml, tmpfs, removed afterwards.",
+  "generatorPendingOnRepositorySchema": {
+    "create": [],
+    "add": []
+  },
+  "columnTypeNullabilityDiffs": [],
+  "indexesIdentical": true,
+  "foreignKeysIdentical": true,
+  "seededCredentialSignIn": {
+    "api": "auth.api.signInEmail",
+    "user": "staff@stateaction.local",
+    "userId": "seed-staff-1",
+    "sessionTokenIssued": true,
+    "wrongPassword": "UNAUTHORIZED"
+  },
+  "generatedSql": "create table \"user\" (\"id\" text not null primary key, \"name\" text not null, \"email\" text not null unique, \"emailVerified\" boolean not null, \"image\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate table \"session\" (\"id\" text not null primary key, \"expiresAt\" timestamptz not null, \"token\" text not null unique, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null, \"ipAddress\" text, \"userAgent\" text, \"userId\" text not null references \"user\" (\"id\") on delete cascade);\n\ncreate table \"account\" (\"id\" text not null primary key, \"accountId\" text not null, \"providerId\" text not null, \"userId\" text not null references \"user\" (\"id\") on delete cascade, \"accessToken\" text, \"refreshToken\" text, \"idToken\" text, \"accessTokenExpiresAt\" timestamptz, \"refreshTokenExpiresAt\" timestamptz, \"scope\" text, \"password\" text, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz not null);\n\ncreate table \"verification\" (\"id\" text not null primary key, \"identifier\" text not null, \"value\" text not null, \"expiresAt\" timestamptz not null, \"createdAt\" timestamptz default CURRENT_TIMESTAMP not null, \"updatedAt\" timestamptz default CURRENT_TIMESTAMP not null);\n\ncreate index \"session_userId_idx\" on \"session\" (\"userId\");\n\ncreate index \"account_userId_idx\" on \"account\" (\"userId\");\n\ncreate index \"verification_identifier_idx\" on \"verification\" (\"identifier\");",
+  "notReproducedInCi": "better-auth is not yet a locked workspace dependency; SA-15 adds it and must pin 1.7.15 (or re-run this comparison with an additive migration)."
+}
