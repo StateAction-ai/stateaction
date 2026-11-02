@@ -15,6 +15,7 @@ import {
   type ClipInput,
 } from "./catalog.js";
 import { hashCredentialPassword } from "./password.js";
+import { establishFixtureAdmission } from "../admission/fixtures.js";
 
 /**
  * Deterministic local seed. Catalog rows only: no media objects are written,
@@ -162,6 +163,13 @@ export async function seedLocalCatalog(
     recordingId,
     ownerUserId: collector,
     manifestFileId: seedUuid("f", 1),
+  });
+  // Explicit local fixture evidence (synthetic local permission, registration,
+  // seal and admission) so the fail-closed jobs trigger admits this one job.
+  await establishFixtureAdmission(owner, {
+    recordingId,
+    firstJobId: jobId,
+    recordedBy: "local-seed",
   });
   await createProcessingJob(owner, {
     jobId,

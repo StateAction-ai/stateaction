@@ -5,8 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v2.json is the current registry; catalog.v1.json stays published.
-const catalog = JSON.parse(text("catalog.v2.json"));
+// catalog.v3.json is the current registry; catalog.v1.json and catalog.v2.json
+// stay published and immutable.
+const catalog = JSON.parse(text("catalog.v3.json"));
+const catalogV2 = JSON.parse(text("catalog.v2.json"));
 const catalogV1 = JSON.parse(text("catalog.v1.json"));
 const lock = JSON.parse(text("schemas.lock.json"));
 const sha256 = (path: string) =>
@@ -108,19 +110,57 @@ test("v1 lock entries are unchanged and every v1 file keeps its exact bytes", ()
   assert.equal(Object.keys(PUBLISHED_V1_LOCK).length, 30);
 });
 
-test("catalog v2 is an exact superset of catalog v1", () => {
-  assert.equal(catalogV1.catalog, "stateaction.contracts.catalog.v1");
-  assert.equal(catalog.catalog, "stateaction.contracts.catalog.v2");
+/**
+ * Lock entries published with SA-15 (catalog v2). Frozen like the v1 values:
+ * they may never be re-blessed.
+ */
+const PUBLISHED_V2_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v2.json":
+    "cc67b8fd846911850b9b537ea1d4231529b9743d8c5a78e65bb49c7f505dd862",
+  "http/me.v1.schema.json":
+    "e8cb9e686a4314de5ba0268dc924e2fd5ede2f5d9128d5a75a17ec3b1f25f80a",
+};
+
+test("v2 lock entries are unchanged and every v2 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V2_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+});
+
+function assertExactSuperset(
+  next: any,
+  previous: any,
+  names: [string, string],
+  added: string[],
+) {
+  assert.equal(previous.catalog, `stateaction.contracts.catalog.${names[0]}`);
+  assert.equal(next.catalog, `stateaction.contracts.catalog.${names[1]}`);
   for (const key of ["common", "errorCodes", "maxDepth"])
-    assert.deepEqual(catalog[key], catalogV1[key], key);
-  assert.deepEqual(Object.keys(catalog).sort(), Object.keys(catalogV1).sort());
-  for (const [id, entry] of Object.entries(catalogV1.contracts))
-    assert.deepEqual(catalog.contracts[id], entry, `${id} differs in v2`);
-  const added = Object.keys(catalog.contracts).filter(
-    (id) => !(id in catalogV1.contracts),
+    assert.deepEqual(next[key], previous[key], key);
+  assert.deepEqual(Object.keys(next).sort(), Object.keys(previous).sort());
+  for (const [id, entry] of Object.entries(previous.contracts))
+    assert.deepEqual(next.contracts[id], entry, `${id} differs in ${names[1]}`);
+  assert.deepEqual(
+    Object.keys(next.contracts).filter((id) => !(id in previous.contracts)),
+    added,
   );
-  assert.deepEqual(added, ["http.me.v1"]);
+}
+
+test("catalog v2 is an exact superset of catalog v1", () => {
+  assertExactSuperset(catalogV2, catalogV1, ["v1", "v2"], ["http.me.v1"]);
   assert.equal(Object.keys(catalogV1.contracts).length, 27);
+});
+
+test("catalog v3 is an exact superset of catalog v2", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV2,
+    ["v2", "v3"],
+    ["http.recording-registration.v1"],
+  );
+  assert.equal(Object.keys(catalogV2.contracts).length, 28);
+  assert.equal(Object.keys(catalog.contracts).length, 29);
 });
 
 test("published schema bytes match the immutability lock", () => {

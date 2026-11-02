@@ -8,6 +8,10 @@
     "./auth": {
       "types": "./dist/auth/index.d.ts",
       "default": "./dist/auth/index.js"
+    },
+    "./recordings": {
+      "types": "./dist/admission/next.d.ts",
+      "default": "./dist/admission/next.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -26,7 +30,8 @@
     "hosted:preflight": "node dist/cli.js preflight",
     "hosted:storage-check": "node dist/cli.js storage-check",
     "storage:presign": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts presign-check",
-    "hosted:presign-check": "node dist/cli.js presign-check"
+    "hosted:presign-check": "node dist/cli.js presign-check",
+    "ingest-permission": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ingest-permission-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1161.0",

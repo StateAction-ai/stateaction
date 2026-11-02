@@ -18,8 +18,9 @@ from referencing.jsonschema import DRAFT202012
 from .canonical import MalformedJsonError, loads_strict
 from .rules import RULES
 
-# Current registry: an exact superset of the immutable catalog.v1.json.
-CATALOG_FILE = "catalog.v2.json"
+# Current registry: an exact superset of the immutable catalog.v2.json, which
+# is an exact superset of the immutable catalog.v1.json.
+CATALOG_FILE = "catalog.v3.json"
 
 
 def _api_dir() -> Path:

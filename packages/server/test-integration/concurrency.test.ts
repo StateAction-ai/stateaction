@@ -23,6 +23,7 @@ import {
   type Actors,
   type Processed,
   type TestDb,
+  fixtureAdmission,
 } from "./harness.js";
 
 let db: TestDb;
@@ -485,8 +486,11 @@ test("seal and source reservation serialize in both orders; seal stays a closed 
           "UPDATE files SET state = 'completed', observed_size_bytes = 10, completed_at = now() WHERE id = $1",
           [fileId],
         );
+        // Explicit fixture evidence for the fail-closed SA-19 jobs trigger.
+        const jobId = randomUUID();
+        await fixtureAdmission(db.app, recordingId, jobId);
         await createProcessingJob(db.app, {
-          jobId: randomUUID(),
+          jobId,
           recordingId,
           profileRevision: "x",
         });
@@ -534,9 +538,12 @@ test("output insertion and result acceptance serialize on the job", async () => 
         `jobs/${p.jobId}/outputs/${id}/e1/late.rrd`,
       ],
     );
+    // Observe the rejection before COMMIT: it can settle in the same I/O turn
+    // as the COMMIT reply, which would otherwise be an unhandled rejection.
+    const rejected = expectCode(late, "SAC04");
     await new Promise((r) => setTimeout(r, 300));
     await holder.query("COMMIT");
-    await expectCode(late, "SAC04");
+    await rejected;
     evidence.outputVersusAcceptance =
       "late output rejected after acceptance commit";
   } finally {
@@ -614,10 +621,14 @@ test("seal may precede completion; replay is idempotent; admission creates exact
       "UPDATE files SET state = 'completed', observed_size_bytes = 10, completed_at = now() WHERE id = $1",
       [id],
     );
+  // Fixture evidence admits exactly one first job id (SA-19 jobs trigger);
+  // attempts race with that id and with unadmitted ids.
+  const admitted = randomUUID();
+  await fixtureAdmission(db.app, recordingId, admitted);
   const { ok, codes } = await settle(
-    Array.from({ length: 6 }, () =>
+    Array.from({ length: 6 }, (_, i) =>
       createProcessingJob(db.app, {
-        jobId: randomUUID(),
+        jobId: i % 2 ? randomUUID() : admitted,
         recordingId,
         profileRevision: "x",
       }),

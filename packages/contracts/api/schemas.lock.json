@@ -33,6 +33,8 @@
     "native/capture-snapshot.v1.schema.json": "da8ef57c927bad2f114e7e5df663c2135b420596ea43a442922ac340af1773dc",
     "platform-verify.v1.schema.json": "171bc49bd9a786d923dfbb14bccabe40a7d4c8281a2caddb5fd0f04f05864080",
     "catalog.v2.json": "cc67b8fd846911850b9b537ea1d4231529b9743d8c5a78e65bb49c7f505dd862",
-    "http/me.v1.schema.json": "e8cb9e686a4314de5ba0268dc924e2fd5ede2f5d9128d5a75a17ec3b1f25f80a"
+    "http/me.v1.schema.json": "e8cb9e686a4314de5ba0268dc924e2fd5ede2f5d9128d5a75a17ec3b1f25f80a",
+    "catalog.v3.json": "721e08cd0b30b108881eb4483ade4d7094d1159d4ce3d3f12430df8a5b6536dd",
+    "http/recording-registration.v1.schema.json": "b4ec236ded3b1f1310bb2f7ddf6070c2050fb4657580501dc87c9c153b421816"
   }
 }

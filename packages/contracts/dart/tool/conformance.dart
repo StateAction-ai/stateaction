@@ -67,7 +67,7 @@ ValidationResult runCase(
 
 void main(List<String> args) {
   final catalog = _map(
-    jsonDecode(File.fromUri(_api('catalog.v2.json')).readAsStringSync()),
+    jsonDecode(File.fromUri(_api('catalog.v3.json')).readAsStringSync()),
   );
   final registry = ContractRegistry.load(
     catalog,

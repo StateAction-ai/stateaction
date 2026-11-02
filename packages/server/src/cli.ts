@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { appEnv, serverConfig } from "./config.js";
 import { migrateDatabase } from "./migrations.js";
+import { admissionConfigFromEnv } from "./admission/recordings.js";
 import { seedLocalCatalog } from "./catalog/seed.js";
 import { initializeStorage, presignObject, storageClient } from "./storage.js";
 const LOOPBACK = ["127.0.0.1", "localhost", "[::1]"];
@@ -59,6 +60,7 @@ if (command === "migrate") {
   // Configuration and environment-isolation check before a hosted web process
   // listens. Database readiness is reported by /api/v1/health, not startup.
   serverConfig();
+  admissionConfigFromEnv(process.env);
   console.log(`Preflight passed (${env})`);
 } else if (command === "storage-init") {
   const config = serverConfig();

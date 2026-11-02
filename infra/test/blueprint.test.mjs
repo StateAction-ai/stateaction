@@ -61,3 +61,12 @@ test("web binds through the health-checked Render start path", () => {
   assert.match(blocks.web, /APP_ENV\n\s+value: production/);
   assert.match(blocks.web, /--frozen-lockfile/);
 });
+test("recording admission settings are explicit and web-only", () => {
+  assert.match(blocks.web, /key: PROCESSING_PROFILE_REVISION\n\s+sync: false/);
+  assert.match(
+    blocks.web,
+    /key: SUPPORTED_RGB_PROFILES\n\s+value: h264_mcap_v1\n/,
+  );
+  for (const key of ["PROCESSING_PROFILE_REVISION", "SUPPORTED_RGB_PROFILES"])
+    assert.ok(!envKeys(blocks.workflow).includes(key));
+});
