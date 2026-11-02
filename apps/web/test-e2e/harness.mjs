@@ -11,6 +11,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
+import { startSeaweedfs } from "./seaweedfs.mjs";
+import { startOutageProxy } from "./outage-proxy.mjs";
 
 export const webDir = fileURLToPath(new URL("..", import.meta.url));
 const serverDir = fileURLToPath(
@@ -49,9 +51,22 @@ export class Jar {
   }
 }
 
-export async function startStack() {
+export async function startStack({ storage = false } = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
   const db = await startCatalogPostgres();
+  let s3;
+  let outage;
+  try {
+    if (storage) {
+      s3 = await startSeaweedfs();
+      outage = await startOutageProxy(s3.endpoint);
+    }
+  } catch (error) {
+    outage?.stop();
+    await s3?.stop();
+    await db.stop();
+    throw error;
+  }
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const env = {
@@ -66,6 +81,15 @@ export async function startStack() {
     BETTER_AUTH_SECRET: randomBytes(32).toString("base64url"),
     AUTH_LOCAL_PASSWORD: "true",
     NEXT_TELEMETRY_DISABLED: "1",
+    ...(s3 && {
+      S3_ENDPOINT: outage.endpoint,
+      S3_REGION: "us-east-1",
+      S3_BUCKET: s3.bucket ?? "stateaction-sa21-e2e",
+      S3_ACCESS_KEY_ID: s3.accessKeyId,
+      S3_SECRET_ACCESS_KEY: s3.secretAccessKey,
+      PROCESSING_PROFILE_REVISION: "sa21-e2e-1",
+      SUPPORTED_RGB_PROFILES: "h264_mcap_v1",
+    }),
   };
   let logs = "";
   let next;
@@ -77,6 +101,8 @@ export async function startStack() {
       await sleep(500);
     }
     await db.stop();
+    outage?.stop();
+    await s3?.stop();
   };
   try {
     const boot = spawnSync(
@@ -129,7 +155,17 @@ export async function startStack() {
         throw new Error(`next start failed:\n${logs}`);
       await sleep(500);
     }
-    return { db, origin, env, users, password, stop, logs: () => logs };
+    return {
+      db,
+      s3,
+      outage,
+      origin,
+      env,
+      users,
+      password,
+      stop,
+      logs: () => logs,
+    };
   } catch (error) {
     await stop();
     throw error;

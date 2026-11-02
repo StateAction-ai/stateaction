@@ -262,6 +262,19 @@ test("route layer: bad ids are 404 before any lookup; storage configuration fail
   const badJob = await routes.job.create(bearer(token), "x");
   assert.equal(badJob.status, 404);
   assert.equal(lookups.length, 0);
+  for (const act of ["reconcile", "complete", "cancel", "restart"] as const) {
+    assert.equal(
+      (await routes.owner[act](human(), "../../etc")).status,
+      404,
+      `owner ${act}`,
+    );
+    assert.equal(
+      (await routes.job[act](bearer(token), jobId, "not-a-uuid")).status,
+      404,
+      `job ${act}`,
+    );
+  }
+  assert.equal(lookups.length, 0);
   const failed = await routes.owner.create(human());
   assert.equal(failed.status, 503);
   const text = await failed.text();

@@ -1,6 +1,9 @@
 import {
   AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
   ListMultipartUploadsCommand,
   ListPartsCommand,
   UploadPartCommand,
@@ -16,17 +19,58 @@ export type ProviderPart = {
   sizeBytes: bigint;
 };
 
+export type ProviderObject = {
+  sizeBytes: bigint;
+  /** Provider receipt only; never a content digest. */
+  etag: string | null;
+  /** x-amz-mp-parts-count when the provider reports it. */
+  partsCount: number | null;
+};
+
+/** The persisted multipart upload no longer exists at the provider. */
+export class ProviderUploadGone extends Error {
+  constructor(message = "Provider multipart upload does not exist") {
+    super(message);
+    this.name = "ProviderUploadGone";
+  }
+}
+
 /**
- * The only provider surface the transport service uses. Completion, abort and
- * restart belong to the reconciliation layer (SA-21) and are intentionally
- * absent except best-effort abort of an upload this process just created.
+ * The only provider surface the transport service uses. Every state decision
+ * is made from authoritative reads (exact-key listing, ListParts, HEAD) rather
+ * than from the journal or from comparing opaque upload IDs.
  */
 export interface MultipartProvider {
   /** Uploads in flight for exactly this key (exact-key filter applied). */
   listUploadsForKey(key: string): Promise<ProviderUpload[]>;
   createUpload(key: string): Promise<ProviderUpload>;
+  /** Idempotent: an upload that is already gone is not an error. */
   abortUpload(key: string, uploadId: string): Promise<void>;
-  /** Parts with numbers in [fromPart, toPart], fully paginated. */
+  /**
+   * Completes with the exact ordered part list. Success may be reported by a
+   * lost response, so callers verify with headObject rather than repeating.
+   */
+  completeUpload(
+    key: string,
+    uploadId: string,
+    parts: { partNumber: number; etag: string }[],
+  ): Promise<void>;
+  /** HEAD of the exact key; null when the object does not exist. */
+  headObject(key: string): Promise<ProviderObject | null>;
+  /**
+   * Streams the completed object (optionally a byte range) for the later
+   * full-EOF SHA-256 verification. Completion and reconcile never call it:
+   * HEAD length and ETags cannot prove content, and nothing here marks a
+   * file verified.
+   */
+  readObject(
+    key: string,
+    range?: { start: bigint; endInclusive: bigint },
+  ): Promise<AsyncIterable<Uint8Array>>;
+  /**
+   * Parts with numbers in [fromPart, toPart], fully paginated. Throws
+   * ProviderUploadGone when the upload does not exist.
+   */
   listParts(
     key: string,
     uploadId: string,
@@ -43,6 +87,11 @@ export interface MultipartProvider {
 }
 
 const MAX_LIST_PAGES = 20;
+
+function isGone(error: unknown): boolean {
+  const e = error as { name?: string; Code?: string };
+  return e?.name === "NoSuchUpload" || e?.Code === "NoSuchUpload";
+}
 
 /**
  * S3-compatible provider (SeaweedFS locally, Cloudflare R2 hosted). `control`
@@ -96,13 +145,72 @@ export class S3MultipartProvider implements MultipartProvider {
   }
 
   async abortUpload(key: string, uploadId: string): Promise<void> {
+    try {
+      await this.control.send(
+        new AbortMultipartUploadCommand({
+          Bucket: this.bucket,
+          Key: key,
+          UploadId: uploadId,
+        }),
+      );
+    } catch (error) {
+      if (!isGone(error)) throw error;
+    }
+  }
+
+  async completeUpload(
+    key: string,
+    uploadId: string,
+    parts: { partNumber: number; etag: string }[],
+  ): Promise<void> {
     await this.control.send(
-      new AbortMultipartUploadCommand({
+      new CompleteMultipartUploadCommand({
         Bucket: this.bucket,
         Key: key,
         UploadId: uploadId,
+        MultipartUpload: {
+          Parts: parts.map((p) => ({
+            PartNumber: p.partNumber,
+            ETag: p.etag,
+          })),
+        },
       }),
     );
+  }
+
+  async readObject(
+    key: string,
+    range?: { start: bigint; endInclusive: bigint },
+  ): Promise<AsyncIterable<Uint8Array>> {
+    const out = await this.control.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Range: range ? `bytes=${range.start}-${range.endInclusive}` : undefined,
+      }),
+    );
+    if (!out.Body) throw new Error("Provider returned no object body");
+    return out.Body as unknown as AsyncIterable<Uint8Array>;
+  }
+
+  async headObject(key: string): Promise<ProviderObject | null> {
+    try {
+      const out = await this.control.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      if (out.ContentLength === undefined)
+        throw new Error("Provider HEAD returned no length");
+      return {
+        sizeBytes: BigInt(out.ContentLength),
+        etag: out.ETag ? normalizeEtag(out.ETag) : null,
+        partsCount: out.PartsCount ?? null,
+      };
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } })
+        .$metadata?.httpStatusCode;
+      if (status === 404 || (error as Error).name === "NotFound") return null;
+      throw error;
+    }
   }
 
   async listParts(
@@ -114,15 +222,21 @@ export class S3MultipartProvider implements MultipartProvider {
     const parts: ProviderPart[] = [];
     let marker = String(Math.max(0, fromPart - 1));
     for (let page = 0; page < MAX_LIST_PAGES; page++) {
-      const out = await this.control.send(
-        new ListPartsCommand({
-          Bucket: this.bucket,
-          Key: key,
-          UploadId: uploadId,
-          PartNumberMarker: marker,
-          MaxParts: 1000,
-        }),
-      );
+      let out;
+      try {
+        out = await this.control.send(
+          new ListPartsCommand({
+            Bucket: this.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumberMarker: marker,
+            MaxParts: 1000,
+          }),
+        );
+      } catch (error) {
+        if (isGone(error)) throw new ProviderUploadGone();
+        throw error;
+      }
       for (const p of out.Parts ?? []) {
         if (p.PartNumber === undefined || p.ETag === undefined) continue;
         if (p.PartNumber < fromPart || p.PartNumber > toPart) continue;

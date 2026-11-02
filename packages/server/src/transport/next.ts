@@ -181,6 +181,34 @@ export function transportRouteHandlers(
           request,
           fileId,
         ),
+      reconcile: (request: Request, fileId: string) =>
+        withFile(
+          () => ownerAuthority(request, get),
+          (h) => h.reconcileUpload,
+          request,
+          fileId,
+        ),
+      complete: (request: Request, fileId: string) =>
+        withFile(
+          () => ownerAuthority(request, get),
+          (h) => h.completeUpload,
+          request,
+          fileId,
+        ),
+      cancel: (request: Request, fileId: string) =>
+        withFile(
+          () => ownerAuthority(request, get),
+          (h) => h.cancelUpload,
+          request,
+          fileId,
+        ),
+      restart: (request: Request, fileId: string) =>
+        withFile(
+          () => ownerAuthority(request, get),
+          (h) => h.restartUpload,
+          request,
+          fileId,
+        ),
     },
     job: {
       create: async (request: Request, jobId: string) =>
@@ -207,6 +235,34 @@ export function transportRouteHandlers(
         withFile(
           () => jobAuthority(request, jobId, get),
           (h) => h.putReceipts,
+          request,
+          fileId,
+        ),
+      reconcile: (request: Request, jobId: string, fileId: string) =>
+        withFile(
+          () => jobAuthority(request, jobId, get),
+          (h) => h.reconcileUpload,
+          request,
+          fileId,
+        ),
+      complete: (request: Request, jobId: string, fileId: string) =>
+        withFile(
+          () => jobAuthority(request, jobId, get),
+          (h) => h.completeUpload,
+          request,
+          fileId,
+        ),
+      cancel: (request: Request, jobId: string, fileId: string) =>
+        withFile(
+          () => jobAuthority(request, jobId, get),
+          (h) => h.cancelUpload,
+          request,
+          fileId,
+        ),
+      restart: (request: Request, jobId: string, fileId: string) =>
+        withFile(
+          () => jobAuthority(request, jobId, get),
+          (h) => h.restartUpload,
           request,
           fileId,
         ),

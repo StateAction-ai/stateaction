@@ -12,6 +12,7 @@ import { registerRecording } from "../src/admission/recordings.js";
 import { storageClient } from "../src/storage.js";
 import type { ServerConfig } from "../src/config.js";
 import {
+  ProviderUploadGone,
   S3MultipartProvider,
   type MultipartProvider,
   type SignedPart,
@@ -212,6 +213,36 @@ export class FaultProvider implements MultipartProvider {
     this.calls.push("abortUpload");
     return this.inner.abortUpload(key, uploadId);
   }
+  /** Complete at the provider, then fail as if the reply was lost. */
+  loseCompleteResponse = false;
+  /** Runs after the provider applied the completion (e.g. to break the DB). */
+  afterComplete: (() => void) | undefined;
+  /** Holds completeUpload until released (completion-in-flight races). */
+  holdComplete: Promise<void> | undefined;
+  enteredComplete: (() => void) | undefined;
+  async completeUpload(
+    key: string,
+    uploadId: string,
+    parts: { partNumber: number; etag: string }[],
+  ) {
+    this.calls.push("completeUpload");
+    this.enteredComplete?.();
+    if (this.holdComplete) await this.holdComplete;
+    await this.inner.completeUpload(key, uploadId, parts);
+    this.afterComplete?.();
+    if (this.loseCompleteResponse) {
+      this.loseCompleteResponse = false;
+      throw new Error("injected lost complete response");
+    }
+  }
+  headObject(key: string) {
+    this.calls.push("headObject");
+    return this.inner.headObject(key);
+  }
+  readObject(key: string, range?: { start: bigint; endInclusive: bigint }) {
+    this.calls.push("readObject");
+    return this.inner.readObject(key, range);
+  }
   async listParts(key: string, uploadId: string, from: number, to: number) {
     this.gate("listParts");
     return this.inner.listParts(key, uploadId, from, to);
@@ -221,5 +252,74 @@ export class FaultProvider implements MultipartProvider {
   ) {
     this.gate("presignUploadPart");
     return this.inner.presignUploadPart(request);
+  }
+}
+
+/**
+ * In-memory provider with a scripted part inventory, used where real parts
+ * would be too large (more than 1,000 x 64 MiB) and to model R2's opaque
+ * create/list upload-ID aliases. Database state is always real.
+ */
+export class ScriptedProvider implements MultipartProvider {
+  /** ID returned by createUpload. */
+  createId = "create-id";
+  /** IDs returned by listUploadsForKey (R2: differ from the create ID). */
+  listIds: string[] = ["list-alias"];
+  parts = new Map<number, { etag: string; sizeBytes: bigint }>();
+  object: { sizeBytes: bigint } | undefined;
+  gone = false;
+  pageSize = 1000;
+  calls: string[] = [];
+  completed: { partNumber: number; etag: string }[][] = [];
+  listPartsPages = 0;
+  async listUploadsForKey() {
+    this.calls.push("listUploadsForKey");
+    return this.gone || this.object
+      ? []
+      : this.listIds.map((uploadId) => ({ uploadId, initiatedAt: new Date() }));
+  }
+  async createUpload() {
+    this.calls.push("createUpload");
+    return { uploadId: this.createId, initiatedAt: new Date() };
+  }
+  async abortUpload(_key: string, uploadId: string) {
+    this.calls.push(`abortUpload:${uploadId}`);
+    this.gone = true;
+  }
+  async completeUpload(
+    _key: string,
+    _id: string,
+    parts: { partNumber: number; etag: string }[],
+  ) {
+    this.calls.push("completeUpload");
+    this.completed.push(parts);
+    this.object = {
+      sizeBytes: parts.reduce(
+        (sum, p) => sum + this.parts.get(p.partNumber)!.sizeBytes,
+        0n,
+      ),
+    };
+  }
+  async headObject() {
+    this.calls.push("headObject");
+    return this.object
+      ? { ...this.object, etag: "x-7", partsCount: null }
+      : null;
+  }
+  async listParts(_k: string, _id: string, from: number, to: number) {
+    this.calls.push("listParts");
+    if (this.gone) throw new ProviderUploadGone();
+    // Mirror the provider's page walk so the page count is observable.
+    const all = [...this.parts.entries()]
+      .filter(([n]) => n >= from && n <= to)
+      .sort((a, b) => a[0] - b[0]);
+    this.listPartsPages += Math.max(1, Math.ceil(all.length / this.pageSize));
+    return all.map(([partNumber, p]) => ({ partNumber, ...p }));
+  }
+  async readObject(): Promise<AsyncIterable<Uint8Array>> {
+    throw new Error("not scripted");
+  }
+  async presignUploadPart() {
+    return "https://example.invalid/part";
   }
 }

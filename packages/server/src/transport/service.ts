@@ -5,6 +5,7 @@ import {
   outputObjectKey,
   reserveSourceFile,
 } from "../catalog/catalog.js";
+import type { AdmissionDeps } from "../admission/recordings.js";
 import { CatalogError } from "../catalog/errors.js";
 import {
   assertJobAuthority,
@@ -33,6 +34,16 @@ export type TransportDeps = {
   now?: () => Date;
   /** Init-claim lease; a crashed initializer is retried after this. */
   claimLeaseMs?: number;
+  /** Lease for a recovery transition (complete/reconcile/cancel/restart). */
+  transitionLeaseMs?: number;
+  /**
+   * Recording admission (SA-19). Finalizing a SOURCE file goes through its
+   * `recordSourceCompletion` so the eligibility step runs in the same
+   * transaction; absent configuration fails closed rather than completing a
+   * source file without admission. Resolved lazily so other transport routes
+   * do not depend on admission settings.
+   */
+  admission?: () => AdmissionDeps;
 };
 
 export const SOURCE_ROLES = [
@@ -61,10 +72,11 @@ const SLOT = /^[A-Za-z0-9._-]{1,128}(\/[A-Za-z0-9._-]{1,128}){0,7}$/;
 
 const invalid = (message: string) =>
   new TransportError("invalid_request", message);
-const nowOf = (deps: TransportDeps) => (deps.now ?? (() => new Date()))();
+export const nowOf = (deps: TransportDeps) =>
+  (deps.now ?? (() => new Date()))();
 
 /** Maps SA-13 catalog/DB errors onto transport errors. */
-async function mapped<T>(work: () => Promise<T>): Promise<T> {
+export async function mapped<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
@@ -77,7 +89,7 @@ async function mapped<T>(work: () => Promise<T>): Promise<T> {
     throw error;
   }
 }
-async function provider<T>(work: () => Promise<T>): Promise<T> {
+export async function provider<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
@@ -122,7 +134,7 @@ export function toUploadPlan(file: FileRow): UploadPlan {
     transportExpiresAt: expires.toISOString().replace(/\.\d{3}Z$/, "Z"),
   };
 }
-function framePlan(file: FileRow): PartPlan {
+export function framePlan(file: FileRow): PartPlan {
   const plan = planFor(BigInt(file.size_bytes));
   // The row's frozen plan must be the canonical server plan.
   if (
@@ -362,7 +374,13 @@ export async function initializeTransport(
           [file.id],
         )
       ).rows[0]?.provider_upload_id;
-      if (persisted && persisted !== created.uploadId) {
+      if (!persisted) {
+        // The file no longer points at any upload (cancelled or restarted while
+        // we were creating), so ours can never be used: retire it.
+        await deps.provider
+          .abortUpload(file.object_key, created.uploadId)
+          .catch(() => undefined);
+      } else if (persisted !== created.uploadId) {
         const listed = await deps.provider
           .listUploadsForKey(file.object_key)
           .catch(() => []);
@@ -422,7 +440,7 @@ function checkPartNumbers(partNumbers: unknown, partCount: number): number[] {
   }
   return partNumbers as number[];
 }
-function checkEpoch(value: unknown): number {
+export function checkEpoch(value: unknown): number {
   if (
     !Number.isInteger(value) ||
     (value as number) < 1 ||
@@ -431,7 +449,7 @@ function checkEpoch(value: unknown): number {
     throw invalid("expectedTransportEpoch must be 1..1000");
   return value as number;
 }
-function assertWritable(file: FileRow, expectedEpoch: number, at: Date) {
+export function assertWritable(file: FileRow, expectedEpoch: number, at: Date) {
   if (file.transport_epoch !== expectedEpoch)
     throw new TransportError("conflict", "Stale transport epoch");
   if (file.state !== "uploading" || !file.provider_upload_id)
