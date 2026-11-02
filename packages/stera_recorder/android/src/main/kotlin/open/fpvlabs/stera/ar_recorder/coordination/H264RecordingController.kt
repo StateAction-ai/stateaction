@@ -17,6 +17,7 @@ import open.fpvlabs.stera.ar_recorder.data.h264.H264CaptureSetup
 import open.fpvlabs.stera.ar_recorder.data.h264.H264Evidence
 import open.fpvlabs.stera.ar_recorder.encoding.CameraTimestampGate
 import open.fpvlabs.stera.ar_recorder.encoding.H264AccessUnit
+import open.fpvlabs.stera.ar_recorder.encoding.CpuImageIdentityPolicy
 import open.fpvlabs.stera.ar_recorder.encoding.H264EncoderProfile
 import open.fpvlabs.stera.ar_recorder.encoding.H264PreflightException
 import open.fpvlabs.stera.ar_recorder.encoding.H264RgbEncoder
@@ -127,10 +128,14 @@ class H264RecordingController(
                 check(image.timestamp > 0 && image.timestamp >= lastImageNs) { "Missing or regressing camera image timestamp" }
                 // ARCore can hand back the previous CPU image for a newer Frame: it is not a new image.
                 if (image.timestamp == lastImageNs) { repeatedCpuImages++; return false }
-                // Hardware identity: the accessor clock describes this Frame's capture, so the encoded CPU image must be
-                // that same capture. A different capture is skipped and counted, never relabelled.
-                if (!encoderProfile.simulation && image.timestamp != frameNs) { cpuImageFrameMismatches++; lastImageNs = image.timestamp; return false }
-                if (image.timestamp != frameNs) cpuImageFrameMismatches++
+                // Hardware identity: the accepted native camera clock (the value written as the RGB clock) describes this
+                // capture, so the encoded CPU image must carry it. Frame.timestamp has an undefined time base and stays
+                // separate evidence. A different capture is skipped and counted, never relabelled.
+                when (CpuImageIdentityPolicy.evaluate(encoderProfile.simulation, image.timestamp, accepted.cameraNs)) {
+                    CpuImageIdentityPolicy.Verdict.IDENTICAL -> Unit
+                    CpuImageIdentityPolicy.Verdict.MISMATCH_RECORDED_SIMULATION -> cpuImageFrameMismatches++
+                    CpuImageIdentityPolicy.Verdict.MISMATCH_REJECTED -> { cpuImageFrameMismatches++; lastImageNs = image.timestamp; return false }
+                }
                 if (image.width != encoderProfile.width || image.height != encoderProfile.height) {
                     throw H264PreflightException("Camera image ${image.width}x${image.height} differs from ${encoderProfile.width}x${encoderProfile.height}; no resize fallback")
                 }

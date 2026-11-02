@@ -360,7 +360,7 @@
   },
   "limits": [
     "emulator ~5 fps camera cadence and software encoder: no throughput, thermal or hardware-encoder claim",
-    "no physical evidence yet for REALTIME camera clock, Image==Frame timestamp identity, hardware Main 4.0 1080p encoder or an ARCore 1920x1080 CPU camera config",
+    "no physical evidence yet for REALTIME camera clock, Image.timestamp == accepted camera clock identity, hardware Main 4.0 1080p encoder or an ARCore 1920x1080 CPU camera config",
     "depth, saved calibration and durable recovery are other tickets",
     "Flutter UI Start/Stop with real login pending SA-17 merge"
   ],

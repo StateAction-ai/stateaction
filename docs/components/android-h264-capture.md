@@ -43,7 +43,7 @@ frame-rate fallback.
   elapsed-realtime→Unix anchor). `ImageMetadata.SENSOR_TIMESTAMP` is kept only when it equals that value. SA-60 saw it
   one capture behind on about 10 of 110 emulator frames; such frames are no longer aborted, and the stale value is
   excluded from that frame and counted (`metadata_timestamp_stale`/`_ahead`).
-- Hardware profile: the encoded CPU image must be the Frame's own capture (`Image.timestamp == Frame.timestamp`).
+- Hardware profile: the encoded CPU image must carry the accepted native camera clock written as the RGB clock (`Image.timestamp == accepted cameraNs`, i.e. `Frame.androidCameraTimestamp`), decided by `CpuImageIdentityPolicy`. `Frame.timestamp` is separate evidence and never an equality requirement. A mismatch is a counted, skipped drop.
   A different or repeated CPU image is skipped and counted, never relabelled.
 - When the emulator camera does not report a `REALTIME` source, the simulation profile uses the disclosed host receipt
   clock `android.elapsed_realtime_receipt`. This is not camera timing evidence.
