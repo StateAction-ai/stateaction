@@ -1,0 +1,1 @@
+{"errors":["E_LEGACY_JPEG"],"facts":{"channel_counts":{"/camera/rgb/image/compressed":3},"legacy_images":3,"legacy_log_times_ns":["1800000000000000007","1800000000033333340","1800000000066666673"]},"outcome":"legacy_jpeg"}

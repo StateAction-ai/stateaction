@@ -1,2 +1,4 @@
 # Exact-byte contract fixtures: digests cover these bytes, so formatters must not rewrite them.
 packages/contracts/conformance/fixtures/
+packages/contracts/capture/golden/
+packages/contracts/capture/fixtures/encoder_buffers.json

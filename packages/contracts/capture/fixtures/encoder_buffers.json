@@ -1,0 +1,332 @@
+{
+  "cases": {
+    "config_only_no_image": {
+      "buffers": [
+        {
+          "flags": 2,
+          "nals": [
+            0,
+            2
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 4,
+          "pts_us": "0"
+        }
+      ],
+      "description": "Only CODEC_CONFIG then end of stream: no access unit is emitted (configuration is not an image).",
+      "expect": {
+        "aus": [],
+        "errors": [],
+        "outcome": "accept"
+      }
+    },
+    "config_then_idr_then_p": {
+      "buffers": [
+        {
+          "flags": 2,
+          "nals": [
+            0,
+            2
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 1,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 0,
+          "nals": [
+            4,
+            5
+          ],
+          "pts_us": "33333",
+          "source": "baseline"
+        }
+      ],
+      "description": "CODEC_CONFIG buffer, then SEI+IDR without parameter sets, then a P frame: the IDR access unit gets the stored SPS/PPS.",
+      "expect": {
+        "aus": [
+          {
+            "bytes": 1237,
+            "idr": true,
+            "pts_us": "0",
+            "sha256": "fae98a4ef204ca35b34c21cc08fc8b34fc5ba26dcf13706a9de628f047044996"
+          },
+          {
+            "bytes": 13,
+            "idr": false,
+            "pts_us": "33333",
+            "sha256": "eb39cb40e7c2d3e29a6540082f49097cf210460d222c1ee5abaadfe6c5bedad1"
+          }
+        ],
+        "errors": [],
+        "outcome": "accept"
+      }
+    },
+    "idr_without_config": {
+      "buffers": [
+        {
+          "flags": 1,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        }
+      ],
+      "description": "IDR buffer with no SPS/PPS inline and no CODEC_CONFIG ever received.",
+      "expect": {
+        "aus": [],
+        "errors": [
+          "E_MISSING_PARAMETER_SETS"
+        ],
+        "outcome": "reject"
+      }
+    },
+    "inline_config": {
+      "buffers": [
+        {
+          "flags": 1,
+          "nals": [
+            0,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 0,
+          "nals": [
+            4,
+            5
+          ],
+          "pts_us": "33333",
+          "source": "baseline"
+        }
+      ],
+      "description": "SPS/PPS inline in the IDR buffer; no separate CODEC_CONFIG buffer.",
+      "expect": {
+        "aus": [
+          {
+            "bytes": 1237,
+            "idr": true,
+            "pts_us": "0",
+            "sha256": "fae98a4ef204ca35b34c21cc08fc8b34fc5ba26dcf13706a9de628f047044996"
+          },
+          {
+            "bytes": 13,
+            "idr": false,
+            "pts_us": "33333",
+            "sha256": "eb39cb40e7c2d3e29a6540082f49097cf210460d222c1ee5abaadfe6c5bedad1"
+          }
+        ],
+        "errors": [],
+        "outcome": "accept"
+      }
+    },
+    "multiple_aus_in_buffer": {
+      "buffers": [
+        {
+          "flags": 1,
+          "nals": [
+            0,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 0,
+          "nals": [
+            4,
+            6
+          ],
+          "pts_us": "33333",
+          "source": "baseline"
+        }
+      ],
+      "description": "One complete (non-partial) buffer holds two complete P access units.",
+      "expect": {
+        "aus": [],
+        "errors": [
+          "E_MULTIPLE_ACCESS_UNITS"
+        ],
+        "outcome": "reject"
+      }
+    },
+    "partial_idr_assembly": {
+      "buffers": [
+        {
+          "flags": 2,
+          "nals": [
+            0,
+            2
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "bytes": [
+            0,
+            300
+          ],
+          "flags": 8,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "bytes": [
+            300,
+            1201
+          ],
+          "flags": 1,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        }
+      ],
+      "description": "The IDR arrives in two chunks (PARTIAL_FRAME then final) with one PTS; one access unit results, with stored SPS/PPS prepended.",
+      "expect": {
+        "aus": [
+          {
+            "bytes": 1237,
+            "idr": true,
+            "pts_us": "0",
+            "sha256": "fae98a4ef204ca35b34c21cc08fc8b34fc5ba26dcf13706a9de628f047044996"
+          }
+        ],
+        "errors": [],
+        "outcome": "accept"
+      }
+    },
+    "partial_incomplete_at_eos": {
+      "buffers": [
+        {
+          "flags": 2,
+          "nals": [
+            0,
+            2
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "bytes": [
+            0,
+            300
+          ],
+          "flags": 8,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "flags": 4,
+          "pts_us": "0"
+        }
+      ],
+      "description": "A PARTIAL_FRAME chunk is never completed before end of stream.",
+      "expect": {
+        "aus": [],
+        "errors": [
+          "E_INCOMPLETE_AU"
+        ],
+        "outcome": "reject"
+      }
+    },
+    "partial_pts_mismatch": {
+      "buffers": [
+        {
+          "flags": 2,
+          "nals": [
+            0,
+            2
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "bytes": [
+            0,
+            300
+          ],
+          "flags": 8,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "0",
+          "source": "baseline"
+        },
+        {
+          "bytes": [
+            300,
+            1201
+          ],
+          "flags": 1,
+          "nals": [
+            2,
+            4
+          ],
+          "pts_us": "5",
+          "source": "baseline"
+        }
+      ],
+      "description": "The completing chunk of a partial frame carries a different PTS.",
+      "expect": {
+        "aus": [],
+        "errors": [
+          "E_PARTIAL_PTS_MISMATCH"
+        ],
+        "outcome": "reject"
+      }
+    },
+    "pts_not_integer": {
+      "buffers": [
+        {
+          "flags": 1,
+          "nals": [
+            0,
+            4
+          ],
+          "pts_us": "12.5",
+          "source": "baseline"
+        }
+      ],
+      "description": "Buffer PTS 12.5 is not an integer microsecond count.",
+      "expect": {
+        "aus": [],
+        "errors": [
+          "E_PTS_INVALID"
+        ],
+        "outcome": "reject"
+      }
+    }
+  },
+  "contract": "stateaction.capture.encoder_buffers.v1",
+  "description": "Encoder-output buffer sequences (MediaCodec CODEC_CONFIG=2, PARTIAL_FRAME=8, END_OF_STREAM=4, KEY_FRAME=1 flag values) and the whole access units a writer must assemble from them. Public synthetic sources only. Contract-level only: no MediaCodec producer is wired here (SA-51).",
+  "sources": {
+    "baseline": "golden/source/baseline-5.h264"
+  }
+}

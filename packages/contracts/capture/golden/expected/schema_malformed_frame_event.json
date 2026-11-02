@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/frame_events[7]/native_timestamp_ns:type"]},"outcome":"reject"}

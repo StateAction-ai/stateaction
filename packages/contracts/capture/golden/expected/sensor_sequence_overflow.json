@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/sensor_events[1]/output_sequence:maximum"]},"outcome":"reject"}

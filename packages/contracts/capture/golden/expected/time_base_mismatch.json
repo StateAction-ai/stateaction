@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/frame_events[6]/encoder_time_base:const","/stateaction/frame_events[7]/encoder_time_base:const","/stateaction/frame_events[8]/encoder_time_base:const"]},"outcome":"reject"}

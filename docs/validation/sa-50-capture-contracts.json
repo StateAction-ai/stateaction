@@ -1,0 +1,95 @@
+{
+  "ticket": "SA-50",
+  "wire_contract_revision": "stateaction.capture.v1.1",
+  "date": "2026-11-01",
+  "local_results": {
+    "python": "passed",
+    "typescript": "passed",
+    "dart": "passed",
+    "kotlin": "passed",
+    "swift": "passed"
+  },
+  "golden_cases": 84,
+  "descriptor_sha256": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+  "native_assets_match": true,
+  "independent_decode": {
+    "delayed": {
+      "json_messages": 27,
+      "video": 5,
+      "ffmpeg_decoded_frames": 5
+    },
+    "idr_with_config": {
+      "json_messages": 13,
+      "video": 1,
+      "ffmpeg_decoded_frames": 1
+    },
+    "valid": {
+      "json_messages": 27,
+      "video": 5,
+      "ffmpeg_decoded_frames": 5
+    },
+    "identical_duplicate_definitions": {
+      "json_messages": 27,
+      "video": 5,
+      "ffmpeg_decoded_frames": 5
+    }
+  },
+  "tool_versions": {
+    "node": "v24.22.2",
+    "dart": "Dart SDK version: 3.12.2 (stable) (Tue Jun 9 01:11:39 2026 -0700) on \"linux_x64\"",
+    "swift": "6.1.2 (swift-6.1.2-RELEASE, Linux x86_64, ubuntu24.04 toolchain on Ubuntu 26.04; tarball sha256 d749d5fe2d6709ee988e96b16f02bca7b53304d09925e31063fd5ec56019de9f)",
+    "kotlin": "2.1.0 via Gradle 8.14, JDK 21 (JVM-only project; production CaptureProtocol.kt/VideoWire.kt)",
+    "uv": "0.13.6",
+    "official_mcap_reader": "mcap 1.6.0 (Python), jsonschema 4.25.1, protobuf 6.33.0"
+  },
+  "not_proven": [
+    "Apple-platform (iOS/AVFoundation/VideoToolbox) Swift behaviour",
+    "physical device capture or clock accuracy",
+    "Kotlin native enforcement of 66 rejecting cases (strict schema, CRC/layout, descriptor/channel/clock/tracking/calibration reset/counts/cardinality/outcome/sequence/malformed/profile/truncation/legacy/definition order and conflicts/JSON BOM, depth and surrogates) is portable-reader only; recorder wiring is SA-51+",
+    "native CaptureProtocol does not itself enforce UUID recording IDs or closed profile inputs (schema does; SA-51)",
+    "MediaCodec producer of encoder buffers (SA-51)",
+    "chunked/indexed production MCAP is checked only through the official reader in verify.py --mcap, not by the five portable readers",
+    "stera-recorder Gradle unit tests not rerun locally (CaptureProtocol.kt unchanged; only asset JSON copies changed); hosted Android job covers them",
+    "hosted CI result and hosted Swift (reported separately)",
+    "model-relative 3D data is never metric ground truth"
+  ],
+  "sa12_shared_contract_integration": "merged origin/main 5384027 (SA-12 PR5) normally; common.v1 definitions consumed offline; contracts-dart and capture-conformance-mobile selectors both kept",
+  "encoder_buffer_cases": 9,
+  "kotlin_scope": {
+    "portable_contract_reader_cases": 84,
+    "native_replay_accepted": 7,
+    "native_replay_rejected": 11,
+    "portable_only_rejects": 66,
+    "native_profile_builder_strict_schema_checks": 4
+  },
+  "hosted_ci": "capture-conformance (server job) and capture-conformance-mobile (Android/Dart job) wired in checks.yml; Swift not run hosted (no toolchain on runner)",
+  "strict_schema": {
+    "interpreter": "portable fail-closed subset in Python/TS/Dart/Kotlin/Swift; strict RFC 8259 + RFC 7493 parser: leading UTF-8 BOM, invalid UTF-8, nesting deeper than 32 open containers (pre-recursion bound, same maxDepth as api/catalog.v1.json), duplicate keys compared as exact code point sequences (never normalized; Swift uses scalar-keyed JKey), unpaired surrogate escapes, NaN/Infinity and double overflow are malformed",
+    "direct_schema_cases": 52,
+    "unsupported_schemas_fail_closed": 7,
+    "jsonschema_differential_instances": 9218,
+    "jsonschema_differential_rejected": 6320,
+    "common_defs": "uuid/int64Decimal/clockDomain/revision bundled verbatim from packages/contracts/api/common.v1.schema.json (SA-12 PR5 merged at 5384027)"
+  },
+  "container_integrity": {
+    "layout": "Header first; Schema/Channel/Message only; one DataEnd with nonzero CRC-32 of preceding bytes; Footer without summary; MCAP0 magic",
+    "codes": [
+      "E_DATA_CRC",
+      "E_UNSUPPORTED_LAYOUT",
+      "E_TRUNCATED",
+      "E_DEFINITION_ORDER",
+      "E_DEFINITION_CONFLICT"
+    ],
+    "official_reader": "mcap 1.6.0 StreamReader(validate_crcs=True): every accepted golden ok; data_crc_header_corrupt/data_crc_payload_corrupt raise CRCValidationError; data_crc_zero treated as unavailable by the official reader but rejected by this contract",
+    "chunked_production_files": "rejected by portable readers (E_UNSUPPORTED_LAYOUT); verify.py --mcap uses the official reader with validate_crcs=True",
+    "definitions": "streamed in file order by all five readers: Channel nonzero schema_id and Message channel_id must already be defined (E_DEFINITION_ORDER); a Schema/Channel id redefined with non-identical record bytes or a Schema with reserved id 0 is E_DEFINITION_CONFLICT; byte-identical repeats accepted (identical_duplicate_definitions, facts equal valid)",
+    "official_reader_definitions": "mcap 1.6.0 make_reader(validate_crcs=True): channel_after_messages and schema_after_channel raise McapError (no channel/schema record found); bogus_channel_redefined_after_messages reads all 17 FrameEvents on /bogus/topic; identical_duplicate_definitions reads the same topic counts as valid (asserted in verify.py)",
+    "strings": "record and message strings are strict UTF-8 in every reader and keep a leading U+FEFF (video_frame_id_bom); previously Dart stripped a BOM and Kotlin/Swift substituted U+FFFD"
+  },
+  "sa50_final_review_corrections": {
+    "F1": "definition order and conflicting redefinitions enforced while streaming in all five readers; 7 new goldens",
+    "F2": "leading BOM rejected before decoding in every parser; Dart BOM-preserving decode for record/message strings; json_bom, video_frame_id_bom goldens and bom_prefix direct case",
+    "F3": "MAX_DEPTH 32 enforced before recursion in all five parsers; depth 32/33 direct cases (root arrays, deep unknown value/objects, 20000 levels, brackets inside strings) and json_nesting_at_limit/json_nesting_over_limit goldens",
+    "F4": "unpaired surrogate escapes malformed everywhere; Swift keys compared by exact scalars; composed/decomposed, U+FFFD, astral pair and escaped duplicate direct cases plus json_lone_surrogate golden"
+  }
+}

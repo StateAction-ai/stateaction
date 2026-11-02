@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/frame_events[6]:required","/stateaction/frame_events[8]:required"]},"outcome":"reject"}
