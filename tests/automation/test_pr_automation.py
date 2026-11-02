@@ -10,7 +10,12 @@ from urllib.error import HTTPError
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "automation"))
 
-from auto_merge import candidates, merge_one  # noqa: E402
+from auto_merge import (  # noqa: E402
+    MAX_COMPARE_COMMITS,
+    MergedOnUntestedBase,
+    candidates,
+    merge_one,
+)
 from github_policy import ApiError, GitHub, PolicyError, validate_pr  # noqa: E402
 
 REPO = "timothywangdev/stateaction"
@@ -50,6 +55,13 @@ class FakeGitHub:
         self.writes = []
         self.base = BASE
         self.behind = False
+        # Candidate commits between main and the PR head, oldest first.
+        self.candidate_commits = [
+            {"sha": "f" * 40, "parents": [{"sha": BASE}]},
+            {"sha": HEAD, "parents": [{"sha": "f" * 40}]},
+        ]
+        self.compare_override = None
+        self.squash_parents = None
         self.pr_reads = 0
         self.base_reads = 0
         self.calls = []
@@ -97,13 +109,9 @@ class FakeGitHub:
         self.calls.append((method, path))
         if method != "GET":
             self.writes.append((method, path, deepcopy(body)))
-            if path.endswith("/update-branch"):
-                self.pr["head"]["sha"] = NEW
-                return {"message": "Updating pull request branch"}
             if path.endswith("/merge"):
                 return {"merged": True, "sha": "d" * 40}
-            if path.endswith("/dispatches"):
-                return None
+            # update-branch and workflow dispatch are no longer merger operations.
             raise AssertionError((method, path))
         if path == "pulls/11":
             self.pr_reads += 1
@@ -114,7 +122,20 @@ class FakeGitHub:
             self.on_base_read(self.base_reads)
             return {"object": {"sha": self.base}}
         if path.startswith("compare/"):
-            return {"merge_base_commit": {"sha": "e" * 40 if self.behind else BASE}}
+            if self.compare_override is not None:
+                return deepcopy(self.compare_override)
+            commits = deepcopy(self.candidate_commits)
+            return {
+                "status": "diverged" if self.behind else "ahead",
+                "ahead_by": len(commits),
+                "behind_by": 1 if self.behind else 0,
+                "total_commits": len(commits),
+                "merge_base_commit": {"sha": "e" * 40 if self.behind else BASE},
+                "commits": commits,
+            }
+        if path == "commits/" + "d" * 40:
+            parents = self.squash_parents or [self.base]
+            return {"sha": "d" * 40, "parents": [{"sha": sha} for sha in parents]}
         if path.startswith("actions/workflows/"):
             return deepcopy(self.workflows[path.rsplit("/", 1)[1]])
         raise AssertionError((method, path))
@@ -237,15 +258,45 @@ class IdentityTests(unittest.TestCase):
 
 
 class MergeTests(unittest.TestCase):
-    def test_ready_pr_merges_with_expected_sha_and_preserves_history(self):
+    def test_ready_rebased_pr_squash_merges_once_with_expected_sha(self):
         api = FakeGitHub()
-        self.assertEqual(merge_one(api, 11)["action"], "merged")
+        result = merge_one(api, 11)
+        self.assertEqual(
+            (result["action"], result["merge_sha"], result["base"]),
+            ("merged", "d" * 40, BASE),
+        )
         self.assertEqual(len(api.writes), 1)
         method, path, body = api.writes[0]
         self.assertEqual((method, path), ("PUT", "pulls/11/merge"))
         self.assertEqual(body["sha"], HEAD)
-        self.assertEqual(body["merge_method"], "merge")
-        self.assertEqual(api.calls[-2], ("GET", "git/ref/heads/main"))
+        self.assertEqual(body["merge_method"], "squash")
+        self.assertEqual(body["commit_title"], "SA-11: Set up the monorepo (#11)")
+        self.assertEqual(body["commit_message"], f"Refs SA-11\n\nTested head: {HEAD}")
+        # The base is the last read before the merge; the squash parent is checked after.
+        self.assertEqual(
+            api.calls[-3:-1], [("GET", "git/ref/heads/main"), ("PUT", "pulls/11/merge")]
+        )
+        self.assertEqual(api.calls[-1], ("GET", "commits/" + "d" * 40))
+
+    def test_merge_method_is_squash_only_and_no_branch_refresh_exists(self):
+        source = (ROOT / "scripts/automation/auto_merge.py").read_text()
+        self.assertEqual(source.count('"merge_method"'), 1)
+        self.assertIn('"merge_method": "squash"', source)
+        for disallowed in (
+            "update-branch",
+            "/dispatches",
+            '"rebase"',
+            '"merge_method": "merge"',
+        ):
+            self.assertNotIn(disallowed, source)
+
+    def test_fixes_declaration_is_normalized_into_squash_message(self):
+        api = FakeGitHub()
+        api.pr["body"] = "fixes SA-11\n\nDepends on SA-12."
+        merge_one(api, 11)
+        self.assertEqual(
+            api.writes[-1][2]["commit_message"], f"Fixes SA-11\n\nTested head: {HEAD}"
+        )
 
     def test_failed_cancelled_skipped_neutral_or_missing_final_job_never_merges(self):
         for workflow_id in (1, 2):
@@ -323,7 +374,7 @@ class MergeTests(unittest.TestCase):
             self.assertEqual(merge_one(api, 11)["action"], "waiting")
             self.assertEqual(api.writes, [])
 
-    def test_dispatch_run_can_be_used_after_branch_update(self):
+    def test_dispatch_run_can_be_used_after_owner_rebase(self):
         api = FakeGitHub()
         for runs in api.runs.values():
             runs[0].update(event="workflow_dispatch", pull_requests=[])
@@ -357,27 +408,65 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(merge_one(api, 11)["action"], "waiting")
         self.assertEqual(api.writes, [])
 
-    def test_behind_base_updates_with_expected_head_then_dispatches_both_checks(self):
+    def test_stale_base_waits_for_owner_rebase_without_any_write(self):
         api = FakeGitHub()
         api.behind = True
         result = merge_one(api, 11)
-        self.assertEqual((result["action"], result["new_head"]), ("updated", NEW))
-        self.assertEqual(
-            api.writes,
-            [
-                ("PUT", "pulls/11/update-branch", {"expected_head_sha": HEAD}),
-                (
-                    "POST",
-                    "actions/workflows/checks.yml/dispatches",
-                    {"ref": LINEAR_BRANCH, "inputs": {"pr_number": "11"}},
-                ),
-                (
-                    "POST",
-                    "actions/workflows/pr-policy.yml/dispatches",
-                    {"ref": LINEAR_BRANCH, "inputs": {"pr_number": "11"}},
-                ),
-            ],
-        )
+        self.assertEqual(result["action"], "waiting")
+        self.assertTrue(result["reason"].startswith("rebase-required"))
+        self.assertIn("--force-with-lease", result["reason"])
+        self.assertEqual(result["base"], BASE)
+        self.assertEqual(api.writes, [])
+        self.assertFalse(any("update-branch" in path for _, path in api.calls))
+
+    def test_ancestor_main_with_merge_commit_in_range_is_refused(self):
+        # "Merge origin/main into branch" keeps main as merge base but is not a rebase.
+        api = FakeGitHub()
+        api.candidate_commits[-1]["parents"].append({"sha": "9" * 40})
+        result = merge_one(api, 11)
+        self.assertEqual(result["action"], "waiting")
+        self.assertIn("not linear", result["reason"])
+        self.assertEqual(api.writes, [])
+
+    def test_identical_behind_or_inconsistent_compare_is_refused(self):
+        def compare(**changes):
+            commits = [{"sha": HEAD, "parents": [{"sha": BASE}]}]
+            response = {
+                "status": "ahead",
+                "ahead_by": 1,
+                "behind_by": 0,
+                "total_commits": 1,
+                "merge_base_commit": {"sha": BASE},
+                "commits": commits,
+            }
+            return response | changes
+
+        too_many = MAX_COMPARE_COMMITS + 1
+        for override in (
+            compare(status="identical", ahead_by=0, total_commits=0, commits=[]),
+            compare(status="behind", behind_by=2),
+            compare(behind_by=1),
+            compare(merge_base_commit={"sha": NEW}),
+            compare(total_commits=too_many, ahead_by=too_many),
+            compare(ahead_by=2, total_commits=2),
+            compare(commits=None),
+            compare(commits=[{"sha": NEW, "parents": [{"sha": BASE}]}]),
+            compare(commits=[{"sha": HEAD, "parents": []}]),
+        ):
+            with self.subTest(override=override):
+                api = FakeGitHub()
+                api.compare_override = override
+                self.assertEqual(merge_one(api, 11)["action"], "waiting")
+                self.assertEqual(api.writes, [])
+
+    def test_main_moving_in_final_interval_is_reported_after_squash(self):
+        api = FakeGitHub()
+        api.squash_parents = [NEW]
+        with self.assertRaises(MergedOnUntestedBase) as raised:
+            merge_one(api, 11)
+        self.assertEqual(raised.exception.outcome["parents"], [NEW])
+        self.assertEqual(raised.exception.outcome["merge_sha"], "d" * 40)
+        self.assertEqual(len(api.writes), 1)
 
     def test_title_is_data_and_never_executed_by_a_shell(self):
         api = FakeGitHub()
@@ -412,25 +501,24 @@ class MergeTests(unittest.TestCase):
             merge_one(api, 11)
         self.assertEqual(len(api.writes), 1)
 
-    def test_slow_branch_update_does_not_dispatch_old_head_or_retry_update(self):
+    def test_head_race_after_final_checks_is_rejected_by_expected_sha(self):
+        # GitHub returns 409 when the head no longer matches the supplied sha.
         api = FakeGitHub()
-        api.behind = True
         request = api.request
 
-        def delayed_update(method, path, body=None):
-            if path.endswith("/update-branch"):
+        def head_moved(method, path, body=None):
+            if path.endswith("/merge"):
                 api.writes.append((method, path, body))
-                return {"message": "accepted"}
+                raise ApiError("GitHub PUT pulls/11/merge: HTTP 409")
             return request(method, path, body)
 
         with (
-            patch.object(api, "request", side_effect=delayed_update),
-            self.assertRaisesRegex(PolicyError, "new head is not visible"),
+            patch.object(api, "request", side_effect=head_moved),
+            self.assertRaisesRegex(ApiError, "409"),
         ):
-            merge_one(api, 11, sleep=lambda _: None)
-        self.assertEqual(
-            api.writes, [("PUT", "pulls/11/update-branch", {"expected_head_sha": HEAD})]
-        )
+            merge_one(api, 11)
+        self.assertEqual(len(api.writes), 1)
+        self.assertEqual(api.writes[0][2]["sha"], HEAD)
 
     def test_event_discovery_refuses_fork_trigger(self):
         api = FakeGitHub()
@@ -465,8 +553,10 @@ class MergeTests(unittest.TestCase):
             "pnpm install",
             "head.sha",
             "pull_request_target:",
+            "actions: write",
         ):
             self.assertNotIn(disallowed, workflow)
+        self.assertIn("actions: read", workflow)
 
 
 class ApiTests(unittest.TestCase):

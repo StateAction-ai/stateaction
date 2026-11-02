@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 from github_policy import (
@@ -17,6 +16,7 @@ from github_policy import (
     GitHub,
     PolicyError,
     get_validated_pr,
+    primary_declaration,
     successful_workflows,
     validate_pr,
 )
@@ -29,9 +29,53 @@ def main_sha(api) -> str:
     return sha
 
 
-def merge_one(
-    api, number: int, expected_head: str | None = None, sleep=time.sleep
-) -> dict:
+# GitHub's compare API lists at most 250 commits; a longer range cannot be verified.
+MAX_COMPARE_COMMITS = 250
+REBASE_REQUIRED = (
+    "rebase-required: the branch owner must rebase onto current main, push with "
+    "--force-with-lease=<branch>:<previous head>, and wait for fresh exact-head checks"
+)
+
+
+def linear_candidate(api, base: str, head: str) -> tuple[bool, str]:
+    """A squashable head is a strict, merge-free descendant of the current main.
+
+    The merger never refreshes a stale branch: a GitHub branch-update merge commit would
+    put an untested combination and a merge commit into the PR's history.
+    """
+    comparison = api.request("GET", f"compare/{base}...{head}")
+    commits = comparison.get("commits")
+    if (
+        comparison.get("merge_base_commit", {}).get("sha") != base
+        or comparison.get("status") != "ahead"
+        or comparison.get("behind_by") != 0
+    ):
+        return False, REBASE_REQUIRED
+    ahead = comparison.get("ahead_by")
+    if (
+        not isinstance(commits, list)
+        or not isinstance(ahead, int)
+        or ahead < 1
+        or ahead > MAX_COMPARE_COMMITS
+        or comparison.get("total_commits") != ahead
+        or len(commits) != ahead
+    ):
+        return False, (
+            f"candidate range must list 1..{MAX_COMPARE_COMMITS} commits completely; "
+            "squash locally into fewer commits and push with an exact lease"
+        )
+    for commit in commits:
+        if len(commit.get("parents") or []) != 1:
+            return False, (
+                f"{REBASE_REQUIRED}; commit {str(commit.get('sha', ''))[:12]} is a merge "
+                "or root commit, so the branch history is not linear"
+            )
+    if commits[-1].get("sha") != head:
+        return False, "compare response does not end at the tested head"
+    return True, "head is a linear descendant of current main"
+
+
+def merge_one(api, number: int, expected_head: str | None = None) -> dict:
     pr, ticket = get_validated_pr(api, number)
     head = pr["head"]["sha"]
     result = {"pr": number, "ticket": ticket, "head": head}
@@ -46,32 +90,10 @@ def merge_one(
     if not ready:
         return result | {"action": "waiting", "reason": reason}
     base = main_sha(api)
-    comparison = api.request("GET", f"compare/{base}...{head}")
-    if comparison.get("merge_base_commit", {}).get("sha") != base:
-        # A tested head must include the current main. Update atomically, then test
-        # the resulting head. Explicit dispatch avoids GITHUB_TOKEN event limits.
-        api.request("PUT", f"pulls/{number}/update-branch", {"expected_head_sha": head})
-        for _ in range(30):
-            current = api.request("GET", f"pulls/{number}")
-            if current["head"]["sha"] != head:
-                break
-            sleep(1)
-        else:
-            raise PolicyError(
-                "Branch update accepted but its new head is not visible; rerun the merger after it completes."
-            )
-        current, _ = get_validated_pr(api, number)
-        for filename, _, _ in WORKFLOWS:
-            api.request(
-                "POST",
-                f"actions/workflows/{filename}/dispatches",
-                {"ref": current["head"]["ref"], "inputs": {"pr_number": str(number)}},
-            )
-        return result | {
-            "action": "updated",
-            "new_head": current["head"]["sha"],
-            "reason": "both workflows dispatched; waiting for new CI",
-        }
+    linear, reason = linear_candidate(api, base, head)
+    if not linear:
+        # Fail closed without any write: no branch update, workflow dispatch or merge.
+        return result | {"action": "waiting", "reason": reason, "base": base}
     # Re-read everything that can invalidate eligibility immediately before the
     # expected-SHA merge. A serialized merger prevents races with our other merges.
     current, _ = get_validated_pr(api, number)
@@ -96,13 +118,33 @@ def merge_one(
         f"pulls/{number}/merge",
         {
             "sha": head,
-            "merge_method": "merge",
+            "merge_method": "squash",
             "commit_title": f"{current['title']} (#{number})",
+            "commit_message": f"{primary_declaration(current)}\n\nTested head: {head}",
         },
     )
-    if not merged.get("merged"):
+    if not merged.get("merged") or not SHA.fullmatch(str(merged.get("sha", ""))):
         raise PolicyError("GitHub refused the guarded merge; no retry was attempted.")
-    return result | {"action": "merged", "merge_sha": merged["sha"]}
+    # Detect the unguardable final-interval main race after the fact: a squash
+    # commit must have exactly the tested base as its only parent.
+    commit = api.request("GET", f"commits/{merged['sha']}")
+    parents = [parent.get("sha") for parent in commit.get("parents") or []]
+    outcome = result | {"action": "merged", "merge_sha": merged["sha"], "base": base}
+    if parents != [base]:
+        raise MergedOnUntestedBase(
+            outcome | {"parents": parents},
+            "Squash commit parent is not the tested main; main moved in the final "
+            "interval. Investigate and verify main's CI; nothing was retried.",
+        )
+    return outcome
+
+
+class MergedOnUntestedBase(PolicyError):
+    """The merge happened, but not on the tested base; surface it loudly."""
+
+    def __init__(self, outcome: dict, message: str):
+        super().__init__(message)
+        self.outcome = outcome
 
 
 def candidates(api, event: dict) -> list[int]:
@@ -139,7 +181,7 @@ def main():
     parser.add_argument(
         "--pr",
         type=int,
-        help="Validate and merge one PR (also used for the initial bootstrap).",
+        help="Validate and squash merge one PR (also used for a policy bootstrap).",
     )
     parser.add_argument(
         "--event-file", type=Path, default=os.environ.get("GITHUB_EVENT_PATH")
@@ -161,6 +203,9 @@ def main():
         for number in numbers:
             try:
                 print(json.dumps(merge_one(api, number)))
+            except MergedOnUntestedBase as error:
+                print(json.dumps(error.outcome | {"reason": str(error)}))
+                raise
             except ApiError:
                 raise
             except PolicyError as error:
