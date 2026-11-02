@@ -2,3 +2,5 @@
 packages/contracts/conformance/fixtures/
 packages/contracts/capture/golden/
 packages/contracts/capture/fixtures/encoder_buffers.json
+# Proposed profile fixtures use the same exact generator bytes as conformance/fixtures and move there verbatim.
+packages/contracts/proposed/profile/fixtures/

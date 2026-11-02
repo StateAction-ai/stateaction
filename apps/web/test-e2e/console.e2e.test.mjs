@@ -6,6 +6,7 @@
 // agent-browser against the same stack (serve-console.mjs).
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import {
@@ -414,5 +415,107 @@ describe("server-confirmed sign-out", () => {
     });
     assert.notEqual(res.status, 200);
     assert.equal((await call("/api/v1/me", { jar })).status, 200);
+  });
+});
+
+// PROPOSED wire contracts (packages/contracts/proposed/profile): real service
+// bytes validated against the proposed request/response schemas. They are not
+// published; catalog.v4 follows SA-19's catalog.v3 merge.
+describe("own-profile service matches the proposed wire contracts", () => {
+  const contractsDir = new URL("../../../packages/contracts/", import.meta.url);
+  const { Ajv2020 } = createRequire(new URL("package.json", contractsDir))(
+    "ajv/dist/2020.js",
+  );
+  const readJson = (path) =>
+    JSON.parse(readFileSync(new URL(path, contractsDir), "utf8"));
+  const ajv = new Ajv2020({
+    allErrors: true,
+    strict: true,
+    allowUnionTypes: true,
+    validateFormats: false,
+  });
+  ajv.addSchema(readJson("api/common.v1.schema.json"));
+  const requestSchema = readJson(
+    "proposed/profile/http/profile-update.v1.schema.json",
+  );
+  const responseSchema = readJson(
+    "proposed/profile/http/profile.v1.schema.json",
+  );
+  ajv.addSchema(requestSchema);
+  ajv.addSchema(responseSchema);
+  const validRequest = ajv.getSchema(requestSchema.$id);
+  const validResponse = ajv.getSchema(responseSchema.$id);
+  const responseCases = readJson(
+    "proposed/profile/fixtures/http.profile.v1.json",
+  ).cases;
+  const rejectedNames = responseCases
+    .filter(
+      (c) =>
+        !c.expect.valid &&
+        c.expect.paths?.[0] === "/user/name" &&
+        !/^(leading|trailing|whitespace)/.test(c.name),
+    )
+    .map((c) => c.input.document.user.name);
+
+  test("success bodies validate and the stored value is trimmed NFC", async () => {
+    const jar = await signIn("collector");
+    const id = stack.users.collector.id;
+    const cases = [
+      ["Pilot Staff", "Pilot Staff"],
+      ["  Pilot  ", "Pilot"],
+      ["Pilot ", "Pilot"],
+      ["　Pilot　", "Pilot"],
+      ["﻿Pilot", "Pilot"],
+      ["Café", "Café"],
+      ["\u{1f600}".repeat(80), "\u{1f600}".repeat(80)],
+    ];
+    for (const [sent, stored] of cases) {
+      assert.equal(validRequest({ name: sent }), true, JSON.stringify(sent));
+      const res = await patch(jar, { name: sent });
+      assert.equal(res.status, 200, `${JSON.stringify(sent)} ${res.text}`);
+      const body = JSON.parse(res.text);
+      assert.equal(
+        validResponse(body.data),
+        true,
+        JSON.stringify(validResponse.errors),
+      );
+      assert.equal(body.data.user.name, stored);
+      assert.equal(body.data.user.id, id);
+      assert.equal(body.data.user.name, body.data.user.name.normalize("NFC"));
+      assert.equal(nameOf(id), stored);
+    }
+  });
+
+  test("every name the response contract rejects is refused or normalized before storage", async () => {
+    const half = Math.ceil(rejectedNames.length / 2);
+    for (const [label, names] of [
+      ["customer", rejectedNames.slice(0, half)],
+      ["collector", rejectedNames.slice(half)],
+    ]) {
+      const jar = await signIn(label);
+      const id = stack.users[label].id;
+      for (const name of names) {
+        const before = nameOf(id);
+        const res = await patch(jar, { name });
+        assert.equal(res.status, 422, JSON.stringify(name));
+        assert.equal(nameOf(id), before, JSON.stringify(name));
+      }
+    }
+  });
+
+  test("wire-bound violations never reach storage", async () => {
+    const jar = await signIn("staff");
+    const id = stack.users.staff.id;
+    const before = nameOf(id);
+    for (const body of [
+      { name: "" },
+      { name: "Pilot", roles: ["staff"] },
+      {},
+      [{ name: "Pilot" }],
+    ]) {
+      assert.equal(validRequest(body), false, JSON.stringify(body));
+      assert.equal((await patch(jar, body)).status, 422, JSON.stringify(body));
+    }
+    assert.equal(nameOf(id), before);
   });
 });

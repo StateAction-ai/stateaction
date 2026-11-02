@@ -75,7 +75,7 @@ function bodyName(value: unknown): unknown {
  * other field are never read from the request. Better Auth's broad
  * `/update-user` stays disabled.
  *
- * Proposed local contract (NOT published conformance; a v4 registry superset
+ * Proposed contract (NOT published conformance; schemas in packages/contracts/proposed/profile; a v4 registry superset
  * follows backend SA-19's catalog.v3 merge): request `{ "name": string }`,
  * response `{ data: { user: { id, email, name } }, requestId }`.
  */

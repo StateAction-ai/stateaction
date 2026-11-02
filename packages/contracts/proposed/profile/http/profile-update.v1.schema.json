@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/profile-update.v1.json",
+  "title": "Own display-name update request v1",
+  "description": "PATCH /api/v1/me/profile request body: a closed object with exactly one key, `name`. This is the WIRE bound only. The service additionally NFC-normalizes and trims the value and then requires 1-80 Unicode code points without control, bidi, zero-width or separator characters (`maxLength` below counts code points; a body is at most 1024 bytes). Those post-normalization rules cannot be expressed here and are enforced by the service; the response contract (`http.profile.v1`) carries the normalized result. Identity, email and roles are never accepted from the client.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "description": "Untrusted display text as typed. May carry surrounding whitespace the service trims.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1013
+    }
+  }
+}
