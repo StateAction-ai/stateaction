@@ -1,0 +1,12 @@
+#!/bin/sh
+# Tracked pre-commit entry: previous/staged-content checks, then the full guarded local CI.
+# Installed per worktree by scripts/local-ci/install.py. No environment variable skips it.
+top=$(git rev-parse --show-toplevel) || exit 1
+cd "$top" || exit 1
+previous_dir=${STATEACTION_PREVIOUS_HOOKS:-$(git rev-parse --git-common-dir)/hooks}
+if [ -x "$previous_dir/pre-commit" ]; then
+  "$previous_dir/pre-commit" "$@" || exit $? # e.g. Lefthook's staged-content check
+elif [ -f scripts/platform/check-staged.mjs ]; then
+  node scripts/platform/check-staged.mjs || exit $?
+fi
+exec python3 scripts/local-ci/local_ci.py run --staged

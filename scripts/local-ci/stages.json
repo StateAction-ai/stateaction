@@ -1,0 +1,209 @@
+{
+  "schema": "stateaction.local-ci.stages/1",
+  "pins": {
+    "node": "24.22.2",
+    "pnpm": "10.33.0",
+    "uv": "0.13.6"
+  },
+  "stages": [
+    {
+      "id": "toolchain",
+      "title": "Record toolchain versions",
+      "capture": "toolchain",
+      "timeoutSec": 120,
+      "argv": [
+        "bash",
+        "-c",
+        "set -e; echo node=$(node --version); echo pnpm=$(pnpm --version); echo uv=$(uv --version); echo python=$(python3 --version); echo java=$(java -version 2>&1 | grep -m1 version); echo flutter=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"frameworkVersion\"])'); echo dart=$(dart --version 2>&1)"
+      ]
+    },
+    {
+      "id": "node-install",
+      "title": "pnpm install --frozen-lockfile against the exported tree",
+      "timeoutSec": 900,
+      "argv": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile",
+        "--child-concurrency=1",
+        "--network-concurrency=2",
+        "--prefer-offline"
+      ]
+    },
+    {
+      "id": "python-sync",
+      "title": "uv sync workers/processing",
+      "timeoutSec": 900,
+      "argv": ["uv", "sync", "--project", "workers/processing", "--locked"]
+    },
+    {
+      "id": "render-cli",
+      "title": "Pinned Render CLI for the local runtime smoke (checksum-verified, cached download)",
+      "timeoutSec": 300,
+      "argv": ["python3", "scripts/platform/install-render.py"]
+    },
+    {
+      "id": "root-python-tests",
+      "title": "Root geometry/export/clock unit suites (tests/test_*.py) on pinned CPU dependencies",
+      "timeoutSec": 1500,
+      "requiresPaths": ["stera-sdk/README.md"],
+      "argv": [
+        "uv",
+        "run",
+        "--no-project",
+        "--python",
+        "3.11",
+        "--with-requirements",
+        "requirements-stera.txt",
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "server-tooling",
+      "title": "Build, typecheck, syntax, test and format (non-mobile, Nx-cached)",
+      "timeoutSec": 1200,
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run-many",
+        "-t",
+        "build,typecheck,syntax,test,format",
+        "--exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e",
+        "--parallel=1",
+        "--outputStyle=static",
+        "--nxBail"
+      ],
+      "cache": "nx"
+    },
+    {
+      "id": "mobile-android-dart",
+      "title": "Flutter, Dart and Android JVM build, typecheck, test, format (Nx-cached)",
+      "timeoutSec": 1500,
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run-many",
+        "--projects=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e",
+        "-t",
+        "build,typecheck,test,format",
+        "--parallel=1",
+        "--outputStyle=static",
+        "--nxBail"
+      ],
+      "cache": "nx",
+      "gradleBuildCache": true
+    },
+    {
+      "id": "staged-dart-hook",
+      "title": "Real staged-Dart pre-commit behaviour",
+      "timeoutSec": 600,
+      "argv": [
+        "node",
+        "--test",
+        "--test-concurrency=1",
+        "scripts/platform/check-staged-dart.test.mjs"
+      ]
+    },
+    {
+      "id": "local-ci-self-test",
+      "title": "Local CI runner tests",
+      "timeoutSec": 600,
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "scripts/local-ci",
+        "-p",
+        "test_*.py"
+      ]
+    },
+    {
+      "id": "catalog-integration",
+      "title": "Catalog and storage integration on bounded external PostgreSQL and S3",
+      "fixtures": true,
+      "timeoutSec": 1500,
+      "argv": ["bash", "packages/server/scripts/catalog-integration.sh"]
+    },
+    {
+      "id": "server-auth-integration",
+      "title": "Auth integration on bounded external fixtures",
+      "fixtures": true,
+      "timeoutSec": 1500,
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "server:auth-integration",
+        "--skip-nx-cache",
+        "--outputStyle=static"
+      ]
+    },
+    {
+      "id": "web-auth-e2e",
+      "title": "Real Next, Better Auth and storage HTTP E2E on bounded external fixtures",
+      "fixtures": true,
+      "timeoutSec": 1500,
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "web:auth-e2e",
+        "--skip-nx-cache",
+        "--outputStyle=static"
+      ]
+    },
+    {
+      "id": "mobile-backend-e2e",
+      "title": "Mobile Dart auth client against the real backend on bounded fixtures",
+      "fixtures": true,
+      "timeoutSec": 1500,
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "mobile-auth-backend-e2e:mobile-backend-e2e",
+        "--skip-nx-cache",
+        "--outputStyle=static"
+      ]
+    },
+    {
+      "id": "runtime-smoke",
+      "title": "Local runtime and hosted-mode smoke on bounded fixtures and finite ports",
+      "fixtures": true,
+      "timeoutSec": 1500,
+      "env": {
+        "HOSTED_SMOKE_WEB_PORT": "10050",
+        "HOSTED_SMOKE_RUNNER_PORT": "8150"
+      },
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "infra:integration",
+        "--skip-nx-cache",
+        "--outputStyle=static"
+      ]
+    }
+  ],
+  "unautomated": [
+    "Physical Android device capture and company/work-profile operations (user-intentional Start action; never automated)",
+    "iOS hardware and Xcode builds (no iOS hardware in this environment)",
+    "Hosted provider qualification: Render deployment, Cloudflare R2, Linear/GitHub app integrations"
+  ]
+}

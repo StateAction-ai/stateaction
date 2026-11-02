@@ -1,8 +1,6 @@
 name: PR policy
+# Optional and manual: `pnpm ci:merge` applies the same ticket policy locally.
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, edited, ready_for_review]
-    branches: [main]
   workflow_dispatch:
     inputs:
       pr_number:

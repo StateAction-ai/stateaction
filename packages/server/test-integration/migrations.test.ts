@@ -8,6 +8,7 @@ import {
   loadMigrations,
   migrateDatabase,
 } from "../src/migrations.js";
+import { claimRole, expectRole } from "./fixture-ledger.js";
 import { expectCode, freshDatabase, writeArtifact } from "./harness.js";
 
 const TABLES = [
@@ -247,7 +248,8 @@ test("the grant helper resets broad table grants and default ACLs for the app ro
 
 test("hosted path: migrateDatabase creates the restricted role, grants via the helper and is idempotent", async () => {
   const db = await freshDatabase({ migrate: false });
-  const role = `sa_hosted_${db.name.slice(8, 20)}`;
+  const role = `sa_hosted_${db.name.slice(-12)}`;
+  expectRole(role);
   const password = "hosted-password-0123456789";
   const hostedUrl = (() => {
     const u = new URL(db.appUrl);
@@ -303,6 +305,7 @@ test("hosted path: migrateDatabase creates the restricted role, grants via the h
     );
   } finally {
     await db.owner.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
+    await claimRole(db.owner, role); // still present: removed after its database
     await db.close();
   }
 });
@@ -376,7 +379,7 @@ test("pre-existing privileged or member app roles fail closed without rotation o
     connectionString: process.env.CATALOG_TEST_ADMIN_URL,
   });
   await admin.connect();
-  const tag = db.name.slice(8, 20);
+  const tag = db.name.slice(-12);
   // Only the bootstrap superuser can create REPLICATION/BYPASSRLS roles.
   const cases: [string, string][] = [
     [
@@ -432,6 +435,7 @@ test("pre-existing privileged or member app roles fail closed without rotation o
     // A fresh role created by the CREATEROLE owner (which gets ADMIN on it,
     // the reverse membership direction) is accepted and stays plain.
     const fresh = `sa_fresh_${tag}`;
+    expectRole(fresh);
     try {
       const report = await migrateDatabase({
         ownerUrl: db.ownerUrl,
@@ -469,6 +473,7 @@ test("pre-existing privileged or member app roles fail closed without rotation o
       await db.owner
         .query(`DROP ROLE IF EXISTS ${fresh}`)
         .catch(() => undefined);
+      await claimRole(db.owner, fresh);
     }
   } finally {
     for (const [role] of cases)

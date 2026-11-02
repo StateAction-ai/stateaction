@@ -36,7 +36,25 @@
       "{workspaceRoot}/.env.example",
       "{workspaceRoot}/.env.workflows.example",
       "{workspaceRoot}/Makefile",
-      "{workspaceRoot}/.nxignore"
+      "{workspaceRoot}/.nxignore",
+      {
+        "runtime": "node --version"
+      },
+      {
+        "runtime": "pnpm --version"
+      },
+      {
+        "runtime": "python3 --version"
+      },
+      {
+        "runtime": "uv --version"
+      },
+      {
+        "runtime": "java -version 2>&1"
+      },
+      {
+        "runtime": "flutter --version --machine"
+      }
     ],
     "automationSources": [
       "{workspaceRoot}/scripts/automation/**/*",

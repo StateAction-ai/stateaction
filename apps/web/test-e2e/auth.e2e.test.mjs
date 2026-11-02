@@ -303,7 +303,7 @@ after(async () => {
     } catch {}
     await sleep(500);
   }
-  db?.stop();
+  await db?.stop();
 });
 
 describe("Next.js production server with Better Auth", () => {
@@ -454,7 +454,7 @@ describe("Next.js production server with Better Auth", () => {
   test("the Next server reaches the catalog only as stateaction_app", async () => {
     await signIn("customer");
     const roles = psql(
-      "SELECT DISTINCT usename FROM pg_stat_activity WHERE datname = 'stateaction' AND pid <> pg_backend_pid() AND usename IS NOT NULL ORDER BY 1",
+      "SELECT DISTINCT usename FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND usename IS NOT NULL ORDER BY 1",
     ).split("\n");
     assert.deepEqual(roles, ["stateaction_app"]);
     assert.ok(!JSON.stringify(env).includes("migration_owner"));

@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import {
@@ -9,6 +8,7 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import type { ServerConfig } from "../src/config.js";
+import { bucketName, ledgerRun, recordCreated } from "./fixture-ledger.js";
 import { presignObject, storageClient } from "../src/storage.js";
 
 const env = (key: string) => {
@@ -42,7 +42,9 @@ export type TestBucket = {
 };
 
 export async function freshBucket(): Promise<TestBucket> {
-  const config = storageConfig(`it-${randomBytes(6).toString("hex")}`);
+  const run = ledgerRun();
+  const config = storageConfig(bucketName(run));
+  if (run) recordCreated(run, "bucket", config.bucket);
   const client = storageClient(config, 15000);
   await client.send(new CreateBucketCommand({ Bucket: config.bucket }));
   return {

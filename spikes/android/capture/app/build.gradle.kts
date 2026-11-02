@@ -13,6 +13,11 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
+// MCAPWriterTest writes a fixture that a later verifier reads. Declare it as an output so a
+// build-cache hit restores the file instead of skipping the test that creates it.
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    outputs.dir(layout.buildDirectory.dir("spike-fixtures"))
+}
 dependencies {
     implementation("com.google.ar:core:1.44.0")
     testImplementation("junit:junit:4.13.2")

@@ -1,0 +1,1673 @@
+#!/usr/bin/env python3
+"""Full local CI for StateAction: guarded, serial, bound to an exact Git tree.
+
+  local_ci.py run --staged          test the index tree about to be committed (pre-commit)
+  local_ci.py run --tree REV        test a clean commit tree (rebased head before merge)
+  local_ci.py verify --head REV     validate the PASS receipt for REV against origin/main
+  local_ci.py merge --pr N          verify, then squash merge through the GitHub CLI
+
+Rules enforced here, not by convention:
+  * every stage runs inside the machine-wide agent-resource scope (6 GiB, no swap,
+    one heavy job); without verified cgroup enforcement the run is refused;
+  * stages run one at a time, uncached, in a private export of the exact tree;
+  * the tree is re-read after every stage; a change fails the run;
+  * only a run in which every declared stage passed leaves a PASS receipt;
+  * receipts, logs and the export live outside Git and hold no credentials.
+Standard library only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import ctypes
+import fcntl
+import hashlib
+import json
+import os
+import re
+import secrets
+import selectors
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+from urllib.parse import urlparse
+
+GIB = 1024**3
+JOB_MAX = 6 * GIB
+TOTAL_MAX = 12 * GIB  # legacy installed guard
+AGG_MAX = 24 * GIB  # only with a positive policy proof
+BUILD_SCOPE = "agent-mobile-build.scope"
+SLICE = "agent-work.slice"
+RECEIPT_SCHEMA = "stateaction.local-ci.receipt/1"
+STAGES_SCHEMA = "stateaction.local-ci.stages/1"
+STAGES_PATH = "scripts/local-ci/stages.json"
+RUNNER_PATH = "scripts/local-ci/local_ci.py"
+DEFAULT_OUTPUT_CAP = 64 * 1024 * 1024
+FIXTURE_KEYS = (
+    "CATALOG_TEST_ADMIN_URL",
+    "CATALOG_TEST_OWNER_URL",
+    "CATALOG_TEST_APP_URL",
+    "STORAGE_TEST_ENDPOINT",
+    "STORAGE_TEST_ACCESS_KEY_ID",
+    "STORAGE_TEST_SECRET_ACCESS_KEY",
+    "TRANSPORT_TEST_S3_ENDPOINT",
+    "TRANSPORT_TEST_S3_ACCESS_KEY",
+    "TRANSPORT_TEST_S3_SECRET_KEY",
+)
+REQUIRED_FIXTURE_KEYS = FIXTURE_KEYS[:6]
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+SECRET_KEY = re.compile(
+    r"(TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|PRIVATE|CREDENTIAL)", re.I
+)
+GIT_ENV = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_PREFIX",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_EDITOR",
+)
+
+
+class Refused(RuntimeError):
+    """The run must not start or its result must not count."""
+
+
+class GuardError(Refused):
+    pass
+
+
+# --------------------------------------------------------------------------- git
+
+
+def git(repo: Path, *args: str, input: bytes | None = None, check=True) -> str:
+    result = subprocess.run(
+        ["git", *args], cwd=repo, input=input, capture_output=True, timeout=120
+    )
+    if check and result.returncode:
+        raise Refused(
+            f"git {args[0]} failed: {result.stderr.decode(errors='replace').strip()}"
+        )
+    return result.stdout.decode(errors="replace").strip()
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def blob(repo: Path, rev: str, path: str) -> bytes | None:
+    result = subprocess.run(
+        ["git", "cat-file", "blob", f"{rev}:{path}"], cwd=repo, capture_output=True
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def local_ci_home() -> Path:
+    return Path(
+        os.environ.get("STATEACTION_LOCAL_CI_HOME")
+        or Path.home() / ".cache" / "stateaction-local-ci"
+    )
+
+
+def private_dir(path: Path) -> Path:
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
+        raise Refused(f"{path} must be private and owned by this user")
+    return path
+
+
+# ------------------------------------------------------------------------ guard
+
+
+def _read(path: Path) -> str:
+    return path.read_text().strip()
+
+
+def _limit(value: str) -> int:
+    if not value.isdigit():
+        raise GuardError(f"cgroup limit {value!r} is not a finite byte count")
+    return int(value)
+
+
+def fetch_policy() -> dict:
+    launcher = guard_binary()
+    if launcher is None:
+        raise GuardError("agent-resource is missing; cannot prove the aggregate cap")
+    result = subprocess.run(
+        [str(launcher), "policy"], capture_output=True, text=True, timeout=30
+    )
+    try:
+        report = json.loads(result.stdout)
+    except ValueError as error:
+        raise GuardError(
+            "the installed agent-resource has no policy proof, so a cap above 12 GiB is refused"
+        ) from error
+    if not isinstance(report, dict):
+        raise GuardError("agent-resource policy returned an invalid report")
+    return report
+
+
+def check_aggregate(slice_max: int, fetch=None) -> dict | None:
+    """<=12 GiB is the legacy guard. Up to 24 GiB needs positive policy-2 proof."""
+    if slice_max <= TOTAL_MAX:
+        return None
+    if slice_max > AGG_MAX:
+        raise GuardError("aggregate cap exceeds the 24 GiB policy maximum")
+    report = (fetch or fetch_policy)()
+    if not (
+        report.get("ok") is True
+        and report.get("watchdogPolicyActive") is True
+        and report.get("kernelSwapMax") == "0"
+        and report.get("kernelMemoryMaxBytes") == slice_max
+        and report.get("recordedCapBytes") == slice_max
+    ):
+        raise GuardError(
+            "aggregate cap above 12 GiB is not proved by a current policy-2 watchdog "
+            "and a recorded cap equal to the kernel cap with zero swap"
+        )
+    return {
+        "capBytes": slice_max,
+        "watchdogPolicyActive": True,
+        "stopThresholdBytes": report.get("stopThresholdBytes"),
+    }
+
+
+def guard_proof(
+    proc: Path = Path("/proc"),
+    cgroup: Path = Path("/sys/fs/cgroup"),
+    policy_fetch=None,
+) -> dict:
+    """Prove from the kernel's own files that this process is inside the budget."""
+    try:
+        line = _read(proc / "self/cgroup")
+        relative = line.split("::", 1)[1]
+        if f"/{SLICE}/" not in relative or not relative.endswith("/" + BUILD_SCOPE):
+            raise GuardError("not inside the agent-resource run scope")
+        group = cgroup / relative.lstrip("/")
+        scope_max = _limit(_read(group / "memory.max"))
+        slice_max = _limit(_read(group.parent / "memory.max"))
+        if scope_max > JOB_MAX:
+            raise GuardError("job memory limit exceeds 6 GiB")
+        aggregate = check_aggregate(slice_max, policy_fetch)
+        if (
+            _read(group / "memory.swap.max") != "0"
+            or _read(group.parent / "memory.swap.max") != "0"
+        ):
+            raise GuardError("swap is not disabled in the enforced cgroups")
+    except (OSError, IndexError) as error:
+        raise GuardError(f"cgroup enforcement cannot be verified: {error}") from error
+    return {
+        "scope": BUILD_SCOPE,
+        "slice": SLICE,
+        "memoryMaxBytes": scope_max,
+        "sliceMemoryMaxBytes": slice_max,
+        "swapMaxBytes": 0,
+        "aggregatePolicy": aggregate,
+        "cgroup": str(group),
+    }
+
+
+def peak_memory(proof: dict) -> int | None:
+    try:
+        return int(_read(Path(proof["cgroup"]) / "memory.peak"))
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def guard_binary() -> Path | None:
+    candidate = Path(
+        os.environ.get("AGENT_RESOURCE_BIN")
+        or Path.home() / ".local/bin/agent-resource"
+    )
+    return candidate if candidate.is_file() and os.access(candidate, os.X_OK) else None
+
+
+def ensure_guard(
+    argv: list[str], *, check=guard_proof, binary=guard_binary, execv=os.execv
+) -> dict:
+    """Return the proof, or re-execute this command under the installed guard.
+
+    There is no unguarded path: no binary and no proof means refusal.
+    """
+    try:
+        return check()
+    except GuardError as inside:
+        if os.environ.get("STATEACTION_LOCAL_CI_REEXEC") == "1":
+            raise GuardError(
+                f"guard re-execution did not enforce limits: {inside}"
+            ) from inside
+        launcher = binary()
+        if launcher is None:
+            raise GuardError(
+                "agent-resource is not installed; refusing to run outside the machine-wide budget"
+            ) from inside
+        os.environ["STATEACTION_LOCAL_CI_REEXEC"] = "1"
+        execv(str(launcher), [str(launcher), "run", "--", sys.executable, *argv])
+        return {}  # unreachable with a real exec; only a mocked execv returns
+
+
+# --------------------------------------------------------------------- stage file
+
+
+def load_stages(text: bytes) -> dict:
+    data = json.loads(text)
+    if data.get("schema") != STAGES_SCHEMA or not data.get("stages"):
+        raise Refused("stages.json has an unknown schema or no stages")
+    seen = set()
+    for stage in data["stages"]:
+        if stage["id"] in seen or not stage.get("argv"):
+            raise Refused(f"invalid or duplicate stage {stage.get('id')!r}")
+        seen.add(stage["id"])
+    return data
+
+
+def argv_hash(stage: dict) -> str:
+    canonical = json.dumps(
+        {
+            k: stage.get(k)
+            for k in ("argv", "cwd", "env", "fixtures", "cache", "gradleBuildCache")
+        },
+        sort_keys=True,
+    )
+    return sha256_bytes(canonical.encode())
+
+
+def is_nx(argv: list[str]) -> bool:
+    return argv[:3] == ["pnpm", "exec", "nx"]
+
+
+def effective_argv(stage: dict, fresh: bool) -> tuple[list[str], bool]:
+    """Nx may use its cache only for stages that declare cache=nx and not on --fresh.
+
+    Everything else (integration, auth, E2E, smoke, live fixtures) is forced uncached.
+    Returns the argv and whether the Nx cache is skipped.
+    """
+    argv = list(stage["argv"])
+    if not is_nx(argv):
+        return argv, False
+    skip = fresh or stage.get("cache") != "nx"
+    if skip and "--skip-nx-cache" not in argv:
+        argv.append("--skip-nx-cache")
+    return argv, skip
+
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class CacheScan:
+    """Counts Nx tasks and local-cache hits from the stage's own output."""
+
+    TASK = re.compile(r"^>\s+nx run (\S+)(.*)$")
+
+    def __init__(self) -> None:
+        self.partial = b""
+        self.hit: list[str] = []
+        self.executed: list[str] = []
+
+    def feed(self, chunk: bytes) -> None:
+        *lines, self.partial = (self.partial + chunk).split(b"\n")
+        self.partial = self.partial[-4000:]
+        for raw in lines:
+            line = ANSI.sub("", raw.decode(errors="replace")).strip()
+            match = self.TASK.match(line)
+            if not match:
+                continue
+            rest = match[2]
+            hit = (
+                "[local cache]" in rest
+                or "[remote cache]" in rest
+                or "existing outputs match the cache" in rest
+            )
+            (self.hit if hit else self.executed).append(match[1])
+
+    def summary(self) -> dict:
+        return {
+            "tasks": len(self.hit) + len(self.executed),
+            "hits": len(self.hit),
+            "hitTasks": self.hit[:200],
+            "executedTasks": self.executed[:200],
+        }
+
+
+# -------------------------------------------------------------------- environment
+
+
+def _shim(directory: Path, name: str, body: str) -> None:
+    path = directory / name
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(0o755)
+
+
+def make_shims(directory: Path, uv_pin: str, which=shutil.which) -> None:
+    """Docker/podman would escape the cgroup budget: refuse them for every stage."""
+    for name in ("docker", "docker-compose", "podman"):
+        _shim(
+            directory,
+            name,
+            f'echo "{name}: disabled by local CI; use the bounded external fixtures" >&2\nexit 126\n',
+        )
+    uvx = which("uvx")
+    uv = which("uv")
+    version = ""
+    if uv:
+        with contextlib.suppress(Exception):
+            version = subprocess.run(
+                [uv, "--version"], capture_output=True, text=True
+            ).stdout
+    if pin_missing(version, uv_pin):
+        if not uvx:
+            raise Refused(f"uv {uv_pin} is required and uvx is unavailable")
+        _shim(directory, "uv", f'exec "{uvx}" -q --from "uv=={uv_pin}" uv "$@"\n')
+
+
+def pin_missing(version_output: str, pin: str) -> bool:
+    return pin not in version_output
+
+
+def tool_paths(env: dict[str, str], node_version: str) -> list[str]:
+    home = Path(env.get("HOME", str(Path.home())))
+    tools = Path(
+        env.get("ROBOTICS_CAPTURE_TOOLS")
+        or home / ".local/share/robotics-capture-tools"
+    )
+    paths = [
+        home / ".nvm/versions/node" / f"v{node_version}" / "bin",
+        tools / "flutter/bin",
+        tools / "android-sdk/platform-tools",
+        tools / "android-sdk/cmdline-tools/latest/bin",
+    ]
+    return [str(p) for p in paths if p.is_dir()]
+
+
+def stage_env(
+    base: dict[str, str],
+    *,
+    shim_dir: Path,
+    node_version: str,
+    stage: dict,
+    fixtures: dict[str, str] | None = None,
+    fixture_file: Path | None = None,
+    tmp: Path,
+    cache_dir: Path | None = None,
+    workspace_data_dir: Path | None = None,
+    skip_nx_cache: bool = True,
+    gradle_cache: bool = False,
+) -> dict[str, str]:
+    env = {
+        k: v
+        for k, v in base.items()
+        if k not in GIT_ENV
+        and not k.startswith("GIT_")
+        and not SECRET_KEY.search(k)
+        and k not in FIXTURE_KEYS
+        and k not in ("STATEACTION_LOCAL_FIXTURES", "E2E_EXTERNAL_FIXTURES")
+    }
+    # Guard-provided build variables (JAVA_HOME, GRADLE_USER_HOME, ...) survive the
+    # filter above because none of their names match the secret pattern.
+    extra = tool_paths(env, node_version)
+    env["PATH"] = os.pathsep.join([str(shim_dir), *extra, env.get("PATH", "")])
+    env.update(
+        CI="true",
+        NX_DAEMON="false",
+        NX_NO_CLOUD="true",
+        NX_TUI="false",
+        NX_PARALLEL="1",
+        npm_config_workspace_concurrency="1",
+        npm_config_child_concurrency="1",
+        OMP_NUM_THREADS="2",
+        OPENBLAS_NUM_THREADS="2",
+        MKL_NUM_THREADS="2",
+        NUMEXPR_NUM_THREADS="2",
+        RAYON_NUM_THREADS="2",
+        UV_CONCURRENT_DOWNLOADS="2",
+        UV_CONCURRENT_BUILDS="1",
+        UV_CONCURRENT_INSTALLS="2",
+        CMAKE_BUILD_PARALLEL_LEVEL="2",
+        MAKEFLAGS="-j2",
+        UV_THREADPOOL_SIZE="2",
+        GOMAXPROCS="2",
+        NO_COLOR="1",
+        TMPDIR=str(tmp),
+        STATEACTION_REQUIRE_EXTERNAL_FIXTURES="1",
+    )
+    home = Path(env.get("HOME", str(Path.home())))
+    tools = Path(
+        env.get("ROBOTICS_CAPTURE_TOOLS")
+        or home / ".local/share/robotics-capture-tools"
+    )
+    if (tools / "android-sdk").is_dir():
+        env.update(
+            ANDROID_HOME=str(tools / "android-sdk"),
+            ANDROID_SDK_ROOT=str(tools / "android-sdk"),
+        )
+    if cache_dir is not None:
+        # One private cache shared by every staged export; correctness comes from Nx's
+        # input hashes (sources, lockfiles, nx.json runtime/toolchain inputs), not paths.
+        env["NX_CACHE_DIRECTORY"] = str(cache_dir)
+    if workspace_data_dir is not None:
+        # Nx indexes cache artifacts in a database kept with the workspace data; without a
+        # stable location every fresh export would see the shared cache as "unrecognized".
+        env["NX_WORKSPACE_DATA_DIRECTORY"] = str(workspace_data_dir)
+    if skip_nx_cache:
+        env["NX_SKIP_NX_CACHE"] = "true"
+    # Every JVM (Gradle, test workers, Kotlin) sizes its thread pools from the CPU count;
+    # the guard scope allows only 256 tasks, so cap them like the 2-worker rule.
+    jvm = "-XX:ActiveProcessorCount=2"
+    if jvm not in env.get("JAVA_TOOL_OPTIONS", ""):
+        env["JAVA_TOOL_OPTIONS"] = f"{env.get('JAVA_TOOL_OPTIONS', '')} {jvm}".strip()
+    flag = f"-Dorg.gradle.caching={'true' if gradle_cache else 'false'}"
+    env["GRADLE_OPTS"] = f"{env.get('GRADLE_OPTS', '')} {flag}".strip()
+    if fixtures is not None and stage.get("fixtures") and fixture_file is not None:
+        # Stages get only the path of a private, allow-listed 0600 copy; their own
+        # bounded-fixture adapter creates and reaps run-owned databases/buckets.
+        env["STATEACTION_LOCAL_FIXTURES"] = str(fixture_file)
+        env["E2E_EXTERNAL_FIXTURES"] = str(fixture_file)
+    env.update({str(k): str(v) for k, v in (stage.get("env") or {}).items()})
+    return env
+
+
+# ---------------------------------------------------------------------- fixtures
+
+
+def parse_env_file(text: str) -> dict[str, str]:
+    values = {}
+    for line in text.splitlines():
+        match = re.match(r"^\s*(?:export\s+)?([A-Z0-9_]+)=(.*)$", line)
+        if match:
+            values[match[1]] = re.sub(r"^(['\"])(.*)\1$", r"\2", match[2].strip())
+    return values
+
+
+def load_fixtures(path: str | None, *, probe=True) -> dict[str, str]:
+    """Only an explicit file of loopback, synthetic fixtures; allow-listed keys only."""
+    if not path:
+        raise Refused(
+            "Fixture-backed stages need STATEACTION_LOCAL_FIXTURES=<env file>; Docker is never started"
+        )
+    try:
+        values = parse_env_file(Path(path).read_text())
+    except OSError as error:
+        raise Refused(f"Cannot read the fixture file: {error.strerror}") from error
+    selected = {k: v for k, v in values.items() if k in FIXTURE_KEYS}
+    for key in REQUIRED_FIXTURE_KEYS:
+        if not selected.get(key):
+            raise Refused(f"{key} missing from the fixture file")
+    endpoints = []
+    for key, value in selected.items():
+        if key.endswith(("_URL", "_ENDPOINT")):
+            parsed = urlparse(value)
+            if parsed.hostname not in LOOPBACK or not parsed.port:
+                raise Refused(f"{key} must be a loopback host with an explicit port")
+            endpoints.append((parsed.hostname, parsed.port))
+    if probe:
+        for host, port in sorted(set(endpoints)):
+            try:
+                with socket.create_connection((host, port), timeout=3):
+                    pass
+            except OSError as error:
+                raise Refused(
+                    f"Fixture {host}:{port} is not reachable: {error.strerror}"
+                ) from error
+    return selected
+
+
+def fixture_secrets(fixtures: dict[str, str]) -> list[str]:
+    secrets_ = set()
+    for key, value in fixtures.items():
+        if SECRET_KEY.search(key) and len(value) >= 6:
+            secrets_.add(value)
+        if key.endswith("_URL"):
+            password = urlparse(value).password
+            if password and len(password) >= 6:
+                secrets_.add(password)
+    return sorted(secrets_, key=len, reverse=True)
+
+
+def fixture_summary(fixtures: dict[str, str]) -> list[str]:
+    seen = set()
+    for key, value in fixtures.items():
+        if key.endswith(("_URL", "_ENDPOINT")):
+            parsed = urlparse(value)
+            seen.add(f"{parsed.scheme}://{parsed.hostname}:{parsed.port}")
+    return sorted(seen)
+
+
+# ----------------------------------------------------------------------- children
+
+
+class Interrupted(Refused):
+    pass
+
+
+def kill_group(process: subprocess.Popen, grace: float = 8.0) -> None:
+    """Reap only the process group this runner created."""
+    for sig, wait in ((signal.SIGTERM, grace), (signal.SIGKILL, 5.0)):
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, sig)
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            if process.poll() is not None and not _group_alive(process.pid):
+                return
+            time.sleep(0.05)
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def set_subreaper() -> None:
+    """Orphaned descendants (even setsid daemons) re-parent to this runner."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        raise Refused(
+            "Cannot become a child subreaper; exact process reaping cannot be proved"
+        )
+
+
+def descendants(root: int, proc: Path = Path("/proc")) -> list[tuple[int, str]]:
+    """(pid, state) of every process below `root`, from the kernel's parent links."""
+    children: dict[int, list[tuple[int, str]]] = {}
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+            children.setdefault(int(fields[1]), []).append((int(entry.name), fields[0]))
+        except (OSError, IndexError, ValueError):
+            continue
+    found, queue = [], [root]
+    while queue:
+        for pid, state in children.get(queue.pop(), []):
+            found.append((pid, state))
+            queue.append(pid)
+    return found
+
+
+def reap_subtree(root: int | None = None, grace: float = 8.0) -> int:
+    """Terminate and reap everything below this runner; only its own descendants.
+
+    Returns how many live processes were found. Raises Refused when the subtree
+    cannot be proved empty, so such a stage can neither pass nor be followed.
+    """
+    root = root or os.getpid()
+    leaked: set[int] = set()
+    terminated = False
+    deadline = time.monotonic() + grace
+    while True:
+        procs = descendants(root)
+        for pid, state in procs:
+            if state == "Z":
+                with contextlib.suppress(ChildProcessError, OSError):
+                    os.waitpid(pid, os.WNOHANG)
+        live = [pid for pid, state in procs if state != "Z"]
+        if not procs:
+            return len(leaked)
+        leaked.update(live)
+        if live:
+            sig = (
+                signal.SIGKILL
+                if terminated and time.monotonic() > deadline - grace / 2
+                else signal.SIGTERM
+            )
+            for pid in live:
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.kill(pid, sig)
+            terminated = True
+        if time.monotonic() > deadline:
+            raise Refused(
+                f"Could not prove that {len(procs)} descendant process(es) exited"
+            )
+        time.sleep(0.05)
+
+
+def redact(text: bytes, secrets_: list[str]) -> bytes:
+    for secret in secrets_:
+        text = text.replace(secret.encode(), b"<redacted>")
+    return text
+
+
+def run_child(
+    argv: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    log: Path,
+    timeout: float,
+    output_cap: int,
+    secrets_: list[str],
+    stop: dict,
+    capture: bool = False,
+    scan: "CacheScan | None" = None,
+) -> dict:
+    started = time.monotonic()
+    try:
+        process = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except OSError as error:
+        return {
+            "status": "error",
+            "exitCode": None,
+            "detail": f"cannot start: {error.strerror}",
+            "durationSec": 0.0,
+        }
+    stop["process"] = process
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    written = 0
+    digest = hashlib.sha256()
+    captured = bytearray()
+    status = None
+    tail = bytearray()
+    with log.open("wb") as sink:
+        os.fchmod(sink.fileno(), 0o600)
+        while True:
+            if stop.get("requested"):
+                kill_group(process)
+                status = "interrupted"
+                break
+            if time.monotonic() - started > timeout:
+                kill_group(process)
+                status = "timeout"
+                break
+            events = selector.select(timeout=0.25)
+            if events:
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    break
+                chunk = redact(chunk, secrets_)
+                digest.update(chunk)
+                if scan is not None:
+                    scan.feed(chunk)
+                tail = (tail + chunk)[-4000:]
+                if capture and len(captured) < 1_000_000:
+                    captured += chunk
+                if written + len(chunk) > output_cap:
+                    sink.write(chunk[: max(0, output_cap - written)])
+                    written = output_cap
+                    kill_group(process)
+                    status = "output-limit"
+                    break
+                sink.write(chunk)
+                written += len(chunk)
+            elif process.poll() is not None:
+                break
+    selector.close()
+    code = process.poll()
+    if code is None:
+        kill_group(process)
+        code = process.wait()
+    with contextlib.suppress(Exception):
+        process.stdout.close()
+    stop["process"] = None
+    leaked = 0
+    try:
+        leaked = reap_subtree()
+    except Refused:
+        status = "unreaped"
+    if status is None:
+        status = "passed" if code == 0 else "failed"
+    if leaked and status == "passed":
+        status = (
+            "leaked-process"  # a daemon outliving its stage is a failure, never a pass
+        )
+    result = {
+        "status": status,
+        "exitCode": code,
+        "durationSec": round(time.monotonic() - started, 2),
+        "logBytes": written,
+        "leakedProcesses": leaked,
+        "logSha256": digest.hexdigest(),
+        "tail": tail.decode(errors="replace") if status != "passed" else "",
+    }
+    if scan is not None:
+        result["cache"] = scan.summary()
+    if capture:
+        result["captured"] = captured.decode(errors="replace")
+    return result
+
+
+# ------------------------------------------------------------------------- export
+
+
+def index_tree(repo: Path) -> str:
+    return git(repo, "write-tree")
+
+
+def current_tree(repo: Path, mode: str, rev: str) -> str:
+    return (
+        index_tree(repo)
+        if mode == "staged"
+        else git(repo, "rev-parse", f"{rev}^{{tree}}")
+    )
+
+
+def require_clean_for_staged(repo: Path) -> None:
+    """Tests cover the index; any other state would make the result misleading."""
+    unstaged = git(repo, "diff", "--name-only", check=False)
+    if unstaged:
+        names = ", ".join(unstaged.splitlines()[:5])
+        raise Refused(
+            "Staged and working-tree content differ ("
+            + names
+            + "). Stage the whole intended change or "
+            "set the rest aside yourself; nothing was stashed or discarded."
+        )
+    if git(repo, "ls-files", "--unmerged"):
+        raise Refused("The index has unmerged paths.")
+
+
+def require_clean_for_tree(repo: Path, rev: str) -> None:
+    if git(repo, "status", "--porcelain", "--untracked-files=no"):
+        raise Refused("--tree mode needs a clean checkout of the revision under test.")
+    if git(repo, "rev-parse", "HEAD") != git(repo, "rev-parse", rev):
+        raise Refused("--tree mode must test the checked-out HEAD.")
+
+
+def export_tree(repo: Path, tree: str, destination: Path) -> None:
+    destination.mkdir(mode=0o700)
+    untar(["git", "archive", "--format=tar", tree], repo, destination)
+    for line in git(repo, "ls-tree", "-r", "-z", tree).split("\0"):
+        meta, _, path = line.partition("\t")
+        if meta.startswith("160000"):
+            export_submodule(repo, path, meta.split()[2], destination)
+
+
+def submodule_pins(repo: Path, tree: str) -> dict[str, str]:
+    pins = {}
+    for line in git(repo, "ls-tree", "-r", "-z", tree).split("\0"):
+        meta, _, path = line.partition("\t")
+        if meta.startswith("160000"):
+            pins[path] = meta.split()[2]
+    return pins
+
+
+def init_export_repo(export: Path) -> None:
+    """Give the export a private index so `git ls-files` based stages behave as in a clone.
+
+    Hooks are disabled for it; it shares nothing with the original repository.
+    """
+    for args in (
+        ["init", "-q"],
+        ["config", "core.hooksPath", "/dev/null"],
+        ["config", "user.email", "local-ci@invalid"],
+        ["config", "user.name", "local-ci"],
+        ["add", "-A"],
+    ):
+        result = subprocess.run(
+            ["git", "-C", str(export), *args],
+            env=foreign_repo_env(),
+            capture_output=True,
+        )
+        if result.returncode:
+            raise Refused(f"Could not prepare the export repository ({args[0]}).")
+
+
+def foreign_repo_env() -> dict[str, str]:
+    """Hook-provided GIT_DIR/GIT_INDEX_FILE must not redirect git into another repo."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
+def untar(
+    producer: list[str], cwd: Path, destination: Path, env: dict | None = None
+) -> None:
+    archive = subprocess.Popen(
+        producer, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env
+    )
+    extract = subprocess.run(
+        ["tar", "-x", "-C", str(destination)], stdin=archive.stdout, capture_output=True
+    )
+    archive.stdout.close()
+    if archive.wait() or extract.returncode:
+        raise Refused("Could not export the tree under test.")
+
+
+def export_submodule(repo: Path, path: str, sha: str, destination: Path) -> bool:
+    """Export the pinned gitlink commit when any local repository has it (optional)."""
+    common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    candidates = [repo / path, common / "modules" / path]
+    candidates += [
+        Path(base) / path
+        for base in os.environ.get("STATEACTION_LOCAL_CI_SUBMODULES", "").split(":")
+        if base
+    ]
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        has = subprocess.run(
+            ["git", "-C", str(candidate), "cat-file", "-e", f"{sha}^{{commit}}"],
+            capture_output=True,
+            env=foreign_repo_env(),
+        )
+        top = subprocess.run(
+            ["git", "-C", str(candidate), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            env=foreign_repo_env(),
+        )
+        if (
+            has.returncode == 0
+            and top.returncode == 0
+            and Path(top.stdout.strip()).resolve() == candidate.resolve()
+        ):
+            target = destination / path
+            target.mkdir(parents=True, exist_ok=True)
+            untar(
+                ["git", "-C", str(candidate), "archive", "--format=tar", sha],
+                repo,
+                target,
+                env=foreign_repo_env(),
+            )
+            return True
+    return False
+
+
+def fixture_services(fixtures: dict[str, str]) -> list[tuple[str, int]]:
+    found = set()
+    for key, value in fixtures.items():
+        if key.endswith("_URL"):
+            found.add(("postgres", urlparse(value).port))
+        elif key.endswith("_ENDPOINT"):
+            found.add(("storage", urlparse(value).port))
+    return sorted(found)
+
+
+def listener_pids(port: int) -> list[int]:
+    """Owners of the loopback listener, from `ss` filtered to this exact port."""
+    result = subprocess.run(
+        ["ss", "-ltnpH", f"sport = :{port}"], capture_output=True, text=True, timeout=10
+    )
+    pids = set()
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        local = fields[3] if len(fields) > 3 else ""
+        if local not in (f"127.0.0.1:{port}", f"[::1]:{port}"):
+            raise Refused(f"Fixture port {port} listens beyond loopback ({local})")
+        pids.update(int(p) for p in re.findall(r"pid=(\d+)", line))
+    return sorted(pids)
+
+
+def service_proof(
+    role: str,
+    port: int,
+    *,
+    listeners=listener_pids,
+    proc: Path = Path("/proc"),
+    cgroup: Path = Path("/sys/fs/cgroup"),
+    policy_fetch=None,
+) -> dict:
+    """The external fixture server must itself sit in a finite, no-swap service cgroup."""
+    scope = f"agent-service-{role}.scope"
+    setup = f"Start it with `agent-resource serve --name {role} -- <server command>`."
+    pids = listeners(port)
+    if not pids:
+        raise Refused(f"No loopback listener on fixture port {port}. {setup}")
+    limit = None
+    for pid in pids:
+        try:
+            relative = _read(proc / str(pid) / "cgroup").split("::", 1)[1]
+            if f"/{SLICE}/" not in relative or not relative.endswith("/" + scope):
+                raise Refused(f"Fixture port {port} is served outside {scope}. {setup}")
+            group = cgroup / relative.lstrip("/")
+            limit = _limit(_read(group / "memory.max"))
+            slice_limit = _limit(_read(group.parent / "memory.max"))
+            if limit > GIB:
+                raise Refused(f"{scope} exceeds its 1 GiB service cap")
+            check_aggregate(slice_limit, policy_fetch)
+            if (
+                _read(group / "memory.swap.max") != "0"
+                or _read(group.parent / "memory.swap.max") != "0"
+            ):
+                raise Refused(f"{scope} allows swap")
+        except (OSError, IndexError, GuardError) as error:
+            raise Refused(
+                f"Cannot verify the cgroup of fixture port {port}: {error}. {setup}"
+            ) from error
+    return {
+        "role": role,
+        "port": port,
+        "scope": scope,
+        "pids": len(pids),
+        "memoryMaxBytes": limit,
+        "swapMaxBytes": 0,
+    }
+
+
+# ----------------------------------------------------------------------- pipeline
+
+
+def _digest(path: Path) -> str:
+    if path.is_symlink():
+        return sha256_bytes(os.readlink(path).encode())
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def take_snapshot(
+    repo: Path, tree: str, export: Path
+) -> dict[str, tuple[int, int, str]]:
+    """Content of every tracked (and submodule) file as exported, to detect rewrites."""
+    listing = git(repo, "ls-tree", "-r", "-z", "--name-only", tree)
+    names = [n for n in listing.split("\0") if n]
+    snapshot: dict[str, tuple[int, int, str]] = {}
+    for name in names:
+        path = export / name
+        if path.is_symlink() or path.is_file():
+            stat_ = path.lstat()
+            snapshot[name] = (stat_.st_size, stat_.st_mtime_ns, _digest(path))
+    return snapshot
+
+
+def modified_since(
+    export: Path, snapshot: dict[str, tuple[int, int, str]]
+) -> list[str]:
+    changed = []
+    for name, (size, mtime, digest) in snapshot.items():
+        path = export / name
+        try:
+            stat_ = path.lstat()
+        except OSError:
+            changed.append(name)
+            continue
+        if (stat_.st_size, stat_.st_mtime_ns) != (size, mtime) and _digest(
+            path
+        ) != digest:
+            changed.append(name)
+    return changed
+
+
+def acquire_lock(home: Path) -> int:
+    """One run per CI home: it owns the fixed export path and the shared caches."""
+    fd = os.open(home / "run.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as error:
+        os.close(fd)
+        raise Refused("Another local CI run owns this CI home.") from error
+    return fd
+
+
+def write_json_private(path: Path, data: dict) -> None:
+    temporary = path.with_name(path.name + f".{secrets.token_hex(4)}.tmp")
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as file:
+        json.dump(data, file, indent=2, sort_keys=True)
+        file.write("\n")
+    os.replace(temporary, path)
+
+
+def invalidate(home: Path, tree: str) -> None:
+    """A new full attempt supersedes, and so removes, any earlier PASS for the tree."""
+    (private_dir(home / "receipts") / f"{tree}.json").unlink(missing_ok=True)
+
+
+def record_attempt(
+    home: Path, tree: str, run_id: str, state: str, verdict: str | None = None
+) -> None:
+    write_json_private(
+        private_dir(home / "attempts") / f"{tree}.json",
+        {
+            "tree": tree,
+            "runId": run_id,
+            "state": state,
+            "verdict": verdict,
+            "at": time.time(),
+        },
+    )
+
+
+def invalidate_best_effort(
+    repo: Path, mode: str, rev: str, home: Path | None = None
+) -> None:
+    """Called before the guard or any other precondition can refuse the run."""
+    with contextlib.suppress(Refused, OSError):
+        invalidate(
+            private_dir(home or local_ci_home()), current_tree(Path(repo), mode, rev)
+        )
+
+
+def receipt_digest(receipt: dict) -> str:
+    body = {k: v for k, v in receipt.items() if k != "receiptSha256"}
+    return sha256_bytes(json.dumps(body, sort_keys=True).encode())
+
+
+def run_pipeline(
+    repo: Path,
+    *,
+    mode: str,
+    rev: str = "HEAD",
+    home: Path | None = None,
+    guard: dict | None = None,
+    keep_going: bool = False,
+    keep_work: bool = False,
+    fresh: bool = False,
+    only: list[str] | None = None,
+    fixtures_path: str | None = None,
+    probe_fixtures: bool = True,
+    runner_text: bytes | None = None,
+    service_check=None,
+    log=lambda message: print(message, file=sys.stderr, flush=True),
+    install_signals: bool = True,
+) -> dict:
+    """Run the declared stages. Returns the run record; receipt only when all passed."""
+    repo = Path(repo).resolve()
+    home = private_dir(Path(home) if home else local_ci_home())
+    service_check = service_check or service_proof
+    if guard is None:
+        raise GuardError("A verified guard proof is required.")
+    if mode == "staged":
+        require_clean_for_staged(repo)
+    else:
+        require_clean_for_tree(repo, rev)
+    tree = current_tree(repo, mode, rev)
+    head = git(repo, "rev-parse", "HEAD", check=False) or None
+    stages_text = blob(repo, tree, STAGES_PATH)
+    if stages_text is None:
+        raise Refused(f"{STAGES_PATH} is not part of the tree under test.")
+    runner_in_tree = blob(repo, tree, RUNNER_PATH)
+    runner_text = (
+        runner_text if runner_text is not None else Path(__file__).read_bytes()
+    )
+    if runner_in_tree is None or sha256_bytes(runner_in_tree) != sha256_bytes(
+        runner_text
+    ):
+        raise Refused(
+            "The running local CI runner differs from the runner in the tree under test."
+        )
+    spec = load_stages(stages_text)
+    stages = spec["stages"]
+    if only:
+        unknown = set(only) - {s["id"] for s in stages}
+        if unknown:
+            raise Refused(f"Unknown stage ids: {sorted(unknown)}")
+        stages = [s for s in stages if s["id"] in only]
+    lock_fd = acquire_lock(home)
+    run_id = time.strftime("%Y%m%dT%H%M%S") + "-" + secrets.token_hex(3)
+    invalidate(home, tree)
+    record_attempt(home, tree, run_id, "running")
+    # A fixed export path (we hold the CI-home lock) keeps path-sensitive build caches
+    # such as Gradle's valid between runs; its content is always a fresh export.
+    work = private_dir(home / "work") / "current"
+    if work.exists():
+        shutil.rmtree(work)
+    nx_cache = private_dir(home / "nx-cache")
+    nx_data = private_dir(home / "nx-workspace-data")
+    logs = private_dir(home / "logs" / run_id)
+    work.mkdir(mode=0o700)
+    export = work / "tree"
+    tmp = work / "tmp"
+    tmp.mkdir(mode=0o700)
+    shim_dir = work / "shims"
+    shim_dir.mkdir(mode=0o700)
+    pins = spec["pins"]
+    make_shims(shim_dir, pins["uv"])
+    base_sha = (
+        git(repo, "rev-parse", "--verify", "refs/remotes/origin/main", check=False)
+        or None
+    )
+    fixtures = None
+    services: list[dict] = []
+    fixture_file = None
+    secrets_: list[str] = []
+    record = {
+        "runId": run_id,
+        "mode": mode,
+        "tree": tree,
+        "head": head,
+        "stages": [],
+        "verdict": "FAIL",
+        "logDir": str(logs),
+    }
+    stop = {"process": None, "requested": False}
+    previous: dict = {}
+    if install_signals:
+
+        def handler(signum, _frame):
+            stop["requested"] = True
+            stop["signal"] = signum
+
+        for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous[name] = signal.signal(name, handler)
+    started_at = time.time()
+    toolchain: dict[str, str] = {}
+    try:
+        set_subreaper()
+        export_tree(repo, tree, export)
+        init_export_repo(export)
+        snapshot = take_snapshot(repo, tree, export)
+        for item in stages:
+            for needed in item.get("requiresPaths", []):
+                if not (export / needed).exists():
+                    raise Refused(
+                        f"Stage {item['id']} needs {needed}, which is not in the exported tree. "
+                        "Initialize the submodule or set STATEACTION_LOCAL_CI_SUBMODULES=<dir containing it>."
+                    )
+        if any(s.get("fixtures") for s in stages):
+            fixtures = load_fixtures(
+                fixtures_path
+                or os.environ.get("STATEACTION_LOCAL_FIXTURES")
+                or os.environ.get("E2E_EXTERNAL_FIXTURES"),
+                probe=probe_fixtures,
+            )
+            secrets_ = fixture_secrets(fixtures)
+            for role, port in fixture_services(fixtures):
+                services.append(service_check(role, port))
+            fixture_file = work / "fixtures.env"
+            fd = os.open(fixture_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w") as file:
+                file.write("".join(f"{k}={v}\n" for k, v in sorted(fixtures.items())))
+        for stage in stages:
+            if stop["requested"]:
+                record["stages"].append({"id": stage["id"], "status": "interrupted"})
+                raise Interrupted("Cancelled before stage " + stage["id"])
+            cwd = export / stage.get("cwd", ".")
+            argv, skip_nx = effective_argv(stage, fresh)
+            gradle_cache = bool(stage.get("gradleBuildCache")) and not fresh
+            env = stage_env(
+                os.environ.copy(),
+                shim_dir=shim_dir,
+                node_version=pins["node"],
+                stage=stage,
+                fixtures=fixtures,
+                fixture_file=fixture_file,
+                tmp=tmp,
+                cache_dir=nx_cache,
+                workspace_data_dir=nx_data,
+                skip_nx_cache=skip_nx,
+                gradle_cache=gradle_cache,
+            )
+            log(f"[local-ci] stage {stage['id']}: {stage['title']}")
+            result = run_child(
+                argv,
+                cwd=cwd,
+                env=env,
+                log=logs / f"{stage['id']}.log",
+                timeout=float(stage.get("timeoutSec", 1800)),
+                output_cap=int(stage.get("maxOutputBytes", DEFAULT_OUTPUT_CAP)),
+                secrets_=secrets_,
+                stop=stop,
+                capture=bool(stage.get("capture")),
+                scan=CacheScan() if is_nx(argv) else None,
+            )
+            entry = {
+                "id": stage["id"],
+                "argvSha256": argv_hash(stage),
+                "status": result["status"],
+                "exitCode": result["exitCode"],
+                "durationSec": result["durationSec"],
+                "startedAt": None,
+                "logBytes": result.get("logBytes", 0),
+                "logSha256": result.get("logSha256"),
+                "fixtureBacked": bool(stage.get("fixtures")),
+                "cacheMode": "none" if skip_nx or not is_nx(argv) else "nx",
+                "gradleBuildCache": gradle_cache,
+                "cache": result.get("cache"),
+            }
+            if stage.get("capture") == "toolchain" and "captured" in result:
+                toolchain = {
+                    k: v.strip()
+                    for k, _, v in (
+                        line.partition("=") for line in result["captured"].splitlines()
+                    )
+                    if k and v
+                }
+            # The tree under test must be exactly what is being committed.
+            observed = current_tree(repo, mode, rev)
+            if observed != tree and result["status"] == "passed":
+                entry["status"] = "tree-changed"
+                entry["detail"] = (
+                    f"tree changed from {tree} to {observed} during the run"
+                )
+            rewritten = modified_since(export, snapshot)
+            if rewritten and entry["status"] == "passed":
+                entry["status"] = "source-modified"
+                entry["detail"] = "stage rewrote tracked source: " + ", ".join(
+                    rewritten[:10]
+                )
+            if result.get("leakedProcesses"):
+                entry["leakedProcesses"] = result["leakedProcesses"]
+            if entry["status"] != "passed" and result.get("tail"):
+                log(redact(result["tail"].encode(), secrets_).decode(errors="replace"))
+            record["stages"].append(entry)
+            if entry["status"] == "interrupted":
+                raise Interrupted("Cancelled during stage " + stage["id"])
+            if entry["status"] != "passed" and not keep_going:
+                break
+        passed = [s for s in record["stages"] if s["status"] == "passed"]
+        complete = len(passed) == len(stages) == len(record["stages"])
+        final = current_tree(repo, mode, rev)
+        if final != tree:
+            complete = False
+            record["detail"] = "tree changed during the run"
+        if complete and only:
+            complete = False
+            record["detail"] = "partial stage selection never produces a PASS receipt"
+        record["verdict"] = "PASS" if complete else "FAIL"
+    except Interrupted as error:
+        record["verdict"] = "INTERRUPTED"
+        record["detail"] = str(error)
+    except Refused as error:
+        record["verdict"] = "FAIL"
+        record["detail"] = str(error)
+    except BaseException as error:  # never leave a half-trusted result
+        record["verdict"] = "FAIL"
+        record["detail"] = f"{type(error).__name__}: {error}"
+        raise
+    finally:
+        if stop.get("process") is not None:
+            kill_group(stop["process"])
+        for name, handler_ in previous.items():
+            signal.signal(name, handler_)
+        with contextlib.suppress(Refused):
+            reap_subtree()
+        record["finishedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        peak = peak_memory(guard)
+        record["guard"] = {
+            **{k: v for k, v in guard.items() if k != "cgroup"},
+            "peakMemoryBytes": peak,
+        }
+        if not keep_work and work.resolve().parent == (home / "work").resolve():
+            shutil.rmtree(work, ignore_errors=True)
+        os.close(lock_fd)
+        write_json_private(logs / "run.json", record)
+    if record["verdict"] == "PASS":
+        receipt = {
+            "schema": RECEIPT_SCHEMA,
+            "verdict": "PASS",
+            "mode": mode,
+            "tree": tree,
+            "head": head,
+            "base": {"ref": "origin/main", "sha": base_sha},
+            "stagesSha256": sha256_bytes(stages_text),
+            "runnerSha256": sha256_bytes(runner_text),
+            "stages": [
+                {
+                    k: s[k]
+                    for k in (
+                        "id",
+                        "argvSha256",
+                        "status",
+                        "exitCode",
+                        "durationSec",
+                        "logSha256",
+                        "fixtureBacked",
+                        "cacheMode",
+                        "gradleBuildCache",
+                        "cache",
+                    )
+                }
+                for s in record["stages"]
+            ],
+            "toolchain": toolchain,
+            "toolchainSha256": sha256_bytes(
+                json.dumps(toolchain, sort_keys=True).encode()
+            ),
+            "fresh": fresh,
+            "totalDurationSec": round(
+                sum(s["durationSec"] for s in record["stages"]), 2
+            ),
+            "guard": record["guard"],
+            "fixtures": fixture_summary(fixtures) if fixtures else [],
+            "fixtureServices": services,
+            "submodules": submodule_pins(repo, tree),
+            "requirementsSha256": sha256_bytes(
+                blob(repo, tree, "requirements-stera.txt") or b""
+            ),
+            "unautomated": spec.get("unautomated", []),
+            "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(started_at)),
+            "finishedAt": record["finishedAt"],
+            "runId": run_id,
+            "logDir": str(logs),
+        }
+        receipt["receiptSha256"] = receipt_digest(receipt)
+        receipts = private_dir(home / "receipts")
+        write_json_private(receipts / f"{tree}.json", receipt)
+        record["receipt"] = str(receipts / f"{tree}.json")
+    record_attempt(home, tree, run_id, "finished", record["verdict"])
+    return record
+
+
+# ------------------------------------------------------------------- verification
+
+
+def verify_receipt(
+    repo: Path,
+    head: str = "HEAD",
+    *,
+    home: Path | None = None,
+    base_ref: str = "refs/remotes/origin/main",
+    require_single_commit: bool = True,
+) -> list[str]:
+    """Return the reasons the receipt cannot authorize merging `head` (empty = valid)."""
+    repo = Path(repo).resolve()
+    errors: list[str] = []
+    head_sha = git(repo, "rev-parse", "--verify", f"{head}^{{commit}}", check=False)
+    base_sha = git(repo, "rev-parse", "--verify", base_ref, check=False)
+    if not head_sha:
+        return [f"{head} is not a commit"]
+    if not base_sha:
+        return ["origin/main is unknown; fetch it first"]
+    tree = git(repo, "rev-parse", f"{head_sha}^{{tree}}")
+    path = (home or local_ci_home()) / "receipts" / f"{tree}.json"
+    try:
+        receipt = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return [
+            f"no PASS receipt for tree {tree}; run `pnpm ci:local` on the clean rebased head"
+        ]
+    if receipt.get("schema") != RECEIPT_SCHEMA or receipt.get("verdict") != "PASS":
+        errors.append("receipt is not a PASS receipt of the supported schema")
+    if receipt.get("receiptSha256") != receipt_digest(receipt):
+        errors.append("receipt digest does not match its content")
+    if receipt.get("toolchainSha256") != sha256_bytes(
+        json.dumps(receipt.get("toolchain", {}), sort_keys=True).encode()
+    ):
+        errors.append("receipt toolchain record is inconsistent")
+    if receipt.get("tree") != tree:
+        errors.append("receipt tree differs from the head tree")
+    try:
+        attempt = json.loads(
+            (
+                private_dir(home or local_ci_home()) / "attempts" / f"{tree}.json"
+            ).read_text()
+        )
+    except (OSError, ValueError):
+        attempt = {}
+    if (
+        attempt.get("runId") != receipt.get("runId")
+        or attempt.get("state") != "finished"
+        or attempt.get("verdict") != "PASS"
+    ):
+        errors.append(
+            "a newer attempt on this tree superseded or invalidated the receipt"
+        )
+    parent = git(repo, "rev-parse", "--verify", f"{head_sha}^", check=False)
+    if not (
+        (receipt.get("mode") == "staged" and receipt.get("head") == parent)
+        or (receipt.get("mode") == "tree" and receipt.get("head") == head_sha)
+    ):
+        errors.append(
+            "receipt was produced for a different commit context; run `pnpm ci:local` on this head"
+        )
+    stages_text = blob(repo, head_sha, STAGES_PATH)
+    runner_text = blob(repo, head_sha, RUNNER_PATH)
+    if stages_text is None or runner_text is None:
+        return errors + ["the head does not contain the local CI runner and stage list"]
+    if receipt.get("stagesSha256") != sha256_bytes(stages_text):
+        errors.append("stage list changed since the receipt")
+    if receipt.get("runnerSha256") != sha256_bytes(runner_text):
+        errors.append("runner changed since the receipt")
+    try:
+        declared = {s["id"]: argv_hash(s) for s in load_stages(stages_text)["stages"]}
+    except (Refused, ValueError, KeyError) as error:
+        return errors + [f"stage list invalid: {error}"]
+    got = {s.get("id"): s for s in receipt.get("stages", [])}
+    if list(got) != list(declared):
+        errors.append("receipt stages do not equal the declared stages in order")
+    for stage_id, digest in declared.items():
+        item = got.get(stage_id)
+        if (
+            not item
+            or item.get("status") != "passed"
+            or item.get("argvSha256") != digest
+        ):
+            errors.append(f"stage {stage_id} did not pass with the declared command")
+    guard = receipt.get("guard", {})
+    if not (
+        0 < guard.get("memoryMaxBytes", 0) <= JOB_MAX and guard.get("swapMaxBytes") == 0
+    ):
+        errors.append("receipt lacks verified guard limits")
+    ancestor = (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", base_sha, head_sha], cwd=repo
+        ).returncode
+        == 0
+    )
+    if not ancestor:
+        errors.append(
+            "head does not contain the latest origin/main (rebase and re-run)"
+        )
+    elif require_single_commit:
+        if git(repo, "rev-list", "--count", f"{base_sha}..{head_sha}") != "1":
+            errors.append(
+                "head must be exactly one commit above origin/main (squash locally)"
+            )
+        if git(repo, "rev-list", "--merges", f"{base_sha}..{head_sha}"):
+            errors.append("head contains a merge commit")
+        if git(repo, "rev-parse", f"{head_sha}^") != base_sha:
+            errors.append("head's parent is not the latest origin/main")
+    return errors
+
+
+# ---------------------------------------------------------------------- merge
+
+
+def gh_json(*args: str) -> object:
+    result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=120)
+    if result.returncode:
+        raise Refused(f"gh {args[0]} failed: {result.stderr.strip()[:300]}")
+    return json.loads(result.stdout or "null")
+
+
+class MergedOnUntestedBase(Refused):
+    """The merge happened but not exactly on the tested base/tree: fatal, never retried."""
+
+
+def check_merged_commit(
+    github_repo: str, number: int, base: str, head_tree: str, api=None
+) -> dict:
+    """GitHub has no atomic expected-base guard: prove the result after the fact."""
+    api = api or gh_json
+    merged = api("api", f"repos/{github_repo}/pulls/{number}")
+    sha = str(merged.get("merge_commit_sha") or "")
+    if not merged.get("merged") or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise MergedOnUntestedBase("GitHub does not report a merged squash commit.")
+    commit = api("api", f"repos/{github_repo}/commits/{sha}")
+    parents = [parent.get("sha") for parent in commit.get("parents") or []]
+    tree = (commit.get("commit") or {}).get("tree", {}).get("sha")
+    if parents != [base] or tree != head_tree:
+        raise MergedOnUntestedBase(
+            f"FATAL: squash commit {sha} has parents {parents} and tree {tree}; "
+            f"expected parent [{base}] and tree {head_tree}. main moved in the final "
+            "interval or the content differs. Stop the merge queue and investigate; "
+            "nothing was retried, reset or rewritten."
+        )
+    return {"mergeSha": sha, "parent": base, "tree": tree}
+
+
+def merge_pr(
+    repo: Path,
+    number: int,
+    *,
+    github_repo: str,
+    execute: bool,
+    home: Path | None = None,
+) -> int:
+    """Serialize with every other CI run/merge on this CI home, then merge."""
+    lock = acquire_lock(private_dir(Path(home) if home else local_ci_home()))
+    try:
+        return _merge_pr(
+            repo, number, github_repo=github_repo, execute=execute, home=home
+        )
+    finally:
+        os.close(lock)
+
+
+def _merge_pr(
+    repo: Path,
+    number: int,
+    *,
+    github_repo: str,
+    execute: bool,
+    home: Path | None = None,
+) -> int:
+    """Validate then squash merge. Never pushes main and never fakes a status."""
+    sys.path.insert(0, str(Path(repo) / "scripts/automation"))
+    import github_policy  # noqa: PLC0415  (repository module, stdlib only)
+
+    owner = gh_json("api", "user")["login"]
+    if owner != "timothywangdev":
+        raise Refused(
+            "Active GitHub account must be timothywangdev for this repository."
+        )
+    git(repo, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    pr = gh_json("api", f"repos/{github_repo}/pulls/{number}")
+    pages = gh_json(
+        "api",
+        "--paginate",
+        "--slurp",
+        f"repos/{github_repo}/pulls?state=all&per_page=100",
+    )
+    pulls = [item for page in pages for item in page]
+    ticket = github_policy.validate_pr(pr, github_repo, pulls)
+    if pr.get("draft"):
+        raise Refused("PR is a draft.")
+    head = git(repo, "rev-parse", "HEAD")
+    if pr["head"]["sha"] != head:
+        raise Refused(
+            "PR head is not the locally verified HEAD; push the rebased head first."
+        )
+    errors = verify_receipt(repo, head, home=home)
+    if errors:
+        raise Refused("Local receipt rejected: " + "; ".join(errors))
+    command = [
+        "gh",
+        "pr",
+        "merge",
+        str(number),
+        "--repo",
+        github_repo,
+        "--squash",
+        "--match-head-commit",
+        head,
+        "--subject",
+        f"{pr['title']} (#{number})",
+        "--body",
+        github_policy.primary_declaration(pr),
+    ]
+    print(
+        json.dumps(
+            {"ticket": ticket, "head": head, "execute": execute, "command": command[:6]}
+        )
+    )
+    if not execute:
+        print("Dry run: receipt valid; re-run with --execute to squash merge.")
+        return 0
+    # Last look immediately before the merge: same head, clean tree, receipt still valid.
+    git(repo, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    if git(repo, "rev-parse", "HEAD") != head or git(
+        repo, "status", "--porcelain", "--untracked-files=no"
+    ):
+        raise Refused("HEAD or the working tree changed during verification.")
+    errors = verify_receipt(repo, head, home=home)
+    if errors:
+        raise Refused("Local receipt rejected at merge time: " + "; ".join(errors))
+    base = git(repo, "rev-parse", "refs/remotes/origin/main")
+    head_tree = git(repo, "rev-parse", f"{head}^{{tree}}")
+    subprocess.run(command, check=True, timeout=300)
+    print(json.dumps(check_merged_commit(github_repo, number, base, head_tree)))
+    return 0
+
+
+# -------------------------------------------------------------------------- cli
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    run = sub.add_parser("run")
+    group = run.add_mutually_exclusive_group(required=True)
+    group.add_argument("--staged", action="store_true")
+    group.add_argument("--tree", metavar="REV")
+    run.add_argument("--keep-going", action="store_true")
+    run.add_argument(
+        "--fresh", action="store_true", help="bypass every cache (cold evidence run)"
+    )
+    run.add_argument("--keep-work", action="store_true")
+    run.add_argument(
+        "--only", action="append", help="debug only; never yields a receipt"
+    )
+    verify = sub.add_parser("verify")
+    verify.add_argument("--head", default="HEAD")
+    merge = sub.add_parser("merge")
+    merge.add_argument("--pr", type=int, required=True)
+    merge.add_argument("--repo", default="timothywangdev/stateaction")
+    merge.add_argument("--execute", action="store_true")
+    args = parser.parse_args(argv)
+    try:
+        repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel"))
+        if args.command == "verify":
+            git(
+                repo,
+                "fetch",
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+                check=False,
+            )
+            errors = verify_receipt(repo, args.head)
+            print(json.dumps({"valid": not errors, "errors": errors}, indent=2))
+            return 0 if not errors else 1
+        if args.command == "merge":
+            return merge_pr(repo, args.pr, github_repo=args.repo, execute=args.execute)
+        invalidate_best_effort(
+            repo, "staged" if args.staged else "tree", args.tree or "HEAD"
+        )
+        guard = ensure_guard([str(Path(__file__).resolve()), *argv])
+        record = run_pipeline(
+            repo,
+            mode="staged" if args.staged else "tree",
+            rev=args.tree or "HEAD",
+            guard=guard,
+            keep_going=args.keep_going,
+            keep_work=args.keep_work,
+            fresh=args.fresh,
+            only=args.only,
+        )
+    except MergedOnUntestedBase as error:
+        print(f"LOCAL CI FATAL: {error}", file=sys.stderr)
+        return 3
+    except Refused as error:
+        print(f"LOCAL CI REFUSED: {error}", file=sys.stderr)
+        return 75
+    summary = {
+        k: record.get(k) for k in ("verdict", "tree", "detail", "receipt", "logDir")
+    }
+    summary["stages"] = [(s["id"], s["status"]) for s in record["stages"]]
+    summary["peakMemoryBytes"] = record["guard"]["peakMemoryBytes"]
+    print(json.dumps(summary, indent=2))
+    return (
+        0
+        if record["verdict"] == "PASS"
+        else 130
+        if record["verdict"] == "INTERRUPTED"
+        else 1
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

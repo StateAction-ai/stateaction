@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 # Run only on isolated local/CI ports. Never dispatches to a cloud workflow.
+#
+# Bounded external mode (STATEACTION_LOCAL_FIXTURES / E2E_EXTERNAL_FIXTURES):
+# no `docker compose`. A run-owned database and bucket on the already-running
+# bounded loopback PostgreSQL/S3 are used and removed on exit by exact ledger
+# entry. STATEACTION_REQUIRE_EXTERNAL_FIXTURES=1 refuses the Compose fallback.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+fixtures=scripts/platform/local-fixtures.mjs
+external=false
+if [[ -n "${STATEACTION_LOCAL_FIXTURES:-}${E2E_EXTERNAL_FIXTURES:-}" || -n "${STATEACTION_REQUIRE_EXTERNAL_FIXTURES:-}" ]]; then
+  node "$fixtures" check # refuses unsafe/missing fixtures
+  external=true
+fi
 export COMPOSE_PROJECT_NAME="${STATEACTION_SMOKE_COMPOSE_PROJECT:-stateaction-sa11-smoke}"
 mkdir -p artifacts/platform-ci
 python3 - <<'PY'
@@ -33,7 +44,9 @@ PY
 web_pid=''
 workflow_pid=''
 compose_started=false
+run_dir=''
 cleanup() {
+  local rc=$?
   [[ -z "$web_pid" ]] || kill -- "-$web_pid" 2>/dev/null || true
   [[ -z "$workflow_pid" ]] || kill -- "-$workflow_pid" 2>/dev/null || true
   if [[ "$compose_started" == true ]]; then
@@ -41,19 +54,46 @@ cleanup() {
     docker compose -f infra/compose.yaml down
   fi
   rm -f .env .env.workflows.local
+  if [[ -n "$run_dir" ]]; then node "$fixtures" reap "$run_dir" || rc=1; fi
+  return "$rc"
 }
-trap cleanup EXIT
-# Isolated named volumes survive shutdown; never delete user data in this script.
-if [[ -n "$(docker compose -f infra/compose.yaml ps -q)" ]]; then
-  echo "Refusing to reuse existing StateAction Compose services." >&2
-  exit 1
+trap 'cleanup; exit $?' EXIT
+if [[ "$external" == true ]]; then
+  run_dir=$(node "$fixtures" prepare smk --database --bucket)
+  (
+    set -a; source "$run_dir/run.env"; set +a
+    python3 - <<'PY'
+from pathlib import Path
+import os, re
+p = Path('.env')
+text = p.read_text()
+def put(key, value):
+    global text
+    text = re.sub(rf'^{key}=.*$', lambda _: f'{key}={value}', text, flags=re.M)
+put('DATABASE_URL', os.environ['STATEACTION_FIXTURE_OWNER_URL'])
+put('S3_ENDPOINT', os.environ['STORAGE_TEST_ENDPOINT'])
+put('S3_BUCKET', os.environ['STATEACTION_FIXTURE_BUCKET'])
+put('S3_ACCESS_KEY_ID', os.environ['STORAGE_TEST_ACCESS_KEY_ID'])
+put('S3_SECRET_ACCESS_KEY', os.environ['STORAGE_TEST_SECRET_ACCESS_KEY'])
+p.write_text(text)
+p.chmod(0o600)
+PY
+  )
+  public_endpoint="http://localhost:19000"
+else
+  # Isolated named volumes survive shutdown; never delete user data in this script.
+  if [[ -n "$(docker compose -f infra/compose.yaml ps -q)" ]]; then
+    echo "Refusing to reuse existing StateAction Compose services." >&2
+    exit 1
+  fi
+  compose_started=true
+  docker compose -f infra/compose.yaml up -d --wait
+  public_endpoint="http://localhost:9000"
 fi
-compose_started=true
-docker compose -f infra/compose.yaml up -d --wait
 pnpm db:migrate
 pnpm storage:init
 pnpm storage:check
-printf 'S3_PUBLIC_ENDPOINT=http://localhost:9000\n' >> .env # differs from S3_ENDPOINT: signing origin test
+printf 'S3_PUBLIC_ENDPOINT=%s\n' "$public_endpoint" >> .env # differs from S3_ENDPOINT: signing origin test
 pnpm storage:presign
 setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!

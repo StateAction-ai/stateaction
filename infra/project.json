@@ -27,7 +27,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --test infra/test/*.test.mjs"
+        "command": "node --test --test-concurrency=2 infra/test/*.test.mjs"
       }
     },
     "syntax": {
