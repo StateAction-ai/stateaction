@@ -24,20 +24,29 @@ class TokenService {
     return ({"cookie": cookie}, null);
   }
 
-  /// Applies every `Set-Cookie` the backend returned (rotation and clearing).
+  /// Jar generation to capture before a request (see [SessionCookieJar]).
+  static int? currentGeneration() => AuthServices.maybeInstance?.jar.generation;
+
+  /// Applies every `Set-Cookie` the backend returned (rotation and clearing),
+  /// unless the jar was cleared since [generation] was captured.
   static Future<void> saveCookiesFromResponse(
     Uri uri,
-    List<String> setCookieHeaders,
-  ) async {
+    List<String> setCookieHeaders, {
+    int? generation,
+  }) async {
     final services = AuthServices.maybeInstance;
     if (services == null || setCookieHeaders.isEmpty) return;
-    await services.jar.ingest(uri, setCookieHeaders);
+    await services.jar.ingest(
+      uri,
+      setCookieHeaders,
+      expectedGeneration: generation,
+    );
   }
 
   /// A human route answered 401: the session ended. This is not a logout:
   /// networking pauses, captures/journals and offline eligibility remain, and
   /// the owner is asked to sign in again.
-  static Future<void> handleSessionExpired() async {
+  static Future<void> handleSessionExpired({int? generation}) async {
     // No session to expire, and `AuthProvider` isn't registered.
     if (AppConfig.noAuthMode) return;
 
@@ -48,7 +57,7 @@ class TokenService {
 
     final ctx = AppRouter.navigatorKey.currentContext;
     if (ctx != null) {
-      await ctx.read<AuthProvider>().onSessionEnded();
+      await ctx.read<AuthProvider>().onSessionEnded(generation: generation);
     }
     AppToast.show(title: "Session expired. Sign in again to resume uploads.");
   }

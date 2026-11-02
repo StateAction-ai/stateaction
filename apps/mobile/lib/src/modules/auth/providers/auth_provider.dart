@@ -163,9 +163,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// A human route returned 401: pause networking, keep owner data.
-  Future<void> onSessionEnded() async {
+  Future<void> onSessionEnded({int? generation}) async {
     _attach();
-    await _controller?.reportUnauthorized();
+    await _controller?.reportUnauthorized(generation: generation);
   }
 
   Future<Failure?> updateCurrentUserProfile({

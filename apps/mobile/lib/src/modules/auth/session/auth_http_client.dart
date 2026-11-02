@@ -135,21 +135,26 @@ class AuthHttpClient {
     }
   }
 
-  /// Requests server revocation, then clears local cookies regardless.
+  /// Clears local cookies immediately (so no later request or late response
+  /// can use them), then asks the server to revoke that session.
   Future<SignOutConfirmation> signOut() async {
-    var confirmed = false;
-    if (await jar.hasCredentials) {
-      final result = await _send("POST", "$authBasePath/sign-out", body: {});
-      confirmed = switch (result) {
-        // 401 means the server already has no session for this cookie.
-        _Transport(:final response?) =>
-          response.statusCode == 200 || response.statusCode == 401,
-        _ => false,
-      };
-    } else {
-      confirmed = true;
-    }
+    final uri = origin.resolve("$authBasePath/sign-out");
+    final cookie = await jar.cookieHeaderFor(uri);
     await jar.clear();
+    if (cookie == null) return SignOutConfirmation.confirmed;
+    final result = await _send(
+      "POST",
+      "$authBasePath/sign-out",
+      body: {},
+      cookieOverride: cookie,
+      applyCookies: false,
+    );
+    // 401 means the server already has no session for this cookie.
+    final confirmed = switch (result) {
+      _Transport(:final response?) =>
+        response.statusCode == 200 || response.statusCode == 401,
+      _ => false,
+    };
     return confirmed
         ? SignOutConfirmation.confirmed
         : SignOutConfirmation.unconfirmed;
@@ -225,7 +230,10 @@ class AuthHttpClient {
     String method,
     String path, {
     Map<String, Object?>? body,
+    String? cookieOverride,
+    bool applyCookies = true,
   }) async {
+    final generation = jar.generation;
     final uri = origin.resolve(path);
     final request = http.Request(method, uri)
       ..followRedirects = false
@@ -238,7 +246,7 @@ class AuthHttpClient {
       request.headers["content-type"] = "application/json";
       request.body = jsonEncode(body ?? const <String, Object?>{});
     }
-    final cookie = await jar.cookieHeaderFor(uri);
+    final cookie = cookieOverride ?? await jar.cookieHeaderFor(uri);
     if (cookie != null) request.headers["cookie"] = cookie;
 
     try {
@@ -246,10 +254,13 @@ class AuthHttpClient {
       final response = await http.Response.fromStream(
         streamed,
       ).timeout(timeout);
-      await jar.ingest(
-        uri,
-        response.headersSplitValues["set-cookie"] ?? const [],
-      );
+      if (applyCookies) {
+        await jar.ingest(
+          uri,
+          response.headersSplitValues["set-cookie"] ?? const [],
+          expectedGeneration: generation,
+        );
+      }
       return _Transport(response: response);
     } on TimeoutException {
       return const _Transport(

@@ -26,7 +26,12 @@ class OfflineEligibility {
   /// lifetime; a provisional pilot policy, not a server-enforced value.
   static const Duration maxOfflineAge = Duration(days: 7);
 
-  bool isFresh(DateTime now) => now.difference(verifiedAt) <= maxOfflineAge;
+  /// Fresh only for a non-negative age within [maxOfflineAge]. A verification
+  /// time in the future (device clock rolled back) fails closed.
+  bool isFresh(DateTime now) {
+    final age = now.difference(verifiedAt);
+    return !age.isNegative && age <= maxOfflineAge;
+  }
 
   @override
   String toString() => "OfflineEligibility(user=<opaque>, at=$verifiedAt)";
@@ -38,8 +43,19 @@ class OfflineEligibilityStore {
 
   final BackendOrigin origin;
   final SecretStore _store;
+  Future<void> _tail = Future<void>.value();
 
-  Future<OfflineEligibility?> read() async {
+  /// Serializes reads/writes/clears so a clear issued after a write is always
+  /// applied after it, whatever the platform storage ordering.
+  Future<T> _serial<T>(Future<T> Function() body) {
+    final run = _tail.then((_) => body());
+    _tail = run.then<void>((_) {}, onError: (_) {});
+    return run;
+  }
+
+  Future<OfflineEligibility?> read() => _serial(_read);
+
+  Future<OfflineEligibility?> _read() async {
     final raw = await _store.read(SecretKeys.offlineEligibility);
     if (raw == null) return null;
     try {
@@ -48,12 +64,12 @@ class OfflineEligibilityStore {
           map["origin"] != origin.value ||
           map["authUserId"] is! String ||
           map["verifiedAt"] is! String) {
-        await clear();
+        await _store.delete(SecretKeys.offlineEligibility);
         return null;
       }
       final verifiedAt = DateTime.tryParse(map["verifiedAt"] as String);
       if (verifiedAt == null) {
-        await clear();
+        await _store.delete(SecretKeys.offlineEligibility);
         return null;
       }
       return OfflineEligibility(
@@ -62,7 +78,7 @@ class OfflineEligibilityStore {
         verifiedAt: verifiedAt,
       );
     } on FormatException {
-      await clear();
+      await _store.delete(SecretKeys.offlineEligibility);
       return null;
     }
   }
@@ -71,9 +87,14 @@ class OfflineEligibilityStore {
   Future<OfflineEligibility?> recordVerified(
     ServerIdentity identity,
     DateTime now,
+  ) => _serial(() => _record(identity, now));
+
+  Future<OfflineEligibility?> _record(
+    ServerIdentity identity,
+    DateTime now,
   ) async {
     if (!identity.canCollect) {
-      await clear();
+      await _store.delete(SecretKeys.offlineEligibility);
       return null;
     }
     final eligibility = OfflineEligibility(
@@ -93,5 +114,6 @@ class OfflineEligibilityStore {
     return eligibility;
   }
 
-  Future<void> clear() => _store.delete(SecretKeys.offlineEligibility);
+  Future<void> clear() =>
+      _serial(() => _store.delete(SecretKeys.offlineEligibility));
 }

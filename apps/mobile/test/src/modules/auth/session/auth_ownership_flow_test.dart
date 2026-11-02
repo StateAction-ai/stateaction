@@ -49,9 +49,12 @@ void main() {
     );
   }
 
-  CaptureOwnerGate gate() =>
-      CaptureOwnerGate(session: () => controller.state, ledger: ledger);
-  CaptureAccessPolicy policy() => CaptureAccessPolicy(ledger);
+  CaptureOwnerGate gate() => CaptureOwnerGate(
+    session: () => controller.state,
+    ledger: ledger,
+    clock: () => now,
+  );
+  CaptureAccessPolicy policy() => CaptureAccessPolicy(ledger, clock: () => now);
 
   /// Simulates the recorder: gate, native Start returning [dir], bind.
   Future<RecordingStartClearance> capture(String dir) async {
@@ -90,7 +93,7 @@ void main() {
       expect(result, isA<AuthOk<Object?>>());
       final state = controller.state as AuthActive;
       expect(state.identity.authUserId, aliceId);
-      expect(state.captureOwnerId, aliceId);
+      expect(controller.captureOwnerId, aliceId);
 
       for (final r in server.requests) {
         expect(r.headers.containsKey("authorization"), isFalse, reason: r.path);
@@ -125,8 +128,8 @@ void main() {
 
     server.users[alice]!.status = "pending";
     await controller.signInWithEmail(email: alice, password: password);
-    final state = controller.state as AuthActive;
-    expect(state.captureOwnerId, isNull);
+    expect(controller.state, isA<AuthActive>());
+    expect(controller.captureOwnerId, isNull);
     expect(secrets.values.containsKey(SecretKeys.offlineEligibility), isFalse);
     expect(await capture("pending-1"), isA<RecordingStartDenied>());
   });
@@ -211,7 +214,7 @@ void main() {
       await controller.restore();
       expect(controller.state, isA<AuthOfflineEligible>());
       expect((controller.state as AuthOfflineEligible).reauthRequired, isFalse);
-      expect(controller.state.networkOwnerId, isNull);
+      expect(controller.networkOwnerId, isNull);
       expect(await capture("s-offline"), isA<RecordingStartAllowed>());
 
       now = now.add(
@@ -219,7 +222,7 @@ void main() {
       );
       controller = newController();
       await controller.restore();
-      expect(controller.state.captureOwnerId, isNull);
+      expect(controller.captureOwnerId, isNull);
       expect(await capture("s-stale"), isA<RecordingStartDenied>());
       // Start a fresh server so tearDown can close something.
       server = await FakeBetterAuthServer.start();
@@ -232,7 +235,7 @@ void main() {
       await controller.signInWithEmail(email: alice, password: password);
       server.users[alice]!.status = "disabled";
       await controller.refresh();
-      expect(controller.state.captureOwnerId, isNull);
+      expect(controller.captureOwnerId, isNull);
       expect(
         secrets.values.containsKey(SecretKeys.offlineEligibility),
         isFalse,

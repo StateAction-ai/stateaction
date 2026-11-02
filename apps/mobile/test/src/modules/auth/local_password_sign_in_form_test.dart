@@ -105,7 +105,7 @@ void main() {
     expect(signedIn, 1);
     expect(provider.user?.id, "opaque-c1");
     expect(provider.sessionState, isA<AuthActive>());
-    expect(provider.sessionState.captureOwnerId, "opaque-c1");
+    expect(provider.sessionState.captureOwnerAt(DateTime.now()), "opaque-c1");
     expect(secrets.values.keys, contains(SecretKeys.sessionCookies));
     expect(
       server.requests.every((r) => !r.headers.containsKey("authorization")),

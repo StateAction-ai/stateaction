@@ -23,7 +23,7 @@ class AuthServices {
     required this.client,
     required this.controller,
     required this.ledger,
-  }) : policy = CaptureAccessPolicy(ledger);
+  }) : policy = CaptureAccessPolicy(ledger, clock: controller.now);
 
   final BackendOrigin origin;
   final AuthHttpClient client;

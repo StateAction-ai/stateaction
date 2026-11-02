@@ -64,6 +64,7 @@ class Api {
           : queryParameters.map((k, v) => MapEntry(k, "$v")),
     );
 
+    final generation = TokenService.currentGeneration();
     if (authenticated) {
       final (cookieHeaders, tokenFailure) = await TokenService.getAuthHeaders(
         uri: uri,
@@ -123,6 +124,7 @@ class Api {
     await TokenService.saveCookiesFromResponse(
       uri,
       response.headersSplitValues["set-cookie"] ?? const [],
+      generation: generation,
     );
 
     switch (response.statusCode) {
@@ -174,7 +176,7 @@ class Api {
       case 401:
         log("Api: Received 401, session expired");
         if (authenticated && !suppressSessionExpiry) {
-          await TokenService.handleSessionExpired();
+          await TokenService.handleSessionExpired(generation: generation);
         }
         return (null, Failure.unAuthorized());
       case 429:

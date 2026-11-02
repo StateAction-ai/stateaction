@@ -35,7 +35,7 @@ class OwnerFence {
   /// not create the upload row.
   static Future<bool> stampUploadSource(String filepath) async {
     final services = AuthServices.maybeInstance;
-    final owner = services?.controller.state.networkOwnerId;
+    final owner = services?.controller.networkOwnerId;
     if (services == null || owner == null) return false;
     await services.ledger.stampUploadSource(filepath, owner);
     return true;
@@ -58,7 +58,7 @@ class OwnerFence {
     final services = AuthServices.maybeInstance;
     if (services == null) return 0;
     final state = services.controller.state;
-    final owner = state.captureOwnerId;
+    final owner = services.controller.captureOwnerId;
     if (owner == null || !services.policy.mayRecover(state)) return 0;
     var claimed = 0;
     for (final name in sessionDirNames) {

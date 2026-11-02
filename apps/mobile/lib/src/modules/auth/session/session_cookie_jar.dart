@@ -64,6 +64,10 @@ enum CookieRejection {
   foreignDomain,
   secureOverHttp,
   invalidPrefix,
+
+  /// The jar was cleared (logout/account switch) after the request started;
+  /// a late response must not reinstall credentials.
+  staleGeneration,
 }
 
 /// Cookie jar bound to a single exact [BackendOrigin].
@@ -91,6 +95,21 @@ class SessionCookieJar {
 
   final Map<String, StoredCookie> _cookies = <String, StoredCookie>{};
   bool _loaded = false;
+  int _generation = 0;
+  Future<void> _tail = Future<void>.value();
+
+  /// Incremented by every [clear]. Callers capture it before a request and
+  /// pass it to [ingest]/[clearIfGeneration] so a late response from an older
+  /// session can neither reinstall cookies nor wipe a newer session.
+  int get generation => _generation;
+
+  /// Serializes store writes so a clear can never be overtaken by an earlier
+  /// persist that completes later.
+  Future<T> _serial<T>(Future<T> Function() body) {
+    final run = _tail.then((_) => body());
+    _tail = run.then<void>((_) {}, onError: (_) {});
+    return run;
+  }
 
   static String _key(String name, String path) => "$name|$path";
 
@@ -131,11 +150,15 @@ class SessionCookieJar {
   /// (empty when every header was applied).
   Future<List<CookieRejection>> ingest(
     Uri responseUri,
-    Iterable<String> setCookieHeaders,
-  ) async {
+    Iterable<String> setCookieHeaders, {
+    int? expectedGeneration,
+  }) async {
     await load();
     final headers = setCookieHeaders.toList();
     if (headers.isEmpty) return const [];
+    if (expectedGeneration != null && expectedGeneration != _generation) {
+      return List.filled(headers.length, CookieRejection.staleGeneration);
+    }
     if (!origin.matches(responseUri)) {
       return List.filled(headers.length, CookieRejection.foreignOrigin);
     }
@@ -239,25 +262,36 @@ class SessionCookieJar {
     return applicable.map((c) => "${c.name}=${c.value}").join("; ");
   }
 
+  /// Removes every cookie immediately (in memory) and from secure storage.
   Future<void> clear() async {
     await load();
+    _generation++;
     _cookies.clear();
-    await _store.delete(SecretKeys.sessionCookies);
+    await _serial(() => _store.delete(SecretKeys.sessionCookies));
   }
 
-  Future<void> _persist() async {
+  /// Clears only if no other clear happened since [generation] was captured.
+  Future<bool> clearIfGeneration(int generation) async {
+    if (generation != _generation) return false;
+    await clear();
+    return true;
+  }
+
+  Future<void> _persist() {
     final now = _clock();
     _cookies.removeWhere((_, c) => c.isExpired(now));
-    if (_cookies.isEmpty) {
-      await _store.delete(SecretKeys.sessionCookies);
-      return;
-    }
-    await _store.write(
-      SecretKeys.sessionCookies,
-      jsonEncode({
-        "origin": origin.value,
-        "cookies": _cookies.values.map((c) => c.toJson()).toList(),
-      }),
+    // Snapshot synchronously: the serialized write reflects the jar as of
+    // this change, and a later clear is queued behind it.
+    final snapshot = _cookies.isEmpty
+        ? null
+        : jsonEncode({
+            "origin": origin.value,
+            "cookies": _cookies.values.map((c) => c.toJson()).toList(),
+          });
+    return _serial(
+      () => snapshot == null
+          ? _store.delete(SecretKeys.sessionCookies)
+          : _store.write(SecretKeys.sessionCookies, snapshot),
     );
   }
 }
