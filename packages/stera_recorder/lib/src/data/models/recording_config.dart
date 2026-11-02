@@ -1,6 +1,8 @@
 import "../enums/rgb_video_resolution.dart";
+import "../enums/rgb_video_codec.dart";
 
 export "../enums/rgb_video_resolution.dart";
+export "../enums/rgb_video_codec.dart";
 
 /// Configuration for which data channels to record into the MCAP file.
 class RecordingConfig {
@@ -34,6 +36,12 @@ class RecordingConfig {
 
   /// Whether the RGB video track is recorded.
   final bool recordRgb;
+
+  /// Source encoding. H.264 is explicitly selected until device qualification.
+  final RgbVideoCodec rgbCodec;
+
+  /// Explicit software-codec test profile; Android rejects this on real phones.
+  final bool h264SimulationMode;
 
   /// RGB frame rate, in Hz.
   final int rgbHz;
@@ -78,6 +86,8 @@ class RecordingConfig {
     this.recordPointCloud = true,
     this.recordMesh = true,
     this.recordRgb = true,
+    this.rgbCodec = RgbVideoCodec.jpeg,
+    this.h264SimulationMode = false,
     this.rgbHz = defaultSpatialHz,
     this.depthHz = defaultSpatialHz,
     this.pointCloudHz = defaultSpatialHz,
@@ -93,22 +103,44 @@ class RecordingConfig {
 
   /// Serializes the config into the map the native session expects. The keys
   /// are part of the native contract — see `ArRecorderMethodChannelHandler`.
-  Map<String, dynamic> toMap() => {
-    "recordImu": recordImu,
-    "recordDepth": recordDepth,
-    "recordPointCloud": recordPointCloud,
-    "recordMesh": recordMesh,
-    "recordRgb": recordRgb,
-    "rgbHz": rgbHz,
-    "depthHz": depthHz,
-    "pointCloudHz": pointCloudHz,
-    "imuHz": imuHz,
-    "rgbVideoHeight": rgbVideoResolution.nominalHeight,
-    "enableVoiceCommands": enableVoiceCommands,
-    "enableAudioCues": enableAudioCues,
-    "autoFocus": autoFocus,
-    "autoExposure": autoExposure,
-    "arkitFps": arkitFps,
-    "enableInertialDerived": enableInertialDerived,
-  };
+  Map<String, dynamic> toMap() {
+    if (h264SimulationMode && rgbCodec != RgbVideoCodec.h264) {
+      throw ArgumentError("H.264 simulation requires the h264 codec");
+    }
+    if (rgbCodec == RgbVideoCodec.h264) {
+      if (!recordRgb || rgbHz != 30) {
+        throw ArgumentError(
+          "The H.264 profile requires RGB at requested 30 Hz",
+        );
+      }
+      // Raw IMU is not recorded by this profile revision (SA-53 adds the
+      // independent producer), so it is not a hardware prerequisite yet.
+      if (!h264SimulationMode &&
+          rgbVideoResolution != RgbVideoResolution.hd1080) {
+        throw ArgumentError("Hardware H.264 requires 1080p");
+      }
+    }
+    return {
+      "recordImu": recordImu,
+      "recordDepth": recordDepth,
+      "recordPointCloud": recordPointCloud,
+      "recordMesh": recordMesh,
+      "recordRgb": recordRgb,
+      "rgbCodec": rgbCodec.name,
+      "h264SimulationMode": h264SimulationMode,
+      "rgbHz": rgbHz,
+      "depthHz": depthHz,
+      "pointCloudHz": pointCloudHz,
+      "imuHz": imuHz,
+      "rgbVideoHeight": h264SimulationMode
+          ? 480
+          : rgbVideoResolution.nominalHeight,
+      "enableVoiceCommands": enableVoiceCommands,
+      "enableAudioCues": enableAudioCues,
+      "autoFocus": autoFocus,
+      "autoExposure": autoExposure,
+      "arkitFps": arkitFps,
+      "enableInertialDerived": enableInertialDerived,
+    };
+  }
 }

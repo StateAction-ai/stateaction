@@ -34,6 +34,8 @@ class MCAPWriter {
 
         /** Flush chunk when buffer exceeds 1 MB. */
         const val CHUNK_FLUSH_THRESHOLD = 1_048_576
+        const val MAX_MESSAGE_BYTES = 16 * 1024 * 1024 - 31
+        const val MAX_CHUNK_INDEX_COUNT = 65_536
     }
 
     private data class ChunkIndexInfo(
@@ -85,9 +87,14 @@ class MCAPWriter {
     private var metadataCount: Int = 0
 
     private var isFinalized = false
+    private var finishFailure: Exception? = null
+    /** CRC-32 of every byte before DataEnd (the official readers' data_section_crc definition). */
+    private val dataSectionCrc = java.util.zip.CRC32()
+    private var dataSectionOpen = true
 
     /** Opens an MCAP file for writing. */
-    fun open(file: File, profile: String = "ros2", library: String = "fpv_labs"): Boolean {
+    @Synchronized fun open(file: File, profile: String = "ros2", library: String = "fpv_labs"): Boolean {
+        if (outputStream != null || isFinalized) return false
         return try {
             outputStream = BufferedOutputStream(FileOutputStream(file))
             offset = 0
@@ -102,13 +109,19 @@ class MCAPWriter {
             writeRecord(OP_HEADER, content.toByteArray())
             true
         } catch (e: Exception) {
+            try { outputStream?.close() } catch (_: Exception) {}
+            outputStream = null
             println("Failed to open MCAP file: ${e.message}")
             false
         }
     }
 
     /** Registers a schema and returns its ID (1-based). */
-    fun addSchema(name: String, encoding: String, data: String): Int {
+    fun addSchema(name: String, encoding: String, data: String): Int = addSchema(name, encoding, data.toByteArray(Charsets.UTF_8))
+
+    @Synchronized fun addSchema(name: String, encoding: String, data: ByteArray): Int {
+        check(outputStream != null && !isFinalized) { "MCAP writer is closed" }
+        require(data.size <= MAX_MESSAGE_BYTES) { "Schema exceeds MCAP byte bound" }
         schemaCount++
         val id = schemaCount
 
@@ -116,7 +129,7 @@ class MCAPWriter {
         content.writeUInt16(id)
         content.writeString(name)
         content.writeString(encoding)
-        val schemaBytes = data.toByteArray(Charsets.UTF_8)
+        val schemaBytes = data
         content.writeUInt32(schemaBytes.size)
         content.writeRawBytes(schemaBytes)
 
@@ -127,7 +140,7 @@ class MCAPWriter {
     }
 
     /** Registers a channel and returns its ID (1-based). */
-    fun addChannel(
+    @Synchronized fun addChannel(
         topic: String,
         messageEncoding: String,
         schemaId: Int,
@@ -151,8 +164,12 @@ class MCAPWriter {
     }
 
     /** Buffers a message. Automatically flushes as a Chunk when buffer exceeds threshold. */
-    fun addMessage(channelId: Int, logTime: Long, publishTime: Long, data: ByteArray) {
-        if (isFinalized) return
+    @Synchronized fun addMessage(channelId: Int, logTime: Long, publishTime: Long, data: ByteArray, sequence: Int? = null) {
+        check(outputStream != null && !isFinalized) { "MCAP writer is closed" }
+        require(channelId in channelMessageCounts) { "Unknown MCAP channel" }
+        require(logTime >= 0 && publishTime >= 0) { "Negative MCAP timestamps" }
+        require(data.size <= MAX_MESSAGE_BYTES) { "Message exceeds 16 MiB MCAP input bound" }
+        if (chunkBufferSize > 0 && chunkBufferSize + data.size + 31 > 16 * 1024 * 1024) flushChunk()
 
         // Build the full message record in a single exact-size array, copying the
         // payload once. The content length (fixed 22-byte header + payload) is
@@ -160,7 +177,7 @@ class MCAPWriter {
         // that otherwise copies a large JPEG/depth payload several times.
         // Layout: opcode(1) + len(u64) + [channel(u16) seq(u32) logTime(u64)
         // publishTime(u64) payload].
-        val seq = (messageCount and 0xFFFFFFFFL).toInt()
+        val seq = sequence ?: (messageCount and 0xFFFFFFFFL).toInt()
         val contentLen = 22 + data.size
         val recordData = ByteArray(1 + 8 + contentLen)
         ByteBuffer.wrap(recordData).order(ByteOrder.LITTLE_ENDIAN).apply {
@@ -198,8 +215,8 @@ class MCAPWriter {
     }
 
     /** Writes a metadata record and tracks it for MetadataIndex. */
-    fun addMetadata(name: String, metadata: Map<String, String>) {
-        if (isFinalized) return
+    @Synchronized fun addMetadata(name: String, metadata: Map<String, String>) {
+        check(outputStream != null && !isFinalized) { "MCAP writer is closed" }
 
         // Flush any buffered messages before metadata
         if (chunkBufferSize > 0) {
@@ -229,7 +246,7 @@ class MCAPWriter {
      * Forces currently buffered messages to be emitted as a Chunk record immediately.
      * Useful for near-real-time visibility of MCAP growth during recording.
      */
-    fun forceFlushChunk() {
+    @Synchronized fun forceFlushChunk() {
         if (isFinalized) return
         if (chunkBufferSize == 0) return
         flushChunk()
@@ -237,10 +254,12 @@ class MCAPWriter {
     }
 
     /** Finalizes the MCAP file: flushes remaining messages, writes summary, footer, and trailing magic. */
-    fun finish() {
+    @Synchronized fun finish() {
+        finishFailure?.let { throw it }
         if (isFinalized) return
         val os = outputStream ?: return
         isFinalized = true
+        try {
 
         // Flush any remaining buffered messages
         if (chunkBufferSize > 0) {
@@ -249,7 +268,8 @@ class MCAPWriter {
 
         // DataEnd
         val dataEndContent = MCAPBuffer()
-        dataEndContent.writeUInt32(0) // data_section_crc
+        dataEndContent.writeUInt32(dataSectionCrc.value.toInt()) // data_section_crc
+        dataSectionOpen = false
         writeRecord(OP_DATA_END, dataEndContent.toByteArray())
 
         val summaryStart = offset
@@ -310,12 +330,19 @@ class MCAPWriter {
         os.flush()
         os.close()
         outputStream = null
+        } catch (e: Exception) {
+            finishFailure = e
+            try { os.close() } catch (close: Exception) { e.addSuppressed(close) }
+            outputStream = null
+            throw e
+        }
     }
 
     // --- Chunk Flushing ---
 
     private fun flushChunk() {
         if (chunkBufferSize == 0) return
+        check(chunkIndices.size < MAX_CHUNK_INDEX_COUNT) { "MCAP chunk index bound exhausted; stop recording" }
 
         val uncompressedSize = chunkBufferSize.toLong()
         val chunkRecordStart = offset
@@ -333,7 +360,7 @@ class MCAPWriter {
         chunkContent.writeUInt64(chunkStartTime)
         chunkContent.writeUInt64(chunkEndTime)
         chunkContent.writeUInt64(uncompressedSize) // uncompressed_size
-        chunkContent.writeUInt32(0) // uncompressed_crc
+        chunkContent.writeUInt32(java.util.zip.CRC32().apply { update(allRecords) }.value.toInt()) // uncompressed_crc
         chunkContent.writeString("") // compression: empty = none
         // records: length-prefixed bytes
         chunkContent.writeUInt64(uncompressedSize)
@@ -467,7 +494,8 @@ class MCAPWriter {
     }
 
     private fun writeRaw(data: ByteArray) {
-        outputStream?.write(data)
+        checkNotNull(outputStream) { "MCAP writer is closed" }.write(data)
+        if (dataSectionOpen) dataSectionCrc.update(data)
         offset += data.size
     }
 }

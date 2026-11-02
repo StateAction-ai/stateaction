@@ -10,6 +10,62 @@ class _GrantedPermissions implements RecorderPermissions {
 }
 
 void main() {
+  testWidgets("native failed auto-stop is visible without a Dart Stop", (
+    tester,
+  ) async {
+    const channel = MethodChannel("ar_recorder");
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var autoStopped = false;
+    var stopCalls = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case "initializeSession":
+          return {"success": true, "textureId": 1};
+        case "getRecordingState":
+          return {
+            "state": "READY",
+            "isRecording": false,
+            if (autoStopped) "error": "Required H.264 writer failed",
+          };
+        case "startRecording":
+          return {
+            "success": true,
+            "outputDirectory": "/preserved/failed-session",
+          };
+        case "stopRecording":
+          stopCalls++;
+          return {"success": false};
+        default:
+          return {"success": true};
+      }
+    });
+    final provider = ArRecorderProvider(
+      preferences: InMemoryRecorderPreferences(),
+      permissions: _GrantedPermissions(),
+    );
+    try {
+      await provider.initializeSession();
+      await tester.pump(const Duration(milliseconds: 600));
+      await provider.startRecording();
+      expect(provider.isRecording, isTrue);
+      autoStopped = true;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(provider.isRecording, isFalse);
+      expect(provider.outputDirectory, isNull);
+      expect(provider.lastFramesRecorded, 0);
+      expect(provider.errorMessage, contains("writer failed"));
+      expect(stopCalls, 0);
+      autoStopped = false;
+      await provider.startRecording();
+      expect(provider.isRecording, isTrue);
+      expect(provider.errorMessage, isNull);
+    } finally {
+      provider.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
   testWidgets("failed empty capture clears saved output and recording state", (
     tester,
   ) async {

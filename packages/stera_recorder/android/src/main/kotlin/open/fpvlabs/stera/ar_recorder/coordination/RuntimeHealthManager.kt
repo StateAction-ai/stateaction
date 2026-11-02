@@ -72,6 +72,7 @@ class RuntimeHealthManager(
     @Volatile
     var cachedDeviceMetrics = CachedDeviceMetrics()
     private var lastDeviceMetricsRefreshMs: Long = 0L
+    private var lastH264PassiveSampleMs: Long = 0L
 
     // ── Health sampling state ────────────────────────────────────────────
     var lastHealthSampleElapsedMs: Long = 0L
@@ -127,6 +128,9 @@ class RuntimeHealthManager(
      */
     fun reset() {
         lastHealthSampleElapsedMs = 0L
+        lastDeviceMetricsRefreshMs = 0L
+        lastH264PassiveSampleMs = 0L
+        cachedDeviceMetrics = CachedDeviceMetrics()
         lastHealthSampleArcoreFrames = 0
         lastHealthSampleEncodedFrames = 0
         thermalThrottlingDetected = false
@@ -637,6 +641,21 @@ class RuntimeHealthManager(
             thermalStateStr = thermalStatus.label
         )
         lastDeviceMetricsRefreshMs = nowMs
+    }
+
+    /** Observe candidate H.264 health without invoking legacy bitrate/profile adaptation. */
+    fun maybeSamplePassiveH264Health(): CachedDeviceMetrics? {
+        val now = SystemClock.elapsedRealtime()
+        if (lastH264PassiveSampleMs != 0L && now - lastH264PassiveSampleMs < DEVICE_METRICS_REFRESH_INTERVAL_MS) return null
+        lastH264PassiveSampleMs = now
+        maybeRefreshDeviceMetricsCache()
+        val snapshot = cachedDeviceMetrics.copy()
+        maxMemoryUsageMb = maxOf(maxMemoryUsageMb, snapshot.memoryUsedMb)
+        maxNativeHeapMb = maxOf(maxNativeHeapMb, currentNativeHeapUsageMb())
+        memoryHighWatermarkMb = maxOf(memoryHighWatermarkMb, snapshot.memoryUsedMb)
+        thermalStatusLabel = snapshot.thermalStateStr
+        thermalThrottlingDetected = thermalThrottlingDetected || snapshot.thermalState >= 3
+        return snapshot
     }
 
     /** Writes cached device metrics to MCAP. Must be called on the writerHandler thread. */

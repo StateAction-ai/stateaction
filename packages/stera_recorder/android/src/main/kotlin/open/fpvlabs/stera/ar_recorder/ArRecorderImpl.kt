@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
+import open.fpvlabs.stera.ar_recorder.coordination.H264RecordingController
 import open.fpvlabs.stera.ar_recorder.coordination.FrameProcessingCoordinator
 import open.fpvlabs.stera.ar_recorder.coordination.MetadataAssembler
 import open.fpvlabs.stera.ar_recorder.coordination.PerformanceOptimizer
@@ -70,7 +71,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class ArRecorderImpl(
     private val context: Context,
-    private val textureRegistry: TextureRegistry
+    private val textureRegistry: TextureRegistry,
+    datasetWriterOverride: DatasetWriter? = null
 ) : ArRecorder {
 
     private companion object {
@@ -99,7 +101,7 @@ class ArRecorderImpl(
     private val eglManager: EglManager = EglManagerImpl()
     private val frameProcessor: ArFrameProcessor = ArFrameProcessorImpl()
     private val imuCollector: ImuCollector = ImuCollectorImpl(context)
-    private val datasetWriter: DatasetWriter = if (USE_MCAP_FORMAT) {
+    private val datasetWriter: DatasetWriter = datasetWriterOverride ?: if (USE_MCAP_FORMAT) {
         MCAPDatasetWriter(
             context,
             Build.MODEL,
@@ -224,6 +226,10 @@ class ArRecorderImpl(
     private val upscaleApplied: Boolean = false
 
     // ── Timing ───────────────────────────────────────────────────────────
+    private var activeRecordingConfig = RecordingConfig()
+    private var sessionConfig = RecordingConfig()
+    private var h264TerminalStats: Map<String, Any?> = emptyMap()
+    private val failureStopPosted = AtomicBoolean(false)
     private var recordingStartTime: Long = 0
     private var pauseStartedAtMs: Long = 0
     private var totalPausedDurationMs: Long = 0
@@ -262,7 +268,9 @@ class ArRecorderImpl(
                 )
             }
 
-            applyRgbTargets(RecordingConfig.fromMap(arguments))
+            sessionConfig = RecordingConfig.fromMap(arguments)
+            applyRgbTargets(sessionConfig)
+            sessionManager.configureCameraTarget(sessionConfig.rgbLandscapeWidth, sessionConfig.rgbLandscapeHeight, sessionConfig.isH264)
 
             currentState = ArRecordingState.INITIALIZING
             println("📷 ArRecorderImpl: Initializing session...")
@@ -412,7 +420,7 @@ class ArRecorderImpl(
                     lastTrackingState = newTrackingState
                 }
 
-                if (isReady && currentState == ArRecordingState.INITIALIZING) {
+                if ((isReady || (sessionConfig.isH264 && frame.timestamp > 0L)) && currentState == ArRecordingState.INITIALIZING) {
                     currentState = ArRecordingState.READY
                     println("✅ ARCore session ready for recording")
                 }
@@ -430,6 +438,11 @@ class ArRecorderImpl(
                     )
                 }
 
+                if (isRecording.get() && datasetWriter.getWriteFailure() != null && failureStopPosted.compareAndSet(false, true)) {
+                    // Post only after releasing the producer gate. stopRecording waits for the
+                    // producer, drains EOS and writer work, and preserves failed-session diagnostics.
+                    mainHandler.post { if (isRecording.get()) stopRecording() }
+                }
                 val loopDurationNs = SystemClock.elapsedRealtimeNanos() - loopStartNs
                 metrics.renderLoopIterations++
                 metrics.renderLoopTotalNs += loopDurationNs
@@ -439,9 +452,22 @@ class ArRecorderImpl(
                 return
             }
             println("❌ Frame loop error: ${e.message}")
+            val message = "Frame loop failed: ${e.message}"
+            datasetWriter.recordWriteFailure(message, e)
             recordError("Frame loop error", e)
             e.printStackTrace()
-            currentState = ArRecordingState.ERROR
+            // Keep RECORDING/PAUSED stoppable until the owner thread drains it. Publishing
+            // ERROR here used to strand the encoder and IMU because canStop(ERROR) is false.
+            lastErrorMessage = message
+            failureStopPosted.set(true)
+            mainHandler.post {
+                if (isRecording.get()) stopRecording()
+                // session.update has failed and this loop exited; release it so a later
+                // initializeSession creates a fresh session rather than reusing dead state.
+                disposeSession()
+                currentState = ArRecordingState.ERROR
+                lastErrorMessage = message
+            }
         }
     }
 
@@ -476,12 +502,16 @@ class ArRecorderImpl(
             if (!recordingStateManager.canStart(currentState)) {
                 return createErrorResult("Session not ready. Current state: ${currentState.name}")
             }
-            if (!sessionManager.isSessionReady) {
+            val recordingConfig = RecordingConfig.fromMap(arguments)
+            if (!recordingConfig.isH264 && !sessionManager.isSessionReady) {
                 return createErrorResult("Tracking not stable. Wait for TRACKING state.")
             }
 
-            val recordingConfig = RecordingConfig.fromMap(arguments)
+            activeRecordingConfig = recordingConfig
+            failureStopPosted.set(false)
             applyRgbTargets(recordingConfig)
+            // H.264 camera raster is checked by the preflight below with an explicit error code.
+            if (!recordingConfig.isH264) sessionManager.configureCameraTarget(recordingConfig.rgbLandscapeWidth, recordingConfig.rgbLandscapeHeight, false)
 
             println("📷 ArRecorderImpl: Starting recording...")
             currentState = ArRecordingState.RECORDING
@@ -492,9 +522,29 @@ class ArRecorderImpl(
                 return createErrorResult(storagePrecheck.second ?: "Insufficient storage headroom")
             }
 
+            // H.264 preflight runs before any file exists: unsupported encoder, camera raster/clock or an
+            // emulator/hardware profile mismatch is an explicit start error, never a lowered-quality fallback.
+            h264TerminalStats = emptyMap()
+            val h264Controller = if (recordingConfig.isH264) try {
+                val camera = checkNotNull(sessionManager.session) { "AR session unavailable" }.cameraConfig
+                if (camera.imageSize.width != recordingConfig.rgbLandscapeWidth || camera.imageSize.height != recordingConfig.rgbLandscapeHeight) {
+                    throw open.fpvlabs.stera.ar_recorder.encoding.H264PreflightException(
+                        "Camera CPU image ${camera.imageSize.width}x${camera.imageSize.height} is not the required ${recordingConfig.rgbLandscapeWidth}x${recordingConfig.rgbLandscapeHeight}")
+                }
+                H264RecordingController(context, recordingConfig.recordingId ?: java.util.UUID.randomUUID().toString(),
+                    if (recordingConfig.h264SimulationMode) open.fpvlabs.stera.ar_recorder.encoding.H264EncoderProfile.SIMULATION
+                    else open.fpvlabs.stera.ar_recorder.encoding.H264EncoderProfile.HARDWARE,
+                    camera.cameraId, recordingConfig.recordImu, recordingConfig.recordDepth, sessionManager.isDepthSupported,
+                    datasetWriter, checkNotNull(writerHandler) { "Writer thread unavailable" }, metrics)
+            } catch (e: Exception) {
+                currentState = ArRecordingState.READY
+                recordError("H.264 preflight failed", e)
+                return createErrorResult("H.264 preflight failed: ${e.message}") + mapOf("errorCode" to "H264_PREFLIGHT")
+            } else null
+
             val sessionBaseDir = File(context.getExternalFilesDir(null), "ar_sessions")
             val sessionDir = datasetWriter.createSessionDirectory(sessionBaseDir)
-                ?: return createErrorResult("Failed to create output directory")
+                ?: run { h264Controller?.abort(); currentState = ArRecordingState.READY; return createErrorResult("Failed to create output directory") }
 
             // Reset all metrics and health state
             val encodeBitrate =
@@ -514,8 +564,8 @@ class ArRecorderImpl(
             lowQualityReason = null
 
             frameProcessor.prepareForRecording(
-                pointCloudPoolCapacity = POINTCLOUD_POOL_CAPACITY,
-                depthPoolCapacity = DEPTH_POOL_CAPACITY
+                pointCloudPoolCapacity = if (recordingConfig.isH264) { if (recordingConfig.recordPointCloud) 4 else 0 } else POINTCLOUD_POOL_CAPACITY,
+                depthPoolCapacity = if (recordingConfig.isH264) { if (recordingConfig.recordDepth && sessionManager.isDepthSupported) 4 else 0 } else DEPTH_POOL_CAPACITY
             )
             recordingStartTime = System.currentTimeMillis()
             pauseStartedAtMs = 0L
@@ -525,8 +575,15 @@ class ArRecorderImpl(
                 applyResolutionPolicyFromCameraConfig()
             }
 
+            frameOrchestrator.h264Controller = h264Controller
+            datasetWriter.configureH264Capture(h264Controller?.setup)
+            if (h264Controller != null) {
+                metrics.configuredVideoWidth = recordingConfig.rgbLandscapeWidth
+                metrics.configuredVideoHeight = recordingConfig.rgbLandscapeHeight
+                metrics.targetVideoBitrate = h264Controller.encoderProfile.bitrate
+            }
             if (!datasetWriter.initializeWriters()) {
-                return createErrorResult("Failed to initialize writers")
+                throw IllegalStateException("Failed to initialize writers")
             }
 
             val arcoreVersion = resolveArCoreVersion()
@@ -548,14 +605,15 @@ class ArRecorderImpl(
             )
             datasetWriter.logSystem("Pool capacities: depth=$DEPTH_POOL_CAPACITY pointcloud=$POINTCLOUD_POOL_CAPACITY")
 
-            metrics.targetEncodeFps = VIDEO_FPS_FIXED
+            metrics.targetEncodeFps = if (recordingConfig.isH264) 30 else VIDEO_FPS_FIXED
             metrics.encodeFrameIntervalNs = 1_000_000_000L / metrics.targetEncodeFps
-            metrics.dynamicEncoderMode = "jpeg_to_mcap"
+            metrics.dynamicEncoderMode = if (recordingConfig.isH264) "native_h264_to_mcap" else "jpeg_to_mcap"
 
             frameSampler.configure(metrics.targetEncodeFps)
 
             datasetWriter.logSystem(
-                "JPEG capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/compressed"
+                if (recordingConfig.isH264) "H264 capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/video recording_id=${h264Controller?.recordingId}"
+                else "JPEG capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/compressed"
             )
 
             motionCapture.start(motionScheduler(), DEFAULT_MOTION_RATE_HZ)
@@ -571,9 +629,18 @@ class ArRecorderImpl(
                 lowQualityReason = lowQualityReason,
                 cameraResolution = cameraResolution,
                 recordingResolution = recordingResolution
-            )
+            ) + mapOf("recordingId" to h264Controller?.recordingId, "rgbCodec" to recordingConfig.rgbCodec)
         } catch (e: Exception) {
-            currentState = ArRecordingState.ERROR
+            isRecording.set(false)
+            var cleanupSucceeded = true
+            try { motionCapture.stopCollection() } catch (_: Throwable) { cleanupSucceeded = false }
+            try { frameOrchestrator.h264Controller?.abort() } catch (_: Throwable) { cleanupSucceeded = false }
+            frameOrchestrator.h264Controller = null
+            // The partial container closes as an explicit failed take, never as an unexplained abort.
+            datasetWriter.recordWriteFailure("Recording start failed", e)
+            try { drainWriterQueue { datasetWriter.finalize() } } catch (_: Throwable) { cleanupSucceeded = false }
+            frameProcessor.releaseRecordingBuffers()
+            currentState = if (cleanupSucceeded) ArRecordingState.READY else ArRecordingState.ERROR
             recordError("Failed to start recording", e)
             createErrorResult("Failed to start recording: ${e.message}")
         }
@@ -650,8 +717,10 @@ class ArRecorderImpl(
             totalPausedDurationMs = cancelResult.totalPausedDurationMs
 
             motionCapture.stopCollection()
+            frameOrchestrator.h264Controller?.abort(); frameOrchestrator.h264Controller = null
             abortVideoEncoder()
             drainWriterQueue()
+            frameProcessor.releaseRecordingBuffers()
             val deleted = datasetWriter.deleteSessionDirectory()
             if (!deleted) {
                 currentState = ArRecordingState.ERROR
@@ -741,6 +810,16 @@ class ArRecorderImpl(
                 motionCapture.finishOnWriter()
             }
 
+            // H.264: drain the codec to end of stream and write Inventory/Close only after every admitted motion
+            // event is written, so the Close counts and outcome cover the whole take.
+            val h264 = frameOrchestrator.h264Controller
+            if (h264 != null) {
+                try { h264.finish() } catch (error: Throwable) { datasetWriter.recordWriteFailure("H.264 end of stream failed: ${error.message}", error) }
+                frameOrchestrator.h264Controller = null
+                drainWriterQueue()
+                h264TerminalStats = h264.terminalStats() + mapOf("evidence" to datasetWriter.h264Capture()?.stats())
+            }
+
             datasetWriter.captureFreeStorageAfterSnapshot()
 
             val stats = datasetWriter.getRecordingStats()
@@ -778,6 +857,24 @@ class ArRecorderImpl(
                 )
             )
 
+            if (activeRecordingConfig.isH264) {
+                finalizationResult.metadata["rgb_codec"] = "h264"
+                finalizationResult.metadata["recording_id"] = h264TerminalStats["recording_id"]
+                finalizationResult.metadata["raw_imu"] = "independent_accel_gyro_motion_events"
+                finalizationResult.metadata["encoder_mode"] = "native_camera_cadence_no_tracking_gate"
+                finalizationResult.metadata["sampling_strategy"] = "all_unique_arcore_camera_frames"
+                finalizationResult.metadata["rgb_sampling_strategy"] = "all_unique_arcore_camera_frames"
+                finalizationResult.metadata["sampling_strategy_detail"] = "backpressure_and_unavailable_camera_images_reported_separately"
+                finalizationResult.metadata["rgb_intentional_downsample"] = false
+                finalizationResult.metadata["video_profile"] = if (activeRecordingConfig.h264SimulationMode) "simulation_640x480_30fps" else "candidate_1920x1080_30fps"
+                finalizationResult.metadata["capture_geometry"] = open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry.metadata() + mapOf(
+                    "rgb_source" to "arcore_acquireCameraImage_YUV_420_888_to_MediaCodec_input_Image",
+                    "rgb_mcap_log_time" to "mapped_capture_time", "rgb_mcap_publish_time" to "mapped_capture_time",
+                    "rgb_capture_time" to "foxglove_CompressedVideo_timestamp_with_clock_provenance",
+                    "depth" to "not_recorded_by_profile_revision", "cross_stream_clock_verified" to false)
+                finalizationResult.metadata["h264_terminal"] = h264TerminalStats
+                finalizationResult.metadata["qualification"] = if (activeRecordingConfig.h264SimulationMode) "simulation_only" else "unqualified"
+            }
             datasetWriter.writeMetadata(finalizationResult.metadata)
 
             // Log session end info
@@ -822,15 +919,24 @@ class ArRecorderImpl(
             }
 
             val outputDir = datasetWriter.getSessionDirectory()
-            currentState = ArRecordingState.READY
 
             val writtenRgbFrames = (stats["rgbFrameCount"] as? Int) ?: metrics.encodedVideoFrameCount.get()
             var captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
             finalizationResult.metadata["capture_result_valid"] = captureFailure == null
             finalizationResult.metadata["first_writer_error"] = datasetWriter.getWriteFailure()
             finalizationResult.metadata["finalization_complete"] = zipSuccess && datasetWriter.getWriteFailure() == null
+            if (activeRecordingConfig.isH264) {
+                val evidence = h264TerminalStats["evidence"] as? Map<*, *>
+                finalizationResult.metadata["container_state"] = if (zipSuccess) "closed" else "unclosed"
+                finalizationResult.metadata["capture_outcome"] = evidence?.get("close_outcome") ?: "unknown"
+            }
             datasetWriter.writeMetadata(finalizationResult.metadata)
             captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
+            frameProcessor.releaseRecordingBuffers()
+            // Publish READY only after the final sidecar is durably persisted. Pollers may
+            // immediately start a new recording once this state becomes observable.
+            lastErrorMessage = captureFailure
+            currentState = ArRecordingState.READY
             if (captureFailure != null) {
                 return createErrorResult(captureFailure) + mapOf(
                     "recordingStopped" to true,
@@ -858,6 +964,8 @@ class ArRecorderImpl(
                 "previewWidth" to previewWidth,
                 "previewHeight" to previewHeight,
                 "upscaleApplied" to upscaleApplied,
+                "recordingId" to h264TerminalStats["recording_id"],
+                "rgbCodec" to activeRecordingConfig.rgbCodec,
                 "error" to null
             )
         } catch (e: Exception) {
@@ -928,6 +1036,7 @@ class ArRecorderImpl(
         frameHandler = null
         writerThread = null
         writerHandler = null
+        frameProcessor.releaseRecordingBuffers()
 
         imuCollector.release()
         datasetWriter.release()

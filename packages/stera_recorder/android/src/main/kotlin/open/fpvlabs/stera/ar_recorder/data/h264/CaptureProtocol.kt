@@ -12,6 +12,8 @@ object CaptureProtocol {
     const val ACCEL = "/stateaction/imu/accel"
     const val GYRO = "/stateaction/imu/gyro"
     const val SENSORS = "/stateaction/sensor_events"
+    const val INVENTORY = "/stateaction/inventory"
+    const val CLOSE = "/stateaction/close"
     const val MAX_PENDING = 4
     const val MAX_ACCESS_UNIT = 16 * 1024 * 1024 - 4096
     val TIME_BASE: Map<String, Int> = mapOf("numerator" to 1, "denominator" to 1_000_000)

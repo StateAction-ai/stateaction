@@ -15,6 +15,19 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Optional separate identity for StateAction development installs (for example
+// -PstateactionApplicationId=ai.stateaction.collector.dev), so a test build never
+// replaces or reads the existing collector's package and data. Unset keeps the
+// default identity unchanged.
+val stateactionApplicationId = (project.findProperty("stateactionApplicationId") as String?)?.also {
+    require(Regex("ai\\.stateaction\\.[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*").matches(it)) {
+        "stateactionApplicationId must be an ai.stateaction.* package name"
+    }
+}
+val stateactionAppLabel = (project.findProperty("stateactionAppLabel") as String?)?.also {
+    require(Regex("[A-Za-z0-9 ._-]{1,40}").matches(it)) { "stateactionAppLabel must be 1-40 plain characters" }
+}
+
 android {
     namespace = "open.fpvlabs.stera"
     compileSdk = flutter.compileSdkVersion
@@ -41,7 +54,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "open.fpvlabs.stera"
+        applicationId = stateactionApplicationId ?: "open.fpvlabs.stera"
+        manifestPlaceholders["appLabel"] = stateactionAppLabel
+            ?: if (stateactionApplicationId != null) "StateAction Dev" else "@string/app_name_short"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

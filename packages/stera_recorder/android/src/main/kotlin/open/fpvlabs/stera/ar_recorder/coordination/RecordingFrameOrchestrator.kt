@@ -41,6 +41,7 @@ class RecordingFrameOrchestrator(
     private val recordError: (String, Throwable?) -> Unit
 ) {
     private val cpuImageEncoder = CpuImageEncoder()
+    var h264Controller: H264RecordingController? = null
 
     private data class CapturedDepth(val timestampNs: Long, val width: Int, val height: Int,
                                      val intrinsics: Map<String, Any>, val mapping: DoubleArray)
@@ -102,6 +103,26 @@ class RecordingFrameOrchestrator(
         var rgbCaptureDiagnostics: Map<String, Any?>? = null
         var rgbIntrinsics: Map<String, Any>? = null
         var capturedDepth: CapturedDepth? = null
+
+        val activeH264 = h264Controller
+        if (activeH264 != null) {
+            // RGB follows the native camera cadence even while AR tracking is paused or lost; tracking state is
+            // written as explicit per-frame pose evidence instead of gating capture.
+            metrics.rgbEncodeAttemptCount++
+            val poseSnapshot = if (isTracking) frameProcessor.extractPose(camera) else null
+            val poseState = when {
+                trackingState == "TRACKING" && poseSnapshot != null -> "tracking"
+                trackingState == "PAUSED" -> "paused"
+                trackingState == "STOPPED" -> "lost"
+                trackingState == "TRACKING" -> "lost"
+                else -> "unknown"
+            }
+            if (activeH264.capture(frame, poseState, poseSnapshot) && poseSnapshot != null) {
+                metrics.poseFrameCount.incrementAndGet(); metrics.poseTimestampRange.record(timestamp)
+            }
+            metrics.frameCount++
+            return
+        }
 
         val pose = if (isTracking) frameProcessor.extractPose(camera) else null
         val shouldSample = pose != null && frameSampler.shouldEncodeFrame(timestamp)
