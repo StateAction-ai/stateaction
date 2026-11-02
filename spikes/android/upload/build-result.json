@@ -1,0 +1,25 @@
+{
+  "recordedAt": "2026-11-01T22:23:08.754511+00:00",
+  "package": "ai.stateaction.spike.upload",
+  "minSdk": 34,
+  "compileSdk": 36,
+  "targetSdk": 35,
+  "agp": "8.12.1",
+  "gradle": "8.14",
+  "java": "21.0.12.1",
+  "build": "PASS",
+  "lint": "0 errors, 24 warnings",
+  "artifacts": [
+    {
+      "path": "app/build/outputs/apk/debug/app-debug.apk",
+      "bytes": 61737,
+      "sha256": "1c214402020a829a81d85aa8726b948d5292b1e83e87691f4206926adf93614d"
+    },
+    {
+      "path": "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk",
+      "bytes": 28430,
+      "sha256": "e779700f60f4c0dc86d6adc02567c48f8e433d80d7584c71ea0a25681317e863"
+    }
+  ],
+  "note": "Debug APKs are not reproducible byte-for-byte across hosts; hashes identify the exact emulator-run inputs in emulator-run-result.json."
+}

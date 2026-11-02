@@ -1,0 +1,35 @@
+{
+  "recordedAt": "2026-11-01T22:23:08.607Z",
+  "executionMode": "node_protocol_test",
+  "simulated": true,
+  "realGoogle": false,
+  "realBetterAuth": false,
+  "realProvider": false,
+  "nativeAndroidExecuted": false,
+  "bytesVerified": "134217761",
+  "sha256": "9d4c7aa65819f27410bba60469b6034c89392ecfb6d358e5fef2113a8829ecac",
+  "scenarios": [
+    "cookie_rotation_multiple_headers",
+    "immutable_replay",
+    "owner_isolation",
+    "url_expiry_renewal",
+    "two_parallel_puts",
+    "receipt_loss_reconciliation",
+    "simulated_paginated_listing",
+    "lost_completion_response",
+    "same_owner_relogin",
+    "epoch_restart",
+    "logout"
+  ],
+  "counters": {
+    "session_rotations": 19,
+    "sign_requests": 2,
+    "expired_urls": 2,
+    "provider_puts": 3,
+    "reconciliations": 2,
+    "receipt_batches": 1,
+    "api_completions": 1,
+    "injected_completion_response_loss": 1,
+    "completion_replays": 1
+  }
+}

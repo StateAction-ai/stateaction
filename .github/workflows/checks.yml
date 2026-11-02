@@ -107,7 +107,7 @@ jobs:
             mobile=$(pnpm exec nx show projects --json)
           fi
           echo "integration_projects=$(jq -r 'join(",")' <<< "$projects")" >> "$GITHUB_OUTPUT"
-          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile" or . == "android-capture-spike-native" or . == "mobile-auth-backend-e2e")] | join(",")' <<< "$mobile")
+          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile" or . == "android-capture-spike-native" or . == "mobile-auth-backend-e2e" or . == "android-upload-spike-native")] | join(",")' <<< "$mobile")
           echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
           if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build, typecheck, syntax, test and format
@@ -115,9 +115,9 @@ jobs:
           MODE: ${{ steps.scope.outputs.mode }}
         run: |
           if [[ "$MODE" == affected ]]; then
-            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e --outputStyle=static
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native --outputStyle=static
           else
-            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e --outputStyle=static
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native --outputStyle=static
           fi
   android:
     name: Affected Android and Dart checks

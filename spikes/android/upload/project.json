@@ -1,0 +1,47 @@
+{
+  "name": "android-upload-spike",
+  "root": "spikes/android/upload",
+  "projectType": "application",
+  "tags": ["spike", "android", "simulation-only"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "node --test spikes/android/upload/fixture.test.ts",
+          "python3 -m unittest discover -s spikes/android/upload -p 'test_*.py' -v"
+        ],
+        "parallel": false
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/android_personal_device.py"
+      ]
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml spikes/android/upload"
+      },
+      "inputs": ["default"]
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml spikes/android/upload",
+          "pnpm exec prettier --check \"spikes/android/upload/*.{ts,json,md}\""
+        ],
+        "parallel": false
+      },
+      "inputs": ["default"]
+    },
+    "emulator": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "flock /tmp/stateaction-mobile-validation.lock python3 spikes/android/upload/emulator_harness.py --serial {args.serial} --output {args.output}"
+      }
+    }
+  }
+}

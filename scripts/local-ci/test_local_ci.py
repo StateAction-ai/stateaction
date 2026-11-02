@@ -941,7 +941,11 @@ class InstallerTests(unittest.TestCase):
                 f'#!/bin/sh\necho "{name} $@" >> {self.trace}\nexit {code}\n'
             )
             shim.chmod(0o755)
-        return {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+        # A worktree wrapper exports STATEACTION_PREVIOUS_HOOKS to its hook; when
+        # this suite runs from inside such a commit it must not redirect the
+        # temporary repository's hook chain.
+        env = {k: v for k, v in os.environ.items() if k != "STATEACTION_PREVIOUS_HOOKS"}
+        return {**env, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
     def test_pre_commit_chains_checks_then_local_ci_and_cannot_be_bypassed_by_environment(
         self,

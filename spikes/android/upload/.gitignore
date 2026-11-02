@@ -1,0 +1,7 @@
+.gradle/
+.gradle-user/
+**/build/
+local.properties
+fixture-data/
+results.local.json
+node_modules/
