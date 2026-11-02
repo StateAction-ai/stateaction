@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import pg from "pg";
-import { loadMigrations, migrateDatabase } from "../src/migrations.js";
+import {
+  ensureAppRole,
+  grantAppRole,
+  loadMigrations,
+  migrateDatabase,
+} from "../src/migrations.js";
 import { expectCode, freshDatabase, writeArtifact } from "./harness.js";
 
 const TABLES = [
@@ -222,6 +227,239 @@ test("the grant helper resets broad table grants and default ACLs for the app ro
       await app.end();
     }
   } finally {
+    await db.close();
+  }
+});
+
+test("hosted path: migrateDatabase creates the restricted role, grants via the helper and is idempotent", async () => {
+  const db = await freshDatabase({ migrate: false });
+  const role = `sa_hosted_${db.name.slice(8, 20)}`;
+  const password = "hosted-password-0123456789";
+  const hostedUrl = (() => {
+    const u = new URL(db.appUrl);
+    u.username = role;
+    u.password = password;
+    return u.toString();
+  })();
+  try {
+    // Legacy state: version-1 row without checksum, role with broad grants.
+    await db.owner.query(
+      "CREATE TABLE platform_schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())",
+    );
+    await db.owner.query(
+      "INSERT INTO platform_schema_migrations (version) VALUES (1)",
+    );
+    const first = await migrateDatabase({
+      ownerUrl: db.ownerUrl,
+      appRole: role,
+      appRolePassword: password,
+    });
+    assert.deepEqual(first.adopted, [1]);
+    assert.equal(first.appRoleGranted, true);
+    const second = await migrateDatabase({
+      ownerUrl: db.ownerUrl,
+      appRole: role,
+      appRolePassword: password,
+    });
+    assert.deepEqual(second.applied, []);
+    const flags = await db.owner.query(
+      "SELECT rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = $1",
+      [role],
+    );
+    assert.deepEqual(flags.rows, [
+      { rolsuper: false, rolcreatedb: false, rolcreaterole: false },
+    ]);
+    const app = new pg.Client({ connectionString: hostedUrl });
+    await app.connect();
+    try {
+      await app.query("SELECT count(*) FROM reviews");
+      await expectCode(app.query("CREATE TABLE nope (x int)"), "42501");
+      await expectCode(app.query("DELETE FROM reviews"), "42501");
+      await expectCode(app.query("UPDATE access SET enabled = true"), "42501");
+    } finally {
+      await app.end();
+    }
+    await assert.rejects(
+      migrateDatabase({
+        ownerUrl: db.ownerUrl,
+        appRole: role,
+        appRolePassword: "short",
+      }),
+      /at least 16/,
+    );
+  } finally {
+    await db.owner.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
+    await db.close();
+  }
+});
+
+const roleSnapshot = async (pool: pg.Pool) =>
+  (
+    await pool.query(
+      `SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolcanlogin
+       FROM pg_roles ORDER BY rolname`,
+    )
+  ).rows;
+
+test("hostile app role names are rejected before any SQL reaches the database", async () => {
+  const db = await freshDatabase({ migrate: false });
+  try {
+    const before = await roleSnapshot(db.owner);
+    const hostile = [
+      "x$role$; CREATE ROLE pwned SUPERUSER; --",
+      "a$$; DROP TABLE platform_schema_migrations; $$",
+      "app'; ALTER ROLE migration_owner SUPERUSER; --",
+      'quoted"role',
+      "UPPER",
+      "",
+      "a".repeat(64),
+    ];
+    const client = await db.owner.connect();
+    const issued: unknown[] = [];
+    const original = client.query.bind(client);
+    // Spy: any query issued for a hostile name is a failure.
+    (client as unknown as { query: unknown }).query = (...args: unknown[]) => {
+      issued.push(args[0]);
+      return (original as (...a: unknown[]) => unknown)(...args);
+    };
+    try {
+      for (const name of hostile) {
+        await assert.rejects(
+          ensureAppRole(client, "hostile-password-0123456789", name),
+          /plain unquoted identifier/,
+        );
+        await assert.rejects(
+          grantAppRole(client, name),
+          /plain unquoted identifier/,
+        );
+      }
+    } finally {
+      client.release();
+    }
+    assert.deepEqual(issued, [], "no SQL was issued for hostile names");
+    for (const name of hostile)
+      await assert.rejects(
+        migrateDatabase({
+          ownerUrl: db.ownerUrl,
+          appRole: name,
+          appRolePassword: "hostile-password-0123456789",
+        }),
+        /plain unquoted identifier/,
+      );
+    assert.deepEqual(await roleSnapshot(db.owner), before, "no role changes");
+    const table = await db.owner.query(
+      "SELECT to_regclass('public.platform_schema_migrations') AS t",
+    );
+    assert.equal(table.rows[0].t, null, "the failed migration rolled back");
+  } finally {
+    await db.close();
+  }
+});
+
+test("pre-existing privileged or member app roles fail closed without rotation or schema changes", async () => {
+  const db = await freshDatabase({ migrate: false });
+  const admin = new pg.Client({
+    connectionString: process.env.CATALOG_TEST_ADMIN_URL,
+  });
+  await admin.connect();
+  const tag = db.name.slice(8, 20);
+  // Only the bootstrap superuser can create REPLICATION/BYPASSRLS roles.
+  const cases: [string, string][] = [
+    [
+      `sa_repl_${tag}`,
+      `CREATE ROLE sa_repl_${tag} LOGIN REPLICATION PASSWORD 'old-password-0123456789'`,
+    ],
+    [
+      `sa_brls_${tag}`,
+      `CREATE ROLE sa_brls_${tag} LOGIN BYPASSRLS PASSWORD 'old-password-0123456789'`,
+    ],
+    [
+      `sa_memb_${tag}`,
+      `CREATE ROLE sa_memb_${tag} LOGIN PASSWORD 'old-password-0123456789'; GRANT pg_read_all_data TO sa_memb_${tag}`,
+    ],
+    [`sa_nolg_${tag}`, `CREATE ROLE sa_nolg_${tag} NOLOGIN`],
+  ];
+  try {
+    for (const [, sql] of cases) await admin.query(sql);
+    const before = await roleSnapshot(db.owner);
+    for (const [role] of cases) {
+      await assert.rejects(
+        migrateDatabase({
+          ownerUrl: db.ownerUrl,
+          appRole: role,
+          appRolePassword: "new-password-0123456789",
+        }),
+        /must be a plain LOGIN role|must not be a member/,
+        role,
+      );
+    }
+    assert.deepEqual(
+      await roleSnapshot(db.owner),
+      before,
+      "role flags unchanged",
+    );
+    const members = await admin.query(
+      `SELECT count(*)::int AS n FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+       WHERE r.rolname = $1`,
+      [`sa_memb_${tag}`],
+    );
+    assert.equal(members.rows[0].n, 1, "membership untouched");
+    // The password was not rotated: the old one still logs in.
+    const u = new URL(db.appUrl);
+    u.username = `sa_repl_${tag}`;
+    u.password = "old-password-0123456789";
+    const old = new pg.Client({ connectionString: u.toString() });
+    await old.connect();
+    await old.end();
+    const table = await db.owner.query(
+      "SELECT to_regclass('public.platform_schema_migrations') AS t",
+    );
+    assert.equal(table.rows[0].t, null, "every refused migration rolled back");
+    // A fresh role created by the CREATEROLE owner (which gets ADMIN on it,
+    // the reverse membership direction) is accepted and stays plain.
+    const fresh = `sa_fresh_${tag}`;
+    try {
+      const report = await migrateDatabase({
+        ownerUrl: db.ownerUrl,
+        appRole: fresh,
+        appRolePassword: "fresh-password-0123456789",
+      });
+      assert.equal(report.appRoleGranted, true);
+      const flags = await admin.query(
+        `SELECT rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolcanlogin,
+                (SELECT count(*)::int FROM pg_auth_members m WHERE m.member = r.oid) AS member_of,
+                (SELECT count(*)::int FROM pg_auth_members m WHERE m.roleid = r.oid) AS has_members
+         FROM pg_roles r WHERE rolname = $1`,
+        [fresh],
+      );
+      assert.deepEqual(flags.rows, [
+        {
+          rolsuper: false,
+          rolcreatedb: false,
+          rolcreaterole: false,
+          rolreplication: false,
+          rolbypassrls: false,
+          rolcanlogin: true,
+          member_of: 0,
+          has_members: 1,
+        },
+      ]);
+      // Rerun (rotation path) over the owner-created role still succeeds.
+      await migrateDatabase({
+        ownerUrl: db.ownerUrl,
+        appRole: fresh,
+        appRolePassword: "fresh-password-9876543210",
+      });
+    } finally {
+      await db.owner.query(`DROP OWNED BY ${fresh}`).catch(() => undefined);
+      await db.owner
+        .query(`DROP ROLE IF EXISTS ${fresh}`)
+        .catch(() => undefined);
+    }
+  } finally {
+    for (const [role] of cases)
+      await admin.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
+    await admin.end();
     await db.close();
   }
 });

@@ -50,7 +50,7 @@ Staff grant changes go through `catalog_set_dataset_access(...)`, a `SECURITY DE
 
 The migrator (`src/migrations.ts`) applies ordered `NNN_*.sql` files inside one transaction under advisory lock `7430001`, records each file's SHA-256 and refuses edited applied files. A database bootstrapped by the original 001-only `migrate` adopts the current 001 checksum (reported as `adopted`). It then re-applies the grant function when `stateaction_app` exists.
 
-**SA-14 integration contract.** The hosted owner migrator should call `applyMigrations(client)` (or `migrateDatabase`) inside its transaction instead of reading `001_platform.sql`. After provisioning the role, it should call `SELECT stateaction_grant_app_role('stateaction_app')` in place of broad `GRANT … ON ALL TABLES` and `ALTER DEFAULT PRIVILEGES`. Broad grants would reopen DELETE/UPDATE. The triggers still protect the invariants, but least privilege would be lost.
+**SA-14 integration (implemented).** The hosted/dev owner migration (`hosted:migrate`, `packages/server/src/cli.ts`) calls `migrateDatabase({ ownerUrl, appRolePassword })`: `applyMigrations` → `ensureAppRole` (create/password only, never grants) → `stateaction_grant_app_role`, in one transaction. The role name must match `^[a-z_][a-z0-9_]{0,62}$` and is validated before any query (then passed as a bound setting, never interpolated). A pre-existing role fails closed unless it is plain LOGIN: no SUPERUSER, CREATEDB, CREATEROLE, REPLICATION or BYPASSRLS and no membership in other roles; the owner's automatic ADMIN membership in a freshly created role is allowed. No broad grants or default privileges remain. See render-deployment.md.
 
 ## Bounded reads
 
