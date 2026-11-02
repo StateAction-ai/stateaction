@@ -15,6 +15,7 @@ import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.data.h264.CaptureProtocol
 import open.fpvlabs.stera.ar_recorder.data.h264.H264CaptureSetup
 import open.fpvlabs.stera.ar_recorder.data.h264.H264Evidence
+import open.fpvlabs.stera.ar_recorder.finalization.CaptureOutcomePolicy
 import open.fpvlabs.stera.ar_recorder.encoding.CameraTimestampGate
 import open.fpvlabs.stera.ar_recorder.encoding.H264AccessUnit
 import open.fpvlabs.stera.ar_recorder.encoding.CpuImageIdentityPolicy
@@ -67,6 +68,7 @@ class H264RecordingController(
     private var cpuImageFrameMismatches = 0L
     private var codecInputDrops = 0L
     @Volatile var failure: String? = null; private set
+    @Volatile var interruptionReason: String? = null; private set
     val setup: H264CaptureSetup
 
     init {
@@ -171,15 +173,20 @@ class H264RecordingController(
     }
 
     /** Ends the codec stream within its deadline, writes every remaining access unit, then Inventory/Close. */
-    fun finish() {
+    fun finish(interruptionReason: String? = null, eosDeadlineMs: Long = H264RgbEncoder.EOS_DEADLINE_MS) {
+        this.interruptionReason = interruptionReason
         try {
             if (failure == null) {
-                try { encoder.finish() } catch (error: Throwable) { fail("H.264 end of stream failed", error) }
+                try { encoder.finish(eosDeadlineMs) } catch (error: Throwable) { fail("H.264 end of stream failed", error) }
             }
         } finally {
             encoder.close()
-            val reason = failure ?: writer.getWriteFailure()
-            post(always = true) { writer.closeH264Capture(if (reason == null) "completed" else "failed", reason) }
+            // Evaluated on the writer thread so a write failure that lands before Close is never missed. A reasoned
+            // interruption closes as `aborted` with an explicit reason; any failure wins over it.
+            post(always = true) {
+                val (outcome, reason) = CaptureOutcomePolicy.closeFor(interruptionReason, failure ?: writer.getWriteFailure())
+                writer.closeH264Capture(outcome, reason)
+            }
         }
     }
 
@@ -200,7 +207,7 @@ class H264RecordingController(
         "metadata_timestamp_stale" to gate.staleMetadata, "metadata_timestamp_ahead" to gate.aheadMetadata,
         "peak_queued_encoded_bytes" to peakQueuedVideoBytes.get(), "max_queued_encoded_bytes" to MAX_QUEUED_VIDEO_BYTES,
         "peak_queued_writes" to peakQueuedWrites.get(), "max_queued_writes" to MAX_QUEUED_WRITES,
-        "first_error" to failure,
+        "first_error" to failure, "interruption_reason" to interruptionReason,
     )
 
     private fun onAccessUnit(unit: H264AccessUnit) {

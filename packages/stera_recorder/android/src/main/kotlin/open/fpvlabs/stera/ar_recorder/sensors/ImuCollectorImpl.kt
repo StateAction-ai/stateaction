@@ -204,12 +204,14 @@ class ImuCollectorImpl(
     override fun getMaxCallbackLatencyNs(): Long = buffer.stats.values.maxOf { it.maxCallbackLatencyNs() }
     override fun getCallbackCount(): Long = buffer.stats.values.sumOf { it.delivered.get() }
 
+    private companion object { const val IMU_THREAD_JOIN_MS = 2_000L }
+
     override fun release() {
         stop()
         buffer.drain()
         handlerThread?.quitSafely()
         try {
-            handlerThread?.join()
+            handlerThread?.join(IMU_THREAD_JOIN_MS)
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
         }
