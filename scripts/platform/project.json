@@ -7,7 +7,8 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "node --test scripts/platform/check-staged.test.mjs",
+          "node --test --test-concurrency=2 scripts/platform/check-staged.test.mjs",
+          "node --test --test-concurrency=2 scripts/platform/local-fixtures.test.mjs",
           "python3 -m unittest discover -s scripts/platform -p 'test_mobile*.py' -v"
         ],
         "parallel": false
@@ -17,8 +18,8 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "pnpm exec prettier --check \"scripts/platform/**/*.{mjs,json,md}\" \"config/**/*.json\" package.json nx.json pnpm-workspace.yaml lefthook.yml \".github/workflows/*.yml\" AGENTS.md README.md docs/repository-workflow.md .github/pull_request_template.md pnpm-lock.yaml",
-          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
+          "pnpm exec prettier --check \"scripts/platform/**/*.{mjs,json,md}\" scripts/local-ci/stages.json docs/local-ci.md \"config/**/*.json\" package.json nx.json pnpm-workspace.yaml lefthook.yml \".github/workflows/*.yml\" AGENTS.md README.md docs/repository-workflow.md .github/pull_request_template.md pnpm-lock.yaml",
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml scripts/local-ci/*.py scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
         ],
         "parallel": false
       },
@@ -31,9 +32,11 @@
           "node --check scripts/platform/check-staged.mjs",
           "node --check scripts/platform/check-push.mjs",
           "node --check scripts/platform/install-hooks.mjs",
+          "node --check scripts/platform/local-fixtures.mjs",
+          "node --check scripts/platform/local-fixtures.test.mjs",
           "node --check scripts/platform/hook-fixtures.mjs",
           "node --check scripts/platform/check-staged-dart.test.mjs",
-          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
+          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/local-ci/*.py scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
         ],
         "parallel": false
       }

@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
 # Render-like production-mode proof on isolated local ports. Never contacts Render
 # or real R2 credentials: storage uses a fake credential pair and is expected degraded.
+#
+# Bounded external mode (STATEACTION_LOCAL_FIXTURES / E2E_EXTERNAL_FIXTURES): no
+# Docker. A run-owned database on the already-running bounded loopback
+# PostgreSQL replaces the container; a bounded 127.0.0.2 forwarder gives the
+# production-mode services the non-"loopback" host Render would. The database is
+# removed on exit by exact ledger entry. STATEACTION_REQUIRE_EXTERNAL_FIXTURES=1
+# refuses the Docker fallback.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+fixtures=scripts/platform/local-fixtures.mjs
+external=false
+if [[ -n "${STATEACTION_LOCAL_FIXTURES:-}${E2E_EXTERNAL_FIXTURES:-}" || -n "${STATEACTION_REQUIRE_EXTERNAL_FIXTURES:-}" ]]; then
+  node "$fixtures" check # refuses unsafe/missing fixtures
+  external=true
+fi
 WEB_PORT="${HOSTED_SMOKE_WEB_PORT:-10000}"   # Render's default PORT
 RUNNER_PORT="${HOSTED_SMOKE_RUNNER_PORT:-8121}"
 NAME="stateaction-sa14-hosted-pg"
@@ -17,35 +30,67 @@ with socket.socket() as s:
     except OSError: raise SystemExit(f'Refusing occupied port {sys.argv[1]}')
 PY
 done
-web_pid=''; runner_pid=''
+web_pid=''; runner_pid=''; forward_pid=''; run_dir=''
 cleanup() {
+  local rc=$?
   [[ -z "$web_pid" ]] || kill -- "-$web_pid" 2>/dev/null || true
   [[ -z "$runner_pid" ]] || kill -- "-$runner_pid" 2>/dev/null || true
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  [[ -z "$forward_pid" ]] || kill "$forward_pid" 2>/dev/null || true
+  if [[ "$external" == true ]]; then
+    [[ -z "$run_dir" ]] || node "$fixtures" reap "$run_dir" || rc=1
+  else
+    docker rm -f "$NAME" >/dev/null 2>&1 || true
+  fi
+  return "$rc"
 }
-trap cleanup EXIT
-BOOT_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
-OWNER_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
-APP_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
-docker rm -f "$NAME" >/dev/null 2>&1 || true
-# Bootstrap superuser only provisions; the migration owner mirrors Render: NOSUPERUSER
-# CREATEROLE and the owner of its database (the catalog grant helper requires ownership).
-docker run -d --name "$NAME" -e POSTGRES_USER=bootstrap -e POSTGRES_PASSWORD="$BOOT_PW" -e POSTGRES_DB=postgres \
-  "$(grep -oE 'postgres:[^ ]+@sha256:[0-9a-f]+' infra/compose.yaml | head -1)" >/dev/null
-for _ in {1..60}; do docker exec "$NAME" pg_isready -U bootstrap -d postgres >/dev/null 2>&1 && break; sleep 1; done
-DB_HOST="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$NAME")"
-# Non-loopback address, like Render's private network, so production isolation applies.
-for _ in {1..30}; do python3 -c "import socket;socket.create_connection(('$DB_HOST',5432),1)" 2>/dev/null && break; sleep 1; done
-psql_as() { local user=$1 pw=$2 db=$3; shift 3; docker exec -i -e PGPASSWORD="$pw" "$NAME" psql -v ON_ERROR_STOP=1 -qAt -h "$DB_HOST" -U "$user" -d "$db" "$@"; }
-psql_as bootstrap "$BOOT_PW" postgres -c "CREATE ROLE migration_owner LOGIN CREATEROLE NOSUPERUSER NOCREATEDB PASSWORD '$OWNER_PW'"
-psql_as bootstrap "$BOOT_PW" postgres -c "CREATE DATABASE stateaction OWNER migration_owner"
-OWNER_URL="postgresql://migration_owner:$OWNER_PW@$DB_HOST:5432/stateaction"
-APP_AS() { psql_as stateaction_app "$APP_PW" stateaction "$@"; }
-
+trap 'cleanup; exit $?' EXIT
+if [[ "$external" == true ]]; then
+  run_dir=$(node "$fixtures" prepare smk --database)
+  # Synthetic loopback credentials of the bounded fixtures; never printed.
+  set -a; source "$run_dir/run.env"; set +a
+  DB_NAME="$STATEACTION_FIXTURE_DATABASE"
+  OWNER_PW="$(python3 -c 'import os,urllib.parse as u;print(u.unquote(u.urlparse(os.environ["CATALOG_TEST_OWNER_URL"]).password))')"
+  APP_PW="$(python3 -c 'import os,urllib.parse as u;print(u.unquote(u.urlparse(os.environ["CATALOG_TEST_APP_URL"]).password))')"
+  DIRECT_PORT="$(python3 -c 'import os,urllib.parse as u;print(u.urlparse(os.environ["CATALOG_TEST_ADMIN_URL"]).port)')"
+  psql_as() { # user, password, db, then psql-style -c SQL or SQL on stdin
+    local user=$1 pw=$2 db=$3; shift 3
+    local enc; enc="$(python3 -c 'import sys,urllib.parse as u;print(u.quote(sys.argv[1],safe=""))' "$pw")"
+    HS_URL="postgresql://$user:$enc@127.0.0.1:$DIRECT_PORT/$db" node "$fixtures" sql --url-env HS_URL "$@"
+  }
+  forward_port_file="$run_dir/forward.port"
+  setsid node "$fixtures" forward --ttl 1800 > "$forward_port_file" &
+  forward_pid=$!
+  for _ in {1..30}; do [[ -s "$forward_port_file" ]] && break; sleep 0.2; done
+  DB_HOST=127.0.0.2   # not in the config's loopback names, like Render's private network
+  DB_PORT="$(head -1 "$forward_port_file")"
+  [[ "$DB_PORT" =~ ^[0-9]+$ ]] || { echo "forwarder did not start" >&2; exit 1; }
+  OWNER_URL="postgresql://migration_owner:$OWNER_PW@$DB_HOST:$DB_PORT/$DB_NAME"
+  APP_ROLE_SQL=''
+else
+  DB_NAME=stateaction; DB_PORT=5432
+  BOOT_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
+  OWNER_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
+  APP_PW="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  # Bootstrap superuser only provisions; the migration owner mirrors Render: NOSUPERUSER
+  # CREATEROLE and the owner of its database (the catalog grant helper requires ownership).
+  docker run -d --name "$NAME" -e POSTGRES_USER=bootstrap -e POSTGRES_PASSWORD="$BOOT_PW" -e POSTGRES_DB=postgres \
+    "$(grep -oE 'postgres:[^ ]+@sha256:[0-9a-f]+' infra/compose.yaml | head -1)" >/dev/null
+  for _ in {1..60}; do docker exec "$NAME" pg_isready -U bootstrap -d postgres >/dev/null 2>&1 && break; sleep 1; done
+  DB_HOST="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$NAME")"
+  # Non-loopback address, like Render's private network, so production isolation applies.
+  for _ in {1..30}; do python3 -c "import socket;socket.create_connection(('$DB_HOST',5432),1)" 2>/dev/null && break; sleep 1; done
+  psql_as() { local user=$1 pw=$2 db=$3; shift 3; docker exec -i -e PGPASSWORD="$pw" "$NAME" psql -v ON_ERROR_STOP=1 -qAt -h "$DB_HOST" -U "$user" -d "$db" "$@"; }
+  psql_as bootstrap "$BOOT_PW" postgres -c "CREATE ROLE migration_owner LOGIN CREATEROLE NOSUPERUSER NOCREATEDB PASSWORD '$OWNER_PW'"
+  psql_as bootstrap "$BOOT_PW" postgres -c "CREATE DATABASE stateaction OWNER migration_owner"
+  OWNER_URL="postgresql://migration_owner:$OWNER_PW@$DB_HOST:5432/$DB_NAME"
+  APP_ROLE_SQL="CREATE ROLE stateaction_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '$APP_PW';"
+fi
+APP_AS() { psql_as stateaction_app "$APP_PW" "$DB_NAME" "$@"; }
 echo "== legacy SA-14 state: version-1 schema (no checksum) + broad grants and default ACLs"
-psql_as migration_owner "$OWNER_PW" stateaction < packages/server/migrations/001_platform.sql
-psql_as migration_owner "$OWNER_PW" stateaction <<SQL
-CREATE ROLE stateaction_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD '$APP_PW';
+psql_as migration_owner "$OWNER_PW" "$DB_NAME" < packages/server/migrations/001_platform.sql
+psql_as migration_owner "$OWNER_PW" "$DB_NAME" <<SQL
+$APP_ROLE_SQL
 GRANT ALL ON ALL TABLES IN SCHEMA public TO stateaction_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO stateaction_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO stateaction_app;
@@ -59,7 +104,7 @@ grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4\]' <<<"
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }
 echo "== broad default ACLs were removed by stateaction_grant_app_role"
-leftover="$(psql_as migration_owner "$OWNER_PW" stateaction -c "SELECT count(*) FROM pg_default_acl WHERE defaclacl::text LIKE '%stateaction_app=%'")"
+leftover="$(psql_as migration_owner "$OWNER_PW" "$DB_NAME" -c "SELECT count(*) FROM pg_default_acl WHERE defaclacl::text LIKE '%stateaction_app=%'")"
 [[ "$leftover" == 0 ]] || { echo "default ACLs for the app role remain" >&2; exit 1; }
 echo "== restricted role on the catalog: intended operations allowed, escalation/DDL/mutation denied"
 denied() { # statement, expected SQLSTATE class text
@@ -83,13 +128,13 @@ denied "DELETE FROM reviews"
 denied "DELETE FROM clips"
 denied "DELETE FROM recordings"
 denied "SELECT stateaction_grant_app_role('stateaction_app')"
-psql_as migration_owner "$OWNER_PW" stateaction -c "DELETE FROM \"user\" WHERE id = 'smoke-user'" >/dev/null
+psql_as migration_owner "$OWNER_PW" "$DB_NAME" -c "DELETE FROM \"user\" WHERE id = 'smoke-user'" >/dev/null
 echo "restricted role checks passed"
 
 echo "== production start: injected env only, no .env file, PORT=$WEB_PORT"
 test ! -e .env
 HOSTED_ENV=(env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production APP_ENV=production PORT="$WEB_PORT"
-  DATABASE_HOST="$DB_HOST" DATABASE_PORT=5432 DATABASE_NAME=stateaction APP_DB_PASSWORD="$APP_PW"
+  DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME" APP_DB_PASSWORD="$APP_PW"
   S3_REGION=auto S3_ENDPOINT=https://smokeaccount.r2.cloudflarestorage.com S3_BUCKET=stateaction-smoke
   S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real
   PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1)

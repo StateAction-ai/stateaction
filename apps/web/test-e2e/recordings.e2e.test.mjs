@@ -307,7 +307,8 @@ before(async () => {
     AUTH_LOCAL_PASSWORD: "true",
     S3_ENDPOINT: s3.endpoint,
     S3_REGION: "us-east-1",
-    S3_BUCKET: "stateaction-e2e",
+    // External fixtures hand out a run-owned, already-created bucket.
+    S3_BUCKET: s3.bucket ?? "stateaction-e2e",
     S3_ACCESS_KEY_ID: s3.accessKeyId,
     S3_SECRET_ACCESS_KEY: s3.secretAccessKey,
     PROCESSING_PROFILE_REVISION: "sa19-e2e-1",
@@ -346,7 +347,8 @@ before(async () => {
     secretAccessKey: s3.secretAccessKey,
   };
   storage = storageClient(storageConfig, 15000);
-  await storage.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }));
+  if (!s3.bucket)
+    await storage.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }));
   deps = {
     pool: app,
     reader: s3ObjectReader(storageConfig),
@@ -418,8 +420,8 @@ after(async () => {
   }
   storage?.destroy();
   await Promise.all([owner?.end(), app?.end()]);
-  db?.stop();
-  s3?.stop();
+  await db?.stop();
+  await s3?.stop();
   if (process.env.SA19_E2E_EVIDENCE)
     process.stdout.write(`SA19_E2E_EVIDENCE ${JSON.stringify(evidence)}\n`);
 });

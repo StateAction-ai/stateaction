@@ -132,7 +132,7 @@ def main() -> None:
     elif args.target == "typecheck":
         run("flutter", "analyze", "--no-pub", cwd=directory)
     elif args.target == "test":
-        run("flutter", "test", "--no-pub", cwd=directory)
+        run("flutter", "test", "--no-pub", "--concurrency=2", cwd=directory)
     elif args.target == "format":
         format_sources(directory, toolchain["dartFormatLanguageVersion"])
     elif args.project == "mobile":

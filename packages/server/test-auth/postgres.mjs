@@ -1,9 +1,22 @@
 // Throwaway Postgres for auth runtime tests: a uniquely named, labelled
 // container on an ephemeral loopback port with tmpfs data. It shares no
 // Compose project, port, volume or data with other work and is always removed.
-import { execFileSync } from "node:child_process";
+// With STATEACTION_LOCAL_FIXTURES (or E2E_EXTERNAL_FIXTURES) set, no Docker is
+// used: each call creates a run-owned database (and role) on the bounded
+// loopback PostgreSQL, removed by exact ledger entry in `stop()`. With
+// STATEACTION_REQUIRE_EXTERNAL_FIXTURES set, Docker is refused outright.
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import {
+  assertDockerAllowed,
+  externalSession,
+} from "../../../scripts/platform/local-fixtures.mjs";
+
+const CLI = fileURLToPath(
+  new URL("../../../scripts/platform/local-fixtures.mjs", import.meta.url),
+);
 
 // Same pinned image as infra/compose.yaml.
 export const POSTGRES_IMAGE =
@@ -13,7 +26,68 @@ function docker(args) {
   return execFileSync("docker", args, { encoding: "utf8" }).trim();
 }
 
+async function startExternalPostgres() {
+  const session = externalSession();
+  const role = await session.createRole({ purpose: "auth" });
+  let db;
+  try {
+    db = await session.createDatabase({ purpose: "auth", owner: role.name });
+  } catch (error) {
+    await session.remove("role", role.name);
+    throw error;
+  }
+  const url = new URL(db.ownerUrl);
+  url.username = role.name;
+  url.password = role.password;
+  return {
+    name: db.name,
+    url: url.toString(),
+    stop: async () => {
+      await session.remove("database", db.name);
+      await session.remove("role", role.name);
+    },
+  };
+}
+
+async function startExternalCatalogPostgres() {
+  const session = externalSession();
+  const db = await session.createDatabase({ purpose: "cat" });
+  return {
+    name: db.name,
+    ownerUrl: db.ownerUrl,
+    appUrl: db.appUrl,
+    /** Owner-credential SQL (operator actions), returning unaligned rows. */
+    ownerSql: (sql) => {
+      // Synchronous like the Docker `psql` path: callers do not await it. A
+      // short-lived child (the fixture CLI) keeps the credential out of argv.
+      const child = spawnSync(
+        process.execPath,
+        [CLI, "sql", "--url-env", "SA_FIXTURE_OWNER_URL", "-c", sql],
+        {
+          encoding: "utf8",
+          timeout: 60_000,
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            STATEACTION_LOCAL_FIXTURES: process.env.STATEACTION_LOCAL_FIXTURES,
+            E2E_EXTERNAL_FIXTURES: process.env.E2E_EXTERNAL_FIXTURES,
+            SA_FIXTURE_OWNER_URL: db.ownerUrl,
+          },
+        },
+      );
+      if (child.status !== 0)
+        throw new Error(`ownerSql failed: ${child.stderr.trim()}`);
+      return child.stdout.trim();
+    },
+    stop: async () => {
+      await session.remove("database", db.name);
+    },
+  };
+}
+
 export async function startPostgres() {
+  if (externalSession()) return startExternalPostgres();
+  assertDockerAllowed("startPostgres");
   const name = `stateaction-sa15-auth-${randomBytes(6).toString("hex")}`;
   const password = randomBytes(18).toString("base64url");
   docker([
@@ -99,6 +173,8 @@ export async function startPostgres() {
  * the owner and run Better Auth and the access store as `stateaction_app`.
  */
 export async function startCatalogPostgres() {
+  if (externalSession()) return startExternalCatalogPostgres();
+  assertDockerAllowed("startCatalogPostgres");
   const name = `stateaction-sa15-catalog-${randomBytes(6).toString("hex")}`;
   const secret = () => randomBytes(18).toString("hex");
   const admin = secret();

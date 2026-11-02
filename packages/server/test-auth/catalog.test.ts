@@ -123,7 +123,7 @@ after(async () => {
   await harness?.close();
   await owner?.end();
   await runtime?.pool.end();
-  db?.stop();
+  await db?.stop();
 });
 
 describe("Better Auth on the real SA-13 catalog as stateaction_app", () => {

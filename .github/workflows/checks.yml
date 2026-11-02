@@ -1,8 +1,7 @@
 name: CI
+# Optional and manual: the required full-suite gate is the local, guarded
+# scripts/local-ci run and its tree-bound receipt (see docs/local-ci.md).
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
     inputs:
       pr_number:

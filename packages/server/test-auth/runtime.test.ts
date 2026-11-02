@@ -263,7 +263,7 @@ after(async () => {
   await new Promise((resolve) => server?.close(resolve));
   await sql?.end();
   await runtime?.pool.end();
-  db?.stop();
+  await db?.stop();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 

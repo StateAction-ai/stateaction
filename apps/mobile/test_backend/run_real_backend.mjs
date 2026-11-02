@@ -16,7 +16,7 @@
 //
 // Not Google, not Tailscale/HTTPS, not a phone, not hosted qualification.
 //
-//   node apps/mobile/test_backend/run_real_backend.mjs   (needs docker, web build, flutter)
+//   node apps/mobile/test_backend/run_real_backend.mjs   (needs web build, flutter, and Docker or STATEACTION_LOCAL_FIXTURES)
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createRequire } from "node:module";
@@ -25,6 +25,7 @@ import { createServer as createTcpServer, connect } from "node:net";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { externalSession } from "../../../scripts/platform/local-fixtures.mjs";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
 
 const mobileDir = fileURLToPath(new URL("..", import.meta.url));
@@ -94,7 +95,13 @@ let db,
   exitCode = 1,
   logs = "";
 try {
-  if (spawnSync("docker", ["version"], { stdio: "ignore" }).status !== 0)
+  // Bounded external fixtures (STATEACTION_LOCAL_FIXTURES) need no Docker; with
+  // STATEACTION_REQUIRE_EXTERNAL_FIXTURES a missing file is a refusal, never a
+  // Docker fallback (startCatalogPostgres enforces it).
+  if (
+    !externalSession() &&
+    spawnSync("docker", ["version"], { stdio: "ignore" }).status !== 0
+  )
     throw new Error("docker is required for the throwaway Postgres");
   db = await startCatalogPostgres();
   const nextPort = await freePort();
@@ -256,6 +263,6 @@ try {
     } catch {}
     await sleep(500);
   }
-  db?.stop();
+  await db?.stop();
 }
 process.exit(exitCode);

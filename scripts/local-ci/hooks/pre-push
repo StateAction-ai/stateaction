@@ -1,0 +1,13 @@
+#!/bin/sh
+# Tracked pre-push entry: always blocks updates and deletes of refs/heads/main, then
+# chains any previous pre-push hook with the same arguments and ref list.
+input=$(cat)
+if printf '%s\n' "$input" | awk '$3 == "refs/heads/main" { found = 1 } END { exit !found }'; then
+  echo "Direct pushes to main are prohibited. Push a ticket branch and merge its single-ticket PR with a local CI receipt." >&2
+  exit 1
+fi
+previous_dir=${STATEACTION_PREVIOUS_HOOKS:-$(git rev-parse --git-common-dir)/hooks}
+if [ -x "$previous_dir/pre-push" ]; then
+  printf '%s\n' "$input" | "$previous_dir/pre-push" "$@" || exit $?
+fi
+exit 0

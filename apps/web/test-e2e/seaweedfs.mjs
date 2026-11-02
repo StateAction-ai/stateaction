@@ -8,12 +8,38 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import {
+  assertDockerAllowed,
+  externalSession,
+} from "../../../scripts/platform/local-fixtures.mjs";
 
 const root = new URL("../../../", import.meta.url);
 const docker = (args) =>
   execFileSync("docker", args, { encoding: "utf8" }).trim();
 
+/**
+ * Bounded external mode (STATEACTION_LOCAL_FIXTURES): no container; a run-owned
+ * bucket on the shared loopback S3, emptied and removed by exact ledger entry.
+ * The bucket already exists when this returns.
+ */
+async function startExternalSeaweedfs() {
+  const session = externalSession();
+  const bucket = await session.createBucket();
+  return {
+    name: undefined,
+    bucket: bucket.name,
+    endpoint: session.values.STORAGE_TEST_ENDPOINT,
+    accessKeyId: session.values.STORAGE_TEST_ACCESS_KEY_ID,
+    secretAccessKey: session.values.STORAGE_TEST_SECRET_ACCESS_KEY,
+    stop: async () => {
+      await session.remove("bucket", bucket.name);
+    },
+  };
+}
+
 export async function startSeaweedfs() {
+  if (externalSession()) return startExternalSeaweedfs();
+  assertDockerAllowed("startSeaweedfs");
   const image = /^\s*image:\s*(chrislusf\/seaweedfs:\S+)\s*$/m.exec(
     readFileSync(new URL("infra/compose.yaml", root), "utf8"),
   )?.[1];

@@ -16,13 +16,25 @@ if platform.system() != "Linux" or platform.machine() != "x86_64":
         "This checksum-pinned installer supports Linux x86-64 only. See Render's official CLI installation guide for your platform."
     )
 root = Path(__file__).resolve().parents[2]
-response = urllib.request.urlopen(
-    f"https://github.com/render-oss/cli/releases/download/v{VERSION}/cli_{VERSION}_linux_amd64.zip",
-    timeout=60,
+# Reuse an already verified download (immutable, keyed by its SHA-256) across checkouts.
+cached = (
+    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    / "stateaction"
+    / f"render-cli-{SHA256}.zip"
 )
-archive = response.read(64 * 1024 * 1024 + 1)
-if len(archive) > 64 * 1024 * 1024 or hashlib.sha256(archive).hexdigest() != SHA256:
-    raise SystemExit("Render release checksum mismatch")
+archive = b""
+if cached.is_file() and cached.stat().st_size <= 64 * 1024 * 1024:
+    archive = cached.read_bytes()
+if hashlib.sha256(archive).hexdigest() != SHA256:
+    response = urllib.request.urlopen(
+        f"https://github.com/render-oss/cli/releases/download/v{VERSION}/cli_{VERSION}_linux_amd64.zip",
+        timeout=60,
+    )
+    archive = response.read(64 * 1024 * 1024 + 1)
+    if len(archive) > 64 * 1024 * 1024 or hashlib.sha256(archive).hexdigest() != SHA256:
+        raise SystemExit("Render release checksum mismatch")
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_bytes(archive)
 destination = root / "artifacts/platform-tools/render/render"
 destination.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(io.BytesIO(archive)) as release:

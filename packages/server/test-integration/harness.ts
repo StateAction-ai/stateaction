@@ -13,6 +13,12 @@ import {
 import { seedSha } from "../src/catalog/seed.js";
 import { migrateDatabase } from "../src/migrations.js";
 import { establishFixtureAdmission } from "../src/admission/fixtures.js";
+import {
+  databaseName,
+  ledgerRun,
+  marker,
+  recordCreated,
+} from "./fixture-ledger.js";
 
 const env = (key: string) => {
   const value = process.env[key];
@@ -39,13 +45,17 @@ export type TestDb = {
 export async function freshDatabase(
   options: { migrate?: boolean } = {},
 ): Promise<TestDb> {
-  const name = `catalog_${randomUUID().replaceAll("-", "")}`;
+  const run = ledgerRun();
+  const name = databaseName(run);
+  if (run) recordCreated(run, "database", name, "migration_owner");
   const admin = new pg.Client({
     connectionString: env("CATALOG_TEST_ADMIN_URL"),
   });
   await admin.connect();
   try {
     await admin.query(`CREATE DATABASE ${name} OWNER migration_owner`);
+    if (run)
+      await admin.query(`COMMENT ON DATABASE ${name} IS '${marker(run)}'`);
   } finally {
     await admin.end();
   }

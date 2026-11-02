@@ -76,7 +76,7 @@ export async function startStack() {
       } catch {}
       await sleep(500);
     }
-    db.stop();
+    await db.stop();
   };
   try {
     const boot = spawnSync(
