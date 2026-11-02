@@ -94,6 +94,7 @@ class ClipWriter:
         job_id: str,
         first: DecodedFrame,
         limits: ExportLimits,
+        rrd_note: str | None = None,
     ):
         import av
 
@@ -126,7 +127,7 @@ class ClipWriter:
         self.stream.width, self.stream.height = w, h
         self.stream.time_base = TIME_BASE
         self.rrd = RrdWriter(
-            self.dir / FILE_NAMES["viewer_rrd"], clip_id, (w, h), limits
+            self.dir / FILE_NAMES["viewer_rrd"], clip_id, (w, h), limits, rrd_note
         )
         self.last_pts = -1
         self._thumb_from(first)

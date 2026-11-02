@@ -41,6 +41,12 @@ export type JobsDeps = {
   config: JobsConfig;
   presignRead: PresignRead;
   taskInput?: TaskInputBuilder;
+  /**
+   * Storage-backed verification used by SA-28 output acceptance (manifest
+   * reader, streaming hasher, finite budgets). Absent in tests that do not
+   * exercise acceptance; the result routes then fail closed.
+   */
+  acceptance?: Omit<import("../acceptance/service.js").AcceptanceDeps, "pool">;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -846,6 +852,26 @@ export async function refreshInputReadUrl(
     new Date(),
   );
   return { fileId, readUrl: signed!.readUrl, expiresAt: signed!.expiresAt };
+}
+
+/**
+ * The admitted, secret-free task input (jobs.task-input.v2) of the current
+ * claimed job, read from the immutable admission evidence. A worker needs the
+ * recording identity, profile revision and the admitted capture profile (with
+ * the simulation marker for simulated captures) to bind its result to them; the
+ * frozen claim grant deliberately carries none of these.
+ */
+export async function readTaskInput(
+  deps: Pick<JobsDeps, "pool">,
+  input: { jobId: string },
+): Promise<Record<string, unknown>> {
+  const jobId = uuid(input.jobId, "jobId");
+  await assertJobCurrent(deps.pool, jobId);
+  const { rows } = await deps.pool.query<{
+    task_input: Record<string, unknown>;
+  }>("SELECT task_input FROM job_inputs WHERE job_id = $1", [jobId]);
+  if (!rows[0]) throw new TransportError("not_found", "Job not found");
+  return rows[0].task_input;
 }
 
 // ---------------------------------------------------------------------- status

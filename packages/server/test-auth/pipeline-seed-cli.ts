@@ -1,8 +1,9 @@
 // Used by the Pipeline browser/HTTP E2E: writes real catalog rows through the
 // access layer as the restricted app role (processing, completed with clips,
 // failed) for the seeded collector, and prints their recording IDs.
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "../test-integration/harness.js";
 import pg from "pg";
-import { acceptProcessingResult } from "../src/catalog/catalog.js";
 import { processedRecording } from "../test-integration/harness.js";
 
 const appUrl = process.env.CATALOG_APP_URL;
@@ -18,7 +19,7 @@ const actors = {
 };
 const processing = await processedRecording(app, actors, 1);
 const completed = await processedRecording(app, actors, 2);
-await acceptProcessingResult(app, {
+await fixtureAcceptResult(ownerPoolFor(app), app, {
   jobId: completed.jobId,
   manifestFileId: completed.manifestFileId,
   manifestSha256: completed.manifestSha256,

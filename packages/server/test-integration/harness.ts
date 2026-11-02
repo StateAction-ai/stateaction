@@ -1,4 +1,4 @@
-import { fixtureRunJob } from "../src/jobs/fixtures.js";
+import { fixtureCloseOutputs, fixtureRunJob } from "../src/jobs/fixtures.js";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
@@ -168,6 +168,7 @@ export async function processedRecording(
   app: pg.Pool,
   actors: Actors,
   clipCount = 2,
+  options: { open?: boolean } = {},
 ): Promise<Processed> {
   const recordingId = randomUUID();
   await registerRecording(app, {
@@ -217,7 +218,9 @@ export async function processedRecording(
     recordingId,
     profileRevision: "test-1",
   });
-  await fixtureRunJob(ownerPoolFor(app), jobId);
+  await fixtureRunJob(ownerPoolFor(app), jobId, {
+    maxOutputFiles: options.open ? 2000 : 512,
+  });
   const outputFiles: string[] = [];
   const output = async (role: string) => {
     const id = randomUUID();
@@ -263,6 +266,23 @@ export async function processedRecording(
       },
     });
   const resultId = await output("result_manifest");
+  if (options.open)
+    // Bulk fixtures extend the inventory themselves, then close it (running)
+    // and move to result_pending with fixtureCloseOutputs.
+    return {
+      recordingId,
+      jobId,
+      manifestFileId: resultId,
+      manifestSha256: seedSha(resultId),
+      clips,
+      outputFiles,
+    };
+  // Production order: the inventory is closed while the job is still running.
+  await fixtureCloseOutputs(ownerPoolFor(app), {
+    jobId,
+    manifestFileId: resultId,
+    clips,
+  });
   await app.query("UPDATE jobs SET state = 'result_pending' WHERE id = $1", [
     jobId,
   ]);

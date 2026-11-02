@@ -154,6 +154,24 @@ def cmd_read(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_config_digest() -> int:
+    """Print the canonical exporter configuration digest (the value PROCESSING_CONFIG_SHA256 must be)."""
+    from .artifact_export import config_sha256
+    from .artifact_types import RULE_REVISION
+    from .capture_stream import StreamLimits
+
+    print(
+        json.dumps(
+            {
+                "config_sha256": config_sha256(ExportLimits(), StreamLimits()),
+                "rule_revision": RULE_REVISION,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
@@ -180,11 +198,14 @@ def main(argv: list[str] | None = None) -> int:
         help="cut at the first IDR at/after this age (<= 60)",
     )
     e.add_argument("--clip-target-frames", type=int)
+    sub.add_parser("config-digest")
     r = sub.add_parser("read")
     r.add_argument("prefix", type=Path)
     r.add_argument("--verify-mp4", action="store_true")
     r.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
+    if a.command == "config-digest":
+        return cmd_config_digest()
     return cmd_export(a) if a.command == "export" else cmd_read(a)
 
 

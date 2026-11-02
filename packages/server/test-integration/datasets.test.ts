@@ -1,10 +1,9 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
-import {
-  acceptProcessingResult,
-  appendReview,
-} from "../src/catalog/catalog.js";
+import { appendReview } from "../src/catalog/catalog.js";
 import { issueRead, type ReadSigner } from "../src/datasets/broker.js";
 import {
   addDatasetMembers,
@@ -46,7 +45,7 @@ after(() => db.close());
 
 const accepted = async (clipCount: number): Promise<Processed> => {
   const p = await processedRecording(db.app, actors, clipCount);
-  await acceptProcessingResult(db.app, {
+  await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
     jobId: p.jobId,
     manifestFileId: p.manifestFileId,
     manifestSha256: p.manifestSha256,
@@ -835,6 +834,10 @@ describe("read broker", () => {
 
     // An ineligible file (not completed, wrong role) is never signed.
     await db.owner.query("ALTER TABLE files DISABLE TRIGGER files_guard");
+    // Simulated storage corruption of an ACCEPTED file (targeted, test-only).
+    await db.owner.query(
+      "ALTER TABLE files DISABLE TRIGGER output_inventory_closed_files",
+    );
     try {
       await db.owner.query("UPDATE files SET state = 'failed' WHERE id = $1", [
         clip.files.viewerRrd,
@@ -865,6 +868,9 @@ describe("read broker", () => {
       );
     } finally {
       await db.owner.query("ALTER TABLE files ENABLE TRIGGER files_guard");
+      await db.owner.query(
+        "ALTER TABLE files ENABLE TRIGGER output_inventory_closed_files",
+      );
     }
 
     // The next request after revocation, rejection or role loss is denied.

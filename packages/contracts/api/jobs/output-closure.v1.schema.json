@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/output-closure.v1.json",
+  "title": "Closed output inventory v1",
+  "description": "Response of outputs/close: the sealed inventory the server will verify and later accept. inventorySha256 is computed by the database over (slot, file id, role, size, sha256) sorted by slot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "fileCount",
+    "clipCount",
+    "totalBytes",
+    "manifestFileId",
+    "inventorySha256",
+    "closedAt",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "fileCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "clipCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 999
+    },
+    "totalBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/byteCount"
+    },
+    "manifestFileId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "inventorySha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "closedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["succeeded", "failed"]
+    }
+  }
+}

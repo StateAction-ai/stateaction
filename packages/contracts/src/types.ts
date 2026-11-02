@@ -248,6 +248,31 @@ export type InputRead = {
   readUrl: string;
   expiresAt: Rfc3339Utc;
 };
+// SA-28 output sealing and result acceptance (catalog.v9, /internal/v1).
+export type OutputCloseRequest = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  invocationNonce: string;
+  outcome: "succeeded" | "failed";
+};
+export type OutputClosure = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  outcome: "succeeded" | "failed";
+  fileCount: number;
+  clipCount: number;
+  totalBytes: string;
+  manifestFileId: Uuid;
+  inventorySha256: Sha256Hex;
+  closedAt: Rfc3339Utc;
+};
+export type ResultAck = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  candidateStatus: "provisional" | "verified" | "accepted" | "rejected";
+  jobState: string;
+  reasonCode?: string;
+};
 // SA-35 dataset, catalog and read-broker contracts (catalog.v8, /api/v1).
 export type DatasetCreateRequest = { datasetId: Uuid; name: string };
 export type DatasetUpdateRequest = { name: string; expectedRevision: number };

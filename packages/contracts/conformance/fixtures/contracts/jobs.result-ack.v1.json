@@ -1,0 +1,104 @@
+{
+  "contract": "jobs.result-ack.v1",
+  "cases": [
+    {
+      "name": "provisional never means accepted",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "provisional",
+          "jobState": "result_pending"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "accepted",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "accepted",
+          "jobState": "succeeded"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "rejected with an actionable code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "rejected",
+          "jobState": "failed",
+          "reasonCode": "output_hash_mismatch"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "status is closed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "selected",
+          "jobState": "result_pending"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/candidateStatus"
+        ]
+      }
+    },
+    {
+      "name": "reason code shape",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "provisional",
+          "jobState": "result_pending",
+          "reasonCode": "Bad Code"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/reasonCode"
+        ]
+      }
+    },
+    {
+      "name": "closed object",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "candidateStatus": "provisional",
+          "jobState": "result_pending",
+          "slotReleased": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

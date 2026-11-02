@@ -34,6 +34,7 @@ from .artifact_types import (
     MANIFEST_NAME,
     ROLE_BY_KEY,
     RULE_REVISION,
+    Attestation,
     ExportContext,
     ExportError,
     ExportLimits,
@@ -43,6 +44,7 @@ from .artifact_types import (
     derived_uuid,
     make_output,
     require,
+    simulation_note,
 )
 from .capture_stream import StreamLimits
 from .frames import FrameStream
@@ -162,6 +164,8 @@ def export_artifacts(
     writer: ClipWriter | None = None
     peak_clip_bytes = 0
     config_hash = config_sha256(limits, stream_limits)
+    att = context.attestation
+    sim_note = simulation_note(att.simulation) if att else None
 
     def close_clip() -> None:
         nonlocal writer, peak_clip_bytes
@@ -210,6 +214,7 @@ def export_artifacts(
                         context.job_id,
                         frame,
                         limits,
+                        sim_note,
                     )
                 writer.add(frame, obs)
                 miss.add(obs)
@@ -227,6 +232,8 @@ def export_artifacts(
         sha, nbytes = report.source.sha256, report.source.bytes_read
         if context.expected_source_sha256 and context.expected_source_sha256 != sha:
             raise ExportError("E_SOURCE_SHA_MISMATCH", sha)
+        if att is not None:
+            _check_actual_profile(report.profile, att)
         manifest = build_manifest(
             context, report, sha, nbytes, clips_meta, outputs, receipts, miss, stats, frames_inferred,
             total_ms, digest.hexdigest(), config_hash, limits,
@@ -236,7 +243,12 @@ def export_artifacts(
         ).encode()
         from stateaction_contracts import validate_bytes
 
-        verdict = validate_bytes("artifacts.processing-result.v1", data)
+        verdict = validate_bytes(
+            "artifacts.processing-result.v2"
+            if att is not None
+            else "artifacts.processing-result.v1",
+            data,
+        )
         if not verdict.valid:
             raise ExportError(
                 "E_CONTRACT_VIOLATION",
@@ -279,6 +291,21 @@ def export_artifacts(
         observations_sha256=digest.hexdigest(),
         peak_scratch_clip_bytes=peak_clip_bytes,
     )
+
+
+def _check_actual_profile(profile: dict[str, Any] | None, att: Attestation) -> None:
+    """The ACTUAL MCAP capture profile must equal what the backend admitted and attests."""
+    actual = (profile or {}).get("rgb_profile")
+    require(actual == att.rgb_profile, "E_PROFILE_MISMATCH", actual)
+    simulated = actual == "h264_mcap_simulation_v1"
+    require(simulated == (att.simulation is not None), "E_SIMULATION_MISMATCH")
+    if simulated:
+        require(
+            (profile or {}).get("qualification") == "simulation_only"
+            and (profile or {}).get("production_qualified") is False,
+            "E_SIMULATION_MISMATCH",
+            "qualification",
+        )
 
 
 def build_manifest(
@@ -363,7 +390,7 @@ def build_manifest(
         _check("hand_detection_summary", "measured", "Detection counts only; not an accuracy claim.",
                d(**dataclasses.asdict(miss), inference_us_mean=round(total_ms * 1000 / frames))),
     ]  # fmt: skip
-    return {
+    doc: dict[str, Any] = {
         "schema": "stateaction.processing_result.v1",
         "job_id": ctx.job_id,
         "recording_id": ctx.recording_id
@@ -417,6 +444,23 @@ def build_manifest(
             *ctx.extra_limitations,
         ],
     }
+    att = ctx.attestation
+    if att is not None:
+        # Backend job (processing-result.v2): claim-bound source attestation + simulation marker.
+        doc["schema"] = "stateaction.processing_result.v2"
+        doc["attestation"] = {
+            "invocation_nonce": att.invocation_nonce,
+            "rgb_profile": att.rgb_profile,
+            "source_file_id": ctx.source_file_id,
+            "source_eof_verified": True,
+        }
+        if att.simulation is not None:
+            doc["simulation"] = att.simulation
+            doc["limitations"].append(
+                "Simulated capture (simulation_only): not hardware evidence and not production qualified; "
+                "camera, encoder and clock provenance are exactly as stated in the simulation marker."
+            )
+    return doc
 
 
 def _check(

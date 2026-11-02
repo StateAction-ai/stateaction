@@ -122,6 +122,7 @@ class RrdWriter:
         clip_id: str,
         raster: tuple[int, int],
         limits: ExportLimits,
+        extra_note: str | None = None,
     ):
         import rerun as rr
         import rerun.blueprint as rrb
@@ -147,6 +148,8 @@ class RrdWriter:
                 f" Spatial proxy: {w}x{h} downscaled to {self.pw}x{self.ph} and re-encoded for this "
                 "preview only; the native MP4 is the unmodified source video."
             )
+        if extra_note:
+            note += " " + extra_note
         self.rec.log("notes/model_relative_3d", rr.TextDocument(note), static=True)
         self.rec.send_blueprint(
             rrb.Horizontal(
