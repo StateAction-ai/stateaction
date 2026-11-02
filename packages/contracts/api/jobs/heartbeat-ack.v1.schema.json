@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/heartbeat-ack.v1.json",
+  "title": "Worker heartbeat acknowledgement v1",
+  "description": "Data payload of POST /internal/v1/jobs/{jobId}/heartbeat. executionDeadline is the immutable absolute deadline; a heartbeat never extends it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accepted", "executionDeadline"],
+  "properties": {
+    "accepted": {
+      "const": true
+    },
+    "executionDeadline": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  }
+}

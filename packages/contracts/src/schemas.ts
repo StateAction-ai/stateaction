@@ -1,8 +1,8 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v6.json (checked by tests).
-// catalog.v6.json is the current registry: an exact superset of the immutable
-// catalog.v5.json, itself an exact superset of the immutable catalog.v4.json,
-// catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v6.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v7.json (checked by tests).
+// catalog.v7.json is the current registry: an exact superset of the immutable
+// catalog.v6.json, itself an exact superset of the immutable catalog.v5.json,
+// catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
+import catalog from "../api/catalog.v7.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -44,6 +44,11 @@ import s36 from "../api/http/recording-create.v2.schema.json" with { type: "json
 import s37 from "../api/http/recording.v2.schema.json" with { type: "json" };
 import s38 from "../api/http/recording-registration.v2.schema.json" with { type: "json" };
 import s39 from "../api/jobs/task-input.v2.schema.json" with { type: "json" };
+import s40 from "../api/jobs/controller-action.v1.schema.json" with { type: "json" };
+import s41 from "../api/jobs/controller-result.v1.schema.json" with { type: "json" };
+import s42 from "../api/jobs/reconcile-result.v1.schema.json" with { type: "json" };
+import s43 from "../api/jobs/heartbeat-ack.v1.schema.json" with { type: "json" };
+import s44 from "../api/http/input-read.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -54,6 +59,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "artifacts.recording-source.v2": s34,
   "artifacts.simulation-provenance.v1": s33,
   "http.error-envelope.v1": s4,
+  "http.input-read.v1": s44,
   "http.me.v1": s27,
   "http.output-create.v1": s31,
   "http.output-plan.v1": s32,
@@ -77,7 +83,11 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.claim-grant.v1": s15,
   "jobs.controller-input.v1": s16,
   "jobs.heartbeat.v1": s17,
+  "jobs.controller-action.v1": s40,
+  "jobs.controller-result.v1": s41,
+  "jobs.heartbeat-ack.v1": s43,
   "jobs.job-status.v1": s18,
+  "jobs.reconcile-result.v1": s42,
   "jobs.result-candidate.v1": s19,
   "jobs.task-input.v1": s20,
   "jobs.task-input.v2": s39,

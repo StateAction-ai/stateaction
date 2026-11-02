@@ -193,6 +193,61 @@ export type UploadTransitionRequest = { expectedTransportEpoch: number };
 
 // Jobs (camelCase, schemaVersion 1).
 export type ControllerInput = { jobId: Uuid };
+
+// SA-25 internal job-control contracts (catalog.v7, /internal/v1).
+export type ControllerExecutor =
+  | { kind: "local"; localExecutionRef: string }
+  | { kind: "modal"; functionCallId: string };
+export type ControllerEvidence =
+  | {
+      kind: "local_child_reaped" | "provider_call_terminal";
+      executionRef: string;
+      detail?: Record<string, string>;
+    }
+  | { kind: "pre_submission_rejected"; detail?: Record<string, string> };
+export type ControllerAction =
+  | { action: "record_workflow_run"; runRef: string }
+  | { action: "claim_lease"; runRef: string; owner: string }
+  | { action: "renew_lease"; owner: string }
+  | { action: "record_worker_submission"; owner: string }
+  | { action: "record_execution"; owner: string; executor: ControllerExecutor }
+  | { action: "mark_submit_unknown"; owner: string }
+  | { action: "record_execution_evidence"; evidence: ControllerEvidence };
+export type ControllerResult =
+  | { recorded: boolean }
+  | { granted: true; expiresAt: Rfc3339Utc }
+  | { granted: false; reason: "live_owner" | "different_run" | "not_active" }
+  | { renewed: true; expiresAt: Rfc3339Utc }
+  | { renewed: false }
+  | {
+      state: "recorded";
+      bootstrapToken: string;
+      startDeadline: Rfc3339Utc;
+      executionDeadline: Rfc3339Utc;
+      taskInput: Record<string, unknown>;
+      executionBackend: "local" | "modal";
+    }
+  | { state: "already_recorded" }
+  | { state: "submit_unknown" }
+  | { recorded: true; slotReleased: boolean };
+export type ReconcileResult = {
+  admission:
+    | {
+        state: "admitted";
+        jobId: Uuid;
+        dispatchKey: string;
+        executionDeadline: Rfc3339Utc;
+      }
+    | { state: "slot_busy"; holderJobId: Uuid }
+    | { state: "idle" };
+  pendingDispatches: { jobId: Uuid; dispatchKey: string }[];
+};
+export type HeartbeatAck = { accepted: true; executionDeadline: Rfc3339Utc };
+export type InputRead = {
+  fileId: Uuid;
+  readUrl: string;
+  expiresAt: Rfc3339Utc;
+};
 type TaskBase = {
   schemaVersion: 1;
   jobId: Uuid;

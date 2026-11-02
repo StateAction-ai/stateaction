@@ -30,6 +30,21 @@ export async function readBoundedJson(
   contract: string,
   maxBytes = MAX_CONTROL_BODY_BYTES,
 ): Promise<unknown> {
+  const bytes = await readBoundedBytes(request, maxBytes);
+  const result = validateBytes(contract, bytes);
+  if (!result.valid)
+    throw new TransportError(
+      "invalid_request",
+      `${contract}: ${result.code}${result.errors[0] ? ` at ${result.errors[0].path || "/"}` : ""}`,
+    );
+  return result.value;
+}
+
+/** Incrementally bounded application/json body bytes (no schema applied). */
+export async function readBoundedBytes(
+  request: Request,
+  maxBytes = MAX_CONTROL_BODY_BYTES,
+): Promise<Uint8Array> {
   const type = request.headers.get("content-type") ?? "";
   if (!/^application\/json\s*(;|$)/i.test(type))
     throw new TransportError(
@@ -70,13 +85,7 @@ export async function readBoundedJson(
     bytes.set(chunk, at);
     at += chunk.byteLength;
   }
-  const result = validateBytes(contract, bytes);
-  if (!result.valid)
-    throw new TransportError(
-      "invalid_request",
-      `${contract}: ${result.code}${result.errors[0] ? ` at ${result.errors[0].path || "/"}` : ""}`,
-    );
-  return result.value;
+  return bytes;
 }
 
 const ENVELOPE_CODE: Record<string, string> = {

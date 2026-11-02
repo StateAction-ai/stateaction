@@ -1,3 +1,4 @@
+import { fixtureRunJob } from "../src/jobs/fixtures.js";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
@@ -216,7 +217,7 @@ export async function processedRecording(
     recordingId,
     profileRevision: "test-1",
   });
-  await app.query("UPDATE jobs SET state = 'running' WHERE id = $1", [jobId]);
+  await fixtureRunJob(ownerPoolFor(app), jobId);
   const outputFiles: string[] = [];
   const output = async (role: string) => {
     const id = randomUUID();

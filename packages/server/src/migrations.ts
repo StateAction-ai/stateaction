@@ -136,6 +136,10 @@ export async function grantAppRole(
   );
   if (transport)
     await client.query("SELECT stateaction_grant_transport($1)", [role]);
+  const { rowCount: jobs } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_jobs(name)') IS NOT NULL",
+  );
+  if (jobs) await client.query("SELECT stateaction_grant_jobs($1)", [role]);
   return true;
 }
 

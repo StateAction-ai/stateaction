@@ -38,6 +38,7 @@ const { recordIngestPermission, revokeIngestPermission } = await dist(
   "admission/permissions.js",
 );
 const cat = await dist("catalog/catalog.js");
+const { fixtureRunJob } = await dist("jobs/fixtures.js");
 const { establishFixtureAdmission } = await dist("admission/fixtures.js");
 const { hashCredentialPassword } = await dist("catalog/password.js");
 const { storageClient } = await dist("storage.js");
@@ -377,12 +378,8 @@ async function runningJob(ownerUserId) {
     recordingId,
     profileRevision: "sa20-e2e",
   });
-  await app.query("UPDATE jobs SET state = 'running' WHERE id = $1", [jobId]);
-  const token = "sa_svc_" + randomBytes(32).toString("base64url");
-  await owner.query(
-    "UPDATE jobs SET capability_token_sha256 = $2, execution_deadline = now() + interval '1 hour' WHERE id = $1",
-    [jobId, sha(token)],
-  );
+  // Walk the real admission/claim state machine (owner credential fixture).
+  const { capabilityToken: token } = await fixtureRunJob(owner, jobId);
   return { jobId, recordingId, token };
 }
 const workerPost = (token, body, method = "POST") => ({
@@ -974,7 +971,10 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     );
     // Authority ends with the attempt: deadline passed, then job finished.
     await owner.query(
-      "UPDATE jobs SET execution_deadline = now() - interval '1 second' WHERE id = $1",
+      "ALTER TABLE jobs DISABLE TRIGGER jobs_orchestration_guard",
+    );
+    await owner.query(
+      "UPDATE jobs SET start_deadline = now() - interval '2 seconds', execution_deadline = now() - interval '1 second' WHERE id = $1",
       [job.jobId],
     );
     assert.equal(
@@ -992,6 +992,9 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     await owner.query(
       "UPDATE jobs SET execution_deadline = now() + interval '1 hour' WHERE id = $1",
       [job.jobId],
+    );
+    await owner.query(
+      "ALTER TABLE jobs ENABLE TRIGGER jobs_orchestration_guard",
     );
     assert.equal(
       (

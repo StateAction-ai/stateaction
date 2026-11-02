@@ -1,4 +1,5 @@
 import type pg from "pg";
+import { assertJobCurrent } from "../jobs/current.js";
 import { TransportError } from "./errors.js";
 
 /**
@@ -73,21 +74,23 @@ export async function assertOwnerAuthority(
   if (!rows[0]?.ok) throw new TransportError("not_found", "Upload not found");
 }
 
-/** Live job check: the job must still be running and inside its deadline. */
+/**
+ * Live job check for output mutations: the full current-claim predicate
+ * (state, claim, slot, absolute deadline, current recording pointer, owner
+ * role and permission), re-read on every call.
+ */
 export async function assertJobAuthority(
   db: Db,
   authority: Extract<Authority, { kind: "job" }>,
   expectedJobId?: string | null,
 ): Promise<{ jobId: string; recordingId: string }> {
   if (expectedJobId && expectedJobId !== authority.jobId) throw forbidden();
-  const { rows } = await db.query<{ id: string; recording_id: string }>(
-    `SELECT id, recording_id FROM jobs
-     WHERE id = $1 AND state = 'running'
-       AND (execution_deadline IS NULL OR execution_deadline > now())`,
-    [authority.jobId],
-  );
-  if (!rows[0]) throw forbidden();
-  return { jobId: rows[0].id, recordingId: rows[0].recording_id };
+  try {
+    const current = await assertJobCurrent(db, authority.jobId);
+    return { jobId: current.jobId, recordingId: current.recordingId };
+  } catch {
+    throw forbidden();
+  }
 }
 
 /**

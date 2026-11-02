@@ -20,6 +20,8 @@ export const SERVICE_SCOPES = [
   "job:result",
   // Processing worker: reserve/sign/journal its own job's output uploads.
   "job:output",
+  // Processing worker: refresh signed read URLs for its own sealed inputs.
+  "job:input",
 ] as const;
 export type ServiceScope = (typeof SERVICE_SCOPES)[number];
 
