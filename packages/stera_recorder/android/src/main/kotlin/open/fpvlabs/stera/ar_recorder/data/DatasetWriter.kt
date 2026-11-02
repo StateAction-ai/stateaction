@@ -1,6 +1,6 @@
 package open.fpvlabs.stera.ar_recorder.data
 
-import open.fpvlabs.stera.ar_recorder.sensors.ImuSample
+import open.fpvlabs.stera.ar_recorder.sensors.RawMotionEvent
 import open.fpvlabs.stera.ar_recorder.session.DepthFrameData
 import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
 import java.io.File
@@ -16,7 +16,13 @@ interface DatasetWriter {
     fun getWriteFailure(): String? = null
     fun logError(message: String, throwable: Throwable? = null)
     fun writePoseRow(timestamp: Long, pose: FloatArray, trackingState: String)
-    fun writeImuSamples(samples: List<ImuSample>)
+    /**
+     * Writes independent raw accelerometer/gyroscope events (never paired). Every event is
+     * resolved as written, failed or discarded-while-paused so counts stay exact.
+     */
+    fun writeMotionEvents(events: List<RawMotionEvent>): MotionWriteResult
+    /** Canonical recording UUID used by the SA-50 motion messages, once writers are initialized. */
+    fun getCaptureRecordingId(): String? = null
     fun writeCaptureFrameInfo(timestampNs: Long, info: Map<String, Any?>)
     fun writeFrameLogRow(
         frameIndex: Int,

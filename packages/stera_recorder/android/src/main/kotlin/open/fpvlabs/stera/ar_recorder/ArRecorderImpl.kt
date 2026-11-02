@@ -40,6 +40,9 @@ import open.fpvlabs.stera.ar_recorder.metrics.RecordingMetricsCollector
 import open.fpvlabs.stera.ar_recorder.metrics.RecordingMetricsCollectorImpl
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollector
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollectorImpl
+import open.fpvlabs.stera.ar_recorder.sensors.DEFAULT_MOTION_RATE_HZ
+import open.fpvlabs.stera.ar_recorder.coordination.MotionDrainCoordinator
+import open.fpvlabs.stera.ar_recorder.coordination.MotionScheduler
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessor
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessorImpl
 import open.fpvlabs.stera.ar_recorder.session.ArSessionManager
@@ -95,6 +98,7 @@ class ArRecorderImpl(
     private val eglManager: EglManager = EglManagerImpl()
     private val frameProcessor: ArFrameProcessor = ArFrameProcessorImpl()
     private val imuCollector: ImuCollector = ImuCollectorImpl(context)
+    @Volatile private var motionStopReason: String? = null
     private val datasetWriter: DatasetWriter = if (USE_MCAP_FORMAT) {
         MCAPDatasetWriter(
             context,
@@ -156,6 +160,9 @@ class ArRecorderImpl(
         recordError = { message, throwable -> recordError(message, throwable) }
     )
     private val metadataAssembler = MetadataAssembler(metricsCollector)
+    private val motionDrain = MotionDrainCoordinator(imuCollector, datasetWriter) { written ->
+        written.forEach { metrics.imuTimestampRange.record(it.nativeTimestampNs) }
+    }
     private val frameOrchestrator = RecordingFrameOrchestrator(
         metrics = metrics,
         healthManager = healthManager,
@@ -163,7 +170,6 @@ class ArRecorderImpl(
         frameProcessingCoordinator = frameProcessingCoordinator,
         frameProcessor = frameProcessor,
         frameSampler = frameSampler,
-        imuCollector = imuCollector,
         datasetWriter = datasetWriter,
         sessionManager = sessionManager,
         recordError = { message, throwable -> recordError(message, throwable) }
@@ -524,7 +530,10 @@ class ArRecorderImpl(
             datasetWriter.logSystem("Preview resolution: ${previewWidth}x${previewHeight}")
             datasetWriter.logSystem("Recording resolution: $recordingResolution")
             datasetWriter.logSystem("Low quality mode: $isLowQualityMode (${lowQualityReason ?: "none"})")
-            datasetWriter.logSystem("Sensor sampling rates: accelerometer/gyroscope FASTEST")
+            datasetWriter.logSystem(
+                "Sensor sampling: independent accelerometer and gyroscope, ${DEFAULT_MOTION_RATE_HZ} Hz requested each " +
+                    "(samplingPeriodUs=${1_000_000 / DEFAULT_MOTION_RATE_HZ}, maxReportLatencyUs=0); original SensorEvent timestamps"
+            )
             datasetWriter.logSystem("Pool capacities: depth=$DEPTH_POOL_CAPACITY pointcloud=$POINTCLOUD_POOL_CAPACITY")
 
             metrics.targetEncodeFps = VIDEO_FPS_FIXED
@@ -537,7 +546,10 @@ class ArRecorderImpl(
                 "JPEG capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/compressed"
             )
 
+            motionStopReason = null
+            imuCollector.configure(DEFAULT_MOTION_RATE_HZ) { reason -> mainHandler.post { onMotionSaturated(reason) } }
             imuCollector.start()
+            motionDrain.start(motionScheduler())
             isRecording.set(true)
             isPaused.set(false)
 
@@ -568,7 +580,12 @@ class ArRecorderImpl(
             pauseStartedAtMs = pauseResult.pauseStartedAtMs
             currentState = pauseResult.nextState
             imuCollector.stop()
-            drainWriterQueue { datasetWriter.pauseWriters() }
+            motionDrain.stop()
+            // Admitted motion is written before the writers pause; nothing is discarded.
+            drainWriterQueue {
+                motionDrain.flushAll()
+                datasetWriter.pauseWriters()
+            }
             createSuccessResult(
                 state = ArRecordingState.PAUSED.name,
                 outputDirectory = datasetWriter.getSessionDirectory(),
@@ -587,6 +604,7 @@ class ArRecorderImpl(
             if (!recordingStateManager.canResume(currentState)) {
                 return createErrorResult("Not paused. Current state: ${currentState.name}")
             }
+            motionStopReason?.let { return createErrorResult("Capture stopped: $it. Stop to save diagnostics.") }
             val resumeResult = recordingLifecycleCoordinator.resumeRecording(
                 nowMs = System.currentTimeMillis(),
                 pauseStartedAtMs = pauseStartedAtMs,
@@ -596,6 +614,7 @@ class ArRecorderImpl(
             pauseStartedAtMs = resumeResult.pauseStartedAtMs
             datasetWriter.resumeWriters()
             imuCollector.start()
+            motionDrain.start(motionScheduler())
             isRecording.withProducerPaused { isPaused.set(resumeResult.isPaused) }
             currentState = resumeResult.nextState
             createSuccessResult(
@@ -624,6 +643,7 @@ class ArRecorderImpl(
             totalPausedDurationMs = cancelResult.totalPausedDurationMs
 
             imuCollector.stop()
+            motionDrain.stop()
             abortVideoEncoder()
             drainWriterQueue()
             val deleted = datasetWriter.deleteSessionDirectory()
@@ -680,12 +700,7 @@ class ArRecorderImpl(
             pauseStartedAtMs = 0L
 
             imuCollector.stop()
-
-            // Process remaining IMU samples
-            val remainingSamples = imuCollector.drainSamples()
-            if (remainingSamples.isNotEmpty()) {
-                remainingSamples.forEach { metrics.imuTimestampRange.record(it.timestampNs) }
-            }
+            motionDrain.stop()
 
             // Compute core stats
             val coreStats = recordingFinalizationCoordinator.computeCoreStats(
@@ -717,7 +732,10 @@ class ArRecorderImpl(
             // frame can enqueue after this barrier; tail IMU must also use the writer queue.
             drainWriterQueue {
                 datasetWriter.resumeWriters()
-                if (remainingSamples.isNotEmpty()) datasetWriter.writeImuSamples(remainingSamples)
+                motionDrain.flushAll()
+                // Stop uncertainty and motion saturation are sticky capture failures.
+                imuCollector.getStopFailureReason()?.let { datasetWriter.recordWriteFailure(it) }
+                imuCollector.getSaturationReason()?.let { datasetWriter.recordWriteFailure(it) }
             }
 
             datasetWriter.captureFreeStorageAfterSnapshot()
@@ -872,8 +890,36 @@ class ArRecorderImpl(
             "isLowQualityMode" to isLowQualityMode,
             "lowQualityReason" to lowQualityReason,
             "upscaleApplied" to upscaleApplied,
-            "error" to lastErrorMessage
+            "error" to lastErrorMessage,
+            "captureStopReason" to motionStopReason
         )
+    }
+
+    /**
+     * A full raw motion queue means motion evidence can no longer be complete. Stop admitting
+     * new capture (camera frames and sensors) with an explicit reason; already admitted events
+     * are still written, and the eventual stop reports the failure instead of success.
+     */
+    private fun onMotionSaturated(reason: String) {
+        if (motionStopReason != null) return
+        motionStopReason = reason
+        metrics.totalErrorsEncountered++
+        android.util.Log.e("SteraCapture", "Capture stopped: $reason")
+        // Writer-owned failure state is updated on the writer thread; the stop barrier also
+        // re-applies the collector's saturation reason, so it cannot be lost.
+        writerHandler?.post { datasetWriter.recordWriteFailure(reason) }
+        if (currentState == ArRecordingState.RECORDING) {
+            isRecording.withProducerPaused { isPaused.set(true) }
+            imuCollector.stop()
+        }
+    }
+
+    private fun motionScheduler(): MotionScheduler {
+        val handler = checkNotNull(writerHandler) { "Writer thread unavailable for raw motion" }
+        return object : MotionScheduler {
+            override fun postDelayed(task: Runnable, delayMs: Long) = handler.postDelayed(task, delayMs)
+            override fun remove(task: Runnable) = handler.removeCallbacks(task)
+        }
     }
 
     override fun checkArAvailability(): Map<String, Any?> {
@@ -892,6 +938,7 @@ class ArRecorderImpl(
         currentState = ArRecordingState.DISPOSED
         shouldStopFrameLoop.set(true)
 
+        motionDrain.stop()
         sessionLifecycleManager.stopThreads(frameThread, writerThread)
         frameThread = null
         frameHandler = null

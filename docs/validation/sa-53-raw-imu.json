@@ -1,0 +1,63 @@
+{
+  "ticket": "SA-53",
+  "title": "Preserve independent raw IMU events and original sensor clocks",
+  "date": "2026-11-01",
+  "qualification": "simulation_and_local_only",
+  "scope": {
+    "android": "Independent accelerometer and gyroscope listeners (100 Hz requested each, maxReportLatencyUs=0); one RawMotionEvent per SensorEvent with the exact SensorEvent.timestamp, values, accuracy and per-sensor event ID; per-sensor bounded queues; frame-independent writer drain; SA-50 MotionEvent v1.1 JSON on /stateaction/imu/{accel,gyro}; paired /device/imu sensor_msgs/Imu removed; raw_motion evidence (requested/effective rates, intervals, gaps, non-increasing timestamps, delivered/written/dropped by reason, queue high water, sensor identity, SA-50 inventory states) in metadata.json; queue saturation and stop uncertainty are sticky capture failures with a reason and stop further capture.",
+    "ios": "Out of this PR by root decision (Android E2E first). No iOS source changes. An unqualified local checkpoint (portable Foundation-only RawMotion seam, Linux Swift 6.1.2 checks, fused/derived stream provenance) is preserved on unpublished branch wanghujie/sa-53-ios-raw-motion-checkpoint at 774cb72 for later iOS parity after the shared contract revision (SA-64)."
+  },
+  "local_evidence": {
+    "android_jvm_tests": {
+      "command": "./gradlew :stera_recorder:testDebugUnitTest (apps/mobile/android)",
+      "result": "41 tests, 0 failures",
+      "new_suites": {
+        "RawMotionBufferTest": 5,
+        "ImuCollectorImplTest": 7,
+        "RawMotionMcapRoundTripTest": 3
+      }
+    },
+    "jvm_round_trip_fixture": {
+      "description": "Production collector + MotionDrainCoordinator + MCAPDatasetWriter; accel 100 Hz and gyro ~197 Hz jittered schedules, every third video frame dropped and the rest written 120 ms late; read back by an independent byte-level MCAP parser in the test.",
+      "sha256": "bb9de3fd2c44f3d0b408e170bccf3022a112716d3111befd714f181cb2ef1e89",
+      "official_reader_check": "scripts/mobile/verify_raw_motion_mcap.py with mcap==1.6.0 and the SA-50 strict MotionEvent schema: ok",
+      "accel_messages": 100,
+      "gyro_messages": 197,
+      "missing_event_ids": 0
+    },
+    "emulator_instrumented": {
+      "test": "RawMotionEmulatorInstrumentedTest",
+      "avd": "stera_ar_api35 (android-35 google_apis x86_64), emulator only, user 0",
+      "sensors": "Goldfish 3-axis Accelerometer / Goldfish gyroscope (virtual)",
+      "result": "OK (1 test)",
+      "duration_s": 3,
+      "video_frames_written": 54,
+      "video_frames_dropped": 27,
+      "slow_video_write_ms": 150,
+      "mcap_sha256": "3e7b9c7549974e0f5a242d395b034b6083798f1e7b336d50f049d2fe0fca3909",
+      "official_reader_check": "ok with --metadata and --require-both",
+      "accel": {
+        "delivered": 303,
+        "written": 303,
+        "dropped": 0,
+        "effective_rate_hz": 100.0,
+        "gaps_over_threshold": 0
+      },
+      "gyro": {
+        "delivered": 302,
+        "written": 302,
+        "dropped": 0,
+        "effective_rate_hz": 100.0,
+        "gaps_over_threshold": 0
+      },
+      "note": "Accelerometer and gyroscope timestamps have distinct phases (first 48908107189 ns vs 48917728404 ns), confirming independent delivery rather than pairing. The ARCore camera loop itself was not run on the emulator."
+    }
+  },
+  "remaining_gates": [
+    "Physical Android: effective rates, gravity sign/axes, accuracy states, long-run saturation and thermal behaviour on real hardware (root-coordinated, personal profile only).",
+    "Full ArRecorderImpl capture loop with ARCore on a device: saturation-triggered capture stop and stop result are compile-verified only; the collector/drain/writer semantics are tested.",
+    "iOS (deferred): CMDeviceMotion gravity-removed values still feed /device/imu and ARKit-derived /arkit/imu is unchanged; raw CoreMotion acquisition, separately named fused/derived provenance and MCAP output need the shared capture contract revision (SA-64), an Apple framework build and device qualification.",
+    "Clock mapping of motion to the capture timeline (mapped_capture_time_ns stays null) belongs to SA-54.",
+    "H.264 profile wiring of these channels with Inventory/Close counts belongs to SA-51/SA-56."
+  ]
+}
