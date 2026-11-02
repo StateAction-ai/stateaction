@@ -43,6 +43,8 @@ make render-cli
 pnpm exec nx run infra:integration --skip-nx-cache
 ```
 
+`pnpm exec nx run server:integration` separately runs the catalog migration/constraint/concurrency tests on a throwaway Postgres bound to an ephemeral loopback port ([catalog](../../docs/components/catalog.md)); CI runs every affected `integration` target in the Local runtime smoke job.
+
 This isolated smoke creates its own local settings and dedicated `stateaction-sa11-smoke` Compose services. It refuses occupied ports/existing settings, proves a real Postgres migration and S3 Put/Get/Delete, then executes Next API → official Render local runner → Node LocalExecutor → installed Python health worker. It stops its own processes/services and retains its own named test volumes. It never deploys or dispatches to cloud Render.
 
 For interactive development, copy `.env.example` and `.env.workflows.example` to their ignored local counterparts, replace `LOCAL_SMOKE_TOKEN`, then run `make infra-up migrate storage-init`, `make web` and `make workflows` in separate terminals. Database/storage credentials stay out of the workflow environment. [Official local runtime](https://render.com/docs/workflows-local-development)
