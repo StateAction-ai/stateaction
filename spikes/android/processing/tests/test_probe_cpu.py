@@ -11,6 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE / "tests"))
 MODEL = Path.home() / ".cache/mediapipe/hand_landmarker.task"
 HAVE = (
     all(importlib.util.find_spec(m) for m in ("av", "mediapipe", "rerun", "numpy"))
@@ -60,6 +61,34 @@ class ProbeCpuTest(unittest.TestCase):
             self.assertLess(
                 (out / "clip-000/viewer.rrd").stat().st_size, probe.MAX_RRD_BYTES
             )
+
+    def test_chunked_source_runs_the_same_cpu_path_with_container_evidence(self):
+        import hashlib
+
+        import indexed_fixture
+        import probe
+        import strict_capture as sc
+
+        flat = (sc.REPO / "packages/contracts/capture/golden/valid.mcap").read_bytes()
+        data = indexed_fixture.chunked(flat, messages_per_chunk=4)
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "chunked.mcap"
+            src.write_bytes(data)
+            out = Path(tmp) / "run"
+            r = probe.process(src, out, model=MODEL, max_clip_seconds=2.0,
+                              expected_sha256=hashlib.sha256(data).hexdigest(),
+                              max_source_bytes=sc.DEFAULT_MAX_SOURCE_BYTES, input_class="published_golden_fixture")  # fmt: skip
+            self.assertEqual(r["source"]["sha256"], hashlib.sha256(data).hexdigest())
+            self.assertEqual(r["source"]["container"]["layout"], "indexed_chunked")
+            self.assertTrue(
+                r["source"]["official_mcap_crosscheck"][
+                    "stream_messages_equal_in_file_order"
+                ]
+            )
+            self.assertEqual(
+                r["decode"]["decoded_source_frame_ids"], ["0", "1", "2", "4", "5"]
+            )
+            self.assertEqual(src.read_bytes(), data)  # source never modified
 
     def test_rejected_source_writes_no_partial_success(self):
         import probe

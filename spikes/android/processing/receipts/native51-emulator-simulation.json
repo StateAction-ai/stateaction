@@ -1,0 +1,887 @@
+{
+  "browser_checks": {
+    "clip-000": {
+      "browser": {
+        "chrome": "/usr/bin/google-chrome",
+        "flags": ["--no-sandbox", "--enable-unsafe-swiftshader"],
+        "headless": true,
+        "render_backend": "webgl"
+      },
+      "clip": "artifacts/native51-20261102T0229-ae21bd88/clip-000",
+      "initial_load_seconds": 7.316,
+      "limitations": [
+        "Headless Linux Chrome with software WebGL only; no Safari/Firefox/handset browser.",
+        "Loopback HTTP; no signed URL expiry, auth, R2, React remount or Next.js bundle.",
+        "performance.memory is JS heap only, not WASM/GPU memory.",
+        "Overlay alignment requires visual readback of the saved screenshots."
+      ],
+      "playback": {
+        "cursor_advanced_to_ns": "300000003",
+        "errors_after_playback": [],
+        "js_heap_after_playback": {
+          "totalJSHeapSize": 16931086,
+          "usedJSHeapSize": 7428778
+        },
+        "pause_state": "paused"
+      },
+      "resource_loads": [
+        {
+          "bytes": 249819,
+          "decodedBytes": 249519,
+          "name": "/node_modules/@rerun-io/web-viewer/index.js"
+        },
+        {
+          "bytes": 238236,
+          "decodedBytes": 237936,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer.js"
+        },
+        {
+          "bytes": 66876516,
+          "decodedBytes": 66876216,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer_bg.wasm"
+        },
+        {
+          "bytes": 635,
+          "decodedBytes": 335,
+          "name": "/favicon.ico"
+        },
+        {
+          "bytes": 180587,
+          "decodedBytes": 180287,
+          "name": "/artifacts/native51-20261102T0229-ae21bd88/clip-000/viewer.rrd"
+        }
+      ],
+      "rrd_bytes": 180287,
+      "rrd_sha256": "ad5f03b99861f5e6d30d74e5132cae37fa658b65ef3de2c60b16de3ca2ac6507",
+      "screenshots_visually_inspected": true,
+      "seconds": 13.398,
+      "snapshots": [
+        {
+          "clip_time_ns": "1309281000",
+          "decode_calls": 13,
+          "decoded_frames": 9,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "forward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 16713706,
+            "usedJSHeapSize": 6603438
+          },
+          "screenshot": "browser-forward.png",
+          "screenshot_sha256": "3ec62cc1720eaf97f979c58be96be7bd8cba41b52643e064ecaf5b060998b958",
+          "source_clip_pts_us": "1309281",
+          "source_frame_id": "6",
+          "visual_readback": "Actual emulator virtual room (checkerboard target with red marker, shelf, window) decoded from the native H.264 AUs at clip_time +1.309281 s; no hand overlays (0 detections, consistent with a hand-free virtual scene); model-relative 3D panes empty; no viewer errors",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 1309281
+        },
+        {
+          "clip_time_ns": "1167806000",
+          "decode_calls": 17,
+          "decoded_frames": 11,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "backward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 16800407,
+            "usedJSHeapSize": 6864715
+          },
+          "screenshot": "browser-backward.png",
+          "screenshot_sha256": "764fb811a1b5cb4d611e2bcdfcc5e58958e586ff35669fb6334a98619417bbfc",
+          "source_clip_pts_us": "1167806",
+          "source_frame_id": "5",
+          "visual_readback": "Same room at +1.167806 s, red marker shifted slightly relative to forward frame; no overlays; panes empty",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 1167806
+        }
+      ],
+      "status": "passed",
+      "stop_removed_canvas": true,
+      "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+      "viewer_version": "0.41.0",
+      "viewer_wasm_bytes": 66876216,
+      "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2"
+    },
+    "clip-001": {
+      "browser": {
+        "chrome": "/usr/bin/google-chrome",
+        "flags": ["--no-sandbox", "--enable-unsafe-swiftshader"],
+        "headless": true,
+        "render_backend": "webgl"
+      },
+      "clip": "artifacts/native51-20261102T0229-ae21bd88/clip-001",
+      "initial_load_seconds": 6.61,
+      "limitations": [
+        "Headless Linux Chrome with software WebGL only; no Safari/Firefox/handset browser.",
+        "Loopback HTTP; no signed URL expiry, auth, R2, React remount or Next.js bundle.",
+        "performance.memory is JS heap only, not WASM/GPU memory.",
+        "Overlay alignment requires visual readback of the saved screenshots."
+      ],
+      "playback": {
+        "cursor_advanced_to_ns": "300000003",
+        "errors_after_playback": [],
+        "js_heap_after_playback": {
+          "totalJSHeapSize": 17373710,
+          "usedJSHeapSize": 7734686
+        },
+        "pause_state": "paused"
+      },
+      "resource_loads": [
+        {
+          "bytes": 249819,
+          "decodedBytes": 249519,
+          "name": "/node_modules/@rerun-io/web-viewer/index.js"
+        },
+        {
+          "bytes": 238236,
+          "decodedBytes": 237936,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer.js"
+        },
+        {
+          "bytes": 66876516,
+          "decodedBytes": 66876216,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer_bg.wasm"
+        },
+        {
+          "bytes": 635,
+          "decodedBytes": 335,
+          "name": "/favicon.ico"
+        },
+        {
+          "bytes": 283903,
+          "decodedBytes": 283603,
+          "name": "/artifacts/native51-20261102T0229-ae21bd88/clip-001/viewer.rrd"
+        }
+      ],
+      "rrd_bytes": 283603,
+      "rrd_sha256": "c125c114563c5ec4960622f5fecddfa14ab24f643098396d458845d1586cb58b",
+      "screenshots_visually_inspected": true,
+      "seconds": 13.65,
+      "snapshots": [
+        {
+          "clip_time_ns": "1663444000",
+          "decode_calls": 19,
+          "decoded_frames": 12,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "forward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17016410,
+            "usedJSHeapSize": 6768826
+          },
+          "screenshot": "browser-forward.png",
+          "screenshot_sha256": "1f3c7678d83fccb0544563cf22ce39a7ae9d681318e2ee6ae619d1fcd1db2f65",
+          "source_clip_pts_us": "1663444",
+          "source_frame_id": "17",
+          "visual_readback": "Room with marker now green, upper-left of the checkerboard, at +1.663444 s; no overlays; panes empty",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 1663444
+        },
+        {
+          "clip_time_ns": "1392066000",
+          "decode_calls": 26,
+          "decoded_frames": 14,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "backward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17140751,
+            "usedJSHeapSize": 7069119
+          },
+          "screenshot": "browser-backward.png",
+          "screenshot_sha256": "dae00c7a13b097e187abff0ac61cc3e343836b7deb7f5503489563f9364a10fe",
+          "source_clip_pts_us": "1392066",
+          "source_frame_id": "16",
+          "visual_readback": "Green marker in a different checkerboard position at +1.392066 s, so the content differs between seek targets; no stale overlays",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 1392066
+        }
+      ],
+      "status": "passed",
+      "stop_removed_canvas": true,
+      "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+      "viewer_version": "0.41.0",
+      "viewer_wasm_bytes": 66876216,
+      "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2"
+    },
+    "clip-002": {
+      "browser": {
+        "chrome": "/usr/bin/google-chrome",
+        "flags": ["--no-sandbox", "--enable-unsafe-swiftshader"],
+        "headless": true,
+        "render_backend": "webgl"
+      },
+      "clip": "artifacts/native51-20261102T0229-ae21bd88/clip-002",
+      "initial_load_seconds": 7.233,
+      "limitations": [
+        "Headless Linux Chrome with software WebGL only; no Safari/Firefox/handset browser.",
+        "Loopback HTTP; no signed URL expiry, auth, R2, React remount or Next.js bundle.",
+        "performance.memory is JS heap only, not WASM/GPU memory.",
+        "Overlay alignment requires visual readback of the saved screenshots."
+      ],
+      "playback": {
+        "cursor_advanced_to_ns": "300000003",
+        "errors_after_playback": [],
+        "js_heap_after_playback": {
+          "totalJSHeapSize": 17793857,
+          "usedJSHeapSize": 7644613
+        },
+        "pause_state": "paused"
+      },
+      "resource_loads": [
+        {
+          "bytes": 249819,
+          "decodedBytes": 249519,
+          "name": "/node_modules/@rerun-io/web-viewer/index.js"
+        },
+        {
+          "bytes": 238236,
+          "decodedBytes": 237936,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer.js"
+        },
+        {
+          "bytes": 66876516,
+          "decodedBytes": 66876216,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer_bg.wasm"
+        },
+        {
+          "bytes": 635,
+          "decodedBytes": 335,
+          "name": "/favicon.ico"
+        },
+        {
+          "bytes": 180447,
+          "decodedBytes": 180147,
+          "name": "/artifacts/native51-20261102T0229-ae21bd88/clip-002/viewer.rrd"
+        }
+      ],
+      "rrd_bytes": 180147,
+      "rrd_sha256": "8ec81fce431445e1b8521f6edccb39aad4a87400774baaf6501fb7da788a42f6",
+      "screenshots_visually_inspected": true,
+      "seconds": 14.227,
+      "snapshots": [
+        {
+          "clip_time_ns": "692392000",
+          "decode_calls": 14,
+          "decoded_frames": 12,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "forward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17539713,
+            "usedJSHeapSize": 6775981
+          },
+          "screenshot": "browser-forward.png",
+          "screenshot_sha256": "2ccbcdd23753fd9fc1a3b58cc45f84acd1fc88a369c34454a7015563c0c2f6a3",
+          "source_clip_pts_us": "692392",
+          "source_frame_id": "26",
+          "visual_readback": "Green marker centre-top of the checkerboard at +0.692392 s; no overlays; panes empty",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 692392
+        },
+        {
+          "clip_time_ns": "424273000",
+          "decode_calls": 21,
+          "decoded_frames": 14,
+          "decoder_configs": [
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.4D401F",
+              "codedHeight": 480,
+              "codedWidth": 640,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "backward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17663070,
+            "usedJSHeapSize": 7071982
+          },
+          "screenshot": "browser-backward.png",
+          "screenshot_sha256": "bbdb90fa9942e05387e3d5cdded975bb20333954941efd16e96dfd5aee0fde5f",
+          "source_clip_pts_us": "424273",
+          "source_frame_id": "25",
+          "visual_readback": "Green marker at +0.424273 s; no overlays; panes empty",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 424273
+        }
+      ],
+      "status": "passed",
+      "stop_removed_canvas": true,
+      "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+      "viewer_version": "0.41.0",
+      "viewer_wasm_bytes": 66876216,
+      "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2"
+    }
+  },
+  "input_provenance": {
+    "bytes": 604078,
+    "capture_profile": "h264_mcap_simulation_v1",
+    "encoder": {
+      "b_frames": 0,
+      "bitrate": 4000000,
+      "codec": "h264",
+      "fps": 30,
+      "hardware": false,
+      "height": 480,
+      "idr_interval_seconds": 1,
+      "name": "c2.android.avc.encoder",
+      "profile": "main",
+      "width": 640
+    },
+    "evidence_class": "android_emulator_native51_simulation (actual ArRecorderImpl/ARCore/MediaCodec output on an Android emulator; virtual scene)",
+    "native_rgb_clock": "android.elapsed_realtime_receipt (emulator camera timestamp source not REALTIME; disclosed simulation)",
+    "not_qualified": [
+      "physical phone hardware encoder",
+      "real camera clock/REALTIME source",
+      "hand usefulness (virtual scene has no hands)",
+      "long-run/thermal",
+      "non-Chrome browsers"
+    ],
+    "producer": "SA-51 native recorder working tree (sa-51-native-capture), unmerged; source bytes read in place, never copied into Git",
+    "producer_reported_container": {
+      "chunk_index": 1,
+      "chunk_uncompressed_crc": "nonzero",
+      "chunks": 1,
+      "compression": "",
+      "data_section_crc": "0x0a6cc971",
+      "footer_summary_crc": 0,
+      "header_profile": "",
+      "message_index": 8,
+      "statistics": 1,
+      "summary_channels": 10,
+      "summary_offset": 4,
+      "summary_schemas": 9
+    },
+    "producer_reported_topics": {
+      "/camera/rgb/video": 28,
+      "/stateaction/capture_profile": 1,
+      "/stateaction/clocks": 1,
+      "/stateaction/close": 1,
+      "/stateaction/frame_events": 84,
+      "/stateaction/inventory": 1,
+      "/stateaction/sensor_events": 28,
+      "/tracking/pose": 14
+    },
+    "producer_run": "artifacts/android-h264-e2e/20261102T022849Z (session_20261101_212911_881_110955d3)",
+    "production_qualified": false,
+    "qualification": "simulation_only",
+    "sha256": "ae21bd8821ae1ea8a2642c50c107feee3f0b43c8167b4425fef09c40035542bd"
+  },
+  "probe_receipt": {
+    "clip_policy": {
+      "clip_pts": "source_pts - first_included_source_pts",
+      "max_clip_seconds": 2.0,
+      "split": "IDR only",
+      "time_base": [1, 1000000]
+    },
+    "clips": [
+      {
+        "directory": "clip-000",
+        "files": {
+          "frame-map.jsonl": {
+            "bytes": 6070,
+            "sha256": "49ee7d3a0424d9bcd24f498dc5c5a66a11952745da2813fffb222fd2682634ba"
+          },
+          "hands.npz": {
+            "bytes": 1615,
+            "sha256": "4949edd3a7242fc5604f6bbf9d9e07fb60b220977d148340b3490b84aee1af6b"
+          },
+          "rgb.mp4": {
+            "bytes": 120963,
+            "sha256": "ee2ce40a8f7cf0b152ef58d9abf97e881bfd670b0c03f80824edfaca40492f8a"
+          },
+          "viewer.rrd": {
+            "bytes": 180287,
+            "sha256": "ad5f03b99861f5e6d30d74e5132cae37fa658b65ef3de2c60b16de3ca2ac6507"
+          }
+        },
+        "first_source_frame_id": "0",
+        "frames": 9,
+        "frames_with_hands": 0,
+        "hand_observations": 0,
+        "last_source_frame_id": "8",
+        "mp4_independent_decode": {
+          "pixels_exact": true,
+          "pts_exact": true,
+          "vcl_nal_bytes_exact": true
+        },
+        "raster": [640, 480],
+        "source_pts_origin": "0"
+      },
+      {
+        "directory": "clip-001",
+        "files": {
+          "frame-map.jsonl": {
+            "bytes": 8224,
+            "sha256": "f28d216fb73fa78812b320cad4c07f57c1b1c795fa29b3f70bb5d41b178047c4"
+          },
+          "hands.npz": {
+            "bytes": 1655,
+            "sha256": "a21e41eb8d44dfd02f02918e6c9f03acaa6fa3c8de877071ed5cfa76b69ec2e4"
+          },
+          "rgb.mp4": {
+            "bytes": 223267,
+            "sha256": "9a162c258f93958f9ee2e7d3d1adc8eecfe9f2873bbca286ea9e973ee4d371c1"
+          },
+          "viewer.rrd": {
+            "bytes": 283603,
+            "sha256": "c125c114563c5ec4960622f5fecddfa14ab24f643098396d458845d1586cb58b"
+          }
+        },
+        "first_source_frame_id": "9",
+        "frames": 12,
+        "frames_with_hands": 0,
+        "hand_observations": 0,
+        "last_source_frame_id": "20",
+        "mp4_independent_decode": {
+          "pixels_exact": true,
+          "pts_exact": true,
+          "vcl_nal_bytes_exact": true
+        },
+        "raster": [640, 480],
+        "source_pts_origin": "2394515"
+      },
+      {
+        "directory": "clip-002",
+        "files": {
+          "frame-map.jsonl": {
+            "bytes": 4786,
+            "sha256": "6fc000a196b4a24dd265e9613a239ea310146d80c8ead3eae31c30262571ada1"
+          },
+          "hands.npz": {
+            "bytes": 1590,
+            "sha256": "3e360323742c82605823fc526594d30818073521fb26701af5c4c9a625c55fd1"
+          },
+          "rgb.mp4": {
+            "bytes": 121031,
+            "sha256": "08a93d1ccc64bb4b493cfa5d0a72f1307a4f07ab65eda287e657e0cbd2120b2c"
+          },
+          "viewer.rrd": {
+            "bytes": 180147,
+            "sha256": "8ec81fce431445e1b8521f6edccb39aad4a87400774baaf6501fb7da788a42f6"
+          }
+        },
+        "first_source_frame_id": "21",
+        "frames": 7,
+        "frames_with_hands": 0,
+        "hand_observations": 0,
+        "last_source_frame_id": "27",
+        "mp4_independent_decode": {
+          "pixels_exact": true,
+          "pts_exact": true,
+          "vcl_nal_bytes_exact": true
+        },
+        "raster": [640, 480],
+        "source_pts_origin": "4917482"
+      }
+    ],
+    "decode": {
+      "decode_seconds": 0.0516,
+      "decoded_frames": 28,
+      "decoded_order_equals_source_order": true,
+      "decoded_source_frame_ids": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27"
+      ],
+      "decoder": "ffmpeg h264 (PyAV), one sequential pass, thread_count=1, err_detect=explode"
+    },
+    "environment": {
+      "cpu_count": 20,
+      "delegate": "CPU",
+      "ffmpeg": {
+        "libavcodec": "(63, 1, 102)",
+        "libavdevice": "(63, 1, 102)",
+        "libavfilter": "(12, 1, 102)",
+        "libavformat": "(63, 1, 102)",
+        "libavutil": "(61, 1, 102)",
+        "libswresample": "(7, 1, 102)",
+        "libswscale": "(10, 1, 102)"
+      },
+      "implementation": "CPython",
+      "machine": "x86_64",
+      "packages": {
+        "av": "19.0.2",
+        "mcap": "1.6.0",
+        "mediapipe": "1.2.0",
+        "numpy": "2.5.4",
+        "psutil": "7.2.2",
+        "rerun-sdk": "0.41.0"
+      },
+      "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+      "python": "3.12.13"
+    },
+    "inference": {
+      "frames": 28,
+      "frames_with_hands": 0,
+      "hand_observations": 0,
+      "metric_accuracy_validated": false,
+      "ms_per_frame": {
+        "max": 22.94,
+        "mean": 16.24,
+        "p50": 15.0,
+        "p95": 22.59
+      },
+      "note": "Detection counts are observations only, not anatomical or metric accuracy."
+    },
+    "input_class": "android_emulator_spike",
+    "model": {
+      "bytes": 7819105,
+      "config": {
+        "min_hand_detection_confidence": 0.5,
+        "min_hand_presence_confidence": 0.5
+      },
+      "delegate": "CPU",
+      "file": "hand_landmarker.task",
+      "license": "Apache-2.0",
+      "license_evidence": "Official model card PDF, 'LICENSED UNDER: Apache License, Version 2.0' (re-read 2026-11-01)",
+      "model_card_sha256": "43127ff8a92e22717f0d8c30dab3efef4641a29cbf50b15ae3de001be94ab76b",
+      "model_card_url": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Hand%20Tracking%20%28Lite_Full%29%20with%20Fairness%20Oct%202021.pdf",
+      "name": "MediaPipe Hand Landmarker (full), float16, task bundle version 1",
+      "num_hands": 2,
+      "outputs": "21 normalized image landmarks + 21 model-relative 3D (hand_world_landmarks, metres, hand-centred) + handedness per detected hand",
+      "overview_url": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
+      "redistribution": "Not committed; fetched to ~/.cache/mediapipe and hash-verified (fetch_model.sh).",
+      "running_mode": "IMAGE",
+      "runtime": "mediapipe==1.2.0 Python Tasks API, CPU delegate",
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    },
+    "probe": "SA-61 isolated CPU hands + Rerun probe (not the production worker)",
+    "resources": {
+      "after_model_load_mib": 246.2,
+      "after_strict_gate_mib": 171.3,
+      "end_mib": 265.5,
+      "peak_process_rss_mib": 301.8,
+      "start_mib": 166.7,
+      "strict_gate_seconds": 0.143,
+      "wall_seconds": 1.272
+    },
+    "rrd_total_bytes": 644037,
+    "semantics": {
+      "hand_axis": "detection order within a frame, NOT tracked identity",
+      "handedness": "model label/score per detection; not per-joint confidence or visibility",
+      "image_landmarks_px": "[frames, 2, 21, 2] in the encoded source raster; NaN + mask=False when absent",
+      "model_relative_landmarks_m": "[frames, 2, 21, 3] model-relative estimate, NOT camera/world/metric",
+      "rerun_timelines": {
+        "clip_time": "duration ns = clip_pts_us * 1000",
+        "source_frame": "original source_frame_id"
+      },
+      "unknown": [
+        "camera/IMU synchronization",
+        "per-joint visibility",
+        "occlusion",
+        "depth",
+        "metric accuracy"
+      ]
+    },
+    "source": {
+      "bytes": 604078,
+      "channel_counts": {
+        "/camera/rgb/video": 28,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 84,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 28,
+        "/tracking/pose": 14
+      },
+      "close_outcome": "completed",
+      "container": {
+        "channels": 10,
+        "chunk_compression": [""],
+        "chunk_crc": "verified_nonzero",
+        "chunks": 1,
+        "data_section_crc": "verified_nonzero",
+        "file_order_is_log_time_order": false,
+        "layout": "indexed_chunked",
+        "library": "stateaction/stera_recorder/sa-51",
+        "message_indexes": 8,
+        "messages": 158,
+        "original_on_portable_reader": ["E_UNSUPPORTED_LAYOUT"],
+        "profile": "",
+        "projection_note": "identical Header/Schema/Channel/Message bodies in physical order; new flat framing only; not the recording and never written",
+        "projection_sha256": "9e3b828c633e61939b685a6e9d34105e94127b169e44fe4460724a2e23ef674d",
+        "reference_reader_input": "validation_projection_in_memory",
+        "schemas": 9,
+        "summary_crc": "absent_summary_cross_validated",
+        "summary_offsets": 4
+      },
+      "encoder_pts_us": [
+        "0",
+        "17914",
+        "48968",
+        "565280",
+        "584629",
+        "1167806",
+        "1309281",
+        "1319179",
+        "1863011",
+        "2394515",
+        "2403153",
+        "2922700",
+        "2935569",
+        "3198457",
+        "3750271",
+        "3768928",
+        "3786581",
+        "4057959",
+        "4074324",
+        "4370421",
+        "4407528",
+        "4917482",
+        "4938342",
+        "5315339",
+        "5321176",
+        "5341755",
+        "5609874",
+        "5620927"
+      ],
+      "encoder_time_base": [1, 1000000],
+      "errors": [],
+      "frame_event_counts": {
+        "acquired": 28,
+        "dropped": 0,
+        "submitted": 28,
+        "written": 28
+      },
+      "idr_count": 5,
+      "official_mcap_crosscheck": {
+        "chunk_indexes": 1,
+        "indexed_messages_equal": true,
+        "library": "mcap (official Python)",
+        "statistics_message_count": 158,
+        "stream_messages_equal_in_file_order": true,
+        "validate_crcs": true,
+        "version": "1.6.0"
+      },
+      "outcome": "accept",
+      "reader": "packages/contracts/capture/conformance/python/capture_conformance.py",
+      "sha256": "ae21bd8821ae1ea8a2642c50c107feee3f0b43c8167b4425fef09c40035542bd",
+      "source_frame_ids": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24",
+        "25",
+        "26",
+        "27"
+      ],
+      "unresolved_frames": 0,
+      "video_messages": 28
+    },
+    "status": "passed"
+  }
+}

@@ -425,6 +425,9 @@ source = { virtual = "." }
 default-groups = []
 
 [package.dev-dependencies]
+container = [
+    { name = "mcap" },
+]
 cpu = [
     { name = "av" },
     { name = "mcap" },
@@ -440,6 +443,7 @@ dev = [
 [package.metadata]
 
 [package.metadata.requires-dev]
+container = [{ name = "mcap", specifier = "==1.6.0" }]
 cpu = [
     { name = "av", specifier = "==19.0.2" },
     { name = "mcap", specifier = "==1.6.0" },

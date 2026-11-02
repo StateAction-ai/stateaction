@@ -27,6 +27,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import av
+import indexed_mcap
 import mediapipe as mp
 import numpy as np
 import psutil
@@ -347,6 +348,21 @@ def process(source: Path, out: Path, *, model: Path, max_clip_seconds: float, ex
     capture = sc.load(
         source, max_bytes=max_source_bytes, expected_sha256=expected_sha256
     )
+    official = None
+    if capture.container["layout"] == "indexed_chunked":
+        # Independent agreement with the official mcap reader on the ORIGINAL bytes (validate_crcs).
+        data = sc.read_bounded(source, max_source_bytes)
+        sc.require(
+            hashlib.sha256(data).hexdigest() == capture.source_sha256,
+            "E_SOURCE_CHANGED_WHILE_READING",
+        )
+        try:
+            official = indexed_mcap.official_crosscheck(
+                data, indexed_mcap.validate(data)
+            )
+        except indexed_mcap.ContainerRejected as e:
+            raise sc.CaptureRejected(e.code, e.detail) from None
+        del data
     t_gate = time.perf_counter()
     rss["after_strict_gate_mib"] = rss_mib()
     clips = sc.plan_clips(capture.access_units, round(max_clip_seconds * 1_000_000))
@@ -424,6 +440,7 @@ def process(source: Path, out: Path, *, model: Path, max_clip_seconds: float, ex
             "sha256": capture.source_sha256,
             "bytes": capture.source_bytes,
             **sc.summary(capture),
+            "official_mcap_crosscheck": official,
         },
         "decode": {
             "decoder": "ffmpeg h264 (PyAV), one sequential pass, thread_count=1, err_detect=explode",

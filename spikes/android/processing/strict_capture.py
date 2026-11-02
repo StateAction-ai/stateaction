@@ -2,13 +2,23 @@
 
 This module does not parse the capture contract itself. Every source is first evaluated by the
 published SA-50 reference reader (`packages/contracts/capture/conformance/python/
-capture_conformance.py`) and must be `accept`. Only then are the accepted video messages joined
-to the reader's own facts (sequence, SHA-256, encoder PTS, source frame id, capture/log time) and
-handed to the decoder. Any disagreement is a hard error; nothing is repaired or re-timed.
+capture_conformance.py`) on its original bytes. A flat portable file must be `accept`.
 
-Bounds: the whole source is read into memory once (the portable reader is unchunked), so the
-source size is capped explicitly (`DEFAULT_MAX_SOURCE_BYTES`). Production chunked/indexed files are
-outside this layout and are rejected by the strict reader, never reported complete.
+Native recorders write standard indexed (chunked) MCAP, which the portable reader rejects as
+`E_UNSUPPORTED_LAYOUT` by design. Only in that case, `indexed_mcap.validate` checks the original
+container independently: CRCs, chunk/message/summary indexes, statistics, bounds and definition
+order. It then builds an in-memory, validation-only flat projection holding the identical
+Header/Schema/Channel/Message bodies in physical order. The unmodified reference checker evaluates
+that projection for every payload/semantic rule. The projection's records must equal the
+container's exactly. The result records both layers, and it never claims that the native layout
+passed the flat reader.
+
+Accepted video messages are then joined to the reader's own facts (sequence, SHA-256, encoder PTS,
+source frame id, capture/log time) and handed to the decoder. Any disagreement is a hard error;
+nothing is repaired or re-timed.
+
+Bounds: the whole source is read into memory once with an explicit cap (`DEFAULT_MAX_SOURCE_BYTES`),
+and indexed chunks are uncompressed and individually bounded.
 """
 
 from __future__ import annotations
@@ -25,6 +35,7 @@ if str(CONFORMANCE) not in sys.path:
     sys.path.insert(0, str(CONFORMANCE))
 
 import capture_conformance as cc  # noqa: E402  (published SA-50 reference reader)
+import indexed_mcap  # noqa: E402
 
 DEFAULT_MAX_SOURCE_BYTES = 512 * 1024 * 1024
 MAX_FRAMES = 36_000  # 20 min at 30 fps; the spike is not a two-hour qualification
@@ -81,6 +92,7 @@ class StrictCapture:
     source_bytes: int
     result: dict  # exact reference-reader result (outcome accept)
     access_units: list[AccessUnit]
+    container: dict  # which layout was validated and how (see gate)
 
     @property
     def facts(self) -> dict:
@@ -114,14 +126,68 @@ def load(
 def gate(data: bytes, digest: str | None = None) -> StrictCapture:
     digest = digest or hashlib.sha256(data).hexdigest()
     result = cc.check(data)
+    container: dict = {
+        "layout": "flat_portable",
+        "reference_reader_input": "original_bytes",
+    }
+    checked = data
+    indexed = None
+    if result["outcome"] == "reject" and result["errors"] == ["E_UNSUPPORTED_LAYOUT"]:
+        try:
+            indexed = indexed_mcap.validate(data)
+        except indexed_mcap.ContainerRejected as e:
+            raise CaptureRejected(
+                "E_CAPTURE_NOT_ACCEPTED",
+                {
+                    "outcome": result["outcome"],
+                    "errors": result["errors"],
+                    "indexed_container": {"errors": [e.code], "detail": e.detail},
+                },
+            ) from None
+        checked = indexed_mcap.flat_projection(indexed)
+        result = cc.check(checked)
+        container = {
+            **indexed.facts,
+            "original_on_portable_reader": ["E_UNSUPPORTED_LAYOUT"],
+            "reference_reader_input": "validation_projection_in_memory",
+            "projection_sha256": hashlib.sha256(checked).hexdigest(),
+            "projection_note": "identical Header/Schema/Channel/Message bodies in physical "
+            "order; new flat framing only; not the recording and never written",
+        }
     require(
         result["outcome"] == "accept",
         "E_CAPTURE_NOT_ACCEPTED",
-        {"outcome": result["outcome"], "errors": result["errors"]},
+        {
+            "outcome": result["outcome"],
+            "errors": result["errors"],
+            **({"indexed_container": container} if indexed is not None else {}),
+            **(
+                {"schema_violations": result["facts"]["schema_violations"][:20]}
+                if "schema_violations" in result["facts"]
+                else {}
+            ),
+        },
     )
     parsed = cc.read_mcap(
-        data
+        checked
     )  # already validated by check(); re-read only to obtain payload bytes
+    if indexed is not None:
+        # The projection must be lossless at record level: same messages/definitions, same order.
+        projected = [
+            (m["channel"], m["sequence"], m["log_time"], m["publish_time"], m["data"])
+            for m in parsed["messages"]
+        ]
+        original = [
+            (m.channel, m.sequence, m.log_time, m.publish_time, m.data)
+            for m in indexed.messages
+        ]
+        require(projected == original, "E_PROJECTION_NOT_LOSSLESS", "messages")
+        require(
+            set(parsed["schemas"]) == set(indexed.schemas)
+            and set(parsed["channels"]) == set(indexed.channels),
+            "E_PROJECTION_NOT_LOSSLESS",
+            "definitions",
+        )
     topics = {cid: ch["topic"] for cid, ch in parsed["channels"].items()}
     videos = [m for m in parsed["messages"] if topics[m["channel"]] == cc.VIDEO_CHANNEL]
     facts = result["facts"]["video"]
@@ -175,7 +241,7 @@ def gate(data: bytes, digest: str | None = None) -> StrictCapture:
         len({u.source_frame_id for u in units}) == len(units),
         "E_DUPLICATE_SOURCE_FRAME",
     )
-    return StrictCapture(digest, len(data), result, units)
+    return StrictCapture(digest, len(data), result, units, container)
 
 
 def plan_clips(units: list[AccessUnit], max_clip_us: int) -> list[list[AccessUnit]]:
@@ -208,6 +274,7 @@ def summary(capture: StrictCapture) -> dict:
     facts = capture.facts
     return {
         "reader": "packages/contracts/capture/conformance/python/capture_conformance.py",
+        "container": capture.container,
         "outcome": capture.result["outcome"],
         "errors": capture.result["errors"],
         "close_outcome": facts["close_outcome"],

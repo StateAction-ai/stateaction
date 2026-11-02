@@ -4,7 +4,7 @@ Isolated, reproducible local probe for [SA-61](https://linear.app/hw-personal-pr
 
 ## Pipeline
 
-1. **Strict gate.** `strict_capture.py` reads the source once (explicit byte bound, default 512 MiB) and runs the published SA-50 reference reader `packages/contracts/capture/conformance/python/capture_conformance.py`. Only `accept` continues. Video payloads are joined back to the reader's own facts (MCAP sequence, SHA-256, encoder PTS, `source_frame_id`, capture/log time) and any disagreement is an error. Decode order must equal PTS order (no B-frame reordering, first AU IDR). Chunked/indexed production layouts are rejected by this reader, never reported complete.
+1. **Strict gate.** `strict_capture.py` reads the source once (explicit byte bound, default 512 MiB) and runs the published SA-50 reference reader `packages/contracts/capture/conformance/python/capture_conformance.py` on the **original bytes**. A flat portable file must be `accept`. Native recorders write standard **indexed/chunked** MCAP, which that reader rejects as `E_UNSUPPORTED_LAYOUT` by design. Only then, `indexed_mcap.py` validates the original container independently against the [MCAP spec](https://mcap.dev/spec): uncompressed chunks only (other compression is rejected by name, never decompressed), nonzero chunk and data-section CRCs, exact MessageIndex/ChunkIndex/Statistics/SummaryOffset agreement, summary Schema/Channel repeats byte-identical to the data section, a nonzero summary CRC when present (`0` is reported as `absent_summary_cross_validated`), definition order/conflicts, per-chunk and record-count bounds, and no trailing or unknown records. The unmodified reference checker then applies every payload/semantic rule to an **in-memory, validation-only flat projection**: the identical Header/Schema/Channel/Message bodies in physical order with new flat framing. The projection's messages must equal the container's exactly. Its hash is recorded and it is never written. `probe.py process` also cross-checks the original bytes with the official `mcap` 1.6.0 reader (`validate_crcs=True`, streamed and index-driven). The receipt's `source.container` keeps both layers. A native file is never described as having passed the flat reader. Video payloads are joined back to the reader's own facts (MCAP sequence, SHA-256, encoder PTS, `source_frame_id`, capture/log time), and any disagreement is an error. Decode order must equal PTS order (no B-frame reordering, first AU IDR).
 2. **One sequential decode.** PyAV/FFmpeg `h264`, one pass, `thread_count=1`, `err_detect=explode`, at most 4 pending AUs, exact PTS→AU mapping, drained at each IDR clip boundary.
 3. **Real CPU inference.** MediaPipe Hand Landmarker (pinned task asset below), CPU delegate, `IMAGE` mode (no cross-frame tracking state), up to 2 hands, on every decoded frame.
 4. **Per-clip outputs** (`artifacts/<run>/clip-NNN/`, IDR-only splits, `clip_pts = source_pts − first_included_source_pts`, time base 1/1,000,000):
@@ -24,7 +24,7 @@ cd spikes/android/processing
 uv sync --locked --group cpu --group dev
 ./fetch_model.sh                         # downloads + verifies the pinned model into ~/.cache/mediapipe
 npm ci --ignore-scripts --no-audit --no-fund
-uv run --locked python -m unittest discover -s tests -v
+uv run --locked --group container python -m unittest discover -s tests -v
 
 # Published golden fixture (public, deterministic codec/timeline fixture; no hands expected)
 .venv/bin/python probe.py process ../../../packages/contracts/capture/golden/valid.mcap artifacts/golden-001 \
@@ -36,7 +36,13 @@ uv run --locked python -m unittest discover -s tests -v
   --expected-sha256 SOURCE_SHA256
 ```
 
-Each run needs a new output directory. A rejected source exits 2 with the reader's codes and writes no receipt.
+Each run needs a new output directory. A rejected source exits 2 with the reader's codes (plus `indexed_container` errors for chunked files) and writes no receipt.
+
+Explain a rejection (diagnostic only, never acceptance). This separates container faults from payload/contract mismatches. Zero CRCs from old prototype writers are tolerated **only** in this diagnostic output, which is marked `DIAGNOSTIC_ONLY`:
+
+```sh
+.venv/bin/python diagnose_source.py /abs/capture.mcap
+```
 
 Historical replay (local, private user capture, never committed):
 
@@ -57,14 +63,15 @@ Historical replay (local, private user capture, never committed):
 | av (PyAV) + bundled FFmpeg   | 19.0.2                               | PyPI via `uv.lock`                | BSD-3 (PyAV); bundled FFmpeg/libx264 licensing needs its own distribution review before shipping |
 | rerun-sdk                    | 0.41.0                               | PyPI via `uv.lock`                | MIT OR Apache-2.0; `VideoStream` is an unstable API, keep SDK/viewer paired                      |
 | @rerun-io/web-viewer         | 0.41.0                               | npm via `package-lock.json`       | MIT                                                                                              |
-| numpy / psutil / mcap        | 2.5.4 / 7.2.2 / 1.6.0                | PyPI via `uv.lock`                | BSD-3 / BSD-3 / MIT                                                                              |
+| numpy / psutil / mcap        | 2.5.4 / 7.2.2 / 1.6.0                | PyPI via `uv.lock`                | BSD-3 / BSD-3 / MIT; `mcap` (with its lz4/zstandard deps) is also the `container` test group     |
 | SA-50 contract reader/writer | repo                                 | `packages/contracts/capture`      | in-repo; Foxglove/Protobuf notices there                                                         |
 
 ## Evidence classes (never merged)
 
 - **Published golden fixture**: codec/timeline/reader correctness only (64×48 baseline, 5 frames, one dropped acquisition). No hand utility.
 - **Historical replay**: real hands from the user's own 2026-10-22 Android capture, software H.264, synthetic contract timing. Detection counts and visual alignment only; not accuracy.
-- **Android emulator spike** (pending SA-60 merge): actual recorder output; codec/container/timeline path only, virtual scene.
+- **Android emulator, SA-60 prototype** (`receipts/sa60-prototype-diagnosis.json`): **rejected**. Container: valid indexed structure but zero chunk and data-section CRCs (`E_CONTAINER_CHUNK_CRC_ABSENT`). Payloads (diagnostic only): pre-contract "experimental" JSON schemas (`E_SCHEMA_MISMATCH`), FrameEvent/MotionEvent schema violations (`E_SCHEMA_MALFORMED`), no Profile/Clocks/Inventory/Close messages, and extra non-contract topics (`E_CHANNEL_ENCODING`).
+- **Android emulator, SA-51 native recorder** (`receipts/native51-emulator-simulation.json`): the actual ArRecorderImpl/ARCore/MediaCodec output from a virtual scene, explicitly `h264_mcap_simulation_v1` / `simulation_only`. It qualifies the indexed-container → strict contract → decode → CPU → real viewer path only. It does not qualify the hardware encoder, camera clock or hand utility (the scene has no hands).
 - **Physical Android capture** (pending user recording): the only class that can inform real hand usefulness, codec and clock behaviour.
 
 ## Pilot hand-usefulness rubric (proposed thresholds; staff calibration pending)
@@ -86,6 +93,7 @@ A failed rubric or viewer qualification is a blocking finding. It is not resolve
 
 - MediaPipe logs `Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI` in IMAGE mode; projected landmarks were visually aligned on the replay, but non-square-ROI precision is not measured.
 - Handedness score is not per-joint confidence/visibility; no depth, occlusion, world trajectory or metric claim (`metric_accuracy_validated=false`).
-- Whole-file reads bounded by `--max-source-bytes`; this is not a two-hour/1080p streaming or thermal qualification. Chunked production MCAP needs the official reader path (`verify.py --mcap`), not this probe.
+- Whole-file reads bounded by `--max-source-bytes` (chunks individually bounded at 64 MiB); this is not a two-hour/1080p streaming or thermal qualification. Compressed chunks, attachments, metadata and top-level messages outside chunks are rejected rather than supported. Forward-compatible extra record fields are rejected as `E_CONTAINER_RECORD_LENGTH`.
+- Chunked positive tests use `tests/indexed_fixture.py`: legal re-framings of the published golden corpus whose projection is byte-identical to the flat golden. They are container fixtures, not recordings.
 - Headless Linux Chrome with software WebGL only; no signed URL/R2/auth/Next.js/React lifecycle test.
 - Generated MCAP/MP4/RRD/NPZ/screenshots stay under ignored `artifacts/`. Only scripts, locks and non-sensitive receipts in `receipts/` are tracked.

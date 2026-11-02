@@ -1,0 +1,111 @@
+{
+  "DIAGNOSTIC_ONLY": "not an acceptance result; the strict gate verdict is `strict_gate`",
+  "container_with_zero_crcs_tolerated": {
+    "channels": 11,
+    "chunk_compression": [""],
+    "chunk_crc": "DIAGNOSTIC_ONLY_zero_allowed_not_strict",
+    "chunks": 4,
+    "data_section_crc": "DIAGNOSTIC_ONLY_zero_allowed_not_strict",
+    "file_order_is_log_time_order": true,
+    "layout": "indexed_chunked",
+    "library": "stateaction-android-capture-spike",
+    "message_indexes": 20,
+    "messages": 5328,
+    "profile": "",
+    "schemas": 11,
+    "summary_crc": "absent_summary_cross_validated",
+    "summary_offsets": 4
+  },
+  "payload_reference_checker": {
+    "embedded_schema_matches_manifest": {
+      "foxglove.CompressedVideo": true,
+      "geometry_msgs/msg/PoseStamped": false,
+      "sensor_msgs/msg/CameraInfo": false,
+      "sensor_msgs/msg/Image": false,
+      "stateaction.capture.Clocks.v1": false,
+      "stateaction.capture.FrameEvent.v1": false,
+      "stateaction.capture.MotionEvent.v1": false,
+      "stateaction.capture.Profile.v1": false,
+      "stateaction.capture.SensorEvent.v1": false
+    },
+    "errors": ["E_CHANNEL_ENCODING", "E_SCHEMA_MALFORMED", "E_SCHEMA_MISMATCH"],
+    "message_counts": {
+      "/camera/rgb/camera_info": 100,
+      "/camera/rgb/video": 100,
+      "/stateaction/frame_events": 200,
+      "/stateaction/imu/accel": 2473,
+      "/stateaction/imu/gyro": 2455
+    },
+    "missing_singletons": [
+      "/stateaction/capture_profile",
+      "/stateaction/clocks",
+      "/stateaction/inventory",
+      "/stateaction/close"
+    ],
+    "outcome": "reject",
+    "schema_violation_counts": [
+      {
+        "count": 200,
+        "keyword": "additionalProperties",
+        "topic": "/stateaction/frame_events"
+      },
+      {
+        "count": 200,
+        "keyword": "required",
+        "topic": "/stateaction/frame_events"
+      },
+      {
+        "count": 2473,
+        "keyword": "additionalProperties",
+        "topic": "/stateaction/imu/accel"
+      },
+      {
+        "count": 2473,
+        "keyword": "enum",
+        "topic": "/stateaction/imu/accel"
+      },
+      {
+        "count": 2473,
+        "keyword": "required",
+        "topic": "/stateaction/imu/accel"
+      },
+      {
+        "count": 2455,
+        "keyword": "additionalProperties",
+        "topic": "/stateaction/imu/gyro"
+      },
+      {
+        "count": 2455,
+        "keyword": "enum",
+        "topic": "/stateaction/imu/gyro"
+      },
+      {
+        "count": 2455,
+        "keyword": "required",
+        "topic": "/stateaction/imu/gyro"
+      }
+    ],
+    "topics_outside_contract": [
+      "/camera/depth_raw/confidence",
+      "/camera/depth_raw/image",
+      "/camera/pose",
+      "/camera/rgb/camera_info"
+    ]
+  },
+  "source_bytes": 3317495,
+  "source_sha256": "bd7668da3c6f55480a4667b2dfc527295f66a4cfaed5b3401aec6003133eb5bc",
+  "strict_gate": {
+    "code": "E_CAPTURE_NOT_ACCEPTED",
+    "detail": {
+      "errors": ["E_UNSUPPORTED_LAYOUT"],
+      "indexed_container": {
+        "detail": {
+          "chunk": 0
+        },
+        "errors": ["E_CONTAINER_CHUNK_CRC_ABSENT"]
+      },
+      "outcome": "reject"
+    },
+    "outcome": "reject"
+  }
+}

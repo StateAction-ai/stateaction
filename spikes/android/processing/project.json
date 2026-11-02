@@ -7,7 +7,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --locked python -m unittest discover -s tests -v",
+        "command": "uv run --locked --group container python -m unittest discover -s tests -v",
         "cwd": "spikes/android/processing"
       }
     },
