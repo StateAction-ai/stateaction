@@ -5,7 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
 import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
-import open.fpvlabs.stera.ar_recorder.sensors.ImuSample
+import open.fpvlabs.stera.ar_recorder.sensors.MotionSensorKind
+import open.fpvlabs.stera.ar_recorder.sensors.RawMotionEvent
 import open.fpvlabs.stera.ar_recorder.session.DepthFrameData
 import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
 import java.io.BufferedWriter
@@ -69,7 +70,8 @@ class MCAPDatasetWriter(
     // Channel IDs
     private var captureGeometryChannelId = 0
     private var poseChannelId = 0
-    private var imuChannelId = 0
+    private var motionChannelIds: Map<MotionSensorKind, Int> = emptyMap()
+    private var captureRecordingId: String? = null
     private var compressedRgbChannelId = 0
     private var depthChannelId = 0
     private var pointCloudChannelId = 0
@@ -181,6 +183,7 @@ class MCAPDatasetWriter(
             }
             mcapWriter = writer
 
+            captureRecordingId = java.util.UUID.randomUUID().toString()
             registerSchemasAndChannels()
 
             isInitialized = true
@@ -210,12 +213,10 @@ class MCAPDatasetWriter(
             ROS2SchemaDefinitions.POSE_TOPIC, msgEnc, poseSchemaId
         )
 
-        val imuSchemaId = writer.addSchema(
-            ROS2SchemaDefinitions.IMU_NAME, enc, ROS2SchemaDefinitions.IMU_SCHEMA
-        )
-        imuChannelId = writer.addChannel(
-            ROS2SchemaDefinitions.IMU_TOPIC, msgEnc, imuSchemaId
-        )
+        // Independent raw motion: SA-50 MotionEvent JSON on /stateaction/imu/{accel,gyro}.
+        // The paired sensor_msgs/Imu /device/imu channel is intentionally not written.
+        val motionSchema = context.assets.open(MotionEventWire.SCHEMA_ASSET).use { it.readBytes().toString(Charsets.UTF_8) }
+        motionChannelIds = MotionEventWire.register(writer, motionSchema)
 
         val imageSchemaId = writer.addSchema(
             ROS2SchemaDefinitions.IMAGE_NAME, enc, ROS2SchemaDefinitions.IMAGE_SCHEMA
@@ -381,31 +382,29 @@ class MCAPDatasetWriter(
         }
     }
 
-    override fun writeImuSamples(samples: List<ImuSample>) {
-        if (!isInitialized || writersPaused || samples.isEmpty()) return
+    override fun writeMotionEvents(events: List<RawMotionEvent>): MotionWriteResult {
+        if (events.isEmpty()) return MotionWriteResult()
+        if (writersPaused) return MotionWriteResult(paused = events)
+        val writer = mcapWriter
+        val recordingId = captureRecordingId
+        if (!isInitialized || writer == null || recordingId == null || motionChannelIds.size != 2) {
+            recordWriteFailure("Raw motion writer is not initialized")
+            return MotionWriteResult(failed = events)
+        }
         val startNs = SystemClock.elapsedRealtimeNanos()
         try {
-            for (sample in samples) {
-                val data = CDRSerializer.serializeImu(
-                    timestampNs = sample.timestampNs,
-                    frameId = "device",
-                    angularVelocity = Triple(
-                        sample.gyroX.toDouble(), sample.gyroY.toDouble(), sample.gyroZ.toDouble()
-                    ),
-                    linearAcceleration = Triple(
-                        sample.accelX.toDouble(), sample.accelY.toDouble(), sample.accelZ.toDouble()
-                    )
-                )
-                mcapWriter?.addMessage(imuChannelId, sample.timestampNs, sample.timestampNs, data)
-                imuSampleCount++
-                totalBytesWritten += data.size + 22
+            val (result, error) = MotionEventWire.write(writer, motionChannelIds, recordingId, events) {
+                totalBytesWritten += it
             }
-        } catch (e: Exception) {
-            recordWriteFailure("Failed to write IMU samples", e)
+            imuSampleCount += result.written.size
+            if (error != null) recordWriteFailure("Failed to write raw motion events", error)
+            return result
         } finally {
             recordWriterLatency(startNs)
         }
     }
+
+    override fun getCaptureRecordingId(): String? = captureRecordingId
 
     /**
      * Downscale a full-size JPEG frame to a ≤1080p thumbnail (long edge capped at

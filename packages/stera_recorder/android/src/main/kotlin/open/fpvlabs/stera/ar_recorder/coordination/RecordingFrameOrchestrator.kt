@@ -7,7 +7,6 @@ import open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoder
 import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
 import com.google.ar.core.Coordinates2d
 import open.fpvlabs.stera.ar_recorder.encoding.FrameSampler
-import open.fpvlabs.stera.ar_recorder.sensors.ImuCollector
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessor
 import open.fpvlabs.stera.ar_recorder.session.ArSessionManager
 import open.fpvlabs.stera.ar_recorder.session.FrameProcessingPipeline
@@ -27,7 +26,7 @@ import com.google.ar.core.Frame
  * - Point cloud extraction and writing
  * - Depth extraction and writing
  * - Frame log row writing
- * - IMU sample draining
+ * Raw IMU is drained independently by [MotionDrainCoordinator], never per frame.
  * - Post-frame health checks and maintenance
  */
 class RecordingFrameOrchestrator(
@@ -37,7 +36,6 @@ class RecordingFrameOrchestrator(
     private val frameProcessingCoordinator: FrameProcessingCoordinator,
     private val frameProcessor: ArFrameProcessor,
     private val frameSampler: FrameSampler,
-    private val imuCollector: ImuCollector,
     private val datasetWriter: DatasetWriter,
     private val sessionManager: ArSessionManager,
     private val recordError: (String, Throwable?) -> Unit
@@ -206,15 +204,6 @@ class RecordingFrameOrchestrator(
             depthAvailable = depthAvailable,
             pointCloudAvailable = pointCloudAvailable
         )
-
-        // Drain IMU samples
-        val imuSamples = imuCollector.drainSamples()
-        if (imuSamples.isNotEmpty()) {
-            imuSamples.forEach { metrics.imuTimestampRange.record(it.timestampNs) }
-            writerHandler?.post {
-                datasetWriter.writeImuSamples(imuSamples)
-            }
-        }
 
         writerHandler?.post {
             // Write device metrics per-frame (~15Hz) using cached values

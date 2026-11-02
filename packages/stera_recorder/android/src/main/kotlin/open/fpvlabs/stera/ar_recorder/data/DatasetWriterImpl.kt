@@ -2,7 +2,7 @@ package open.fpvlabs.stera.ar_recorder.data
 
 import android.content.Context
 import android.os.SystemClock
-import open.fpvlabs.stera.ar_recorder.sensors.ImuSample
+import open.fpvlabs.stera.ar_recorder.sensors.RawMotionEvent
 import open.fpvlabs.stera.ar_recorder.session.DepthFrameData
 import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
 import java.io.BufferedOutputStream
@@ -142,7 +142,7 @@ class DatasetWriterImpl(
             }
 
             imuWriter = BufferedWriter(FileWriter(File(dataDir, "imu.csv"))).apply {
-                write("timestamp_ns,sensor_type,x,y,z,accuracy\n")
+                write("sensor,event_id,native_timestamp_ns,native_clock_id,callback_elapsed_ns,unit,accuracy,x,y,z\n")
             }
 
             frameLogWriter = BufferedWriter(FileWriter(File(dataDir, "frame_log.csv"))).apply {
@@ -227,35 +227,29 @@ class DatasetWriterImpl(
         }
     }
 
-    override fun writeImuSamples(samples: List<ImuSample>) {
-        if (!isInitialized || writersPaused || samples.isEmpty()) return
+    override fun writeMotionEvents(events: List<RawMotionEvent>): MotionWriteResult {
+        if (events.isEmpty()) return MotionWriteResult()
+        if (writersPaused) return MotionWriteResult(paused = events)
+        val writer = imuWriter
+        if (!isInitialized || writer == null) return MotionWriteResult(failed = events)
         val startNs = SystemClock.elapsedRealtimeNanos()
-
-        try {
+        return try {
+            // One row per independent SensorEvent; no accel/gyro pairing.
             val sb = StringBuilder()
-            for (sample in samples) {
-                sb.append(sample.timestampNs)
-                sb.append(",")
-                sb.append(sample.accelX)
-                sb.append(",")
-                sb.append(sample.accelY)
-                sb.append(",")
-                sb.append(sample.accelZ)
-                sb.append(",")
-                sb.append(sample.gyroX)
-                sb.append(",")
-                sb.append(sample.gyroY)
-                sb.append(",")
-                sb.append(sample.gyroZ)
-                sb.append("\n")
-                imuSampleCount++
+            for (e in events) {
+                sb.append(e.kind.id).append(',').append(e.eventId).append(',').append(e.nativeTimestampNs)
+                    .append(",android.elapsed_realtime,").append(e.callbackElapsedNs).append(',').append(e.kind.unit)
+                    .append(',').append(e.accuracy ?: "").append(',').append(e.x).append(',').append(e.y)
+                    .append(',').append(e.z).append('\n')
             }
             val payload = sb.toString()
-            imuWriter?.write(payload)
+            writer.write(payload)
+            imuSampleCount += events.size
             totalBytesWritten += payload.toByteArray().size.toLong()
+            MotionWriteResult(written = events)
         } catch (e: Exception) {
-            logError("Failed to write IMU samples", e)
-            e.printStackTrace()
+            logError("Failed to write raw motion events", e)
+            MotionWriteResult(failed = events)
         } finally {
             recordWriterLatency(startNs)
         }
