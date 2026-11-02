@@ -10,11 +10,12 @@
   "local_evidence": {
     "android_jvm_tests": {
       "command": "./gradlew :stera_recorder:testDebugUnitTest (apps/mobile/android)",
-      "result": "41 tests, 0 failures",
+      "result": "45 tests, 0 failures",
       "new_suites": {
         "RawMotionBufferTest": 5,
         "ImuCollectorImplTest": 7,
-        "RawMotionMcapRoundTripTest": 3
+        "RawMotionMcapRoundTripTest": 3,
+        "MotionCaptureControllerTest": 4
       }
     },
     "jvm_round_trip_fixture": {
@@ -51,11 +52,12 @@
         "gaps_over_threshold": 0
       },
       "note": "Accelerometer and gyroscope timestamps have distinct phases (first 48908107189 ns vs 48917728404 ns), confirming independent delivery rather than pairing. The ARCore camera loop itself was not run on the emulator."
-    }
+    },
+    "recorder_lifecycle": "MotionCaptureController (delegated to by ArRecorderImpl) is tested with the production collector, drain, MCAPDatasetWriter and RecordingMetricsState.captureFailureReason: saturation halts capture with a reason, refuses resume, writes every admitted event (IDs 0..7) and counts the 4 rejected; the recording is classified failed. An uncertain IMU stop fails the recording; pause flushes before writers pause; a clean stop writes everything without failure."
   },
   "remaining_gates": [
     "Physical Android: effective rates, gravity sign/axes, accuracy states, long-run saturation and thermal behaviour on real hardware (root-coordinated, personal profile only).",
-    "Full ArRecorderImpl capture loop with ARCore on a device: saturation-triggered capture stop and stop result are compile-verified only; the collector/drain/writer semantics are tested.",
+    "Full ArRecorderImpl capture loop with ARCore on a device: the motion lifecycle it delegates to is tested on the JVM, but the ARCore frame loop, Flutter method-channel result and on-device saturation stop are not exercised (SA-51/SA-56).",
     "iOS (deferred): CMDeviceMotion gravity-removed values still feed /device/imu and ARKit-derived /arkit/imu is unchanged; raw CoreMotion acquisition, separately named fused/derived provenance and MCAP output need the shared capture contract revision (SA-64), an Apple framework build and device qualification.",
     "Clock mapping of motion to the capture timeline (mapped_capture_time_ns stays null) belongs to SA-54.",
     "H.264 profile wiring of these channels with Inventory/Close counts belongs to SA-51/SA-56."
