@@ -19,6 +19,7 @@ Map<String, Object?> _me(String id) => {
     },
     "session": {"expiresAt": DateTime.utc(2026, 11, 9).toIso8601String()},
   },
+  "requestId": "0b9f1c7e-4d3a-4f6b-9a2e-5c8d7e6f1a20",
 };
 
 void main() {

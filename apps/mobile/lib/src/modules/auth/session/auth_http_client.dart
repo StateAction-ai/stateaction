@@ -124,7 +124,7 @@ class AuthHttpClient {
       case _Transport(:final response?):
         if (response.statusCode == 200) {
           try {
-            return AuthOk(ServerIdentity.fromEnvelope(_decode(response.body)));
+            return AuthOk(ServerIdentity.fromResponseBytes(response.bodyBytes));
           } on FormatException {
             return const AuthUnavailable("Unexpected identity response");
           }

@@ -2,8 +2,10 @@ import "dart:convert";
 import "dart:io";
 import "dart:math";
 
+import "package:uuid/uuid.dart";
+
 /// Ephemeral loopback HTTP fixture with Better Auth-like cookie semantics and
-/// the draft SA-15 `/api/v1/me` envelope.
+/// the published `http.me.v1` response inside `http.success-envelope.v1`.
 ///
 /// It is a deterministic test double for the client's cookie/role/expiry
 /// handling only. It is NOT the real Better Auth server and proves nothing
@@ -26,6 +28,10 @@ class FakeBetterAuthServer {
   /// When true the next `/api/v1/me` re-issues the session cookie (refresh
   /// window), extending its Max-Age.
   bool reissueOnNextMe = false;
+
+  /// When set, the next `/api/v1/me` 200 answers with this raw `data` value
+  /// instead of the identity document (contract negative cases).
+  Object? meDataOverrideOnce;
 
   /// Overrides the status code of the next request when set.
   int? failNextWith;
@@ -227,17 +233,23 @@ class FakeBetterAuthServer {
       _setSessionCookies(response, session.token, 604800);
     }
     final user = users.values.firstWhere((u) => u.id == session.userId);
+    final override = meDataOverrideOnce;
+    meDataOverrideOnce = null;
     response.write(
       jsonEncode({
-        "data": {
-          "user": {"id": user.id, "email": user.email, "name": "Fixture"},
-          "access": {
-            "status": user.status,
-            "roles": user.status == "active" ? user.roles : <String>[],
-          },
-          "session": {"expiresAt": session.expiresAt.toUtc().toIso8601String()},
-        },
-        "requestId": "req-${requests.length}",
+        "data":
+            override ??
+            {
+              "user": {"id": user.id, "email": user.email, "name": "Fixture"},
+              "access": {
+                "status": user.status,
+                "roles": user.status == "active" ? user.roles : <String>[],
+              },
+              "session": {
+                "expiresAt": session.expiresAt.toUtc().toIso8601String(),
+              },
+            },
+        "requestId": const Uuid().v4(),
       }),
     );
     await response.close();

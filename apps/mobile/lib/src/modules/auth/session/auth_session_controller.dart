@@ -58,8 +58,7 @@ class AuthActive extends AuthSessionState {
   String? networkOwnerAt(DateTime now) {
     if (!identity.canCollect) return null;
     if (now.isBefore(verifiedAt)) return null;
-    final expires = identity.sessionExpiresAt;
-    if (expires != null && !now.isBefore(expires)) return null;
+    if (!now.isBefore(identity.sessionExpiresAt)) return null;
     return identity.authUserId;
   }
 }

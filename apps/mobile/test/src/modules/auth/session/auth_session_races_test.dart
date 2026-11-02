@@ -69,6 +69,7 @@ Map<String, Object?> _me(String id, {String status = "active"}) => {
           .toIso8601String(),
     },
   },
+  "requestId": "0b9f1c7e-4d3a-4f6b-9a2e-5c8d7e6f1a20",
 };
 
 String _cookie(String token) =>
@@ -311,7 +312,7 @@ void main() {
         await signIn("alice", "t");
         final state = controller.state as AuthActive;
         expect(controller.networkOwnerId, "alice");
-        now = state.identity.sessionExpiresAt!.toUtc().add(
+        now = state.identity.sessionExpiresAt.toUtc().add(
           const Duration(seconds: 1),
         );
         expect(controller.networkOwnerId, isNull);
