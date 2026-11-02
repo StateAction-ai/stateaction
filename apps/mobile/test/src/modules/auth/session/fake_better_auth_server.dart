@@ -30,8 +30,12 @@ class FakeBetterAuthServer {
   /// Overrides the status code of the next request when set.
   int? failNextWith;
 
-  static Future<FakeBetterAuthServer> start() async {
-    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+  /// Called after each request is recorded (headers only, never values of
+  /// credentials are printed by the standalone runner).
+  void Function(RecordedRequest request)? onRequest;
+
+  static Future<FakeBetterAuthServer> start({int port = 0}) async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     final fake = FakeBetterAuthServer._(server);
     server.listen(fake._handle);
     return fake;
@@ -75,6 +79,7 @@ class FakeBetterAuthServer {
             name: request.headers.value(name)!,
       }),
     );
+    onRequest?.call(requests.last);
     final response = request.response;
     response.headers.set("cache-control", "private, no-store, max-age=0");
     final forced = failNextWith;
