@@ -1,7 +1,7 @@
 {
   "ticket": "SA-17",
   "recorded": "2026-11-02",
-  "scope": "Independent mobile client preparation: local email/password via Better Auth, origin-bound secure cookies, server /me identity, offline eligibility, immutable capture ownership and owner-fenced uploads. Local fixtures and emulator only; hosted CI is reported on the PR.",
+  "scope": "Mobile client integrated with published SA-15 auth (main d6ddd9d): local email/password via the same Better Auth instance, origin-bound secure cookies, /me bound to the published http.me.v1 contract through the shared Dart validator, offline eligibility, immutable capture ownership and owner-fenced uploads. Real-backend local/CI and root QA HTTPS evidence below; emulator evidence predates this revision. Hosted CI is reported on the PR.",
   "toolchain": {
     "flutter": "3.44.6",
     "dart": "3.12.2",
@@ -12,19 +12,21 @@
     "systemImage": "android-33 google_apis x86_64"
   },
   "localChecks": {
-    "appAnalyze": "flutter analyze: no issues",
-    "appTests": "197 passed (156 pre-existing + 41 new; +3 stale-401 empty-jar/failed-exchange regressions)",
+    "appAnalyze": "flutter analyze (whole package incl. test_backend): no issues",
+    "appTests": "257 passed (197 previous + 60 published-contract drift/conformance/binding cases)",
     "recorderAnalyze": "flutter analyze lib test: no issues",
-    "recorderTests": "12 passed (9 pre-existing + 3 new start-gate tests)",
+    "recorderTests": "12 passed",
     "newSuites": [
-      "apps/mobile/test/src/modules/auth/session/session_cookie_jar_test.dart",
+      "apps/mobile/test/src/core/contracts/published_contracts_test.dart",
+      "apps/mobile/test/src/modules/auth/local_password_sign_in_form_test.dart",
       "apps/mobile/test/src/modules/auth/session/auth_ownership_flow_test.dart",
       "apps/mobile/test/src/modules/auth/session/auth_session_races_test.dart",
-      "apps/mobile/test/src/modules/auth/local_password_sign_in_form_test.dart",
+      "apps/mobile/test/src/modules/auth/session/session_cookie_jar_test.dart",
+      "apps/mobile/test/src/modules/auth/session/stale_401_after_empty_jar_test.dart",
       "apps/mobile/test/src/modules/capture_ownership/capture_owner_ledger_test.dart",
       "packages/stera_recorder/test/recording_start_gate_test.dart"
     ],
-    "fixture": "fake_better_auth_server.dart: ephemeral loopback HTTP test double with Better Auth-like cookies and the draft SA-15 /me envelope. Not Better Auth, not Google, not the real backend."
+    "fixture": "fake_better_auth_server.dart: deterministic loopback test double emitting the published http.me.v1 envelope; used only for race/unit cases. Not Better Auth."
   },
   "emulatorSimulation": {
     "bypass": "NO_AUTH_MODE=false, LOCAL_PASSWORD_AUTH=true, DEV_BACKEND_ORIGIN=http://10.0.2.2:18444 (host loopback fixture)",
@@ -72,11 +74,37 @@
     "screenshotsStored": "local /tmp only; not committed"
   },
   "notQualified": [
-    "Real SA-15 backend runtime (password sign-in, /me, rotation, sign-out, 401) and the published http.me.v1 Dart binding",
-    "Signed Android build with native Google ID token, audience and nonce verification",
-    "Physical-device login/expiry/account-switch with retained journals",
-    "Native owner-aware upload pause/cancel (SA-57) including the iOS background URLSession uploader; issued presigned URLs are not revoked",
+    "Signed Android build with native Google ID token, audience and nonce verification (real Google gate)",
+    "Physical-device login/expiry/account-switch with retained journals (root-coordinated, personal profile only)",
+    "Emulator re-run of this revision (UX unchanged; previous emulator receipt covers login/Keystore/offline/logout UI)",
+    "Native owner-aware upload pause/cancel (SA-57); native uploads refused in this build (nativeUploadOwnerFenced=false); Android has no upload path; issued presigned URLs are not revoked",
     "Owner embedded in capture/MCAP metadata; natively driven starts remain ownerless",
-    "iOS build/signing; hosted Render HTTPS __Secure- cookie behavior"
-  ]
+    "iOS build/signing; hosted Render HTTPS behavior"
+  ],
+  "realBackend": {
+    "local": {
+      "entry": "pnpm exec nx run mobile-auth-backend-e2e:mobile-backend-e2e --skip-nx-cache (apps/mobile/test_backend/run_real_backend.mjs)",
+      "backend": "production next build + next start of apps/web at d6ddd9d+this branch, real Better Auth 1.7.15 email/password, throwaway postgres:17.9 migrated/seeded by the published catalog migrator; Next connects only as stateaction_app; APP_ENV=local; container removed after run",
+      "client": "app's own AuthHttpClient/SessionCookieJar/AuthSessionController/OfflineEligibilityStore/CaptureOwnerLedger/CaptureOwnerGate/CaptureAccessPolicy over real HTTP via loopback TCP relay (offline = connection refused)",
+      "result": "8/8 passed twice (direct node run and nx target); 5 real sign-in rate-limit waits honored, no client-address spoofing",
+      "cases": [
+        "wrong password rejected, nothing stored, gate denies before native Start",
+        "correct password: /me active collector, sessionExpiresAt equals session row (<1s), HttpOnly host-only cookies, Authorization header rejected 401",
+        "staff/customer active non-collector and pending/disabled: no eligibility, capture denied before native Start, no session directory created",
+        "refresh window: real Set-Cookie re-issue extends row >6 days and jar cookie expiry, token kept",
+        "server-side expiry and row revocation: real 401 clears cookies, reauthRequired, networking paused, offline capture allowed, A re-auth restores owner upload eligibility, source digest unchanged",
+        "operator disables collector access: eligibility cleared, capture refused",
+        "offline restart keeps eligibility; offline logout clears locally, reports unconfirmed, server row still present",
+        "online logout confirmed and session row deleted; old cookie 401",
+        "A->B on one device: foreign isolation, recoverOwnerless conflict, switch-without-logout revokes previous session row, A source bytes and on-disk ledger unchanged, B footage retained"
+      ],
+      "ci": "Android job step 'Mobile auth client against the real Next, Better Auth and Postgres backend' when mobile-auth-backend-e2e is affected (implicit deps mobile, web, server, contracts); uncached"
+    },
+    "rootQaHttps": {
+      "origin": "https://tim-work-pc.taila68f99.ts.net:8444 (root-owned sa-local-runtime, published d6ddd9d, APP_ENV development, real R2 backend-only)",
+      "mode": "SA17_BACKEND_MODE=remote, seeded collector@stateaction.local; password read in memory from root's ignored 0600 file, never printed/stored",
+      "result": "1/1 passed: wrong password 401, sign-in, /me active collector with future expiry, __Secure- prefixed Secure+HttpOnly cookies, gate allows capture, refresh, Authorization rejected, confirmed logout, revoked cookie 401, ledger owner retained; 0 rate-limit waits",
+      "notClaimed": "hosted Render, phone network path, Google"
+    }
+  }
 }

@@ -1,10 +1,11 @@
 # Mobile sign-in, session cookies and capture ownership (SA-17)
 
-Status, 2026-11-01: **independent client preparation**. The mobile client, its
-cookie jar and the owner fence run against an ephemeral loopback fixture and the
-Android emulator. They have **not** run against the real SA-15 backend, real
-Google sign-in, a signed build, iOS or a physical phone. See
-[Remaining gates](#remaining-gates).
+Status, 2026-11-02: **integrated with the published SA-15 backend**. The app's
+own Dart client, cookie jar, controller, owner ledger, gate and policy run
+against the real Next production server, Better Auth and a restricted
+Postgres (local, uncached, in CI) and against the root QA HTTPS origin over
+Tailscale. They have **not** run with real Google sign-in, a signed build,
+iOS or a physical phone. See [Remaining gates](#remaining-gates).
 
 ## Sign-in paths
 
@@ -22,12 +23,23 @@ signs the new session out instead of guessing. There is no custom JWT service,
 client-side role, or anonymous bypass. `NO_AUTH_MODE=true` remains a separate,
 explicit, network-free capture harness and never substitutes for sign-in.
 
-`/api/v1/me` parsing (`server_identity.dart`) is a **provisional client
-boundary** mirroring the draft SA-15 envelope
-`{data:{user:{id,email,name}, access:{status, roles}, session:{expiresAt}}}`.
-Published `main` has no `http.me.v1` schema yet; replace the parser with the
-shared contract after SA-15 merges. `authUserId` is opaque (not a UUID).
-Unknown statuses fail closed; unknown roles grant nothing.
+`/api/v1/me` is bound to the **published `http.me.v1` contract** inside
+`http.success-envelope.v1`, validated by the shared Dart adapter
+(`packages/contracts/dart`, `stateaction_contracts`) before any field is read
+(`lib/src/core/contracts/published_contracts.dart`, `server_identity.dart`).
+Flutter cannot bundle assets from outside `apps/mobile`, so
+`tool/sync_published_contracts.dart` embeds exact copies of the published
+schema files and catalog entries in `published_contracts.g.dart`;
+`test/src/core/contracts/published_contracts_test.dart` fails on any byte
+drift and runs every shared `http.me.v1`/`http.success-envelope.v1`
+conformance fixture through both the registry and `ServerIdentity`.
+Enforced: byte bounds (1 MiB envelope; `data` measured as its compact
+encoding against 16 KiB), strict UTF-8/JSON (no BOM), closed objects, request
+UUID, opaque `authUserId` pattern, status enum, unique roles in canonical
+order, active ⇒ ≥1 role, pending/disabled ⇒ none, and a **required** RFC 3339
+UTC `session.expiresAt`. Any violation fails closed as "unexpected identity
+response" (never as revocation). Network authority ends at that server expiry;
+there is no missing-expiry case.
 
 ## Configuration
 
@@ -158,10 +170,13 @@ when the same owner is verified again.
 
 - Clearing Flutter state does **not** revoke presigned part URLs already
   issued. A chunk batch in flight can finish after logout; no new parts start.
-- The iOS background `URLSession` windowed uploader and any native-owned
-  upload work are **not** owner-fenced by this change. That production native
-  fencing belongs to the native upload ticket (SA-57); until then it is an open
-  gate, not a claimed guarantee.
+- The iOS background `URLSession` windowed uploader is **not** owner-fenced
+  natively. That fencing belongs to the native upload ticket (SA-57). Until
+  then `UploadsService.nativeUploadOwnerFenced` is `false` and `uploadFile`
+  refuses to start a native upload (recordings stay on the device). Android
+  has no upload path in this app yet (`uploadFile` fails on non-iOS); the
+  legacy `/upload/*` routes do not exist on the new backend (SA-19/SA-57).
+  No build of this change claims a working or owner-safe upload.
 - Natively driven starts (e.g. native arm-start) bypass the Dart gate. Their
   captures are ownerless and go to explicit recovery (fail closed).
 - The owner is not yet written inside the MCAP/capture metadata; that belongs
@@ -182,16 +197,36 @@ when the same owner is verified again.
 - `packages/stera_recorder/test/recording_start_gate_test.dart`: gate runs
   before native Start; denial never reaches native; native failure aborts.
 - Emulator simulation: see `docs/validation/sa-17-mobile-auth.json`.
+- **Real backend** (`apps/mobile/test_backend/`, Nx project
+  `mobile-auth-backend-e2e`, target `mobile-backend-e2e`, uncached, run in
+  the CI Android job): `run_real_backend.mjs` starts a uniquely named
+  throwaway Postgres, migrates and seeds it with the published catalog
+  migrator, serves the production `next build` with `next start` (Next
+  connects only as `stateaction_app`), puts a loopback TCP relay in front for
+  offline simulation and exposes token-protected operator SQL actions. Then
+  `real_backend_auth_test.dart` runs the app's own client code over real HTTP:
+  wrong/correct password, `/me` roles and expiry equal to the session row,
+  staff/customer/pending/disabled refused before native Start, real
+  `Set-Cookie` refresh-window re-issue (Max-Age/Expires), server-side expiry
+  and revocation (cookies cleared by the real 401, offline capture kept,
+  A re-auth), operator access disable, offline restart and unconfirmed
+  offline logout, confirmed online logout removing the session row, A→B
+  switch on one device (foreign isolation, no recovery of owned captures,
+  previous session revoked at the sign-in boundary, source bytes and the
+  on-disk ledger unchanged) and `Authorization` rejection. The harness never
+  spoofs client addresses; it waits out Better Auth's real sign-in rate limit.
+  Remote mode (`SA17_BACKEND_MODE=remote`) runs a single-collector subset
+  against an existing backend such as the QA HTTPS origin and asserts
+  `__Secure-` Secure/HttpOnly cookies.
 
-The fixture is a deterministic test double. It is not Better Auth and proves
-nothing about Google OAuth, audience/nonce verification or the real backend.
+The loopback fixture (`fake_better_auth_server.dart`) remains a deterministic
+test double for race and unit cases only.
 
 ## Remaining gates
 
-1. Real SA-15 backend runtime: local password sign-in, `/me`, rotation,
-   sign-out and 401 behavior against the reviewed server over
-   `https://tim-work-pc.taila68f99.ts.net:8444` (draft integration until SA-15
-   merges and publishes `http.me.v1`).
+1. Done for local password: real backend locally and in CI, plus the root QA
+   origin `https://tim-work-pc.taila68f99.ts.net:8444` (single collector,
+   remote mode). Not hosted Render.
 2. Signed Android build → native Google ID token → `sign-in/social`, with
    platform/server audience and nonce verification.
 3. Real-device login/expiry/account-switch with retained journals and rotated

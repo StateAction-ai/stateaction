@@ -108,7 +108,7 @@ jobs:
             mobile=$(pnpm exec nx show projects --json)
           fi
           echo "integration_projects=$(jq -r 'join(",")' <<< "$projects")" >> "$GITHUB_OUTPUT"
-          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile" or . == "android-capture-spike-native")] | join(",")' <<< "$mobile")
+          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile" or . == "android-capture-spike-native" or . == "mobile-auth-backend-e2e")] | join(",")' <<< "$mobile")
           echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
           if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build, typecheck, syntax, test and format
@@ -116,9 +116,9 @@ jobs:
           MODE: ${{ steps.scope.outputs.mode }}
         run: |
           if [[ "$MODE" == affected ]]; then
-            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native --outputStyle=static
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e --outputStyle=static
           else
-            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native --outputStyle=static
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e --outputStyle=static
           fi
   android:
     name: Affected Android and Dart checks
@@ -175,6 +175,10 @@ jobs:
           if [[ -n "$MOBILE_PROJECTS" ]]; then
             python3 scripts/platform/runner_disk.py run -- pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
           fi
+      - name: Mobile auth client against the real Next, Better Auth and Postgres backend
+        if: contains(format(',{0},', needs.checks.outputs.mobile_projects), ',mobile-auth-backend-e2e,')
+        # Uncached: real production Next build, throwaway restricted Postgres and the app's Dart auth code.
+        run: pnpm exec nx run mobile-auth-backend-e2e:mobile-backend-e2e --skip-nx-cache --outputStyle=static
       - name: Report final Android runner storage
         if: always()
         run: |

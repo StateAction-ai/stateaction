@@ -181,8 +181,29 @@ class UploadsService {
         code: ErrorType.unknown,
       );
     }
+    // SA-17 owner gate: the Dart queue only hands over rows the verified
+    // network owner owns, but the native background URLSession keeps running
+    // after logout/account switch and is not owner-fenced natively (SA-57).
+    // Until that lands, this build refuses to start native uploads rather than
+    // implying owner safety. Captures and their files are kept untouched.
+    if (!nativeUploadOwnerFenced) {
+      UploadLog.add(
+        "upload",
+        "native upload refused: native owner fencing (SA-57) not implemented",
+        level: UploadLogLevel.warn,
+      );
+      return Failure(
+        message:
+            "Uploading is not available in this build yet. Your recordings "
+            "are kept on this device.",
+        code: ErrorType.unknown,
+      );
+    }
     return _uploadViaWindowedEngine(upload, videoIndex, totalVideos);
   }
+
+  /// True only once native uploads pause/cancel on owner change (SA-57).
+  static const bool nativeUploadOwnerFenced = false;
 
   void _trackProgressMilestone(UploadProgress? progress) {
     if (progress == null) return;
