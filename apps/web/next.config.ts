@@ -15,5 +15,17 @@ const config: NextConfig = {
   transpilePackages: ["@stateaction/contracts", "@stateaction/server"],
   serverExternalPackages: ["pg", "@aws-sdk/client-s3", "@renderinc/sdk"],
   experimental: { cpus: 2 },
+  // Pages and API replies are per-user: never stored by the browser (so Back
+  // after sign-out re-requests and re-checks) or by any shared cache.
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|_next/image).*)",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store, max-age=0" },
+        ],
+      },
+    ];
+  },
 };
 export default config;

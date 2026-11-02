@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v3.json is the current registry; catalog.v1.json and catalog.v2.json
-// stay published and immutable.
-const catalog = JSON.parse(text("catalog.v3.json"));
+// catalog.v4.json is the current registry; catalog.v1.json, catalog.v2.json and
+// catalog.v3.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v4.json"));
+const catalogV3 = JSON.parse(text("catalog.v3.json"));
 const catalogV2 = JSON.parse(text("catalog.v2.json"));
 const catalogV1 = JSON.parse(text("catalog.v1.json"));
 const lock = JSON.parse(text("schemas.lock.json"));
@@ -154,13 +155,38 @@ test("catalog v2 is an exact superset of catalog v1", () => {
 
 test("catalog v3 is an exact superset of catalog v2", () => {
   assertExactSuperset(
-    catalog,
+    catalogV3,
     catalogV2,
     ["v2", "v3"],
     ["http.recording-registration.v1"],
   );
   assert.equal(Object.keys(catalogV2.contracts).length, 28);
-  assert.equal(Object.keys(catalog.contracts).length, 29);
+  assert.equal(Object.keys(catalogV3.contracts).length, 29);
+});
+
+/** Lock entries published with SA-19 (catalog v3). Frozen. */
+const PUBLISHED_V3_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v3.json":
+    "721e08cd0b30b108881eb4483ade4d7094d1159d4ce3d3f12430df8a5b6536dd",
+  "http/recording-registration.v1.schema.json":
+    "b4ec236ded3b1f1310bb2f7ddf6070c2050fb4657580501dc87c9c153b421816",
+};
+
+test("v3 lock entries are unchanged and every v3 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V3_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+});
+
+test("catalog v4 is an exact superset of catalog v3", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV3,
+    ["v3", "v4"],
+    ["http.profile-update.v1", "http.profile.v1"],
+  );
+  assert.equal(Object.keys(catalog.contracts).length, 31);
 });
 
 test("published schema bytes match the immutability lock", () => {

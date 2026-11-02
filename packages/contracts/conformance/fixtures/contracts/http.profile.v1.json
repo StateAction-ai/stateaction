@@ -1,0 +1,595 @@
+{
+  "contract": "http.profile.v1",
+  "cases": [
+    {
+      "name": "normalized name",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "single character",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "A"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "exactly 80 code points",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "80 astral code points (code points, not UTF-16 units)",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "interior spaces and tabs-free text",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Mary  Anne"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "combining mark kept as stored",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "é"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "empty",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": ""
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "81 code points",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "81 astral code points",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "leading space",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": " Pilot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing space",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot "
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing no-break space",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot "
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing ideographic space",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot　"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "whitespace only",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "   "
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing LF (portable end of input)",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot\n"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing CRLF",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot\r\n"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing line separator",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot "
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "control character",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi\u0007lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "newline inside",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi\nlot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "DEL",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "C1 control",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "bidi override",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi‮lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "bidi isolate",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi⁦lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "zero-width space",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi​lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "word joiner",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi⁠lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "byte order mark",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi﻿lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "line separator",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pi lot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "name missing",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user"
+        ]
+      }
+    },
+    {
+      "name": "extra user key",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot",
+            "roles": [
+              "staff"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user"
+        ]
+      }
+    },
+    {
+      "name": "extra root key",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot"
+          },
+          "access": {
+            "status": "active",
+            "roles": []
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "id not an auth id",
+      "input": {
+        "document": {
+          "user": {
+            "id": "bad id",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/id"
+        ]
+      }
+    },
+    {
+      "name": "email without at",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "nope",
+            "name": "Pilot"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/email"
+        ]
+      }
+    }
+  ]
+}

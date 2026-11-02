@@ -49,8 +49,8 @@ class _Entry {
   final List<Rule> rules;
 }
 
-/// Validators built from the current catalog (api/catalog.v3.json, an exact
-/// superset of the immutable catalog.v2.json and catalog.v1.json) and the
+/// Validators built from the current catalog (api/catalog.v4.json, an exact
+/// superset of the immutable catalog.v3.json, catalog.v2.json and catalog.v1.json) and the
 /// schema documents it lists.
 /// [readSchema] receives catalog-relative paths (for example `http/x.v1.schema.json`).
 class ContractRegistry {

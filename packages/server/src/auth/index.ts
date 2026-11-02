@@ -69,3 +69,15 @@ export {
   type ServiceCredentialRecord,
   type ServiceCredentialStore,
 } from "./service.js";
+export {
+  profileRoute,
+  profileOriginProblem,
+  PROFILE_BODY_MAX_BYTES,
+  WEB_CLIENT,
+} from "./profile.js";
+export {
+  DISPLAY_NAME_MAX,
+  DISPLAY_NAME_MESSAGES,
+  parseDisplayName,
+  type DisplayNameResult,
+} from "./display-name.js";

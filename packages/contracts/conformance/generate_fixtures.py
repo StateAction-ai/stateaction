@@ -2365,6 +2365,8 @@ def contract_cases():
         },
     ]
     c["http.me.v1"] = me_cases()
+    c["http.profile-update.v1"] = profile_update_cases()
+    c["http.profile.v1"] = profile_response_cases()
     c["http.recording-registration.v1"] = registration_cases()
     return c
 
@@ -2445,6 +2447,163 @@ def registration_cases():
             "",
         ),
     ]
+
+
+# ------------------------------------------ Own-profile update (SA-16, catalog v4)
+PROFILE_EMAIL = "staff.pilot@example.test"
+
+
+def profile_user(name):
+    return {"user": {"id": OWNER, "email": PROFILE_EMAIL, "name": name}}
+
+
+def profile_update_cases():
+    c = [
+        ok("plain name", {"name": "Pilot Staff"}),
+        ok("single character", {"name": "A"}),
+        ok("non-latin and astral code points", {"name": "李雷 \U0001f600"}),
+        ok(
+            "surrounding whitespace is a service trim, not a wire error",
+            {"name": "  Pilot  "},
+        ),
+        ok("wire bound 1013 code points", {"name": "a" * 1013}),
+        bad("empty", {"name": ""}, "schema_violation", "/name"),
+        bad("over the wire bound", {"name": "a" * 1014}, "schema_violation", "/name"),
+        bad("not a string", {"name": 7}, "schema_violation", "/name"),
+        bad("null", {"name": None}, "schema_violation", "/name"),
+        bad("missing name", {}, "schema_violation", ""),
+        bad(
+            "unknown key",
+            {"name": "Pilot", "email": "x@example.test"},
+            "schema_violation",
+            "",
+        ),
+        bad(
+            "role smuggling",
+            {"name": "Pilot", "roles": ["staff"]},
+            "schema_violation",
+            "",
+        ),
+        bad(
+            "identity smuggling", {"name": "Pilot", "id": OWNER}, "schema_violation", ""
+        ),
+        bad("array body", [{"name": "Pilot"}], "schema_violation", ""),
+    ]
+    return c
+
+
+def profile_response_cases():
+    c = [
+        ok("normalized name", profile_user("Pilot Staff")),
+        ok("single character", profile_user("A")),
+        ok("exactly 80 code points", profile_user("a" * 80)),
+        ok(
+            "80 astral code points (code points, not UTF-16 units)",
+            profile_user("\U0001f600" * 80),
+        ),
+        ok("interior spaces and tabs-free text", profile_user("Mary  Anne")),
+        ok("combining mark kept as stored", profile_user("é")),
+        bad("empty", profile_user(""), "schema_violation", "/user/name"),
+        bad("81 code points", profile_user("a" * 81), "schema_violation", "/user/name"),
+        bad(
+            "81 astral code points",
+            profile_user("\U0001f600" * 81),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad("leading space", profile_user(" Pilot"), "schema_violation", "/user/name"),
+        bad("trailing space", profile_user("Pilot "), "schema_violation", "/user/name"),
+        bad(
+            "trailing no-break space",
+            profile_user("Pilot "),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "trailing ideographic space",
+            profile_user("Pilot　"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad("whitespace only", profile_user("   "), "schema_violation", "/user/name"),
+        bad(
+            "trailing LF (portable end of input)",
+            profile_user("Pilot\n"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "trailing CRLF",
+            profile_user("Pilot\r\n"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "trailing line separator",
+            profile_user("Pilot\u2028"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "control character",
+            profile_user("Pi\u0007lot"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "newline inside", profile_user("Pi\nlot"), "schema_violation", "/user/name"
+        ),
+        bad("DEL", profile_user("Pi\u007flot"), "schema_violation", "/user/name"),
+        bad(
+            "C1 control", profile_user("Pi\u0085lot"), "schema_violation", "/user/name"
+        ),
+        bad("bidi override", profile_user("Pi‮lot"), "schema_violation", "/user/name"),
+        bad("bidi isolate", profile_user("Pi⁦lot"), "schema_violation", "/user/name"),
+        bad(
+            "zero-width space", profile_user("Pi​lot"), "schema_violation", "/user/name"
+        ),
+        bad("word joiner", profile_user("Pi⁠lot"), "schema_violation", "/user/name"),
+        bad("byte order mark", profile_user("Pi﻿lot"), "schema_violation", "/user/name"),
+        bad("line separator", profile_user("Pi lot"), "schema_violation", "/user/name"),
+        bad(
+            "name missing",
+            {"user": {"id": OWNER, "email": PROFILE_EMAIL}},
+            "schema_violation",
+            "/user",
+        ),
+        bad(
+            "extra user key",
+            {
+                "user": {
+                    "id": OWNER,
+                    "email": PROFILE_EMAIL,
+                    "name": "Pilot",
+                    "roles": ["staff"],
+                }
+            },
+            "schema_violation",
+            "/user",
+        ),
+        bad(
+            "extra root key",
+            {**profile_user("Pilot"), "access": {"status": "active", "roles": []}},
+            "schema_violation",
+            "",
+        ),
+        bad(
+            "id not an auth id",
+            {"user": {"id": "bad id", "email": PROFILE_EMAIL, "name": "Pilot"}},
+            "schema_violation",
+            "/user/id",
+        ),
+        bad(
+            "email without at",
+            {"user": {"id": OWNER, "email": "nope", "name": "Pilot"}},
+            "schema_violation",
+            "/user/email",
+        ),
+    ]
+    return c
 
 
 # ------------------------------------------------- Signed-in identity (SA-15)

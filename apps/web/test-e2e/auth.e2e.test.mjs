@@ -337,12 +337,10 @@ describe("Next.js production server with Better Auth", () => {
 
   test("staff sign-in -> home page shows server roles -> /api/v1/me agrees", async () => {
     const jar = await signIn("staff");
-    const home = await page("/", jar);
-    assert.equal(home.status, 200);
+    const home = await page("/pipeline", jar);
+    assert.equal(home.status, 200, "staff role opens the staff page");
     assertNoStore(home, "home");
-    assert.match(home.text, /Signed in as/);
-    assert.match(home.text, new RegExp(users.staff.email.replace(".", "\\.")));
-    assert.match(home.text, /Access: <!-- -->Staff|Access: Staff/);
+    assert.match(home.text, /Account menu for Seed Staff/);
     const me = await call("/api/v1/me", { jar });
     assert.equal(me.status, 200);
     assertNoStore(me, "me");
@@ -363,7 +361,7 @@ describe("Next.js production server with Better Auth", () => {
     const token = tokenOf(jar.cookies.get(SESSION));
     moveExpiry(token, "5 days");
     const before = rowExpiry(token);
-    const home = await page("/", jar);
+    const home = await page("/data-browser", jar);
     assert.equal(home.status, 200);
     const pageCookies = [home.headers["set-cookie"] ?? []].flat();
     assert.ok(
@@ -371,7 +369,7 @@ describe("Next.js production server with Better Auth", () => {
       "the page response cannot carry a refresh",
     );
     assert.equal(rowExpiry(token), before, "SSR did not extend the row");
-    assert.match(home.text, /Signed in as/);
+    assert.match(home.text, /Account menu for/);
     const started = Date.now();
     const me = await call("/api/v1/me", { jar });
     assert.equal(me.status, 200);
@@ -418,7 +416,7 @@ describe("Next.js production server with Better Auth", () => {
         headers: { "x-forwarded-for": jar.ip },
       });
       await chrome.send("Page.enable");
-      await chrome.send("Page.navigate", { url: `${origin}/` });
+      await chrome.send("Page.navigate", { url: `${origin}/data-browser` });
       let after = before;
       for (let i = 0; i < 100 && after === before; i++) {
         await sleep(100);
@@ -447,7 +445,7 @@ describe("Next.js production server with Better Auth", () => {
         expression: "document.body.innerText",
         returnByValue: true,
       });
-      assert.match(result.value, /Collection and review/);
+      assert.match(result.value, /Capture accounts use the Android app/);
     } finally {
       await chrome.close();
     }
@@ -464,19 +462,22 @@ describe("Next.js production server with Better Auth", () => {
   });
 
   test("pending and disabled identities get explanatory pages, not the console", async () => {
-    const pending = await page("/", await signIn("pending"));
+    const pending = await page("/data-browser", await signIn("pending"));
     assert.equal(pending.status, 200);
     assert.match(pending.text, /Access pending/);
-    assert.doesNotMatch(pending.text, /Collection and review/);
-    const disabled = await page("/", await signIn("disabled"));
+    assert.doesNotMatch(pending.text, /aria-label="Primary"/);
+    const disabled = await page("/data-browser", await signIn("disabled"));
     assert.match(disabled.text, /Access disabled/);
   });
 
   test("role revocation applies to the next page load", async () => {
     const jar = await signIn("collector");
-    assert.match((await page("/", jar)).text, /Collector/);
+    assert.match(
+      (await page("/data-browser", jar)).text,
+      /Capture accounts use/,
+    );
     psql(`DELETE FROM access WHERE user_id = ${quoted(users.collector.id)}`);
-    assert.match((await page("/", jar)).text, /Access pending/);
+    assert.match((await page("/data-browser", jar)).text, /Access pending/);
   });
 
   test("cross-origin sign-out is refused; same-origin sign-out revokes server-side", async () => {
@@ -502,7 +503,9 @@ describe("Next.js production server with Better Auth", () => {
     assert.equal(replay.status, 401);
     const home = await page("/", undefined);
     assert.equal(home.status, 307);
-    const replayPage = await call("/", { headers: { cookie: stale } });
+    const replayPage = await call("/data-browser", {
+      headers: { cookie: stale },
+    });
     assert.equal(
       replayPage.status,
       307,

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/profile.v1.json",
+  "title": "Own profile after update v1",
+  "description": "PATCH /api/v1/me/profile success data, carried as `data` inside http.success-envelope.v1. `user.name` is the stored, normalized display name: NFC, trimmed, 1-80 code points, no control, bidi, zero-width or line/paragraph separator characters, and no leading or trailing whitespace (the pattern). NFC form is guaranteed by the service and not expressible in JSON Schema. `user.id` is the server-owned Better Auth ID and `user.email` is read-only here; both repeat GET /api/v1/me.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["user"],
+  "properties": {
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "email", "name"],
+      "properties": {
+        "id": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+        },
+        "email": {
+          "description": "Sign-in email as stored by the identity provider; not re-validated as an address.",
+          "type": "string",
+          "maxLength": 320,
+          "pattern": "^[^@]+@[^@]+$"
+        },
+        "name": {
+          "description": "Normalized display text. Render escaped; never an operator label.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff\\u0020\\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000]([^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff]*[^\\u0000-\\u001f\\u007f-\\u009f\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2069\\ufeff\\u0020\\u00a0\\u1680\\u2000-\\u200a\\u202f\\u205f\\u3000])?$"
+        }
+      }
+    }
+  }
+}

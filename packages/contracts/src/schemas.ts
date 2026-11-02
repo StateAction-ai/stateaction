@@ -1,7 +1,8 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v3.json (checked by tests).
-// catalog.v3.json is the current registry: an exact superset of the immutable
-// catalog.v2.json, itself an exact superset of the immutable catalog.v1.json.
-import catalog from "../api/catalog.v3.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v4.json (checked by tests).
+// catalog.v4.json is the current registry: an exact superset of the immutable
+// catalog.v3.json, itself an exact superset of the immutable catalog.v2.json and
+// catalog.v1.json.
+import catalog from "../api/catalog.v4.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -32,6 +33,8 @@ import s25 from "../api/native/capture-recoverable.v1.schema.json" with { type: 
 import s26 from "../api/native/capture-snapshot.v1.schema.json" with { type: "json" };
 import s27 from "../api/http/me.v1.schema.json" with { type: "json" };
 import s28 from "../api/http/recording-registration.v1.schema.json" with { type: "json" };
+import s29 from "../api/http/profile-update.v1.schema.json" with { type: "json" };
+import s30 from "../api/http/profile.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -44,6 +47,8 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.parts-receipts.v1": s5,
   "http.parts-sign.v1": s6,
   "http.parts-signed.v1": s7,
+  "http.profile-update.v1": s29,
+  "http.profile.v1": s30,
   "http.recording-create.v1": s8,
   "http.recording-registration.v1": s28,
   "http.recording-seal.v1": s9,

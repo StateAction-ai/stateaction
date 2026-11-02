@@ -1,66 +1,44 @@
-* {
-  box-sizing: border-box;
+@import "tailwindcss";
+
+/* Tokens follow the approved StateAction.ai console mock (docs/mocks). */
+@theme {
+  --color-bg: #f5f5f1;
+  --color-paper: #ffffff;
+  --color-ink: #192623;
+  --color-muted: #5b6862;
+  --color-line: #e0e6e0;
+  --color-sidebar: #fbfcf9;
+  --color-topbar: #f8f9f5;
+  --color-brand: #235ce0;
+  --color-brand-strong: #174ac0;
+  --color-brand-soft: #eaf0fc;
+  --color-brand-ink: #244c9c;
+  --color-danger: #ad3941;
+  --color-danger-soft: #fff0f0;
+  --color-good: #24724d;
+  --color-field: #f7f9f4;
+  --font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
-body {
-  margin: 0;
-  background: #f5f6f8;
-  color: #182330;
-  font-family: system-ui, sans-serif;
-}
-main {
-  max-width: 54rem;
-  margin: 12vh auto;
-  padding: 2rem;
-}
-.brand {
-  font-weight: 700;
-}
-h1 {
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  letter-spacing: -0.04em;
-}
-p {
-  max-width: 40rem;
-  line-height: 1.65;
-}
-.card,
-form {
-  display: grid;
-  gap: 1rem;
-  max-width: 24rem;
-}
-label {
-  display: grid;
-  gap: 0.35rem;
-  font-weight: 600;
-}
-input {
-  font: inherit;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #b8c0cc;
-  border-radius: 0.4rem;
-}
-button {
-  font: inherit;
-  font-weight: 600;
-  padding: 0.6rem 1rem;
-  border: 0;
-  border-radius: 0.4rem;
-  background: #182330;
-  color: #fff;
-  cursor: pointer;
-}
-button:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-.actions {
-  margin-top: 2rem;
-}
-.error {
-  color: #a3212a;
-}
-.muted {
-  color: #5b6573;
-  font-size: 0.9rem;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 3px solid #6a96ff;
+    outline-offset: 3px;
+  }
+  button:not(:disabled),
+  [role="menuitem"] {
+    cursor: pointer;
+  }
 }

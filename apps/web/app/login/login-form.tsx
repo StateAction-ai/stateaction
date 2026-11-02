@@ -1,6 +1,9 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { clientHeaders } from "../client-header";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
 type Props = { password: boolean; google: boolean };
 export function LoginForm({ password, google }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -61,35 +64,51 @@ export function LoginForm({ password, google }: Props) {
     setBusy(false);
   }
   return (
-    <div className="card">
+    <div className="grid gap-4">
       {google ? (
-        <button type="button" onClick={signInWithGoogle} disabled={busy}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={signInWithGoogle}
+          disabled={busy}
+        >
           Continue with Google
-        </button>
+        </Button>
       ) : null}
       {password ? (
-        <form onSubmit={submit} aria-label="Sign in with email">
-          <label>
-            Email
-            <input name="email" type="email" autoComplete="username" required />
-          </label>
-          <label>
-            Password
-            <input
+        <form
+          onSubmit={submit}
+          aria-label="Sign in with email"
+          className="grid gap-4"
+        >
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
               name="password"
               type="password"
               autoComplete="current-password"
               required
               minLength={12}
             />
-          </label>
-          <button type="submit" disabled={busy}>
+          </div>
+          <Button type="submit" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
       ) : null}
       {error ? (
-        <p role="alert" className="error">
+        <p role="alert" className="m-0 text-xs font-semibold text-danger">
           {error}
         </p>
       ) : null}
