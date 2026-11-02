@@ -99,7 +99,7 @@ SQL
 echo "== owner migration (explicit owner credentials, not the web env): adoption + catalog"
 MIGRATE_ENV=(env -i PATH="$PATH" APP_ENV=production "MIGRATION_DATABASE_URL=$OWNER_URL" "APP_DB_PASSWORD=$APP_PW")
 first="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$first"
-grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
+grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
   || { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }

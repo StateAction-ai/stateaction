@@ -38,6 +38,9 @@
     "http/recording-registration.v1.schema.json": "b4ec236ded3b1f1310bb2f7ddf6070c2050fb4657580501dc87c9c153b421816",
     "catalog.v4.json": "beef2a5f78e8bc294e666879997acc9792bc52ec2bf50214b307a9d904e110b4",
     "http/profile-update.v1.schema.json": "8af6302756bb767ca51632d83a427b35752d87d18cfc87bc6c4018b73a55ef60",
-    "http/profile.v1.schema.json": "325b8fd28084a98f7464969db99e19280b9861d7b3c6606b15156bdcff191513"
+    "http/profile.v1.schema.json": "325b8fd28084a98f7464969db99e19280b9861d7b3c6606b15156bdcff191513",
+    "catalog.v5.json": "54b3cf5d4afe9c4bad833bc9b3b00f3f631edfe9b737cc0e558c394c7c684099",
+    "http/output-create.v1.schema.json": "d8ad1dc0ae2a92f3de3b2038993865c6b29c5fa27576b6ce416f8f5998e78f88",
+    "http/output-plan.v1.schema.json": "bae373330bcfe3ba2775f63bd35e7a86a5bdcb2658ed85eaf136e3060c3826b1"
   }
 }

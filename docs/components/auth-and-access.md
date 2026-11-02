@@ -45,11 +45,11 @@ Status, 2026-11-01: **local implementation on the real catalog; external gates o
 
 `service.ts` provides typed credentials for non-human callers. Only workflow, cron and worker principals are defined:
 
-| Caller              | Kind       | Scopes                                     | Binding             |
-| ------------------- | ---------- | ------------------------------------------ | ------------------- |
-| Workflow controller | `workflow` | `jobs:status`, `jobs:reconcile`            | not job-bound       |
-| Repair cron         | `cron`     | `jobs:repair`                              | not job-bound       |
-| Processing worker   | `worker`   | `job:claim`, `job:heartbeat`, `job:result` | exactly one `jobId` |
+| Caller              | Kind       | Scopes                                                   | Binding             |
+| ------------------- | ---------- | -------------------------------------------------------- | ------------------- |
+| Workflow controller | `workflow` | `jobs:status`, `jobs:reconcile`                          | not job-bound       |
+| Repair cron         | `cron`     | `jobs:repair`                                            | not job-bound       |
+| Processing worker   | `worker`   | `job:claim`, `job:heartbeat`, `job:result`, `job:output` | exactly one `jobId` |
 
 Credential rules:
 

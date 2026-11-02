@@ -11,3 +11,4 @@ export { storageClient, initializeStorage, presignObject } from "./storage.js";
 export * from "./catalog/catalog.js";
 export { CatalogError } from "./catalog/errors.js";
 export * as admission from "./admission/index.js";
+export * from "./transport/index.js";
