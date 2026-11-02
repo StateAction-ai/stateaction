@@ -94,7 +94,6 @@ class SessionCookieJar {
   final DateTime Function() _clock;
 
   final Map<String, StoredCookie> _cookies = <String, StoredCookie>{};
-  bool _loaded = false;
   int _generation = 0;
   Future<void> _tail = Future<void>.value();
 
@@ -113,15 +112,27 @@ class SessionCookieJar {
 
   static String _key(String name, String path) => "$name|$path";
 
-  Future<void> load() async {
-    if (_loaded) return;
-    _loaded = true;
-    final raw = await _store.read(SecretKeys.sessionCookies);
-    if (raw == null) return;
+  Future<void>? _loading;
+
+  /// Loads the persisted record once. Concurrent callers share one Future, so
+  /// a [clear] issued during startup waits for the read and then wins; a read
+  /// that completes after a clear is discarded by the generation fence.
+  Future<void> load() => _loading ??= _load();
+
+  Future<void> _load() async {
+    final generation = _generation;
+    final String? raw;
+    try {
+      raw = await _store.read(SecretKeys.sessionCookies);
+    } catch (_) {
+      // Fail closed: unreadable storage means no session.
+      return;
+    }
+    if (raw == null || generation != _generation) return;
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map || decoded["origin"] != origin.value) {
-        await _store.delete(SecretKeys.sessionCookies);
+        await _serial(() => _store.delete(SecretKeys.sessionCookies));
         return;
       }
       final list = decoded["cookies"];
@@ -133,7 +144,7 @@ class SessionCookieJar {
         _cookies[_key(cookie.name, cookie.path)] = cookie;
       }
     } on FormatException {
-      await _store.delete(SecretKeys.sessionCookies);
+      await _serial(() => _store.delete(SecretKeys.sessionCookies));
     }
   }
 

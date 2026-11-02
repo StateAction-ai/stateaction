@@ -134,16 +134,21 @@ class AuthSessionController extends ChangeNotifier {
   /// Startup: restore cookies and eligibility, then ask the server.
   Future<AuthSessionState> restore() async {
     final epoch = _epoch;
-    if (!await _client.jar.hasCredentials) {
+    final hasCredentials = await _client.jar.hasCredentials;
+    // A logout/sign-in during startup owns the state now.
+    if (epoch != _epoch) return _state;
+    if (!hasCredentials) {
       await _fallBackToEligibility(epoch, reauthRequired: true);
       return _state;
     }
-    return refresh();
+    return _refresh(epoch);
   }
 
   /// Re-reads `/api/v1/me`. Call on startup, resume and after a 401.
-  Future<AuthSessionState> refresh() async {
-    final epoch = _epoch;
+  Future<AuthSessionState> refresh() => _refresh(_epoch);
+
+  Future<AuthSessionState> _refresh(int epoch) async {
+    if (epoch != _epoch) return _state;
     final generation = _client.jar.generation;
     final result = await _client.fetchMe();
     if (epoch != _epoch) return _state;

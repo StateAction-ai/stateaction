@@ -74,9 +74,18 @@ Map<String, Object?> _me(String id, {String status = "active"}) => {
 String _cookie(String token) =>
     "better-auth.session_token=$token.sig; Max-Age=604800; Path=/; HttpOnly";
 
-/// Secret store whose writes can be held open, to reorder storage I/O.
+/// Secret store whose writes (and reads) can be held open, to reorder I/O.
 class _BarrierStore extends MemorySecretStore {
   Completer<void>? hold;
+  Completer<void>? holdReads;
+
+  @override
+  Future<String?> read(String key) async {
+    final value = values[key];
+    final barrier = holdReads;
+    if (barrier != null) await barrier.future;
+    return value;
+  }
 
   @override
   Future<void> write(String key, String value) async {
@@ -328,4 +337,84 @@ void main() {
       expect(await startGate().clearStart(), isA<RecordingStartDenied>());
     });
   });
+
+  test(
+    "a delayed first secure-store read cannot restore cookies after logout",
+    () async {
+      // Persisted state from a previous run: session cookie + eligibility.
+      await signIn("alice", "old");
+      expect(secrets.values.keys, contains(SecretKeys.sessionCookies));
+
+      // Fresh process: new jar/controller over the same store, first read held.
+      secrets.holdReads = Completer<void>();
+      final jar = SessionCookieJar(
+        origin: origin,
+        store: secrets,
+        clock: () => now,
+      );
+      client = AuthHttpClient(
+        origin: origin,
+        jar: jar,
+        clientKind: "test",
+        client: MockClient(gate.handle),
+      );
+      controller = AuthSessionController(
+        client: client,
+        eligibility: OfflineEligibilityStore(origin: origin, store: secrets),
+        clock: () => now,
+      );
+      final restore = controller.restore();
+      await gate.settle();
+      final logout = controller.logout();
+      await gate.settle();
+
+      secrets.holdReads!.complete();
+      secrets.holdReads = null;
+      await gate.settle();
+      for (final p in gate.pending.toList()) {
+        gate.pending.remove(p);
+        p.reply(200, p.request.url.path == "/api/v1/me" ? _me("alice") : {});
+      }
+      await Future.wait([restore, logout]);
+      await gate.settle();
+
+      expect(controller.state, isA<AuthSignedOut>());
+      expect(controller.networkOwnerId, isNull);
+      expect(controller.captureOwnerId, isNull);
+      expect(await jar.cookies(), isEmpty);
+      expect(secrets.values.containsKey(SecretKeys.sessionCookies), isFalse);
+      expect(
+        secrets.values.containsKey(SecretKeys.offlineEligibility),
+        isFalse,
+      );
+      expect(
+        gate.pending.where((p) => p.request.url.path == "/api/v1/me"),
+        isEmpty,
+      );
+
+      // And a later fresh load sees nothing either.
+      final reloaded = SessionCookieJar(
+        origin: origin,
+        store: secrets,
+        clock: () => now,
+      );
+      expect(await reloaded.cookies(), isEmpty);
+    },
+  );
+
+  test("an unreadable secure store fails closed", () async {
+    final broken = _ThrowingStore();
+    final jar = SessionCookieJar(
+      origin: origin,
+      store: broken,
+      clock: () => now,
+    );
+    expect(await jar.cookies(), isEmpty);
+    expect(await jar.cookieHeaderFor(origin.resolve("/")), isNull);
+  });
+}
+
+class _ThrowingStore extends MemorySecretStore {
+  @override
+  Future<String?> read(String key) async => throw StateError("keystore");
 }
