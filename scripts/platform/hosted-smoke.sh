@@ -54,7 +54,7 @@ SQL
 echo "== owner migration (explicit owner credentials, not the web env): adoption + catalog"
 MIGRATE_ENV=(env -i PATH="$PATH" APP_ENV=production "MIGRATION_DATABASE_URL=$OWNER_URL" "APP_DB_PASSWORD=$APP_PW")
 first="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$first"
-grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
+grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
   || { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }
@@ -70,6 +70,9 @@ APP_AS -c "SELECT count(*) FROM platform_schema_migrations" >/dev/null
 APP_AS -c "INSERT INTO \"user\" (id, name, email, \"emailVerified\") VALUES ('smoke-user','s','s@example.test',true)" >/dev/null
 APP_AS -c "INSERT INTO session (id, \"expiresAt\", token, \"createdAt\", \"updatedAt\", \"userId\") VALUES ('smoke-s', now() + interval '1 day', 'smoke-token', now(), now(), 'smoke-user')" >/dev/null
 APP_AS -c "DELETE FROM session WHERE id = 'smoke-s'" >/dev/null
+APP_AS -c "SELECT count(*) FROM ingest_permissions" >/dev/null
+denied "DELETE FROM ingest_permissions"
+denied "UPDATE recording_registrations SET permission_ref = 'x'"
 denied "CREATE TABLE should_fail(x int)"
 denied "DROP TABLE platform_schema_migrations"
 denied "ALTER TABLE recordings ADD COLUMN x int"

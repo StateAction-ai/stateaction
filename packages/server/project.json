@@ -42,6 +42,7 @@
     "integration": {
       "executor": "nx:run-commands",
       "cache": false,
+      "dependsOn": ["^build"],
       "options": {
         "command": "pnpm --filter @stateaction/server integration"
       }

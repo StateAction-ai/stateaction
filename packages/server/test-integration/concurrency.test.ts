@@ -538,9 +538,12 @@ test("output insertion and result acceptance serialize on the job", async () => 
         `jobs/${p.jobId}/outputs/${id}/e1/late.rrd`,
       ],
     );
+    // Observe the rejection before COMMIT: it can settle in the same I/O turn
+    // as the COMMIT reply, which would otherwise be an unhandled rejection.
+    const rejected = expectCode(late, "SAC04");
     await new Promise((r) => setTimeout(r, 300));
     await holder.query("COMMIT");
-    await expectCode(late, "SAC04");
+    await rejected;
     evidence.outputVersusAcceptance =
       "late output rejected after acceptance commit";
   } finally {
