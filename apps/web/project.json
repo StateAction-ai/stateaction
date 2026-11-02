@@ -30,7 +30,16 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec prettier --check \"apps/web/app/**/*\" \"apps/web/test/**/*\" \"apps/web/*.json\" \"apps/web/next.config.ts\""
+        "command": "pnpm exec prettier --check \"apps/web/app/**/*\" \"apps/web/test/**/*\" \"apps/web/test-e2e/**/*\" \"apps/web/*.json\" \"apps/web/next.config.ts\""
+      }
+    },
+    "auth-e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": ["build"],
+      "options": {
+        "command": "node --test --test-concurrency=1 test-e2e/*.test.mjs",
+        "cwd": "apps/web"
       }
     }
   }

@@ -28,7 +28,15 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec prettier --check \"packages/server/src/**/*\" \"packages/server/test/**/*\" \"packages/server/test-integration/**/*\" \"packages/server/*.json\""
+        "command": "pnpm exec prettier --check \"packages/server/src/**/*\" \"packages/server/test/**/*\" \"packages/server/test-auth/**/*\" \"packages/server/test-integration/**/*\" \"packages/server/*.json\""
+      }
+    },
+    "auth-integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": ["^build"],
+      "options": {
+        "command": "pnpm --filter @stateaction/server test:auth"
       }
     },
     "integration": {

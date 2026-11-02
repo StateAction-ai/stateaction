@@ -49,7 +49,8 @@ class _Entry {
   final List<Rule> rules;
 }
 
-/// Validators built from api/catalog.v1.json and the schema documents it lists.
+/// Validators built from the current catalog (api/catalog.v2.json, an exact
+/// superset of the immutable catalog.v1.json) and the schema documents it lists.
 /// [readSchema] receives catalog-relative paths (for example `http/x.v1.schema.json`).
 class ContractRegistry {
   ContractRegistry._(this._entries, this._maxDepth);

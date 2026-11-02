@@ -18,11 +18,14 @@ from referencing.jsonschema import DRAFT202012
 from .canonical import MalformedJsonError, loads_strict
 from .rules import RULES
 
+# Current registry: an exact superset of the immutable catalog.v1.json.
+CATALOG_FILE = "catalog.v2.json"
+
 
 def _api_dir() -> Path:
     """Prefer the repository's api/ (source of truth); wheels carry a packaged copy."""
     checkout = Path(__file__).resolve().parents[3] / "api"
-    if (checkout / "catalog.v1.json").is_file():
+    if (checkout / CATALOG_FILE).is_file():
         return checkout
     return Path(str(resources.files("stateaction_contracts") / "_api"))
 
@@ -62,7 +65,7 @@ class ContractViolation(ValueError):
 
 @cache
 def _catalog() -> dict[str, Any]:
-    with open(_api_dir() / "catalog.v1.json", "rb") as file:
+    with open(_api_dir() / CATALOG_FILE, "rb") as file:
         catalog: dict[str, Any] = json.load(file)
     return catalog
 

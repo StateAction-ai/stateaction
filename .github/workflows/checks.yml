@@ -89,20 +89,22 @@ jobs:
           BASE_SHA: ${{ needs.resolve.outputs.base }}
           HEAD_SHA: ${{ needs.resolve.outputs.head }}
           DISPATCHED_PR: ${{ needs.resolve.outputs.dispatched_pr }}
+          RUNTIME_TARGETS: integration auth-integration auth-e2e
         run: |
           if [[ "$DISPATCHED_PR" == true ]]; then BASE_SHA=$(git rev-parse origin/main); fi
           if [[ -n "$BASE_SHA" ]] && git cat-file -e "$BASE_SHA:nx.json" 2>/dev/null; then
             echo "mode=affected" >> "$GITHUB_OUTPUT"
             echo "NX_BASE=$BASE_SHA" >> "$GITHUB_ENV"
             echo "NX_HEAD=$HEAD_SHA" >> "$GITHUB_ENV"
-            projects=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --withTarget=integration --json)
+            # Uncached runtime targets: catalog/infra integration plus the auth HTTP and Next E2E suites.
+            projects=$(for target in $RUNTIME_TARGETS; do pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --withTarget="$target" --json; done | jq -cs 'add | unique')
             if [[ "$projects" == '[]' ]]; then echo "integration=false" >> "$GITHUB_OUTPUT"; else echo "integration=true" >> "$GITHUB_OUTPUT"; fi
             mobile=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --json)
           else
             # The first tooling PR has no Nx graph/lockfile on its base.
             echo "mode=all" >> "$GITHUB_OUTPUT"
             echo "integration=true" >> "$GITHUB_OUTPUT"
-            projects=$(pnpm exec nx show projects --withTarget=integration --json)
+            projects=$(for target in $RUNTIME_TARGETS; do pnpm exec nx show projects --withTarget="$target" --json; done | jq -cs 'add | unique')
             mobile=$(pnpm exec nx show projects --json)
           fi
           echo "integration_projects=$(jq -r 'join(",")' <<< "$projects")" >> "$GITHUB_OUTPUT"
@@ -198,10 +200,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --project workers/processing --locked
       - run: python3 scripts/platform/install-render.py
-      - name: Real Next, Render local runner, Python, storage and catalog integration
+      - name: Real Next, Render local runner, Python, storage, catalog and auth integration
         env:
           INTEGRATION_PROJECTS: ${{ needs.checks.outputs.integration_projects }}
-        run: pnpm exec nx run-many -t integration --projects="$INTEGRATION_PROJECTS" --parallel=1 --skip-nx-cache --outputStyle=static
+        run: pnpm exec nx run-many -t integration,auth-integration,auth-e2e --projects="$INTEGRATION_PROJECTS" --parallel=1 --skip-nx-cache --outputStyle=static
   required:
     name: Required checks
     if: always()

@@ -4,13 +4,18 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "default": "./dist/auth/index.js"
+    }
   },
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --conditions=react-server --import tsx --test test/*.test.ts",
+    "test:auth": "NODE_ENV=test node --conditions=react-server --import tsx --test --test-concurrency=1 test-auth/*.test.ts",
     "test:catalog": "node --conditions=react-server --import tsx --test --test-concurrency=4 test-integration/*.test.ts",
     "migrate": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts migrate",
     "seed": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts seed",
@@ -24,10 +29,11 @@
     "hosted:presign-check": "node dist/cli.js presign-check"
   },
   "dependencies": {
-    "@stateaction/contracts": "workspace:*",
     "@aws-sdk/client-s3": "3.1161.0",
     "@aws-sdk/s3-request-presigner": "3.1161.0",
     "@renderinc/sdk": "1.6.0",
+    "@stateaction/contracts": "workspace:*",
+    "better-auth": "1.7.15",
     "pg": "8.23.1",
     "server-only": "0.0.1"
   },

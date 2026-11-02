@@ -1,0 +1,590 @@
+{
+  "contract": "http.me.v1",
+  "cases": [
+    {
+      "name": "active with every role in canonical order",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "active with one role",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "staff"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "active collector and customer",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "pending has no roles; names may be empty",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "new.user@example.test",
+            "name": ""
+          },
+          "access": {
+            "status": "pending",
+            "roles": []
+          },
+          "session": {
+            "expiresAt": "2026-11-08T00:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "disabled has no roles",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "new.user@example.test",
+            "name": ""
+          },
+          "access": {
+            "status": "disabled",
+            "roles": []
+          },
+          "session": {
+            "expiresAt": "2026-11-08T00:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "Better Auth IDs are opaque, not UUIDs",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Q7zXy0pLm3NcVb8Rt2Wk5Hs9Jd4Fg6Ae",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "active with no roles",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": []
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "pending with a role",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "new.user@example.test",
+            "name": ""
+          },
+          "access": {
+            "status": "pending",
+            "roles": [
+              "collector"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T00:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "disabled with a role",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "new.user@example.test",
+            "name": ""
+          },
+          "access": {
+            "status": "disabled",
+            "roles": [
+              "staff"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T00:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown role",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "admin"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/access/roles"
+        ]
+      }
+    },
+    {
+      "name": "duplicate role",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "staff",
+              "staff"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/access/roles"
+        ]
+      }
+    },
+    {
+      "name": "roles out of canonical order",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "staff",
+              "collector"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/access/roles"
+        ]
+      }
+    },
+    {
+      "name": "unknown access status",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "suspended",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/access/status"
+        ]
+      }
+    },
+    {
+      "name": "clients cannot add fields",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          },
+          "role": "staff"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "user object is closed",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff",
+            "roles": [
+              "staff"
+            ]
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user"
+        ]
+      }
+    },
+    {
+      "name": "session is required",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "expiry must be UTC with Z",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59+00:00"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/session/expiresAt"
+        ]
+      }
+    },
+    {
+      "name": "user ID must be an opaque token",
+      "input": {
+        "document": {
+          "user": {
+            "id": "has space",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/id"
+        ]
+      }
+    },
+    {
+      "name": "user ID is bounded",
+      "input": {
+        "document": {
+          "user": {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/id"
+        ]
+      }
+    },
+    {
+      "name": "email needs one @",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "not-an-email",
+            "name": "Pilot Staff"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/email"
+        ]
+      }
+    },
+    {
+      "name": "display name is bounded",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+          },
+          "access": {
+            "status": "active",
+            "roles": [
+              "collector",
+              "staff",
+              "customer"
+            ]
+          },
+          "session": {
+            "expiresAt": "2026-11-08T23:59:59.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "document over 16 KiB",
+      "input": {
+        "json": "{\"user\": {\"id\": \"Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA\", \"email\": \"staff.pilot@example.test\", \"name\": \"Pilot Staff\"}, \"access\": {\"status\": \"active\", \"roles\": [\"collector\", \"staff\", \"customer\"]}, \"session\": {\"expiresAt\": \"2026-11-08T23:59:59.123Z\"}}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              "
+      },
+      "expect": {
+        "valid": false,
+        "code": "document_too_large"
+      }
+    }
+  ]
+}
