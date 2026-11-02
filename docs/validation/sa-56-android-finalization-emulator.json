@@ -37,6 +37,15 @@
     "interrupted_files_passed": 2,
     "completed_files_passed": 5
   },
-  "jvm_tests": "79 passed, 0 failed",
-  "regression": "SA-51 h264 lifecycle emulator harness passed (5 completed, 1 failed-by-design)"
+  "jvm_tests": "88 passed, 0 failed",
+  "regression": "SA-51 h264 lifecycle emulator harness passed (5 completed, 1 failed-by-design)",
+  "review_fixes": {
+    "receipt_dir_ignored": "artifacts/android-finalization-e2e/20261102T043717Z",
+    "container_fsync": "real FileOutputStream.fd.sync() observed while journal was CLOSING_CONTAINER, before final sidecar/FINALIZED; session directory fsync forced on the emulator filesystem; injected sync failure => container_state unclosed, quarantined, journal not FINALIZED, error ack",
+    "zero_frame_h264": "capture_outcome=failed, recovery_state=quarantined, capture_result_valid=false, journal stays FINALIZING_METADATA with marker; error returned",
+    "first_stop_journal_write_failure": "producers gated off first; uncertain latch set; Start refused; journal left at CAPTURING with marker",
+    "slow_close": "close phase wait bounded (15.0 s on emulator); late worker cannot publish FINALIZED (journal stays CLOSING_CONTAINER, sidecar container_state=closing)",
+    "independent_validation": "official mcap reader + SA-50 checker on 6 completed + 2 interrupted takes; faulted takes verified non-final with recovery marker"
+  },
+  "durability_limits": "Container bytes are fsynced and the directory entry is forced where the filesystem supports it; physical power-loss behaviour, eMMC/UFS write-cache and filesystem-specific guarantees are NOT qualified. A stalled uninterruptible syscall cannot be cancelled: the coordinator wait is bounded and the stop reports uncertain, not closed."
 }

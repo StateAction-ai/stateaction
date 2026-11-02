@@ -28,6 +28,7 @@ import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriterImpl
 import open.fpvlabs.stera.ar_recorder.data.MCAPDatasetWriter
 import open.fpvlabs.stera.ar_recorder.data.StorageManager
+import open.fpvlabs.stera.ar_recorder.finalization.BoundedPhaseRunner
 import open.fpvlabs.stera.ar_recorder.finalization.CaptureOutcomePolicy
 import open.fpvlabs.stera.ar_recorder.finalization.CaptureResourceGuard
 import open.fpvlabs.stera.ar_recorder.finalization.FinalizationBudget
@@ -244,6 +245,10 @@ class ArRecorderImpl(
     @Volatile private var pendingStopReason: String? = null
     /** Set when a stop could not prove its writer/threads are quiet; no new take until the session is disposed. */
     @Volatile private var finalizationUncertain = false
+    /** Bounded workers for the close/zip/sidecar phases; a timed-out worker stays visible so dispose cannot clear the latch under it. */
+    private val boundedPhases = BoundedPhaseRunner()
+    /** True once the stop's writer barrier completed; any stop exception before that keeps the uncertain latch set. */
+    @Volatile private var writerQuiet = true
     private var lastResourcePollMs = 0L
     @Volatile var lastRecoveryReport: RecoveryScanner.Report? = null; private set
     /** Test seams: simulated storage/thermal and a fault hook after each journaled phase (never set in production). */
@@ -828,10 +833,13 @@ class ArRecorderImpl(
             currentState = ArRecordingState.STOPPING
             val budget = FinalizationBudget(nowMs = { SystemClock.elapsedRealtime() })
             val stopReason = pendingStopReason
+            // Gate the producers first (this waits for an in-flight producer). The STOPPING journal write below can
+            // fail with I/O errors; until the writer barrier completes, any exception must leave the uncertain latch set.
+            writerQuiet = false
+            isRecording.set(false)
             journal?.advance(FinalizationPhase.STOPPING, stopReason = stopReason)
             phaseFaultHook?.invoke(FinalizationPhase.STOPPING)
 
-            isRecording.set(false)
             if (isPaused.get()) {
                 val pausedSince = pauseStartedAtMs
                 if (pausedSince > 0L) {
@@ -876,6 +884,7 @@ class ArRecorderImpl(
                 // Stop uncertainty and motion saturation are sticky capture failures.
                 motionCapture.finishOnWriter()
             }
+            writerQuiet = true
 
             // H.264: drain the codec to end of stream and write Inventory/Close only after every admitted motion
             // event is written, so the Close counts and outcome cover the whole take.
@@ -951,21 +960,6 @@ class ArRecorderImpl(
             finalizationResult.metadata["capture_outcome"] = "unresolved"
             finalizationResult.metadata["recovery_state"] = "quarantined"
             finalizationResult.metadata["finalization_complete"] = false
-            datasetWriter.writeMetadata(finalizationResult.metadata)
-
-            // Log session end info
-            datasetWriter.logSystem("Session end time: ${Date()}")
-            datasetWriter.logSystem("Errors encountered: ${metrics.totalErrorsEncountered}")
-            datasetWriter.logSystem("Tracking loss events: ${metrics.trackingLossEvents}")
-            datasetWriter.logSystem("Free storage before: ${datasetWriter.getFreeStorageBeforeBytes()} bytes")
-            datasetWriter.logSystem("Free storage after: ${datasetWriter.getFreeStorageAfterBytes()} bytes")
-            datasetWriter.logSystem("Total bytes written: $totalBytesWritten bytes")
-            if (totalBytesWritten > SIZE_WARNING_THRESHOLD_BYTES) {
-                datasetWriter.logSystem(
-                    "WARN: session size exceeded threshold. bytes=$totalBytesWritten threshold=$SIZE_WARNING_THRESHOLD_BYTES"
-                )
-            }
-
             val durationSeconds = coreStats.durationSeconds
             val imuFps = if (durationSeconds > 0.0) imuSampleCount.toDouble() / durationSeconds else 0.0
 
@@ -982,13 +976,34 @@ class ArRecorderImpl(
                 maxEncoderQueueDepth = metrics.maxEncoderQueueDepth,
                 encoderBackpressureDetected = metrics.encoderBackpressureDetected
             )
-            datasetWriter.writeSessionSummary(sessionSummary)
+            boundedPhases.run(budget, "provisional_sidecar", FinalizationBudget.METADATA_CAP_MS) { token ->
+                datasetWriter.writeMetadata(finalizationResult.metadata)
+                // Log session end info
+                datasetWriter.logSystem("Session end time: ${Date()}")
+                datasetWriter.logSystem("Errors encountered: ${metrics.totalErrorsEncountered}")
+                datasetWriter.logSystem("Tracking loss events: ${metrics.trackingLossEvents}")
+                datasetWriter.logSystem("Free storage before: ${datasetWriter.getFreeStorageBeforeBytes()} bytes")
+                datasetWriter.logSystem("Free storage after: ${datasetWriter.getFreeStorageAfterBytes()} bytes")
+                datasetWriter.logSystem("Total bytes written: $totalBytesWritten bytes")
+                if (totalBytesWritten > SIZE_WARNING_THRESHOLD_BYTES) {
+                    datasetWriter.logSystem(
+                        "WARN: session size exceeded threshold. bytes=$totalBytesWritten threshold=$SIZE_WARNING_THRESHOLD_BYTES"
+                    )
+                }
+
+                if (!token.cancelled) datasetWriter.writeSessionSummary(sessionSummary)
+            }
 
             journal?.advance(FinalizationPhase.CLOSING_CONTAINER)
             phaseFaultHook?.invoke(FinalizationPhase.CLOSING_CONTAINER)
-            val (zipSuccess, zipPath, zipError) = datasetWriter.createSpatialDataZip()
-
-            datasetWriter.finalize()
+            // Container close, zip and fsync run on a bounded worker: uninterruptible OS I/O cannot be reported finished,
+            // so a timeout throws FinalizationTimeout (uncertain latch, quarantine, no closed ack) and the late worker is cancelled.
+            val closeResult = boundedPhases.run(budget, "close_container", FinalizationBudget.CLOSE_CAP_MS) { token ->
+                val zipped = datasetWriter.createSpatialDataZip()
+                if (!token.cancelled) datasetWriter.finalize()
+                zipped
+            }
+            val (zipSuccess, zipPath, zipError) = closeResult
             if (!zipSuccess) {
                 datasetWriter.recordWriteFailure("Session finalization failed: ${zipError ?: "unknown error"}")
                 println("⚠️ Failed to create spatial_data.zip: $zipError")
@@ -1002,17 +1017,25 @@ class ArRecorderImpl(
             var captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
             val sessionFile = outputDir?.let(::File)
             val mcapFile = sessionFile?.listFiles { f -> f.name.endsWith(".mcap") }?.firstOrNull()
-            val containerState = if (mcapFile != null) CaptureOutcomePolicy.containerState(zipSuccess, mcapFile) else CaptureOutcomePolicy.UNCLOSED
+            // Closed requires the writer to have finished AND the container bytes to have been fsynced; a missing or failed
+            // sync is never a closed container.
+            val containerState = if (mcapFile != null) CaptureOutcomePolicy.containerState(zipSuccess && datasetWriter.containerDurable, mcapFile) else CaptureOutcomePolicy.UNCLOSED
             val evidence = h264TerminalStats["evidence"] as? Map<*, *>
             val captureOutcome = if (activeRecordingConfig.isH264) {
                 CaptureOutcomePolicy.captureOutcome(evidence?.get("close_outcome") as? String, stopReason,
-                    (evidence?.get("unresolved") as? Number)?.toLong() ?: 0L, datasetWriter.getWriteFailure())
+                    (evidence?.get("unresolved") as? Number)?.toLong() ?: 0L, datasetWriter.getWriteFailure(), captureFailure)
             } else if (captureFailure == null) "completed" else "failed"
             val recoveryState = CaptureOutcomePolicy.recoveryState(containerState, captureOutcome)
             val finalizationToken = java.util.UUID.randomUUID().toString()
             finalizationResult.metadata["capture_result_valid"] = captureFailure == null
             finalizationResult.metadata["first_writer_error"] = datasetWriter.getWriteFailure()
-            finalizationResult.metadata["finalization_complete"] = containerState == CaptureOutcomePolicy.CLOSED && datasetWriter.getWriteFailure() == null
+            finalizationResult.metadata["finalization_complete"] = containerState == CaptureOutcomePolicy.CLOSED && datasetWriter.getWriteFailure() == null && captureFailure == null
+            // Durability truth: container bytes fsynced before closed was claimed; directory entry may be unsupported by the filesystem.
+            finalizationResult.metadata["container_fsync"] = datasetWriter.containerDurable
+            finalizationResult.metadata["session_directory_fsync"] = when (datasetWriter.sessionDirectorySynced) {
+                true -> "forced"; false -> "unsupported_by_filesystem"; null -> "not_attempted"
+            }
+            finalizationResult.metadata["power_loss_qualified"] = false
             finalizationResult.metadata["container_state"] = containerState
             finalizationResult.metadata["capture_outcome"] = captureOutcome
             finalizationResult.metadata["recovery_state"] = recoveryState
@@ -1022,10 +1045,13 @@ class ArRecorderImpl(
             finalizationResult.metadata["finalization_token"] = finalizationToken
             journal?.advance(FinalizationPhase.FINALIZING_METADATA, containerState = containerState, captureOutcome = captureOutcome)
             phaseFaultHook?.invoke(FinalizationPhase.FINALIZING_METADATA)
-            datasetWriter.writeMetadata(finalizationResult.metadata)
+            // Final sidecar write and read-back are bounded too; a late worker is cancelled and cannot publish afterwards.
+            val sidecarDurable = boundedPhases.run(budget, "final_sidecar", FinalizationBudget.METADATA_CAP_MS) { token ->
+                if (!token.cancelled) datasetWriter.writeMetadata(finalizationResult.metadata)
+                !token.cancelled && sessionFile?.let { File(it, "metadata.json").takeIf(File::isFile)?.readText()?.contains(finalizationToken) } == true
+            }
             captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
             // FINALIZED only after the final sidecar is read back from disk and the container is proven closed.
-            val sidecarDurable = sessionFile?.let { File(it, "metadata.json").takeIf(File::isFile)?.readText()?.contains(finalizationToken) } == true
             val durablyFinal = sidecarDurable && containerState == CaptureOutcomePolicy.CLOSED
             // The quarantine marker is durable before the journal can say FINALIZED, so a crash in between still leaves a signal.
             if (sessionFile != null && (!durablyFinal || recoveryState == "quarantined")) {
@@ -1033,7 +1059,7 @@ class ArRecorderImpl(
                     RecoveryScanner.quarantine(sessionFile, if (!durablyFinal) "finalization_incomplete:container=$containerState,sidecar=$sidecarDurable" else "capture_outcome_$captureOutcome", System.currentTimeMillis())
                 } catch (error: Throwable) { recordError("Could not write recovery marker", error) }
             }
-            if (durablyFinal) journal?.advance(FinalizationPhase.FINALIZED)
+            if (CaptureOutcomePolicy.mayPublishFinalized(durablyFinal, captureFailure)) journal?.advance(FinalizationPhase.FINALIZED)
             frameProcessor.releaseRecordingBuffers()
             // Publish READY only after the final sidecar is durably persisted. Pollers may
             // immediately start a new recording once this state becomes observable.
@@ -1080,7 +1106,7 @@ class ArRecorderImpl(
             )
         } catch (e: Exception) {
             currentState = ArRecordingState.ERROR
-            if (e is FinalizationTimeout) finalizationUncertain = true
+            if (e is FinalizationTimeout || !writerQuiet) finalizationUncertain = true
             try { frameOrchestrator.h264Controller?.abort() } catch (_: Throwable) {}
             frameOrchestrator.h264Controller = null
             // Whatever phase the journal reached stays non-final; also drop a durable quarantine marker beside it.
@@ -1147,7 +1173,7 @@ class ArRecorderImpl(
 
         motionCapture.stopCollection()
         val threadsQuiet = sessionLifecycleManager.stopThreads(frameThread, writerThread)
-        if (!threadsQuiet) {
+        if (!threadsQuiet || boundedPhases.hasLateWork()) {
             // A thread outlived its bounded join: its files and codecs may still be in use, so nothing is released
             // out from under it and no new take may start in this process.
             finalizationUncertain = true

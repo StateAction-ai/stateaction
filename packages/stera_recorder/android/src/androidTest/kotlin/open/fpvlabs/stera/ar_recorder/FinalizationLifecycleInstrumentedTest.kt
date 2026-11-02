@@ -40,9 +40,10 @@ class FinalizationLifecycleInstrumentedTest {
         while (!predicate()) { assertTrue(message, SystemClock.elapsedRealtime() < until); SystemClock.sleep(100) }
     }
 
-    private fun launch(): H264RecorderTestActivity {
+    private fun launch(faults: Boolean = false): H264RecorderTestActivity {
         val activity = instrumentation.startActivitySync(
             Intent(instrumentation.context, H264RecorderTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra("inject_writer_faults", faults)
         ) as H264RecorderTestActivity
         assertTrue("TextureView did not attach", activity.surfaceReady.await(15, TimeUnit.SECONDS))
         return activity
@@ -151,6 +152,151 @@ class FinalizationLifecycleInstrumentedTest {
             out.put("status", "passed")
         } finally {
             receipt("finalization-phase-faults.json", out)
+        }
+    }
+
+    // ── Review fixes: container fsync ordering/failure, empty capture, first stop-journal write, slow close ──
+
+    @Test fun containerFsyncPrecedesFinalMetadataAndSyncFailureFailsClosed() {
+        requireEmulator()
+        val out = JSONObject()
+        val activity = launch(faults = true); val recorder = activity.recorder; val writer = activity.faultWriter!!
+        try {
+            ready(recorder)
+            // Take 1: the real fsync runs while the journal is still CLOSING_CONTAINER, before final metadata/FINALIZED.
+            val phases = mutableListOf<String>()
+            var tokenAtSync: Boolean? = null
+            val start = recorder.startRecording(config); assertEquals(start.toString(), true, start["success"])
+            val dir = File(start["outputDirectory"] as String)
+            writer.containerSyncProbe = { stream ->
+                phases += journalPhase(dir).name
+                tokenAtSync = File(dir, "metadata.json").readText().contains("\"container_state\": \"closed\"")
+                stream.fd.sync()
+            }
+            SystemClock.sleep(2500)
+            val stop = recorder.stopRecording()
+            assertEquals(stop.toString(), true, stop["success"])
+            assertEquals(listOf("CLOSING_CONTAINER"), phases)
+            assertEquals("final closed sidecar must not exist before the container fsync", false, tokenAtSync)
+            val meta = metadata(dir)
+            assertEquals("closed", meta.getString("container_state")); assertTrue(meta.getBoolean("container_fsync"))
+            assertEquals(false, meta.getBoolean("power_loss_qualified"))
+            assertEquals(FinalizationPhase.FINALIZED, journalPhase(dir))
+            out.put("synced_take", dir.name).put("sync_observed_journal_phase", phases[0])
+                .put("session_directory_fsync", meta.getString("session_directory_fsync"))
+
+            // Take 2: the container fsync fails -> no closed, no FINALIZED, no success ack, quarantined.
+            val start2 = recorder.startRecording(config); assertEquals(start2.toString(), true, start2["success"])
+            val dir2 = File(start2["outputDirectory"] as String)
+            writer.containerSyncProbe = { throw java.io.IOException("injected container fsync failure") }
+            SystemClock.sleep(2500)
+            val stop2 = recorder.stopRecording()
+            writer.containerSyncProbe = null
+            assertEquals(stop2.toString(), false, stop2["success"])
+            val meta2 = metadata(dir2)
+            assertEquals("unclosed", meta2.getString("container_state")); assertFalse(meta2.getBoolean("container_fsync"))
+            assertEquals("quarantined", meta2.getString("recovery_state"))
+            assertNotEquals(FinalizationPhase.FINALIZED, journalPhase(dir2))
+            assertTrue(File(dir2, RecoveryScanner.MARKER).isFile)
+            out.put("sync_failed_take", dir2.name).put("sync_failed_journal_phase", journalPhase(dir2).name).put("status", "passed")
+        } finally {
+            receipt("finalization-container-fsync.json", out)
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    @Test fun zeroFrameCaptureIsFailedQuarantinedAndNeverFinalized() {
+        requireEmulator()
+        val out = JSONObject()
+        val activity = launch(); val recorder = activity.recorder
+        try {
+            ready(recorder)
+            var dir: File? = null; var stop: Map<String, Any?> = emptyMap()
+            for (attempt in 1..6) { // stop before the first frame is written; retry if a frame raced in
+                val start = recorder.startRecording(config); assertEquals(start.toString(), true, start["success"])
+                dir = File(start["outputDirectory"] as String)
+                stop = recorder.stopRecording()
+                if (stop["success"] == false) break
+            }
+            assertEquals("could not obtain a zero-frame stop: $stop", false, stop["success"])
+            val meta = metadata(dir!!)
+            assertFalse(meta.getBoolean("capture_result_valid"))
+            assertEquals("failed", meta.getString("capture_outcome")); assertEquals("quarantined", meta.getString("recovery_state"))
+            assertFalse(meta.getBoolean("finalization_complete"))
+            assertEquals("failed", stop["captureOutcome"]); assertEquals("quarantined", stop["recoveryState"])
+            assertNotEquals(FinalizationPhase.FINALIZED, journalPhase(dir))
+            assertTrue(File(dir, RecoveryScanner.MARKER).isFile)
+            out.put("directory", dir.name).put("capture_outcome", meta.getString("capture_outcome"))
+                .put("container_state", meta.getString("container_state")).put("journal_phase", journalPhase(dir).name).put("status", "passed")
+        } finally {
+            receipt("finalization-zero-frame.json", out)
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    @Test fun firstStopJournalWriteFailureGatesProducersAndLatchesUncertain() {
+        requireEmulator()
+        val out = JSONObject()
+        val activity = launch(); val recorder = activity.recorder
+        try {
+            ready(recorder)
+            val start = recorder.startRecording(config); assertEquals(start.toString(), true, start["success"])
+            val dir = File(start["outputDirectory"] as String)
+            SystemClock.sleep(2000)
+            // A directory squatting on the journal's temp name makes the very first stop journal write fail with an I/O error.
+            assertTrue(File(dir, ".${FinalizationJournal.FILE_NAME}.tmp").mkdir())
+            val stop = recorder.stopRecording()
+            assertEquals(stop.toString(), false, stop["success"])
+            val state = recorder.getRecordingState()
+            assertEquals(false, state["isRecording"]) // producers gated off
+            assertEquals("ERROR", state["state"])
+            assertEquals(FinalizationPhase.CAPTURING, journalPhase(dir)) // the failed write left the previous complete journal
+            assertTrue(File(dir, RecoveryScanner.MARKER).isFile)
+            val again = recorder.startRecording(config)
+            assertEquals(false, again["success"])
+            assertTrue(again.toString(), again.toString().contains("did not prove the writer was quiet"))
+            out.put("directory", dir.name).put("refused_start", again["error"]).put("journal_phase", journalPhase(dir).name).put("status", "passed")
+        } finally {
+            receipt("finalization-first-journal-write.json", out)
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    @Test fun slowContainerCloseIsBoundedAndLateWorkerCannotPublishFinalized() {
+        requireEmulator()
+        val out = JSONObject()
+        val activity = launch(faults = true); val recorder = activity.recorder; val writer = activity.faultWriter!!
+        try {
+            ready(recorder)
+            val start = recorder.startRecording(config); assertEquals(start.toString(), true, start["success"])
+            val dir = File(start["outputDirectory"] as String)
+            val release = java.util.concurrent.CountDownLatch(1)
+            val workerDone = java.util.concurrent.CountDownLatch(1)
+            writer.containerSyncProbe = { stream -> // stands in for uninterruptible OS I/O; the real fsync still runs when released
+                release.await(60, TimeUnit.SECONDS); stream.fd.sync(); workerDone.countDown()
+            }
+            SystemClock.sleep(2000)
+            val began = SystemClock.elapsedRealtime()
+            val stop = recorder.stopRecording()
+            val elapsed = SystemClock.elapsedRealtime() - began
+            writer.containerSyncProbe = null
+            assertEquals(stop.toString(), false, stop["success"])
+            assertTrue("stop must return within the bounded close phase, took ${elapsed}ms", elapsed < 30_000)
+            assertEquals("ERROR", recorder.getRecordingState()["state"])
+            assertTrue(File(dir, RecoveryScanner.MARKER).isFile)
+            assertEquals(false, recorder.startRecording(config)["success"])
+            release.countDown() // the stalled worker now finishes late
+            assertTrue(workerDone.await(30, TimeUnit.SECONDS))
+            SystemClock.sleep(1500)
+            assertEquals("A late worker must not publish FINALIZED", FinalizationPhase.CLOSING_CONTAINER, journalPhase(dir))
+            val meta = metadata(dir)
+            assertNotEquals("closed", meta.getString("container_state"))
+            assertFalse(meta.getBoolean("finalization_complete"))
+            out.put("directory", dir.name).put("stop_returned_ms", elapsed).put("journal_phase_after_late_worker", journalPhase(dir).name)
+                .put("sidecar_container_state", meta.getString("container_state")).put("status", "passed")
+        } finally {
+            receipt("finalization-slow-close.json", out)
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
         }
     }
 

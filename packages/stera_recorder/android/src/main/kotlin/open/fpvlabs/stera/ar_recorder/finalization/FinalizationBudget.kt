@@ -23,6 +23,8 @@ class FinalizationBudget(val totalMs: Long = TOTAL_MS, private val nowMs: () -> 
         const val TOTAL_MS = 45_000L
         const val WRITER_BARRIER_CAP_MS = 15_000L
         const val ENCODER_EOS_CAP_MS = 10_000L
+        const val CLOSE_CAP_MS = 15_000L
+        const val METADATA_CAP_MS = 10_000L
     }
 }
 

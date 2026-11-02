@@ -37,9 +37,10 @@ object CaptureOutcomePolicy {
      * @param closeOutcome the value in the MCAP Close record (`completed|failed|aborted`) or null when never written
      * @param interruptionReason the reasoned stop (`low_storage`, `critical_thermal`, ...) or null
      */
-    fun captureOutcome(closeOutcome: String?, interruptionReason: String?, unresolvedFrames: Long, writerFailure: String?): String = when {
+    fun captureOutcome(closeOutcome: String?, interruptionReason: String?, unresolvedFrames: Long, writerFailure: String?, captureFailure: String? = null): String = when {
         closeOutcome == null -> "unresolved"
-        writerFailure != null || closeOutcome == "failed" -> "failed"
+        // captureFailure covers an invalid take with no writer error (for example zero RGB frames written).
+        writerFailure != null || captureFailure != null || closeOutcome == "failed" -> "failed"
         unresolvedFrames != 0L -> "unresolved"
         interruptionReason != null -> "interrupted"
         closeOutcome == "completed" -> "completed"
@@ -49,6 +50,12 @@ object CaptureOutcomePolicy {
     /** `none` only for a closed container whose result is completed or a clean interruption; otherwise `quarantined`. */
     fun recoveryState(containerState: String, outcome: String): String =
         if (containerState == CLOSED && (outcome == "completed" || outcome == "interrupted")) "none" else "quarantined"
+
+    /**
+     * The journal may reach FINALIZED only when the container and final sidecar are durable AND the capture result is
+     * valid; an invalid capture stays quarantined (marker written, journal left at FINALIZING_METADATA).
+     */
+    fun mayPublishFinalized(durablyFinal: Boolean, captureFailure: String?): Boolean = durablyFinal && captureFailure == null
 
     /** Close-record outcome and reason for a controlled stop: an interruption is `aborted` with an explicit reason. */
     fun closeFor(interruptionReason: String?, failure: String?): Pair<String, String?> = when {

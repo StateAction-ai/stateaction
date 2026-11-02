@@ -106,6 +106,10 @@ def main() -> None:
             "stopFaultsAtEveryPhaseStayRecoveryRequiredAndReopenSucceeds",
             False,
         ),
+        ("container_fsync", "containerFsyncPrecedesFinalMetadataAndSyncFailureFailsClosed", False),
+        ("zero_frame", "zeroFrameCaptureIsFailedQuarantinedAndNeverFinalized", False),
+        ("first_journal_write", "firstStopJournalWriteFailureGatesProducersAndLatchesUncertain", False),
+        ("slow_close", "slowContainerCloseIsBoundedAndLateWorkerCannotPublishFinalized", False),
         ("crash", "crashDuringCapture", True),
         ("reopen", "reopenAfterCrashQuarantinesSalvagesAndRecordsAgain", False),
     ):
@@ -155,6 +159,10 @@ def main() -> None:
     for name in (
         "finalization-reasoned-stops.json",
         "finalization-phase-faults.json",
+        "finalization-container-fsync.json",
+        "finalization-zero-frame.json",
+        "finalization-first-journal-write.json",
+        "finalization-slow-close.json",
         "finalization-crash-target.json",
         "finalization-crash-reopen.json",
     ):
@@ -193,6 +201,7 @@ def main() -> None:
         p["reopen_take"] for p in receipts["finalization-phase-faults.json"]["phases"]
     ]
     completed.append(receipts["finalization-crash-reopen.json"]["reopen_take"])
+    completed.append(receipts["finalization-container-fsync.json"]["synced_take"])
     validation = {
         "interrupted_aborted_with_reason": validate(
             [mcap(d) for d in interrupted], "aborted", output, "interrupted"
@@ -201,6 +210,19 @@ def main() -> None:
             [mcap(d) for d in completed], "completed", output, "completed"
         ),
     }
+    # Faulted takes must not be claimed closed/finalized: each journal stays non-final and carries a marker.
+    fault_takes = {}
+    for key, name in (
+        ("sync_failed", receipts["finalization-container-fsync.json"]["sync_failed_take"]),
+        ("zero_frame", receipts["finalization-zero-frame.json"]["directory"]),
+        ("first_journal_write", receipts["finalization-first-journal-write.json"]["directory"]),
+        ("slow_close", receipts["finalization-slow-close.json"]["directory"]),
+    ):
+        journal = json.loads((sessions / name / "finalization_journal.json").read_text())
+        if journal["phase"] == "FINALIZED" or not (sessions / name / "recovery_required.json").is_file():
+            raise RuntimeError(f"Faulted take {key} must stay non-final with a recovery marker: {journal['phase']}")
+        fault_takes[key] = {"directory": name, "journal_phase": journal["phase"]}
+    validation["faulted_takes_not_finalized"] = fault_takes
     reopen = receipts["finalization-crash-reopen.json"]
     dead = sessions / reopen["dead_session"]
     check = subprocess.run(

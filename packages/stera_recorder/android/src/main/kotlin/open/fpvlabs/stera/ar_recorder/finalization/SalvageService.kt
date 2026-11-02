@@ -22,7 +22,8 @@ object SalvageService {
     const val DEFAULT_DEADLINE_MS = 120_000L
 
     sealed class Result {
-        data class Salvaged(val directory: File, val derivedRecordingId: String) : Result()
+        /** [parentDirectorySynced]: true = the new directory entry was forced to storage after the rename; false = the filesystem could not force a directory (durability of the entry NOT claimed). */
+        data class Salvaged(val directory: File, val derivedRecordingId: String, val parentDirectorySynced: Boolean = false) : Result()
         data class Refused(val reason: String) : Result()
     }
 
@@ -75,8 +76,11 @@ object SalvageService {
                 "files" to records,
             ))
             AtomicFiles.write(File(temp, MANIFEST), manifest.toByteArray(Charsets.UTF_8))
+            // Make the staged directory's own entries durable, then the rename's parent entry; report an unsupported directory sync truthfully.
+            AtomicFiles.syncDirectoryReporting(temp)
             check(temp.renameTo(final)) { "Could not publish salvage directory" }
-            return Result.Salvaged(final, derivedId)
+            val parentSynced = try { AtomicFiles.syncDirectoryReporting(parent) } catch (_: java.io.IOException) { false } // published; never turn a sync error into a refusal that leaves a published directory
+            return Result.Salvaged(final, derivedId, parentSynced)
         } catch (error: Exception) {
             temp.deleteRecursively() // only the staging copy this call created; the original is never touched
             return Result.Refused("salvage_failed:${error.message ?: error.javaClass.simpleName}")

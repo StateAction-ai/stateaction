@@ -22,6 +22,12 @@ interface DatasetWriter {
     fun logSystem(message: String)
     fun recordWriteFailure(message: String, throwable: Throwable? = null) { logError(message, throwable) }
     fun getWriteFailure(): String? = null
+
+    /** True only when the finished container's bytes were fsynced to storage. Writers that cannot prove it stay false (never a silent no-op claim). */
+    val containerDurable: Boolean get() = false
+
+    /** Session directory sync after the container fsync: true forced, false unsupported by the filesystem, null not attempted. */
+    val sessionDirectorySynced: Boolean? get() = null
     fun logError(message: String, throwable: Throwable? = null)
     fun writePoseRow(timestamp: Long, pose: FloatArray, trackingState: String)
     /**

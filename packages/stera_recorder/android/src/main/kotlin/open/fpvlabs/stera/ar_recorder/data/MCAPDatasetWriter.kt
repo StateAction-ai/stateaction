@@ -62,6 +62,11 @@ class MCAPDatasetWriter(
 
     // MCAP writer
     private var mcapWriter: MCAPWriter? = null
+    /** Test seam: replaces the container fsync of every MCAP writer this instance creates (never set in production). */
+    @Volatile internal var containerSyncHook: ((java.io.FileOutputStream) -> Unit)? = null
+    /** Durability proof of the last finished container: bytes fsynced; directory entry forced (true), unsupported (false) or not attempted (null). */
+    @Volatile override var containerDurable: Boolean = false; private set
+    @Volatile override var sessionDirectorySynced: Boolean? = null; private set
     private var mcapFile: File? = null
 
     // Text writers for debugging (kept outside MCAP)
@@ -216,6 +221,9 @@ class MCAPDatasetWriter(
             val file = File(session, "session_data_$sessionTimestamp.mcap")
             mcapFile = file
             val writer = MCAPWriter()
+            containerSyncHook?.let { writer.containerSync = it }
+            containerDurable = false
+            sessionDirectorySynced = null
             val setup = h264Setup
             // The H.264 profile mixes Protobuf, CDR and JSON: its header profile is generic (empty), never ros2.
             if (!writer.open(file, profile = if (setup == null) "ros2" else "", library = if (setup == null) "fpv_labs/1.0" else "stateaction/stera_recorder/sa-51")) {
@@ -855,8 +863,7 @@ class MCAPDatasetWriter(
                 closeH264Capture(if (failure != null) "failed" else "aborted", failure ?: "recording_ended_without_stop")
             }
             // Finalize MCAP
-            mcapWriter?.finish()
-            mcapWriter = null
+            finishContainer()
 
             if (!file.exists() || file.length() == 0L) {
                 return Triple(false, null, "session_data.mcap is empty or missing")
@@ -872,6 +879,18 @@ class MCAPDatasetWriter(
         }
     }
 
+    /** Finishes the MCAP (flush + container fsync + directory sync) and records the durability proof; rethrows any failure. */
+    private fun finishContainer() {
+        val writer = mcapWriter ?: return
+        try {
+            writer.finish()
+        } finally {
+            containerDurable = writer.containerDurable
+            sessionDirectorySynced = writer.sessionDirectorySynced
+            mcapWriter = null
+        }
+    }
+
     override fun finalize() {
         if (h264Writer?.closed == false) {
             val failure = getWriteFailure()
@@ -881,7 +900,7 @@ class MCAPDatasetWriter(
             frameLogWriter?.flush(); frameLogWriter?.close(); frameLogWriter = null
             systemLogWriter?.flush(); systemLogWriter?.close(); systemLogWriter = null
             writeEndOfSessionMessages()
-            mcapWriter?.finish(); mcapWriter = null
+            finishContainer()
             h264Writer = null
             freeStorageAfterBytes = sessionDir?.usableSpace ?: 0L
             isInitialized = false

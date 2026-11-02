@@ -17,6 +17,20 @@ of stream ≤ 10 s, each clipped to the time left). READY is published only afte
 | `FINALIZING_METADATA` | provisional (`quarantined`) sidecar already on disk; final sidecar written atomically and read back |
 | `FINALIZED`           | only when the container is closed and the final sidecar is read back with its random token          |
 
+Container durability: `MCAPWriter.finish()` flushes its buffer and fsyncs the underlying file descriptor before closing,
+then forces the session directory entry. The sidecar says `container_fsync` and `session_directory_fsync`
+(`forced`, `unsupported_by_filesystem` or `not_attempted`; an unsupported directory sync is reported, never claimed).
+A failed or missing sync means `unclosed`, quarantine and an error ack, never `FINALIZED`. The journal/sidecar fsync alone
+is not container durability. `power_loss_qualified` stays `false`: physical power-loss behaviour is not qualified.
+
+The provisional sidecar, container close/zip and final sidecar run on bounded workers (`BoundedPhaseRunner`; caps 10 s,
+15 s, 10 s, all clipped to the 45 s budget). Uninterruptible OS I/O cannot be cancelled, so on timeout the stop reports
+uncertain (latch, quarantine, no closed ack), the late worker is cancelled before any publishing step and `dispose` keeps
+the latch while it still runs. The recorder's own quarantine write after a timeout is ordinary file I/O and is not bounded.
+An invalid capture (for example zero RGB frames) is `failed`/quarantined even when the container closed cleanly, and its
+journal is never advanced to `FINALIZED`. Producers are gated off before the first stop journal write, and any exception
+before the writer barrier completes sets the uncertain latch.
+
 Any exception, timeout or process death leaves the journal at its last phase. A writer-barrier timeout or a thread
 that outlives its bounded join sets an in-process latch: no new Start until the session is disposed with both threads
 joined. Unbounded `Thread.join` calls in the session and IMU paths are now bounded.
@@ -43,7 +57,7 @@ with a non-final or unreadable journal, or a container without a sidecar, gets `
 (`admission=never_automatic`). Originals are never rewritten, repaired, hashed, uploaded or deleted. Only an explicit
 user cancel deletes a session (unchanged). `SalvageService` is an explicit, not yet UI-exposed operation: it byte-copies a
 quarantined session into `salvage_<name>_<id>/`, records the SHA-256 of every original and copy, derives a new
-recording identity from those hashes and declares `salvaged_unverified`, `auto_admit=false`. This hash is salvage
+recording identity from those hashes (parent directory fsynced after the rename and reported as `parentDirectorySynced`; false means the filesystem could not force it) and declares `salvaged_unverified`, `auto_admit=false`. This hash is salvage
 identity only, not the SA-18 manifest.
 
 ## Evidence

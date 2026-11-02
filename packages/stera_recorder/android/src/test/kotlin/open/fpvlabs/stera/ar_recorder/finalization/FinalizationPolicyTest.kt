@@ -105,6 +105,7 @@ class FinalizationPolicyTest {
         val mcapRecord = manifest.getJSONArray("files").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.first { it.getString("name").endsWith(".mcap") } }
         assertEquals(expected, mcapRecord.getString("sha256"))
         assertEquals(expected, mcapRecord.getString("copy_sha256"))
+        assertTrue(result.parentDirectorySynced) // rename's parent entry forced (supported on this filesystem)
         assertEquals(result.derivedRecordingId, again.derivedRecordingId) // identity is a function of original bytes
         assertNotEquals(result.directory, again.directory)
         assertTrue(base.listFiles()!!.none { it.name.startsWith(".salvage_tmp_") })

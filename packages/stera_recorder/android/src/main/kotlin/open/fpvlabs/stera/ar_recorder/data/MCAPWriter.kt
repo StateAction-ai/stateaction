@@ -1,6 +1,7 @@
 package open.fpvlabs.stera.ar_recorder.data
 
 import java.io.File
+import open.fpvlabs.stera.ar_recorder.finalization.AtomicFiles
 import java.io.FileOutputStream
 import java.io.BufferedOutputStream
 import java.nio.ByteBuffer
@@ -62,6 +63,18 @@ class MCAPWriter {
     )
 
     private var outputStream: BufferedOutputStream? = null
+    /** The file stream under [outputStream]; finish() forces its bytes to storage (fsync) before the container counts as closed. */
+    private var fileStream: FileOutputStream? = null
+    private var containerFile: File? = null
+    /**
+     * Container durability seam. Production uses a plain fsync (FileDescriptor.sync) of the underlying descriptor); tests inject
+     * faults or record ordering. A throwing hook fails finish(), so the take can never be reported closed.
+     */
+    @Volatile var containerSync: (FileOutputStream) -> Unit = { it.fd.sync() }
+    /** Result of the last directory sync after the container sync: true forced, false unsupported by the filesystem, null not attempted. */
+    @Volatile var sessionDirectorySynced: Boolean? = null; private set
+    /** True only after the container bytes were flushed and fsynced in finish(). */
+    @Volatile var containerDurable: Boolean = false; private set
     private var offset: Long = 0
     private var messageCount: Long = 0
     private var messageStartTime: Long = Long.MAX_VALUE
@@ -96,7 +109,10 @@ class MCAPWriter {
     @Synchronized fun open(file: File, profile: String = "ros2", library: String = "fpv_labs"): Boolean {
         if (outputStream != null || isFinalized) return false
         return try {
-            outputStream = BufferedOutputStream(FileOutputStream(file))
+            val raw = FileOutputStream(file)
+            fileStream = raw
+            containerFile = file
+            outputStream = BufferedOutputStream(raw)
             offset = 0
 
             // Magic
@@ -110,7 +126,9 @@ class MCAPWriter {
             true
         } catch (e: Exception) {
             try { outputStream?.close() } catch (_: Exception) {}
+            try { fileStream?.close() } catch (_: Exception) {}
             outputStream = null
+            fileStream = null
             println("Failed to open MCAP file: ${e.message}")
             false
         }
@@ -327,11 +345,18 @@ class MCAPWriter {
         // Trailing magic
         writeRaw(MAGIC)
 
+        // Durability: flush the buffered bytes into the file, then fsync the underlying descriptor BEFORE close, so the
+        // footer and closing magic are on storage (not just the page cache) before anything reports the container closed.
         os.flush()
+        val raw = checkNotNull(fileStream) { "MCAP container has no syncable file stream; refusing a silent no-op durability claim" }
+        containerSync(raw)
+        containerDurable = true
         os.close()
         outputStream = null
+        containerFile?.parentFile?.let { sessionDirectorySynced = AtomicFiles.syncDirectoryReporting(it) }
         } catch (e: Exception) {
             finishFailure = e
+            containerDurable = false
             try { os.close() } catch (close: Exception) { e.addSuppressed(close) }
             outputStream = null
             throw e

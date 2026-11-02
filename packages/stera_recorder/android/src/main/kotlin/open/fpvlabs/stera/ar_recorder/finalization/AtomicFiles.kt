@@ -44,4 +44,19 @@ internal object AtomicFiles {
             // Some filesystems cannot open a directory for sync; the file fsync above already happened.
         }
     }
+
+    /**
+     * Directory fsync that reports the truth: true = the directory entry was forced to storage, false = the
+     * filesystem cannot open/force a directory (durability of the entry is then NOT claimed). An I/O error while
+     * forcing a directory that did open is thrown.
+     */
+    fun syncDirectoryReporting(dir: File): Boolean {
+        val channel = try {
+            java.nio.channels.FileChannel.open(dir.toPath(), StandardOpenOption.READ)
+        } catch (_: Exception) {
+            return false
+        }
+        channel.use { it.force(true) }
+        return true
+    }
 }
