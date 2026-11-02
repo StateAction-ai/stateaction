@@ -58,6 +58,22 @@ services:
         sync: false
       - key: SUPPORTED_RGB_PROFILES
         value: h264_mcap_v1
+      # Job admission (SA-25, web only). The permanent input identity recorded on every
+      # admitted job. Backend, code revision, worker image spec digest and config digest are
+      # release inputs the operator supplies (prompted, never defaulted; preflight refuses to
+      # start without them). The model digest is the accepted CPU model pin: MediaPipe Hand
+      # Landmarker (full, float16, task bundle v1, Apache-2.0) as pinned by the SA-30/SA-61
+      # hand_model.json manifest.
+      - key: PROCESSING_EXECUTION_BACKEND
+        sync: false # local | modal
+      - key: PROCESSING_CODE_REVISION
+        sync: false
+      - key: PROCESSING_IMAGE_SPEC_SHA256
+        sync: false
+      - key: PROCESSING_CONFIG_SHA256
+        sync: false
+      - key: PROCESSING_MODEL_SHA256
+        value: fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1
       # Authentication (web only; SA-15 owns the implementation, not yet merged). One Better
       # Auth instance. BETTER_AUTH_URL is this service's public HTTPS origin (the onrender.com
       # or custom-domain URL, known only after creation). The secret is generated per

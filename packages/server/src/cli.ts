@@ -1,6 +1,7 @@
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import { jobsConfigFromEnv } from "./jobs/config.js";
 import { issueControllerCapability } from "./jobs/credentials.js";
 import {
   PutObjectCommand,
@@ -63,6 +64,10 @@ if (command === "migrate") {
   // listens. Database readiness is reported by /api/v1/health, not startup.
   serverConfig();
   admissionConfigFromEnv(process.env);
+  // Hosted/development processes must declare the permanent job input identity
+  // (execution backend, code revision, image spec, model and config digests).
+  // Local development may start without it; the job routes then fail closed.
+  if (env !== "local") jobsConfigFromEnv(process.env);
   console.log(`Preflight passed (${env})`);
 } else if (command === "storage-init") {
   const config = serverConfig();
