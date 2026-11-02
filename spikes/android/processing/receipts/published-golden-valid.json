@@ -1,0 +1,335 @@
+{
+  "browser_checks": {
+    "clip-000": {
+      "browser": {
+        "chrome": "/usr/bin/google-chrome",
+        "flags": ["--no-sandbox", "--enable-unsafe-swiftshader"],
+        "headless": true,
+        "render_backend": "webgl"
+      },
+      "clip": "artifacts/golden-final/clip-000",
+      "initial_load_seconds": 7.14,
+      "limitations": [
+        "Headless Linux Chrome with software WebGL only; no Safari/Firefox/handset browser.",
+        "Loopback HTTP; no signed URL expiry, auth, R2, React remount or Next.js bundle.",
+        "performance.memory is JS heap only, not WASM/GPU memory.",
+        "Overlay alignment requires visual readback of the saved screenshots."
+      ],
+      "playback": {
+        "cursor_advanced_to_ns": "200000002",
+        "errors_after_playback": [],
+        "js_heap_after_playback": {
+          "totalJSHeapSize": 17171330,
+          "usedJSHeapSize": 7122346
+        },
+        "pause_state": "paused"
+      },
+      "resource_loads": [
+        {
+          "bytes": 249819,
+          "decodedBytes": 249519,
+          "name": "/node_modules/@rerun-io/web-viewer/index.js"
+        },
+        {
+          "bytes": 238236,
+          "decodedBytes": 237936,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer.js"
+        },
+        {
+          "bytes": 66876516,
+          "decodedBytes": 66876216,
+          "name": "/node_modules/@rerun-io/web-viewer/re_viewer_bg.wasm"
+        },
+        {
+          "bytes": 635,
+          "decodedBytes": 335,
+          "name": "/favicon.ico"
+        },
+        {
+          "bytes": 60786,
+          "decodedBytes": 60486,
+          "name": "/artifacts/golden-final/clip-000/viewer.rrd"
+        }
+      ],
+      "rrd_bytes": 60486,
+      "rrd_sha256": "e4f63094341fe3acc5514eccf189d3524a9eac146a4490c2fb7818109277b3b3",
+      "screenshots_visually_inspected": true,
+      "seconds": 13.862,
+      "snapshots": [
+        {
+          "clip_time_ns": "133332000",
+          "decode_calls": 10,
+          "decoded_frames": 9,
+          "decoder_configs": [
+            {
+              "codec": "avc1.42C00A",
+              "codedHeight": 48,
+              "codedWidth": 64,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.42C00A",
+              "codedHeight": 48,
+              "codedWidth": 64,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "forward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17155398,
+            "usedJSHeapSize": 6495850
+          },
+          "screenshot": "browser-forward.png",
+          "screenshot_sha256": "78c5f7cc7dd53110ee34920820ae4596086ce7bfa85c30cef80eab33f069af28",
+          "source_clip_pts_us": "133332",
+          "source_frame_id": "4",
+          "visual_readback": "SMPTE-style colour-bar codec fixture at 64x48 rendered via WebCodecs; no hand overlay drawn and both model-relative panes empty, as expected for a hand-free fixture",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 133332
+        },
+        {
+          "clip_time_ns": "66666000",
+          "decode_calls": 15,
+          "decoded_frames": 11,
+          "decoder_configs": [
+            {
+              "codec": "avc1.42C00A",
+              "codedHeight": 48,
+              "codedWidth": 64,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.42C00A",
+              "codedHeight": 48,
+              "codedWidth": 64,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            },
+            {
+              "codec": "avc1.42C00A",
+              "codedHeight": 48,
+              "codedWidth": 64,
+              "hardwareAcceleration": "no-preference",
+              "optimizeForLatency": true
+            }
+          ],
+          "direction": "backward",
+          "entities": [
+            "/model_relative_3d/left",
+            "/model_relative_3d/right",
+            "/notes/model_relative_3d",
+            "/rgb",
+            "/rgb/hands/left",
+            "/rgb/hands/right",
+            "/__properties"
+          ],
+          "handedness": [null, null],
+          "hands_detected": 0,
+          "js_heap": {
+            "totalJSHeapSize": 17159937,
+            "usedJSHeapSize": 6675665
+          },
+          "screenshot": "browser-backward.png",
+          "screenshot_sha256": "62a3d38f5c3ae557c727d8db099fec7eb5334ae1e86bfba98be0901ced210bb4",
+          "source_clip_pts_us": "66666",
+          "source_frame_id": "2",
+          "visual_readback": "Same fixture at an earlier frame; decoded image shown, no overlays",
+          "webcodecs_source_delta_us": 0,
+          "webcodecs_timestamp_us": 66666
+        }
+      ],
+      "status": "passed",
+      "stop_removed_canvas": true,
+      "viewer_js_sha256": "0fd384f7ab2528ef02f45ff3ff181bb00a98d2cd60f43faace990aee8656dd21",
+      "viewer_version": "0.41.0",
+      "viewer_wasm_bytes": 66876216,
+      "viewer_wasm_sha256": "f2831500e6ca8645fbfc94f4ffff78e62a4eb8d864afd84299f9188b9b577cb2"
+    }
+  },
+  "probe_receipt": {
+    "clip_policy": {
+      "clip_pts": "source_pts - first_included_source_pts",
+      "max_clip_seconds": 2.0,
+      "split": "IDR only",
+      "time_base": [1, 1000000]
+    },
+    "clips": [
+      {
+        "directory": "clip-000",
+        "files": {
+          "frame-map.jsonl": {
+            "bytes": 3345,
+            "sha256": "4aaa02c576888a812965c06401dc32b4a0ef2e17fb8c2f757b83da466f86400e"
+          },
+          "hands.npz": {
+            "bytes": 1563,
+            "sha256": "9f1c6d54ccf5326789face0eb2cb34308c48458ff2874214fdb6a72196e126d0"
+          },
+          "rgb.mp4": {
+            "bytes": 2183,
+            "sha256": "df8c73c68003cc75368bad3edf8bf349a1a502defd8a2dbd5cc38cf44d7f4e96"
+          },
+          "viewer.rrd": {
+            "bytes": 60486,
+            "sha256": "e4f63094341fe3acc5514eccf189d3524a9eac146a4490c2fb7818109277b3b3"
+          }
+        },
+        "first_source_frame_id": "0",
+        "frames": 5,
+        "frames_with_hands": 0,
+        "hand_observations": 0,
+        "last_source_frame_id": "5",
+        "mp4_independent_decode": {
+          "pixels_exact": true,
+          "pts_exact": true,
+          "vcl_nal_bytes_exact": true
+        },
+        "raster": [64, 48],
+        "source_pts_origin": "0"
+      }
+    ],
+    "decode": {
+      "decode_seconds": 0.0008,
+      "decoded_frames": 5,
+      "decoded_order_equals_source_order": true,
+      "decoded_source_frame_ids": ["0", "1", "2", "4", "5"],
+      "decoder": "ffmpeg h264 (PyAV), one sequential pass, thread_count=1, err_detect=explode"
+    },
+    "environment": {
+      "cpu_count": 20,
+      "delegate": "CPU",
+      "ffmpeg": {
+        "libavcodec": "(63, 1, 102)",
+        "libavdevice": "(63, 1, 102)",
+        "libavfilter": "(12, 1, 102)",
+        "libavformat": "(63, 1, 102)",
+        "libavutil": "(61, 1, 102)",
+        "libswresample": "(7, 1, 102)",
+        "libswscale": "(10, 1, 102)"
+      },
+      "implementation": "CPython",
+      "machine": "x86_64",
+      "packages": {
+        "av": "19.0.2",
+        "mcap": "1.6.0",
+        "mediapipe": "1.2.0",
+        "numpy": "2.5.4",
+        "psutil": "7.2.2",
+        "rerun-sdk": "0.41.0"
+      },
+      "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+      "python": "3.12.13"
+    },
+    "inference": {
+      "frames": 5,
+      "frames_with_hands": 0,
+      "hand_observations": 0,
+      "metric_accuracy_validated": false,
+      "ms_per_frame": {
+        "max": 15.16,
+        "mean": 14.59,
+        "p50": 14.44,
+        "p95": 15.06
+      },
+      "note": "Detection counts are observations only, not anatomical or metric accuracy."
+    },
+    "input_class": "published_golden_fixture",
+    "model": {
+      "bytes": 7819105,
+      "config": {
+        "min_hand_detection_confidence": 0.5,
+        "min_hand_presence_confidence": 0.5
+      },
+      "delegate": "CPU",
+      "file": "hand_landmarker.task",
+      "license": "Apache-2.0",
+      "license_evidence": "Official model card PDF, 'LICENSED UNDER: Apache License, Version 2.0' (re-read 2026-11-01)",
+      "model_card_sha256": "43127ff8a92e22717f0d8c30dab3efef4641a29cbf50b15ae3de001be94ab76b",
+      "model_card_url": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20Hand%20Tracking%20%28Lite_Full%29%20with%20Fairness%20Oct%202021.pdf",
+      "name": "MediaPipe Hand Landmarker (full), float16, task bundle version 1",
+      "num_hands": 2,
+      "outputs": "21 normalized image landmarks + 21 model-relative 3D (hand_world_landmarks, metres, hand-centred) + handedness per detected hand",
+      "overview_url": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
+      "redistribution": "Not committed; fetched to ~/.cache/mediapipe and hash-verified (fetch_model.sh).",
+      "running_mode": "IMAGE",
+      "runtime": "mediapipe==1.2.0 Python Tasks API, CPU delegate",
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    },
+    "probe": "SA-61 isolated CPU hands + Rerun probe (not the production worker)",
+    "resources": {
+      "after_model_load_mib": 243.1,
+      "after_strict_gate_mib": 167.3,
+      "end_mib": 247.6,
+      "peak_process_rss_mib": 283.5,
+      "start_mib": 166.9,
+      "strict_gate_seconds": 0.008,
+      "wall_seconds": 0.327
+    },
+    "rrd_total_bytes": 60486,
+    "semantics": {
+      "hand_axis": "detection order within a frame, NOT tracked identity",
+      "handedness": "model label/score per detection; not per-joint confidence or visibility",
+      "image_landmarks_px": "[frames, 2, 21, 2] in the encoded source raster; NaN + mask=False when absent",
+      "model_relative_landmarks_m": "[frames, 2, 21, 3] model-relative estimate, NOT camera/world/metric",
+      "rerun_timelines": {
+        "clip_time": "duration ns = clip_pts_us * 1000",
+        "source_frame": "original source_frame_id"
+      },
+      "unknown": [
+        "camera/IMU synchronization",
+        "per-joint visibility",
+        "occlusion",
+        "depth",
+        "metric accuracy"
+      ]
+    },
+    "source": {
+      "bytes": 51167,
+      "channel_counts": {
+        "/camera/rgb/video": 5,
+        "/stateaction/capture_profile": 1,
+        "/stateaction/clocks": 1,
+        "/stateaction/close": 1,
+        "/stateaction/frame_events": 17,
+        "/stateaction/imu/accel": 2,
+        "/stateaction/imu/gyro": 2,
+        "/stateaction/inventory": 1,
+        "/stateaction/sensor_events": 2,
+        "/tracking/pose": 1
+      },
+      "close_outcome": "completed",
+      "encoder_pts_us": ["0", "33333", "66666", "133332", "166665"],
+      "encoder_time_base": [1, 1000000],
+      "errors": [],
+      "frame_event_counts": {
+        "acquired": 6,
+        "dropped": 1,
+        "submitted": 5,
+        "written": 5
+      },
+      "idr_count": 1,
+      "outcome": "accept",
+      "reader": "packages/contracts/capture/conformance/python/capture_conformance.py",
+      "sha256": "47b9653485b1b63020d8138faf165765622f6dd3ba75a57af435ebc6d7f7772e",
+      "source_frame_ids": ["0", "1", "2", "4", "5"],
+      "unresolved_frames": 0,
+      "video_messages": 5
+    },
+    "status": "passed"
+  }
+}

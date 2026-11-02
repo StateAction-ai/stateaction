@@ -1,0 +1,29 @@
+[project]
+name = "stateaction-sa61-cpu-rerun-probe"
+version = "0.1.0"
+description = "SA-61 isolated CPU hands + Rerun 0.41.0 probe over strict h264_mcap_v1 captures"
+requires-python = "==3.12.*"
+# The contract gate, indexed-MCAP validator and timeline/H.264 adapters are stdlib-only. The unit
+# tests add only the official `mcap` reader (`container` group) for independent cross-checks. The
+# real probe syncs the locked `cpu` group.
+dependencies = []
+
+[dependency-groups]
+cpu = [
+  "rerun-sdk==0.41.0",
+  "mediapipe==1.2.0",
+  "av==19.0.2",
+  "numpy==2.5.4",
+  "psutil==7.2.2",
+  "mcap==1.6.0",
+]
+container = ["mcap==1.6.0"]
+dev = ["ruff==0.17.3"]
+
+[tool.uv]
+required-version = "==0.13.6"
+package = false
+default-groups = []
+
+# Ruff runs from the repository root with workers/processing/pyproject.toml, exactly like the
+# pre-commit staged-content hook (project.json format target).
