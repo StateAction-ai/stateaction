@@ -1,0 +1,57 @@
+{
+  "name": "android-capture-spike",
+  "root": "spikes/android/capture",
+  "projectType": "application",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/harness/**/*",
+        "{workspaceRoot}/scripts/android_personal_device.py",
+        "{workspaceRoot}/.python-version"
+      ],
+      "options": {
+        "command": "python3 -m unittest discover -s tests -v",
+        "cwd": "spikes/android/capture/harness",
+        "env": {
+          "PYTHONPATH": ".:tests:../../../../scripts"
+        }
+      }
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "inputs": ["{projectRoot}/harness/**/*"],
+      "options": {
+        "command": "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml spikes/android/capture/harness"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "{projectRoot}/harness/**/*",
+        "{projectRoot}/*.json",
+        "{projectRoot}/*.md"
+      ],
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml spikes/android/capture/harness",
+          "pnpm exec prettier --check spikes/android/capture/project.json spikes/android/capture/app/project.json spikes/android/capture/README.md spikes/android/capture/QUALIFICATION.md docs/validation/sa-60-emulator-qualification.json"
+        ],
+        "parallel": false
+      }
+    },
+    "android-build": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "dependsOn": [],
+      "options": {
+        "commands": [
+          "spikes/android/capture/gradlew -p spikes/android/capture :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon --console=plain",
+          "python3 spikes/android/capture/harness/capture_verify.py spikes/android/capture/app/build/spike-fixtures/native-writer.mcap --require container,video --output artifacts/android-capture-spike/jvm-native-writer-verification.json",
+          "cd spikes/android/capture/harness && PYTHONPATH=.:tests:../../../../scripts python3 -m unittest discover -s tests -v"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}
