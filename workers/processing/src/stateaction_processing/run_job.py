@@ -102,7 +102,7 @@ def _strict_origin(raw: object) -> str:
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """The Bearer capability must never follow a redirect to another origin."""
 
-    def redirect_request(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
         return None
 
 

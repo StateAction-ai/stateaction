@@ -591,6 +591,35 @@ test("a storage outage before the manifest EOF is transient until the finite wal
   }
 });
 
+test("a manifest outage that outlasts the wall is rejected in the SAME invocation (wall re-checked after the failure)", async () => {
+  const s = await scenario();
+  try {
+    const { manifest, doc } = await uploadResult(s);
+    await closeOutputs(s.accept, {
+      jobId: s.job.jobId,
+      invocationNonce: s.job.nonce,
+      outcome: "succeeded",
+    });
+    await submitCandidate(s.accept, candidateBody(s.job, manifest, doc));
+    const slow = {
+      ...s.accept,
+      reader: {
+        read: async () => {
+          await new Promise((r) => setTimeout(r, 2300));
+          throw new Error("storage down");
+        },
+      },
+      config: { ...s.accept.config, verifyWallSeconds: 2 },
+    };
+    const out = await advanceResult(slow, s.job.jobId);
+    assert.equal(out?.candidateStatus, "rejected");
+    assert.equal(out?.reasonCode, "verification_timeout");
+    assert.equal((await state(s.db, s.job.jobId)).state, "failed");
+  } finally {
+    await s.db.close();
+  }
+});
+
 test("per-object hashing is capped by the remaining verification wall and progress is durable and exact", async () => {
   const s = await scenario();
   try {
@@ -656,6 +685,64 @@ test("the legacy helper and the application role cannot fabricate acceptance fac
       acceptProcessingResult(s.db.app, { ...input, clips: [] }),
     );
     assert.equal((await state(s.db, s.job.jobId)).state, "result_pending");
+  } finally {
+    await s.db.close();
+  }
+});
+
+test("a verified candidate's clip plan and checks are immutable on EVERY transition out of verified", async () => {
+  const s = await scenario();
+  try {
+    const { manifest, doc } = await uploadResult(s);
+    await closeOutputs(s.accept, {
+      jobId: s.job.jobId,
+      invocationNonce: s.job.nonce,
+      outcome: "succeeded",
+    });
+    await submitCandidate(s.accept, candidateBody(s.job, manifest, doc));
+    await advanceResult(s.accept, s.job.jobId); // verified; evidence still missing
+    const snapshot = async () =>
+      (
+        await s.db.owner.query(
+          `SELECT c.status, c.clip_plan, c.verified_checks, c.verified_at, c.reason_code, c.decided_at,
+                  j.state, (SELECT count(*)::int FROM clips k WHERE k.job_id = j.id) AS clips
+           FROM job_result_candidates c JOIN jobs j ON j.id = c.job_id WHERE c.job_id = $1`,
+          [s.job.jobId],
+        )
+      ).rows[0];
+    const before = await snapshot();
+    assert.equal(before.status, "verified");
+    assert.ok(Array.isArray(before.clip_plan) && before.clip_plan.length > 0);
+    for (const [status, extra] of [
+      ["accepted", ", decided_at = now()"],
+      [
+        "rejected",
+        ", reason_code = 'output_hash_mismatch', decided_at = now()",
+      ],
+      ["verified", ""],
+    ] as const)
+      await assert.rejects(
+        s.db.app.query(
+          `UPDATE job_result_candidates SET status = '${status}', clip_plan = '[]'::jsonb${extra} WHERE job_id = $1`,
+          [s.job.jobId],
+        ),
+        /clip plan is write-once|SAC01/,
+        `verified -> ${status} must not alter the plan`,
+      );
+    assert.deepEqual(await snapshot(), before);
+    await assert.rejects(
+      s.db.app.query(
+        "UPDATE job_result_candidates SET status = 'accepted', verified_checks = '[]'::jsonb, decided_at = now() WHERE job_id = $1",
+        [s.job.jobId],
+      ),
+      /write-once|SAC01/,
+    );
+    assert.deepEqual(await snapshot(), before);
+    // The legitimate path is unaffected: evidence then acceptance with the unchanged plan.
+    await evidence(s.db, s.job.jobId);
+    await advanceResult(s.accept, s.job.jobId);
+    const st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.clips], ["succeeded", 1]);
   } finally {
     await s.db.close();
   }

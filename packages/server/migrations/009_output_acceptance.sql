@@ -284,7 +284,7 @@ BEGIN
   IF OLD.status = 'verified' AND NEW.verified_checks IS DISTINCT FROM OLD.verified_checks THEN
     PERFORM public.catalog_raise('SAC01', 'the verified checks are write-once');
   END IF;
-  IF OLD.status = 'verified' AND NEW.status = 'verified' AND NEW.clip_plan IS DISTINCT FROM OLD.clip_plan THEN
+  IF OLD.status = 'verified' AND NEW.clip_plan IS DISTINCT FROM OLD.clip_plan THEN
     PERFORM public.catalog_raise('SAC01', 'the verified clip plan is write-once');
   END IF;
   RETURN NEW;

@@ -37,7 +37,10 @@ before(async () => {
     `UPDATE "user" SET name = 'Maya Collector' WHERE id = $1`,
     [actors.collector],
   );
-  processing = await processedRecording(db.app, actors, 1); // result_pending
+  // Exactly ONE nonterminal job can hold the single real global slot, and the
+  // fixture step retires a previous fixture holder through the real
+  // transitions. So the terminal states are built first, in order, and the
+  // in-flight recording is created LAST so it is the genuine slot holder.
   completed = await processedRecording(db.app, actors, 2);
   await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
     jobId: completed.jobId,
@@ -52,6 +55,7 @@ before(async () => {
      WHERE id = $1`,
     [failed.jobId],
   );
+  processing = await processedRecording(db.app, actors, 1); // result_pending, holds the slot
 });
 after(async () => {
   await closeOwnerPools();

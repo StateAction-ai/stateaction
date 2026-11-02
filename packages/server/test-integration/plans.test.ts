@@ -229,6 +229,20 @@ const walk = (node: PlanNode, out: PlanNode[] = []) => {
   return out;
 };
 
+/** Plan outline with estimated vs actual cardinalities, for failure diagnosis. */
+const outline = (
+  node: PlanNode & {
+    "Plan Rows"?: number;
+    "Actual Rows"?: number;
+    "Actual Loops"?: number;
+  },
+  depth = 0,
+): string =>
+  [
+    `${"  ".repeat(depth)}${node["Node Type"]} ${node["Relation Name"] ?? ""} ${node["Index Name"] ?? ""} est=${node["Plan Rows"]} actual=${node["Actual Rows"]} loops=${node["Actual Loops"]}`,
+    ...(node.Plans ?? []).map((c) => outline(c, depth + 1)),
+  ].join("\n");
+
 test("bounded catalog reads use indexes and LIMIT on a large catalog", async () => {
   const reads: Record<string, [string, unknown[]]> = {
     customerDatasetGrid: [
@@ -276,7 +290,7 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
     assert.deepEqual(
       seq.map((n) => n["Relation Name"]),
       [],
-      `${name} must not scan whole catalog tables: ${seq.map((n) => n["Relation Name"]).join(",")}`,
+      `${name} must not scan whole catalog tables: ${seq.map((n) => n["Relation Name"]).join(",")}\n${outline(plan.Plan)}`,
     );
     assert.ok(
       nodes.some((n) => n["Node Type"] === "Limit"),

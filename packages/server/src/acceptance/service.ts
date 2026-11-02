@@ -392,6 +392,14 @@ async function verifyCandidate(
   // One finite wall for the whole verification, measured from candidate receipt
   // and checked at entry and after every failed or slow step, so an outage
   // before the manifest EOF cannot keep a candidate provisional forever.
+  // A transient storage failure is retried by the next invocation only while the
+  // wall holds; the wall is re-checked AFTER the failure, so the invocation in
+  // which it expires reports the deterministic outcome itself. The wall is
+  // enforced between steps: one in-flight read can overrun it by at most its own
+  // timeout (verifyObjectTimeoutMs for objects; the reader's own bound for the
+  // manifest), so this is a finite bound, not a hard 25 s limit.
+  const transientOrExpired = (): Verification =>
+    Date.now() > wall ? reject("verification_timeout") : { kind: "incomplete" };
   const sliceEnd = Date.now() + config.verifySliceMs;
   if (Date.now() > wall) return reject("verification_timeout");
   const files = (
@@ -440,7 +448,7 @@ async function verifyCandidate(
   } catch (error) {
     if (error instanceof ObjectTooLargeError)
       return reject("manifest_too_large");
-    return { kind: "incomplete" };
+    return transientOrExpired();
   }
   if (
     bytes.byteLength !== Number(manifest.size_bytes) ||
@@ -527,11 +535,10 @@ async function verifyCandidate(
           return reject("output_hash_mismatch", f.slot);
       } catch (error) {
         if (error instanceof ObjectHashError) {
-          if (error.code === "object_read_failed")
-            return { kind: "incomplete" };
+          if (error.code === "object_read_failed") return transientOrExpired();
           return reject(error.code, f.slot);
         }
-        return { kind: "incomplete" };
+        return transientOrExpired();
       }
     }
     await pool.query(
