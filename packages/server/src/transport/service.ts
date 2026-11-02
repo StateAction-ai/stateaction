@@ -349,10 +349,29 @@ export async function initializeTransport(
       [file.id, file.transport_epoch, upload.uploadId, expires],
     );
     if (!updated.rowCount && created && !adopted) {
-      // Lost a race after creating: retire the redundant upload we made.
-      await deps.provider
-        .abortUpload(file.object_key, created.uploadId)
-        .catch(() => undefined);
+      // Lost the persist. Another initializer may have adopted the very upload
+      // we created (our lease expired mid-creation, it listed the exact key and
+      // persisted it). Provider IDs are opaque: R2 returns a create-time ID and
+      // list-time IDs that differ yet address the same upload, so ID inequality
+      // alone never proves an orphan. Retire ours only when the exact-key
+      // listing shows both the persisted ID and our ID as separate uploads;
+      // anything ambiguous is left to the bounded lifecycle / SA-21 reconcile.
+      const persisted = (
+        await deps.pool.query<{ provider_upload_id: string | null }>(
+          "SELECT provider_upload_id FROM files WHERE id = $1",
+          [file.id],
+        )
+      ).rows[0]?.provider_upload_id;
+      if (persisted && persisted !== created.uploadId) {
+        const listed = await deps.provider
+          .listUploadsForKey(file.object_key)
+          .catch(() => []);
+        const ids = new Set(listed.map((u) => u.uploadId));
+        if (ids.has(persisted) && ids.has(created.uploadId))
+          await deps.provider
+            .abortUpload(file.object_key, created.uploadId)
+            .catch(() => undefined);
+      }
     }
   } finally {
     // The claim only serializes the in-flight provider call; a retry after any

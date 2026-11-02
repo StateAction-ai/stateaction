@@ -210,6 +210,126 @@ test("concurrent initializers create exactly one provider upload", async () => {
   evidence.concurrentInit = results;
 });
 
+/**
+ * Deterministic two-initializer race. A is held inside createUpload at a gate;
+ * its creation lease is expired; B then runs to completion. `holdAfterCreate`
+ * picks whether A's provider upload exists (and is adoptable by B) when B lists.
+ */
+async function leaseRace(holdAfterCreate: boolean, aliasCreateId = false) {
+  const request = await rq();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  let reached!: () => void;
+  const inCreate = new Promise<void>((resolve) => (reached = resolve));
+  const aborted: string[] = [];
+  let heldOnce = false;
+  const slowCreate = {
+    listUploadsForKey: (key: string) => faults.listUploadsForKey(key),
+    listParts: faults.listParts.bind(faults),
+    presignUploadPart: faults.presignUploadPart.bind(faults),
+    abortUpload: (key: string, uploadId: string) => {
+      aborted.push(uploadId);
+      return faults.abortUpload(key, uploadId);
+    },
+    async createUpload(key: string) {
+      if (heldOnce) return faults.createUpload(key);
+      heldOnce = true;
+      if (!holdAfterCreate) {
+        reached();
+        await gate;
+        return faults.createUpload(key);
+      }
+      const created = await faults.createUpload(key);
+      reached();
+      await gate;
+      // R2 reports a create-time ID that differs from the listed alias.
+      return aliasCreateId
+        ? { ...created, uploadId: `alias-${created.uploadId}` }
+        : created;
+    },
+  } as unknown as TransportDeps["provider"];
+  const a = allocateSourceUpload(
+    { ...deps, provider: slowCreate },
+    owner,
+    request,
+  );
+  const settled = a.then(
+    (plan) => plan,
+    (error: unknown) => error,
+  );
+  await Promise.race([
+    inCreate,
+    new Promise((_, rej) =>
+      setTimeout(() => rej(new Error("A never reached createUpload")), 10_000),
+    ),
+  ]);
+  // A's lease lapses while it is still talking to the provider.
+  await db.owner.query(
+    "UPDATE file_transport_claims SET expires_at = now() - interval '1 second' WHERE file_id = (SELECT id FROM files WHERE recording_id = $1 AND client_upload_id = $2)",
+    [request.recordingId, request.clientUploadId],
+  );
+  const planB = await allocateSourceUpload(deps, owner, request);
+  const afterB = await fileOf(request);
+  release();
+  const resultA = await Promise.race([
+    settled,
+    new Promise((_, rej) =>
+      setTimeout(() => rej(new Error("A did not settle")), 45_000),
+    ),
+  ]);
+  return { request, planB, afterB, resultA, aborted };
+}
+
+test("lease expiry: a creation adopted and persisted by a second initializer is never aborted by the first", async () => {
+  const { request, afterB, resultA, aborted } = await leaseRace(true);
+  assert.ok(afterB!.provider_upload_id, "B persisted the adopted upload");
+  const final = await fileOf(request);
+  assert.equal(final!.provider_upload_id, afterB!.provider_upload_id);
+  assert.equal(final!.state, "uploading");
+  assert.ok(
+    !aborted.includes(afterB!.provider_upload_id!),
+    "adopted ID aborted",
+  );
+  const live = await uploadsAt(final!.object_key);
+  assert.deepEqual(
+    live.map((u) => u.UploadId),
+    [final!.provider_upload_id],
+  );
+  assert.equal((resultA as { fileId?: string }).fileId, final!.id);
+  // The persisted upload is still usable: signing succeeds against it.
+  const signed = await signParts(deps, owner, final!.id, {
+    expectedTransportEpoch: 1,
+    partNumbers: [1],
+  });
+  assert.equal(signed.parts.length, 1);
+  evidence.leaseAdoption = { aborted, persisted: final!.provider_upload_id };
+});
+
+test("lease expiry: a truly different abandoned creation is still retired", async () => {
+  const { request, afterB, resultA, aborted } = await leaseRace(false);
+  const final = await fileOf(request);
+  assert.equal(final!.provider_upload_id, afterB!.provider_upload_id);
+  assert.equal(aborted.length, 1, "exactly the redundant upload is aborted");
+  assert.notEqual(aborted[0], final!.provider_upload_id);
+  const live = await uploadsAt(final!.object_key);
+  assert.deepEqual(
+    live.map((u) => u.UploadId),
+    [final!.provider_upload_id],
+  );
+  assert.equal((resultA as { fileId?: string }).fileId, final!.id);
+  evidence.leaseOrphan = { aborted, persisted: final!.provider_upload_id };
+});
+
+test("lease expiry: an R2-style create ID that differs from the adopted listed ID is not treated as an orphan", async () => {
+  const { request, afterB, resultA, aborted } = await leaseRace(true, true);
+  const final = await fileOf(request);
+  assert.equal(final!.provider_upload_id, afterB!.provider_upload_id);
+  assert.equal(aborted.length, 0, "no abort by raw ID inequality");
+  assert.equal((await uploadsAt(final!.object_key)).length, 1);
+  assert.equal((resultA as { fileId?: string }).fileId, final!.id);
+  evidence.leaseAlias = { aborted: aborted.length };
+});
+
 test("provider failures on sign and receipt corroboration are retryable and record nothing", async () => {
   const request = await rq(5);
   const plan = await allocateSourceUpload(deps, owner, request);
