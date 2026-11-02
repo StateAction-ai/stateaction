@@ -244,6 +244,63 @@
       }
     },
     {
+      "name": "trailing LF (portable end of input)",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot\n"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing CRLF",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot\r\n"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
+      "name": "trailing line separator",
+      "input": {
+        "document": {
+          "user": {
+            "id": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+            "email": "staff.pilot@example.test",
+            "name": "Pilot "
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/user/name"
+        ]
+      }
+    },
+    {
       "name": "control character",
       "input": {
         "document": {

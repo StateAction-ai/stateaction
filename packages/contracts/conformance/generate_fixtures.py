@@ -2527,6 +2527,24 @@ def profile_response_cases():
         ),
         bad("whitespace only", profile_user("   "), "schema_violation", "/user/name"),
         bad(
+            "trailing LF (portable end of input)",
+            profile_user("Pilot\n"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "trailing CRLF",
+            profile_user("Pilot\r\n"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
+            "trailing line separator",
+            profile_user("Pilot\u2028"),
+            "schema_violation",
+            "/user/name",
+        ),
+        bad(
             "control character",
             profile_user("Pi\u0007lot"),
             "schema_violation",
