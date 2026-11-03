@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import {
   ContractViolation,
+  HARDWARE_RGB_PROFILE,
+  SIMULATION_RGB_PROFILE,
   parseContract,
+  recordingCreateContractFor,
   requestSha256,
   type InventoryFile,
   type Recording,
   type RecordingCreateRequest,
+  type RecordingCreateRequestV2,
   type RecordingSealRequest,
+  type RecordingV2,
+  type SimulationProvenance,
 } from "@stateaction/contracts";
 import type pg from "pg";
 import { inTransaction, type Queryable } from "../catalog/catalog.js";
@@ -17,6 +23,7 @@ import {
   sealRequestSha256,
   SOURCE_MANIFEST_MAX_BYTES,
 } from "./inventory.js";
+import { simulatedCaptureInputsEnabled } from "./simulation.js";
 
 type Tx = pg.PoolClient;
 
@@ -43,8 +50,10 @@ export type ObjectReader = {
 export type AdmissionConfig = {
   /** Processing profile revision pinned on admitted jobs (explicit config). */
   processingProfileRevision: string;
-  /** RGB profiles the server accepts for processing. */
+  /** RGB profiles the server accepts for processing (hardware + simulation iff enabled). */
   supportedRgbProfiles: readonly string[];
+  /** SA-71: development-only acceptance of h264_mcap_simulation_v1. Default false. */
+  simulatedCaptureInputs?: boolean;
 };
 
 export type AdmissionDeps = {
@@ -67,13 +76,19 @@ export function admissionConfigFromEnv(
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean);
-  if (!profiles.length || profiles.some((p) => p !== "h264_mcap_v1"))
+  // The list names hardware profiles only; simulation is enabled solely by
+  // ALLOW_SIMULATED_CAPTURE_INPUTS in a local/development environment.
+  if (!profiles.length || profiles.some((p) => p !== HARDWARE_RGB_PROFILE))
     throw new Error(
       "Missing or invalid server setting: SUPPORTED_RGB_PROFILES",
     );
+  const simulated = simulatedCaptureInputsEnabled(env);
   return {
     processingProfileRevision: revision,
-    supportedRgbProfiles: profiles,
+    supportedRgbProfiles: simulated
+      ? [...profiles, SIMULATION_RGB_PROFILE]
+      : profiles,
+    ...(simulated ? { simulatedCaptureInputs: true } : {}),
   };
 }
 
@@ -135,16 +150,21 @@ async function recordingView(
   q: Tx | Queryable,
   recordingId: string,
   ownerUserId: string,
-): Promise<Recording | undefined> {
+): Promise<RecordingView | undefined> {
   const { rows } = await q.query<{
     id: string;
     client_recording_id: string;
     owner_user_id: string;
     status: Recording["status"];
     created: string;
+    rgb_profile: string;
+    simulation: SimulationProvenance | null;
+    admitted_simulation: SimulationProvenance | null;
   }>(
-    `SELECT id, client_recording_id, owner_user_id, status, ${TS.replace("%s", "created_at")} AS created
-     FROM recordings WHERE id = $1 AND owner_user_id = $2 AND deleted_at IS NULL`,
+    `SELECT r.id, r.client_recording_id, r.owner_user_id, r.status, ${TS.replace("%s", "r.created_at")} AS created,
+            r.rgb_profile, r.simulation, a.simulation AS admitted_simulation
+     FROM recordings r LEFT JOIN recording_admissions a ON a.recording_id = r.id AND a.outcome = 'admitted'
+     WHERE r.id = $1 AND r.owner_user_id = $2 AND r.deleted_at IS NULL`,
     [recordingId, ownerUserId],
   );
   const r = rows[0];
@@ -164,7 +184,7 @@ async function recordingView(
   const live = files.rows.filter(
     (f) => !["cancelled", "failed", "expired"].includes(f.state),
   );
-  return {
+  const base: Recording = {
     recordingId: r.id,
     clientRecordingId: r.client_recording_id,
     ownerUserId: r.owner_user_id,
@@ -182,18 +202,54 @@ async function recordingView(
       (role) => !live.some((f) => f.role === role && f.required),
     ),
   };
+  if (r.rgb_profile === SIMULATION_RGB_PROFILE) {
+    // Never a hardware-looking view: the admitted manifest declaration wins
+    // over the create-time marker once the recording is admitted.
+    const simulation = r.admitted_simulation ?? r.simulation;
+    if (!simulation)
+      throw new CatalogError(
+        "conflict",
+        "Simulated recording lacks its marker",
+      );
+    return { ...base, rgbProfile: SIMULATION_RGB_PROFILE, simulation };
+  }
+  // Hardware keeps exactly the frozen http.recording.v1 shape.
+  return base;
 }
+
+/**
+ * A recording view: exactly the frozen http.recording.v1 shape for hardware,
+ * and the http.recording.v2 shape (rgbProfile + simulation) for simulated
+ * captures, which have no v1 representation.
+ */
+export type RecordingView = Recording | SimulatedRecording;
+export type SimulatedRecording = Extract<
+  RecordingV2,
+  { rgbProfile: typeof SIMULATION_RGB_PROFILE }
+>;
 
 export async function getRecording(
   pool: Queryable,
   principal: CollectorPrincipal,
   recordingId: string,
-): Promise<Recording> {
+): Promise<RecordingView> {
   const owner = principalId(principal);
   const view = await recordingView(pool, recordingUuid(recordingId), owner);
   // Absent and other-owner recordings are indistinguishable.
   if (!view) throw new CatalogError("not_found", "Recording not found");
   return view;
+}
+
+/** Frozen http.recording.v1 representation; only hardware recordings have one. */
+export function toRecordingV1(view: RecordingView): Recording | undefined {
+  return "simulation" in view ? undefined : view;
+}
+
+/** http.recording.v2 representation of any recording (explicit profile). */
+export function toRecordingV2(view: RecordingView): RecordingV2 {
+  return "simulation" in view
+    ? view
+    : { ...view, rgbProfile: HARDWARE_RGB_PROFILE };
 }
 
 // ---------------------------------------------------------- registration
@@ -206,20 +262,37 @@ export async function getRecording(
  * active capture permission evidence, which the registration binds.
  */
 export async function registerRecording(
-  deps: Pick<AdmissionDeps, "pool" | "newId">,
+  deps: Pick<AdmissionDeps, "pool" | "newId"> & {
+    config?: Pick<AdmissionConfig, "simulatedCaptureInputs">;
+  },
   principal: CollectorPrincipal,
   body: unknown,
 ): Promise<{
   created: boolean;
-  recording: Recording;
+  recording: RecordingView;
   collectionPermissionRef: string;
 }> {
   const owner = principalId(principal);
-  const request = contract<RecordingCreateRequest>(
-    "http.recording-create.v1",
+  // v1 bodies (no `schema`) stay frozen and hardware-only; v2 bodies select the
+  // additive contract that may name the simulation profile.
+  const versioned = recordingCreateContractFor(body);
+  const parsed = contract<RecordingCreateRequest | RecordingCreateRequestV2>(
+    versioned,
     body,
   );
-  const digest = requestSha256(request);
+  const request = {
+    ...parsed,
+    simulation: "simulation" in parsed ? parsed.simulation : undefined,
+  };
+  if (
+    request.rgbProfile === SIMULATION_RGB_PROFILE &&
+    !deps.config?.simulatedCaptureInputs
+  )
+    throw new CatalogError(
+      "forbidden",
+      "Simulated capture inputs are not enabled on this server",
+    );
+  const digest = requestSha256(parsed);
   const newId = deps.newId ?? randomUUID;
   return inTransaction(deps.pool, async (tx) => {
     const replay = async () => {
@@ -266,8 +339,8 @@ export async function registerRecording(
       );
     const recordingId = newId();
     const inserted = await tx.query<{ id: string }>(
-      `INSERT INTO recordings (id, owner_user_id, client_recording_id, capture_format, rgb_profile, started_at, device)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO recordings (id, owner_user_id, client_recording_id, capture_format, rgb_profile, started_at, device, simulation)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (owner_user_id, client_recording_id) DO NOTHING RETURNING id`,
       [
         recordingId,
@@ -281,6 +354,9 @@ export async function registerRecording(
           osVersion: request.device.osVersion,
           appVersion: request.device.appVersion,
         },
+        request.simulation === undefined
+          ? null
+          : JSON.stringify(request.simulation),
       ],
     );
     // A concurrent identical registration committed first: resolve by key.
@@ -369,6 +445,7 @@ export async function admitInTransaction(
     client_recording_id: string;
     capture_format: string;
     rgb_profile: string;
+    simulation: SimulationProvenance | null;
     manifest_file_id: string | null;
     manifest_sha: string | null;
     ingest_permission_id: string;
@@ -379,7 +456,7 @@ export async function admitInTransaction(
     rejection_code: string | null;
     job_id: string | null;
   }>(
-    `SELECT r.owner_user_id, r.client_recording_id, r.capture_format, r.rgb_profile,
+    `SELECT r.owner_user_id, r.client_recording_id, r.capture_format, r.rgb_profile, r.simulation,
             r.source_manifest_file_id AS manifest_file_id, r.source_manifest_sha256 AS manifest_sha,
             g.ingest_permission_id, g.permission_ref, s.recording_id IS NOT NULL AS sealed, s.inventory,
             a.outcome, a.rejection_code, a.job_id
@@ -478,8 +555,8 @@ export async function admitInTransaction(
   await tx.query(
     `INSERT INTO recording_admissions (recording_id, source_manifest_sha256, outcome, job_id,
        ingest_permission_id, permission_ref, capture_format, rgb_profile, capture_config_sha256,
-       close_status, clock_domains, declared_files, calibration_file_ids, counts, channel_count)
-     VALUES ($1, $2, 'admitted', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+       close_status, clock_domains, declared_files, calibration_file_ids, counts, channel_count, simulation)
+     VALUES ($1, $2, 'admitted', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
     [
       recordingId,
       r.manifest_sha,
@@ -495,6 +572,7 @@ export async function admitInTransaction(
       e.calibrationFileIds,
       e.counts,
       e.channelCount,
+      e.simulation === null ? null : JSON.stringify(e.simulation),
     ],
   );
   await tx.query(

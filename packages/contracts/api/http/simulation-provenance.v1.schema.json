@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json",
+  "title": "Simulation provenance HTTP view v1",
+  "description": "camelCase wire form of artifacts/simulation-provenance.v1 for HTTP and job contracts; the same fields and meaning. Embedded as `simulation` in recording-create.v2, recording.v2, recording-registration.v2 and task-input.v2. Simulated capture is never hardware evidence: qualification is always simulation_only and productionQualified is always false. Unknown provenance stays explicit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "qualification",
+    "mappedTimelineSemantics",
+    "productionQualified",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.simulation_provenance.v1"
+    },
+    "qualification": {
+      "const": "simulation_only"
+    },
+    "mappedTimelineSemantics": {
+      "const": "simulation_transport_only"
+    },
+    "productionQualified": {
+      "const": false
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["camera", "encoder", "clock"],
+      "properties": {
+        "camera": {
+          "$ref": "#/$defs/source"
+        },
+        "encoder": {
+          "$ref": "#/$defs/source"
+        },
+        "clock": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "description": "Provenance of one capture component: known with a bounded label, or explicitly unknown.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "label"],
+          "properties": {
+            "status": {
+              "const": "known"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -61,6 +61,13 @@ test("web binds through the health-checked Render start path", () => {
   assert.match(blocks.web, /APP_ENV\n\s+value: production/);
   assert.match(blocks.web, /--frozen-lockfile/);
 });
+test("hosted Blueprints never define the development-only simulated capture flag", () => {
+  // SA-71: ALLOW_SIMULATED_CAPTURE_INPUTS is refused by the server outside
+  // APP_ENV local/development and on Render; it must not appear at all.
+  for (const [name, block] of Object.entries(blocks))
+    assert.doesNotMatch(block, /ALLOW_SIMULATED_CAPTURE_INPUTS/, name);
+  assert.doesNotMatch(text, /h264_mcap_simulation_v1/);
+});
 test("recording admission settings are explicit and web-only", () => {
   assert.match(blocks.web, /key: PROCESSING_PROFILE_REVISION\n\s+sync: false/);
   assert.match(

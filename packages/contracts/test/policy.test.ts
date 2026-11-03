@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v5.json is the current registry; catalog.v1.json through
-// catalog.v4.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v5.json"));
+// catalog.v6.json is the current registry; catalog.v1.json through
+// catalog.v5.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v6.json"));
+const catalogV5 = JSON.parse(text("catalog.v5.json"));
 const catalogV4 = JSON.parse(text("catalog.v4.json"));
 const catalogV3 = JSON.parse(text("catalog.v3.json"));
 const catalogV2 = JSON.parse(text("catalog.v2.json"));
@@ -209,12 +210,12 @@ test("v4 lock entries are unchanged and every v4 file keeps its exact bytes", ()
 
 test("catalog v5 is an exact superset of catalog v4", () => {
   assertExactSuperset(
-    catalog,
+    catalogV5,
     catalogV4,
     ["v4", "v5"],
     ["http.output-create.v1", "http.output-plan.v1"],
   );
-  assert.equal(Object.keys(catalog.contracts).length, 33);
+  assert.equal(Object.keys(catalogV5.contracts).length, 33);
 });
 
 test("v5 output contracts are internal-path, closed and byte-capped", () => {
@@ -222,13 +223,100 @@ test("v5 output contracts are internal-path, closed and byte-capped", () => {
     ["http.output-create.v1", 4096],
     ["http.output-plan.v1", 16384],
   ] as const) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV5.contracts[id];
     assert.equal(entry.version.path, "/internal/v1", id);
     assert.equal(entry.maxBytes, maxBytes, id);
   }
-  assert.deepEqual(catalog.contracts["http.output-plan.v1"].rules, [
+  assert.deepEqual(catalogV5.contracts["http.output-plan.v1"].rules, [
     "upload_plan",
   ]);
+});
+
+/** Lock entries published with SA-20 (catalog v5). Frozen. */
+const PUBLISHED_V5_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v5.json":
+    "54b3cf5d4afe9c4bad833bc9b3b00f3f631edfe9b737cc0e558c394c7c684099",
+  "http/output-create.v1.schema.json":
+    "d8ad1dc0ae2a92f3de3b2038993865c6b29c5fa27576b6ce416f8f5998e78f88",
+  "http/output-plan.v1.schema.json":
+    "bae373330bcfe3ba2775f63bd35e7a86a5bdcb2658ed85eaf136e3060c3826b1",
+};
+
+test("v5 lock entries are unchanged and every v5 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V5_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+});
+
+const V6_ADDED = [
+  "artifacts.recording-source.v2",
+  "artifacts.simulation-provenance.v1",
+  "http.recording-create.v2",
+  "http.recording-registration.v2",
+  "http.recording.v2",
+  "http.simulation-provenance.v1",
+  "jobs.task-input.v2",
+];
+
+test("catalog v6 (SA-71) is an exact superset of catalog v5 adding only simulation-capable versions", () => {
+  assertExactSuperset(catalog, catalogV5, ["v5", "v6"], V6_ADDED);
+  assert.equal(Object.keys(catalog.contracts).length, 40);
+  // The frozen v1 siblings are deep-equal entries, not edited in place.
+  for (const id of [
+    "artifacts.recording-source.v1",
+    "http.recording-create.v1",
+    "http.recording.v1",
+    "http.recording-registration.v1",
+    "jobs.task-input.v1",
+  ])
+    assert.deepEqual(catalog.contracts[id], catalogV5.contracts[id], id);
+});
+
+/** Lock entries published with SA-71 (catalog v6). Frozen once released. */
+const PUBLISHED_V6_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v6.json":
+    "467d38dfa820815b788595fda918057a796544ccf0ea1121c5519cc1005fb81f",
+  "artifacts/simulation-provenance.v1.schema.json":
+    "fdb507cedda7ec7363033dfda6adb0ce159621f1848b91cf9e34ca95e8f1f6cd",
+  "http/simulation-provenance.v1.schema.json":
+    "30472eea6e3a60b58f3bbde0d30ba34d5e195052deeeadd32f709d6a427af5f4",
+  "artifacts/recording-source.v2.schema.json":
+    "148eb258dc805089ba59261240943625b99f5c0037e7a9c49f4b15790eeb7504",
+  "http/recording-create.v2.schema.json":
+    "8139a3e4e4bf78bba9d1948cb3e01ce15b8fc90e60709c0bd181537504906a31",
+  "http/recording.v2.schema.json":
+    "549e6518afe009f223c475bbf27de68baec51931bd81da630d081ced074ca492",
+  "http/recording-registration.v2.schema.json":
+    "221e1933c3ce5fe6951936470b117f160ecb6eb9fb714044f41364a3d1360ecf",
+  "jobs/task-input.v2.schema.json":
+    "d2d9a7b587680ded1ba8df531ef157691f79ad66de9e569aa638685dbc65320a",
+};
+
+test("v6 lock entries are unchanged and every v6 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V6_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V6_LOCK).length, 8);
+});
+
+test("v6 contracts keep the version discriminators that select them", () => {
+  const field = (id: string) => catalog.contracts[id].version;
+  assert.deepEqual(field("artifacts.recording-source.v2"), {
+    field: "schema",
+    accepted: ["stateaction.recording_source.v2"],
+  });
+  assert.deepEqual(field("http.recording-create.v2"), {
+    field: "schema",
+    accepted: ["stateaction.recording_create.v2"],
+  });
+  assert.deepEqual(field("jobs.task-input.v2"), {
+    field: "schemaVersion",
+    accepted: [2],
+  });
+  for (const id of ["http.recording.v2", "http.recording-registration.v2"])
+    assert.deepEqual(field(id), { path: "/api/v1" }, id);
 });
 
 test("published schema bytes match the immutability lock", () => {

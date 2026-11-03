@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/simulation-provenance.v1.json",
+  "title": "Simulation provenance v1",
+  "description": "Explicit marker for emulator/simulated capture (rgb_profile h264_mcap_simulation_v1), embedded as `simulation` in recording-source.v2 and carried unchanged to manifests, admission evidence, job input and read surfaces. A simulated capture is never hardware evidence: qualification is always simulation_only and production_qualified is always false. Camera, encoder and clock provenance are each either known (a bounded label) or explicitly unknown; unknown is never filled in with a hardware value. Downstream outputs (for example an output manifest) reuse this exact object to preserve the marker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "qualification",
+    "mapped_timeline_semantics",
+    "production_qualified",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.simulation_provenance.v1"
+    },
+    "qualification": {
+      "const": "simulation_only"
+    },
+    "mapped_timeline_semantics": {
+      "const": "simulation_transport_only"
+    },
+    "production_qualified": {
+      "const": false
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["camera", "encoder", "clock"],
+      "properties": {
+        "camera": {
+          "$ref": "#/$defs/source"
+        },
+        "encoder": {
+          "$ref": "#/$defs/source"
+        },
+        "clock": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "description": "Provenance of one capture component: known with a bounded label, or explicitly unknown.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "label"],
+          "properties": {
+            "status": {
+              "const": "known"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

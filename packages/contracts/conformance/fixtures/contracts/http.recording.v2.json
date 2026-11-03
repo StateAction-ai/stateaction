@@ -1,0 +1,318 @@
+{
+  "contract": "http.recording.v2",
+  "cases": [
+    {
+      "name": "hardware recording view v2",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_v1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "simulated recording view with explicit marker",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_simulation_v1",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mappedTimelineSemantics": "simulation_transport_only",
+            "productionQualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "simulation profile requires the marker",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_simulation_v1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "hardware profile forbids the marker",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_v1",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mappedTimelineSemantics": "simulation_transport_only",
+            "productionQualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "rgbProfile is required in v2",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "unknown rgb profile",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "mp4"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rgbProfile"
+        ]
+      }
+    },
+    {
+      "name": "unknown status",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "archived",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_v1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/status"
+        ]
+      }
+    },
+    {
+      "name": "extra field",
+      "input": {
+        "document": {
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "status": "uploading",
+          "createdAt": "2026-11-01T18:04:06Z",
+          "files": [
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+              "required": true,
+              "state": "uploading"
+            }
+          ],
+          "missingRequiredRoles": [
+            "recorder_metadata"
+          ],
+          "rgbProfile": "h264_mcap_simulation_v1",
+          "simulation": {
+            "schema": "stateaction.simulation_provenance.v1",
+            "qualification": "simulation_only",
+            "mappedTimelineSemantics": "simulation_transport_only",
+            "productionQualified": false,
+            "provenance": {
+              "camera": {
+                "status": "known",
+                "label": "android-emulator-virtualscene"
+              },
+              "encoder": {
+                "status": "unknown"
+              },
+              "clock": {
+                "status": "known",
+                "label": "host-receipt-transport-only"
+              }
+            }
+          },
+          "hardwareQualified": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

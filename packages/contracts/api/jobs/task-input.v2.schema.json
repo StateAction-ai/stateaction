@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/task-input.v2.json",
+  "title": "Compute task input v2",
+  "description": "Additive successor of task-input.v1: process_recording carries rgbProfile and, for simulated captures only, the explicit `simulation` marker, so a worker can never treat simulated input as hardware. export_release is unchanged. Secret-free references only.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "targetId",
+        "profileRevision",
+        "kind",
+        "sourceManifestSha256",
+        "rgbProfile"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "targetId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "kind": {
+          "const": "process_recording"
+        },
+        "sourceManifestSha256": {
+          "description": "SHA-256 of the exact sealed source_manifest file bytes (recording-source/v1).",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "rgbProfile": {
+          "type": "string",
+          "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+        },
+        "simulation": {
+          "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "rgbProfile": {
+                "const": "h264_mcap_simulation_v1"
+              }
+            },
+            "required": ["rgbProfile"]
+          },
+          "then": {
+            "properties": {
+              "simulation": {}
+            },
+            "required": ["simulation"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rgbProfile": {
+                "const": "h264_mcap_v1"
+              }
+            },
+            "required": ["rgbProfile"]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "simulation": {}
+              },
+              "required": ["simulation"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "targetId",
+        "profileRevision",
+        "kind",
+        "selectionSha256"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "targetId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "kind": {
+          "const": "export_release"
+        },
+        "selectionSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  ]
+}

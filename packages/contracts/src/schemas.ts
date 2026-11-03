@@ -1,8 +1,8 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v5.json (checked by tests).
-// catalog.v5.json is the current registry: an exact superset of the immutable
-// catalog.v4.json, itself an exact superset of the immutable catalog.v3.json,
-// catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v5.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v6.json (checked by tests).
+// catalog.v6.json is the current registry: an exact superset of the immutable
+// catalog.v5.json, itself an exact superset of the immutable catalog.v4.json,
+// catalog.v3.json, catalog.v2.json and catalog.v1.json.
+import catalog from "../api/catalog.v6.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -37,6 +37,13 @@ import s29 from "../api/http/profile-update.v1.schema.json" with { type: "json" 
 import s30 from "../api/http/profile.v1.schema.json" with { type: "json" };
 import s31 from "../api/http/output-create.v1.schema.json" with { type: "json" };
 import s32 from "../api/http/output-plan.v1.schema.json" with { type: "json" };
+import s33 from "../api/artifacts/simulation-provenance.v1.schema.json" with { type: "json" };
+import s34 from "../api/artifacts/recording-source.v2.schema.json" with { type: "json" };
+import s35 from "../api/http/simulation-provenance.v1.schema.json" with { type: "json" };
+import s36 from "../api/http/recording-create.v2.schema.json" with { type: "json" };
+import s37 from "../api/http/recording.v2.schema.json" with { type: "json" };
+import s38 from "../api/http/recording-registration.v2.schema.json" with { type: "json" };
+import s39 from "../api/jobs/task-input.v2.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -44,6 +51,8 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "artifacts.hand-observations.v1": s1,
   "artifacts.processing-result.v1": s2,
   "artifacts.recording-source.v1": s3,
+  "artifacts.recording-source.v2": s34,
+  "artifacts.simulation-provenance.v1": s33,
   "http.error-envelope.v1": s4,
   "http.me.v1": s27,
   "http.output-create.v1": s31,
@@ -54,9 +63,13 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.profile-update.v1": s29,
   "http.profile.v1": s30,
   "http.recording-create.v1": s8,
+  "http.recording-create.v2": s36,
   "http.recording-registration.v1": s28,
+  "http.recording-registration.v2": s38,
   "http.recording-seal.v1": s9,
   "http.recording.v1": s10,
+  "http.recording.v2": s37,
+  "http.simulation-provenance.v1": s35,
   "http.success-envelope.v1": s11,
   "http.upload-create.v1": s12,
   "http.upload-plan.v1": s13,
@@ -67,6 +80,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.job-status.v1": s18,
   "jobs.result-candidate.v1": s19,
   "jobs.task-input.v1": s20,
+  "jobs.task-input.v2": s39,
   "jobs.worker-claim.v1": s21,
   "native.capture-capabilities.v1": s22,
   "native.capture-command.v1": s23,

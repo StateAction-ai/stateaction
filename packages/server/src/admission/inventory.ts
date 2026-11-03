@@ -1,9 +1,13 @@
 import {
   checkSealedInventory,
+  recordingSourceContractFor,
   requestSha256,
   sha256Hex,
+  simulationFromArtifact,
   validateBytes,
   type InventoryFile,
+  type SimulationProvenance,
+  type SimulationProvenanceArtifact,
 } from "@stateaction/contracts";
 
 /** Bound for the source manifest control document (contract maxBytes). */
@@ -52,6 +56,8 @@ export type DeclarationExpectation = {
 export type DeclarationEvidence = {
   captureFormat: string;
   rgbProfile: string;
+  /** Simulation marker declared by the manifest (null for hardware). */
+  simulation: SimulationProvenance | null;
   captureConfigSha256: string;
   closeStatus: "closed_clean" | "closed_after_recovery";
   clockDomains: string[];
@@ -83,6 +89,7 @@ type Declaration = {
   owner_user_id: string;
   capture_format: string;
   rgb_profile: string;
+  simulation?: SimulationProvenanceArtifact;
   capture_config_sha256: string;
   close_status: "closed_clean" | "closed_after_recovery";
   files: {
@@ -115,7 +122,10 @@ export function checkSourceDeclaration(
     return fail("manifest_size_mismatch");
   if (sha256Hex(bytes) !== expect.sourceManifestSha256)
     return fail("manifest_digest_mismatch");
-  const result = validateBytes("artifacts.recording-source.v1", bytes);
+  const result = validateBytes(
+    recordingSourceContractFor(peekSchema(bytes)),
+    bytes,
+  );
   if (!result.valid) {
     if (result.code === "schema_violation" && unclosed(bytes))
       return fail("source_not_closed");
@@ -164,6 +174,9 @@ export function checkSourceDeclaration(
     evidence: {
       captureFormat: doc.capture_format,
       rgbProfile: doc.rgb_profile,
+      simulation: doc.simulation
+        ? simulationFromArtifact(doc.simulation)
+        : null,
       captureConfigSha256: doc.capture_config_sha256,
       closeStatus: doc.close_status,
       clockDomains: [...doc.clock_domains],
@@ -175,6 +188,20 @@ export function checkSourceDeclaration(
       channelCount: doc.channels.length,
     },
   };
+}
+
+/** The document's `schema` value (v1 vs v2 selection); undefined if unreadable. */
+function peekSchema(bytes: Uint8Array): unknown {
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes)) as {
+      schema?: unknown;
+    };
+    return typeof value === "object" && value !== null
+      ? value.schema
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function unclosed(bytes: Uint8Array): boolean {

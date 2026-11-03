@@ -41,6 +41,14 @@
     "http/profile.v1.schema.json": "325b8fd28084a98f7464969db99e19280b9861d7b3c6606b15156bdcff191513",
     "catalog.v5.json": "54b3cf5d4afe9c4bad833bc9b3b00f3f631edfe9b737cc0e558c394c7c684099",
     "http/output-create.v1.schema.json": "d8ad1dc0ae2a92f3de3b2038993865c6b29c5fa27576b6ce416f8f5998e78f88",
-    "http/output-plan.v1.schema.json": "bae373330bcfe3ba2775f63bd35e7a86a5bdcb2658ed85eaf136e3060c3826b1"
+    "http/output-plan.v1.schema.json": "bae373330bcfe3ba2775f63bd35e7a86a5bdcb2658ed85eaf136e3060c3826b1",
+    "catalog.v6.json": "467d38dfa820815b788595fda918057a796544ccf0ea1121c5519cc1005fb81f",
+    "artifacts/simulation-provenance.v1.schema.json": "fdb507cedda7ec7363033dfda6adb0ce159621f1848b91cf9e34ca95e8f1f6cd",
+    "http/simulation-provenance.v1.schema.json": "30472eea6e3a60b58f3bbde0d30ba34d5e195052deeeadd32f709d6a427af5f4",
+    "artifacts/recording-source.v2.schema.json": "148eb258dc805089ba59261240943625b99f5c0037e7a9c49f4b15790eeb7504",
+    "http/recording-create.v2.schema.json": "8139a3e4e4bf78bba9d1948cb3e01ce15b8fc90e60709c0bd181537504906a31",
+    "http/recording.v2.schema.json": "549e6518afe009f223c475bbf27de68baec51931bd81da630d081ced074ca492",
+    "http/recording-registration.v2.schema.json": "221e1933c3ce5fe6951936470b117f160ecb6eb9fb714044f41364a3d1360ecf",
+    "jobs/task-input.v2.schema.json": "d2d9a7b587680ded1ba8df531ef157691f79ad66de9e569aa638685dbc65320a"
   }
 }

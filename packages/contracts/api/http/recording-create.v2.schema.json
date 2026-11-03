@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-create.v2.json",
+  "title": "Create recording request v2",
+  "description": "POST /api/v1/recordings with body `schema` stateaction.recording_create.v2 (v1 bodies, which carry no `schema`, stay hardware-only and frozen). The owner is the authenticated actor; no owner field is accepted. rgbProfile also admits h264_mcap_simulation_v1, which REQUIRES the explicit `simulation` marker and is accepted only by development servers that enable simulated inputs. Hardware h264_mcap_v1 must not carry `simulation`. Idempotency scope: (actor, recordings.create, clientRecordingId) plus request digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "clientRecordingId",
+    "captureFormat",
+    "rgbProfile",
+    "startedAt",
+    "device"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording_create.v2"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "captureFormat": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "osVersion", "appVersion"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "osVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "appVersion": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        }
+      }
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}

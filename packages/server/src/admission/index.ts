@@ -9,3 +9,5 @@ export {
 } from "./http.js";
 export * from "./object-reader.js";
 export * from "./runtime.js";
+export * from "./simulation.js";
+export * from "./job-input.js";

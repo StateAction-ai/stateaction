@@ -3315,6 +3315,11 @@ def render() -> dict[Path, bytes]:
             {"contract": cid, "cases": cases}
         )
     files[OUT / "digests.v1.json"] = dump(digests())
+    # SA-71 adds only new fixture files for the catalog.v6 contracts.
+    sys.path.insert(0, str(HERE))
+    from generate_sa71_fixtures import render_sa71
+
+    files.update(render_sa71())
     return files
 
 

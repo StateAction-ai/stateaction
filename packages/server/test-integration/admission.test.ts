@@ -767,7 +767,7 @@ describe("source manifest validation before admission", () => {
       rawManifest: () => Buffer.from("{not json"),
     });
     await expectRejected("manifest_unsupported_version", {
-      mutate: (d) => (d.schema = "stateaction.recording_source.v2"),
+      mutate: (d) => (d.schema = "stateaction.recording_source.v3"),
     });
     await expectRejected("source_not_closed", {
       mutate: (d) => (d.close_status = "unclosed"),
