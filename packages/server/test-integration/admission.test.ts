@@ -1,3 +1,4 @@
+import { fixtureRunJob } from "../src/jobs/fixtures.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
@@ -1081,6 +1082,7 @@ describe("permission evidence", () => {
       revokedBy: "op",
       reason: "r",
     });
+    await fixtureRunJob(db.owner, (admitted as { jobId: string }).jobId);
     await db.owner.query(
       "UPDATE jobs SET state = 'failed', finished_at = now() WHERE recording_id = $1",
       [s3.recordingId],

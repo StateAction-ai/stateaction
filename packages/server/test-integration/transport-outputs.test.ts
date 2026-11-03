@@ -22,12 +22,9 @@ import {
   transportDatabase,
   uploadsAt,
 } from "./transport-harness.js";
-import {
-  processedRecording,
-  writeArtifact,
-  type Actors,
-  type TestDb,
-} from "./harness.js";
+import { writeArtifact, type Actors, type TestDb } from "./harness.js";
+import { queuedJob } from "./jobs-harness.js";
+import { fixtureRunJob } from "../src/jobs/fixtures.js";
 
 let db: TestDb & { actors: Actors };
 let deps: TransportDeps;
@@ -44,13 +41,11 @@ const code = async (promise: Promise<unknown>) =>
   );
 
 async function runningJob() {
-  const processed = await processedRecording(db.app, db.actors, 1);
-  await db.owner.query("ALTER TABLE jobs DISABLE TRIGGER USER");
-  await db.owner.query("UPDATE jobs SET state = 'running' WHERE id = $1", [
-    processed.jobId,
-  ]);
-  await db.owner.query("ALTER TABLE jobs ENABLE TRIGGER USER");
-  return processed;
+  // A RUNNING job (the only state that may write outputs) through the real
+  // admission/claim state machine (a fixture holder is retired by the fixture).
+  const { jobId, recordingId: recording } = await queuedJob(db);
+  await fixtureRunJob(db.owner, jobId);
+  return { jobId, recordingId: recording };
 }
 
 before(async () => {
@@ -211,9 +206,7 @@ test("credentials are kind- and job-bound; finished or cancelled jobs lose autho
       }),
     );
   assert.equal(await sign(job), "ok");
-  // Another job's worker and a human owner can never touch this output.
-  const other = await runningJob();
-  assert.equal(await sign({ kind: "job", jobId: other.jobId }), "forbidden");
+  // A human owner and an unknown job can never touch this output.
   const session = await openSession(db, db.actors.collector);
   assert.equal(
     await sign({
@@ -224,13 +217,7 @@ test("credentials are kind- and job-bound; finished or cancelled jobs lose autho
     "forbidden",
   );
   assert.equal(await sign({ kind: "job", jobId: randomUUID() }), "forbidden");
-  assert.equal(
-    await code(
-      getUploadPlan(deps, { kind: "job", jobId: other.jobId }, plan.fileId),
-    ),
-    "forbidden",
-  );
-  // Cancellation request or a past deadline revokes the right to mint URLs or write.
+  // Cancellation request revokes the right to mint URLs or write at once.
   await db.owner.query(
     "UPDATE jobs SET state = 'cancel_requested' WHERE id = $1",
     [job.jobId],
@@ -240,19 +227,44 @@ test("credentials are kind- and job-bound; finished or cancelled jobs lose autho
     await code(allocateJobOutput(deps, job, output("scoped/b.bin"))),
     "forbidden",
   );
-  await db.owner.query("UPDATE jobs SET state = 'running' WHERE id = $1", [
-    job.jobId,
-  ]);
-  assert.equal(await sign(job), "ok");
-  await db.owner.query(
-    "UPDATE jobs SET execution_deadline = now() - interval '1 second' WHERE id = $1",
-    [job.jobId],
+  // Another job's worker (it takes over the single admission slot) cannot
+  // reach this job's output.
+  const other = await runningJob();
+  assert.equal(await sign({ kind: "job", jobId: other.jobId }), "forbidden");
+  assert.equal(
+    await code(
+      getUploadPlan(deps, { kind: "job", jobId: other.jobId }, plan.fileId),
+    ),
+    "forbidden",
   );
-  assert.equal(await sign(job), "forbidden");
-  await db.owner.query(
-    "UPDATE jobs SET execution_deadline = NULL WHERE id = $1",
-    [job.jobId],
+  // A past absolute deadline revokes authority (test-only: the production
+  // trigger makes deadlines write-once, so the guard is bypassed by the owner).
+  const late = await runningJob();
+  const lateWorker: Authority = { kind: "job", jobId: late.jobId };
+  const latePlan = await allocateJobOutput(
+    deps,
+    lateWorker,
+    output("late/a.bin"),
   );
+  const signLate = () =>
+    code(
+      signParts(deps, lateWorker, latePlan.fileId, {
+        expectedTransportEpoch: 1,
+        partNumbers: [1],
+      }),
+    );
+  assert.equal(await signLate(), "ok");
+  await db.owner.query(
+    "ALTER TABLE jobs DISABLE TRIGGER jobs_orchestration_guard",
+  );
+  await db.owner.query(
+    "UPDATE jobs SET start_deadline = now() - interval '2 seconds', execution_deadline = now() - interval '1 second' WHERE id = $1",
+    [late.jobId],
+  );
+  await db.owner.query(
+    "ALTER TABLE jobs ENABLE TRIGGER jobs_orchestration_guard",
+  );
+  assert.equal(await signLate(), "forbidden");
   // A stale worker (previous job) cannot reserve into a new job's prefix.
   assert.equal(
     await code(

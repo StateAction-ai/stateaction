@@ -22,7 +22,7 @@ const health = await fetch(`${base}/api/v1/health`, {
 assert.equal(health.status, 200);
 assert.deepEqual(await health.json(), {
   status: "ok",
-  checks: { database: true, storage: true },
+  checks: { database: true, storage: true, jobs: true },
 });
 const requestId = randomUUID();
 const path = `${base}/api/v1/development/workflows/verify`;

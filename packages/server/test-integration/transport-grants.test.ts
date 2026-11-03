@@ -22,7 +22,7 @@ const priv = async (table: string, privilege: string, column?: string) => {
   return rows[0]!.ok;
 };
 
-test("005 and 006 are applied through the real migrator with the published 001-004 untouched", async () => {
+test("005 through 007 are applied through the real migrator with the published 001-004 untouched", async () => {
   const applied = await db.owner.query<{ version: number; sha256: string }>(
     "SELECT version, sha256 FROM platform_schema_migrations ORDER BY version",
   );
@@ -31,7 +31,7 @@ test("005 and 006 are applied through the real migrator with the published 001-0
     applied.rows,
     files.map((m) => ({ version: m.version, sha256: m.sha256 })),
   );
-  assert.equal(applied.rows.at(-1)?.version, 6);
+  assert.equal(applied.rows.at(-1)?.version, 7);
 });
 
 test("restricted-role matrix for the transport tables", async () => {

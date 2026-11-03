@@ -63,3 +63,5 @@ The migrator (`src/migrations.ts`) applies ordered `NNN_*.sql` files inside one 
 `pnpm exec nx run server:integration` starts a throwaway pinned Postgres on an ephemeral loopback port, then runs migration, constraint, seed, concurrency and query-plan tests as the unprivileged owner and the restricted app role.
 
 **SA-19 (migration 004).** Job inserts now also require registration-bound, active ingest permission evidence and an admitted admission row (fail closed for every credential). See [recording admission](recording-admission.md) for the extended lock order (recording → files → evidence row `FOR SHARE`) and the fixture step used by the seed and SA-13 tests.
+
+**SA-25 (migration 007).** Adds `dispatch_admission` (single global slot), `job_inputs`, `job_execution_evidence`, `service_capabilities` and the job state-machine guard. See [job orchestration](job-orchestration.md); the slot is released only by a terminal job state plus execution evidence.

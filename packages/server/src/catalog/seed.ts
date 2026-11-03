@@ -1,3 +1,4 @@
+import { fixtureReapJob, fixtureRunJob } from "../jobs/fixtures.js";
 import { createHash } from "node:crypto";
 import type pg from "pg";
 import {
@@ -176,9 +177,8 @@ export async function seedLocalCatalog(
     recordingId,
     profileRevision: "seed-profile-1",
   });
-  // Executor/claim transitions belong to the job protocol ticket; the seed
-  // advances the fixture directly with the owner credential.
-  await owner.query("UPDATE jobs SET state = 'running' WHERE id = $1", [jobId]);
+  // The seed walks the real admission/claim state machine (owner credential).
+  await fixtureRunJob(owner, jobId);
   const outputs: Record<string, string> = {};
   const output = async (
     key: string,
@@ -273,6 +273,9 @@ export async function seedLocalCatalog(
     manifestSha256: seedSha("result"),
     clips,
   });
+  // The synthetic execution is over: record its reaped fixture child so the
+  // single admission slot is free for real jobs in a seeded database.
+  await fixtureReapJob(owner, jobId);
   const { shared, internal } = SEED.datasets;
   await createDataset(owner, {
     datasetId: shared.id,

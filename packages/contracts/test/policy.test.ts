@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v6.json is the current registry; catalog.v1.json through
-// catalog.v5.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v6.json"));
+// catalog.v7.json is the current registry; catalog.v1.json through
+// catalog.v6.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v7.json"));
+const catalogV6 = JSON.parse(text("catalog.v6.json"));
 const catalogV5 = JSON.parse(text("catalog.v5.json"));
 const catalogV4 = JSON.parse(text("catalog.v4.json"));
 const catalogV3 = JSON.parse(text("catalog.v3.json"));
@@ -260,8 +261,8 @@ const V6_ADDED = [
 ];
 
 test("catalog v6 (SA-71) is an exact superset of catalog v5 adding only simulation-capable versions", () => {
-  assertExactSuperset(catalog, catalogV5, ["v5", "v6"], V6_ADDED);
-  assert.equal(Object.keys(catalog.contracts).length, 40);
+  assertExactSuperset(catalogV6, catalogV5, ["v5", "v6"], V6_ADDED);
+  assert.equal(Object.keys(catalogV6.contracts).length, 40);
   // The frozen v1 siblings are deep-equal entries, not edited in place.
   for (const id of [
     "artifacts.recording-source.v1",
@@ -270,7 +271,7 @@ test("catalog v6 (SA-71) is an exact superset of catalog v5 adding only simulati
     "http.recording-registration.v1",
     "jobs.task-input.v1",
   ])
-    assert.deepEqual(catalog.contracts[id], catalogV5.contracts[id], id);
+    assert.deepEqual(catalogV6.contracts[id], catalogV5.contracts[id], id);
 });
 
 /** Lock entries published with SA-71 (catalog v6). Frozen once released. */
@@ -317,6 +318,58 @@ test("v6 contracts keep the version discriminators that select them", () => {
   });
   for (const id of ["http.recording.v2", "http.recording-registration.v2"])
     assert.deepEqual(field(id), { path: "/api/v1" }, id);
+});
+
+const V7_ADDED = [
+  "http.input-read.v1",
+  "jobs.controller-action.v1",
+  "jobs.controller-result.v1",
+  "jobs.heartbeat-ack.v1",
+  "jobs.reconcile-result.v1",
+];
+
+test("catalog v7 (SA-25) is an exact superset of catalog v6 adding only internal job-control contracts", () => {
+  assertExactSuperset(catalog, catalogV6, ["v6", "v7"], V7_ADDED);
+  assert.equal(Object.keys(catalog.contracts).length, 45);
+  for (const id of V7_ADDED) {
+    const entry = catalog.contracts[id];
+    assert.equal(entry.casing, "camelCase", id);
+    assert.deepEqual(entry.version, { path: "/internal/v1" }, id);
+    assert.deepEqual(entry.rules, [], id);
+  }
+  // Frozen worker contracts stay deep-equal; the control DTOs never replace them.
+  for (const id of [
+    "jobs.worker-claim.v1",
+    "jobs.claim-grant.v1",
+    "jobs.heartbeat.v1",
+    "jobs.job-status.v1",
+    "jobs.task-input.v1",
+  ])
+    assert.deepEqual(catalog.contracts[id], catalogV6.contracts[id], id);
+});
+
+/** Lock entries published with SA-25 (catalog v7). Frozen once released. */
+const PUBLISHED_V7_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v7.json":
+    "89bc8add1ae7249fefebe807065557f05ce94a01d9d8583c5f159c84716ff2db",
+  "jobs/controller-action.v1.schema.json":
+    "42d6140d37fe0dfcf0138804c415c854cbdce6b011d4fd1b49aa803ae023ea9f",
+  "jobs/controller-result.v1.schema.json":
+    "b9ea7573391326d6a6e1a9ab52d5ef850a0ac1fbe4e7786e080a91c044f6ac97",
+  "jobs/reconcile-result.v1.schema.json":
+    "9e1694d76f8f99c36254445e712adb5a4001023b117e22ede196cdad3b73c8a5",
+  "jobs/heartbeat-ack.v1.schema.json":
+    "747a4c671aa771dbd67478e655da1ae366e4d44fda08c299996d1c4b0c5599bc",
+  "http/input-read.v1.schema.json":
+    "aa8dc7988a5114b014ddef918c3f7e1a2075980a0e9de68ef461033c7cf12842",
+};
+
+test("v7 lock entries are unchanged and every v7 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V7_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V7_LOCK).length, 6);
 });
 
 test("published schema bytes match the immutability lock", () => {

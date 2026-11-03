@@ -1,0 +1,363 @@
+{
+  "contract": "jobs.controller-action.v1",
+  "cases": [
+    {
+      "name": "record workflow run",
+      "input": {
+        "document": {
+          "action": "record_workflow_run",
+          "runRef": "run-e2e-1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "claim lease",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "renew lease",
+      "input": {
+        "document": {
+          "action": "renew_lease",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record worker submission",
+      "input": {
+        "document": {
+          "action": "record_worker_submission",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record local execution",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "local",
+            "localExecutionRef": "child-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record modal execution",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "modal",
+            "functionCallId": "fc-01HABC123"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "mark submit unknown",
+      "input": {
+        "document": {
+          "action": "mark_submit_unknown",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "local child reaped evidence",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "local_child_reaped",
+            "executionRef": "child-1",
+            "detail": {
+              "exit": "0"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "provider call terminal evidence",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "provider_call_terminal",
+            "executionRef": "fc-01HABC123"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "pre-submission rejection",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "pre_submission_rejected"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown action",
+      "input": {
+        "document": {
+          "action": "resubmit",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "a job ID is carried by the route, never the action",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "owner is required",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "owner charset is bounded",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1",
+          "owner": "bad owner"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "owner length is bounded",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1",
+          "owner": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "run ref charset is bounded",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run 1",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "modal executor needs a function call ID",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "modal",
+            "functionCallId": "x1"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "executor kinds do not mix fields",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "local",
+            "functionCallId": "fc-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "pre-submission rejection names no execution",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "pre_submission_rejected",
+            "executionRef": "child-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "terminal evidence must name the exact execution",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "local_child_reaped"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "evidence kind is closed",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "assumed_dead",
+            "executionRef": "child-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "evidence detail values are bounded strings",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "local_child_reaped",
+            "executionRef": "child-1",
+            "detail": {
+              "exit": 0
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "evidence detail is bounded",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "local_child_reaped",
+            "executionRef": "child-1",
+            "detail": {
+              "k0": "v",
+              "k1": "v",
+              "k2": "v",
+              "k3": "v",
+              "k4": "v",
+              "k5": "v",
+              "k6": "v",
+              "k7": "v",
+              "k8": "v",
+              "k9": "v",
+              "k10": "v",
+              "k11": "v",
+              "k12": "v",
+              "k13": "v",
+              "k14": "v",
+              "k15": "v",
+              "k16": "v"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

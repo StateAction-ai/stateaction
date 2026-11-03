@@ -3320,6 +3320,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa71_fixtures import render_sa71
 
     files.update(render_sa71())
+    # SA-25 adds only new fixture files for the catalog.v7 job-control contracts.
+    from generate_sa25_fixtures import render_sa25
+
+    files.update(render_sa25())
     return files
 
 

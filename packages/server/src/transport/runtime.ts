@@ -63,7 +63,7 @@ export class JobCapabilityStore implements ServiceCredentialStore {
       execution_deadline: Date | null;
     }>(
       `SELECT id, execution_deadline FROM jobs
-       WHERE capability_token_sha256 = $1 AND state = 'running'`,
+       WHERE capability_token_sha256 = $1 AND state = 'running' AND claimed_at IS NOT NULL`,
       [sha256],
     );
     const job = rows[0];

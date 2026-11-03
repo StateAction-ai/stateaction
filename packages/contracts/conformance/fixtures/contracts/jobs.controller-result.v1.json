@@ -1,0 +1,337 @@
+{
+  "contract": "jobs.controller-result.v1",
+  "cases": [
+    {
+      "name": "workflow run or execution recorded",
+      "input": {
+        "document": {
+          "recorded": true
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "replayed record is not an error",
+      "input": {
+        "document": {
+          "recorded": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease granted",
+      "input": {
+        "document": {
+          "granted": true,
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease refused: live owner",
+      "input": {
+        "document": {
+          "granted": false,
+          "reason": "live_owner"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease refused: different run",
+      "input": {
+        "document": {
+          "granted": false,
+          "reason": "different_run"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease refused: job not active",
+      "input": {
+        "document": {
+          "granted": false,
+          "reason": "not_active"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease renewed",
+      "input": {
+        "document": {
+          "renewed": true,
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "lease not renewed",
+      "input": {
+        "document": {
+          "renewed": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "submission intent recorded with the one-time bootstrap",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "sa_svc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "process_recording",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1"
+          },
+          "executionBackend": "local"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "submission intent with a v2 task input",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "sa_svc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 2,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "process_recording",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1",
+            "rgbProfile": "h264_mcap_v1"
+          },
+          "executionBackend": "local"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "submission intent already recorded: never submit again",
+      "input": {
+        "document": {
+          "state": "already_recorded"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "submission marked unknown",
+      "input": {
+        "document": {
+          "state": "submit_unknown"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "evidence recorded, slot kept until terminal",
+      "input": {
+        "document": {
+          "recorded": true,
+          "slotReleased": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "evidence recorded, slot released",
+      "input": {
+        "document": {
+          "recorded": true,
+          "slotReleased": true
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "bootstrap token is bounded",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "sa_svc_short",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "process_recording",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1"
+          },
+          "executionBackend": "local"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "bootstrap token has the service prefix",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "process_recording",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1"
+          },
+          "executionBackend": "local"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "task input must be a valid task document",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "sa_svc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "export_release",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1"
+          },
+          "executionBackend": "local"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "backend is closed",
+      "input": {
+        "document": {
+          "state": "recorded",
+          "bootstrapToken": "sa_svc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "startDeadline": "2026-11-02T08:00:00Z",
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "taskInput": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "kind": "process_recording",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "profileRevision": "cpu-mediapipe-1"
+          },
+          "executionBackend": "gpu"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "lease refusal reason is closed",
+      "input": {
+        "document": {
+          "granted": false,
+          "reason": "busy"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "a refused lease has no expiry",
+      "input": {
+        "document": {
+          "granted": false,
+          "reason": "live_owner",
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "already recorded carries no token",
+      "input": {
+        "document": {
+          "state": "already_recorded",
+          "bootstrapToken": "sa_svc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "empty result",
+      "input": {
+        "document": {}
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -39,6 +39,7 @@ const { recordIngestPermission, revokeIngestPermission } = await dist(
   "admission/permissions.js",
 );
 const cat = await dist("catalog/catalog.js");
+const { fixtureRunJob } = await dist("jobs/fixtures.js");
 const { establishFixtureAdmission } = await dist("admission/fixtures.js");
 const { hashCredentialPassword } = await dist("catalog/password.js");
 const { storageClient } = await dist("storage.js");
@@ -382,12 +383,8 @@ async function runningJob(ownerUserId) {
     recordingId,
     profileRevision: "sa20-e2e",
   });
-  await app.query("UPDATE jobs SET state = 'running' WHERE id = $1", [jobId]);
-  const token = "sa_svc_" + randomBytes(32).toString("base64url");
-  await owner.query(
-    "UPDATE jobs SET capability_token_sha256 = $2, execution_deadline = now() + interval '1 hour' WHERE id = $1",
-    [jobId, sha(token)],
-  );
+  // Walk the real admission/claim state machine (owner credential fixture).
+  const { capabilityToken: token } = await fixtureRunJob(owner, jobId);
   return { jobId, recordingId, token };
 }
 const workerPost = (token, body, method = "POST") => ({
@@ -826,8 +823,10 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
 
   test("a worker reserves, signs and journals its own job output with the job-bound capability only", async () => {
     await permissionFor(users.collector.id);
-    const job = await runningJob(users.collector.id);
+    // One global execution slot: the earlier job is retired when the next one
+    // runs, so its capability no longer resolves (no second live credential).
     const other = await runningJob(users.collector.id);
+    const job = await runningJob(users.collector.id);
     const base = `/internal/v1/jobs/${job.jobId}/outputs`;
     const bytes = randomBytes(2048);
     const out = {
@@ -851,7 +850,21 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
       (await call(base, workerPost("sa_svc_short", out))).status,
       401,
     );
-    assert.equal((await call(base, workerPost(other.token, out))).status, 403);
+    assert.equal(
+      (await call(base, workerPost(other.token, out))).status,
+      401,
+      "a retired job's capability resolves to nothing",
+    );
+    assert.equal(
+      (
+        await call(
+          base.replace(job.jobId, other.jobId),
+          workerPost(job.token, out),
+        )
+      ).status,
+      403,
+      "the current capability is bound to its own job",
+    );
     const cookies = await signIn(users.collector.email);
     assert.equal(
       (await call(base, nativePost(cookies, out))).status,
@@ -936,7 +949,7 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
       (
         await call(`${base.replace(job.jobId, other.jobId)}/${plan.fileId}`, {
           method: "GET",
-          headers: { authorization: `Bearer ${other.token}` },
+          headers: { authorization: `Bearer ${job.token}` },
         })
       ).status,
       403,
@@ -986,7 +999,10 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     );
     // Authority ends with the attempt: deadline passed, then job finished.
     await owner.query(
-      "UPDATE jobs SET execution_deadline = now() - interval '1 second' WHERE id = $1",
+      "ALTER TABLE jobs DISABLE TRIGGER jobs_orchestration_guard",
+    );
+    await owner.query(
+      "UPDATE jobs SET start_deadline = now() - interval '2 seconds', execution_deadline = now() - interval '1 second' WHERE id = $1",
       [job.jobId],
     );
     assert.equal(
@@ -1004,6 +1020,9 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     await owner.query(
       "UPDATE jobs SET execution_deadline = now() + interval '1 hour' WHERE id = $1",
       [job.jobId],
+    );
+    await owner.query(
+      "ALTER TABLE jobs ENABLE TRIGGER jobs_orchestration_guard",
     );
     assert.equal(
       (

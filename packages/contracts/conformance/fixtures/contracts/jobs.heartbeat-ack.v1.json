@@ -1,0 +1,69 @@
+{
+  "contract": "jobs.heartbeat-ack.v1",
+  "cases": [
+    {
+      "name": "accepted",
+      "input": {
+        "document": {
+          "accepted": true,
+          "executionDeadline": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "never a negative acknowledgement",
+      "input": {
+        "document": {
+          "accepted": false,
+          "executionDeadline": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "deadline is required",
+      "input": {
+        "document": {
+          "accepted": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "deadline is RFC 3339 UTC",
+      "input": {
+        "document": {
+          "accepted": true,
+          "executionDeadline": "2026-11-02 14:00:00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "extra field",
+      "input": {
+        "document": {
+          "accepted": true,
+          "executionDeadline": "2026-11-02T14:00:00.123Z",
+          "extendedBy": "60"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}
