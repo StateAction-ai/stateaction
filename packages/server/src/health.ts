@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 import { HeadBucketCommand } from "@aws-sdk/client-s3";
-import { serverConfig } from "./config.js";
+import { appEnv, serverConfig } from "./config.js";
+import { jobsConfigFromEnv } from "./jobs/config.js";
 import { storageClient } from "./storage.js";
 export async function platformHealth() {
   try {
@@ -26,19 +27,32 @@ export async function platformHealth() {
     ]);
     await pool.end();
     client.destroy();
+    // Job admission needs explicit input identity (backend, code, image, model,
+    // config). Outside local development a missing setting is degraded: a
+    // reachable database and bucket must not read as a working pipeline.
+    let jobs = true;
+    try {
+      jobsConfigFromEnv();
+    } catch {
+      jobs = false;
+    }
+    const jobsRequired = appEnv() !== "local";
     return {
-      status: results.every((result) => result.status === "fulfilled")
-        ? ("ok" as const)
-        : ("degraded" as const),
+      status:
+        results.every((result) => result.status === "fulfilled") &&
+        (jobs || !jobsRequired)
+          ? ("ok" as const)
+          : ("degraded" as const),
       checks: {
         database: results[0]?.status === "fulfilled",
         storage: results[1]?.status === "fulfilled",
+        jobs,
       },
     };
   } catch {
     return {
       status: "degraded" as const,
-      checks: { database: false, storage: false },
+      checks: { database: false, storage: false, jobs: false },
     };
   }
 }

@@ -1,0 +1,75 @@
+{
+  "contract": "http.input-read.v1",
+  "cases": [
+    {
+      "name": "fresh read URL",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "readUrl": "http://127.0.0.1:19000/bucket/key?X-Amz-Signature=abc",
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "url must be http(s)",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "readUrl": "ftp://host/key",
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "url has no whitespace",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "readUrl": "http://host/a b",
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "file ID is a lowercase UUID",
+      "input": {
+        "document": {
+          "fileId": "7C2D3E4F-5061-4728-9BAC-1D2E3F4A5B6C",
+          "readUrl": "http://127.0.0.1:19000/bucket/key?X-Amz-Signature=abc",
+          "expiresAt": "2026-11-02T14:00:00.123Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "extra field",
+      "input": {
+        "document": {
+          "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "readUrl": "http://127.0.0.1:19000/bucket/key?X-Amz-Signature=abc",
+          "expiresAt": "2026-11-02T14:00:00.123Z",
+          "role": "source_mcap"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

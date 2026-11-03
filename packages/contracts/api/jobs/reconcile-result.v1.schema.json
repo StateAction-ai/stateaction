@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/reconcile-result.v1.json",
+  "title": "Admission reconcile result v1",
+  "description": "Data payload of POST /internal/v1/jobs/reconcile (scope jobs:repair). Admission is serialized through one global slot; pendingDispatches lists admitted jobs whose workflow task start was never acknowledged (retry startTask with the same dispatchKey).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["admission", "pendingDispatches"],
+  "properties": {
+    "admission": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "jobId", "dispatchKey", "executionDeadline"],
+          "properties": {
+            "state": {
+              "const": "admitted"
+            },
+            "jobId": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            },
+            "dispatchKey": {
+              "type": "string",
+              "pattern": "^job:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "executionDeadline": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "holderJobId"],
+          "properties": {
+            "state": {
+              "const": "slot_busy"
+            },
+            "holderJobId": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "const": "idle"
+            }
+          }
+        }
+      ]
+    },
+    "pendingDispatches": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "dispatchKey"],
+        "properties": {
+          "jobId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "dispatchKey": {
+            "type": "string",
+            "pattern": "^job:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        }
+      }
+    }
+  }
+}

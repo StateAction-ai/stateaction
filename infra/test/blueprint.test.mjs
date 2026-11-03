@@ -61,6 +61,29 @@ test("web binds through the health-checked Render start path", () => {
   assert.match(blocks.web, /APP_ENV\n\s+value: production/);
   assert.match(blocks.web, /--frozen-lockfile/);
 });
+test("job admission identity is explicit, web-only and never a placeholder", () => {
+  // SA-25: backend, code revision, image spec and config digests are operator
+  // inputs; only the accepted CPU model digest is a literal nonsecret pin.
+  for (const key of [
+    "PROCESSING_EXECUTION_BACKEND",
+    "PROCESSING_CODE_REVISION",
+    "PROCESSING_IMAGE_SPEC_SHA256",
+    "PROCESSING_CONFIG_SHA256",
+  ])
+    assert.match(blocks.web, new RegExp(`key: ${key}\\n\\s+sync: false`), key);
+  assert.match(
+    blocks.web,
+    /key: PROCESSING_MODEL_SHA256\n\s+value: fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1\n/,
+  );
+  for (const key of [
+    "PROCESSING_EXECUTION_BACKEND",
+    "PROCESSING_CODE_REVISION",
+    "PROCESSING_IMAGE_SPEC_SHA256",
+    "PROCESSING_MODEL_SHA256",
+    "PROCESSING_CONFIG_SHA256",
+  ])
+    assert.ok(!envKeys(blocks.workflow).includes(key), key);
+});
 test("hosted Blueprints never define the development-only simulated capture flag", () => {
   // SA-71: ALLOW_SIMULATED_CAPTURE_INPUTS is refused by the server outside
   // APP_ENV local/development and on Render; it must not appear at all.

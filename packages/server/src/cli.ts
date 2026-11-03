@@ -1,5 +1,8 @@
 import pg from "pg";
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { jobsConfigFromEnv } from "./jobs/config.js";
+import { issueControllerCapability } from "./jobs/credentials.js";
 import {
   PutObjectCommand,
   GetObjectCommand,
@@ -61,6 +64,10 @@ if (command === "migrate") {
   // listens. Database readiness is reported by /api/v1/health, not startup.
   serverConfig();
   admissionConfigFromEnv(process.env);
+  // Hosted/development processes must declare the permanent job input identity
+  // (execution backend, code revision, image spec, model and config digests).
+  // Local development may start without it; the job routes then fail closed.
+  if (env !== "local") jobsConfigFromEnv(process.env);
   console.log(`Preflight passed (${env})`);
 } else if (command === "storage-init") {
   const config = serverConfig();
@@ -142,7 +149,58 @@ if (command === "migrate") {
     );
     client.destroy();
   }
+} else if (command === "issue-service-capability") {
+  // Operator setup with the OWNER credential, never a request path: mints one
+  // workflow-controller or repair-cron credential. The token is written once to
+  // a new 0600 file (--out); only its SHA-256 is stored and nothing is printed.
+  const flag = (name: string) => {
+    const at = process.argv.indexOf(`--${name}`);
+    return at > 2 ? process.argv[at + 1] : undefined;
+  };
+  const kind = flag("kind");
+  const scopes = (flag("scopes") ?? "").split(",").filter(Boolean);
+  const label = flag("label");
+  const out = flag("out");
+  const hours = Number(flag("ttl-hours") ?? "24");
+  if (
+    (kind !== "workflow" && kind !== "cron") ||
+    !label ||
+    !out ||
+    !scopes.length
+  )
+    throw new Error(
+      "Usage: issue-service-capability --kind workflow|cron --scopes jobs:status,jobs:reconcile --label <text> --out <new file> [--ttl-hours <1-24>]",
+    );
+  const allowed = ["jobs:status", "jobs:reconcile", "jobs:repair"] as const;
+  type Allowed = (typeof allowed)[number];
+  if (
+    !scopes.every((x): x is Allowed =>
+      (allowed as readonly string[]).includes(x),
+    )
+  )
+    throw new Error("Unsupported scope");
+  const ownerUrl =
+    process.env.MIGRATION_DATABASE_URL ??
+    (env === "local" ? process.env.DATABASE_URL : undefined);
+  if (!ownerUrl)
+    throw new Error("Missing server setting: MIGRATION_DATABASE_URL");
+  if (env === "local") requireLoopback([ownerUrl]);
+  const pool = new pg.Pool({ connectionString: ownerUrl, max: 1 });
+  try {
+    const issued = await issueControllerCapability(pool, {
+      kind,
+      scopes,
+      label,
+      ttlSeconds: Math.round(hours * 3600),
+    });
+    await writeFile(out, issued.token, { mode: 0o600, flag: "wx" });
+    console.log(
+      `Issued ${kind} capability ${issued.credentialId} (expires ${issued.expiresAt.toISOString()}); token written to the requested file`,
+    );
+  } finally {
+    await pool.end();
+  }
 } else
   throw new Error(
-    "Expected migrate, seed, preflight, storage-init, storage-check or presign-check",
+    "Expected migrate, seed, preflight, storage-init, storage-check, presign-check or issue-service-capability",
   );

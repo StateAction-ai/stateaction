@@ -49,9 +49,6 @@ before(async () => {
     "thumbnail_jpeg",
     "viewer_rrd",
   ];
-  await db.owner.query("UPDATE jobs SET state = 'running' WHERE id = $1", [
-    p.jobId,
-  ]);
   await db.owner.query(
     `WITH f AS MATERIALIZED (
        SELECT gen_random_uuid() AS id, r.role FROM generate_series(1, $3) g CROSS JOIN unnest($4::text[]) r(role))

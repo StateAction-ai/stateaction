@@ -564,8 +564,10 @@ describe("identity and logical uniqueness", () => {
 
 describe("immutable clips and their file references", () => {
   test("clips reference completed same-job outputs of the matching role; replay cannot repoint", async () => {
-    const p = await processedRecording(db.app, actors, 2);
+    // One execution is admitted at a time: the other job (its file is only
+    // borrowed below) is created first and retired when p takes the slot.
     const q = await processedRecording(db.app, actors, 1);
+    const p = await processedRecording(db.app, actors, 2);
     const clip = p.clips[0]!;
     const accept = (clips: typeof p.clips) =>
       acceptProcessingResult(db.app, {

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/controller-result.v1.json",
+  "title": "Workflow controller action result v1",
+  "description": "Data payload of POST /internal/v1/jobs/{jobId}/controller inside http.success-envelope.v1; one shape per action. bootstrapToken is a secret: pass it to the worker once and never log or persist it. already_recorded means submission intent exists and the controller must NOT submit again.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recorded"],
+      "properties": {
+        "recorded": {
+          "type": "boolean"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["granted", "expiresAt"],
+      "properties": {
+        "granted": {
+          "const": true
+        },
+        "expiresAt": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["granted", "reason"],
+      "properties": {
+        "granted": {
+          "const": false
+        },
+        "reason": {
+          "enum": ["live_owner", "different_run", "not_active"]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renewed", "expiresAt"],
+      "properties": {
+        "renewed": {
+          "const": true
+        },
+        "expiresAt": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renewed"],
+      "properties": {
+        "renewed": {
+          "const": false
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bootstrapToken",
+        "startDeadline",
+        "executionDeadline",
+        "taskInput",
+        "executionBackend"
+      ],
+      "properties": {
+        "state": {
+          "const": "recorded"
+        },
+        "bootstrapToken": {
+          "type": "string",
+          "pattern": "^sa_svc_[A-Za-z0-9_-]{43}$"
+        },
+        "startDeadline": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        "executionDeadline": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        "taskInput": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/jobs/task-input.v1.json"
+            },
+            {
+              "$ref": "https://stateaction.ai/schemas/jobs/task-input.v2.json"
+            }
+          ]
+        },
+        "executionBackend": {
+          "enum": ["local", "modal"]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "const": "already_recorded"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "const": "submit_unknown"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recorded", "slotReleased"],
+      "properties": {
+        "recorded": {
+          "const": true
+        },
+        "slotReleased": {
+          "type": "boolean"
+        }
+      }
+    }
+  ]
+}

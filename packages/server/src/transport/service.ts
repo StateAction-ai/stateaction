@@ -237,9 +237,14 @@ export async function allocateJobOutput(
     .digest("hex");
   const fileId = await mapped(() =>
     inTransaction(deps.pool, async (tx) => {
+      // Serialize slot allocation and cap accounting for this job, and take the
+      // row lock BEFORE the live authority check: a cancellation, deadline or
+      // pointer change that already won its transition is then always seen, so
+      // no new output allocation is granted after it.
+      await tx.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [
+        authority.jobId,
+      ]);
       const { jobId, recordingId } = await assertJobAuthority(tx, authority);
-      // Serialize slot allocation and cap accounting for this job.
-      await tx.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [jobId]);
       const existing = await tx.query<{
         file_id: string;
         request_digest: string;

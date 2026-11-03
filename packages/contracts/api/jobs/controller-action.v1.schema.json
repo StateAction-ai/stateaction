@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/controller-action.v1.json",
+  "title": "Workflow controller action v1",
+  "description": "POST /internal/v1/jobs/{jobId}/controller (scope jobs:reconcile), one strict action per request. claim_lease owner is a fresh nonce per Render task entry. record_worker_submission persists submission intent and returns the one-time bootstrap capability exactly once; a repeat never yields another token and the controller must not submit again. record_execution_evidence is authoritative terminal execution evidence; the admission slot is released only when a terminal job state ALSO exists. The route's jobId is authoritative; actions carry no job ID.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "runRef"],
+      "properties": {
+        "action": {
+          "const": "record_workflow_run"
+        },
+        "runRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "runRef", "owner"],
+      "properties": {
+        "action": {
+          "const": "claim_lease"
+        },
+        "runRef": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "owner"],
+      "properties": {
+        "action": {
+          "const": "renew_lease"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "owner"],
+      "properties": {
+        "action": {
+          "const": "record_worker_submission"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "owner", "executor"],
+      "properties": {
+        "action": {
+          "const": "record_execution"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        },
+        "executor": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "localExecutionRef"],
+              "properties": {
+                "kind": {
+                  "const": "local"
+                },
+                "localExecutionRef": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "functionCallId"],
+              "properties": {
+                "kind": {
+                  "const": "modal"
+                },
+                "functionCallId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80,
+                  "pattern": "^fc-[A-Za-z0-9]{1,77}$"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "owner"],
+      "properties": {
+        "action": {
+          "const": "mark_submit_unknown"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "evidence"],
+      "properties": {
+        "action": {
+          "const": "record_execution_evidence"
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "executionRef"],
+              "properties": {
+                "kind": {
+                  "enum": ["local_child_reaped", "provider_call_terminal"]
+                },
+                "executionRef": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+                },
+                "detail": {
+                  "type": "object",
+                  "maxProperties": 16,
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "const": "pre_submission_rejected"
+                },
+                "detail": {
+                  "type": "object",
+                  "maxProperties": 16,
+                  "additionalProperties": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

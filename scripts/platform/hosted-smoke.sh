@@ -99,7 +99,7 @@ SQL
 echo "== owner migration (explicit owner credentials, not the web env): adoption + catalog"
 MIGRATE_ENV=(env -i PATH="$PATH" APP_ENV=production "MIGRATION_DATABASE_URL=$OWNER_URL" "APP_DB_PASSWORD=$APP_PW")
 first="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$first"
-grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5,6\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
+grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5,6,7\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
   || { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }
@@ -137,8 +137,20 @@ HOSTED_ENV=(env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production APP_ENV=product
   DATABASE_HOST="$DB_HOST" DATABASE_PORT="$DB_PORT" DATABASE_NAME="$DB_NAME" APP_DB_PASSWORD="$APP_PW"
   S3_REGION=auto S3_ENDPOINT=https://smokeaccount.r2.cloudflarestorage.com S3_BUCKET=stateaction-smoke
   S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real
-  PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1)
+  PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1
+  PROCESSING_EXECUTION_BACKEND=modal PROCESSING_CODE_REVISION=smoke-rev
+  PROCESSING_IMAGE_SPEC_SHA256=$(printf image | sha256sum | cut -d' ' -f1)
+  PROCESSING_MODEL_SHA256=fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1
+  PROCESSING_CONFIG_SHA256=$(printf config | sha256sum | cut -d' ' -f1))
 "${HOSTED_ENV[@]}" pnpm --filter @stateaction/server hosted:preflight
+# SA-25: hosted preflight refuses to start without the permanent job input identity.
+for missing in PROCESSING_EXECUTION_BACKEND PROCESSING_CODE_REVISION PROCESSING_IMAGE_SPEC_SHA256 PROCESSING_MODEL_SHA256 PROCESSING_CONFIG_SHA256; do
+  without=()
+  for assignment in "${HOSTED_ENV[@]}"; do [[ "$assignment" == "$missing="* ]] || without+=("$assignment"); done
+  if "${without[@]}" pnpm --filter @stateaction/server hosted:preflight >/dev/null 2>&1; then
+    echo "hosted preflight must require $missing" >&2; exit 1
+  fi
+done
 # SA-71: the development-only simulated capture flag must make hosted preflight fail.
 if "${HOSTED_ENV[@]}" ALLOW_SIMULATED_CAPTURE_INPUTS=true pnpm --filter @stateaction/server hosted:preflight >/dev/null 2>&1; then
   echo "hosted preflight must refuse ALLOW_SIMULATED_CAPTURE_INPUTS" >&2; exit 1

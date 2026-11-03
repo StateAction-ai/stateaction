@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/input-read.v1.json",
+  "title": "Refreshed source read URL v1",
+  "description": "Data payload of POST /internal/v1/jobs/{jobId}/inputs/{fileId}/read. readUrl is a secret bearer URL for one sealed source file of the current claimed job: never log, persist or cache.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fileId", "readUrl", "expiresAt"],
+  "properties": {
+    "fileId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "readUrl": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/signedUrl"
+    },
+    "expiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  }
+}

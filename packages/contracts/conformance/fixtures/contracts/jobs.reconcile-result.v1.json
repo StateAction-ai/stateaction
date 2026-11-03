@@ -1,0 +1,366 @@
+{
+  "contract": "jobs.reconcile-result.v1",
+  "cases": [
+    {
+      "name": "admitted with a pending dispatch",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "admitted",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          },
+          "pendingDispatches": [
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "slot busy",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "slot_busy",
+            "holderJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b"
+          },
+          "pendingDispatches": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "idle",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "idle"
+          },
+          "pendingDispatches": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "dispatch key is job:{jobId}",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "admitted",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:abc",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          },
+          "pendingDispatches": [
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "pending list is bounded",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "admitted",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          },
+          "pendingDispatches": [
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            },
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "admission state is closed",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "queued",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          },
+          "pendingDispatches": [
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "pending dispatches may not be omitted",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "admitted",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "extra field",
+      "input": {
+        "document": {
+          "admission": {
+            "state": "admitted",
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "executionDeadline": "2026-11-02T14:00:00.123Z"
+          },
+          "pendingDispatches": [
+            {
+              "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+              "dispatchKey": "job:019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ],
+          "note": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

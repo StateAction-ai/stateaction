@@ -42,6 +42,7 @@ const { recordIngestPermission, revokeIngestPermission } = await dist(
   "admission/permissions.js",
 );
 const cat = await dist("catalog/catalog.js");
+const { fixtureRunJob } = await dist("jobs/fixtures.js");
 const { establishFixtureAdmission } = await dist("admission/fixtures.js");
 const { hashCredentialPassword } = await dist("catalog/password.js");
 const { storageClient } = await dist("storage.js");
@@ -254,12 +255,8 @@ async function runningJob(ownerUserId) {
     recordingId,
     profileRevision: "sa21-e2e",
   });
-  await app.query("UPDATE jobs SET state = 'running' WHERE id = $1", [jobId]);
-  const token = "sa_svc_" + randomBytes(32).toString("base64url");
-  await owner.query(
-    "UPDATE jobs SET capability_token_sha256 = $2, execution_deadline = now() + interval '1 hour' WHERE id = $1",
-    [jobId, sha(token)],
-  );
+  // Walk the real admission/claim state machine (owner credential fixture).
+  const { capabilityToken: token } = await fixtureRunJob(owner, jobId);
   return { jobId, recordingId, token };
 }
 
@@ -955,8 +952,10 @@ describe("SA-21 completion and recovery routes on production Next", () => {
   });
 
   test("a worker completes, reconciles, cancels and restarts only its own job's outputs with the job capability", async () => {
-    const job = await runningJob(users.collector.id);
+    // One global execution slot: the earlier job is retired when the next one
+    // runs, so its capability no longer resolves (no second live credential).
     const other = await runningJob(users.collector.id);
+    const job = await runningJob(users.collector.id);
     const o1 = await workerOutput(job);
     validOutputPlan(o1.plan);
     const body = { expectedTransportEpoch: 1 };
@@ -985,8 +984,8 @@ describe("SA-21 completion and recovery routes on production Next", () => {
       );
       assert.equal(
         (await call(url, workerPost(other.token, body))).status,
-        403,
-        `${action}: another job's capability`,
+        401,
+        `${action}: a retired job's capability resolves to nothing`,
       );
       assert.equal(
         (await call(url, nativePost(cookies, body))).status,
@@ -997,7 +996,7 @@ describe("SA-21 completion and recovery routes on production Next", () => {
         (
           await call(
             `/internal/v1/jobs/${other.jobId}/outputs/${o1.fileId}/${action}`,
-            workerPost(other.token, body),
+            workerPost(job.token, body),
           )
         ).status,
         403,
@@ -1176,7 +1175,10 @@ describe("SA-21 completion and recovery routes on production Next", () => {
     const o4 = await workerOutput(job);
     await uploadAllParts(o4);
     await owner.query(
-      "UPDATE jobs SET execution_deadline = now() - interval '1 second' WHERE id = $1",
+      "ALTER TABLE jobs DISABLE TRIGGER jobs_orchestration_guard",
+    );
+    await owner.query(
+      "UPDATE jobs SET start_deadline = now() - interval '2 seconds', execution_deadline = now() - interval '1 second' WHERE id = $1",
       [job.jobId],
     );
     for (const action of TRANSITIONS)

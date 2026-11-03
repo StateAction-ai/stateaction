@@ -1,0 +1,61 @@
+/**
+ * Explicit, fail-closed job orchestration settings. Identical locally,
+ * in development and on Render: only the injected environment differs. The
+ * values are the permanent input identity recorded on every admitted job.
+ */
+export type JobsConfig = {
+  executionBackend: "local" | "modal";
+  codeRevision: string;
+  imageSpecSha256: string;
+  modelSha256: string;
+  configSha256: string;
+  limits: {
+    maxOutputFiles: number;
+    maxOutputBytes: string;
+    maxControlDocumentBytes: number;
+  };
+  /** Absolute job deadline anchored to first admission, never reset. */
+  executionDeadlineSeconds: number;
+  /** Time a submitted worker has to win its physical claim. */
+  startDeadlineSeconds: number;
+  /** Controller lease length (renew about every 30 seconds). */
+  leaseSeconds: number;
+  /** Signed source read URL lifetime (capped by the execution deadline). */
+  readUrlSeconds: number;
+};
+
+const REVISION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
+const SHA = /^[0-9a-f]{64}$/;
+
+function setting(env: NodeJS.ProcessEnv, name: string, pattern: RegExp) {
+  const value = env[name];
+  if (!value || !pattern.test(value))
+    throw new Error(`Missing or invalid server setting: ${name}`);
+  return value;
+}
+
+export function jobsConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): JobsConfig {
+  const backend = env.PROCESSING_EXECUTION_BACKEND;
+  if (backend !== "local" && backend !== "modal")
+    throw new Error(
+      "Missing or invalid server setting: PROCESSING_EXECUTION_BACKEND",
+    );
+  return {
+    executionBackend: backend,
+    codeRevision: setting(env, "PROCESSING_CODE_REVISION", REVISION),
+    imageSpecSha256: setting(env, "PROCESSING_IMAGE_SPEC_SHA256", SHA),
+    modelSha256: setting(env, "PROCESSING_MODEL_SHA256", SHA),
+    configSha256: setting(env, "PROCESSING_CONFIG_SHA256", SHA),
+    limits: {
+      maxOutputFiles: 512,
+      maxOutputBytes: "68719476736",
+      maxControlDocumentBytes: 1048576,
+    },
+    executionDeadlineSeconds: 6 * 3600,
+    startDeadlineSeconds: 600,
+    leaseSeconds: 120,
+    readUrlSeconds: 900,
+  };
+}

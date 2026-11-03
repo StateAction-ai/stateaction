@@ -94,6 +94,13 @@ pnpm db:migrate
 pnpm storage:init
 pnpm storage:check
 printf 'S3_PUBLIC_ENDPOINT=%s\n' "$public_endpoint" >> .env # differs from S3_ENDPOINT: signing origin test
+# SA-25: explicit permanent job input identity (health reports checks.jobs).
+{
+  printf 'PROCESSING_EXECUTION_BACKEND=local\n'
+  printf 'PROCESSING_CODE_REVISION=ci-smoke\n'
+  printf 'PROCESSING_IMAGE_SPEC_SHA256=%s\n' "$(printf image | sha256sum | cut -d' ' -f1)"
+  printf 'PROCESSING_CONFIG_SHA256=%s\n' "$(printf config | sha256sum | cut -d' ' -f1)"
+} >> .env
 pnpm storage:presign
 setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!
