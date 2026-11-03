@@ -76,9 +76,9 @@ export async function establishFixtureAdmission(
     await tx.query(
       `INSERT INTO recording_admissions (recording_id, source_manifest_sha256, outcome, job_id,
          ingest_permission_id, permission_ref, capture_format, rgb_profile, capture_config_sha256,
-         close_status, clock_domains, declared_files, calibration_file_ids, counts, channel_count)
+         close_status, clock_domains, declared_files, calibration_file_ids, counts, channel_count, simulation)
        SELECT r.id, r.source_manifest_sha256, 'admitted', $2, $3, $4, r.capture_format, r.rgb_profile,
-              $5, 'closed_clean', '["fixture"]', s.inventory, '{}', '{"fixture": true}', 1
+              $5, 'closed_clean', '["fixture"]', s.inventory, '{}', '{"fixture": true}', 1, r.simulation
        FROM recordings r JOIN recording_seals s ON s.recording_id = r.id WHERE r.id = $1`,
       [
         input.recordingId,

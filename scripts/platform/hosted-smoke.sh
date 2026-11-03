@@ -99,7 +99,7 @@ SQL
 echo "== owner migration (explicit owner credentials, not the web env): adoption + catalog"
 MIGRATE_ENV=(env -i PATH="$PATH" APP_ENV=production "MIGRATION_DATABASE_URL=$OWNER_URL" "APP_DB_PASSWORD=$APP_PW")
 first="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$first"
-grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
+grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5,6\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
   || { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }
@@ -139,6 +139,11 @@ HOSTED_ENV=(env -i PATH="$PATH" HOME="$HOME" NODE_ENV=production APP_ENV=product
   S3_ACCESS_KEY_ID=smoke-access-key S3_SECRET_ACCESS_KEY=smoke-secret-key-not-real
   PROCESSING_PROFILE_REVISION=smoke-1 SUPPORTED_RGB_PROFILES=h264_mcap_v1)
 "${HOSTED_ENV[@]}" pnpm --filter @stateaction/server hosted:preflight
+# SA-71: the development-only simulated capture flag must make hosted preflight fail.
+if "${HOSTED_ENV[@]}" ALLOW_SIMULATED_CAPTURE_INPUTS=true pnpm --filter @stateaction/server hosted:preflight >/dev/null 2>&1; then
+  echo "hosted preflight must refuse ALLOW_SIMULATED_CAPTURE_INPUTS" >&2; exit 1
+fi
+echo "hosted preflight refuses ALLOW_SIMULATED_CAPTURE_INPUTS"
 setsid "${HOSTED_ENV[@]}" pnpm --filter @stateaction/web start > artifacts/hosted-smoke/web.log 2>&1 &
 web_pid=$!
 LAN_IP="$(python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.connect(('192.0.2.1',9));print(s.getsockname()[0])")"

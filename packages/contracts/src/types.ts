@@ -82,6 +82,39 @@ export type RecordingCreateRequest = {
   startedAt: Rfc3339Utc;
   device: { model: string; osVersion: string; appVersion: string };
 };
+// SA-71 additive versions (catalog.v6). Simulated capture is never hardware:
+// every `simulation` marker is optional on hardware and required on simulation.
+export type SimulationProvenanceSource =
+  | { status: "known"; label: string }
+  | { status: "unknown" };
+export type SimulationProvenance = {
+  schema: "stateaction.simulation_provenance.v1";
+  qualification: "simulation_only";
+  mappedTimelineSemantics: "simulation_transport_only";
+  productionQualified: false;
+  provenance: {
+    camera: SimulationProvenanceSource;
+    encoder: SimulationProvenanceSource;
+    clock: SimulationProvenanceSource;
+  };
+};
+/** Snake_case form embedded in the recording-source.v2 manifest. */
+export type SimulationProvenanceArtifact = {
+  schema: "stateaction.simulation_provenance.v1";
+  qualification: "simulation_only";
+  mapped_timeline_semantics: "simulation_transport_only";
+  production_qualified: false;
+  provenance: SimulationProvenance["provenance"];
+};
+export type HardwareRgbProfile = "h264_mcap_v1";
+export type SimulationRgbProfile = "h264_mcap_simulation_v1";
+export type RecordingCreateRequestV2 = Omit<
+  RecordingCreateRequest,
+  "rgbProfile"
+> & { schema: "stateaction.recording_create.v2" } & (
+    | { rgbProfile: HardwareRgbProfile }
+    | { rgbProfile: SimulationRgbProfile; simulation: SimulationProvenance }
+  );
 export type InventoryFile = {
   fileId: Uuid;
   role: SourceFileRole;
@@ -106,6 +139,15 @@ export type Recording = {
   createdAt: Rfc3339Utc;
   files: (InventoryFile & { state: FileState })[];
   missingRequiredRoles: SourceFileRole[];
+};
+export type RecordingV2 = Recording &
+  (
+    | { rgbProfile: HardwareRgbProfile }
+    | { rgbProfile: SimulationRgbProfile; simulation: SimulationProvenance }
+  );
+export type RecordingRegistrationV2 = {
+  recording: RecordingV2;
+  collectionPermissionRef: string;
 };
 export type UploadCreateRequest = {
   recordingId: Uuid;
@@ -160,6 +202,23 @@ type TaskBase = {
 export type TaskInput =
   | (TaskBase & { kind: "process_recording"; sourceManifestSha256: Sha256Hex })
   | (TaskBase & { kind: "export_release"; selectionSha256: Sha256Hex });
+export type TaskInputV2 =
+  | (Omit<TaskBase, "schemaVersion"> & {
+      schemaVersion: 2;
+      kind: "process_recording";
+      sourceManifestSha256: Sha256Hex;
+    } & (
+        | { rgbProfile: HardwareRgbProfile }
+        | {
+            rgbProfile: SimulationRgbProfile;
+            simulation: SimulationProvenance;
+          }
+      ))
+  | (Omit<TaskBase, "schemaVersion"> & {
+      schemaVersion: 2;
+      kind: "export_release";
+      selectionSha256: Sha256Hex;
+    });
 export type WorkerClaimRequest = {
   schemaVersion: 1;
   jobId: Uuid;
@@ -282,6 +341,16 @@ export type RecordingSourceV1 = {
   collection_permission_ref: string;
   source_verification: "pending";
 };
+export type RecordingSourceV2 = Omit<
+  RecordingSourceV1,
+  "schema" | "rgb_profile"
+> & { schema: "stateaction.recording_source.v2" } & (
+    | { rgb_profile: HardwareRgbProfile }
+    | {
+        rgb_profile: SimulationRgbProfile;
+        simulation: SimulationProvenanceArtifact;
+      }
+  );
 /** NPZ arrays, in schema order; see HAND_ARRAY_SHAPES. */
 export type HandArrayName =
   | "image_landmarks_px"
