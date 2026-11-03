@@ -1352,6 +1352,41 @@ def run_pipeline(
 # ------------------------------------------------------------------- verification
 
 
+def commit_parents(repo: Path, sha: str) -> list[str] | None:
+    """Parents of an existing commit, or None when `sha` is not a local commit object."""
+    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    fields = git(repo, "rev-list", "--parents", "-n", "1", sha, check=False).split()
+    # rev-list dereferences tags: require the very commit object that was named.
+    return fields[1:] if fields and fields[0] == sha else None
+
+
+def receipt_context_matches(
+    repo: Path, receipt: dict, head_sha: str, base_sha: str
+) -> bool:
+    """Was the receipt produced for exactly this commit context?
+
+    `tree` receipts name the head itself. A `staged` (pre-commit) receipt names the
+    HEAD that was current when the staged tree was tested: the resulting commit's
+    parent for a normal commit, or the retained previous owned head for a
+    single-commit amend. For an amend, the previous head and the resulting commit
+    must both have exactly one parent, equal to the receipt's tested base and the
+    latest origin/main. Arbitrary ancestry is never accepted.
+    """
+    recorded = receipt.get("head")
+    if receipt.get("mode") == "tree":
+        return recorded == head_sha
+    if receipt.get("mode") != "staged":
+        return False
+    parents = commit_parents(repo, head_sha)
+    if parents is not None and parents == [recorded]:
+        return True
+    tested_base = (receipt.get("base") or {}).get("sha")
+    if parents != [base_sha] or tested_base != base_sha:
+        return False
+    return commit_parents(repo, recorded) == [base_sha]
+
+
 def verify_receipt(
     repo: Path,
     head: str = "HEAD",
@@ -1403,11 +1438,7 @@ def verify_receipt(
         errors.append(
             "a newer attempt on this tree superseded or invalidated the receipt"
         )
-    parent = git(repo, "rev-parse", "--verify", f"{head_sha}^", check=False)
-    if not (
-        (receipt.get("mode") == "staged" and receipt.get("head") == parent)
-        or (receipt.get("mode") == "tree" and receipt.get("head") == head_sha)
-    ):
+    if not receipt_context_matches(repo, receipt, head_sha, base_sha):
         errors.append(
             "receipt was produced for a different commit context; run `pnpm ci:local` on this head"
         )
