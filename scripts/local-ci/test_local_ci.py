@@ -827,6 +827,120 @@ class VerifyTests(RepoCase):
         self.assertTrue(any("guard" in e for e in self.errors()))
 
 
+class AmendVerifyTests(RepoCase):
+    """Receipts for a normal `git commit --amend` of a single-commit PR (real Git)."""
+
+    commit_passed = VerifyTests.commit_passed
+    errors = VerifyTests.errors
+    rewrite = VerifyTests.rewrite
+
+    def head(self, ref="HEAD"):
+        return sh(self.repo, "git", "rev-parse", ref)
+
+    def amend_passed(self, text="three\n"):
+        """Commit, then test a staged amend with HEAD = the previous owned head."""
+        self.commit_passed()
+        self.old_head = self.head()
+        self.stage_change(text)
+        record = self.run_staged()
+        self.assertEqual(record["verdict"], "PASS")
+        self.assertEqual(
+            json.loads(Path(record["receipt"]).read_text())["head"], self.old_head
+        )
+        sh(self.repo, "git", "commit", "-q", "--amend", "-m", "amended")
+        self.assertNotEqual(self.head(), self.old_head)
+        return record
+
+    def move_main(self):
+        sh(self.repo, "git", "checkout", "-q", "--detach", "origin/main")
+        sh(self.repo, "git", "commit", "-q", "--allow-empty", "-m", "main moved")
+        newer = self.head()
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", newer)
+        sh(self.repo, "git", "checkout", "-q", "main")
+        return newer
+
+    def test_normal_amend_of_a_single_commit_is_accepted(self):
+        self.amend_passed()
+        self.assertEqual(self.errors(), [])
+
+    def test_amend_with_different_content_than_tested_is_rejected(self):
+        self.amend_passed()
+        (self.repo / "app.txt").write_text("untested\n")
+        sh(self.repo, "git", "commit", "-qa", "--amend", "-m", "again")
+        self.assertTrue(any("no PASS receipt" in e for e in self.errors()))
+
+    def test_amend_after_the_base_moved_is_rejected(self):
+        self.amend_passed()
+        self.move_main()
+        self.assertTrue(any("latest origin/main" in e for e in self.errors()))
+
+    def test_same_tree_replayed_on_a_newer_base_is_rejected(self):
+        self.amend_passed()
+        newer = self.move_main()
+        tree = self.head("HEAD^{tree}")
+        replayed = sh(self.repo, "git", "commit-tree", tree, "-p", newer, "-m", "r")
+        sh(self.repo, "git", "reset", "-q", "--hard", replayed)
+        self.assertTrue(
+            any("different commit context" in e for e in self.errors()), self.errors()
+        )
+
+    def test_old_head_with_several_commits_is_rejected(self):
+        self.commit_passed()
+        (self.repo / "y.txt").write_text("y")
+        sh(self.repo, "git", "add", "y.txt")
+        sh(self.repo, "git", "commit", "-qm", "second")
+        self.stage_change("three\n")
+        self.assertEqual(self.run_staged()["verdict"], "PASS")
+        sh(self.repo, "git", "reset", "-q", "--soft", "origin/main")
+        sh(self.repo, "git", "commit", "-qm", "squashed")
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+
+    def test_old_head_that_is_a_merge_is_rejected(self):
+        self.commit_passed()
+        first = self.head()
+        sh(self.repo, "git", "checkout", "-q", "-b", "side", "origin/main")
+        (self.repo / "side.txt").write_text("s")
+        sh(self.repo, "git", "add", "side.txt")
+        sh(self.repo, "git", "commit", "-qm", "side")
+        sh(self.repo, "git", "merge", "-q", "--no-ff", "-m", "merge", first)
+        self.stage_change("three\n")
+        self.assertEqual(self.run_staged()["verdict"], "PASS")
+        sh(self.repo, "git", "reset", "-q", "--soft", "origin/main")
+        sh(self.repo, "git", "commit", "-qm", "squashed")
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+
+    def test_missing_old_head_object_is_rejected(self):
+        record = self.amend_passed()
+        sh(self.repo, "git", "reflog", "expire", "--expire=now", "--all")
+        sh(self.repo, "git", "prune", "--expire=now")
+        self.assertEqual(
+            sh(self.repo, "git", "cat-file", "-t", self.old_head, check=False), ""
+        )
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+        self.rewrite(record, lambda d: d.update(head="f" * 40))
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+
+    def test_malformed_or_annotated_tag_old_head_is_rejected(self):
+        record = self.amend_passed()
+        sh(self.repo, "git", "tag", "-a", "-m", "t", "oldtag", self.old_head)
+        tag = self.head("oldtag")
+        self.assertNotEqual(tag, self.old_head)
+        for bad in (tag, 1, ["x"], {"a": 1}, True):
+            self.rewrite(record, lambda d, bad=bad: d.update(head=bad))
+            self.assertTrue(
+                any("different commit context" in e for e in self.errors()), bad
+            )
+
+    def test_amend_with_failed_or_superseded_attempt_is_rejected(self):
+        record = self.amend_passed()
+        self.rewrite(record, lambda d: d["stages"][0].update(status="failed"))
+        self.assertTrue(any("did not pass" in e for e in self.errors()))
+        self.rewrite(record, lambda d: d["stages"][0].update(status="passed"))
+        self.assertEqual(self.errors(), [])
+        local_ci.record_attempt(self.home, self.head("HEAD^{tree}"), "newer", "running")
+        self.assertTrue(any("superseded" in e for e in self.errors()))
+
+
 class InstallerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="local-ci-install-"))
