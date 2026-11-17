@@ -11,6 +11,7 @@ dependencies = []
 
 [project.scripts]
 stateaction-worker = "stateaction_processing.cli:main"
+stateaction-artifacts = "stateaction_processing.artifact_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/stateaction_processing"]
@@ -20,10 +21,16 @@ dev = ["mypy==1.19.1", "ruff==0.17.3"]
 decode = ["av==19.0.2", "numpy==2.5.4"]
 # SA-30: CPU hand landmarker. Same pins as the SA-61 probe (numpy matches rerun-sdk 0.41.0 era pins).
 cpu = ["mediapipe==1.2.0"]
+# SA-31: clip artifact export. rerun-sdk 0.41.0 is the pinned SA-61/Rerun viewer pair; the frozen v1
+# contract validators come from the in-repo package (path source, editable so the checkout api/ is used).
+export = ["rerun-sdk==0.41.0", "stateaction-contracts"]
 
 [tool.uv]
 required-version = "==0.13.6"
-default-groups = ["dev", "decode", "cpu"]
+default-groups = ["dev", "decode", "cpu", "export"]
+
+[tool.uv.sources]
+stateaction-contracts = { path = "../../packages/contracts/python", editable = true }
 
 [tool.mypy]
 files = [
@@ -41,6 +48,12 @@ files = [
   "src/stateaction_processing/hand_model.py",
   "src/stateaction_processing/hands.py",
   "src/stateaction_processing/hand_stream.py",
+  "src/stateaction_processing/artifact_types.py",
+  "src/stateaction_processing/artifact_rrd.py",
+  "src/stateaction_processing/artifact_clip.py",
+  "src/stateaction_processing/artifact_export.py",
+  "src/stateaction_processing/artifact_reader.py",
+  "src/stateaction_processing/artifact_cli.py",
 ]
 strict = true
 follow_imports = "skip"
@@ -53,3 +66,7 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["stateaction_processing"]
+
+[[tool.mypy.overrides]]
+module = ["rerun.*", "stateaction_contracts.*"]
+ignore_missing_imports = true
