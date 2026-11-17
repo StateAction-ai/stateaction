@@ -13,7 +13,7 @@ export class LocalExecutor {
     )
       throw new Error("LocalExecutor requires explicit local configuration");
     const python =
-      process.env.PYTHON_EXECUTABLE ??
+      process.env.PYTHON_EXECUTABLE ||
       fileURLToPath(
         new URL(
           "../../../workers/processing/.venv/bin/python",

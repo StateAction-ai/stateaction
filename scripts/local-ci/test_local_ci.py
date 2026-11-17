@@ -509,6 +509,33 @@ class PipelineTests(RepoCase):
         self.assertEqual(self.receipts(), [])
         self.assertDead(pidfile)
 
+    def test_mobile_stage_allows_gradle_to_finish_shutdown(self):
+        pidfile = self.tmp / "gradle.pid"
+        code = (
+            "import subprocess, sys; "
+            "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(0.5)'], "
+            "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, "
+            "stderr=subprocess.DEVNULL, start_new_session=True); "
+            f"open({str(pidfile)!r}, 'w').write(str(p.pid))"
+        )
+        self.set_stages([stage("mobile-android-dart", code)])
+        sh(self.repo, "git", "add", "-A")
+        with mock.patch.object(
+            local_ci, "is_gradle_daemon", return_value=True
+        ) as match:
+            record = self.run_staged()
+        match.assert_called_with(int(pidfile.read_text()))
+        self.assertEqual(record["stages"][0]["status"], "passed")
+        self.assertDead(pidfile)
+
+    def test_mobile_stage_still_reaps_unrelated_detached_grandchild(self):
+        pidfile = self.tmp / "unrelated.pid"
+        self.set_stages([{**self.detached_stage(pidfile), "id": "mobile-android-dart"}])
+        sh(self.repo, "git", "add", "-A")
+        record = self.run_staged()
+        self.assertEqual(record["stages"][0]["status"], "leaked-process")
+        self.assertDead(pidfile)
+
     def test_detached_grandchild_after_failure_is_reaped(self):
         pidfile = self.tmp / "d2.pid"
         self.set_stages([self.detached_stage(pidfile, exit_code=2)])
@@ -1439,6 +1466,21 @@ class CacheTests(RepoCase):
 
 
 class StageFileTests(unittest.TestCase):
+    def test_android_upload_build_runs_in_mobile_lane(self):
+        spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
+        stages = {item["id"]: item["argv"] for item in spec["stages"]}
+        server = next(
+            arg for arg in stages["server-tooling"] if arg.startswith("--exclude=")
+        )
+        mobile = next(
+            arg
+            for arg in stages["mobile-android-dart"]
+            if arg.startswith("--projects=")
+        )
+        project = "android-upload-spike-native"
+        self.assertIn(project, server.split("=", 1)[1].split(","))
+        self.assertIn(project, mobile.split("=", 1)[1].split(","))
+
     def test_shipped_stage_file_is_valid_serial_and_declares_all_suites(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
         ids = [s["id"] for s in spec["stages"]]
@@ -1451,6 +1493,7 @@ class StageFileTests(unittest.TestCase):
             "server-auth-integration",
             "web-auth-e2e",
             "mobile-backend-e2e",
+            "jobs-controller-integration",
             "runtime-smoke",
         ):
             self.assertIn(needed, ids)
@@ -1462,6 +1505,18 @@ class StageFileTests(unittest.TestCase):
                 if "run-many" in joined:
                     self.assertIn("--parallel=1", joined, item["id"])
             self.assertNotIn("docker", joined)
+        controller = next(
+            s for s in spec["stages"] if s["id"] == "jobs-controller-integration"
+        )
+        self.assertTrue(controller["fixtures"])
+        self.assertNotIn("cache", controller)
+        self.assertEqual(
+            controller["argv"],
+            ["pnpm", "--filter", "@stateaction/jobs", "test:integration"],
+        )
+        self.assertLess(ids.index("render-cli"), ids.index(controller["id"]))
+        self.assertLess(ids.index("python-sync"), ids.index(controller["id"]))
+        self.assertLess(ids.index("server-tooling"), ids.index(controller["id"]))
         self.assertTrue(spec["unautomated"])
 
 

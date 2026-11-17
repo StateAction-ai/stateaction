@@ -54,7 +54,18 @@ test("no Render API key is provisioned until a dispatch feature needs it", () =>
 });
 test("workflow tasks receive no database, storage or dispatch credentials", () => {
   const keys = envKeys(blocks.workflow);
-  assert.deepEqual(keys.sort(), ["APP_ENV", "NODE_VERSION"]);
+  // SA-26: API URL + operator-issued workflow credential (jobs:status/jobs:reconcile) only.
+  assert.deepEqual(keys.sort(), [
+    "APP_ENV",
+    "CONTROLLER_CAPABILITY_TOKEN",
+    "EXECUTION_BACKEND",
+    "NODE_VERSION",
+    "STATEACTION_API_URL",
+  ]);
+  for (const key of ["CONTROLLER_CAPABILITY_TOKEN", "STATEACTION_API_URL"])
+    assert.match(blocks.workflow, new RegExp(`key: ${key}\\n\\s+sync: false`));
+  assert.ok(!envKeys(blocks.web).includes("CONTROLLER_CAPABILITY_TOKEN"));
+  assert.doesNotMatch(blocks.workflow, /DATABASE|S3_|DISPATCH_CAPABILITY/);
 });
 test("web binds through the health-checked Render start path", () => {
   assert.match(blocks.web, /healthCheckPath: \/api\/v1\/live/);

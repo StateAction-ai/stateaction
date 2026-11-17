@@ -104,3 +104,13 @@ services:
         value: 24.22.2
       - key: APP_ENV
         value: production
+      # SA-26 controller: API-only access with an operator-issued workflow credential
+      # (scopes jobs:status, jobs:reconcile; max 24 h; issue-service-capability). No
+      # database or storage credential. EXECUTION_BACKEND=modal is refused (fail closed)
+      # until a qualified ModalExecutor exists; only local development runs LocalExecutor.
+      - key: STATEACTION_API_URL
+        sync: false
+      - key: CONTROLLER_CAPABILITY_TOKEN
+        sync: false
+      - key: EXECUTION_BACKEND
+        sync: false
