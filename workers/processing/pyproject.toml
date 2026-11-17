@@ -17,9 +17,11 @@ packages = ["src/stateaction_processing"]
 
 [dependency-groups]
 dev = ["mypy==1.19.1", "ruff==0.17.3"]
+decode = ["av==19.0.2", "numpy==2.5.4"]
 
 [tool.uv]
 required-version = "==0.13.6"
+default-groups = ["dev", "decode"]
 
 [tool.mypy]
 files = [
@@ -27,6 +29,13 @@ files = [
   "src/stateaction_processing/run_job.py",
   "src/stateaction_processing/local_signal.py",
   "src/stateaction_processing/fixture_noop.py",
+  "src/stateaction_processing/mcap_stream.py",
+  "src/stateaction_processing/capture_stream.py",
+  "src/stateaction_processing/contract.py",
+  "src/stateaction_processing/h264_decode.py",
+  "src/stateaction_processing/jpeg_decode.py",
+  "src/stateaction_processing/jpeg_stream.py",
+  "src/stateaction_processing/frames.py",
 ]
 strict = true
 follow_imports = "skip"
@@ -36,3 +45,6 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["stateaction_processing"]
