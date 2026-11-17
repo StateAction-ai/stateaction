@@ -1,0 +1,93 @@
+{
+  "contract": "http.dataset-change.v1",
+  "cases": [
+    {
+      "name": "created",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "revision": 1
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "renamed",
+      "input": {
+        "document": {
+          "revision": 2
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "added",
+      "input": {
+        "document": {
+          "added": 3,
+          "revision": 3
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "removed",
+      "input": {
+        "document": {
+          "removed": true,
+          "revision": 4
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "revision required",
+      "input": {
+        "document": {
+          "added": 1
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "added is bounded",
+      "input": {
+        "document": {
+          "added": 101,
+          "revision": 2
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/added"
+        ]
+      }
+    },
+    {
+      "name": "closed object",
+      "input": {
+        "document": {
+          "revision": 2,
+          "members": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-update.v1.json",
+  "title": "Rename dataset request v1",
+  "description": "PATCH /api/v1/datasets/{datasetId} body (staff only). Stale expectedRevision returns 409.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "expectedRevision"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "expectedRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    }
+  }
+}

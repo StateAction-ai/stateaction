@@ -1,0 +1,86 @@
+{
+  "contract": "http.clip-read-create.v1",
+  "cases": [
+    {
+      "name": "thumbnail",
+      "input": {
+        "document": {
+          "role": "thumbnail_jpeg"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "viewer",
+      "input": {
+        "document": {
+          "role": "viewer_rrd"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "raw video has no path",
+      "input": {
+        "document": {
+          "role": "clip_mp4"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "source MCAP has no path",
+      "input": {
+        "document": {
+          "role": "source_mcap"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "role required",
+      "input": {
+        "document": {}
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "no object keys from the client",
+      "input": {
+        "document": {
+          "role": "viewer_rrd",
+          "objectKey": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

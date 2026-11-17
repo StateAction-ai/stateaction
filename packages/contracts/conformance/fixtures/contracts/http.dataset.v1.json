@@ -1,0 +1,109 @@
+{
+  "contract": "http.dataset.v1",
+  "cases": [
+    {
+      "name": "customer shape",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": 3,
+          "durationNs": "2700"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "staff shape",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": 3,
+          "durationNs": "2700",
+          "revision": 4,
+          "createdAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "count is a safe integer",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": -1,
+          "durationNs": "2700"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/clipCount"
+        ]
+      }
+    },
+    {
+      "name": "duration is decimal text",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": 3,
+          "durationNs": 2700
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/durationNs"
+        ]
+      }
+    },
+    {
+      "name": "no collector or owner detail",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": 3,
+          "durationNs": "2700",
+          "createdBy": "user-1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "no grant detail",
+      "input": {
+        "document": {
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "name": "Kitchen pours",
+          "clipCount": 3,
+          "durationNs": "2700",
+          "grants": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

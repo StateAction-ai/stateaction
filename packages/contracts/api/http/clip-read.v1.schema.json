@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/clip-read.v1.json",
+  "title": "Brokered clip read v1",
+  "description": "Data payload of POST .../reads. url is a secret short-lived bearer URL for exactly one derived object (60 s maximum; no-store). Never log, persist or cache it. A URL already issued cannot be recalled before expiresAt; revocation only stops new URLs. Sizes are bounded by role (thumbnail 5 MiB, RRD 128 MiB).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url",
+    "role",
+    "contentType",
+    "sizeBytes",
+    "expiresAt",
+    "ttlSeconds"
+  ],
+  "properties": {
+    "url": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/signedUrl"
+    },
+    "role": {
+      "enum": ["thumbnail_jpeg", "viewer_rrd"]
+    },
+    "contentType": {
+      "enum": ["image/jpeg", "application/octet-stream"]
+    },
+    "sizeBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/byteCount"
+    },
+    "expiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "ttlSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60
+    }
+  }
+}

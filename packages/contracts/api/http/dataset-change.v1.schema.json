@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-change.v1.json",
+  "title": "Dataset change result v1",
+  "description": "Data payload of dataset create (datasetId, revision), rename (revision), add members (added, revision) and remove member (removed, revision).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["revision"],
+  "properties": {
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "datasetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "added": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "removed": {
+      "type": "boolean"
+    }
+  }
+}

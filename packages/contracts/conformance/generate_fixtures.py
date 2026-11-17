@@ -3324,6 +3324,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa25_fixtures import render_sa25
 
     files.update(render_sa25())
+    # SA-35 adds only new fixture files for the catalog.v8 dataset contracts.
+    from generate_sa35_fixtures import render_sa35
+
+    files.update(render_sa35())
     return files
 
 

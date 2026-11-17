@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-page.v1.json",
+  "title": "Dataset page v1",
+  "description": "Data payload of GET /api/v1/datasets: a bounded keyset page (default 24, maximum 100). nextCursor is opaque.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["datasets", "nextCursor"],
+  "properties": {
+    "datasets": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/http/dataset.v1.json"
+      }
+    },
+    "nextCursor": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

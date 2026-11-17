@@ -12,9 +12,13 @@ import {
   registerRecording,
   reserveSourceFile,
   sealRecording,
-  setDatasetAccess,
   type ClipInput,
 } from "./catalog.js";
+import {
+  clearClips,
+  grantDatasetAccess,
+  recordSharingPermission,
+} from "../datasets/operator.js";
 import { hashCredentialPassword } from "./password.js";
 import { establishFixtureAdmission } from "../admission/fixtures.js";
 
@@ -319,12 +323,23 @@ export async function seedLocalCatalog(
     expectedRevision: 1,
     actorUserId: staff,
   });
-  await setDatasetAccess(owner, {
+  // Synthetic local evidence only: the operator records recipient-sharing
+  // permission, clears the shared dataset's approved members, then grants.
+  await recordSharingPermission(owner, {
+    permissionRef: "local-seed-share-1",
     datasetId: shared.id,
-    userId: SEED.users.customer.id,
-    enabled: true,
+    recipientUserId: SEED.users.customer.id,
+    evidenceRef: "local-seed:pilot-agreement",
+    recordedBy: "local-seed",
+  });
+  await clearClips(owner, {
+    permissionRef: "local-seed-share-1",
+    allCurrentMembers: true,
+    clearedBy: "local-seed",
+  });
+  await grantDatasetAccess(owner, {
+    permissionRef: "local-seed-share-1",
     actorUserId: staff,
-    permissionEvidenceRef: "local-seed:pilot-agreement",
   });
   return { seeded: true, credentialAccounts: Boolean(options.password) };
 }

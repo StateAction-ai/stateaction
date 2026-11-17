@@ -99,8 +99,17 @@ SQL
 echo "== owner migration (explicit owner credentials, not the web env): adoption + catalog"
 MIGRATE_ENV=(env -i PATH="$PATH" APP_ENV=production "MIGRATION_DATABASE_URL=$OWNER_URL" "APP_DB_PASSWORD=$APP_PW")
 first="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$first"
-grep -q 'checksum adopted \[1\]' <<<"$first" && grep -q 'applied \[2,3,4,5,6,7\]' <<<"$first" && grep -q 'grants applied' <<<"$first" \
-  || { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
+expected_versions=()
+for migration in packages/server/migrations/[0-9][0-9][0-9]_*.sql; do
+  filename="${migration##*/}"
+  version=$((10#${filename%%_*}))
+  if ((version > 1)); then expected_versions+=("$version"); fi
+done
+expected_applied="$(IFS=,; printf '%s' "${expected_versions[*]}")"
+grep -Fq 'checksum adopted [1]' <<<"$first" &&
+  grep -Fq "applied [$expected_applied]" <<<"$first" &&
+  grep -Fq 'grants applied' <<<"$first" ||
+  { echo "legacy v1 must adopt its checksum and apply the published catalog" >&2; exit 1; }
 second="$("${MIGRATE_ENV[@]}" node packages/server/dist/cli.js migrate)"; echo "$second"
 grep -q 'applied \[\],' <<<"$second" || { echo "second migration must be a no-op" >&2; exit 1; }
 echo "== broad default ACLs were removed by stateaction_grant_app_role"

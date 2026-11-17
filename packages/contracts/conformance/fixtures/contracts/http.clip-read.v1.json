@@ -1,0 +1,138 @@
+{
+  "contract": "http.clip-read.v1",
+  "cases": [
+    {
+      "name": "thumbnail read",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "thumbnail_jpeg",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 60
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "viewer read",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "viewer_rrd",
+          "contentType": "application/octet-stream",
+          "sizeBytes": "134217728",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 60
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "ttl is bounded",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "thumbnail_jpeg",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 61
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/ttlSeconds"
+        ]
+      }
+    },
+    {
+      "name": "ttl is positive",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "thumbnail_jpeg",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 0
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/ttlSeconds"
+        ]
+      }
+    },
+    {
+      "name": "only derived roles",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "clip_mp4",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 60
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "url is http(s)",
+      "input": {
+        "document": {
+          "url": "ftp://host/key",
+          "role": "thumbnail_jpeg",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 60
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/url"
+        ]
+      }
+    },
+    {
+      "name": "no object key beside the url",
+      "input": {
+        "document": {
+          "url": "http://127.0.0.1:19000/bucket/jobs/j/outputs/f/e1/thumbnail.jpg?X-Amz-Expires=60&X-Amz-Signature=abc",
+          "role": "thumbnail_jpeg",
+          "contentType": "image/jpeg",
+          "sizeBytes": "4096",
+          "expiresAt": "2026-11-02T14:01:00.000Z",
+          "ttlSeconds": 60,
+          "objectKey": "k"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}
