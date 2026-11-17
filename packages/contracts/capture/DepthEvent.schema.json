@@ -1,0 +1,504 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/capture/v1/DepthEvent",
+  "title": "stateaction.capture.DepthEvent.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "stream_id",
+    "event_id",
+    "source_kind",
+    "native_timestamp_ns",
+    "native_clock_id",
+    "clock_epoch",
+    "timestamp_relation",
+    "estimate_provenance",
+    "capture_time_basis",
+    "capture_time_ns",
+    "clock_mapping_revision",
+    "receipt_native_timestamp_ns",
+    "acquisition_source_frame_id",
+    "measurement_source_frame_id",
+    "calibration_id",
+    "depth",
+    "confidence"
+  ],
+  "properties": {
+    "recording_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "stream_id": {
+      "enum": ["depth_raw", "depth_dense"]
+    },
+    "event_id": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "source_kind": {
+      "enum": [
+        "arcore_acquire_raw_depth_image_16bits",
+        "arcore_acquire_depth_image_16bits"
+      ]
+    },
+    "native_timestamp_ns": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "native_clock_id": {
+      "$ref": "#/$defs/clockDomain"
+    },
+    "clock_epoch": {
+      "$ref": "#/$defs/uint32"
+    },
+    "timestamp_relation": {
+      "enum": ["first", "advanced", "repeated", "clock_reset"]
+    },
+    "estimate_provenance": {
+      "enum": ["new_estimate", "reprojected", "api_repeat", "unknown"]
+    },
+    "capture_time_basis": {
+      "enum": ["transport_mapping", "acquisition_receipt"]
+    },
+    "capture_time_ns": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "clock_mapping_revision": {
+      "$ref": "#/$defs/revision"
+    },
+    "receipt_native_timestamp_ns": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "acquisition_source_frame_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "measurement_source_frame_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "calibration_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/label"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "depth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_channel",
+        "output_sequence",
+        "encoding",
+        "byte_order",
+        "units",
+        "native_format",
+        "native_width",
+        "native_height",
+        "native_row_stride_bytes",
+        "native_pixel_stride_bytes",
+        "stored_width",
+        "stored_height",
+        "crop"
+      ],
+      "properties": {
+        "output_channel": {
+          "enum": ["/camera/depth_raw/image", "/camera/depth_dense/image"]
+        },
+        "output_sequence": {
+          "$ref": "#/$defs/uint32"
+        },
+        "encoding": {
+          "const": "16UC1"
+        },
+        "byte_order": {
+          "const": "little"
+        },
+        "units": {
+          "const": "millimetre"
+        },
+        "native_format": {
+          "const": "android.hardware.HardwareBuffer.D_16"
+        },
+        "native_width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "native_height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "native_row_stride_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "native_pixel_stride_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "stored_width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "stored_height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "crop": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y", "width", "height"],
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16383
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 16383
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4096
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "output_channel",
+            "output_sequence",
+            "encoding",
+            "units",
+            "native_format",
+            "native_timestamp",
+            "native_width",
+            "native_height",
+            "native_row_stride_bytes",
+            "native_pixel_stride_bytes",
+            "stored_width",
+            "stored_height",
+            "crop"
+          ],
+          "properties": {
+            "state": {
+              "const": "separate_image"
+            },
+            "output_channel": {
+              "const": "/camera/depth_raw/confidence"
+            },
+            "output_sequence": {
+              "$ref": "#/$defs/uint32"
+            },
+            "encoding": {
+              "const": "mono8"
+            },
+            "units": {
+              "const": "source_confidence_u8"
+            },
+            "native_format": {
+              "$ref": "#/$defs/label"
+            },
+            "native_timestamp": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "state",
+                    "native_timestamp_ns",
+                    "native_clock_id"
+                  ],
+                  "properties": {
+                    "state": {
+                      "const": "reported"
+                    },
+                    "native_timestamp_ns": {
+                      "$ref": "#/$defs/int64Decimal"
+                    },
+                    "native_clock_id": {
+                      "$ref": "#/$defs/clockDomain"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["state", "reason"],
+                  "properties": {
+                    "state": {
+                      "const": "unavailable"
+                    },
+                    "reason": {
+                      "$ref": "#/$defs/label"
+                    }
+                  }
+                }
+              ]
+            },
+            "native_width": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "native_height": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "native_row_stride_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777216
+            },
+            "native_pixel_stride_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            },
+            "stored_width": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "stored_height": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4096
+            },
+            "crop": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["x", "y", "width", "height"],
+                  "properties": {
+                    "x": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16383
+                    },
+                    "y": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 16383
+                    },
+                    "width": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 4096
+                    },
+                    "height": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 4096
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state"],
+          "properties": {
+            "state": {
+              "enum": ["not_provided_by_source", "unavailable_for_frame"]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["stream_id"],
+        "properties": {
+          "stream_id": {
+            "const": "depth_raw"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_kind": {
+            "const": "arcore_acquire_raw_depth_image_16bits"
+          },
+          "depth": {
+            "properties": {
+              "output_channel": {
+                "const": "/camera/depth_raw/image"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["stream_id"],
+        "properties": {
+          "stream_id": {
+            "const": "depth_dense"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source_kind": {
+            "const": "arcore_acquire_depth_image_16bits"
+          },
+          "depth": {
+            "properties": {
+              "output_channel": {
+                "const": "/camera/depth_dense/image"
+              }
+            }
+          },
+          "confidence": {
+            "properties": {
+              "state": {
+                "enum": ["not_provided_by_source", "unavailable_for_frame"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["capture_time_basis"],
+        "properties": {
+          "capture_time_basis": {
+            "const": "acquisition_receipt"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "receipt_native_timestamp_ns": {
+            "$ref": "#/$defs/int64Decimal"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["capture_time_basis"],
+        "properties": {
+          "capture_time_basis": {
+            "const": "transport_mapping"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "receipt_native_timestamp_ns": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": {
+      "description": "Domain entity identifier: canonical lowercase RFC 9562 UUID, versions 1-8.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "int64Decimal": {
+      "description": "Exact non-negative signed 64-bit integer as a decimal string (0..9223372036854775807); used for nanosecond timestamps, PTS and native counters.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$"
+    },
+    "clockDomain": {
+      "description": "Named native clock domain (for example android.elapsed_realtime or android.sensor_event). Timestamps from different domains are never merged.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){0,3}$"
+    },
+    "revision": {
+      "description": "Code, profile or rule revision label.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "uint32": {
+      "description": "MCAP message sequence (uint32).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "label": {
+      "description": "Textual label (calibration ID, sensor/stream ID, kind, model, reason code). Intentionally not a UUID.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "text": {
+      "description": "Bounded human-readable diagnostic: 1..256 printable ASCII characters.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[ -~]{1,256}$"
+    },
+    "timeBase": {
+      "description": "Encoder PTS time base: exactly 1/1000000 seconds.",
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
+    }
+  }
+}

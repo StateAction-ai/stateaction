@@ -2,3 +2,7 @@
 *.bat whitespace=cr-at-eol
 # Contract fixtures are digest-covered exact bytes; never convert line endings.
 packages/contracts/conformance/fixtures/** -text
+
+# RawImage protobuf descriptors are digest-covered binary fixtures.
+packages/contracts/capture/foxglove-raw-image.desc binary
+packages/stera_recorder/android/src/main/assets/stateaction/capture/foxglove-raw-image.desc binary

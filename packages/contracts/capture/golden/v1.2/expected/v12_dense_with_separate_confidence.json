@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/depth_events[0]/confidence/state:enum","/stateaction/depth_events[0]/confidence:anyOf"]},"outcome":"reject"}

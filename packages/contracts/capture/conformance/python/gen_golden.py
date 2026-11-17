@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import re
 import struct
+import sys
 import zlib
 
 import capture_conformance as cc
@@ -201,6 +202,10 @@ def render(m: dict) -> bytes:
         m.get("patch"),
     )
 
+    rev = m.get(
+        "v12"
+    )  # stateaction.capture.v1.2 additions (gen_golden_v12.py); None = frozen v1.1
+
     def js(topic, key):
         return w.channel(
             topic,
@@ -210,7 +215,16 @@ def render(m: dict) -> bytes:
             "json",
         )
 
-    js("/stateaction/capture_profile", "Profile")
+    if rev:
+        w.channel(
+            "/stateaction/capture_profile",
+            "stateaction.capture.Profile.v2",
+            "jsonschema",
+            schema("Profile.v2.schema.json"),
+            "json",
+        )
+    else:
+        js("/stateaction/capture_profile", "Profile")
     js("/stateaction/clocks", "Clocks")
     js("/stateaction/inventory", "Inventory")
     js("/stateaction/frame_events", "FrameEvent")
@@ -223,12 +237,15 @@ def render(m: dict) -> bytes:
         schema("SensorEvent.schema.json"),
         "json",
     )
+    close_name, close_file = (
+        rev.get(
+            "close_schema", ("stateaction.capture.Close.v2", "Close.v2.schema.json")
+        )
+        if rev
+        else ("stateaction.capture.Close.v1", "Close.schema.json")
+    )
     w.channel(
-        "/stateaction/close",
-        "stateaction.capture.Close.v1",
-        "jsonschema",
-        schema("Close.schema.json"),
-        "json",
+        "/stateaction/close", close_name, "jsonschema", schema(close_file), "json"
     )
     w.channel(
         cc.VIDEO_CHANNEL,
@@ -244,6 +261,8 @@ def render(m: dict) -> bytes:
         (CAP / cc.POSE_SCHEMA_FILE).read_bytes(),
         "cdr",
     )
+    for topic, name, file, encoding in rev.get("channels", ()) if rev else ():
+        w.channel(topic, name, encoding[0], schema(file), encoding[1])
     w.out += m.get("extra_record", b"")
     t0 = BASE_CAPTURE_NS
     w.message(
@@ -254,12 +273,16 @@ def render(m: dict) -> bytes:
                 "capture_schema": "stateaction.capture.v1",
                 "rgb_profile": "h264_mcap_v1",
                 "recording_id": REC,
-                "wire_contract_revision": "stateaction.capture.v1.1",
+                "wire_contract_revision": "stateaction.capture.v1.2"
+                if rev
+                else "stateaction.capture.v1.1",
                 "production_qualified": False,
                 "qualification": "unqualified",
                 "encoder_time_base": {"numerator": 1, "denominator": 1000000},
                 "limits": {"pending_frames": 4},
-                "encoder": {"codec": "h264", "profile": "baseline"},
+                "encoder": {"codec": "h264", "profile": "baseline", **rev["encoder"]}
+                if rev
+                else {"codec": "h264", "profile": "baseline"},
             }
         ),
     )
@@ -352,8 +375,11 @@ def render(m: dict) -> bytes:
                         "native_clock_id": None,
                         "unavailable_reason": None,
                     },
-                ],
-                "calibrations": [
+                ]
+                + (rev.get("inventory_sensors", []) if rev else []),
+                "calibrations": rev["inventory_calibrations"]
+                if rev and "inventory_calibrations" in rev
+                else [
                     {
                         "calibration_id": "rgb_0",
                         "stream_id": "rgb",
@@ -554,12 +580,19 @@ def render(m: dict) -> bytes:
         else [],
     }
     close.update(m["extra"].get("close", {}))
+    if rev:
+        close.update(rev["close"])
+        events += rev.get("events", [])
     last = max(e[0] for e in events) + 1_000_000
     events.sort(key=lambda e: e[0])
     for log_ns, topic, payload in events:
         if topic == cc.VIDEO_CHANNEL:
             seq, au, cap, fid = payload
             w.message(topic, log_ns, compressed_video(cap, au, fid), sequence=seq)
+        elif isinstance(
+            payload, tuple
+        ):  # (sequence, protobuf bytes) on a RawImage channel
+            w.message(topic, log_ns, payload[1], sequence=payload[0])
         elif isinstance(payload, bytes):
             w.message(topic, log_ns, payload)
         else:
@@ -1328,23 +1361,54 @@ def legacy_jpeg() -> bytes:
     return w.finish()
 
 
+V12_FILES = {
+    "Profile.v2.schema.json",
+    "Close.v2.schema.json",
+    "Calibration.schema.json",
+    "DepthEvent.schema.json",
+    "CameraMetadata.schema.json",
+    "foxglove-raw-image.desc",
+    "schema-provenance.raw-image.json",
+}
+
+
 def sync_contract():
-    """Pin every contract file in manifest.json and refresh the byte-identical Android asset copies."""
+    """Pin every contract file in the manifests and refresh the byte-identical Android asset copies.
+
+    manifest.json (v1.1) is frozen: it never lists a v1.2 file. manifest.v1.2.json lists the reused v1.1
+    files (without Profile/Close v1) plus the new files. Android copies of v1.2 files are added later by
+    the integration owner (not by this generator).
+    """
     native = (
         CAP.parents[1] / "stera_recorder/android/src/main/assets/stateaction/capture"
     )
     names = sorted(
         p.name
         for p in CAP.iterdir()
-        if p.name.endswith(".schema.json")
-        or p.name.startswith("LICENSE")
-        or p.suffix in (".desc", ".ros2msg")
-        or p.name == "schema-provenance.json"
+        if (
+            p.name.endswith(".schema.json")
+            or p.name.startswith("LICENSE")
+            or p.suffix in (".desc", ".ros2msg")
+            or p.name == "schema-provenance.json"
+            or p.name == "schema-provenance.raw-image.json"
+        )
     )
+    v11 = [n for n in names if n not in V12_FILES]
     manifest = json.loads((CAP / "manifest.json").read_text())
-    manifest["files"] = {n: cc.sha256((CAP / n).read_bytes()) for n in names}
+    manifest["files"] = {n: cc.sha256((CAP / n).read_bytes()) for n in v11}
     (CAP / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    for n in names:
+    v12 = [n for n in names if n not in ("Profile.schema.json", "Close.schema.json")]
+    (CAP / cc.MANIFEST_V12).write_text(
+        json.dumps(
+            {
+                "wire_contract_revision": "stateaction.capture.v1.2",
+                "files": {n: cc.sha256((CAP / n).read_bytes()) for n in v12},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    for n in v11:
         (native / n).write_bytes((CAP / n).read_bytes())
 
 
@@ -1846,6 +1910,9 @@ def main():
     for n, e in index.items():
         print(n, e["expect"], e["expected_errors"])
     gen_encoder_buffers()
+    import gen_golden_v12
+
+    gen_golden_v12.generate(sys.modules[__name__])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/capture/v2/Close",
+  "title": "stateaction.capture.Close.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recording_id",
+    "outcome",
+    "frames",
+    "video_messages",
+    "drops",
+    "motion_events",
+    "sensor_events",
+    "calibrations",
+    "camera_metadata",
+    "depth",
+    "stop_reason",
+    "encoder_drain"
+  ],
+  "properties": {
+    "recording_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "outcome": {
+      "enum": ["completed", "failed", "aborted", "unknown"]
+    },
+    "failure_reason": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "frames": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acquired", "submitted", "written", "dropped", "unresolved"],
+      "properties": {
+        "acquired": {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        "submitted": {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        "written": {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        "dropped": {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        "unresolved": {
+          "$ref": "#/$defs/int64Decimal"
+        }
+      }
+    },
+    "video_messages": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "motion_events": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accel", "gyro"],
+      "properties": {
+        "accel": {
+          "$ref": "#/$defs/int64Decimal"
+        },
+        "gyro": {
+          "$ref": "#/$defs/int64Decimal"
+        }
+      }
+    },
+    "sensor_events": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "drops": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "count"],
+        "properties": {
+          "reason": {
+            "$ref": "#/$defs/label"
+          },
+          "count": {
+            "$ref": "#/$defs/int64Decimal"
+          }
+        }
+      }
+    },
+    "calibrations": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "camera_metadata": {
+      "$ref": "#/$defs/int64Decimal"
+    },
+    "depth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth_raw", "depth_dense"],
+      "properties": {
+        "depth_raw": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "events",
+            "confidence_images",
+            "distinct_native_timestamps",
+            "retention_policy",
+            "skipped_repeats"
+          ],
+          "properties": {
+            "events": {
+              "$ref": "#/$defs/int64Decimal"
+            },
+            "distinct_native_timestamps": {
+              "$ref": "#/$defs/int64Decimal"
+            },
+            "retention_policy": {
+              "enum": ["all_returned_images", "native_updates_only"]
+            },
+            "skipped_repeats": {
+              "$ref": "#/$defs/int64Decimal"
+            },
+            "confidence_images": {
+              "$ref": "#/$defs/int64Decimal"
+            }
+          }
+        },
+        "depth_dense": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "events",
+            "distinct_native_timestamps",
+            "retention_policy",
+            "skipped_repeats"
+          ],
+          "properties": {
+            "events": {
+              "$ref": "#/$defs/int64Decimal"
+            },
+            "distinct_native_timestamps": {
+              "$ref": "#/$defs/int64Decimal"
+            },
+            "retention_policy": {
+              "enum": ["all_returned_images", "native_updates_only"]
+            },
+            "skipped_repeats": {
+              "$ref": "#/$defs/int64Decimal"
+            }
+          }
+        }
+      }
+    },
+    "stop_reason": {
+      "enum": [
+        "user_requested",
+        "duration_limit",
+        "low_storage_reserve",
+        "thermal_critical",
+        "session_interrupted",
+        "camera_lost",
+        "writer_error",
+        "encoder_error",
+        "app_terminating",
+        "unknown"
+      ]
+    },
+    "encoder_drain": {
+      "enum": [
+        "eos_reached",
+        "deadline_exceeded",
+        "encoder_failed",
+        "not_started"
+      ]
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "description": "Domain entity identifier: canonical lowercase RFC 9562 UUID, versions 1-8.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "int64Decimal": {
+      "description": "Exact non-negative signed 64-bit integer as a decimal string (0..9223372036854775807); used for nanosecond timestamps, PTS and native counters.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6]|9223372036854775807)$"
+    },
+    "clockDomain": {
+      "description": "Named native clock domain (for example android.elapsed_realtime or android.sensor_event). Timestamps from different domains are never merged.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}(\\.[a-z][a-z0-9_]{0,31}){0,3}$"
+    },
+    "revision": {
+      "description": "Code, profile or rule revision label.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "uint32": {
+      "description": "MCAP message sequence (uint32).",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "label": {
+      "description": "Textual label (calibration ID, sensor/stream ID, kind, model, reason code). Intentionally not a UUID.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "text": {
+      "description": "Bounded human-readable diagnostic: 1..256 printable ASCII characters.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^[ -~]{1,256}$"
+    },
+    "timeBase": {
+      "description": "Encoder PTS time base: exactly 1/1000000 seconds.",
+      "const": {
+        "numerator": 1,
+        "denominator": 1000000
+      }
+    }
+  }
+}

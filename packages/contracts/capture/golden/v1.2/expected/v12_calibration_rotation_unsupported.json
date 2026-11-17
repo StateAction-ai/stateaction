@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/calibrations[0]/source_to_saved/rotation_cw_degrees:const"]},"outcome":"reject"}

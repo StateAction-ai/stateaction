@@ -52,6 +52,7 @@ def python_runner():
     report = json.loads(out)
     return "passed", {
         "golden_cases": len(report["golden_cases"]),
+        "v12_golden_cases": len(report["v12"]["golden_cases"]),
         "encoder_buffer_cases": report["encoder_buffer_cases"],
     }
 

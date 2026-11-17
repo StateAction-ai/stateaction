@@ -477,6 +477,450 @@ SCHEMAS = {
 }
 
 
+# ------------------------------------------------------------------------------------------------
+# stateaction.capture.v1.2 additions (SA-68). Existing v1.1 schemas above are frozen byte for byte;
+# every v1.2 schema is a NEW file. Profile.v2 and Close.v2 are derived from the frozen v1 definitions.
+# ------------------------------------------------------------------------------------------------
+import copy  # noqa: E402
+
+REV12 = "stateaction.capture.v1.2"
+RAW_IMAGE_BYTES = 16_777_216
+ENC_LABELS = {
+    "depth_raw": ("arcore_acquire_raw_depth_image_16bits", "/camera/depth_raw/image"),
+    "depth_dense": ("arcore_acquire_depth_image_16bits", "/camera/depth_dense/image"),
+}
+
+
+def schema_v(name: str, body: dict, version: str, title: str) -> dict:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"https://stateaction.ai/schemas/capture/{version}/{name}",
+        "title": title,
+        **body,
+        "$defs": DEFS,
+    }
+
+
+def number(bound: int = 1_000_000_000) -> dict:
+    return {"type": "number", "minimum": -bound, "maximum": bound}
+
+
+def numbers(n: int) -> dict:
+    return {"type": "array", "minItems": n, "maxItems": n, "items": number()}
+
+
+def reported_or_unavailable(value_schema: dict, **extra) -> dict:
+    return {
+        "anyOf": [
+            obj(
+                ["state", "value"],
+                {"state": {"const": "reported"}, "value": value_schema, **extra},
+            ),
+            obj(
+                ["state", "reason"],
+                {"state": {"const": "unavailable"}, "reason": ref("label")},
+            ),
+        ]
+    }
+
+
+def _profile_v2() -> dict:
+    body = copy.deepcopy(SCHEMAS["Profile"])
+    body["properties"]["wire_contract_revision"] = {"const": REV12}
+    for k in ("$schema", "$id", "title", "$defs"):
+        body.pop(k)
+    return schema_v("Profile", body, "v2", "stateaction.capture.Profile.v2")
+
+
+def _close_v2() -> dict:
+    body = copy.deepcopy(SCHEMAS["Close"])
+    for k in ("$schema", "$id", "title", "$defs"):
+        body.pop(k)
+    count = ref("int64Decimal")
+    stream = {
+        "events": count,
+        "distinct_native_timestamps": count,
+        "retention_policy": {"enum": ["all_returned_images", "native_updates_only"]},
+        "skipped_repeats": count,
+    }
+    raw_keys = ["events", "confidence_images", "distinct_native_timestamps"]
+    body["required"] += [
+        "calibrations",
+        "camera_metadata",
+        "depth",
+        "stop_reason",
+        "encoder_drain",
+    ]
+    body["properties"].update(
+        {
+            "calibrations": count,
+            "camera_metadata": count,
+            "depth": obj(
+                ["depth_raw", "depth_dense"],
+                {
+                    "depth_raw": obj(
+                        raw_keys + ["retention_policy", "skipped_repeats"],
+                        {**stream, "confidence_images": count},
+                    ),
+                    "depth_dense": obj(list(stream), stream),
+                },
+            ),
+            "stop_reason": {
+                "enum": [
+                    "user_requested",
+                    "duration_limit",
+                    "low_storage_reserve",
+                    "thermal_critical",
+                    "session_interrupted",
+                    "camera_lost",
+                    "writer_error",
+                    "encoder_error",
+                    "app_terminating",
+                    "unknown",
+                ]
+            },
+            "encoder_drain": {
+                "enum": [
+                    "eos_reached",
+                    "deadline_exceeded",
+                    "encoder_failed",
+                    "not_started",
+                ]
+            },
+        }
+    )
+    return schema_v("Close", body, "v2", "stateaction.capture.Close.v2")
+
+
+def _calibration() -> dict:
+    crop = obj(
+        ["left", "top", "width", "height"],
+        {
+            "left": integer(0, 16383),
+            "top": integer(0, 16383),
+            "width": integer(1, 16384),
+            "height": integer(1, 16384),
+        },
+    )
+    return schema_v(
+        "Calibration",
+        obj(
+            [
+                "recording_id",
+                "calibration_id",
+                "stream_id",
+                "model",
+                "saved_width",
+                "saved_height",
+                "K",
+                "P",
+                "source",
+                "source_to_saved",
+                "distortion",
+                "first_source_frame_id",
+                "first_native_timestamp_ns",
+                "native_clock_id",
+            ],
+            {
+                "recording_id": ref("uuid"),
+                "calibration_id": ref("label"),
+                "stream_id": {"const": "rgb"},
+                "model": {"const": "pinhole"},
+                "saved_width": integer(1, 16384),
+                "saved_height": integer(1, 16384),
+                "K": numbers(9),
+                "P": numbers(12),
+                "source": obj(
+                    ["width", "height", "intrinsics_source", "value_type", "K"],
+                    {
+                        "width": integer(1, 16384),
+                        "height": integer(1, 16384),
+                        "intrinsics_source": ref("label"),
+                        "value_type": {"enum": ["float32", "float64"]},
+                        "K": numbers(9),
+                    },
+                ),
+                "source_to_saved": obj(
+                    [
+                        "crop",
+                        "scaled_width",
+                        "scaled_height",
+                        "rotation_cw_degrees",
+                        "mirror_horizontal",
+                        "operation_order",
+                        "pixel_center_convention",
+                        "matrix",
+                    ],
+                    {
+                        "crop": crop,
+                        "scaled_width": integer(1, 16384),
+                        "scaled_height": integer(1, 16384),
+                        "rotation_cw_degrees": {"const": 0},
+                        "mirror_horizontal": {"const": False},
+                        "operation_order": {"const": "crop,resize"},
+                        "pixel_center_convention": {
+                            "const": "integer_centers_assumed_not_verified_against_arcore"
+                        },
+                        "matrix": numbers(9),
+                    },
+                ),
+                "distortion": obj(
+                    ["state", "assumed_model", "measured"],
+                    {
+                        "state": {"const": "not_exposed_by_source"},
+                        "assumed_model": {"const": "none"},
+                        "measured": {"const": False},
+                    },
+                ),
+                "first_source_frame_id": ref("int64Decimal"),
+                "first_native_timestamp_ns": ref("int64Decimal"),
+                "native_clock_id": ref("clockDomain"),
+            },
+        ),
+        "v1",
+        "stateaction.capture.Calibration.v1",
+    )
+
+
+def _depth_event() -> dict:
+    # Original native plane layout beside the stored (tight) layout: stride padding is dropped, a crop is
+    # recorded, and neither ever silently erases the native shape (mirrors SA-55 DepthEvidence).
+    plane_keys = [
+        "native_width",
+        "native_height",
+        "native_row_stride_bytes",
+        "native_pixel_stride_bytes",
+        "stored_width",
+        "stored_height",
+        "crop",
+    ]
+    plane = {
+        "native_width": integer(1, 16384),
+        "native_height": integer(1, 16384),
+        "native_row_stride_bytes": integer(1, RAW_IMAGE_BYTES),
+        "native_pixel_stride_bytes": integer(1, 16),
+        "stored_width": integer(1, 4096),
+        "stored_height": integer(1, 4096),
+        "crop": {
+            "anyOf": [
+                obj(
+                    ["x", "y", "width", "height"],
+                    {
+                        "x": integer(0, 16383),
+                        "y": integer(0, 16383),
+                        "width": integer(1, 4096),
+                        "height": integer(1, 4096),
+                    },
+                ),
+                {"type": "null"},
+            ]
+        },
+    }
+    separate = obj(
+        [
+            "state",
+            "output_channel",
+            "output_sequence",
+            "encoding",
+            "units",
+            "native_format",
+            "native_timestamp",
+            *plane_keys,
+        ],
+        {
+            "state": {"const": "separate_image"},
+            "output_channel": {"const": "/camera/depth_raw/confidence"},
+            "output_sequence": ref("uint32"),
+            "encoding": {"const": "mono8"},
+            "units": {"const": "source_confidence_u8"},
+            "native_format": ref("label"),
+            "native_timestamp": {
+                "anyOf": [
+                    obj(
+                        ["state", "native_timestamp_ns", "native_clock_id"],
+                        {
+                            "state": {"const": "reported"},
+                            "native_timestamp_ns": ref("int64Decimal"),
+                            "native_clock_id": ref("clockDomain"),
+                        },
+                    ),
+                    obj(
+                        ["state", "reason"],
+                        {
+                            "state": {"const": "unavailable"},
+                            "reason": ref("label"),
+                        },
+                    ),
+                ]
+            },
+            **plane,
+        },
+    )
+    absent = obj(
+        ["state"],
+        {"state": {"enum": ["not_provided_by_source", "unavailable_for_frame"]}},
+    )
+    body = obj(
+        [
+            "recording_id",
+            "stream_id",
+            "event_id",
+            "source_kind",
+            "native_timestamp_ns",
+            "native_clock_id",
+            "clock_epoch",
+            "timestamp_relation",
+            "estimate_provenance",
+            "capture_time_basis",
+            "capture_time_ns",
+            "clock_mapping_revision",
+            "receipt_native_timestamp_ns",
+            "acquisition_source_frame_id",
+            "measurement_source_frame_id",
+            "calibration_id",
+            "depth",
+            "confidence",
+        ],
+        {
+            "recording_id": ref("uuid"),
+            "stream_id": {"enum": ["depth_raw", "depth_dense"]},
+            "event_id": ref("int64Decimal"),
+            "source_kind": {"enum": [v[0] for v in ENC_LABELS.values()]},
+            "native_timestamp_ns": ref("int64Decimal"),
+            "native_clock_id": ref("clockDomain"),
+            "clock_epoch": ref("uint32"),
+            "timestamp_relation": {
+                "enum": ["first", "advanced", "repeated", "clock_reset"]
+            },
+            "estimate_provenance": {
+                "enum": ["new_estimate", "reprojected", "api_repeat", "unknown"]
+            },
+            "capture_time_basis": {
+                "enum": ["transport_mapping", "acquisition_receipt"]
+            },
+            "capture_time_ns": ref("int64Decimal"),
+            "clock_mapping_revision": ref("revision"),
+            "receipt_native_timestamp_ns": nullable("int64Decimal"),
+            "acquisition_source_frame_id": nullable("int64Decimal"),
+            "measurement_source_frame_id": nullable("int64Decimal"),
+            "calibration_id": nullable("label"),
+            "depth": obj(
+                [
+                    "output_channel",
+                    "output_sequence",
+                    "encoding",
+                    "byte_order",
+                    "units",
+                    "native_format",
+                    *plane_keys,
+                ],
+                {
+                    "output_channel": {"enum": [v[1] for v in ENC_LABELS.values()]},
+                    "output_sequence": ref("uint32"),
+                    "encoding": {"const": "16UC1"},
+                    "byte_order": {"const": "little"},
+                    "units": {"const": "millimetre"},
+                    "native_format": {"const": "android.hardware.HardwareBuffer.D_16"},
+                    **plane,
+                },
+            ),
+            "confidence": {"anyOf": [separate, absent]},
+        },
+    )
+    ties = []
+    for stream, (kind, channel) in ENC_LABELS.items():
+        then = {
+            "properties": {
+                "source_kind": {"const": kind},
+                "depth": {"properties": {"output_channel": {"const": channel}}},
+            }
+        }
+        if stream == "depth_dense":
+            then["properties"]["confidence"] = {
+                "properties": {
+                    "state": {
+                        "enum": ["not_provided_by_source", "unavailable_for_frame"]
+                    }
+                }
+            }
+        ties.append(
+            {
+                "if": {
+                    "required": ["stream_id"],
+                    "properties": {"stream_id": {"const": stream}},
+                },
+                "then": then,
+            }
+        )
+    ties += [
+        {
+            "if": {
+                "required": ["capture_time_basis"],
+                "properties": {"capture_time_basis": {"const": "acquisition_receipt"}},
+            },
+            "then": {
+                "properties": {"receipt_native_timestamp_ns": ref("int64Decimal")}
+            },
+        },
+        {
+            "if": {
+                "required": ["capture_time_basis"],
+                "properties": {"capture_time_basis": {"const": "transport_mapping"}},
+            },
+            "then": {"properties": {"receipt_native_timestamp_ns": {"type": "null"}}},
+        },
+    ]
+    body["allOf"] = ties
+    return schema_v("DepthEvent", body, "v1", "stateaction.capture.DepthEvent.v1")
+
+
+def _camera_metadata() -> dict:
+    return schema_v(
+        "CameraMetadata",
+        obj(
+            [
+                "recording_id",
+                "stream_id",
+                "source_frame_id",
+                "native_timestamp_ns",
+                "source",
+                "exposure_time_ns",
+                "frame_duration_ns",
+                "rolling_shutter_skew_ns",
+                "sensitivity_iso",
+                "focus_distance_diopters",
+            ],
+            {
+                "recording_id": ref("uuid"),
+                "stream_id": {"const": "rgb"},
+                "source_frame_id": ref("int64Decimal"),
+                "native_timestamp_ns": nullable("int64Decimal"),
+                "source": ref("label"),
+                "exposure_time_ns": reported_or_unavailable(ref("int64Decimal")),
+                "frame_duration_ns": reported_or_unavailable(ref("int64Decimal")),
+                "rolling_shutter_skew_ns": reported_or_unavailable(ref("int64Decimal")),
+                "sensitivity_iso": reported_or_unavailable(integer(0, 1_000_000)),
+                "focus_distance_diopters": reported_or_unavailable(
+                    {"type": "number", "minimum": 0, "maximum": 1_000_000},
+                    value_type={"enum": ["float32", "float64"]},
+                ),
+            },
+        ),
+        "v1",
+        "stateaction.capture.CameraMetadata.v1",
+    )
+
+
+# schema key -> output file stem. The v1.1 keys keep their historical `<key>.schema.json` names.
+SCHEMAS12 = {
+    "Profile.v2": _profile_v2(),
+    "Close.v2": _close_v2(),
+    "Calibration": _calibration(),
+    "DepthEvent": _depth_event(),
+    "CameraMetadata": _camera_metadata(),
+}
+
+
 def _pretty(value, indent: int, prefix_len: int) -> str:
     """Prettier-compatible JSON (printWidth 80): objects always expanded, primitive arrays inline when
     they fit on the line, so the generated files pass the repository's Prettier check byte for byte."""
@@ -509,7 +953,7 @@ def render(body: dict) -> bytes:
 def main() -> int:
     check = "--check" in sys.argv[1:]
     drift = []
-    for name, body in SCHEMAS.items():
+    for name, body in {**SCHEMAS, **SCHEMAS12}.items():
         path = CAP / f"{name}.schema.json"
         data = render(body)
         if check:

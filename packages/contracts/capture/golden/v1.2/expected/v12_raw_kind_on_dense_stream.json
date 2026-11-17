@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/depth_events[0]/source_kind:const"]},"outcome":"reject"}

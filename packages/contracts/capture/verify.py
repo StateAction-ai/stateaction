@@ -1,4 +1,4 @@
-"""Verify stateaction.capture.v1.1 schemas, pinned hashes, native asset copies and golden MCAP conformance.
+"""Verify stateaction.capture.v1.1 and v1.2 schemas, pinned hashes, native asset copies and golden MCAP conformance.
 
   uv run --no-project --with jsonschema==4.25.1 --with mcap==1.6.0 --with protobuf==6.33.0 python packages/contracts/capture/verify.py
 
@@ -101,6 +101,10 @@ def mutations(value, rng, depth=0):
     return out
 
 
+def table_of(f: dict) -> dict:
+    return cc.CHANNELS12 if cc.uses_v12(f) else cc.CHANNELS
+
+
 def differential_messages(data: bytes, diff, rng) -> dict:
     """Validate every parseable JSON message (and mutations of it) with both validators."""
     try:
@@ -114,14 +118,17 @@ def differential_messages(data: bytes, diff, rng) -> dict:
     ):
         return {}
     counts = {}
+    table = table_of(f)
     for m in f["messages"]:
-        want = cc.CHANNELS.get(f["channels"][m["channel"]]["topic"])
+        want = table.get(f["channels"][m["channel"]]["topic"])
         if want is None or want[2] != "json":
             continue
         try:
             value = strict_schema.parse_json(m["data"])
         except strict_schema.MalformedJson:
             continue
+        if len(m["data"]) > cc.JSON_MESSAGE_MAX:
+            continue  # the v1.2 cap rejects it before any schema evaluation
         diff(want[0], value)
         for mutated in rng.sample(
             mutations(value, rng), k=min(4, len(mutations(value, rng)))
@@ -178,6 +185,117 @@ def struct_error():
     return struct.error
 
 
+def build_raw_recipe(recipe: dict) -> bytes:
+    import gen_golden_v12 as g12
+
+    return g12.build_raw(recipe)
+
+
+def verify_v12(manifest12: dict, diff, validators, rng) -> dict:
+    """stateaction.capture.v1.2: direct schema cases, RawImage decode cases, golden corpus, official
+    decoders, the max-revision (frozen reader) verdicts."""
+    import gen_golden
+    import gen_golden_v12 as g12
+
+    g12.G, g12.cc = gen_golden, cc
+    sc = json.loads((ROOT / "fixtures/schema_cases.v1.2.json").read_text())
+    for case in sc["cases"]:
+        value = strict_schema.parse_json(case["json"].encode())
+        assert diff(case["schema"], value) == case["expect"], case["name"]
+    raws = json.loads((ROOT / "fixtures/raw_image_cases.v1.2.json").read_text())
+    raw_ok = 0
+    for case in raws["cases"]:
+        data = (
+            bytes.fromhex(case["hex"])
+            if "hex" in case
+            else build_raw_recipe(case["build"])
+        )
+        try:
+            cc.decode_raw_image(data)
+            verdict = "ok"
+        except (ValueError, UnicodeDecodeError):
+            verdict = "malformed"
+        assert verdict == case["expect"], case["name"]
+        raw_ok += verdict == "ok"
+    cases = json.loads((ROOT / "golden/v1.2/cases.json").read_text())
+    on_disk = {p.stem for p in (ROOT / "golden/v1.2").glob("*.mcap")}
+    assert on_disk == set(cases), f"golden/v1.2 out of sync: {on_disk ^ set(cases)}"
+    summary = {}
+    for name, entry in sorted(cases.items()):
+        path = ROOT / "golden/v1.2" / f"{name}.mcap"
+        data = path.read_bytes()
+        assert hashlib.sha256(data).hexdigest() == entry["sha256"], (
+            f"Golden drift: {name}"
+        )
+        result = cc.check(data)
+        assert (
+            cc.canonical(result)
+            == (ROOT / "golden/v1.2/expected" / f"{name}.json").read_text()
+        ), name
+        assert (
+            result["outcome"] == entry["expect"]
+            and result["errors"] == entry["expected_errors"]
+        ), name
+        stripped = sorted(
+            re.sub(r"\[[0-9]+\]", "", v, count=1)
+            for v in result["facts"].get("schema_violations", [])
+        )
+        assert stripped == entry.get("expected_violations", []), name
+        # a frozen v1.1 reader (max_revision v1.1) must reject every v1.2 file
+        old = cc.check(data, max_revision="v1.1")
+        assert {"outcome": old["outcome"], "errors": old["errors"]} == entry[
+            "v1_1_reader"
+        ], name
+        assert old["outcome"] == "reject", name
+        differential_messages(data, diff, rng)
+        crc = official_crc_status(path)
+        if result["outcome"] == "accept":
+            assert crc == "ok", (name, crc)
+            ind = independent_decode.decode(path)
+            facts = result["facts"]
+            assert ind["profile"] == ""
+            assert (
+                ind["schema_sha256"].get(
+                    "foxglove.RawImage", manifest12["files"][cc.RAW_IMAGE_DESC]
+                )
+                == manifest12["files"][cc.RAW_IMAGE_DESC]
+            )
+            assert [v["sequence"] for v in ind["video"]] == [
+                v["sequence"] for v in facts["video"]
+            ]
+            # RawImage bytes: the official protobuf runtime agrees with the reference decoder and the facts
+            depth = facts["depth"]
+            expect_images = len(ind["images"])
+            counted = sum(
+                1 + (d["confidence_state"] == "separate_image") for d in depth
+            )
+            assert expect_images == counted, (name, expect_images, counted)
+            for img in ind["images"]:
+                assert img["step"] * img["height"] == img["bytes"], name
+                assert img["frame_id"] == cc.DEPTH_FRAME_ID
+                assert img["encoding"] in ("16UC1", "mono8")
+            depth_shas = sorted(
+                i["sha256"] for i in ind["images"] if i["encoding"] == "16UC1"
+            )
+            assert depth_shas == sorted(d["depth_sha256"] for d in depth), name
+            conf_shas = sorted(
+                i["sha256"] for i in ind["images"] if i["encoding"] == "mono8"
+            )
+            assert conf_shas == sorted(
+                d["confidence_sha256"] for d in depth if d["confidence_sha256"]
+            ), name
+            assert official_topics(path) is not None
+            summary[name] = {"depth_events": len(depth), "images": expect_images}
+        else:
+            summary[name] = result["errors"]
+    return {
+        "schema_cases": len(sc["cases"]),
+        "raw_image_cases": len(raws["cases"]),
+        "raw_image_ok": raw_ok,
+        "golden_cases": summary,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mcap", nargs="*", type=Path, default=[])
@@ -192,26 +310,59 @@ def main() -> None:
             f"Contract hash mismatch: {name}"
         )
         assert (native / name).read_bytes() == source, f"Native asset drift: {name}"
+    manifest12 = json.loads((ROOT / cc.MANIFEST_V12).read_text())
+    assert manifest12["wire_contract_revision"] == "stateaction.capture.v1.2"
+    for name, expected in manifest12["files"].items():
+        source = (ROOT / name).read_bytes()
+        assert hashlib.sha256(source).hexdigest() == expected, (
+            f"v1.2 contract hash mismatch: {name}"
+        )
+        assert (native / name).read_bytes() == source, (
+            f"v1.2 native asset drift: {name}"
+        )
+    assert (native / cc.MANIFEST_V12).read_bytes() == (
+        ROOT / cc.MANIFEST_V12
+    ).read_bytes(), "v1.2 native manifest drift"
+    # Every native asset must be pinned by one manifest (no stray or stale copies).
+    pinned = set(manifest["files"]) | set(manifest12["files"]) | {cc.MANIFEST_V12}
+    stray = {p.name for p in native.iterdir() if p.is_file()} - pinned
+    assert not stray, f"Unpinned native assets: {stray}"
+    # v1.1 stays frozen: its manifest never lists a v1.2 file; v1.2 reuses the v1.1 bytes unchanged.
+    new_files = {
+        *cc.CUSTOM12.values(),
+        cc.RAW_IMAGE_DESC,
+        "schema-provenance.raw-image.json",
+    }
+    assert not new_files & set(manifest["files"]), "v1.1 manifest lists a v1.2 file"
+    for name, digest in manifest["files"].items():
+        if name in manifest12["files"]:
+            assert manifest12["files"][name] == digest, f"reused file differs: {name}"
+    assert set(manifest12["files"]) == (
+        (set(manifest["files"]) - {"Profile.schema.json", "Close.schema.json"})
+        | new_files
+    ), "manifest.v1.2.json file set"
+    provenance = json.loads((ROOT / "schema-provenance.raw-image.json").read_text())
+    assert provenance["descriptor_sha256"] == manifest12["files"][cc.RAW_IMAGE_DESC]
     disk = (
         {p.name for p in ROOT.glob("*.schema.json")}
         | {p.name for p in ROOT.glob("*.ros2msg")}
-        | {"foxglove-compressed-video.desc"}
+        | {"foxglove-compressed-video.desc", cc.RAW_IMAGE_DESC}
     )
-    assert disk <= set(manifest["files"]), (
-        f"Unpinned contract files: {disk - set(manifest['files'])}"
+    assert disk <= set(manifest["files"]) | set(manifest12["files"]), (
+        f"Unpinned contract files: {disk - set(manifest['files']) - set(manifest12['files'])}"
     )
     assert all(
         (ROOT / f"{n}.schema.json").read_bytes() == build_schemas.render(b)
-        for n, b in build_schemas.SCHEMAS.items()
+        for n, b in {**build_schemas.SCHEMAS, **build_schemas.SCHEMAS12}.items()
     ), "schema files differ from build_schemas.py output"
     validators, portable = {}, {}
-    for name, file in cc.CUSTOM.items():
+    for name, file in {**cc.CUSTOM, **cc.CUSTOM12}.items():
         schema = json.loads((ROOT / file).read_text())
         Draft202012Validator.check_schema(schema)
         validators[name] = Oracle(schema)
         portable[name] = strict_schema.Schema(schema)
     diff = Differential(validators, portable)
-    short = {n.split(".")[2]: n for n in validators}
+    short = {n.split(".")[2]: n for n in cc.CUSTOM}
     # direct interpreter cases (declared by hand; also checked against jsonschema)
     schema_cases = json.loads((ROOT / "fixtures/schema_cases.json").read_text())
     for case in schema_cases["cases"]:
@@ -322,6 +473,7 @@ def main() -> None:
             }
         else:
             summary[name] = result["errors"]
+    v12_summary = verify_v12(manifest12, diff, validators, rng)
     # encoder-output buffer contract: the reference assembler reproduces every declared expectation
     buffers = json.loads((ROOT / "fixtures/encoder_buffers.json").read_text())
     units = {k: cc.nals((ROOT / v).read_bytes()) for k, v in buffers["sources"].items()}
@@ -384,6 +536,7 @@ def main() -> None:
                 ),
                 "native_assets_match": True,
                 "golden_cases": summary,
+                "v12": v12_summary,
                 "encoder_buffer_cases": len(buffers["cases"]),
                 "sources": sources,
                 "actual_messages": actual_counts,

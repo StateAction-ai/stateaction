@@ -22,6 +22,7 @@ def decode(path: Path) -> dict:
     out = {
         "profile": None,
         "video": [],
+        "images": [],  # foxglove.RawImage messages decoded with the official runtime (v1.2)
         "json_counts": {},
         "cdr_bytes": 0,
         "schema_sha256": {},
@@ -31,6 +32,7 @@ def decode(path: Path) -> dict:
         out["profile"] = reader.get_header().profile
         stream = bytearray()
         cls = None
+        raw_cls = None
         for schema, channel, msg in reader.iter_messages():
             out["schema_sha256"][schema.name] = hashlib.sha256(schema.data).hexdigest()
             if schema.name == "foxglove.CompressedVideo":
@@ -54,6 +56,30 @@ def decode(path: Path) -> dict:
                     }
                 )
                 stream += v.data
+            elif schema.name == "foxglove.RawImage":
+                if raw_cls is None:
+                    fds = descriptor_pb2.FileDescriptorSet.FromString(schema.data)
+                    pool = descriptor_pool.DescriptorPool()
+                    for fd in fds.file:
+                        pool.Add(fd)
+                    raw_cls = message_factory.GetMessageClass(
+                        pool.FindMessageTypeByName("foxglove.RawImage")
+                    )
+                v = raw_cls.FromString(msg.data)
+                out["images"].append(
+                    {
+                        "topic": channel.topic,
+                        "sequence": msg.sequence,
+                        "capture_ns": v.timestamp.seconds * 10**9 + v.timestamp.nanos,
+                        "frame_id": v.frame_id,
+                        "encoding": v.encoding,
+                        "width": v.width,
+                        "height": v.height,
+                        "step": v.step,
+                        "bytes": len(v.data),
+                        "sha256": hashlib.sha256(v.data).hexdigest(),
+                    }
+                )
             elif channel.message_encoding == "json":
                 json.loads(msg.data)
                 out["json_counts"][channel.topic] = (

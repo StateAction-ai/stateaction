@@ -1,0 +1,22 @@
+{
+  "wire_contract_revision": "stateaction.capture.v1.2",
+  "files": {
+    "Calibration.schema.json": "f7ca7a145a77175de100abf824514460965e4858ad433bcbf267ebaff6c0834b",
+    "CameraMetadata.schema.json": "79064093236e6619216553151ad81603fce94242d0b8d3d8f5e8ea5052ca92d9",
+    "Clocks.schema.json": "554c2078789e9b0490aa061ba8343134fb39813f99ca8f965c8ad9517ba6f4a2",
+    "Close.v2.schema.json": "408c591f633f0f4678e21844144b10323c43b724a3978ddd3b7df944294831b8",
+    "DepthEvent.schema.json": "03d03ff7b18a108f22611fff4b6b8d68edf670e0507f7477c8efa7b3cd7688fd",
+    "FrameEvent.schema.json": "977c2e3c4b111b48740a632c117104aa615dbeb0c6fa96fe0e14af9f2b7da8da",
+    "Inventory.schema.json": "9f3d6b25b1308897a86a1ba7304ee54daaeaa1ab57c3a65859647ace9a9e708a",
+    "LICENSE-FOXGLOVE-SCHEMAS": "da11235665c17d4c1634072dae92b8ba1b38d6fdde2ccf19a6bbede33253f58d",
+    "LICENSE-PROTOBUF": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+    "MotionEvent.schema.json": "22938cce69bc54f1bd81260658aba56438f66b867af50cdf8065617c64e052b2",
+    "Profile.v2.schema.json": "b6584a3ae22cd9b9e54e4961af10ed363bb73dbdc250e82032c4ee2c28f529be",
+    "SensorEvent.schema.json": "c2e667342f39338967f8a3f530cd50228a7425ead116574871deb4432ebe23e9",
+    "foxglove-compressed-video.desc": "4abbe41b9ab9714bb3e622cc341d23427f1fa2ca24ae6b1f533ce2288a0b3b53",
+    "foxglove-raw-image.desc": "caf8b5596ce106bbc8dc6561e334b9dbf7da1789e590c6c4eb5f7839487b641d",
+    "geometry_msgs-PoseStamped.ros2msg": "eaf9fa742b6bff36539ea75c51434b40a162611c8afbba4b6a7434706fec38aa",
+    "schema-provenance.json": "da77ee9e2021f948c3123c563fc66653810100cd1a403d0ed85bb5ab910377f4",
+    "schema-provenance.raw-image.json": "f0be9f6bef65b24012b91ca4db44d4965387ea6223bf78f997be939c187fb0ee"
+  }
+}

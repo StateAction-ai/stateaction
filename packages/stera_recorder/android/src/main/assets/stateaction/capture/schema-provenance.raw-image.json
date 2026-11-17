@@ -1,0 +1,14 @@
+{
+  "source": "foxglove-schemas-protobuf",
+  "version": "0.4.0",
+  "schema_name": "foxglove.RawImage",
+  "descriptor_file": "foxglove-raw-image.desc",
+  "includes": ["google/protobuf/timestamp.proto"],
+  "descriptor_sha256": "caf8b5596ce106bbc8dc6561e334b9dbf7da1789e590c6c4eb5f7839487b641d",
+  "upstream_artifacts": {
+    "foxglove_schemas_protobuf-0.4.0-py3-none-any.whl": "e6a35df574f4c10ea455e8660abd09af028ea00d90e01c78f8696972e2decc95",
+    "foxglove_schemas_protobuf-0.4.0.tar.gz": "3fc9610d7ec6cc4b4029f746ab9699a4ad396bdd7551b99d2a37509d13ef3cc2"
+  },
+  "reproduce": "uv run --no-project --with foxglove-schemas-protobuf==0.4.0 --with protobuf==6.33.0 python packages/contracts/capture/conformance/python/build_descriptor.py --raw-image",
+  "note": "v1.2 (SA-68) pin for depth and confidence images. Same pinned upstream wheel and artifacts as schema-provenance.json (frozen v1.1). Field layout probed: timestamp=1 width=2 height=3 encoding=4 step=5 data=6 frame_id=7; width/height/step are fixed32."
+}

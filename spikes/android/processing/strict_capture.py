@@ -98,6 +98,16 @@ class StrictCapture:
     def facts(self) -> dict:
         return self.result["facts"]
 
+    @property
+    def auto_admissible(self) -> bool | None:
+        """Reader fact: clean `completed` take only (v1.2+); None for frozen v1.1 files.
+
+        This is a capture-integrity fact. It is NOT server, device or qualification admission: an
+        accepted clean `aborted` file passes the gate (its bytes are internally consistent) but is
+        never automatically admissible.
+        """
+        return self.facts.get("auto_admissible")
+
 
 def read_bounded(path: Path, max_bytes: int) -> bytes:
     size = path.stat().st_size
@@ -278,6 +288,13 @@ def summary(capture: StrictCapture) -> dict:
         "outcome": capture.result["outcome"],
         "errors": capture.result["errors"],
         "close_outcome": facts["close_outcome"],
+        "wire_contract_revision": facts.get(
+            "wire_contract_revision", "stateaction.capture.v1.1"
+        ),
+        "close_stop_reason": facts.get("close_stop_reason"),
+        "encoder_drain": facts.get("encoder_drain"),
+        "auto_admissible": capture.auto_admissible,
+        "auto_admissible_scope": "capture_integrity_only_not_server_or_device_qualification",
         "frame_event_counts": facts["frame_event_counts"],
         "channel_counts": facts["channel_counts"],
         "unresolved_frames": facts["unresolved_frames"],

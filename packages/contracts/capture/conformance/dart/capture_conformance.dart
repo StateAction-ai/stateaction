@@ -17,6 +17,31 @@ const custom = {
   'stateaction.capture.SensorEvent.v1': 'SensorEvent.schema.json',
   'stateaction.capture.Close.v1': 'Close.schema.json',
 };
+// stateaction.capture.v1.2 (SA-68): selected by the schema record name of /stateaction/capture_profile.
+// NEW files only; the v1.1 table above, manifest.json and every v1.1 golden stay frozen.
+const profileV2 = 'stateaction.capture.Profile.v2';
+const custom12 = {
+  profileV2: 'Profile.v2.schema.json',
+  'stateaction.capture.Close.v2': 'Close.v2.schema.json',
+  'stateaction.capture.Calibration.v1': 'Calibration.schema.json',
+  'stateaction.capture.DepthEvent.v1': 'DepthEvent.schema.json',
+  'stateaction.capture.CameraMetadata.v1': 'CameraMetadata.schema.json',
+};
+final customV12Table = <String, String>{
+  for (final e in custom.entries)
+    if (!e.key.contains('Profile') && !e.key.contains('Close')) e.key: e.value,
+  ...custom12,
+};
+const manifestV12 = 'manifest.v1.2.json';
+const rawImageSchema = 'foxglove.RawImage';
+const rawImageDesc = 'foxglove-raw-image.desc';
+const jsonMessageMax =
+    65536; // v1.2: per JSON evidence message, checked before parsing
+const rawDataMax = 16777216;
+const rawMessageMax = rawDataMax + 4096;
+const rawDimMax = 4096;
+const depthFrameId = 'depth_optical_frame';
+const tolerance = 1e-9;
 final magic = [0x89, 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a];
 
 class Truncated implements Exception {}
@@ -176,8 +201,8 @@ String sha256Hex(List<int> data) {
 
 // ---- MCAP
 class Message {
-  Message(this.channel, this.sequence, this.logTime, this.data);
-  final int channel, sequence, logTime;
+  Message(this.channel, this.sequence, this.logTime, this.data, this.pos);
+  final int channel, sequence, logTime, pos;
   final Uint8List data;
 }
 
@@ -286,6 +311,7 @@ Mcap readMcapRecords(Uint8List data) {
         bd.getUint32(2, Endian.little),
         bd.getUint64(6, Endian.little),
         Uint8List.sublistView(body, 22),
+        out.messages.length,
       );
       bd.getUint64(
         14,
@@ -371,6 +397,116 @@ Video decodeVideo(Uint8List b) {
     }
   }
   return v;
+}
+
+// ---- Protobuf foxglove.RawImage (v1.2)
+// Varint for the RawImage decoder: every consumer rejects a value >= 2^63 (unknown field number, length
+// beyond the buffer, seconds > int64 max, nanos >= 1e9), so such a varint is rejected where it is read.
+(int, int) rawVarint(Uint8List b, int pos) {
+  var shift = 0, value = 0;
+  for (;;) {
+    if (pos >= b.length || shift > 63) throw Malformed();
+    final x = b[pos++];
+    final low = x & 0x7f;
+    if (shift == 63 && low != 0) throw Malformed();
+    value |= low << shift;
+    if (x & 0x80 == 0) return (value, pos);
+    shift += 7;
+  }
+}
+
+// field number -> (name, wire type); width/height/step are fixed32 (wire 5).
+const rawFields = <int, (String, int)>{
+  1: ('timestamp', 2),
+  2: ('width', 5),
+  3: ('height', 5),
+  4: ('encoding', 2),
+  5: ('step', 5),
+  6: ('data', 2),
+  7: ('frame_id', 2),
+};
+
+class RawImage {
+  BigInt captureNs = BigInt.zero;
+  String frameId = '', encoding = '';
+  int width = 0, height = 0, step = 0;
+  Uint8List data = Uint8List(0);
+}
+
+BigInt rawTimestamp(Uint8List chunk) {
+  var sec = 0, nanos = 0;
+  final seen = <int>{};
+  var pos = 0;
+  while (pos < chunk.length) {
+    final (key, p1) = rawVarint(chunk, pos);
+    final field = key >> 3, wire = key & 7;
+    if (wire != 0 || (field != 1 && field != 2) || !seen.add(field)) {
+      throw Malformed();
+    }
+    final (v, p2) = rawVarint(chunk, p1);
+    pos = p2;
+    if (field == 1) {
+      sec = v;
+    } else {
+      nanos = v;
+    }
+  }
+  if (sec < 0 || nanos >= 1000000000) throw Malformed();
+  return BigInt.from(sec) * BigInt.from(1000000000) + BigInt.from(nanos);
+}
+
+/// Strict foxglove.RawImage decoder: only fields 1..7 with their exact wire types, no duplicates, lengths
+/// checked against the buffer before slicing, dimensions and sizes bounded before use.
+RawImage decodeRawImage(Uint8List buf) {
+  if (buf.length > rawMessageMax) throw Malformed();
+  final out = RawImage();
+  final seen = <int>{};
+  var pos = 0;
+  while (pos < buf.length) {
+    final (key, p1) = rawVarint(buf, pos);
+    pos = p1;
+    final field = key >> 3, wire = key & 7;
+    final known = rawFields[field];
+    if (known == null || known.$2 != wire || !seen.add(field)) {
+      throw Malformed();
+    }
+    if (wire == 5) {
+      if (buf.length - pos < 4) throw Malformed();
+      final v = ByteData.sublistView(buf).getUint32(pos, Endian.little);
+      pos += 4;
+      switch (field) {
+        case 2:
+          out.width = v;
+        case 3:
+          out.height = v;
+        default:
+          out.step = v;
+      }
+      continue;
+    }
+    final (n, p2) = rawVarint(buf, pos);
+    if (n > buf.length - p2) throw Malformed();
+    final chunk = Uint8List.sublistView(buf, p2, p2 + n);
+    pos = p2 + n;
+    if (field == 1) {
+      out.captureNs = rawTimestamp(chunk);
+    } else if (field == 6) {
+      if (n > rawDataMax) throw Malformed();
+      out.data = chunk;
+    } else if (field == 4) {
+      out.encoding = decodeUtf8Exact(chunk);
+    } else {
+      out.frameId = decodeUtf8Exact(chunk);
+    }
+  }
+  if (!seen.contains(1) ||
+      out.width < 1 ||
+      out.width > rawDimMax ||
+      out.height < 1 ||
+      out.height > rawDimMax) {
+    throw Malformed();
+  }
+  return out;
 }
 
 // ---- Annex B
@@ -498,6 +634,36 @@ const channelTable = <String, List<String>>{
   videoTopic: ['foxglove.CompressedVideo', 'protobuf', 'protobuf'],
   '/tracking/pose': [poseSchema, 'ros2msg', 'cdr'],
 };
+const rawEnc = [rawImageSchema, 'protobuf', 'protobuf'];
+// v1.2 table: v1.1 entries unchanged except Profile.v2 / Close.v2, plus the optional new channels.
+final channelTable12 = <String, List<String>>{
+  for (final e in channelTable.entries)
+    if (e.key != '/stateaction/capture_profile' &&
+        e.key != '/stateaction/close')
+      e.key: e.value,
+  '/stateaction/capture_profile': [profileV2, ...jsonEnc],
+  '/stateaction/close': ['stateaction.capture.Close.v2', ...jsonEnc],
+  '/stateaction/calibrations': [
+    'stateaction.capture.Calibration.v1',
+    ...jsonEnc,
+  ],
+  '/stateaction/depth_events': [
+    'stateaction.capture.DepthEvent.v1',
+    ...jsonEnc,
+  ],
+  '/stateaction/camera_metadata': [
+    'stateaction.capture.CameraMetadata.v1',
+    ...jsonEnc,
+  ],
+  '/camera/depth_raw/image': rawEnc,
+  '/camera/depth_raw/confidence': rawEnc,
+  '/camera/depth_dense/image': rawEnc,
+};
+const depthImageTopics = [
+  '/camera/depth_raw/image',
+  '/camera/depth_raw/confidence',
+  '/camera/depth_dense/image',
+];
 const identityKeys = [
   'recording_id',
   'stream_id',
@@ -521,7 +687,11 @@ String captureDir = '../..';
 Schema contractSchema(String name) => _schemas.putIfAbsent(
   name,
   () => Schema(
-    jsonDecode(File('$captureDir/${custom[name]}').readAsStringSync())
+    jsonDecode(
+          File(
+            '$captureDir/${{...custom, ...custom12}[name]}',
+          ).readAsStringSync(),
+        )
         as Map<String, dynamic>,
   ),
 );
@@ -538,7 +708,19 @@ Map<String, Object?> rejectWith(Set<String> errors) => {
   'facts': <String, Object?>{},
 };
 
-Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
+// Revision dispatch: the schema record name of any /stateaction/capture_profile channel.
+bool usesV12(Mcap f) => f.channels.values.any(
+  (ch) =>
+      ch.topic == '/stateaction/capture_profile' &&
+      f.schemas[ch.schemaId]?.name == profileV2,
+);
+
+// maxRevision 'v1.1' reproduces a frozen v1.1 reader: every v1.2 file is rejected.
+Map<String, Object?> check(
+  Uint8List data,
+  Map<String, dynamic>? explicitManifest, {
+  String maxRevision = 'v1.2',
+}) {
   final errors = <String>{};
   final Mcap f;
   try {
@@ -594,10 +776,22 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       'facts': facts,
     };
   }
+  final rev12 = maxRevision != 'v1.1' && usesV12(f);
+  final channels = rev12 ? channelTable12 : channelTable;
+  final customTable = rev12 ? customV12Table : custom;
+  final manifest =
+      explicitManifest ??
+      (jsonDecode(
+                File(
+                  '$captureDir/${rev12 ? manifestV12 : 'manifest.json'}',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>)['files']
+          as Map<String, dynamic>;
   // Exact per-channel encodings and reviewed schema identity.
   for (final ch in f.channels.values) {
     final schema = f.schemas[ch.schemaId];
-    final want = channelTable[ch.topic];
+    final want = channels[ch.topic];
     if (schema == null ||
         want == null ||
         schema.name != want[0] ||
@@ -616,8 +810,12 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
     hashes[s.name] = digest;
     if (s.name == 'foxglove.CompressedVideo') {
       if (digest != descriptor) errors.add('E_DESCRIPTOR_HASH');
-    } else if (custom.containsKey(s.name)) {
-      if (digest != manifest[custom[s.name]]) errors.add('E_SCHEMA_MISMATCH');
+    } else if (rev12 && s.name == rawImageSchema) {
+      if (digest != manifest[rawImageDesc]) errors.add('E_DESCRIPTOR_HASH');
+    } else if (customTable.containsKey(s.name)) {
+      if (digest != manifest[customTable[s.name]]) {
+        errors.add('E_SCHEMA_MISMATCH');
+      }
     }
   }
   facts['schema_sha256'] = hashes;
@@ -625,12 +823,20 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
   final decoded = <String, List<Object?>>{};
   try {
     for (final entry in byTopic.entries) {
-      final want = channelTable[entry.key];
+      final want = channels[entry.key];
       if (want == null) continue;
       if (want[2] == 'json') {
+        if (rev12 && entry.value.any((m) => m.data.length > jsonMessageMax)) {
+          throw Malformed();
+        }
         decoded[entry.key] = [for (final m in entry.value) parseJson(m.data)];
       } else if (want[2] == 'protobuf') {
-        decoded[entry.key] = [for (final m in entry.value) decodeVideo(m.data)];
+        decoded[entry.key] = [
+          for (final m in entry.value)
+            entry.key == videoTopic
+                ? decodeVideo(m.data)
+                : decodeRawImage(m.data),
+        ];
       } else {
         decoded[entry.key] = [for (final m in entry.value) decodePose(m.data)];
       }
@@ -654,7 +860,7 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
   // Strict schema gate: violations are reported exactly and stop evaluation.
   final violations = <String>[];
   for (final topic in decoded.keys.toList()..sort()) {
-    final want = channelTable[topic]!;
+    final want = channels[topic]!;
     if (want[2] != 'json') continue;
     final validator = contractSchema(want[0]);
     final values = decoded[topic]!;
@@ -677,7 +883,7 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
   }
   final recordingIds = <Object?>{
     for (final e in decoded.entries)
-      if (channelTable[e.key]![2] == 'json')
+      if (channels[e.key]![2] == 'json')
         for (final x in e.value) (x as Map)['recording_id'],
   };
   if (recordingIds.length > 1) errors.add('E_RECORDING_ID');
@@ -850,10 +1056,14 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
       },
   ];
   final closes = js('/stateaction/close');
+  Map<String, dynamic>? lastClose;
+  int? unresolvedAll;
   if (closes.isNotEmpty) {
     final close = closes.last;
+    lastClose = close;
     final dropped = state.values.where((x) => x == 'dropped').length;
     final unresolved = acquired.length - written.length - dropped;
+    unresolvedAll = unresolved;
     final expect = {for (final e in counts.entries) e.key: e.value.toString()};
     expect['unresolved'] = unresolved.toString();
     final expectMotion = {
@@ -883,12 +1093,534 @@ Map<String, Object?> check(Uint8List data, Map<String, dynamic> manifest) {
     facts['close_outcome'] = outcome;
     facts['unresolved_frames'] = unresolved;
   }
+  if (rev12) {
+    checkV12(
+      errors,
+      facts,
+      byTopic,
+      decoded,
+      acquired,
+      lastClose,
+      unresolvedAll,
+    );
+  }
   final list = errors.toList()..sort();
   return {
     'outcome': list.isEmpty ? 'accept' : 'reject',
     'errors': list,
     'facts': list.isEmpty ? facts : <String, Object?>{},
   };
+}
+
+// ---- v1.2 rules (SA-68)
+int asInt(Object? v) => (v as num).toInt();
+
+bool isF32(num x) {
+  final d = x.toDouble();
+  return (Float32List(1)..[0] = d)[0] == d;
+}
+
+bool closeTo(num actual, double expected) =>
+    (actual - expected).abs() <=
+    tolerance * (expected.abs() > 1 ? expected.abs() : 1);
+
+List<double> matmul3(List<num> a, List<num> b) => [
+  for (var i = 0; i < 3; i++)
+    for (var j = 0; j < 3; j++)
+      a[3 * i].toDouble() * b[j].toDouble() +
+          a[3 * i + 1].toDouble() * b[3 + j].toDouble() +
+          a[3 * i + 2].toDouble() * b[6 + j].toDouble(),
+];
+
+bool kForm(List<num> k) =>
+    k[0] > 0 &&
+    k[4] > 0 &&
+    k[1] == 0 &&
+    k[3] == 0 &&
+    k[6] == 0 &&
+    k[7] == 0 &&
+    k[8] == 1;
+
+List<num> nums(Object? v) => (v as List).cast<num>();
+
+/// Saved-raster calibration rules (axis-aligned identity/crop/resize only).
+bool calibrationValuesOk(Map<String, dynamic> c, Map<String, dynamic> encoder) {
+  final k = nums(c['K']), p = nums(c['P']);
+  final src = c['source'] as Map<String, dynamic>;
+  final t = c['source_to_saved'] as Map<String, dynamic>;
+  final crop = t['crop'] as Map<String, dynamic>;
+  final srcK = nums(src['K']);
+  if (!(kForm(k) && kForm(srcK))) return false;
+  final wantP = [k[0], k[1], k[2], 0, k[3], k[4], k[5], 0, k[6], k[7], k[8], 0];
+  for (var i = 0; i < 12; i++) {
+    if (p[i] != wantP[i]) return false;
+  }
+  if ((asInt(crop['left'])) + (asInt(crop['width'])) > (asInt(src['width'])) ||
+      (asInt(crop['top'])) + (asInt(crop['height'])) > (asInt(src['height'])) ||
+      c['saved_width'] != t['scaled_width'] ||
+      c['saved_height'] != t['scaled_height']) {
+    return false;
+  }
+  if (src['value_type'] == 'float32' && !srcK.every(isF32)) return false;
+  final sx = (asInt(t['scaled_width'])) / (asInt(crop['width']));
+  final sy = (asInt(t['scaled_height'])) / (asInt(crop['height']));
+  final m = [
+    sx,
+    0.0,
+    (0.5 - (asInt(crop['left']))) * sx - 0.5,
+    0.0,
+    sy,
+    (0.5 - (asInt(crop['top']))) * sy - 0.5,
+    0.0,
+    0.0,
+    1.0,
+  ];
+  final matrix = nums(t['matrix']);
+  for (var i = 0; i < 9; i++) {
+    if (!closeTo(matrix[i], m[i])) return false;
+  }
+  final prod = matmul3(matrix, srcK);
+  for (var i = 0; i < 9; i++) {
+    if (!closeTo(k[i], prod[i])) return false;
+  }
+  return !((encoder.containsKey('width') &&
+          encoder['width'] != c['saved_width']) ||
+      (encoder.containsKey('height') &&
+          encoder['height'] != c['saved_height']));
+}
+
+/// Native plane layout beside the stored (tight) layout; products stay far below 2**63.
+bool planeOk(Map<String, dynamic> p, int sample) {
+  final crop = p['crop'] as Map<String, dynamic>?;
+  final nw = asInt(p['native_width']), nh = asInt(p['native_height']);
+  if (crop != null &&
+      ((asInt(crop['x'])) + (asInt(crop['width'])) > nw ||
+          (asInt(crop['y'])) + (asInt(crop['height'])) > nh)) {
+    return false;
+  }
+  final rw = crop != null ? asInt(crop['width']) : nw;
+  final rh = crop != null ? asInt(crop['height']) : nh;
+  final pixel = asInt(p['native_pixel_stride_bytes']);
+  return p['stored_width'] == rw &&
+      p['stored_height'] == rh &&
+      pixel >= sample &&
+      (asInt(p['native_row_stride_bytes'])) >= (nw - 1) * pixel + sample;
+}
+
+Map<String, dynamic>? inventoryEntry(
+  Map<String, dynamic> inventory,
+  String sensorId,
+  Set<String> errors,
+) {
+  final entries = [
+    for (final s in (inventory['sensors'] as List? ?? const []))
+      if ((s as Map)['sensor_id'] == sensorId) s as Map<String, dynamic>,
+  ];
+  if (entries.length > 1) errors.add('E_COUNT_MISMATCH');
+  return entries.length == 1 ? entries[0] : null;
+}
+
+void inventoryCount(
+  Map<String, dynamic> inventory,
+  String sensorId,
+  int n,
+  Set<String> errors,
+) {
+  final entry = inventoryEntry(inventory, sensorId, errors);
+  if (n > 0) {
+    if (entry == null ||
+        entry['supported'] != 'yes' ||
+        entry['enabled'] != 'yes' ||
+        entry['observed'] != 'yes' ||
+        entry['observed_count'] != n.toString()) {
+      errors.add('E_COUNT_MISMATCH');
+    }
+  } else if (entry != null &&
+      (entry['observed'] == 'yes' ||
+          (entry['observed_count'] != null &&
+              entry['observed_count'] != '0'))) {
+    errors.add('E_COUNT_MISMATCH');
+  }
+}
+
+class StreamState {
+  final ids = <String>{};
+  (int, BigInt)? last;
+  final pairs = <String>{};
+  int events = 0, confidence = 0;
+}
+
+void checkV12(
+  Set<String> errors,
+  Map<String, Object?> facts,
+  Map<String, List<Message>> byTopic,
+  Map<String, List<Object?>> decoded,
+  Map<String, Map<String, dynamic>> acquired,
+  Map<String, dynamic>? close,
+  int? unresolved,
+) {
+  List<Map<String, dynamic>> js(String t) => [
+    for (final m in decoded[t] ?? <Object?>[]) m as Map<String, dynamic>,
+  ];
+  List<Message> raw(String t) => byTopic[t] ?? <Message>[];
+  final profile = js('/stateaction/capture_profile').firstOrNull ?? {};
+  final clocksMsg = js('/stateaction/clocks').firstOrNull ?? {};
+  final clocks = (clocksMsg['stream_clocks'] as Map<String, dynamic>?) ?? {};
+  final transport = clocksMsg['recorder_transport'] as Map<String, dynamic>?;
+  final inventory = js('/stateaction/inventory').firstOrNull ?? {};
+  final frameEvents = js('/stateaction/frame_events');
+  facts['wire_contract_revision'] = 'stateaction.capture.v1.2';
+
+  // ---- mesh / point cloud: declaration only
+  for (final sensorId in ['mesh', 'point_cloud']) {
+    final entry = inventoryEntry(inventory, sensorId, errors);
+    if (entry != null &&
+        (entry['observed'] == 'yes' ||
+            entry['enabled'] == 'yes' ||
+            (entry['observed_count'] != null &&
+                entry['observed_count'] != '0'))) {
+      errors.add('E_UNSUPPORTED_STREAM');
+    }
+  }
+
+  // ---- calibrations
+  final invCals = [
+    for (final c in (inventory['calibrations'] as List? ?? const []))
+      c as Map<String, dynamic>,
+  ];
+  final ids = [for (final c in invCals) c['calibration_id'] as String];
+  if (ids.toSet().length != ids.length) errors.add('E_CALIBRATION_VALUES');
+  final invById = {for (final c in invCals) c['calibration_id'] as String: c};
+  final calMsgs = js('/stateaction/calibrations');
+  final calRaw = raw('/stateaction/calibrations');
+  final frameRaw = raw('/stateaction/frame_events');
+  final calPos = <String, int>{};
+  final calFacts = <Map<String, Object?>>[];
+  final encoder = (profile['encoder'] as Map<String, dynamic>?) ?? {};
+  for (var idx = 0; idx < calMsgs.length; idx++) {
+    final c = calMsgs[idx];
+    final m = calRaw[idx];
+    final cid = c['calibration_id'] as String;
+    final inv = invById[cid];
+    if (inv == null) {
+      errors.add('E_CALIBRATION_UNKNOWN');
+      continue;
+    }
+    if (calPos.containsKey(cid) ||
+        inv['state'] != 'yes' ||
+        inv['stream_id'] != c['stream_id']) {
+      errors.add('E_CALIBRATION_VALUES');
+    }
+    calPos.putIfAbsent(cid, () => m.pos);
+    if (!calibrationValuesOk(c, encoder)) errors.add('E_CALIBRATION_VALUES');
+    final fi = frameEvents.indexWhere((e) => e['calibration_id'] == cid);
+    final firsts = [
+      for (final e in frameEvents)
+        if (e['calibration_id'] == cid && e['state'] == 'acquired') e,
+    ];
+    if (fi < 0 ||
+        firsts.isEmpty ||
+        m.pos > frameRaw[fi].pos ||
+        c['first_source_frame_id'] != firsts[0]['source_frame_id'] ||
+        c['first_native_timestamp_ns'] != firsts[0]['native_timestamp_ns'] ||
+        c['native_clock_id'] != firsts[0]['native_clock_id']) {
+      errors.add('E_CALIBRATION_ASSOCIATION');
+    }
+    calFacts.add({
+      'calibration_id': cid,
+      'stream_id': c['stream_id'],
+      'saved_width': c['saved_width'],
+      'saved_height': c['saved_height'],
+      'first_source_frame_id': c['first_source_frame_id'],
+    });
+  }
+  for (final inv in invCals) {
+    if (inv['state'] == 'yes' && !calPos.containsKey(inv['calibration_id'])) {
+      errors.add('E_CALIBRATION_VALUES');
+    }
+  }
+  facts['calibrations'] = calFacts;
+
+  // ---- camera metadata
+  final meta = js('/stateaction/camera_metadata');
+  final seenMeta = <String>{};
+  for (final e in meta) {
+    final id = e['source_frame_id'] as String;
+    final frame = acquired[id];
+    if (frame == null ||
+        seenMeta.contains(id) ||
+        (e['native_timestamp_ns'] != null &&
+            e['native_timestamp_ns'] != frame['native_timestamp_ns'])) {
+      errors.add('E_CAMERA_METADATA');
+    }
+    seenMeta.add(id);
+  }
+  inventoryCount(inventory, 'camera_metadata', meta.length, errors);
+  facts['camera_metadata_count'] = meta.length;
+
+  // ---- depth
+  final events = js('/stateaction/depth_events');
+  final images = <String, Map<int, List<(Message, RawImage)>>>{
+    for (final t in depthImageTopics) t: {},
+  };
+  for (final t in depthImageTopics) {
+    final vs = decoded[t] ?? <Object?>[];
+    final ms = raw(t);
+    for (var i = 0; i < ms.length; i++) {
+      images[t]!.putIfAbsent(ms[i].sequence, () => []).add((
+        ms[i],
+        vs[i] as RawImage,
+      ));
+    }
+  }
+  final used = <String>{};
+  (Message, RawImage)? take(String topic, int sequence) {
+    final got = images[topic]?[sequence] ?? [];
+    if (got.length != 1 || used.contains('$topic|$sequence')) {
+      errors.add('E_DEPTH_EVIDENCE');
+      return null;
+    }
+    used.add('$topic|$sequence');
+    return got[0];
+  }
+
+  final offset = transport != null
+      ? BigInt.parse(transport['epoch_anchor_ns'] as String) -
+            BigInt.parse(transport['native_anchor_ns'] as String)
+      : BigInt.zero;
+  final perStream = <String, StreamState>{};
+  final depthFacts = <Map<String, Object?>>[];
+  for (final e in events) {
+    final stream = e['stream_id'] as String;
+    final st = perStream.putIfAbsent(stream, StreamState.new);
+    st.events++;
+    if (!st.ids.add(e['event_id'] as String)) errors.add('E_DEPTH_EVIDENCE');
+    final ts = BigInt.parse(e['native_timestamp_ns'] as String);
+    final epoch = asInt(e['clock_epoch']);
+    // clocks and the capture-timeline basis
+    if (clocks[stream] != e['native_clock_id']) errors.add('E_CLOCK_MISMATCH');
+    final basis = e['capture_time_basis'] as String;
+    final captureNs = BigInt.parse(e['capture_time_ns'] as String);
+    if (transport == null ||
+        e['clock_mapping_revision'] != transport['revision']) {
+      errors.add('E_CLOCK_MISMATCH');
+    } else if (basis == 'transport_mapping') {
+      if (e['native_clock_id'] != transport['clock_id'] ||
+          e['receipt_native_timestamp_ns'] != null ||
+          captureNs != ts + offset) {
+        errors.add('E_CLOCK_MISMATCH');
+      }
+    } else if (e['receipt_native_timestamp_ns'] == null ||
+        captureNs !=
+            BigInt.parse(e['receipt_native_timestamp_ns'] as String) + offset) {
+      errors.add('E_CLOCK_MISMATCH');
+    }
+    // cadence: native timestamps are preserved verbatim; repeats and resets are explicit
+    final last = st.last;
+    final rel = e['timestamp_relation'] as String;
+    final bool valid;
+    if (last == null) {
+      valid = rel == 'first';
+    } else if (epoch == last.$1) {
+      valid =
+          (rel == 'advanced' && ts > last.$2) ||
+          (rel == 'repeated' && ts == last.$2);
+    } else {
+      valid = rel == 'clock_reset' && epoch > last.$1;
+    }
+    if (!valid) errors.add('E_DEPTH_CADENCE');
+    final prov = e['estimate_provenance'] as String;
+    if ((rel == 'repeated' && prov == 'new_estimate') ||
+        (rel != 'repeated' && prov == 'api_repeat')) {
+      errors.add('E_DEPTH_CADENCE');
+    }
+    st.last = (epoch, ts);
+    st.pairs.add('$epoch|$ts');
+    // associations (exact evidence only)
+    final acq = e['acquisition_source_frame_id'] as String?;
+    final mea = e['measurement_source_frame_id'] as String?;
+    if (acq != null && !acquired.containsKey(acq)) {
+      errors.add('E_DEPTH_ASSOCIATION');
+    }
+    if (mea != null &&
+        (!acquired.containsKey(mea) ||
+            acquired[mea]!['native_clock_id'] != e['native_clock_id'] ||
+            acquired[mea]!['native_timestamp_ns'] !=
+                e['native_timestamp_ns'])) {
+      errors.add('E_DEPTH_ASSOCIATION');
+    }
+    final cal = e['calibration_id'] as String?;
+    if (cal != null &&
+        (!invById.containsKey(cal) || invById[cal]!['stream_id'] != stream)) {
+      errors.add('E_CALIBRATION_UNKNOWN');
+    }
+    // image evidence
+    final d = e['depth'] as Map<String, dynamic>;
+    final got = take(
+      d['output_channel'] as String,
+      asInt(d['output_sequence']),
+    );
+    String? depthSha;
+    if (!planeOk(d, 2)) {
+      errors.add('E_DEPTH_EVIDENCE');
+    } else if (got != null) {
+      final v = got.$2;
+      final ok =
+          v.width == d['stored_width'] &&
+          v.height == d['stored_height'] &&
+          v.encoding == '16UC1' &&
+          v.frameId == depthFrameId &&
+          v.step == (asInt(d['stored_width'])) * 2 &&
+          v.data.length == v.step * v.height &&
+          v.captureNs.toString() == e['capture_time_ns'];
+      if (!ok) errors.add('E_DEPTH_EVIDENCE');
+      depthSha = sha256Hex(v.data);
+    }
+    final conf = e['confidence'] as Map<String, dynamic>;
+    final separate = conf['state'] == 'separate_image';
+    String? confSha;
+    int? confBytes;
+    if (separate) {
+      st.confidence++;
+      final cgot = take(
+        conf['output_channel'] as String,
+        asInt(conf['output_sequence']),
+      );
+      final sameLayout =
+          [
+            'native_width',
+            'native_height',
+            'stored_width',
+            'stored_height',
+          ].every((k) => conf[k] == d[k]) &&
+          same(conf['crop'], d['crop']);
+      final stamp = conf['native_timestamp'] as Map<String, dynamic>;
+      if (!planeOk(conf, 1) || !sameLayout) errors.add('E_DEPTH_EVIDENCE');
+      if (stamp['state'] == 'reported' &&
+          stamp['native_clock_id'] != clocks['depth_raw_confidence']) {
+        errors.add('E_CLOCK_MISMATCH');
+      }
+      if (cgot != null) {
+        final v = cgot.$2;
+        final ok =
+            v.width == conf['stored_width'] &&
+            v.height == conf['stored_height'] &&
+            v.encoding == 'mono8' &&
+            v.frameId == depthFrameId &&
+            v.step == conf['stored_width'] &&
+            v.data.length == v.step * v.height &&
+            v.captureNs.toString() == e['capture_time_ns'];
+        if (!ok) errors.add('E_DEPTH_EVIDENCE');
+        confSha = sha256Hex(v.data);
+        confBytes = v.data.length;
+      }
+    }
+    final stamp = conf['native_timestamp'] as Map<String, dynamic>?;
+    depthFacts.add({
+      'stream_id': stream,
+      'event_id': e['event_id'],
+      'native_timestamp_ns': e['native_timestamp_ns'],
+      'native_clock_id': e['native_clock_id'],
+      'clock_epoch': epoch,
+      'timestamp_relation': rel,
+      'estimate_provenance': prov,
+      'capture_time_basis': basis,
+      'capture_time_ns': e['capture_time_ns'],
+      'sequence': d['output_sequence'],
+      'stored_width': d['stored_width'],
+      'stored_height': d['stored_height'],
+      'native_width': d['native_width'],
+      'native_height': d['native_height'],
+      'cropped': d['crop'] != null,
+      'depth_bytes':
+          (asInt(d['stored_width'])) * (asInt(d['stored_height'])) * 2,
+      'depth_sha256': depthSha,
+      'confidence_state': conf['state'],
+      'confidence_bytes': confBytes,
+      'confidence_sha256': confSha,
+      'confidence_timestamp_state': separate ? stamp!['state'] : null,
+      'confidence_native_timestamp_ns': separate
+          ? stamp!['native_timestamp_ns']
+          : null,
+    });
+  }
+  // orphans and duplicate sequences
+  for (final t in depthImageTopics) {
+    for (final entry in images[t]!.entries) {
+      if (entry.value.length != 1 || !used.contains('$t|${entry.key}')) {
+        errors.add('E_DEPTH_EVIDENCE');
+      }
+    }
+  }
+  facts['depth'] = depthFacts;
+  facts['depth_streams'] = {
+    for (final e in perStream.entries)
+      e.key: {
+        'events': e.value.events,
+        'distinct_native_timestamps': e.value.pairs.length,
+      },
+  };
+  for (final stream in ['depth_raw', 'depth_dense']) {
+    inventoryCount(inventory, stream, perStream[stream]?.events ?? 0, errors);
+  }
+
+  // ---- Close.v2
+  if (close == null) return;
+  for (final stream in ['depth_raw', 'depth_dense']) {
+    final st = perStream[stream];
+    final entry = <String, String>{
+      'events': (st?.events ?? 0).toString(),
+      'distinct_native_timestamps': (st?.pairs.length ?? 0).toString(),
+      if (stream == 'depth_raw')
+        'confidence_images': (st?.confidence ?? 0).toString(),
+    };
+    final c =
+        (close['depth'] as Map<String, dynamic>)[stream]
+            as Map<String, dynamic>;
+    if (entry.entries.any((x) => c[x.key] != x.value)) {
+      errors.add('E_COUNT_MISMATCH');
+    }
+    final repeated = events.any(
+      (e) => e['stream_id'] == stream && e['timestamp_relation'] == 'repeated',
+    );
+    if ((c['retention_policy'] == 'native_updates_only' && repeated) ||
+        (c['retention_policy'] == 'all_returned_images' &&
+            c['skipped_repeats'] != '0')) {
+      errors.add('E_DEPTH_CADENCE');
+    }
+  }
+  if (close['calibrations'] != calMsgs.length.toString() ||
+      close['camera_metadata'] != meta.length.toString()) {
+    errors.add('E_COUNT_MISMATCH');
+  }
+  final outcome = close['outcome'];
+  final reason = close['stop_reason'];
+  final drain = close['encoder_drain'];
+  final frames = close['frames'] as Map<String, dynamic>;
+  final bad =
+      (outcome == 'completed' &&
+          (drain != 'eos_reached' ||
+              !['user_requested', 'duration_limit'].contains(reason))) ||
+      ((['writer_error', 'encoder_error'].contains(reason) ||
+              drain == 'encoder_failed') &&
+          outcome != 'failed') ||
+      ([
+            'low_storage_reserve',
+            'thermal_critical',
+            'session_interrupted',
+            'camera_lost',
+            'app_terminating',
+          ].contains(reason) &&
+          !['aborted', 'failed'].contains(outcome)) ||
+      (drain == 'deadline_exceeded' && outcome == 'completed') ||
+      (drain == 'not_started' &&
+          (frames['written'] != '0' || close['video_messages'] != '0')) ||
+      (outcome == 'unknown' && reason != 'unknown');
+  if (bad) errors.add('E_OUTCOME_MISMATCH');
+  facts['close_stop_reason'] = reason;
+  facts['encoder_drain'] = drain;
+  facts['auto_admissible'] =
+      outcome == 'completed' && unresolved == 0 && drain == 'eos_reached';
 }
 
 // ---- Encoder buffer sequences (MediaCodec flags: CODEC_CONFIG=2, END_OF_STREAM=4, PARTIAL_FRAME=8)
@@ -1008,25 +1740,49 @@ String canonical(Object? v) {
   return '${enc(v)}\n';
 }
 
+// Direct foxglove.RawImage build recipe (see fixtures/raw_image_cases.v1.2.json).
+List<int> pbVarint(int n) {
+  final out = <int>[];
+  var v = n;
+  while (v >= 0x80) {
+    out.add((v & 0x7f) | 0x80);
+    v >>= 7;
+  }
+  out.add(v);
+  return out;
+}
+
+List<int> pbField(int n, List<int> payload) => [
+  ...pbVarint((n << 3) | 2),
+  ...pbVarint(payload.length),
+  ...payload,
+];
+
+List<int> u32(int n) =>
+    (ByteData(4)..setUint32(0, n, Endian.little)).buffer.asUint8List();
+
+Uint8List buildRaw(Map<String, dynamic> r) {
+  final frameId = r.containsKey('frame_id_len')
+      ? 'x' * (r['frame_id_len'] as int)
+      : 'depth_optical_frame';
+  final stamp = [0x08, ...pbVarint(1800000000), 0x10, ...pbVarint(7)];
+  return Uint8List.fromList([
+    ...pbField(1, stamp),
+    0x15,
+    ...u32(r['width'] as int),
+    0x1d,
+    ...u32(r['height'] as int),
+    ...pbField(4, utf8.encode(r['encoding'] as String)),
+    0x2d,
+    ...u32(r['step'] as int),
+    ...pbField(6, List<int>.filled(r['data_len'] as int, r['fill'] as int)),
+    ...pbField(7, utf8.encode(frameId)),
+  ]);
+}
+
 void main(List<String> args) {
   final cap = Directory(args.isNotEmpty ? args[0] : '../..').absolute.path;
   captureDir = cap;
-  final manifest =
-      (jsonDecode(File('$cap/manifest.json').readAsStringSync())
-              as Map<String, dynamic>)['files']
-          as Map<String, dynamic>;
-  final declared =
-      jsonDecode(File('$cap/golden/cases.json').readAsStringSync())
-          as Map<String, dynamic>;
-  final names =
-      Directory('$cap/golden')
-          .listSync()
-          .whereType<File>()
-          .map((f) => f.uri.pathSegments.last)
-          .where((n) => n.endsWith('.mcap'))
-          .map((n) => n.substring(0, n.length - 5))
-          .toList()
-        ..sort();
   var failed = 0;
   void fail(String message) {
     failed++;
@@ -1034,64 +1790,111 @@ void main(List<String> args) {
   }
 
   String clip(String s) => s.substring(0, s.length < 300 ? s.length : 300);
-  if (canonical(names) != canonical(declared.keys.toList()..sort())) {
-    fail('golden/*.mcap and cases.json disagree');
+  final counts = <String, int>{};
+  // One golden corpus directory: byte hash, byte-exact expected result, declared verdict, declared schema
+  // violations, and the frozen v1.1 reader (max_revision v1.1) verdict.
+  void runCorpus(String label, String dir, bool frozenReader) {
+    final declared =
+        jsonDecode(File('$dir/cases.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final names =
+        Directory(dir)
+            .listSync()
+            .whereType<File>()
+            .map((f) => f.uri.pathSegments.last)
+            .where((n) => n.endsWith('.mcap'))
+            .map((n) => n.substring(0, n.length - 5))
+            .toList()
+          ..sort();
+    if (canonical(names) != canonical(declared.keys.toList()..sort())) {
+      fail('$label: *.mcap and cases.json disagree');
+    }
+    for (final name in names) {
+      final bytes = File('$dir/$name.mcap').readAsBytesSync();
+      final want = declared[name] as Map<String, dynamic>?;
+      if (want != null &&
+          want['sha256'] != null &&
+          sha256Hex(bytes) != want['sha256']) {
+        fail('$label DRIFT $name');
+      }
+      final result = check(bytes, null);
+      final actual = canonical(result);
+      final expected = File('$dir/expected/$name.json').readAsStringSync();
+      if (actual != expected) {
+        fail(
+          'MISMATCH $label/$name\n  actual:   ${clip(actual)}\n  expected: ${clip(expected)}',
+        );
+      }
+      // The independently declared outcome and error codes are the oracle for rejections.
+      if (want != null &&
+          (result['outcome'] != want['expect'] ||
+              canonical(result['errors']) !=
+                  canonical(want['expected_errors']))) {
+        fail(
+          'DECLARED $label/$name: got ${result['outcome']} ${result['errors']}; declared ${want['expect']} ${want['expected_errors']}',
+        );
+      }
+      // Declared schema violations (without message index) must match exactly.
+      final facts = result['facts'] as Map<String, Object?>;
+      final stripped = [
+        for (final v in (facts['schema_violations'] as List?) ?? const [])
+          (v as String).replaceFirst(RegExp(r'\[[0-9]+\]'), ''),
+      ]..sort();
+      if (want != null &&
+          canonical(stripped) !=
+              canonical(want['expected_violations'] ?? const [])) {
+        fail('VIOLATIONS $label/$name: $stripped');
+      }
+      // max_revision=v1.1 reproduces the frozen reader: v1.1 files are unchanged, v1.2 files carry the
+      // declared frozen-reader verdict.
+      final old = check(bytes, null, maxRevision: 'v1.1');
+      if (frozenReader) {
+        final summary = {'errors': old['errors'], 'outcome': old['outcome']};
+        if (canonical(summary) != canonical(want!['v1_1_reader'])) {
+          fail('FROZEN READER $label/$name: ${canonical(summary)}');
+        }
+      } else if (canonical(old) != actual) {
+        fail('FROZEN READER $label/$name differs from default reader');
+      }
+    }
+    counts[label] = names.length;
   }
-  for (final name in names) {
-    final result = check(
-      File('$cap/golden/$name.mcap').readAsBytesSync(),
-      manifest,
-    );
-    final actual = canonical(result);
-    final expected = File('$cap/golden/expected/$name.json').readAsStringSync();
-    if (actual != expected) {
-      fail(
-        'MISMATCH $name\n  actual:   ${clip(actual)}\n  expected: ${clip(expected)}',
-      );
-    }
-    // The independently declared outcome and error codes are the oracle for rejections.
-    final want = declared[name] as Map<String, dynamic>?;
-    if (want != null &&
-        (result['outcome'] != want['expect'] ||
-            canonical(result['errors']) !=
-                canonical(want['expected_errors']))) {
-      fail(
-        'DECLARED $name: got ${result['outcome']} ${result['errors']}; declared ${want['expect']} ${want['expected_errors']}',
-      );
-    }
-    // Declared schema violations (without message index) must match exactly.
-    final facts = result['facts'] as Map<String, Object?>;
-    final stripped = [
-      for (final v in (facts['schema_violations'] as List?) ?? const [])
-        (v as String).replaceFirst(RegExp(r'\[[0-9]+\]'), ''),
-    ]..sort();
-    if (want != null &&
-        canonical(stripped) !=
-            canonical(want['expected_violations'] ?? const [])) {
-      fail('VIOLATIONS $name: $stripped');
-    }
-  }
+
+  runCorpus('v1.1', '$cap/golden', false);
+  runCorpus('v1.2', '$cap/golden/v1.2', true);
   // Direct strict-schema interpreter cases and fail-closed schema loading.
-  final schemaCases =
-      jsonDecode(File('$cap/fixtures/schema_cases.json').readAsStringSync())
-          as Map<String, dynamic>;
-  for (final c in (schemaCases['cases'] as List).cast<Map<String, dynamic>>()) {
-    final text = c['json'] as String;
-    final raw = text == '__INVALID_UTF8__'
-        ? Uint8List.fromList([0xff, 0xfe])
-        : Uint8List.fromList(utf8.encode(text));
-    Object? got;
-    try {
-      got = contractSchema(
-        'stateaction.capture.${c['schema']}.v1',
-      ).validate(parseJson(raw));
-    } on MalformedJson {
-      got = 'malformed';
+  Map<String, dynamic> runSchemaCases(
+    String file,
+    String Function(String) qualify,
+  ) {
+    final doc =
+        jsonDecode(File('$cap/fixtures/$file').readAsStringSync())
+            as Map<String, dynamic>;
+    for (final c in (doc['cases'] as List).cast<Map<String, dynamic>>()) {
+      final text = c['json'] as String;
+      final raw = text == '__INVALID_UTF8__'
+          ? Uint8List.fromList([0xff, 0xfe])
+          : Uint8List.fromList(utf8.encode(text));
+      Object? got;
+      try {
+        got = contractSchema(
+          qualify(c['schema'] as String),
+        ).validate(parseJson(raw));
+      } on MalformedJson {
+        got = 'malformed';
+      }
+      if (canonical(got) != canonical(c['expect'])) {
+        fail('SCHEMA CASE $file ${c['name']}: ${canonical(got)}');
+      }
     }
-    if (canonical(got) != canonical(c['expect'])) {
-      fail('SCHEMA CASE ${c['name']}: ${canonical(got)}');
-    }
+    return doc;
   }
+
+  final schemaCases = runSchemaCases(
+    'schema_cases.json',
+    (n) => 'stateaction.capture.$n.v1',
+  );
+  final schemaCases12 = runSchemaCases('schema_cases.v1.2.json', (n) => n);
   final unsupported = (schemaCases['unsupported_schemas'] as List)
       .cast<Map<String, dynamic>>();
   for (final u in unsupported) {
@@ -1101,6 +1904,34 @@ void main(List<String> args) {
     } on SchemaUnsupported {
       // fail closed
     }
+  }
+  // Direct bounded RawImage decoder cases (including the 16 MiB cap recipes).
+  final rawCases =
+      jsonDecode(
+            File('$cap/fixtures/raw_image_cases.v1.2.json').readAsStringSync(),
+          )
+          as Map<String, dynamic>;
+  if (rawCases['data_cap_bytes'] != rawDataMax ||
+      rawCases['message_cap_bytes'] != rawMessageMax) {
+    fail('RawImage caps differ from the fixture');
+  }
+  final rawList = (rawCases['cases'] as List).cast<Map<String, dynamic>>();
+  for (final c in rawList) {
+    final data = c.containsKey('hex')
+        ? Uint8List.fromList([
+            for (var i = 0; i < (c['hex'] as String).length; i += 2)
+              int.parse((c['hex'] as String).substring(i, i + 2), radix: 16),
+          ])
+        : buildRaw(c['build'] as Map<String, dynamic>);
+    var verdict = 'ok';
+    try {
+      decodeRawImage(data);
+    } on Malformed {
+      verdict = 'malformed';
+    } on FormatException {
+      verdict = 'malformed';
+    }
+    if (verdict != c['expect']) fail('RAW IMAGE ${c['name']}: $verdict');
   }
   final fixture =
       jsonDecode(File('$cap/fixtures/encoder_buffers.json').readAsStringSync())
@@ -1120,9 +1951,12 @@ void main(List<String> args) {
   print(
     jsonEncode({
       'runner': 'dart',
-      'cases': names.length,
+      'cases': counts['v1.1'],
+      'v12_cases': counts['v1.2'],
       'encoder_buffer_cases': fixtureCases.length,
       'schema_cases': (schemaCases['cases'] as List).length,
+      'v12_schema_cases': (schemaCases12['cases'] as List).length,
+      'raw_image_cases': rawList.length,
       'unsupported_schemas': unsupported.length,
       'failed': failed,
     }),
