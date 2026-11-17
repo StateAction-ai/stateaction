@@ -121,7 +121,7 @@ func sha256Hex(_ data: [UInt8]) -> String {
 }
 
 // MARK: MCAP
-struct Message { var channel: Int; var sequence: UInt32; var logTime: UInt64; var data: [UInt8] }
+struct Message { var channel: Int; var sequence: UInt32; var logTime: UInt64; var data: [UInt8]; var pos: Int = 0 }
 struct Schema { var name: String; var encoding: String; var data: [UInt8] }
 struct Mcap {
     var profile: String? = nil
@@ -197,7 +197,7 @@ func readMcapRecords(_ d: [UInt8]) throws -> Mcap {
             let m = Message(channel: Int(try le(body, 0, UInt16.self)), sequence: try le(body, 2, UInt32.self), logTime: try le(body, 6, UInt64.self), data: [])
             _ = try le(body, 14, UInt64.self)  // publish_time: a short record is truncated in every reader
             if out.channels[m.channel] == nil { throw DefinitionOrder() }
-            out.messages.append(Message(channel: m.channel, sequence: m.sequence, logTime: m.logTime, data: Array(body[22...])))
+            out.messages.append(Message(channel: m.channel, sequence: m.sequence, logTime: m.logTime, data: Array(body[22...]), pos: out.messages.count))
         case 0x0f:
             let crc = try le(body, 0, UInt32.self)
             dataEnd = true
@@ -354,7 +354,8 @@ var schemaCache: [String: StrictSchema] = [:]
 // The reviewed contract schema (never the file's embedded copy, which is only hash-compared).
 func contractSchema(_ name: String) throws -> StrictSchema {
     if let s = schemaCache[name] { return s }
-    let s = try StrictSchema(parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(captureDir)/\(custom[name]!)")))))
+    let file = custom[name] ?? custom12[name]!
+    let s = try StrictSchema(parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(captureDir)/\(file)")))))
     schemaCache[name] = s
     return s
 }
@@ -364,7 +365,15 @@ func rejectWith(_ errors: Set<String>) -> J {
     .obj(["outcome": .str("reject"), "errors": .arr(errors.sorted().map { .str($0) }), "facts": .obj([:])])
 }
 
-func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
+func loadManifest(_ name: String) throws -> [String: String] {
+    let raw = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(captureDir)/\(name)")))
+    var out: [String: String] = [:]
+    if case .obj(let files)? = raw["files"] { for (k, v) in files { out[k.s] = v.s } }
+    return out
+}
+
+/// maxRevision "v1.1" reproduces a frozen v1.1 reader: every v1.2 file is rejected.
+func check(_ data: [UInt8], _ explicitManifest: [String: String]? = nil, maxRevision: String = "v1.2") throws -> J {
     var errors = Set<String>()
     let f: Mcap
     do { f = try readMcap(data) } catch is Truncated {
@@ -389,9 +398,13 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         facts["legacy_log_times_ns"] = .arr(img.map { .str(String($0.logTime)) })
         return .obj(["outcome": .str("legacy_jpeg"), "errors": .arr([.str("E_LEGACY_JPEG")]), "facts": .obj(facts)])
     }
+    let rev12 = maxRevision != "v1.1" && usesV12(f)
+    let table = rev12 ? exactTable12 : exactTable
+    let customTable = rev12 ? customV12Table : custom
+    let manifest = try explicitManifest ?? loadManifest(rev12 ? manifestV12Name : "manifest.json")
     // Exact per-channel encodings and reviewed schema identity.
     for ch in f.channels.values {
-        if let schema = f.schemas[ch.schemaId], let want = tableEntry(ch.topic),
+        if let schema = f.schemas[ch.schemaId], let want = table[JKey(ch.topic)],
            exact(schema.name, want.0), exact(schema.encoding, want.1), exact(ch.encoding, want.2) {
             if schema.name == poseSchema && sha256Hex(schema.data) != manifest[poseSchemaFile] { errors.insert("E_CHANNEL_ENCODING") }
         } else { errors.insert("E_CHANNEL_ENCODING") }
@@ -402,7 +415,9 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         hashes[JKey(s.name)] = .str(digest)
         if s.name == "foxglove.CompressedVideo" {
             if digest != manifest["foxglove-compressed-video.desc"] { errors.insert("E_DESCRIPTOR_HASH") }
-        } else if let file = custom[s.name] {
+        } else if rev12 && s.name == rawImageSchemaName {
+            if digest != manifest[rawImageDescName] { errors.insert("E_DESCRIPTOR_HASH") }
+        } else if let file = customTable[s.name] {
             if digest != manifest[file] { errors.insert("E_SCHEMA_MISMATCH") }
         }
     }
@@ -410,16 +425,21 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     // Decode every message once; an undecodable message is a defined reject.
     var jsonDecoded: [String: [J]] = [:]
     var videoDecoded: [Video] = []
+    var rawDecoded: [String: [RawImage]] = [:]
     var poseDecoded: [[JKey: J]] = []
     do {
         for (key, msgs) in byTopic {
             let topic = key.s
-            guard let want = tableEntry(topic) else { continue }
+            guard let want = table[JKey(topic)] else { continue }
             if want.2 == "json" {
+                if rev12 && msgs.contains(where: { $0.data.count > jsonMessageMax }) { throw Malformed() }
                 jsonDecoded[topic] = try msgs.map { m -> J in
                     do { return try parseStrictJson(m.data) } catch { throw Malformed() }
                 }
-            } else if want.2 == "protobuf" { videoDecoded = try msgs.map { try decodeVideo($0.data) } }
+            } else if want.2 == "protobuf" {
+                if topic == videoTopic { videoDecoded = try msgs.map { try decodeVideo($0.data) } }
+                else { rawDecoded[topic] = try msgs.map { try decodeRawImage($0.data) } }
+            }
             else { poseDecoded = try msgs.map { try decodePose($0.data) } }
         }
     } catch is Malformed {
@@ -429,7 +449,7 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     // Strict schema gate: violations are reported exactly and stop evaluation.
     var violations: [String] = []
     for topic in jsonDecoded.keys.sorted() {
-        let validator = try contractSchema(channelTable[topic]!.0)
+        let validator = try contractSchema(table[JKey(topic)]!.0)
         for (i, value) in jsonDecoded[topic]!.enumerated() {
             for v in validator.validate(value) { violations.append("\(topic)[\(i)]\(v)") }
         }
@@ -523,7 +543,9 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
     let poseMessages = byTopic["/tracking/pose"] ?? []
     facts["cdr_poses"] = .arr(poseDecoded.enumerated().map { i, p in
         var q = p; q["log_time_ns"] = .str(String(poseMessages[i].logTime)); return .obj(q) })
-    if let close = js("/stateaction/close").last {
+    var unresolvedCount: Int? = nil
+    let closeMsg = js("/stateaction/close").last
+    if let close = closeMsg {
         let dropped = state.values.filter { $0 == "dropped" }.count
         let unresolved = acquired.count - written.count - dropped
         var expect = counts.mapValues { J.str(String($0)) }
@@ -542,7 +564,9 @@ func check(_ data: [UInt8], _ manifest: [String: String]) throws -> J {
         else if outcome == "failed" && (close["failure_reason"] ?? .null) == .null { errors.insert("E_OUTCOME_MISMATCH") }
         facts["close_outcome"] = close["outcome"] ?? .null
         facts["unresolved_frames"] = .int(Int64(unresolved))
+        unresolvedCount = unresolved
     }
+    if rev12 { checkV12(&errors, &facts, byTopic, jsonDecoded, rawDecoded, acquired, closeMsg, unresolvedCount) }
     let list = errors.sorted()
     return .obj(["outcome": .str(list.isEmpty ? "accept" : "reject"), "errors": .arr(list.map { .str($0) }), "facts": .obj(list.isEmpty ? facts : [:])])
 }
@@ -668,5 +692,105 @@ if case .obj(let cases)? = fixture["cases"] {
         if !same(got, c["expect"]) { fail("ENCODER BUFFERS \(name): \(canonical(got))") }
     }
 }
-print("{\"runner\":\"swift\",\"cases\":\(names.count),\"encoder_buffer_cases\":\(fixtureCases),\"schema_cases\":\(schemaCaseCount),\"unsupported_schemas\":\(unsupportedCount),\"failed\":\(failed)}")
+// MARK: stateaction.capture.v1.2 (SA-68) corpus: required by default
+// The frozen v1.1 corpus must be reproduced identically by the max_revision=v1.1 reader.
+for name in names {
+    let data = try [UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/golden/\(name).mcap")))
+    let expected = try String(contentsOfFile: "\(cap)/golden/expected/\(name).json", encoding: .utf8)
+    if canonical(try check(data, nil, maxRevision: "v1.1")) + "\n" != expected { fail("MAX_REVISION v1.1 \(name)") }
+    if canonical(try check(data)) + "\n" != expected { fail("DEFAULT REVISION on v1.1 file \(name)") }
+}
+let v12Dir = "\(cap)/golden/v1.2"
+let declared12 = try JSONDecoder().decode(J.self, from: Data(contentsOf: URL(fileURLWithPath: "\(v12Dir)/cases.json")))
+let names12 = try FileManager.default.contentsOfDirectory(atPath: v12Dir).filter { $0.hasSuffix(".mcap") }.map { String($0.dropLast(5)) }.sorted()
+if case .obj(let d) = declared12, Set(d.keys.map { $0.s }) != Set(names12) { fail("golden/v1.2/*.mcap and cases.json disagree") }
+var accepted12 = 0
+for name in names12 {
+    let data = try [UInt8](Data(contentsOf: URL(fileURLWithPath: "\(v12Dir)/\(name).mcap")))
+    guard let want = declared12[name] else { continue }
+    if sha256Hex(data) != want["sha256"]?.s { fail("DRIFT v1.2 \(name)") }
+    let result = try check(data)
+    let expected = try String(contentsOfFile: "\(v12Dir)/expected/\(name).json", encoding: .utf8)
+    if canonical(result) + "\n" != expected { fail("MISMATCH v1.2 \(name)\n  actual:   \((canonical(result) + "\n").prefix(300))\n  expected: \(expected.prefix(300))") }
+    if result["outcome"]?.s != want["expect"]?.s || !same(result["errors"], want["expected_errors"]) { fail("DECLARED v1.2 \(name): got \(canonical(result["errors"] ?? .null))") }
+    var stripped: [String] = []
+    if case .arr(let vs)? = result["facts"]?["schema_violations"] {
+        for v in vs {
+            let text = v.s!
+            if let r = text.range(of: "\\[[0-9]+\\]", options: .regularExpression) { stripped.append(text.replacingCharacters(in: r, with: "")) }
+        }
+    }
+    stripped.sort { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
+    if !same(.arr(stripped.map { .str($0) }), want["expected_violations"] ?? .arr([])) { fail("VIOLATIONS v1.2 \(name): \(stripped)") }
+    let old = try check(data, nil, maxRevision: "v1.1")
+    if let oldWant = want["v1_1_reader"], old["outcome"]?.s != oldWant["outcome"]?.s || !same(old["errors"], oldWant["errors"]) {
+        fail("V1.1 READER v1.2 \(name): got \(canonical(old["errors"] ?? .null))")
+    }
+    if result["outcome"]?.s == "accept" { accepted12 += 1 }
+}
+var schemaCases12 = 0
+let sc12 = try parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/schema_cases.v1.2.json"))))
+if case .arr(let cs)? = sc12["cases"] {
+    for c in cs {
+        schemaCases12 += 1
+        var got: J
+        do {
+            got = .arr(try contractSchema(c["schema"]!.s!).validate(parseStrictJson(Array(c["json"]!.s!.utf8))).map { .str($0) })
+        } catch is MalformedJson { got = .str("malformed") }
+        if !same(got, c["expect"]) { fail("SCHEMA CASE v1.2 \(c["name"]!.s!): \(canonical(got))") }
+    }
+}
+func rawVarintBytes(_ v: UInt64) -> [UInt8] {
+    var out: [UInt8] = [], x = v
+    while x >= 0x80 { out.append(UInt8(x & 0x7f) | 0x80); x >>= 7 }
+    out.append(UInt8(x))
+    return out
+}
+func rawField(_ n: UInt64, _ payload: [UInt8]) -> [UInt8] {
+    var out = rawVarintBytes(n << 3 | 2)
+    out += rawVarintBytes(UInt64(payload.count))
+    out += payload
+    return out
+}
+func rawFixed32(_ v: UInt64) -> [UInt8] { (0..<4).map { UInt8((v >> UInt64(8 * $0)) & 0xff) } }
+/// Same recipe as gen_golden_v12.build_raw.
+func buildRaw(_ r: J) -> [UInt8] {
+    let frameId = r["frame_id_len"]?.i.map { String(repeating: "x", count: Int($0)) } ?? "depth_optical_frame"
+    var stamp: [UInt8] = [0x08]
+    stamp += rawVarintBytes(1_800_000_000)
+    stamp.append(0x10)
+    stamp += rawVarintBytes(7)
+    let data = [UInt8](repeating: UInt8(r["fill"]!.i!), count: Int(r["data_len"]!.i!))
+    var out: [UInt8] = rawField(1, stamp)
+    out.append(0x15); out += rawFixed32(UInt64(r["width"]!.i!))
+    out.append(0x1d); out += rawFixed32(UInt64(r["height"]!.i!))
+    out += rawField(4, Array(r["encoding"]!.s!.utf8))
+    out.append(0x2d); out += rawFixed32(UInt64(r["step"]!.i!))
+    out += rawField(6, data)
+    out += rawField(7, Array(frameId.utf8))
+    return out
+}
+var rawCases = 0, rawOk = 0
+let rawFixture = try parseStrictJson([UInt8](Data(contentsOf: URL(fileURLWithPath: "\(cap)/fixtures/raw_image_cases.v1.2.json"))))
+if case .arr(let cs)? = rawFixture["cases"] {
+    for c in cs {
+        rawCases += 1
+        let bytes: [UInt8]
+        if let hex = c["hex"]?.s {
+            var b: [UInt8] = []
+            var i = hex.startIndex
+            while i < hex.endIndex { let j = hex.index(i, offsetBy: 2); b.append(UInt8(hex[i..<j], radix: 16)!); i = j }
+            bytes = b
+        } else { bytes = buildRaw(c["build"]!) }
+        var verdict = "ok"
+        do { _ = try decodeRawImage(bytes) } catch is Malformed { verdict = "malformed" }
+        if verdict == "ok" { rawOk += 1 }
+        if verdict != c["expect"]?.s { fail("RAW IMAGE \(c["name"]!.s!): got \(verdict)") }
+    }
+}
+if names.count != 84 { fail("expected 84 frozen goldens, found \(names.count)") }
+if names12.count != 106 { fail("expected 106 v1.2 goldens, found \(names12.count)") }
+if schemaCases12 != 59 { fail("expected 59 v1.2 schema cases, found \(schemaCases12)") }
+if rawCases != 27 { fail("expected 27 RawImage cases, found \(rawCases)") }
+print("{\"runner\":\"swift\",\"cases\":\(names.count),\"v12_cases\":\(names12.count),\"v12_accepted\":\(accepted12),\"v12_schema_cases\":\(schemaCases12),\"raw_image_cases\":\(rawCases),\"raw_image_ok\":\(rawOk),\"encoder_buffer_cases\":\(fixtureCases),\"schema_cases\":\(schemaCaseCount),\"unsupported_schemas\":\(unsupportedCount),\"failed\":\(failed)}")
 exit(failed == 0 ? 0 : 1)

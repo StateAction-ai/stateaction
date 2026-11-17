@@ -1,0 +1,1599 @@
+{
+  "v12_aborted_encoder_deadline_unresolved": {
+    "description": "User stop but the encoder missed the drain deadline: aborted, last frame unresolved, drain deadline_exceeded.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "9c7326aada3a6e6a98197d2e8aae56c562f892560ed09eb9bd09a50a35504c92",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_aborted_low_storage_clean": {
+    "description": "Clean closed shorter take: aborted with stop_reason low_storage_reserve, every frame resolved, encoder drained. Valid evidence, never auto-admissible.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "40b9374fdacbf7ee8e239c7fccaa86aa6e5534139c2c9c509038da4f93afa888",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_after_first_frame": {
+    "description": "The Calibration message is written after the first FrameEvent that references it.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_ASSOCIATION"
+    ],
+    "sha256": "8807658a1fc0409a0c3ec5443258ad968f7e038e6dcb338efc146902ac070d0a",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_crop_outside_source": {
+    "description": "The crop extends beyond the source raster.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "81d25441ca0b1afe4398453624c0fef4d346b5816f5aa97b12fc2f38a7fb6915",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_depth_stream_values": {
+    "description": "Calibration values for a depth stream: depth intrinsics are not supported in v1.2.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/calibrations/stream_id:const"
+    ],
+    "sha256": "551120e1901a01105315442480f34f473e6e1b9c2b66d17f5042e0a0a2059542",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_duplicate_message": {
+    "description": "Two Calibration messages for one calibration_id.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "75a3555d333f5f771c0dcf772dce454c0b27b694e56aa43bf4a9d02a8543eeda",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_fake_distortion": {
+    "description": "A distortion model is asserted although the source exposes none.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/calibrations/distortion/assumed_model:const"
+    ],
+    "sha256": "39ff1a264a3a7dc957474d3053c40bd2bb6927d4e1bf42b20a070f52638ba11b",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_first_frame_clock_mismatch": {
+    "description": "Calibration native_clock_id differs from the first acquired frame's clock.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_ASSOCIATION"
+    ],
+    "sha256": "6d886d7cb4b85ae6c00f2a627795341d113a9dba4b3b2463e10a9a29d7c1c83b",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_first_frame_timestamp_mismatch": {
+    "description": "first_native_timestamp_ns differs from the first acquired frame's original sensor timestamp.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_ASSOCIATION"
+    ],
+    "sha256": "d4baf5354673312f637d3703da231897d45c73d47439d58fce8581520f4e99b1",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_float32_not_representable": {
+    "description": "source.value_type is float32 but fx=480.1 is not a float32 value.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "25fb3b74879680bd69808d092b8ff2f301c4b928b82ca0f828ae7b393056bc76",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_k_beyond_tolerance": {
+    "description": "K differs from matrix x source.K by 1.5x the 1e-9 relative tolerance: rejected.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "1603fbe41053759bbbbbd2df3b1436e7f09887d39cbd24f23d381a9420b4bb1d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_k_not_matrix_times_source": {
+    "description": "K differs from matrix x source.K beyond 1e-9 relative tolerance.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "350b28269f3b7d1c86e2457d0a4725f8dd9e6966e6cd800c533890ead91ffc50",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_k_skew": {
+    "description": "K carries a nonzero skew term (not the canonical pinhole form).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "616816251f75cc4e41013ea5bec0474eb7c4240005e13c7f57384c25348b5116",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_k_within_tolerance": {
+    "description": "K differs from matrix x source.K by half the 1e-9 relative tolerance: accepted.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "1cdaa31259d118d6ca161685b53a64d748193bff0ee488585f5506eb588e97ab",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_matrix_inconsistent": {
+    "description": "source_to_saved.matrix disagrees with the declared crop/resize.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "261c5af268517de1bfe73b44d0a2073b5cc20b6923938bd13172ccd8c6b08180",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_mirror_unsupported": {
+    "description": "Mirrored saved pixels are not supported in v1.2.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/calibrations/source_to_saved/mirror_horizontal:const"
+    ],
+    "sha256": "2ac417396093eb9de2f575b338419c8abb7c1ce080c9a7e208d12b4b6fc9a1cc",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_p_not_k_zero": {
+    "description": "P is not exactly [K | 0].",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "a7e8281311965058d12b8ec87862a2829d4311beaaae08efda5635b4fba97a0a",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_rotation_unsupported": {
+    "description": "Rotated saved pixels are not supported in v1.2 (display rotation is not a pixel transform).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/calibrations/source_to_saved/rotation_cw_degrees:const"
+    ],
+    "sha256": "ed6602d9eaf82e4cfc4ed5f203c89120e057b87494c010a1053cf0d730df6855",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_saved_dims_mismatch": {
+    "description": "saved_width disagrees with the resized raster (and the encoder).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "e3f4c3c840f0e41772c38aecfc26505bb581d91206903ae2f87c04a9e39838d0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_unknown_id": {
+    "description": "A Calibration message names an id the Inventory never declared.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_UNKNOWN",
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "d0edf047d9c1789a3a9c92daa50d992e1ffadcfec1e7e33e498959316e816b52",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_values_for_unknown_state": {
+    "description": "Calibration values supplied for rgb_1 although the Inventory declares it state=unknown (and no frame uses it).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_ASSOCIATION",
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "78a49a1afb4c584df89395ddec51a87675aecfb87ffbeed9a0ac74a9135595d7",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_calibration_values_missing": {
+    "description": "Inventory declares rgb_0 state=yes but no Calibration message carries the values (no fabricated K/P).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_VALUES"
+    ],
+    "sha256": "531aef56960de568894c63ba806de4dee49edef709d66b038802d99aaca87de2",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_duplicate": {
+    "description": "Two camera metadata messages for one frame.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CAMERA_METADATA"
+    ],
+    "sha256": "b58a3af2053f2376c1f0df138d8958ae9ecba39afd3a50bdf89f44d2b025aa05",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_inventory_mismatch": {
+    "description": "Inventory camera_metadata observed_count disagrees with the messages.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "1cb3da47db1db462199d91965872ca0bc8b992751b2b45d076ff62e42674ad2d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_nan": {
+    "description": "A JSON NaN where the platform value was non-finite (must be unavailable).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "ae3aeeb99adb03f52cdd888f64d54f6fd364bda4a39ea727997086611e523ef6",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_partial_unavailable": {
+    "description": "Camera metadata for two frames: one reported with partly unavailable fields, one entirely unavailable (non-finite platform value, unknown timestamp).",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "f39aa7777933795a7af66cbce023fce5d8d569c67dffb62e601f91d28e22ccd8",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_timestamp_mismatch": {
+    "description": "Camera metadata native_timestamp_ns differs from the frame's.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CAMERA_METADATA"
+    ],
+    "sha256": "0e3b0d34374f20aa2a6a80cd40b3d8d725f60855f23ba86ddcb49171a19733cf",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_camera_metadata_unknown_frame": {
+    "description": "Camera metadata names a source frame that was never acquired.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CAMERA_METADATA"
+    ],
+    "sha256": "b2a5895a00f58c2495624330645272b80b3697af9b072f30fc58914681b5184f",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_calibrations_count_mismatch": {
+    "description": "Close.v2 calibrations disagrees with the Calibration messages.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "dab94f1dfe412ab4617e8dc49c9482ec0ef3eaedc60781b2ecdc4b0292583dc0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_camera_metadata_count_mismatch": {
+    "description": "Close.v2 camera_metadata disagrees with the messages.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "b986238e232805f4865a1944f20d73a6db92fda8077a65f2dfadda028314deb4",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_completed_with_deadline_exceeded": {
+    "description": "completed take with encoder_drain deadline_exceeded.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "430525ad15cc9706fec12c6541ce804399ebee7a7119f84e3afffe3778754cda",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_completed_with_low_storage": {
+    "description": "completed take stopped by low_storage_reserve (must be aborted or failed).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "ec9cde5753f74baf5ab4300f480ee559fab6e4e075e878a22bf151609ab6f9ec",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_confidence_count_mismatch": {
+    "description": "Close.v2 confidence_images disagrees with the separate confidence images.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "635c93612e20377e20afeb1de78c19ac3d717eb939564e4258d13e26d64b49cf",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_depth_count_mismatch": {
+    "description": "Close.v2 depth_raw events disagree with the retained events.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "df9f8d2df96876f67f9197cd8636943e8f05996b1c1e84e8044e069f1942f756",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_distinct_timestamps_mismatch": {
+    "description": "Close.v2 distinct_native_timestamps counts the retained images instead of the distinct measurements.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "066ea4e6528ede8cf924a55b4f41d13ccc0d0aa70162802f3a744b034883bdfb",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_encoder_failed_not_failed": {
+    "description": "encoder_drain encoder_failed with outcome aborted.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "28de54fc6ee6cab1c27ca06a2cf5a5adf2eadb5ef11b610490ad6d0d50a78c56",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_not_started_with_video": {
+    "description": "encoder_drain not_started although frames were written.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "ac4597c9e7ff508f4129f907f6546902e218cf063fcb8b0bd32292e6fbea0f6c",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_stop_reason_unknown_value": {
+    "description": "stop_reason outside the declared enum.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/close/stop_reason:enum"
+    ],
+    "sha256": "9cc1bbd4d1595d7146d1ee7c58181798b6a473a6b14cedd6f1a14481d014a88a",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_unknown_outcome_with_known_reason": {
+    "description": "outcome unknown must carry stop_reason unknown.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "1b2f750356a08d72a3fbb42e319a7a19751d346f8263b1a2abbc89197c477030",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_close_writer_error_not_failed": {
+    "description": "stop_reason writer_error with outcome aborted.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_OUTCOME_MISMATCH"
+    ],
+    "sha256": "65b7cf27b05796e6a2e056afe7b8016a9941f86f2ddf36fe096b347c4314c189",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_dense_with_separate_confidence": {
+    "description": "A dense-depth event claims a separate confidence image (ARCore has none for dense depth).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/depth_events/confidence/state:enum",
+      "/stateaction/depth_events/confidence:anyOf"
+    ],
+    "sha256": "d36d9e40dbc35415ddf9f4b8f0a3861dd3582d3dd1a6032beac1a480ea6fde97",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_acquisition_unknown_frame": {
+    "description": "acquisition_source_frame_id names a frame that was never acquired.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_ASSOCIATION"
+    ],
+    "sha256": "612a407ccfb259e4bd699cb73bb0d9ba2fd38596d6b253b0e009a44cf508cd60",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_api_repeat_on_advanced": {
+    "description": "An api_repeat provenance on an event whose native timestamp advanced.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "9f83baf7acd5fe7f739700e934d521b51847310dfc066df1c94fc5f5320ef1f8",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_calibration_unknown": {
+    "description": "A DepthEvent references a calibration the Inventory does not declare for that stream.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CALIBRATION_UNKNOWN"
+    ],
+    "sha256": "9912436d4f1dc377d7a610750dd1fc5a5b883a6fc22f5fd3a003c358194c43ff",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_capture_time_arithmetic": {
+    "description": "capture_time_ns is not the declared anchor mapping of the receipt timestamp.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH",
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "f0c521cea2de9961168f557fd558fa086105d08bc380dd5bac8e7a467d1bf7dc",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_capture_time_at_int64_max": {
+    "description": "transport_mapping whose mapped capture time is exactly 9223372036854775807 (the int64 maximum): accepted.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "b1340402f9bcf888ea758268491d12e762e2e96b636bd433f9f2b26e7fc7068c",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_capture_time_overflow": {
+    "description": "native timestamp + anchor offset exceeds int64; the event claims the clamped maximum. Readers must reject (never wrap or saturate).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "sha256": "639b33f24bdceb6430c77e5ec432070f3112ac24514da76ca24ea65a5c9fa020",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_clock_reset_without_epoch": {
+    "description": "A clock_reset relation without a clock_epoch increase.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "b0b33e37e197e52af700abafda4d9b575142e5ce4918f7b9abb24243d0628b7e",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_confidence_clock_undeclared": {
+    "description": "A reported confidence clock that Clocks.stream_clocks does not declare as depth_raw_confidence.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "sha256": "b9b5ac6b275a3f267b3ad106db2c77716d2ed584337cf5ef637fa6d4bd6c89af",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_confidence_dims_mismatch": {
+    "description": "The confidence plane has different dimensions from the depth image.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "dea081d5ebee8e97216783659b3dcbf72c40ad0e714dea49416cb4cfa07be99f",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_confidence_image_missing": {
+    "description": "A DepthEvent declares a separate confidence image that is not in the file.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "7b4cb40432a45d6d6e69be84e529fd83526cbe49034b91bc4dfe3350fe9b4ff9",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_confidence_plane_differs": {
+    "description": "The confidence plane's native dimensions differ from the depth plane's (the API guarantees the same size).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "2ccc6c1810635b5fd51ca65e4e7c0f18eec09642f05bc9975c2c9eb3ecb1f578",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_crop_outside_native": {
+    "description": "The recorded crop extends past the native plane.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "2b1e3487ceaae3d6a6072759b6a286d7f46770cfdce902eb6ab76067ac4aba9d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_data_length_mismatch": {
+    "description": "RawImage data is one row short of step*height.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "7d432639c0665e8f49efb3ee6cf90ebdcd5fec5b84101cab764a6c35866c9cf9",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_dense_measurement_linked": {
+    "description": "Dense depth sharing the RGB native domain with exact timestamp equality: measurement_source_frame_id links the frames; no confidence plane (not provided by the source); different dimensions from raw depth.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "00622237501770c920f4ed03afd6db220b42ff114d56212ede6a275a80d7b9e3",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_dimensions_vs_event": {
+    "description": "RawImage width disagrees with the DepthEvent dimensions.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "2d14f72bb6c36602f27dff79d8dc82ecea603a135ce722b700fe1a1c470074ad",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_duplicate_event_id": {
+    "description": "Two retained depth events share one acquisition ID.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "6019f53e16fc935b1d726f71bff11c2285c2e7e646297995b4057a62daf241fa",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_false_mapping_claim": {
+    "description": "transport_mapping is claimed for a native clock that is not the recorder transport domain.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "sha256": "68f3ea8a82208226107af4bbb276d51b3cea8d52e49b4122f17d12ea506e26d0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_mapping_revision_mismatch": {
+    "description": "clock_mapping_revision differs from the declared recorder transport revision.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "sha256": "4bc2de78078bd5a306df13cc6760468352d4e805f310af7a76c3e07041ae984a",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_measurement_clock_mismatch": {
+    "description": "measurement_source_frame_id claimed across different native clock domains.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_ASSOCIATION"
+    ],
+    "sha256": "c3344861d3250825ff734b0f0dcae8959bdeca3aa82cdee88b77c0dc08df2cc4",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_measurement_timestamp_mismatch": {
+    "description": "measurement_source_frame_id claims simultaneity with a frame whose native timestamp is different.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_ASSOCIATION"
+    ],
+    "sha256": "7ffbe5458a176fbf22953f6f6dd81a0909693888d787be177464db23115fb69a",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_native_updates_only_with_repeat": {
+    "description": "The declared native-updates-only retention policy contradicts a retained repeated timestamp.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "1c249fd47086d5d7cacb0b0f861d81dcb2c7e332758909289b8fc021164db7b1",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_orphan_image": {
+    "description": "A RawImage on the depth channel that no DepthEvent references.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "eebec92c4e581ade7e40f9fd2f65111b95baf029d751efc7071f6aab1c6ec071",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_pixel_stride_below_sample": {
+    "description": "native_pixel_stride_bytes (1) is smaller than a 16-bit sample.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "a89c890bd23e978faa987c31cb140e7c8d2ad6d3f783676072dc79e19eeb79c7",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_raw_unknown_mapping_reprojected": {
+    "description": "Raw depth in its own clock domain with UNKNOWN native-to-capture mapping (acquisition-receipt time basis); equal native timestamps with distinct acquisition IDs and bytes are retained SDK reprojections/repeats; confidence separate, one frame unavailable; measurement association unknown.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "3c44a861149a32a3f98a9c4447388cb32a06c459c24b629c1711b9de2d635003",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_receipt_missing": {
+    "description": "acquisition_receipt basis without a receipt timestamp.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/depth_events/receipt_native_timestamp_ns:type"
+    ],
+    "sha256": "b15b18e322913446cc959327fb3daa2fe467e074e22f4a5e0cc71c44d84a7a1c",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_regression_without_reset": {
+    "description": "A native timestamp regresses within one clock epoch (timestamps are never rewritten; a reset must be explicit).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "2e405fe18c76a94e8a1e64665a3613fd922f50445b166fbb49ea5bf1fb5020cb",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_relation_mismatch": {
+    "description": "timestamp_relation says advanced but the native timestamp equals the previous one.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "4fbd67c3361d9fca421efc171843f80f081738105a51ade64e21bc98fd4b19e8",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_repeat_advertised_as_new": {
+    "description": "A repeated native timestamp is advertised as a new depth estimate.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "7ad7e79e34fe4424f7cd9e015fe54a5e85b8a748fd4808d6beb0a2d84c1c2634",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_row_stride_too_small": {
+    "description": "native_row_stride_bytes is smaller than one native row.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "f9a90cf4186e6eab3e3c2ddb36878693b613865064c72a2f5e71801f9377febe",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_sequence_reused": {
+    "description": "Two DepthEvents reference the same RawImage channel sequence.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "1aad12fd32312b2b5d3e11acf1603b4c5196741bb5a4ed4d858f7b60a28f67a6",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_skips_without_policy": {
+    "description": "skipped_repeats is nonzero although every returned image is retained.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_CADENCE"
+    ],
+    "sha256": "46a29e98dc83f06930ed657133a1225f1ef64ae073608b25aff04726da531be0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_step_mismatch": {
+    "description": "RawImage step is not width*2 for 16UC1 (and the data is sized to that step).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "a42503bddee83599a97750ad6e889306b698009760f6bd3d57706e229574266d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_stored_dims_vs_crop": {
+    "description": "stored dimensions disagree with the recorded crop.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "14720a394637dfd55255263664ebf72fdeb59c0e4bc80ad1a8df912d114cf925",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_stream_clock_mismatch": {
+    "description": "Clocks.stream_clocks declares a different domain from the events' native_clock_id.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CLOCK_MISMATCH"
+    ],
+    "sha256": "b67bb3388c102dbebc376536bf1ce2243804965a893eca9bcafa71d799c05c68",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_strided_cropped_planes": {
+    "description": "Native 10x8 planes with pixel stride 4 (depth) / 2 (confidence) and row padding, cropped to the stored 6x4 region; the confidence carries its OWN native timestamp and clock (5 us after the depth timestamp), never assumed equal; a second event with row padding only.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "645b3440bd50536423a90ef5964bdd623e6cb84dfb2f490f4d2019abbf70bac0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_timestamp_not_capture_time": {
+    "description": "RawImage timestamp differs from the DepthEvent capture_time_ns.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "0771373977924c7dcd0d9ea9404534d251e03cadf283935a2f737d0e5f5bd989",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_transport_mapping_clock_reset": {
+    "description": "Raw depth in the recorder transport domain mapped by the declared fixed anchor, an explicit clock reset (epoch 1, timestamp regression kept verbatim) and a declared native-updates-only policy with 3 counted skips.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "86e245540d4257fcb4faf7eac925c25e0b36e2b84d2881cdedb4cf864e4ba386",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_wrong_encoding": {
+    "description": "Depth RawImage uses 32FC1 although v1.2 stores uint16 millimetres.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "de5164276302b911e3dfe81fc5751fdb3d1fc4dd4a787f26ae7adc7c86e85c27",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_depth_wrong_frame_id": {
+    "description": "Depth RawImage frame_id is camera_optical_frame: no alignment with the RGB frame is claimed.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DEPTH_EVIDENCE"
+    ],
+    "sha256": "b454d734a4a9042333277a01c907316228e1ab59a5f2ce2f792eb3186c0e3611",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_failed_encoder_error": {
+    "description": "Encoder failure: failed with failure_reason, stop_reason encoder_error, drain encoder_failed, last frame unresolved.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "247a20e8bb602830f98db05f781b39034a7bb5ad4477fb04a1447002e4d9c950",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_inventory_depth_count_mismatch": {
+    "description": "Inventory depth_raw observed_count disagrees with the retained events.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "125e79557f022919117d54e8b5f86b978cbf549f0b2d274f44b300585f874432",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_inventory_depth_missing": {
+    "description": "Depth events exist but the Inventory declares depth_raw unsupported.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_COUNT_MISMATCH"
+    ],
+    "sha256": "68772e0cb57a69512fd4b771f5a8c7c7080dea71c0eeaa44b9ae77c66a0cccf4",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_json_at_size_cap": {
+    "description": "A JSON evidence message of exactly 65536 bytes (valid JSON padded with trailing whitespace) is accepted.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "3c2b8aa0619c034909edc6fdede2623975d6a508f93dffa676472900cb061012",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_json_over_size_cap": {
+    "description": "A JSON evidence message of 65537 bytes exceeds the 64 KiB v1.2 cap before parsing.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "111a2bf11b070b2acdcf90b0ac0ea651e4cbb38d4430ed257cf6c5f0400b6717",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_mesh_observed_unsupported": {
+    "description": "The Inventory claims observed mesh data although v1.2 has no mesh payload channel.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_UNSUPPORTED_STREAM"
+    ],
+    "sha256": "00749d78c22ef2863217da57b4215d9e1400858472151feea5f83a24ae72b951",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_new_topic_under_v1_1": {
+    "description": "A Profile.v1 (v1.1) file that declares the v1.2 /stateaction/calibrations channel: the v1.1 channel table is exact.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "1605fb4ae0f76116f67ccdbd7574eed1492f6a382d1a9d0e0ac22289b9f847d0",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_point_cloud_enabled_unsupported": {
+    "description": "point_cloud enabled=yes although nothing can be recorded for it.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_UNSUPPORTED_STREAM"
+    ],
+    "sha256": "818fc6bc200268f9577df59f454b5d4cae7a6b642f70d9a2cf3eea6e10cc75ae",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_profile_unknown_future_revision": {
+    "description": "A Profile.v3 schema record: unknown revisions reject (the v1.1 table applies, so the v1.2 Close.v2 channel and payload are foreign to it).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING",
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/capture_profile/wire_contract_revision:const",
+      "/stateaction/close:additionalProperties"
+    ],
+    "sha256": "2ae6dab729d0578ace26c45b7cd516cc8112a560dee89b6aa0d8ee1f02fb7c2c",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_profile_v2_schema_hash": {
+    "description": "The embedded Profile.v2 schema differs from the reviewed bytes.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MISMATCH"
+    ],
+    "sha256": "2f1bd3937f2570ad992b0ee9604e5236e95f71dfa578fcfda64330a850be690c",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_profile_v2_with_close_v1": {
+    "description": "Profile.v2 selects v1.2 but the Close channel is the v1 schema: v1.2 files never mix revisions.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_CHANNEL_ENCODING"
+    ],
+    "sha256": "144d02827180098e20d5d457b7b4ba4170ffe06698114a91a3646873afabf832",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_profile_v2_wrong_revision_const": {
+    "description": "Profile.v2 carrying wire_contract_revision v1.1.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/capture_profile/wire_contract_revision:const"
+    ],
+    "sha256": "2dddf99c74ab00a79240333be88704edfa946858c2034eebb149cc54dc0120e8",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_raw_kind_on_dense_stream": {
+    "description": "The raw-depth source_kind on a dense stream (raw and dense are never conflated).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_SCHEMA_MALFORMED"
+    ],
+    "expected_violations": [
+      "/stateaction/depth_events/source_kind:const"
+    ],
+    "sha256": "369eae4c6237ae5e65af4b6aca1cd90a201803c0f46541a1282dfbb6b0ebe145",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_descriptor_hash": {
+    "description": "The embedded foxglove.RawImage descriptor differs from the pinned bytes.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_DESCRIPTOR_HASH"
+    ],
+    "sha256": "2b450e4337af276e059cc7d2a02dd4d14eac26ab11021e0fa7f485faa654bd08",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_dimension_over_limit": {
+    "description": "width is 4097 (dimensions must be 1..4096).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "77ef283507780d5364df29c372bc7632cbc79be1a8cde679018c41f4d9acb1dc",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_duplicate_field": {
+    "description": "The width field appears twice.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "13279533eb374eb86a6b44162b85e2e254c3f20be6a3af1189f3c6aad36ca1a4",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_epoch_zero": {
+    "description": "Depth capture time zero with a present but empty RawImage Timestamp.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "6b9c00ef20e46d71333dd18d5b4e30693e3b3ac60b377ae8e384fc26d4a3da81",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_length_overflow": {
+    "description": "The data field declares a length far beyond the message.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "48bdfc2163d4d1fcc482946620018bae3a4eb4c87d72618ae1fec02958c5150d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_missing_timestamp": {
+    "description": "Depth capture time zero with RawImage field 1 omitted.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "a5465d679fd6e7ed977e34ed00449ab69c748780e8f33debd048beb68f419c6d",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_nanos_out_of_range": {
+    "description": "timestamp nanos is 1e9 (must be below 1e9).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "b932fb4993708bc887d1e4c18fc08652f89f9210d1f02576d03649c6474909ed",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_truncated_fixed32": {
+    "description": "The width fixed32 field is cut short (3 of 4 bytes remain).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "e1538b197b827b4ab3598be59944f96c659f2bb5bf2ed00fbbd96ee3952ac743",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_unknown_field": {
+    "description": "The message carries an undeclared field 8.",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "ed7630419d6e93f1d9dd27db4a07bc2065aabdd359e2b52a6f58a1840b85d0ad",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_varint_width": {
+    "description": "width is encoded as a varint instead of fixed32 (wrong wire type).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "67686c5931c9e5ddaa8357cc76eb3c77ce5c1a432822718428f1d86520ae6d68",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_rawimage_zero_dimension": {
+    "description": "height is 0 (dimensions must be 1..4096).",
+    "expect": "reject",
+    "expected_errors": [
+      "E_MALFORMED_MESSAGE"
+    ],
+    "sha256": "f0e2c582ebe42d5eb64a480cd9bef3a3a98c05303bb56a66e015cfb5db2c44a2",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_two_calibration_revisions_with_reset": {
+    "description": "Two calibration revisions: rgb_0 for frames 0-2, a cropped+resized rgb_1 from frame 4 announced by a calibration_reset sensor event.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "4169bc48e3213205dc2e87af5dc1c6b46d83068ef6eeabe4b7e908aee9c96115",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  },
+  "v12_valid_calibration_only": {
+    "description": "v1.2: one RGB calibration (640x480 source resized to the 64x48 saved raster), depth/camera metadata/mesh/point cloud declared unsupported, Close.v2 completed.",
+    "expect": "accept",
+    "expected_errors": [],
+    "sha256": "2313c492c809df6a2021c2b4e23eb59d1fe05f1682b29f957e87c551a68622ec",
+    "v1_1_reader": {
+      "errors": [
+        "E_CHANNEL_ENCODING",
+        "E_SCHEMA_MALFORMED"
+      ],
+      "outcome": "reject"
+    }
+  }
+}

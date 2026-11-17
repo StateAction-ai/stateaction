@@ -1,0 +1,1 @@
+{"errors":["E_SCHEMA_MALFORMED"],"facts":{"schema_violations":["/stateaction/calibrations[0]/distortion/assumed_model:const"]},"outcome":"reject"}

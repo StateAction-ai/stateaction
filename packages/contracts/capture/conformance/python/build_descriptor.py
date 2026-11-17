@@ -15,14 +15,15 @@ import sys
 from pathlib import Path
 
 from foxglove_schemas_protobuf.CompressedVideo_pb2 import CompressedVideo
+from foxglove_schemas_protobuf.RawImage_pb2 import RawImage
 from google.protobuf import descriptor_pb2
 
 CAPTURE = Path(__file__).resolve().parents[2]
 
 
-def build() -> bytes:
+def build(message=CompressedVideo) -> bytes:
     fds = descriptor_pb2.FileDescriptorSet()
-    video = CompressedVideo.DESCRIPTOR.file
+    video = message.DESCRIPTOR.file
     for dependency in video.dependencies:  # timestamp.proto first: dependency order
         dependency.CopyToProto(fds.file.add())
     video.CopyToProto(fds.file.add())
@@ -30,10 +31,18 @@ def build() -> bytes:
 
 
 if __name__ == "__main__":
-    data = build()
-    committed = (CAPTURE / "foxglove-compressed-video.desc").read_bytes()
+    # Default: the frozen v1.1 CompressedVideo descriptor. --raw-image: the v1.2 foxglove.RawImage
+    # descriptor (same wheel, same transitive layout), pinned by schema-provenance.raw-image.json.
+    target = (
+        "foxglove-raw-image.desc"
+        if "--raw-image" in sys.argv
+        else ("foxglove-compressed-video.desc")
+    )
+    data = build(RawImage if "--raw-image" in sys.argv else CompressedVideo)
+    committed_path = CAPTURE / target
+    committed = committed_path.read_bytes() if committed_path.exists() else b""
     print(hashlib.sha256(data).hexdigest(), "rebuilt")
     print(hashlib.sha256(committed).hexdigest(), "committed")
     if "--write" in sys.argv:
-        (CAPTURE / "foxglove-compressed-video.desc").write_bytes(data)
+        committed_path.write_bytes(data)
     sys.exit(0 if data == committed else 1)
