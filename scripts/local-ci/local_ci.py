@@ -596,7 +596,21 @@ def descendants(root: int, proc: Path = Path("/proc")) -> list[tuple[int, str]]:
     return found
 
 
-def reap_subtree(root: int | None = None, grace: float = 8.0) -> int:
+def is_gradle_daemon(pid: int) -> bool:
+    try:
+        proc = Path("/proc") / str(pid)
+        return (proc / "exe").resolve(
+            strict=True
+        ).name == "java" and b"org.gradle.launcher.daemon.bootstrap.GradleDaemon" in (
+            proc / "cmdline"
+        ).read_bytes().split(b"\0")
+    except OSError:
+        return False
+
+
+def reap_subtree(
+    root: int | None = None, grace: float = 8.0, *, gradle_shutdown: dict | None = None
+) -> int:
     """Terminate and reap everything below this runner; only its own descendants.
 
     Returns how many live processes were found. Raises Refused when the subtree
@@ -605,6 +619,7 @@ def reap_subtree(root: int | None = None, grace: float = 8.0) -> int:
     root = root or os.getpid()
     leaked: set[int] = set()
     terminated = False
+    shutdown_deadline = time.monotonic() + (5.0 if gradle_shutdown is not None else 0)
     deadline = time.monotonic() + grace
     while True:
         procs = descendants(root)
@@ -615,6 +630,17 @@ def reap_subtree(root: int | None = None, grace: float = 8.0) -> int:
         live = [pid for pid, state in procs if state != "Z"]
         if not procs:
             return len(leaked)
+        # Gradle's single-use daemon can still be closing its caches after the CLI exits.
+        if (
+            gradle_shutdown is not None
+            and not gradle_shutdown.get("requested")
+            and time.monotonic() < shutdown_deadline
+            and all(is_gradle_daemon(pid) for pid in live)
+        ):
+            deadline = time.monotonic() + grace
+            time.sleep(0.05)
+            continue
+        gradle_shutdown = None
         leaked.update(live)
         if live:
             sig = (
@@ -651,6 +677,7 @@ def run_child(
     stop: dict,
     capture: bool = False,
     scan: "CacheScan | None" = None,
+    wait_for_gradle: bool = False,
 ) -> dict:
     started = time.monotonic()
     try:
@@ -721,11 +748,18 @@ def run_child(
     stop["process"] = None
     leaked = 0
     try:
-        leaked = reap_subtree()
+        leaked = reap_subtree(
+            gradle_shutdown=(
+                stop if wait_for_gradle and status is None and code == 0 else None
+            ),
+        )
     except Refused:
         status = "unreaped"
     if status is None:
-        status = "passed" if code == 0 else "failed"
+        if stop.get("requested"):
+            status = "interrupted"
+        else:
+            status = "passed" if code == 0 else "failed"
     if leaked and status == "passed":
         status = (
             "leaked-process"  # a daemon outliving its stage is a failure, never a pass
@@ -1210,6 +1244,7 @@ def run_pipeline(
                 stop=stop,
                 capture=bool(stage.get("capture")),
                 scan=CacheScan() if is_nx(argv) else None,
+                wait_for_gradle=stage["id"] == "mobile-android-dart",
             )
             entry = {
                 "id": stage["id"],

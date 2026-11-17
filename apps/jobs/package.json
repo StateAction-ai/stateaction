@@ -8,8 +8,9 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test --test-concurrency=2 test/*.test.ts",
-    "smoke": "node --env-file=../../.env --import tsx src/smoke.ts"
+    "test": "tsx --test --test-concurrency=2 --test-timeout=120000 test/*.test.ts",
+    "smoke": "node --env-file=../../.env --import tsx src/smoke.ts",
+    "test:integration": "node --test --test-concurrency=1 --test-timeout=300000 test-integration/*.test.mjs"
   },
   "dependencies": {
     "@stateaction/contracts": "workspace:*",

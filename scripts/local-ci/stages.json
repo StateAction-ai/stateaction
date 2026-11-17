@@ -77,7 +77,7 @@
         "run-many",
         "-t",
         "build,typecheck,syntax,test,format",
-        "--exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e",
+        "--exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native",
         "--parallel=1",
         "--outputStyle=static",
         "--nxBail"
@@ -93,7 +93,7 @@
         "exec",
         "nx",
         "run-many",
-        "--projects=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e",
+        "--projects=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native",
         "-t",
         "build,typecheck,test,format",
         "--parallel=1",
@@ -180,6 +180,13 @@
         "--skip-nx-cache",
         "--outputStyle=static"
       ]
+    },
+    {
+      "id": "jobs-controller-integration",
+      "title": "Official Render SDK runner, Next API, PostgreSQL and detached-child controller integration on bounded fixtures",
+      "fixtures": true,
+      "timeoutSec": 600,
+      "argv": ["pnpm", "--filter", "@stateaction/jobs", "test:integration"]
     },
     {
       "id": "runtime-smoke",

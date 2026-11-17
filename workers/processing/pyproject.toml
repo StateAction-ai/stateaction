@@ -22,7 +22,12 @@ dev = ["mypy==1.19.1", "ruff==0.17.3"]
 required-version = "==0.13.6"
 
 [tool.mypy]
-files = ["src/stateaction_processing/cli.py"]
+files = [
+  "src/stateaction_processing/cli.py",
+  "src/stateaction_processing/run_job.py",
+  "src/stateaction_processing/local_signal.py",
+  "src/stateaction_processing/fixture_noop.py",
+]
 strict = true
 follow_imports = "skip"
 
