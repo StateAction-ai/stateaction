@@ -38,6 +38,28 @@ class Missingness:
     joints_masked_in_present_hands: int = 0
     joints_outside_raster: int = 0
 
+    def add(self, obs: HandObservation) -> None:
+        """Count one observation (shared with the SA-31 artifact exporter)."""
+        self.frames += 1
+        n = obs.hands_detected
+        if n == 0:
+            self.frames_no_hand += 1
+        elif n == 1:
+            self.frames_one_hand += 1
+        else:
+            self.frames_two_hands += 1
+        self.hand_slots_present += n
+        self.joints_present += int(obs.landmark_mask.sum())
+        self.joints_masked_in_present_hands += int(
+            (~obs.landmark_mask[obs.hand_present]).sum()
+        )
+        w, h = obs.transform.raster
+        px = obs.image_landmarks_px
+        outside = obs.landmark_mask & (
+            (px[..., 0] < 0) | (px[..., 0] >= w) | (px[..., 1] < 0) | (px[..., 1] >= h)
+        )
+        self.joints_outside_raster += int(outside.sum())
+
 
 @dataclass
 class HandRunSummary:
@@ -78,28 +100,7 @@ def run_hand_inference(
         for frame in stream:
             obs = inferencer.infer(frame)
             raster = obs.transform.raster
-            miss.frames += 1
-            n = obs.hands_detected
-            if n == 0:
-                miss.frames_no_hand += 1
-            elif n == 1:
-                miss.frames_one_hand += 1
-            else:
-                miss.frames_two_hands += 1
-            miss.hand_slots_present += n
-            miss.joints_present += int(obs.landmark_mask.sum())
-            miss.joints_masked_in_present_hands += int(
-                (~obs.landmark_mask[obs.hand_present]).sum()
-            )
-            w, h = obs.transform.raster
-            px = obs.image_landmarks_px
-            outside = obs.landmark_mask & (
-                (px[..., 0] < 0)
-                | (px[..., 0] >= w)
-                | (px[..., 1] < 0)
-                | (px[..., 1] >= h)
-            )
-            miss.joints_outside_raster += int(outside.sum())
+            miss.add(obs)
             obs.digest_into(digest)
             total_ms += obs.inference_ms
             max_ms = max(max_ms, obs.inference_ms)
