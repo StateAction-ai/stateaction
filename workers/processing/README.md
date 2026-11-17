@@ -37,3 +37,33 @@ The JPEG lane reports `rgb_only` and counts excluded messages by domain in `excl
 Frames are provisional until `require_accepted()` returns. Compare `report.source.sha256` and `report.source.bytes_read` with the sealed source inventory before publishing any result.
 
 `av` and `numpy` are in the locked `decode` group. Current fixtures cover small native-format examples and bounded synthetic workloads. They leave physical capture, long recordings and hardware qualification open.
+
+## CPU hand inference (SA-30)
+
+`hand_stream.run_hand_inference(raw, sink)` consumes `FrameStream`: one decode and one MediaPipe Hand Landmarker inference per frame (CPU delegate, IMAGE mode, so no cross-frame tracking state; up to 2 hands; 21 landmarks; the pinned 0.5 detection/presence thresholds). Each `HandObservation` goes to `sink` immediately and is never accumulated. The returned `HandRunSummary` exists only after `require_accepted()` (footer, CRCs, source SHA-256, Close counts, decoder flush). Any model, decode or source error raises, so no job can succeed with RGB-only output. A frame with no hand is a valid fully-masked observation.
+
+```sh
+uv sync --locked                         # default groups include dev, decode, cpu (mediapipe==1.2.0)
+../../spikes/android/processing/fetch_model.sh   # hash-verified model into ~/.cache/mediapipe
+uv run --locked python -m stateaction_processing.hand_stream INDEXED.mcap [--expected-sha256 HEX]
+```
+
+Model provenance and pins are in `src/stateaction_processing/hand_model.json` (reused from the merged SA-61 spike: SHA-256 `fbc2a300…cde1`, 7,819,105 B, Apache-2.0, mediapipe 1.2.0). The model is not committed; `STATEACTION_HAND_MODEL` overrides the cache path, and a missing file, wrong size or wrong hash fails before any decode.
+
+Observation conventions (also carried on every observation as `semantics`):
+
+| Field                                      | Meaning                                                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `image_landmarks_px [2,21,2]`              | pixels of the decoded raster; may lie outside it; crop/rotation/mirror unknown in contract v1  |
+| `model_relative_landmarks_m [2,21,3]`      | MediaPipe hand-centred world estimate in metres, model-relative only                           |
+| `landmark_mask [2,21]`, `hand_present [2]` | finite-coordinate mask and detection flag; absent/non-finite entries are NaN, never fabricated |
+| `handedness_score [2]`                     | hand-level classification score, **not** per-joint confidence                                  |
+| `joint_confidence`, `joint_visibility`     | unsupported (`None`)                                                                           |
+| `handedness_label`                         | model label under a mirrored-input assumption; the capture mirror state is unknown             |
+| `metric_accuracy_validated`                | always `False`                                                                                 |
+
+The hand axis is detection order, not identity. Original frame id, encoder PTS, native clocks/timestamps, calibration id and access-unit SHA-256 are copied unchanged.
+
+To run inference on original Stera JPEG, pass `source_profile="stera_jpeg_mcap_v1"` to `run_hand_inference`, or use `--source-profile stera_jpeg_mcap_v1` with the CLI. Each JPEG observation exposes `identity.jpeg_source`. Its `source_message` preserves the ROS header timestamp, the MCAP publish and log timestamps, channel, sequence, frame name and JPEG SHA-256. `stream_ordinal` and `derived_pts_us` are processing values. The reported landmarks use the saved JPEG raster. Camera transforms and cross-stream timing remain unverified.
+
+The CPU model detected hands in 43 of 51 frames in the selected phone H.264 capture. The recorded counts are eight frames with no hands, 19 with one and 24 with two. The 0.5 thresholds remain unchanged. The SA-61 bottle-grip replay recorded no detections in 29 frames at that threshold. Held-tool usefulness, handedness, 3D scale and orientation still need qualification. Set `STATEACTION_HAND_FIXTURE=/path/indexed.mcap` to enable the positive-capture test.

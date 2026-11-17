@@ -18,10 +18,12 @@ packages = ["src/stateaction_processing"]
 [dependency-groups]
 dev = ["mypy==1.19.1", "ruff==0.17.3"]
 decode = ["av==19.0.2", "numpy==2.5.4"]
+# SA-30: CPU hand landmarker. Same pins as the SA-61 probe (numpy matches rerun-sdk 0.41.0 era pins).
+cpu = ["mediapipe==1.2.0"]
 
 [tool.uv]
 required-version = "==0.13.6"
-default-groups = ["dev", "decode"]
+default-groups = ["dev", "decode", "cpu"]
 
 [tool.mypy]
 files = [
@@ -36,6 +38,9 @@ files = [
   "src/stateaction_processing/jpeg_decode.py",
   "src/stateaction_processing/jpeg_stream.py",
   "src/stateaction_processing/frames.py",
+  "src/stateaction_processing/hand_model.py",
+  "src/stateaction_processing/hands.py",
+  "src/stateaction_processing/hand_stream.py",
 ]
 strict = true
 follow_imports = "skip"
