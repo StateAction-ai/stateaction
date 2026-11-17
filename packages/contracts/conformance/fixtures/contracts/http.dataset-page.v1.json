@@ -1,0 +1,82 @@
+{
+  "contract": "http.dataset-page.v1",
+  "cases": [
+    {
+      "name": "empty last page",
+      "input": {
+        "document": {
+          "datasets": [],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "page with cursor",
+      "input": {
+        "document": {
+          "datasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen pours",
+              "clipCount": 3,
+              "durationNs": "2700"
+            }
+          ],
+          "nextCursor": "WyIyMDI2IiwiaWQiXQ"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "cursor is null or text",
+      "input": {
+        "document": {
+          "datasets": [],
+          "nextCursor": 1
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "items follow the dataset contract",
+      "input": {
+        "document": {
+          "datasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen pours",
+              "clipCount": 3,
+              "durationNs": "2700",
+              "owner": "x"
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "cursor required",
+      "input": {
+        "document": {
+          "datasets": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

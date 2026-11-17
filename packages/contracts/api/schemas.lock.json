@@ -55,6 +55,18 @@
     "jobs/controller-result.v1.schema.json": "b9ea7573391326d6a6e1a9ab52d5ef850a0ac1fbe4e7786e080a91c044f6ac97",
     "jobs/reconcile-result.v1.schema.json": "9e1694d76f8f99c36254445e712adb5a4001023b117e22ede196cdad3b73c8a5",
     "jobs/heartbeat-ack.v1.schema.json": "747a4c671aa771dbd67478e655da1ae366e4d44fda08c299996d1c4b0c5599bc",
-    "http/input-read.v1.schema.json": "aa8dc7988a5114b014ddef918c3f7e1a2075980a0e9de68ef461033c7cf12842"
+    "http/input-read.v1.schema.json": "aa8dc7988a5114b014ddef918c3f7e1a2075980a0e9de68ef461033c7cf12842",
+    "catalog.v8.json": "e2c70cf7e157d953fc3fbc1ec5f80a74575f7419d481b544de021ef9a475d589",
+    "http/clip-read-create.v1.schema.json": "fa846c30d4d722b1f7cb12e3a9ae19ab0343cb652a869ecbe4b9a2e31c97ace4",
+    "http/clip-read.v1.schema.json": "2123afcd386cc0d66ad1ad7ae28e29b32d29ed3b28d1306309fff27157532175",
+    "http/dataset-change.v1.schema.json": "6c219fbf03069f152e4f1572ea7d7e921747ad79dd796e4556be762832d05277",
+    "http/dataset-clip-page.v1.schema.json": "fb837b68ec18bde4568951c01eef8300d634ec7b8f1c1f4ddd57fd8a2692ca07",
+    "http/dataset-clip.v1.schema.json": "9b1eaf5f2555b51662a6dc100a9ce36b559742dc790a2515596a3d420480fcd9",
+    "http/dataset-create.v1.schema.json": "5ae948fc71e24004bb3e11a4e93597415d38fae33e33625f507dd5f9f8514157",
+    "http/dataset-members-add.v1.schema.json": "3cbafb14e570575c3131da438c25c73738e0e6fb607af8d40a8f2ebc969c0d03",
+    "http/dataset-page.v1.schema.json": "a95d27cc5705ddff8f2537d41eb4765770add8d813bf50bc9cc4ec52c581c92b",
+    "http/dataset-update.v1.schema.json": "3c54db3058b699193c0fc35f5f99b969fdebd55b80a603a793f33d62d1324b66",
+    "http/dataset.v1.schema.json": "308501c6595c59a8057af24a5783513f89ccdcd5018f9047c537a145c0056965",
+    "http/staff-clip-page.v1.schema.json": "5b9c2d69f23cb57202086e1e4f5b9cfe6902f69f16a035433520fb32e60d5e6c"
   }
 }

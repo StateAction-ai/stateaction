@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
+import { createDataset } from "../src/catalog/catalog.js";
 import {
+  DATASET_CLIPS_SQL,
   LIST_DATASETS_SQL,
-  createDataset,
-  setDatasetAccess,
-} from "../src/catalog/catalog.js";
+} from "../src/datasets/queries.js";
+import {
+  grantDatasetAccess,
+  recordSharingPermission,
+} from "../src/datasets/operator.js";
 import {
   createActors,
   freshDatabase,
@@ -31,13 +35,6 @@ before(async () => {
     datasetId,
     name: "Large",
     actorUserId: actors.staff,
-  });
-  await setDatasetAccess(db.app, {
-    datasetId,
-    userId: actors.customer,
-    enabled: true,
-    actorUserId: actors.staff,
-    permissionEvidenceRef: "plan",
   });
   // Bulk fixture through the same triggers: outputs reserved then completed,
   // clips inserted while the result is pending, then reviews and membership.
@@ -117,6 +114,27 @@ before(async () => {
     [p.jobId, actors.staff],
   );
   await db.owner.query("ANALYZE");
+  // Operator setup (owner credential) after the bulk members exist: record
+  // evidence, clear every current member, then grant.
+  await recordSharingPermission(db.owner, {
+    permissionRef: "plan-share",
+    datasetId,
+    recipientUserId: actors.customer,
+    evidenceRef: "plan",
+    recordedBy: "operator",
+  });
+  await db.owner.query(
+    `INSERT INTO dataset_sharing_clearances (permission_id, clip_id, cleared_by)
+     SELECT (SELECT id FROM dataset_sharing_permissions WHERE permission_ref = 'plan-share'),
+            clip_id, 'operator'
+     FROM dataset_clips WHERE dataset_id = $1`,
+    [datasetId],
+  );
+  await grantDatasetAccess(db.owner, {
+    permissionRef: "plan-share",
+    actorUserId: actors.staff,
+  });
+  await db.owner.query("ANALYZE");
 });
 after(() => db.close());
 
@@ -135,14 +153,8 @@ const walk = (node: PlanNode, out: PlanNode[] = []) => {
 test("bounded catalog reads use indexes and LIMIT on a large catalog", async () => {
   const reads: Record<string, [string, unknown[]]> = {
     customerDatasetGrid: [
-      `SELECT c.id, c.title, c.duration_ns, lr.task_label FROM dataset_clips dc
-       JOIN clips c ON c.id = dc.clip_id
-       CROSS JOIN LATERAL (SELECT decision, task_label FROM reviews r WHERE r.clip_id = dc.clip_id ORDER BY r.revision DESC LIMIT 1) lr
-       WHERE dc.dataset_id = $1 AND lr.decision = 'approved'
-         AND (catalog_has_role($2, 'staff') OR (catalog_has_role($2, 'customer') AND EXISTS (
-           SELECT 1 FROM dataset_access da WHERE da.dataset_id = dc.dataset_id AND da.user_id = $2 AND da.enabled)))
-       ORDER BY dc.added_at DESC, dc.clip_id DESC LIMIT 25`,
-      [datasetId, actors.customer],
+      DATASET_CLIPS_SQL,
+      [actors.customer, datasetId, null, null, 25],
     ],
     staffAllClipsPending: [
       `SELECT c.id, coalesce(lr.decision, 'pending') FROM clips c

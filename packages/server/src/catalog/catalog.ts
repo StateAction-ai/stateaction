@@ -10,7 +10,7 @@ import { CatalogError, toCatalogError } from "./errors.js";
  * membership, append-only reviews and immutable identity independently.
  */
 export type Queryable = pg.Pool;
-type Tx = pg.PoolClient;
+export type Tx = pg.PoolClient;
 
 export const MAX_PAGE = 100;
 export const DEFAULT_PAGE = 24;
@@ -36,12 +36,12 @@ export async function inTransaction<T>(
   }
 }
 
-const uuid = (value: string, field: string) => {
+export const uuid = (value: string, field: string) => {
   if (!UUID.test(value))
     throw new CatalogError("invalid_request", `${field} must be a UUID`);
   return value;
 };
-const sortedUnique = (ids: string[], field: string, max = MAX_BATCH) => {
+export const sortedUnique = (ids: string[], field: string, max = MAX_BATCH) => {
   const unique = [...new Set(ids.map((id) => uuid(id, field)))].sort();
   if (unique.length !== ids.length || unique.length > max)
     throw new CatalogError(
@@ -51,12 +51,12 @@ const sortedUnique = (ids: string[], field: string, max = MAX_BATCH) => {
   return unique;
 };
 /** Lock order step 1. */
-async function lockClips(tx: Tx, clipIds: string[]) {
+export async function lockClips(tx: Tx, clipIds: string[]) {
   for (const clipId of [...clipIds].sort())
     await tx.query("SELECT catalog_lock_clip($1)", [clipId]);
 }
 /** Lock order step 2; returns current revisions. */
-async function lockDatasets(tx: Tx, datasetIds: string[]) {
+export async function lockDatasets(tx: Tx, datasetIds: string[]) {
   const ids = [...new Set(datasetIds)].sort();
   const revisions = new Map<string, number>();
   for (const id of ids) {
@@ -69,13 +69,21 @@ async function lockDatasets(tx: Tx, datasetIds: string[]) {
   }
   return revisions;
 }
-async function bumpDataset(tx: Tx, datasetId: string, actorUserId: string) {
+export async function bumpDataset(
+  tx: Tx,
+  datasetId: string,
+  actorUserId: string,
+) {
   await tx.query(
     "UPDATE datasets SET revision = revision + 1, updated_by = $2 WHERE id = $1",
     [datasetId, actorUserId],
   );
 }
-async function requireRole(tx: Tx | Queryable, userId: string, role: string) {
+export async function requireRole(
+  tx: Tx | Queryable,
+  userId: string,
+  role: string,
+) {
   const { rows } = await tx.query<{ ok: boolean }>(
     "SELECT catalog_has_role($1, $2) AS ok",
     [userId, role],
@@ -731,28 +739,6 @@ export async function removeClipFromDataset(
   });
 }
 
-/** Staff grant path through the narrow SECURITY DEFINER routine. */
-export async function setDatasetAccess(
-  pool: Queryable,
-  input: {
-    datasetId: string;
-    userId: string;
-    enabled: boolean;
-    actorUserId: string;
-    permissionEvidenceRef: string;
-  },
-) {
-  return inTransaction(pool, async (tx) => {
-    await tx.query("SELECT catalog_set_dataset_access($1, $2, $3, $4, $5)", [
-      uuid(input.datasetId, "datasetId"),
-      input.userId,
-      input.enabled,
-      input.actorUserId,
-      input.permissionEvidenceRef,
-    ]);
-  });
-}
-
 // ----------------------------------------------------------------- reads
 export type ClipSummary = {
   clipId: string;
@@ -763,13 +749,15 @@ export type ClipSummary = {
   taskLabel: string | null;
   cursor: string;
 };
-const pageSize = (limit?: number) => {
+export const pageSize = (limit?: number) => {
   const size = limit ?? DEFAULT_PAGE;
   if (!Number.isInteger(size) || size < 1 || size > MAX_PAGE)
     throw new CatalogError("invalid_request", `limit must be 1..${MAX_PAGE}`);
   return size;
 };
-const decodeCursor = (cursor?: string): [string, string] | [null, null] => {
+export const decodeCursor = (
+  cursor?: string,
+): [string, string] | [null, null] => {
   if (!cursor) return [null, null];
   try {
     const [ts, id] = JSON.parse(
@@ -782,124 +770,9 @@ const decodeCursor = (cursor?: string): [string, string] | [null, null] => {
   }
   throw new CatalogError("invalid_request", "Invalid cursor");
 };
-const encodeCursor = (ts: string, id: string) =>
+export const encodeCursor = (ts: string, id: string) =>
   Buffer.from(JSON.stringify([ts, id])).toString("base64url");
-const TS = `to_char(%s AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
-
-/**
- * Approved-only dataset grid in one statement (one snapshot). Staff see all
- * members whose latest review is approved; customers additionally need an
- * enabled customer role and a live grant. Roles come from the database,
- * never from the caller.
- */
-export async function listDatasetClips(
-  pool: Queryable,
-  input: {
-    viewerUserId: string;
-    datasetId: string;
-    cursor?: string;
-    limit?: number;
-  },
-): Promise<{ clips: ClipSummary[]; nextCursor: string | null }> {
-  const limit = pageSize(input.limit);
-  const [afterTs, afterId] = decodeCursor(input.cursor);
-  try {
-    const { rows } = await pool.query<{
-      id: string;
-      title: string;
-      duration_ns: string;
-      job_id: string;
-      recording_id: string;
-      task_label: string | null;
-      ts: string;
-    }>(
-      `SELECT c.id, c.title, c.duration_ns::text, c.job_id, c.recording_id, lr.task_label,
-              ${TS.replace("%s", "dc.added_at")} AS ts
-       FROM dataset_clips dc
-       JOIN clips c ON c.id = dc.clip_id
-       CROSS JOIN LATERAL (
-         SELECT decision, task_label FROM reviews r
-         WHERE r.clip_id = dc.clip_id ORDER BY r.revision DESC LIMIT 1
-       ) lr
-       WHERE dc.dataset_id = $1 AND lr.decision = 'approved'
-         AND (catalog_has_role($2, 'staff') OR (
-           catalog_has_role($2, 'customer') AND EXISTS (
-             SELECT 1 FROM dataset_access da
-             WHERE da.dataset_id = dc.dataset_id AND da.user_id = $2 AND da.enabled)))
-         AND ($3::timestamptz IS NULL OR (dc.added_at, dc.clip_id) < ($3::timestamptz, $4::uuid))
-       ORDER BY dc.added_at DESC, dc.clip_id DESC
-       LIMIT $5`,
-      [
-        uuid(input.datasetId, "datasetId"),
-        input.viewerUserId,
-        afterTs,
-        afterId,
-        limit + 1,
-      ],
-    );
-    const page = rows.slice(0, limit).map((r) => ({
-      clipId: r.id,
-      title: r.title,
-      durationNs: r.duration_ns,
-      jobId: r.job_id,
-      recordingId: r.recording_id,
-      taskLabel: r.task_label,
-      cursor: encodeCursor(r.ts, r.id),
-    }));
-    return {
-      clips: page,
-      nextCursor: rows.length > limit ? (page.at(-1)?.cursor ?? null) : null,
-    };
-  } catch (error) {
-    throw toCatalogError(error);
-  }
-}
-
-/**
- * Datasets visible to the viewer with distinct approved clip count/duration,
- * keyset-paginated by (created_at, id). Counts aggregate the members of the
- * returned page only (index lookups per member).
- */
-export const LIST_DATASETS_SQL = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.duration_ns::text,
-       ${TS.replace("%s", "d.created_at")} AS ts
-     FROM datasets d
-     CROSS JOIN LATERAL (
-       SELECT count(*) AS clip_count, coalesce(sum(c.duration_ns), 0) AS duration_ns
-       FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id
-       WHERE dc.dataset_id = d.id AND catalog_latest_decision(dc.clip_id) = 'approved'
-     ) s
-     WHERE (catalog_has_role($1, 'staff') OR (
-       catalog_has_role($1, 'customer') AND EXISTS (
-         SELECT 1 FROM dataset_access da WHERE da.dataset_id = d.id AND da.user_id = $1 AND da.enabled)))
-       AND ($2::timestamptz IS NULL OR (d.created_at, d.id) < ($2::timestamptz, $3::uuid))
-     ORDER BY d.created_at DESC, d.id DESC LIMIT $4`;
-export async function listDatasets(
-  pool: Queryable,
-  input: { viewerUserId: string; cursor?: string; limit?: number },
-) {
-  const limit = pageSize(input.limit);
-  const [afterTs, afterId] = decodeCursor(input.cursor);
-  const { rows } = await pool.query<{
-    id: string;
-    name: string;
-    revision: number;
-    clip_count: string;
-    duration_ns: string;
-    ts: string;
-  }>(LIST_DATASETS_SQL, [input.viewerUserId, afterTs, afterId, limit + 1]);
-  const page = rows.slice(0, limit).map((r) => ({
-    datasetId: r.id,
-    name: r.name,
-    revision: r.revision,
-    clipCount: Number(r.clip_count),
-    durationNs: r.duration_ns,
-    cursor: encodeCursor(r.ts, r.id),
-  }));
-  return {
-    datasets: page,
-    nextCursor: rows.length > limit ? (page.at(-1)?.cursor ?? null) : null,
-  };
-}
+export const TS = `to_char(%s AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 /** Staff All clips with latest review status; pending = no review yet. */
 export async function listInternalClips(

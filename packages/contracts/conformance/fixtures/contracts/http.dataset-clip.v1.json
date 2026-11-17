@@ -1,0 +1,360 @@
+{
+  "contract": "http.dataset-clip.v1",
+  "cases": [
+    {
+      "name": "hardware clip",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "dataset context",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "datasetId": "00000000-0000-4000-8000-00000000d001"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "staff identifiers",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "datasetId": "00000000-0000-4000-8000-00000000d001",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "reviewRevision": 2
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "simulation-only marker",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": {
+            "simulated": true,
+            "qualification": "simulation_only",
+            "productionQualified": false
+          },
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unlabelled clip",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": null,
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "marker cannot claim production qualification",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": {
+            "simulated": true,
+            "qualification": "simulation_only",
+            "productionQualified": true
+          },
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "marker cannot be hardware",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": {
+            "simulated": true,
+            "qualification": "hardware",
+            "productionQualified": false
+          },
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "no internal notes",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "notes": "qc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "no object keys",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "objectKey": "jobs/x/outputs/y"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "no hashes",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "no collector detail",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          },
+          "ownerUserId": "u"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "media flags required",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 3,
+          "simulation": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "frame count is positive",
+      "input": {
+        "document": {
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "title": "Pour water",
+          "taskLabel": "pour water",
+          "durationNs": "900",
+          "raster": {
+            "width": 64,
+            "height": 48
+          },
+          "frameCount": 0,
+          "simulation": null,
+          "media": {
+            "thumbnail": true,
+            "viewer": true
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/frameCount"
+        ]
+      }
+    }
+  ]
+}

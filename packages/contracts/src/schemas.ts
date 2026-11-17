@@ -1,8 +1,9 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v7.json (checked by tests).
-// catalog.v7.json is the current registry: an exact superset of the immutable
-// catalog.v6.json, itself an exact superset of the immutable catalog.v5.json,
+// Generated listing of the published schema files; keep in sync with api/catalog.v8.json (checked by tests).
+// catalog.v8.json is the current registry: an exact superset of the immutable
+// catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
+// itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v7.json" with { type: "json" };
+import catalog from "../api/catalog.v8.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -49,6 +50,17 @@ import s41 from "../api/jobs/controller-result.v1.schema.json" with { type: "jso
 import s42 from "../api/jobs/reconcile-result.v1.schema.json" with { type: "json" };
 import s43 from "../api/jobs/heartbeat-ack.v1.schema.json" with { type: "json" };
 import s44 from "../api/http/input-read.v1.schema.json" with { type: "json" };
+import s45 from "../api/http/dataset-create.v1.schema.json" with { type: "json" };
+import s46 from "../api/http/dataset-update.v1.schema.json" with { type: "json" };
+import s47 from "../api/http/dataset-members-add.v1.schema.json" with { type: "json" };
+import s48 from "../api/http/clip-read-create.v1.schema.json" with { type: "json" };
+import s49 from "../api/http/dataset.v1.schema.json" with { type: "json" };
+import s50 from "../api/http/dataset-page.v1.schema.json" with { type: "json" };
+import s51 from "../api/http/dataset-clip.v1.schema.json" with { type: "json" };
+import s52 from "../api/http/dataset-clip-page.v1.schema.json" with { type: "json" };
+import s53 from "../api/http/staff-clip-page.v1.schema.json" with { type: "json" };
+import s54 from "../api/http/clip-read.v1.schema.json" with { type: "json" };
+import s55 from "../api/http/dataset-change.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -59,6 +71,17 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "artifacts.recording-source.v2": s34,
   "artifacts.simulation-provenance.v1": s33,
   "http.error-envelope.v1": s4,
+  "http.dataset-create.v1": s45,
+  "http.dataset-update.v1": s46,
+  "http.dataset-members-add.v1": s47,
+  "http.clip-read-create.v1": s48,
+  "http.dataset.v1": s49,
+  "http.dataset-page.v1": s50,
+  "http.dataset-clip.v1": s51,
+  "http.dataset-clip-page.v1": s52,
+  "http.staff-clip-page.v1": s53,
+  "http.clip-read.v1": s54,
+  "http.dataset-change.v1": s55,
   "http.input-read.v1": s44,
   "http.me.v1": s27,
   "http.output-create.v1": s31,

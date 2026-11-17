@@ -248,6 +248,81 @@ export type InputRead = {
   readUrl: string;
   expiresAt: Rfc3339Utc;
 };
+// SA-35 dataset, catalog and read-broker contracts (catalog.v8, /api/v1).
+export type DatasetCreateRequest = { datasetId: Uuid; name: string };
+export type DatasetUpdateRequest = { name: string; expectedRevision: number };
+export type DatasetMembersAddRequest = {
+  clipIds: Uuid[];
+  expectedRevision: number;
+};
+export type ClipReadRole = "thumbnail_jpeg" | "viewer_rrd";
+export type ClipReadCreateRequest = { role: ClipReadRole };
+export type DatasetView = {
+  datasetId: Uuid;
+  name: string;
+  clipCount: number;
+  durationNs: DecimalBytes;
+  /** Staff only. */
+  revision?: number;
+  /** Staff only. */
+  createdAt?: Rfc3339Utc;
+};
+export type DatasetPage = {
+  datasets: DatasetView[];
+  nextCursor: string | null;
+};
+/** Customer-safe marker; a simulated clip is never hardware evidence. */
+export type ClipSimulationMarker = {
+  simulated: true;
+  qualification: "simulation_only";
+  productionQualified: false;
+};
+export type DatasetClipView = {
+  clipId: Uuid;
+  datasetId?: Uuid;
+  title: string;
+  taskLabel: string | null;
+  durationNs: DecimalBytes;
+  raster: { width: number; height: number };
+  frameCount: number;
+  simulation: ClipSimulationMarker | null;
+  media: { thumbnail: boolean; viewer: boolean };
+  /** Staff only. */
+  recordingId?: Uuid;
+  /** Staff only. */
+  jobId?: Uuid;
+  /** Staff only. */
+  reviewRevision?: number;
+};
+export type DatasetClipPage = {
+  clips: DatasetClipView[];
+  nextCursor: string | null;
+};
+export type StaffClipView = DatasetClipView & {
+  recordingId: Uuid;
+  jobId: Uuid;
+  reviewRevision: number;
+  reviewStatus: "pending" | "approved" | "rejected";
+  datasetCount: number;
+};
+export type StaffClipPage = {
+  clips: StaffClipView[];
+  nextCursor: string | null;
+};
+export type ClipRead = {
+  url: string;
+  role: ClipReadRole;
+  contentType: "image/jpeg" | "application/octet-stream";
+  sizeBytes: DecimalBytes;
+  expiresAt: Rfc3339Utc;
+  ttlSeconds: number;
+};
+export type DatasetChange = {
+  revision: number;
+  datasetId?: Uuid;
+  added?: number;
+  removed?: boolean;
+};
 type TaskBase = {
   schemaVersion: 1;
   jobId: Uuid;

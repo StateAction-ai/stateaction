@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-members-add.v1.json",
+  "title": "Add dataset members request v1",
+  "description": "POST /api/v1/datasets/{datasetId}/clips body (staff only): up to 100 distinct clips whose LATEST review is approved and whose job is the recording's current accepted result. The batch is all-or-nothing. In a dataset shared with recipients every enabled recipient must also hold active operator-recorded clearance for each clip, otherwise the request fails with 403. Duplicate IDs are rejected by the service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["clipIds", "expectedRevision"],
+  "properties": {
+    "clipIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+      }
+    },
+    "expectedRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    }
+  }
+}

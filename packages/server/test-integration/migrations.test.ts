@@ -17,6 +17,8 @@ const TABLES = [
   "clips",
   "dataset_access",
   "dataset_clips",
+  "dataset_sharing_clearances",
+  "dataset_sharing_permissions",
   "datasets",
   "dispatch_admission",
   "file_part_receipts",
@@ -54,7 +56,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006 and 007 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006, 007 and 008 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -62,7 +64,8 @@ test("published migrations 001-005 are byte-identical; 006 and 007 follow", asyn
   );
   assert.equal(files[5]?.name, "006_simulated_capture.sql");
   assert.equal(files[6]?.name, "007_job_admission_claims.sql");
-  assert.equal(files.length, 7);
+  assert.equal(files[7]?.name, "008_dataset_sharing.sql");
+  assert.equal(files.length, 8);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -77,7 +80,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -90,7 +93,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8],
       adopted: [],
       appRoleGranted: true,
     });
@@ -135,8 +138,8 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const broken = [
       ...files,
       {
-        version: 8,
-        name: "008_broken.sql",
+        version: 9,
+        name: "009_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -148,7 +151,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const left = await db.owner.query(
       "SELECT to_regclass('releases') AS t, max(version) AS v FROM platform_schema_migrations",
     );
-    assert.deepEqual(left.rows[0], { t: null, v: 7 });
+    assert.deepEqual(left.rows[0], { t: null, v: 8 });
   } finally {
     await db.close();
   }
@@ -164,7 +167,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7],
+      applied: [2, 3, 4, 5, 6, 7, 8],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -182,9 +185,9 @@ test("concurrent migrators serialize and apply each version once", async () => {
         migrateDatabase({ ownerUrl: db.ownerUrl }),
       ),
     );
-    assert.equal(reports.filter((r) => r.applied.length === 7).length, 1);
+    assert.equal(reports.filter((r) => r.applied.length === 8).length, 1);
     assert.equal(
-      reports.filter((r) => r.alreadyApplied.length === 7).length,
+      reports.filter((r) => r.alreadyApplied.length === 8).length,
       3,
     );
   } finally {
@@ -228,6 +231,12 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
       "DELETE FROM recording_seals",
       "UPDATE recording_admissions SET outcome = 'admitted'",
       "DELETE FROM recording_admissions",
+      "INSERT INTO dataset_sharing_permissions (id, permission_ref, dataset_id, recipient_user_id, covers_external_inspection, evidence_ref, recorded_by) VALUES (gen_random_uuid(), 'self', gen_random_uuid(), 'x', true, 'x', 'x')",
+      "UPDATE dataset_sharing_permissions SET status = 'revoked'",
+      "DELETE FROM dataset_sharing_permissions",
+      "INSERT INTO dataset_sharing_clearances (permission_id, clip_id, cleared_by) VALUES (gen_random_uuid(), gen_random_uuid(), 'x')",
+      "DELETE FROM dataset_sharing_clearances",
+      "SELECT catalog_set_dataset_access(gen_random_uuid(), 'x', true, 'x', 'x')",
       "INSERT INTO platform_schema_migrations (version) VALUES (99)",
       "CREATE TEMP TABLE reviews (id int)",
     ];

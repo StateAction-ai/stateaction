@@ -1,0 +1,89 @@
+{
+  "contract": "http.dataset-clip-page.v1",
+  "cases": [
+    {
+      "name": "empty last page",
+      "input": {
+        "document": {
+          "clips": [],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "page with cursor",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              }
+            }
+          ],
+          "nextCursor": "abc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "items follow the clip contract",
+      "input": {
+        "document": {
+          "clips": [
+            {
+              "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+              "title": "Pour water",
+              "taskLabel": "pour water",
+              "durationNs": "900",
+              "raster": {
+                "width": 64,
+                "height": 48
+              },
+              "frameCount": 3,
+              "simulation": null,
+              "media": {
+                "thumbnail": true,
+                "viewer": true
+              },
+              "jobId": "x"
+            }
+          ],
+          "nextCursor": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "cursor required",
+      "input": {
+        "document": {
+          "clips": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}
