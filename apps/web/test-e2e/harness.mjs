@@ -51,7 +51,10 @@ export class Jar {
   }
 }
 
-export async function startStack({ storage = false } = {}) {
+export async function startStack({
+  storage = false,
+  storagePublicEndpoint,
+} = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
   const db = await startCatalogPostgres();
   let s3;
@@ -83,6 +86,9 @@ export async function startStack({ storage = false } = {}) {
     NEXT_TELEMETRY_DISABLED: "1",
     ...(s3 && {
       S3_ENDPOINT: outage.endpoint,
+      ...(storagePublicEndpoint && {
+        S3_PUBLIC_ENDPOINT: storagePublicEndpoint,
+      }),
       S3_REGION: "us-east-1",
       S3_BUCKET: s3.bucket ?? "stateaction-sa21-e2e",
       S3_ACCESS_KEY_ID: s3.accessKeyId,

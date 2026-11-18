@@ -51,13 +51,22 @@ android {
         // ARCore requires API 24.
         minSdk 24
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        if (project.hasProperty('sa57Qualification')) {
+            testApplicationId 'open.fpvlabs.stera.upload.qualification'
+            // Match the pinned Flutter app target for foreground start rules.
+            targetSdk 36
+        }
         consumerProguardFiles 'consumer-rules.pro'
     }
 }
 
 dependencies {
     implementation 'com.google.ar:core:1.44.0'
+    // SA-57: foreground WorkManager fallback for API 33 (UIDT JobScheduler covers API 34+).
+    implementation 'androidx.work:work-runtime:2.10.0'
     testImplementation 'junit:junit:4.13.2'
+    // Real org.json for plain-JVM tests (the android.jar one is a stub).
+    testImplementation 'org.json:json:20250517'
     testImplementation 'org.robolectric:robolectric:4.14.1'
     testImplementation 'org.mockito:mockito-core:5.14.2'
     androidTestImplementation 'androidx.test:runner:1.6.2'
