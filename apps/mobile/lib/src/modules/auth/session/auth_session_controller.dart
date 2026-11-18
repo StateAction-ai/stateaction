@@ -88,6 +88,16 @@ class AuthUnverified extends AuthSessionState {
   String? captureOwnerAt(DateTime now) => null;
 }
 
+/// Why the current session is ending *now*, before any await. Observers (the
+/// native uploader) must stop effects for the old credentials immediately.
+enum SessionEnding { logout, signInStarting }
+
+/// Runs before a restore/refresh sends the stored cookies, with the owner the
+/// session is cached/verified for (null when there is none). It may adopt a
+/// newer native credential snapshot for exactly that owner. Failures are
+/// ignored: refresh proceeds with the cookies it has.
+typedef PreRefreshHook = Future<void> Function(String? cachedOwnerId);
+
 /// Coordinates [AuthHttpClient] and [OfflineEligibilityStore]. No UI imports.
 ///
 /// Concurrency: every sign-in and logout starts a new auth epoch. A refresh or
@@ -107,6 +117,20 @@ class AuthSessionController extends ChangeNotifier {
   final AuthHttpClient _client;
   final OfflineEligibilityStore _eligibility;
   final DateTime Function() _clock;
+
+  /// Set once at composition. [onSessionEnding] is invoked synchronously at
+  /// the start of every logout and sign-in, so it cannot be delayed by network
+  /// or hashing work.
+  ///
+  /// The returned future completes when native ACKNOWLEDGED the owner
+  /// invalidation (its owner generation is committed, so the old owner's
+  /// control requests and part PUTs stop). Cookies are cleared only after that,
+  /// or after [sessionEndingGrace] if native is unresponsive: a hung bridge can
+  /// never trap the user in a session, and the unacknowledged unbind is retried
+  /// before any later bind and again at startup.
+  Future<void>? Function(SessionEnding reason)? onSessionEnding;
+  static const Duration sessionEndingGrace = Duration(seconds: 5);
+  PreRefreshHook? preRefresh;
 
   AuthSessionState _state = const AuthRestoring();
   AuthSessionState get state => _state;
@@ -133,6 +157,8 @@ class AuthSessionController extends ChangeNotifier {
   /// Startup: restore cookies and eligibility, then ask the server.
   Future<AuthSessionState> restore() async {
     final epoch = _epoch;
+    await _adoptNative(epoch);
+    if (epoch != _epoch) return _state;
     final hasCredentials = await _client.jar.hasCredentials;
     // A logout/sign-in during startup owns the state now.
     if (epoch != _epoch) return _state;
@@ -146,7 +172,32 @@ class AuthSessionController extends ChangeNotifier {
   /// Re-reads `/api/v1/me`. Call on startup, resume and after a 401.
   Future<AuthSessionState> refresh() => _refresh(_epoch);
 
+  /// Owner a refresh is about to re-verify: the verified or offline-cached
+  /// identity only. A pending or new sign-in has none.
+  Future<String?> _cachedOwner() async {
+    final current = _state;
+    if (current is AuthActive) return current.identity.authUserId;
+    if (current is AuthOfflineEligible) return current.eligibility.authUserId;
+    if (current is AuthRestoring) {
+      final e = await _eligibility.read();
+      return e != null && e.isFresh(_clock()) ? e.authUserId : null;
+    }
+    return null;
+  }
+
+  Future<void> _adoptNative(int epoch) async {
+    final hook = preRefresh;
+    if (hook == null || _busy || epoch != _epoch) return;
+    try {
+      await hook(await _cachedOwner());
+    } catch (_) {
+      // Adoption is best-effort; the Dart jar stays authoritative.
+    }
+  }
+
   Future<AuthSessionState> _refresh(int epoch) async {
+    if (epoch != _epoch) return _state;
+    await _adoptNative(epoch);
     if (epoch != _epoch) return _state;
     final generation = _client.jar.generation;
     final result = await _client.fetchMe();
@@ -215,9 +266,14 @@ class AuthSessionController extends ChangeNotifier {
       return const AuthUnavailable("Sign-in is already in progress.");
     }
     final epoch = ++_epoch;
+    final invalidated = onSessionEnding?.call(SessionEnding.signInStarting);
     _busy = true;
     notifyListeners();
     try {
+      if (invalidated != null) {
+        await _boundedWait(invalidated);
+        if (epoch != _epoch) return _superseded();
+      }
       // A previous session is revoked and its cookies dropped first, so no
       // response from it can land in the new account's jar.
       // Unconditional: the jar may be empty (expired/deleted cookies) while an
@@ -270,7 +326,9 @@ class AuthSessionController extends ChangeNotifier {
   /// journals are untouched; they stay bound to their owner.
   Future<SignOutConfirmation> logout() async {
     ++_epoch;
+    final invalidated = onSessionEnding?.call(SessionEnding.logout);
     _set(const AuthSignedOut());
+    if (invalidated != null) await _boundedWait(invalidated);
     final signOut = _client.signOut();
     final clearEligibility = _eligibility.clear();
     final confirmation = await signOut;
@@ -279,6 +337,15 @@ class AuthSessionController extends ChangeNotifier {
       _set(AuthSignedOut(lastSignOut: confirmation));
     }
     return confirmation;
+  }
+
+  static Future<void> _boundedWait(Future<void>? pending) async {
+    if (pending == null) return;
+    try {
+      await pending.timeout(sessionEndingGrace);
+    } on Object {
+      // Never block logout/sign-in on the native bridge.
+    }
   }
 
   /// Returns false when the epoch moved on while persisting.

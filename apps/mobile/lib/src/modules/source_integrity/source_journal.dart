@@ -387,6 +387,53 @@ class SourceJournal {
     });
   }
 
+  /// Server file reservations keyed by the local (planning) file id
+  /// (unmodifiable). A reservation binds one server-chosen file id to the
+  /// exact local role/size/digest it was requested for.
+  Map<String, Map<String, Object?>> get reservations => Map.unmodifiable({
+    for (final e in _entries)
+      if (e.name == "file_reserved") e.data["localFileId"]! as String: e.data,
+  });
+
+  /// Records the server file id returned for a reservation the first time; an
+  /// identical repeat is a no-op. A different id, role, size, digest or
+  /// client upload id for the same local file, or one server id reused for
+  /// two local files, records a sticky conflict and throws.
+  Future<void> recordReservation(OwnerContext ctx, Map<String, Object?> fact) {
+    final snap = _deepCopy(fact)! as Map<String, Object?>;
+    return _tx(() async {
+      _checkOwner(ctx);
+      if (hasConflict) throw const SourceConflict("journal");
+      final local = snap["localFileId"]! as String;
+      const keys = [
+        "serverFileId",
+        "clientUploadId",
+        "role",
+        "sizeBytes",
+        "sha256",
+      ];
+      Map<String, Object?> pick(Map<String, Object?> m) => {
+        for (final k in keys) k: m[k],
+      };
+      final all = reservations;
+      final prior = all[local];
+      if (prior != null) {
+        if (_canon(pick(prior)) == _canon(pick(snap))) return;
+        throw await _conflictNow("reservation/$local", pick(prior), pick(snap));
+      }
+      for (final other in all.entries) {
+        if (other.value["serverFileId"] == snap["serverFileId"]) {
+          throw await _conflictNow(
+            "reservation/serverFileId",
+            pick(other.value),
+            pick(snap),
+          );
+        }
+      }
+      return _appendNow("event", "file_reserved", snap);
+    });
+  }
+
   /// Durable sticky conflict for a frozen fact the caller found to differ.
   /// Returns the exception to throw.
   Future<SourceConflict> recordConflict(

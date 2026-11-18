@@ -16,6 +16,12 @@ import "session/fake_better_auth_server.dart";
 /// Drives the real dev sign-in form -> AuthProvider -> AuthRepo ->
 /// AuthSessionController -> AuthHttpClient over loopback HTTP to the fixture,
 /// with NO_AUTH_MODE off. Fixture only; not real-backend qualification.
+/// Everything stored except the non-secret credential revision floor.
+Map<String, String> _credentials(MemorySecretStore store) => {
+  for (final e in store.values.entries)
+    if (e.key != SecretKeys.sessionRevisionFloor) e.key: e.value,
+};
+
 void main() {
   late FakeBetterAuthServer server;
   late Directory tmp;
@@ -128,7 +134,7 @@ void main() {
     expect(find.text("Email or password is incorrect."), findsOneWidget);
     expect(find.text("wrong-password-here"), findsNothing);
     expect(provider.user, isNull);
-    expect(secrets.values, isEmpty);
+    expect(_credentials(secrets), isEmpty);
     await shutdown(tester);
   });
 }

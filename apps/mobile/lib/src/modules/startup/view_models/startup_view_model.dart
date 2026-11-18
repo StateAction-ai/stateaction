@@ -1,3 +1,4 @@
+import "package:stera/src/modules/owner_upload/owner_upload_services.dart";
 import "dart:async";
 import "dart:io";
 
@@ -80,7 +81,11 @@ class StartupViewModel {
       // One origin-bound cookie jar, session controller and owner ledger.
       // Throws on a missing/unsafe backend origin so the app shows a
       // configuration error instead of running without a session.
-      await AuthServices.initialize();
+      final authServices = await AuthServices.initialize();
+      // Android owner-bound native uploader (gated off by default). Must be
+      // wired before the session is restored so native rotations are adopted
+      // before the stored cookies are used.
+      await OwnerUploadServices.initialize(auth: authServices);
       await AuthRepo.init();
       // Sole consumer is `UploadQueueManager`, so with no uploads this would be
       // a permanent subscription nothing reads.

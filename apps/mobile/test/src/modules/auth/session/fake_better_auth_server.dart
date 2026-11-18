@@ -33,6 +33,17 @@ class FakeBetterAuthServer {
   /// instead of the identity document (contract negative cases).
   Object? meDataOverrideOnce;
 
+  /// Optional `/api/v1` routes beyond `/me` for upload-workflow tests. Called
+  /// only for an authenticated session; return null for 404. `data` becomes
+  /// the success envelope payload (or the error body when [status] >= 400).
+  ({int status, Object? data})? Function(
+    String method,
+    String path,
+    String body,
+    Map<String, String> headers,
+  )?
+  apiRoutes;
+
   /// Overrides the status code of the next request when set.
   int? failNextWith;
 
@@ -122,6 +133,38 @@ class FakeBetterAuthServer {
       case "POST /api/auth/sign-out":
         await _signOut(request, response);
       default:
+        final routes = apiRoutes;
+        if (routes != null && request.uri.path.startsWith("/api/v1/")) {
+          final session = _session(request, response);
+          if (session == null) {
+            response.statusCode = 401;
+            response.write(
+              jsonEncode({
+                "error": {"code": "unauthenticated"},
+              }),
+            );
+            await response.close();
+            return;
+          }
+          final routed = routes(request.method, request.uri.path, body, {
+            for (final name in ["accept", "content-type", "authorization"])
+              if (request.headers.value(name) != null)
+                name: request.headers.value(name)!,
+          });
+          if (routed != null) {
+            response.statusCode = routed.status;
+            response.headers.contentType = ContentType.json;
+            response.write(
+              jsonEncode(
+                routed.status >= 400
+                    ? routed.data
+                    : {"data": routed.data, "requestId": const Uuid().v4()},
+              ),
+            );
+            await response.close();
+            return;
+          }
+        }
         response.statusCode = 404;
         await response.close();
     }

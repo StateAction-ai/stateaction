@@ -1,3 +1,4 @@
+import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "dart:async";
 import "dart:convert";
 import "dart:io";
@@ -105,6 +106,13 @@ class VideoSourceManager extends ChangeNotifier {
     String? subtaskName,
     String source = "ar_session",
   }) async {
+    // With the owner-bound native uploader enabled, a finished capture is not
+    // queued in the legacy pipeline: it appears in the owner's take list and
+    // is uploaded only by the visible Upload action.
+    if (NativeSourceGuard.nativeEnabled) {
+      NativeSourceGuard.takesChanged.value++;
+      return (null, null);
+    }
     // Only the capture's verified owner may queue it. Foreign and ownerless
     // (recovery) sessions are never adopted into this account's queue.
     if (!OwnerFence.isSessionVisible(p.basename(sessionDir))) {
@@ -347,6 +355,7 @@ class VideoSourceManager extends ChangeNotifier {
   /// [UploadStatus.notStarted]. Used after sign-in to recover recordings
   /// orphaned by reinstalls or DB resets.
   Future<List<Upload>> recoverOrphanedSessions() async {
+    if (NativeSourceGuard.nativeEnabled) return const <Upload>[];
     loading = true;
     final List<Upload> recovered = <Upload>[];
 

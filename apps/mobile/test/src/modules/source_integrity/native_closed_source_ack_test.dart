@@ -1,5 +1,36 @@
+import "dart:io";
+
 import "package:flutter_test/flutter_test.dart";
 import "package:stera/src/modules/source_integrity/closed_source_ack.dart";
+
+import "package:stera/src/modules/source_integrity/posix_fd_hash_backend.dart";
+import "package:stera/src/modules/source_integrity/session_path.dart";
+import "package:stera/src/modules/source_integrity/stable_hasher.dart";
+
+Future<Map<String, Object?>> sourceIdentity(
+  SessionRoot root,
+  String token,
+) async {
+  final stat = await Process.run("stat", [
+    "-c",
+    "%Hd %Ld %i",
+    root.canonicalRoot,
+  ]);
+  expect(stat.exitCode, 0);
+  final parts = (stat.stdout as String).trim().split(" ");
+  final hasher = StableFileHasher(PosixFdHashBackend.create());
+  return {
+    "finalizationToken": token,
+    "directory": {
+      "dev": ((int.parse(parts[0]) << 32) | int.parse(parts[1])).toString(),
+      "inode": parts[2],
+    },
+    "files": {
+      for (final path in ["session.mcap", "metadata.json"])
+        path: (await hasher.hash(root, path)).identity.toJson(),
+    },
+  };
+}
 
 Map<String, Object?> stopped({String outputDirectory = "/captures/session"}) {
   const recording = "e5b9ab21-8cf7-4664-9023-c1c3db816617";

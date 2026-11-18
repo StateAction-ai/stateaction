@@ -115,24 +115,10 @@ void main() {
       close["finalizationToken"] = token;
     }
     if (!legacy) {
-      final stat = await Process.run("stat", [
-        "-c",
-        "%Hd %Ld %i",
-        root.canonicalRoot,
-      ]);
-      expect(stat.exitCode, 0);
-      final parts = (stat.stdout as String).trim().split(" ");
-      stop["sourceIdentity"] = {
-        "finalizationToken": stop["finalizationToken"],
-        "directory": {
-          "dev": ((int.parse(parts[0]) << 32) | int.parse(parts[1])).toString(),
-          "inode": parts[2],
-        },
-        "files": {
-          for (final path in ["session.mcap", "metadata.json"])
-            path: (await hasher.hash(root, path)).identity.toJson(),
-        },
-      };
+      stop["sourceIdentity"] = await native_fixture.sourceIdentity(
+        root,
+        stop["finalizationToken"]! as String,
+      );
     }
     return ClosedSourceAck.fromNativeStop(stop);
   }

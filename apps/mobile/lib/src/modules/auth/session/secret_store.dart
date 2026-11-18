@@ -45,6 +45,10 @@ class MemorySecretStore implements SecretStore {
 /// Persisted key names. Immutable once shipped.
 class SecretKeys {
   static const String sessionCookies = "stateaction.auth.session_cookies.v1";
+
+  /// Never deleted on logout: keeps the credential revision monotonic.
+  static const String sessionRevisionFloor =
+      "stateaction.auth.session_revision.v1";
   static const String offlineEligibility =
       "stateaction.auth.offline_eligibility.v1";
 }

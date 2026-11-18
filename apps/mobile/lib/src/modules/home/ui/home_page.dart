@@ -1,3 +1,4 @@
+import "package:stera/src/modules/owner_upload/ui/owner_recordings_upload_section.dart";
 import "package:stera/src/core/common/utils/extensions.dart";
 import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/constants/app_assets.dart";
@@ -110,6 +111,7 @@ class _HomePageState extends State<HomePage> {
                   AppDemoVideoInlineIntroCard(),
                   SizedBox(height: AppSpacing.lg),
                   UploadProgressCard(),
+                  OwnerRecordingsUploadSection(),
                 ],
               ),
             ),

@@ -28,6 +28,28 @@ val stateactionAppLabel = (project.findProperty("stateactionAppLabel") as String
     require(Regex("[A-Za-z0-9 ._-]{1,40}").matches(it)) { "stateactionAppLabel must be 1-40 plain characters" }
 }
 
+// Two independent, explicit, debug-only switches. The placeholders default to
+// false and only the debug manifest overlay reads them, so no release build can
+// carry the gate or cleartext loopback.
+//  - -PstateactionNativeUpload=true (or ORG_GRADLE_PROJECT_stateactionNativeUpload)
+//    turns the owner-bound native uploader gate on (a real-device HTTPS build
+//    uses only this one).
+//  - -PstateactionNativeUploadCleartext=true additionally allows the emulator's
+//    cleartext loopback backend. It is refused unless the uploader gate is on
+//    AND the dedicated ai.stateaction.collector.e2e package is used.
+val nativeUploadQualification =
+    (project.findProperty("stateactionNativeUpload") as String?) == "true"
+val nativeUploadCleartext =
+    (project.findProperty("stateactionNativeUploadCleartext") as String?) == "true"
+if (nativeUploadCleartext) {
+    require(nativeUploadQualification) {
+        "stateactionNativeUploadCleartext requires stateactionNativeUpload=true"
+    }
+    require(stateactionApplicationId == "ai.stateaction.collector.e2e") {
+        "stateactionNativeUploadCleartext is only allowed for ai.stateaction.collector.e2e"
+    }
+}
+
 android {
     namespace = "open.fpvlabs.stera"
     compileSdk = flutter.compileSdkVersion
@@ -61,6 +83,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["nativeUploadEnabled"] = nativeUploadQualification.toString()
+        manifestPlaceholders["nativeUploadCleartext"] = nativeUploadCleartext.toString()
     }
 
     buildTypes {

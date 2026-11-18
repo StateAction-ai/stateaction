@@ -80,6 +80,11 @@ class _LoginModalState extends State<LoginModal> {
   }
 
   void _routeAfterAuth(AuthProvider ap) {
+    // Re-authentication can return to the same Home route. Explicitly close
+    // its dialog since replacing the current route may leave it open.
+    if (ModalRoute.of(context) case RawDialogRoute(isCurrent: true)) {
+      Navigator.of(context).pop();
+    }
     if (ap.isNewUser) {
       AppRouter.replace(OnboardingPage.routeName);
       return;
