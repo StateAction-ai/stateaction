@@ -466,7 +466,7 @@ class VideoSourceManager extends ChangeNotifier {
     return recovered;
   }
 
-  /// AR check (Android), user refresh, load videos, then native record flow and
+  /// AR check (Android), user refresh, then native record flow and
   /// merge into the upload queue (same flow as “Record” on add upload).
   Future<void> recordVideosForUpload(
     BuildContext context,
@@ -502,10 +502,8 @@ class VideoSourceManager extends ChangeNotifier {
       return;
     }
 
-    if (uvp.videos.isEmpty) {
-      await uvp.getUploadedVideos();
-    }
-
+    // Capture never waits on the legacy uploaded-videos feed: the recorder only
+    // needs the verified session, and the feed request is unrelated to it.
     final (uploads, errors) = await recordVideos(existingVideos: uvp.videos);
     await handleUploadResult(selection, uploads, errors);
   }
