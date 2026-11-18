@@ -145,6 +145,13 @@ export async function grantAppRole(
   );
   if (datasets)
     await client.query("SELECT stateaction_grant_datasets($1)", [role]);
+  const { rowCount: acceptance } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_output_acceptance(name)') IS NOT NULL",
+  );
+  if (acceptance)
+    await client.query("SELECT stateaction_grant_output_acceptance($1)", [
+      role,
+    ]);
   return true;
 }
 

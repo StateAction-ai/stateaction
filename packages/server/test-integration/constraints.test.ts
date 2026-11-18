@@ -1,9 +1,10 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import pg from "pg";
 import {
-  acceptProcessingResult,
   addClipsToDataset,
   appendReview,
   createDataset,
@@ -525,7 +526,7 @@ describe("identity and logical uniqueness", () => {
       ),
       "23514",
     );
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,
@@ -575,7 +576,7 @@ describe("immutable clips and their file references", () => {
     const p = await processedRecording(db.app, actors, 2);
     const clip = p.clips[0]!;
     const accept = (clips: typeof p.clips) =>
-      acceptProcessingResult(db.app, {
+      fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
         jobId: p.jobId,
         manifestFileId: p.manifestFileId,
         manifestSha256: p.manifestSha256,
@@ -605,22 +606,22 @@ describe("immutable clips and their file references", () => {
       ]),
       "conflict",
     );
-    // Not yet completed output.
+    // The inventory was closed while the job ran (production order): a reserved or
+    // late output is refused by the database whatever the caller claims.
     const pending = randomUUID();
-    await db.app.query(
-      `INSERT INTO files (id, recording_id, job_id, purpose, role, size_bytes, sha256, object_key, part_size_bytes, part_count)
-       VALUES ($1, $2, $3, 'output', 'viewer_rrd', 100, $4, $5, 67108864, 1)`,
-      [
-        pending,
-        p.recordingId,
-        p.jobId,
-        seedSha(pending),
-        `jobs/${p.jobId}/outputs/${pending}/e1/viewer.rrd`,
-      ],
-    );
     await expectCode(
-      accept([{ ...clip, files: { ...clip.files, viewerRrd: pending } }]),
-      "conflict",
+      db.app.query(
+        `INSERT INTO files (id, recording_id, job_id, purpose, role, size_bytes, sha256, object_key, part_size_bytes, part_count)
+         VALUES ($1, $2, $3, 'output', 'viewer_rrd', 100, $4, $5, 67108864, 1)`,
+        [
+          pending,
+          p.recordingId,
+          p.jobId,
+          seedSha(pending),
+          `jobs/${p.jobId}/outputs/${pending}/e1/viewer.rrd`,
+        ],
+      ),
+      "SAC04",
     );
     const accepted = await accept(p.clips);
     assert.deepEqual(accepted, {
@@ -636,7 +637,7 @@ describe("immutable clips and their file references", () => {
       "conflict",
     );
     await expectCode(
-      acceptProcessingResult(db.app, {
+      fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
         jobId: p.jobId,
         manifestFileId: p.manifestFileId,
         manifestSha256: seedSha("other"),
@@ -683,7 +684,7 @@ describe("immutable clips and their file references", () => {
 describe("append-only reviews and approved-only datasets", () => {
   test("reviews append exact revisions for the exact result and are never edited", async () => {
     const p = await processedRecording(db.app, actors, 1);
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,
@@ -745,7 +746,7 @@ describe("append-only reviews and approved-only datasets", () => {
 
   test("many-to-many membership is approved-only; rejection removes all memberships; reapproval restores nothing", async () => {
     const p = await processedRecording(db.app, actors, 3);
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,
@@ -935,7 +936,7 @@ describe("append-only reviews and approved-only datasets", () => {
 describe("session TEMP objects cannot shadow catalog relations", () => {
   test("the app role cannot create TEMP tables, and even with TEMP re-granted, shadows do not bypass triggers or the grant routine", async () => {
     const p = await processedRecording(db.app, actors, 2);
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,

@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { assertJobCurrent } from "../jobs/current.js";
+import { assertJobOutputOpen } from "../jobs/current.js";
 import { TransportError } from "./errors.js";
 
 /**
@@ -87,7 +87,7 @@ export async function assertJobAuthority(
 ): Promise<{ jobId: string; recordingId: string }> {
   if (expectedJobId && expectedJobId !== authority.jobId) throw forbidden();
   try {
-    const current = await assertJobCurrent(db, authority.jobId);
+    const current = await assertJobOutputOpen(db, authority.jobId);
     return { jobId: current.jobId, recordingId: current.recordingId };
   } catch {
     throw forbidden();

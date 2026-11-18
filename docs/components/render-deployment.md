@@ -39,20 +39,20 @@ Render one-off jobs inherit the service's environment (no per-job injection), so
 
 ## Secrets map (`sync: false`, entered once at Blueprint creation)
 
-| Service        | Key                                        | Value                                                                 |
-| -------------- | ------------------------------------------ | --------------------------------------------------------------------- |
-| web            | `APP_DB_PASSWORD`                          | random ≥32 chars chosen by the operator; also used for the migration  |
-| web            | `BETTER_AUTH_URL`                          | the web service's public HTTPS origin (onrender.com or custom domain) |
-| web            | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | production Google web client (**Google gate still open**)             |
-| web            | `S3_ENDPOINT`                              | `https://<account>.r2.cloudflarestorage.com`                          |
-| web            | `S3_BUCKET`                                | production bucket (never `stateaction-dev`)                           |
-| web            | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | production bucket-scoped R2 token (not the dev token)                 |
-| web            | `PROCESSING_PROFILE_REVISION`              | processing profile revision pinned on admitted jobs (operator choice) |
-| web            | `PROCESSING_EXECUTION_BACKEND`             | `local` or `modal` job execution backend (operator choice)            |
-| web            | `PROCESSING_CODE_REVISION`                 | deployed worker git revision recorded on every admitted job           |
-| web            | `PROCESSING_IMAGE_SPEC_SHA256`             | SHA-256 of the locked worker image build spec (from build tooling)    |
-| web            | `PROCESSING_CONFIG_SHA256`                 | SHA-256 of the exact worker configuration document                    |
-| operator shell | `MIGRATION_DATABASE_URL`                   | owner external URL; never stored in Render env                        |
+| Service        | Key                                        | Value                                                                                                                           |
+| -------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| web            | `APP_DB_PASSWORD`                          | random ≥32 chars chosen by the operator; also used for the migration                                                            |
+| web            | `BETTER_AUTH_URL`                          | the web service's public HTTPS origin (onrender.com or custom domain)                                                           |
+| web            | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | production Google web client (**Google gate still open**)                                                                       |
+| web            | `S3_ENDPOINT`                              | `https://<account>.r2.cloudflarestorage.com`                                                                                    |
+| web            | `S3_BUCKET`                                | production bucket (never `stateaction-dev`)                                                                                     |
+| web            | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | production bucket-scoped R2 token (not the dev token)                                                                           |
+| web            | `PROCESSING_PROFILE_REVISION`              | processing profile revision pinned on admitted jobs (operator choice)                                                           |
+| web            | `PROCESSING_EXECUTION_BACKEND`             | `local` or `modal` job execution backend (operator choice)                                                                      |
+| web            | `PROCESSING_CODE_REVISION`                 | deployed worker git revision recorded on every admitted job                                                                     |
+| web            | `PROCESSING_IMAGE_SPEC_SHA256`             | SHA-256 of the locked worker image build spec (from build tooling)                                                              |
+| web            | `PROCESSING_CONFIG_SHA256`                 | the exporter `config_sha256(ExportLimits, StreamLimits)` digest (ruleRevision 2), see [output acceptance](output-acceptance.md) |
+| operator shell | `MIGRATION_DATABASE_URL`                   | owner external URL; never stored in Render env                                                                                  |
 
 `BETTER_AUTH_SECRET` is `generateValue: true` (distinct per environment, web only). Literal config in the Blueprint: `NODE_VERSION=24.22.2`, `APP_ENV=production`, `S3_REGION=auto`, `SUPPORTED_RGB_PROFILES=h264_mcap_v1`; `PROCESSING_PROFILE_REVISION` is prompted (`sync: false`, web only) because the pinned processing profile revision is an operator decision per environment, and preflight refuses to start without it; `DATABASE_HOST/PORT/NAME` come from `fromDatabase`. Job admission (SA-25) records a permanent input identity on every admitted job: the four `PROCESSING_*` rows above are prompted (`sync: false`, web only, never defaulted or placeholders) and `PROCESSING_MODEL_SHA256` is the literal accepted CPU model pin (MediaPipe Hand Landmarker full float16 task bundle v1). `hosted:preflight` refuses to start without all five, and `/api/v1/health` reports `checks.jobs=false` (status degraded, 503) outside local development when any is missing, so a reachable database and bucket never read as a working pipeline. Controller and cron credentials are not Blueprint values: an operator issues them with the owner credential (`issue-service-capability`), then enters each token once as a secret of the service that uses it (SA-26 wires the controller; this ticket deploys no workflow, Modal or cron resource). R2 credentials are backend-only and never reach the mobile app or the workflow.
 

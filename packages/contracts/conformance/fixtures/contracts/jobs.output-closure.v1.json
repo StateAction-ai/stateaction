@@ -1,0 +1,117 @@
+{
+  "contract": "jobs.output-closure.v1",
+  "cases": [
+    {
+      "name": "closed inventory",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "outcome": "succeeded",
+          "fileCount": 7,
+          "clipCount": 1,
+          "totalBytes": "123456",
+          "manifestFileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "inventorySha256": "abababababababababababababababababababababababababababababababab",
+          "closedAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "file count is bounded",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "outcome": "succeeded",
+          "fileCount": 2001,
+          "clipCount": 1,
+          "totalBytes": "123456",
+          "manifestFileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "inventorySha256": "abababababababababababababababababababababababababababababababab",
+          "closedAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/fileCount"
+        ]
+      }
+    },
+    {
+      "name": "clip count is bounded",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "outcome": "succeeded",
+          "fileCount": 7,
+          "clipCount": 1000,
+          "totalBytes": "123456",
+          "manifestFileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "inventorySha256": "abababababababababababababababababababababababababababababababab",
+          "closedAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/clipCount"
+        ]
+      }
+    },
+    {
+      "name": "digest is sha256",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "outcome": "succeeded",
+          "fileCount": 7,
+          "clipCount": 1,
+          "totalBytes": "123456",
+          "manifestFileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "inventorySha256": "x",
+          "closedAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/inventorySha256"
+        ]
+      }
+    },
+    {
+      "name": "no object keys",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "outcome": "succeeded",
+          "fileCount": 7,
+          "clipCount": 1,
+          "totalBytes": "123456",
+          "manifestFileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+          "inventorySha256": "abababababababababababababababababababababababababababababababab",
+          "closedAt": "2026-11-02T14:00:00.123456Z",
+          "objectKey": "k"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

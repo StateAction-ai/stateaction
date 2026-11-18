@@ -70,3 +70,37 @@ export async function assertJobCurrent(
     executionDeadline: row.execution_deadline,
   };
 }
+
+/**
+ * Output mutations (allocate, sign, receipts, complete, cancel, restart, close)
+ * additionally require that the job's output inventory is still OPEN and that
+ * no terminal execution evidence exists: after the inventory is closed, or the
+ * physical execution is over, no byte may be added or changed. Candidate
+ * submission deliberately uses JOB_CURRENT_SQL (an already closed inventory may
+ * still be reported by the exact current claim).
+ */
+export const JOB_OUTPUT_OPEN_SQL = `
+  SELECT c.* FROM (${JOB_CURRENT_SQL}) c
+  WHERE NOT EXISTS (SELECT 1 FROM job_output_closures x WHERE x.job_id = c.id)
+    AND NOT EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = c.id)`;
+
+export async function assertJobOutputOpen(
+  db: Db,
+  jobId: string,
+  nonce: string | null = null,
+): Promise<CurrentJob> {
+  const { rows } = await db.query<{
+    id: string;
+    recording_id: string;
+    invocation_nonce: string;
+    execution_deadline: Date;
+  }>(JOB_OUTPUT_OPEN_SQL, [jobId, nonce]);
+  const row = rows[0];
+  if (!row) throw new TransportError("forbidden", "Job outputs are not open");
+  return {
+    jobId: row.id,
+    recordingId: row.recording_id,
+    invocationNonce: row.invocation_nonce,
+    executionDeadline: row.execution_deadline,
+  };
+}

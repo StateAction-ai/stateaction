@@ -765,12 +765,10 @@ test("opaque upload-ID aliases: inequality never retires or aborts anything", as
 });
 
 test("worker outputs: the job capability completes, then a second output is cancelled; humans cannot reach them", async () => {
-  const processed = await processedRecording(db.app, db.actors, 1);
-  await db.owner.query("ALTER TABLE jobs DISABLE TRIGGER USER");
-  await db.owner.query("UPDATE jobs SET state = 'running' WHERE id = $1", [
-    processed.jobId,
-  ]);
-  await db.owner.query("ALTER TABLE jobs ENABLE TRIGGER USER");
+  // An OPEN inventory on a running job: no state hack, no trigger disable.
+  const processed = await processedRecording(db.app, db.actors, 1, {
+    open: true,
+  });
   const job = { kind: "job" as const, jobId: processed.jobId };
   const body = Buffer.from("0123456789");
   const out = (slot: string) => ({

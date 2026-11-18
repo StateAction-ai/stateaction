@@ -72,6 +72,8 @@ Recovery requires authoritative server state and the same execution reference. A
 
 The local runner uses `local_fixture_noop` with `APP_ENV=local` to exercise claims, heartbeats and restart recovery. The fixture emits no output. Before receiving its bootstrap, the worker installs a Linux seccomp filter through `libseccomp.so.2` that blocks process and thread creation and program execution. The controller persists the acknowledgement together with the worker’s identity before allowing a claim. It records `local_child_reaped` only when it can prove that acknowledged process exited, including after restart. Missing kernel support or an unproven identity leaves the execution for operator recovery.
 
+The hand-pose worker adapter and output protocol are described in [output acceptance](output-acceptance.md).
+
 `hand_pose_cpu_v1` needs the real extractor and a qualified containment strategy before the local controller can run it. A journal from an earlier run without containment proof cannot produce automatic exit evidence. Modal and hosted execution remain separate. Journals stay on one controller machine. Keep `JOBS_STATE_DIR` and its parent directories protected from replacement by other users. Credential files must be regular, non-symlink files owned by the controller user and mode 0600. The API URL must be a bare HTTPS origin or HTTP on loopback. The worker refuses redirects.
 
 ## Remaining design (not implemented here)

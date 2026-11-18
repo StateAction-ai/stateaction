@@ -12,7 +12,7 @@
 
 `open_result` refuses a directory without `result-manifest.json` (provisional output), any listed
 file whose size or SHA-256 differs, any unlisted file, and (when `stateaction_contracts` is
-importable, which the CLI requires) any document the frozen v1 validators reject. The manifest's
+importable, which the CLI requires) any document its versioned validator rejects. The manifest's
 SHA-256 is returned as `result.manifest_sha256`: compare it with the value an uploader recorded.
 Every statement a clip makes (shapes, dtypes, frame counts, ordering) is re-checked against the
 manifest instead of trusted.
@@ -542,9 +542,14 @@ def open_result(
     ) as file:
         data = _read_bounded(file, MANIFEST_NAME, _MAX_MANIFEST_BYTES)
     manifest = json.loads(data)
-    validated = _contract_check(
-        "artifacts.processing-result.v1", data, required=require_contracts
-    )
+    schema = manifest.get("schema") if isinstance(manifest, dict) else None
+    if schema == "stateaction.processing_result.v1":
+        manifest_contract = "artifacts.processing-result.v1"
+    elif schema == "stateaction.processing_result.v2":
+        manifest_contract = "artifacts.processing-result.v2"
+    else:
+        raise ArtifactError("E_CONTRACT_VIOLATION", "processing-result schema")
+    validated = _contract_check(manifest_contract, data, required=require_contracts)
     listed = {o["relative_path"]: o for o in manifest["outputs"]}
     sidecar_limits = {
         "frame_map_json": _MAX_SIDECAR_BYTES,

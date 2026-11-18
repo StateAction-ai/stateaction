@@ -77,6 +77,39 @@ class ExportLimits:
 
 
 @dataclass(frozen=True)
+class Attestation:
+    """Claim-bound facts a backend job adds to the manifest (processing-result.v2).
+
+    `invocation_nonce` is the exact physical invocation that won the claim, `rgb_profile` the
+    capture profile the worker ACTUALLY verified in the MCAP (never the admitted claim), and
+    `simulation` the unchanged simulation-provenance marker for simulated captures (None for
+    hardware). Unknown camera/encoder/clock provenance stays unknown inside that marker."""
+
+    invocation_nonce: str
+    rgb_profile: str
+    simulation: dict[str, object] | None = None
+
+
+def simulation_note(simulation: dict[str, object] | None) -> str | None:
+    """Plain-language label embedded in the viewer RRD and the manifest limitations."""
+    if simulation is None:
+        return None
+    prov = simulation.get("provenance")
+    parts = []
+    if isinstance(prov, dict):
+        for name in ("camera", "encoder", "clock"):
+            item = prov.get(name)
+            if isinstance(item, dict) and item.get("status") == "known":
+                parts.append(f"{name}={item.get('label')}")
+            else:
+                parts.append(f"{name}=unknown")
+    return (
+        "SIMULATED CAPTURE (simulation_only, not hardware evidence, not production qualified; "
+        f"provenance: {', '.join(parts)}). Timing and sensor quality are not qualified."
+    )
+
+
+@dataclass(frozen=True)
 class ExportContext:
     """Job identity and provenance supplied by the caller (never invented from the source)."""
 
@@ -95,6 +128,9 @@ class ExportContext:
     # Production requires caller-supplied recording_id and source_file_id (backend identities).
     # Offline/CLI runs set this True: identities are deterministic fixtures, labelled as such.
     fixture_identities: bool = False
+    # Backend jobs attest the claim and the actual capture profile (emits processing-result.v2).
+    # None keeps the offline v1 manifest byte-for-byte unchanged.
+    attestation: Attestation | None = None
 
 
 @dataclass(frozen=True)

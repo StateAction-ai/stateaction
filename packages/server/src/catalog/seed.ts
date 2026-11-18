@@ -1,8 +1,12 @@
-import { fixtureReapJob, fixtureRunJob } from "../jobs/fixtures.js";
+import {
+  fixtureAcceptResult,
+  fixtureCloseOutputs,
+  fixtureReapJob,
+  fixtureRunJob,
+} from "../jobs/fixtures.js";
 import { createHash } from "node:crypto";
 import type pg from "pg";
 import {
-  acceptProcessingResult,
   addClipsToDataset,
   appendReview,
   createDataset,
@@ -268,10 +272,15 @@ export async function seedLocalCatalog(
     });
   }
   await output("result", "result_manifest", "result.json", 8000);
+  await fixtureCloseOutputs(owner, {
+    jobId,
+    manifestFileId: outputs.result!,
+    clips,
+  });
   await owner.query("UPDATE jobs SET state = 'result_pending' WHERE id = $1", [
     jobId,
   ]);
-  await acceptProcessingResult(owner, {
+  await fixtureAcceptResult(owner, owner, {
     jobId,
     manifestFileId: outputs.result!,
     manifestSha256: seedSha("result"),

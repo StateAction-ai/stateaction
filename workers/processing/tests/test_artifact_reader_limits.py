@@ -71,7 +71,12 @@ class ArtifactReaderLimitTests(unittest.TestCase):
                 }
             )
         meta = {**self.clip.meta, "files": {key: key for key in self.paths}}
-        manifest = {"outputs": outputs, "clips": [meta], "job_id": "job"}
+        manifest = {
+            "schema": "stateaction.processing_result.v1",
+            "outputs": outputs,
+            "clips": [meta],
+            "job_id": "job",
+        }
         (self.root / reader.MANIFEST_NAME).write_text(json.dumps(manifest))
         with patch.object(reader, "_contract_check", return_value=True) as validate:
             result = reader.open_result(self.root)
