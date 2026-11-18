@@ -10,6 +10,8 @@ export type StubOptions = {
   jobId: string;
   state: string;
   executionDeadline: Date;
+  /** Override only the worker's deadline when testing controller enforcement. */
+  workerExecutionDeadline?: Date;
   /** First record_worker_submission outcome: token handed out, or already recorded. */
   submission: "recorded" | "already_recorded";
   claimWins?: boolean;
@@ -56,7 +58,9 @@ export async function startStub(options: StubOptions) {
         return send({
           jobId: options.jobId,
           invocationNonce: body.invocationNonce,
-          executionDeadline: iso(options.executionDeadline),
+          executionDeadline: iso(
+            options.workerExecutionDeadline ?? options.executionDeadline,
+          ),
           capability: {
             token: `sa_svc_${randomBytes(32).toString("base64url")}`,
           },
@@ -65,7 +69,9 @@ export async function startStub(options: StubOptions) {
       if (url.endsWith("/heartbeat"))
         return send({
           accepted: true,
-          executionDeadline: iso(options.executionDeadline),
+          executionDeadline: iso(
+            options.workerExecutionDeadline ?? options.executionDeadline,
+          ),
         });
       const later = iso(new Date(Date.now() + 120_000));
       switch (body.action) {
