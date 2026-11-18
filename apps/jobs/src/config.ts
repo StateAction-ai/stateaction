@@ -8,23 +8,47 @@ import {
 } from "node:fs";
 
 /** Finite, explicit controller limits. Everything here is bounded; nothing waits forever. */
-export type ControllerSettings = {
+type BaseSettings = {
   apiUrl: string;
-  /** Local-only state directory for the execution journal (0700). */
+  /** State directory for the execution journal (0700). On Render this is task-local disk. */
   stateDir: string;
-  python: string;
   renewIntervalMs: number;
   pollIntervalMs: number;
   /** Maximum time to wait for a predecessor's lease (same-run native retry). */
   leaseWaitMs: number;
-  /** After SIGKILL, how long to wait for the contained worker to exit. */
+  /** After a kill/cancel, how long to wait for proof the execution is gone. */
   reapGraceMs: number;
   apiTimeoutMs: number;
+};
+
+/** The qualified local executor: a detached child on this host, APP_ENV=local only. */
+export type LocalControllerSettings = BaseSettings & {
+  /** Absent means local (the discriminator is optional so existing local callers are unchanged). */
+  executor?: "local";
+  python: string;
   /** Worker pipeline: an explicit local-only fixture name or the production pipeline. */
   pipeline: "hand_pose_cpu_v1" | "local_fixture_noop";
   /** Local fixture only: bounded hold so recovery cases can be exercised. */
   fixtureHoldSeconds?: number;
 };
+
+/**
+ * SA-42 Modal executor: one finite CPU function call per job. Only the production
+ * pipeline exists here; the Modal client belongs to the controller, never the
+ * processing container. Image, model, code, resources and retries are pinned by
+ * the deployed Modal app, not by controller settings.
+ */
+export type ModalControllerSettings = BaseSettings & {
+  executor: "modal";
+  appName: string;
+  functionName: string;
+  environmentName?: string;
+  pipeline: "hand_pose_cpu_v1";
+};
+
+export type ControllerSettings =
+  | LocalControllerSettings
+  | ModalControllerSettings;
 
 function secretFrom(fileVar: string, tokenVar: string): string {
   const file = process.env[fileVar];
@@ -94,38 +118,110 @@ export function apiUrl(): string {
   return url.origin;
 }
 
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "0.0.0.0"]);
+const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function common() {
+  const stateDir = process.env.JOBS_STATE_DIR;
+  if (!stateDir) throw new Error("JOBS_STATE_DIR is required");
+  return {
+    stateDir,
+    renewIntervalMs: int("CONTROLLER_RENEW_MS", 30_000, 200, 60_000),
+    pollIntervalMs: int("CONTROLLER_POLL_MS", 2_000, 50, 30_000),
+    leaseWaitMs: int("CONTROLLER_LEASE_WAIT_MS", 150_000, 0, 300_000),
+    reapGraceMs: int("CONTROLLER_REAP_GRACE_MS", 30_000, 100, 120_000),
+    apiTimeoutMs: int("CONTROLLER_API_TIMEOUT_MS", 15_000, 100, 60_000),
+  };
+}
+
+/**
+ * Explicit, discriminated executor selection. The backend is never inferred:
+ *  - `local` exists only in APP_ENV=local (development and production REJECT it);
+ *  - `modal` exists only in APP_ENV=development|production, with explicit
+ *    Modal app/function names and a non-loopback https API origin.
+ * Anything else fails closed.
+ */
 export function controllerSettings(): ControllerSettings {
-  // Modal (and any hosted backend) stays fail-closed until a qualified ModalExecutor exists;
-  // a local child is only meaningful inside explicit local development.
-  if (
-    process.env.EXECUTION_BACKEND !== "local" ||
-    process.env.APP_ENV !== "local"
-  )
-    throw new Error(
-      "Only the local executor in APP_ENV=local is qualified; Modal stays fail-closed",
-    );
+  const backend = process.env.EXECUTION_BACKEND;
+  const env = process.env.APP_ENV;
+  if (backend === "local") {
+    if (env !== "local")
+      throw new Error(
+        "The local executor is only qualified in APP_ENV=local; development and production reject it",
+      );
+    return localSettings();
+  }
+  if (backend === "modal") {
+    if (env !== "development" && env !== "production")
+      throw new Error(
+        "The Modal executor requires APP_ENV=development or production",
+      );
+    return modalSettings();
+  }
+  throw new Error(
+    "EXECUTION_BACKEND must be explicit: local (APP_ENV=local) or modal (development/production)",
+  );
+}
+
+function localSettings(): LocalControllerSettings {
   const pipeline = process.env.WORKER_PIPELINE ?? "hand_pose_cpu_v1";
   if (pipeline !== "hand_pose_cpu_v1" && pipeline !== "local_fixture_noop")
     throw new Error("Unknown WORKER_PIPELINE");
   // The no-output fixture exists for controller plumbing tests only.
   if (pipeline === "local_fixture_noop" && process.env.APP_ENV !== "local")
     throw new Error("local_fixture_noop is local-only");
-  const stateDir = process.env.JOBS_STATE_DIR;
-  if (!stateDir) throw new Error("JOBS_STATE_DIR is required");
   const python = process.env.PYTHON_EXECUTABLE;
   if (!python) throw new Error("PYTHON_EXECUTABLE is required");
   return {
+    executor: "local",
     apiUrl: apiUrl(),
-    stateDir,
     python,
-    renewIntervalMs: int("CONTROLLER_RENEW_MS", 30_000, 200, 60_000),
-    pollIntervalMs: int("CONTROLLER_POLL_MS", 2_000, 50, 30_000),
-    leaseWaitMs: int("CONTROLLER_LEASE_WAIT_MS", 150_000, 0, 300_000),
-    reapGraceMs: int("CONTROLLER_REAP_GRACE_MS", 30_000, 100, 120_000),
-    apiTimeoutMs: int("CONTROLLER_API_TIMEOUT_MS", 15_000, 100, 60_000),
+    ...common(),
     pipeline,
     ...(pipeline === "local_fixture_noop"
       ? { fixtureHoldSeconds: int("WORKER_FIXTURE_HOLD_SECONDS", 0, 0, 600) }
       : {}),
   };
+}
+
+function modalSettings(): ModalControllerSettings {
+  // The worker pipeline is not selectable here: only the production pipeline runs on Modal.
+  if (process.env.WORKER_PIPELINE !== undefined)
+    throw new Error(
+      "WORKER_PIPELINE is not configurable for the Modal executor",
+    );
+  const api = apiUrl();
+  // A Modal container can never reach a loopback API: refuse it rather than spawn a doomed call.
+  const url = new URL(api);
+  if (url.protocol !== "https:" || LOOPBACK.has(url.hostname))
+    throw new Error(
+      "The Modal executor requires a non-loopback https STATEACTION_API_URL",
+    );
+  const appName = process.env.MODAL_APP_NAME;
+  const functionName = process.env.MODAL_FUNCTION_NAME;
+  if (!appName || !NAME.test(appName))
+    throw new Error("MODAL_APP_NAME is required");
+  if (!functionName || !NAME.test(functionName))
+    throw new Error("MODAL_FUNCTION_NAME is required");
+  const environmentName = process.env.MODAL_ENVIRONMENT;
+  if (environmentName !== undefined && !NAME.test(environmentName))
+    throw new Error("MODAL_ENVIRONMENT is invalid");
+  return {
+    executor: "modal",
+    apiUrl: api,
+    appName,
+    functionName,
+    ...(environmentName === undefined ? {} : { environmentName }),
+    ...common(),
+    pipeline: "hand_pose_cpu_v1",
+  };
+}
+
+/** Modal API credentials: controller-side only, never forwarded to the processing container. */
+export function modalCredentials(): { tokenId: string; tokenSecret: string } {
+  const tokenId = process.env.MODAL_TOKEN_ID;
+  const tokenSecret = process.env.MODAL_TOKEN_SECRET;
+  if (!tokenId || !tokenSecret)
+    throw new Error("MODAL_TOKEN_ID and MODAL_TOKEN_SECRET are required");
+  return { tokenId, tokenSecret };
 }

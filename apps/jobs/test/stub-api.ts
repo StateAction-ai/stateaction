@@ -15,6 +15,11 @@ export type StubOptions = {
   /** First record_worker_submission outcome: token handed out, or already recorded. */
   submission: "recorded" | "already_recorded";
   claimWins?: boolean;
+  /** SA-42: status identity projection (default local with no reference). */
+  statusBackend?: "local" | "modal";
+  initialExecutionRef?: string;
+  /** SA-42 test control: false makes every lease renewal report a lost lease. */
+  renewWins?: boolean;
 };
 /** Every started stub; test files close them in an `after` hook even when assertions fail. */
 export const stubs: Server[] = [];
@@ -31,6 +36,7 @@ export async function startStub(options: StubOptions) {
   const token = `sa_svc_${randomBytes(32).toString("base64url")}`;
   const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
   let state = options.state;
+  let executionRef: string | null = options.initialExecutionRef ?? null;
   const server: Server = createServer((req, res) => {
     let raw = "";
     req.on("data", (c) => (raw += c));
@@ -51,9 +57,38 @@ export async function startStub(options: StubOptions) {
           previousJobId: null,
           createdAt: iso(new Date()),
           updatedAt: iso(new Date()),
+          executionBackend: options.statusBackend ?? "local",
+          executionRef,
+          startDeadline: iso(
+            new Date(
+              Math.min(
+                Date.now() + 60_000,
+                options.executionDeadline.getTime(),
+              ),
+            ),
+          ),
+          executionDeadline: iso(options.executionDeadline),
         });
       if (url.endsWith("/claim")) {
         if (options.claimWins === false) return send({ error: "x" }, 403);
+        // COALESCE(execution_call_id, claimed ref); a different recorded ref refuses the claim.
+        const claimed =
+          (
+            body.executor as {
+              functionCallId?: string;
+              localExecutionRef?: string;
+            }
+          )?.functionCallId ??
+          (body.executor as { localExecutionRef?: string })
+            ?.localExecutionRef ??
+          null;
+        if (
+          executionRef !== null &&
+          claimed !== null &&
+          executionRef !== claimed
+        )
+          return send({ error: { code: "conflict" } }, 409);
+        executionRef ??= claimed;
         state = "running";
         return send({
           jobId: options.jobId,
@@ -80,6 +115,7 @@ export async function startStub(options: StubOptions) {
         case "claim_lease":
           return send({ granted: true, expiresAt: later });
         case "renew_lease":
+          if (options.renewWins === false) return send({ renewed: false });
           return send({ renewed: true, expiresAt: later });
         case "record_worker_submission":
           if (options.submission === "already_recorded")
@@ -105,10 +141,20 @@ export async function startStub(options: StubOptions) {
               sourceManifestSha256: "a".repeat(64),
               rgbProfile: "h264_mcap_v1",
             },
-            executionBackend: "local",
+            executionBackend: options.statusBackend ?? "local",
           });
-        case "record_execution":
-          return send({ recorded: true });
+        case "record_execution": {
+          const ref = body.executor as {
+            functionCallId?: string;
+            localExecutionRef?: string;
+          };
+          const next = ref.functionCallId ?? ref.localExecutionRef ?? null;
+          if (executionRef !== null && executionRef !== next)
+            return send({ error: { code: "conflict" } }, 409);
+          const first = executionRef === null;
+          executionRef = next;
+          return send({ recorded: first });
+        }
         case "mark_submit_unknown":
           state = "submit_unknown";
           return send({ state: "submit_unknown" });
@@ -126,6 +172,11 @@ export async function startStub(options: StubOptions) {
     url: `http://127.0.0.1:${port}`,
     token,
     calls,
+    /** Test control: flip the job state (e.g. to cancel_requested). */
+    setState: (next: string) => {
+      state = next;
+    },
+    executionRef: () => executionRef,
     actions: () =>
       calls.filter((c) => c.body?.action).map((c) => c.body!.action as string),
     stop: () => new Promise<void>((r) => server.close(() => r())),

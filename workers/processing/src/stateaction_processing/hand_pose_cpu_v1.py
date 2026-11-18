@@ -14,6 +14,7 @@ ACTUAL MCAP capture profile must equal the admitted profile or the run fails (ne
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 import threading
@@ -486,7 +487,7 @@ def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
     try:
         api.heartbeat("hashing_source")
         task = api.call("GET", "task-input")
-        return _process(api, sink, beater, grant, task, scratch)
+        return _process(api, sink, beater, grant, task, scratch, context)
     except Exception as error:
         if task is None:
             print(f"Worker failed before task input: {type(error).__name__}")
@@ -497,6 +498,29 @@ def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def _check_runtime_identity(digests: dict[str, Any], context: dict[str, Any]) -> None:
+    """Modal only: the baked build identity must equal what the server admitted, BEFORE any source read.
+
+    The code revision and the build-spec digest are baked into the image environment at deploy time
+    (the build-spec digest is NOT a Modal image ID). The ACTUAL model bytes are hash-verified here,
+    not only the pin. A local run keeps its existing behaviour (no baked identity to compare).
+    """
+    if context.get("executorKind") != "modal":
+        return
+    from . import hand_model
+    from .artifact_types import ExportError
+
+    for name, key in (
+        ("STATEACTION_CODE_REVISION", "codeRevision"),
+        ("STATEACTION_IMAGE_SPEC_SHA256", "imageSpecSha256"),
+    ):
+        baked = os.environ.get(name)
+        if not baked or baked != digests[key]:
+            raise ExportError("E_RUNTIME_IDENTITY_MISMATCH")
+    if hand_model.resolve_model().sha256 != digests["modelSha256"]:
+        raise ExportError("E_MODEL_DIGEST_MISMATCH")
+
+
 def _process(
     api: Api,
     sink: ServerOutputSink,
@@ -504,6 +528,7 @@ def _process(
     grant: dict[str, Any],
     task: dict[str, Any],
     scratch: Path,
+    context: dict[str, Any] | None = None,
 ) -> int:
     from . import hand_model
     from .artifact_export import config_sha256, export_artifacts
@@ -517,6 +542,7 @@ def _process(
         raise ExportError("E_CONFIG_DIGEST_MISMATCH")
     if hand_model.PINS["sha256"] != digests["modelSha256"]:
         raise ExportError("E_MODEL_DIGEST_MISMATCH")
+    _check_runtime_identity(digests, context or {})
     inputs = {i["role"]: i for i in grant["inputs"]}
     mcaps = [i for i in grant["inputs"] if i["role"] == "source_mcap"]
     if len(mcaps) != 1 or "source_manifest" not in inputs:

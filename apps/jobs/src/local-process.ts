@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
 import type { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { ControllerSettings } from "./config.js";
+import type { LocalControllerSettings } from "./config.js";
 import type { Journal, JournalStore } from "./journal.js";
 import {
   bootId,
@@ -19,7 +19,7 @@ export type Bootstrap = {
   jobId: string;
   bootstrapToken: string;
   executionRef: string;
-  pipeline: ControllerSettings["pipeline"];
+  pipeline: LocalControllerSettings["pipeline"];
   fixtureHoldSeconds?: number;
 };
 
@@ -160,7 +160,7 @@ function waitForFixtureIsolation(proof: Readable): Promise<boolean> {
  * through the stdin pipe.
  */
 export async function spawnChild(
-  settings: ControllerSettings,
+  settings: LocalControllerSettings,
   store: JournalStore,
   journal: Journal,
 ): Promise<Spawned> {

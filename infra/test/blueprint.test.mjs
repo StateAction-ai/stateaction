@@ -70,10 +70,16 @@ test("the Render start key lives on the API only; the repair cron has an API cap
 test("workflow tasks receive no database, storage or dispatch credentials", () => {
   const keys = envKeys(blocks.workflow);
   // SA-26: API URL + operator-issued workflow credential (jobs:status/jobs:reconcile) only.
+  // SA-42 adds the Modal executor selection, names and credential (this service only).
   assert.deepEqual(keys.sort(), [
     "APP_ENV",
     "CONTROLLER_CAPABILITY_TOKEN",
     "EXECUTION_BACKEND",
+    "JOBS_STATE_DIR",
+    "MODAL_APP_NAME",
+    "MODAL_FUNCTION_NAME",
+    "MODAL_TOKEN_ID",
+    "MODAL_TOKEN_SECRET",
     "NODE_VERSION",
     "STATEACTION_API_URL",
   ]);
@@ -83,6 +89,37 @@ test("workflow tasks receive no database, storage or dispatch credentials", () =
   assert.doesNotMatch(
     blocks.workflow,
     /DATABASE|S3_|DISPATCH_CAPABILITY|REPAIR_CAPABILITY/,
+  );
+});
+test("the Modal credential lives on the workflow controller only and is never a literal (SA-42)", () => {
+  for (const key of ["MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET"]) {
+    assert.match(
+      blocks.workflow,
+      new RegExp(`key: ${key}\\n\\s+sync: false`),
+      key,
+    );
+    for (const name of ["web", "cron"])
+      assert.ok(!envKeys(blocks[name]).includes(key), `${key} in ${name}`);
+  }
+  for (const name of ["web", "cron"])
+    assert.ok(
+      !envKeys(blocks[name]).some((k) => k.startsWith("MODAL_")),
+      `${name} must hold no Modal setting`,
+    );
+  // Production selects the Modal executor explicitly; the local executor is never configured here.
+  assert.match(blocks.workflow, /key: EXECUTION_BACKEND\n\s+sync: false/);
+  assert.match(blocks.workflow, /APP_ENV\n\s+value: production/);
+  assert.doesNotMatch(
+    blocks.workflow,
+    /PYTHON_EXECUTABLE|WORKER_PIPELINE|local_fixture/,
+  );
+  assert.match(
+    blocks.workflow,
+    /key: MODAL_APP_NAME\n\s+value: stateaction-processing/,
+  );
+  assert.match(
+    blocks.workflow,
+    /key: MODAL_FUNCTION_NAME\n\s+value: process_recording/,
   );
 });
 test("web binds through the health-checked Render start path", () => {

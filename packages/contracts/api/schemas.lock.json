@@ -79,6 +79,8 @@
     "http/clip-review.v1.schema.json": "c8d884f08cf6516d7b90e64877fbbbfaccf6d3ae45b9910e7a93f0ca8eac8565",
     "catalog.v11.json": "60e83cc9cabdd87cb9ee398c0de4e175ca6d33e7cd115a0d8b9a13311af613d8",
     "http/job-control-command.v1.schema.json": "72c7c78ec195bd098c597fa2b70e2121b8d52394a97894c09481a035eb835cc5",
-    "http/job-control-result.v1.schema.json": "d3f1ca0c45a501fe17029791cf91afee4072452e7659e95057cbde3e783d6960"
+    "http/job-control-result.v1.schema.json": "d3f1ca0c45a501fe17029791cf91afee4072452e7659e95057cbde3e783d6960",
+    "catalog.v12.json": "674b089a92875402ac5ebedfc53f9f906c3e609390a48bb56007e6fdb24937d9",
+    "jobs/job-status.v2.schema.json": "d633d785b58ce4eefdcc0caf5efb4158f0f4cac046fa46ec9a425177d313b36f"
   }
 }

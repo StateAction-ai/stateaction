@@ -1,9 +1,10 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v11.json (checked by tests).
-// catalog.v11.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v12.json (checked by tests).
+// catalog.v12.json is the current registry: an exact superset of the immutable
+// catalog.v11.json (adds only jobs.job-status.v2, SA-42), itself a superset of the immutable
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v11.json" with { type: "json" };
+import catalog from "../api/catalog.v12.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -70,6 +71,7 @@ import s61 from "../api/http/clip-review-state.v1.schema.json" with { type: "jso
 import s62 from "../api/http/clip-review.v1.schema.json" with { type: "json" };
 import s63 from "../api/http/job-control-command.v1.schema.json" with { type: "json" };
 import s64 from "../api/http/job-control-result.v1.schema.json" with { type: "json" };
+import s65 from "../api/jobs/job-status.v2.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -128,6 +130,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.output-closure.v1": s58,
   "jobs.result-ack.v1": s59,
   "jobs.job-status.v1": s18,
+  "jobs.job-status.v2": s65,
   "jobs.reconcile-result.v1": s42,
   "jobs.result-candidate.v1": s19,
   "jobs.task-input.v1": s20,

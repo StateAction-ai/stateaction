@@ -408,7 +408,7 @@ describe("job admission and worker claims on Next.js with Better Auth, Postgres 
     const status = await call(base(second.jobId), get(workflow));
     assert.equal(status.json.data.state, "queued");
     assert.equal(
-      validateValue("jobs.job-status.v1", status.json.data).valid,
+      validateValue("jobs.job-status.v2", status.json.data).valid,
       true,
     );
   });

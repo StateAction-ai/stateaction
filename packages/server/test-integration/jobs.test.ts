@@ -13,6 +13,7 @@ import {
   admitNextJob,
   claimControllerLease,
   claimWorker,
+  getJobStatus,
   markSubmissionUnknown,
   recordExecutionEvidence,
   recordExecutionRef,
@@ -603,4 +604,25 @@ test("machine credentials: operator-issued, hashed, scoped and revocable; no hum
   assert.ok(
     (await store.findByTokenSha256(hashServiceToken(issued.token)))?.revokedAt,
   );
+});
+
+test("job status v2 projects the recorded execution identity and the immutable deadline (SA-42), set by the worker claim or the controller", async () => {
+  const db = await scenario();
+  const { deps, jobId, bootstrap } = await submitted(db);
+  const before = await getJobStatus(deps, jobId);
+  assert.equal(validateValue("jobs.job-status.v2", before).valid, true);
+  assert.equal(before.executionBackend, "local");
+  assert.equal(before.executionRef, null);
+  assert.ok(before.executionDeadline);
+  assert.ok(
+    before.startDeadline,
+    "the submission intent fixed the worker start deadline",
+  );
+  // A claim that names the reference first (the worker winning before the controller records).
+  await claimWorker(deps, claimInput(jobId, bootstrap, "child-status"));
+  const claimed = await getJobStatus(deps, jobId);
+  assert.equal(validateValue("jobs.job-status.v2", claimed).valid, true);
+  assert.equal(claimed.executionRef, "child-status");
+  assert.equal(claimed.executionDeadline, before.executionDeadline);
+  assert.equal(claimed.startDeadline, before.startDeadline);
 });

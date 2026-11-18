@@ -576,6 +576,15 @@ export type JobStatus = {
   createdAt: Rfc3339Utc;
   updatedAt: Rfc3339Utc;
 };
+/** SA-42 (catalog.v12): the status plus the recorded execution identity. An identity only; never spawn authority. */
+export type JobStatusV2 = JobStatus & {
+  executionBackend: "local" | "modal" | null;
+  executionRef: string | null;
+  /** Immutable worker start deadline (10 min after the submission intent); null before intent. */
+  startDeadline: Rfc3339Utc | null;
+  /** Immutable absolute deadline (admitted_at + 6 h); null before admission. */
+  executionDeadline: Rfc3339Utc | null;
+};
 
 // Durable artifacts (snake_case, "schema" discriminator).
 export type RecordingSourceV1 = {

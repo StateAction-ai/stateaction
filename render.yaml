@@ -1,7 +1,7 @@
 # StateAction hosted topology. Validate with `render blueprints validate render.yaml`.
 # Applying this file creates PAID resources; see docs/components/render-deployment.md for the
 # exact order. Nothing here is deployed by CI or by the SA-14 change itself.
-# Secrets use `sync: false` (prompted once at Blueprint creation); no secret value appears in this file. The production processor (Modal) is deferred.
+# Secrets use `sync: false` (prompted once at Blueprint creation); no secret value appears in this file. The production processor is the Modal CPU function (SA-42); its API credential lives only on the workflow service.
 databases:
   - name: stateaction-db
     region: ohio
@@ -114,14 +114,30 @@ services:
         value: production
       # SA-26 controller: API-only access with an operator-issued workflow credential
       # (scopes jobs:status, jobs:reconcile; max 24 h; issue-service-capability). No
-      # database or storage credential. EXECUTION_BACKEND=modal is refused (fail closed)
-      # until a qualified ModalExecutor exists; only local development runs LocalExecutor.
+      # database or storage credential.
       - key: STATEACTION_API_URL
         sync: false
       - key: CONTROLLER_CAPABILITY_TOKEN
         sync: false
+      # SA-42: production runs the Modal executor only (`modal`); the local executor is refused
+      # outside APP_ENV=local and loopback API origins are refused. The Modal API credential is
+      # held by this controller service ALONE (never web, cron or the processing container).
+      # Nothing here deploys or spawns Modal: the operator deploys workers/processing/modal_app.py
+      # and enters the two secrets once (billable; see docs/components/modal-executor.md).
       - key: EXECUTION_BACKEND
         sync: false
+      - key: MODAL_APP_NAME
+        value: stateaction-processing
+      - key: MODAL_FUNCTION_NAME
+        value: process_recording
+      - key: MODAL_TOKEN_ID
+        sync: false
+      - key: MODAL_TOKEN_SECRET
+        sync: false
+      # Controller journal (call identity before/after the single spawn). Task-local disk: a
+      # controller on another instance adopts a known call from the API's recorded reference.
+      - key: JOBS_STATE_DIR
+        value: /tmp/stateaction-jobs
   # SA-27 minute repair pass: one bounded call to the API's repair endpoint, then exit.
   # Credentials: a repair-scoped API capability ONLY (scope jobs:repair, max 24 h, issued with
   # issue-service-capability --kind cron). No database, Render-start, Modal or storage secret.

@@ -16,7 +16,7 @@ import { after, before, describe, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { AmbiguousApiError, JobsApi } from "../src/api-client.js";
-import type { ControllerSettings } from "../src/config.js";
+import type { LocalControllerSettings } from "../src/config.js";
 import { runController } from "../src/controller.js";
 import { JournalStore, type Journal } from "../src/journal.js";
 import { inspect } from "../src/local-process.js";
@@ -43,7 +43,7 @@ after(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const settings = (apiUrl: string, hold: number): ControllerSettings => ({
+const settings = (apiUrl: string, hold: number): LocalControllerSettings => ({
   apiUrl,
   stateDir: join(root, "state"),
   python,
@@ -231,7 +231,7 @@ describe("shared controller with real spawned children and a contract-shaped stu
       { settings: cfg, api, store },
       { jobId, runRef: "run-1" },
     );
-    assert.equal(out.outcome, "child_exited");
+    assert.equal(out.outcome, "child_exited", JSON.stringify(out));
     if (out.outcome !== "child_exited") return;
     assert.equal(out.evidence, "recorded");
     assert.equal(out.exit.signal, "SIGKILL");
