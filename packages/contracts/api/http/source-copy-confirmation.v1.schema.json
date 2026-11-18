@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/source-copy-confirmation.v1.json",
+  "title": "Source copy confirmation v1",
+  "description": "Append-only staff evidence that every sealed original of one recording was streamed whole and matched its sealed length and SHA-256 at EOF. sealSha256 (inventory identity) and sourceManifestSha256 (manifest object identity) are distinct. Reviewable or failed processing is never this approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "confirmationId",
+    "recordingId",
+    "clientRecordingId",
+    "sealSha256",
+    "sourceManifestSha256",
+    "fileCount",
+    "totalBytes",
+    "files",
+    "confirmedByUserId",
+    "verifiedAt",
+    "confirmedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "confirmationId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "sealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "sourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "fileCount": { "type": "integer", "minimum": 3, "maximum": 2000 },
+    "totalBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 2000,
+      "items": { "$ref": "#/$defs/evidenceFile" }
+    },
+    "confirmedByUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "verifiedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "confirmedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  },
+  "$defs": {
+    "evidenceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "role", "required", "sizeBytes", "sha256"],
+      "properties": {
+        "fileId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "role": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+        },
+        "required": { "type": "boolean" },
+        "sizeBytes": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+        },
+        "sha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

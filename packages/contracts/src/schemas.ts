@@ -1,10 +1,11 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v12.json (checked by tests).
-// catalog.v12.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v13.json (checked by tests).
+// catalog.v13.json is the current registry: an exact superset of the immutable
+// catalog.v12.json (adds only the SA-73 source-copy confirmation and cleanup-proof contracts), itself a superset of the immutable
 // catalog.v11.json (adds only jobs.job-status.v2, SA-42), itself a superset of the immutable
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v12.json" with { type: "json" };
+import catalog from "../api/catalog.v13.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -72,6 +73,10 @@ import s62 from "../api/http/clip-review.v1.schema.json" with { type: "json" };
 import s63 from "../api/http/job-control-command.v1.schema.json" with { type: "json" };
 import s64 from "../api/http/job-control-result.v1.schema.json" with { type: "json" };
 import s65 from "../api/jobs/job-status.v2.schema.json" with { type: "json" };
+import s66 from "../api/http/source-copy-confirm.v1.schema.json" with { type: "json" };
+import s67 from "../api/http/cleanup-proof-request.v1.schema.json" with { type: "json" };
+import s68 from "../api/http/source-copy-confirmation.v1.schema.json" with { type: "json" };
+import s69 from "../api/http/cleanup-proof.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -98,6 +103,10 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.clip-review.v1": s62,
   "http.job-control-command.v1": s63,
   "http.job-control-result.v1": s64,
+  "http.source-copy-confirm.v1": s66,
+  "http.cleanup-proof-request.v1": s67,
+  "http.source-copy-confirmation.v1": s68,
+  "http.cleanup-proof.v1": s69,
   "http.dataset-change.v1": s55,
   "http.input-read.v1": s44,
   "http.me.v1": s27,

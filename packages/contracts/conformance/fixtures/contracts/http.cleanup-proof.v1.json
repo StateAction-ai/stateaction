@@ -1,0 +1,352 @@
+{
+  "contract": "http.cleanup-proof.v1",
+  "cases": [
+    {
+      "name": "fresh proof",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "2026-11-02T10:06:00.000Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a proof grants no storage capability",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "2026-11-02T10:06:00.000Z",
+          "signedUrl": "https://x.test/y"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "only a full re-hash is a proof",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "head_bound",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "2026-11-02T10:06:00.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/verification"
+        ]
+      }
+    },
+    {
+      "name": "expiry is required",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "expiry is an RFC 3339 UTC instant",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "later"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expiresAt"
+        ]
+      }
+    },
+    {
+      "name": "owner identity is an opaque id",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "ea3bd73e2b506e00527232b3ed743c066da83a8e3066f62a71e75eb9b4aa1db6"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "2026-11-02T10:06:00.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/ownerUserId"
+        ]
+      }
+    },
+    {
+      "name": "evidence digest",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "proofId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA",
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "confirmationId": "18c9d0e1-f2a3-4b4c-936e-7f8091a2b3c4",
+          "confirmedAt": "2026-11-02T10:00:00.456Z",
+          "verification": "rehash",
+          "fileCount": 3,
+          "totalBytes": "134222825",
+          "files": [
+            {
+              "fileId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+              "role": "source_manifest",
+              "required": true,
+              "sizeBytes": "1000",
+              "sha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+            },
+            {
+              "fileId": "7c2d3e4f-5061-4728-9bac-1d2e3f4a5b6c",
+              "role": "source_mcap",
+              "required": true,
+              "sizeBytes": "134217729",
+              "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+            },
+            {
+              "fileId": "8d3e4f50-6172-4839-acbd-2e3f4a5b6c7d",
+              "role": "recorder_metadata",
+              "required": true,
+              "sizeBytes": "4096",
+              "sha256": "xyz"
+            }
+          ],
+          "issuedAt": "2026-11-02T10:05:00.000Z",
+          "expiresAt": "2026-11-02T10:06:00.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/files/2/sha256"
+        ]
+      }
+    }
+  ]
+}

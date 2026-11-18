@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/cleanup-proof-request.v1.json",
+  "title": "Cleanup proof request v1",
+  "description": "POST /api/v1/recordings/{recordingId}/cleanup-proofs body (the authenticated original collector only). The exact sealed identities held by the phone; any difference is refused. No owner or staff identity is accepted. Asking for a proof is not deletion intent and issuing one deletes nothing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sealSha256", "sourceManifestSha256", "clientRecordingId"],
+  "properties": {
+    "sealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "sourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}

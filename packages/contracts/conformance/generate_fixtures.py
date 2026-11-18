@@ -3344,6 +3344,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa42_fixtures import render_sa42
 
     files.update(render_sa42())
+    # SA-73 adds only new fixture files for the catalog.v13 source-copy contracts.
+    from generate_sa73_fixtures import render_sa73
+
+    files.update(render_sa73())
     return files
 
 
