@@ -121,6 +121,8 @@ No retention job, expiry or purge exists or is added here. Original sources are
 immutable and are never silently expired; any future retention policy needs its
 own ticket and an explicit operator decision.
 
+Database restore, rollback and retention rules: [database-recovery.md](database-recovery.md).
+
 ## External prerequisites (not done)
 
 Modal workspace spend/usage alerts, Render service alerts and any email or Slack
