@@ -3336,6 +3336,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa36_fixtures import render_sa36
 
     files.update(render_sa36())
+    # SA-27 adds only new fixture files for the catalog.v11 staff job control contracts.
+    from generate_sa27_fixtures import render_sa27
+
+    files.update(render_sa27())
     return files
 
 

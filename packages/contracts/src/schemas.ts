@@ -1,9 +1,9 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v10.json (checked by tests).
-// catalog.v10.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v11.json (checked by tests).
+// catalog.v11.json is the current registry: an exact superset of the immutable
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v10.json" with { type: "json" };
+import catalog from "../api/catalog.v11.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
@@ -68,6 +68,8 @@ import s59 from "../api/jobs/result-ack.v1.schema.json" with { type: "json" };
 import s60 from "../api/http/clip-review-command.v1.schema.json" with { type: "json" };
 import s61 from "../api/http/clip-review-state.v1.schema.json" with { type: "json" };
 import s62 from "../api/http/clip-review.v1.schema.json" with { type: "json" };
+import s63 from "../api/http/job-control-command.v1.schema.json" with { type: "json" };
+import s64 from "../api/http/job-control-result.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 export const contractSchemas: Readonly<Record<string, object>> = {
@@ -92,6 +94,8 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.clip-review-command.v1": s60,
   "http.clip-review-state.v1": s61,
   "http.clip-review.v1": s62,
+  "http.job-control-command.v1": s63,
+  "http.job-control-result.v1": s64,
   "http.dataset-change.v1": s55,
   "http.input-read.v1": s44,
   "http.me.v1": s27,
