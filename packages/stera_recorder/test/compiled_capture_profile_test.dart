@@ -54,7 +54,7 @@ void main() {
       expect(arguments["rgbCodec"], codec);
       expect(arguments["h264SimulationMode"], simulation);
       expect(arguments["rgbVideoHeight"], simulation ? 480 : 1080);
-      expect(arguments["rgbHz"], 30);
+      expect(arguments["rgbHz"], codec == "jpeg" ? 15 : 30);
       expect(arguments["recordImu"], isTrue);
       expect(arguments["imuHz"], 100);
     } finally {

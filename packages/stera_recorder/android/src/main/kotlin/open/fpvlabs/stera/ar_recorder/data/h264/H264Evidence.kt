@@ -8,7 +8,7 @@ object H264Evidence {
     const val MAPPING_REVISION = "android_elapsed_to_unix_v1"
     /** SensorEvent clock of SA-53's independent raw motion (`MOTION_NATIVE_CLOCK_ID`). */
     const val MOTION_CLOCK = "android.elapsed_realtime"
-    /** One declared RGB calibration. Its values are not stored by this profile revision (SA-54 owns saved calibration). */
+    /** One declared RGB calibration. Values are persisted in the recording metadata sidecar (SA-54); the v1.1 Inventory carries only its state. */
     const val RGB_CALIBRATION = "rgb_arcore_image_intrinsics"
 
     /** Fixed elapsed-realtime to Unix anchor, bracketed by two elapsed readings around one wall-clock reading. */
@@ -58,7 +58,7 @@ object H264Evidence {
     )
 
     /** Inventory: RGB and independent raw motion with observed counts; depth is explicitly not recorded by this revision. */
-    fun inventory(plan: SensorPlan, acquiredFrames: Long, accelEvents: Long = 0, gyroEvents: Long = 0): Pair<List<Map<String, Any?>>, List<Map<String, Any?>>> {
+    fun inventory(plan: SensorPlan, acquiredFrames: Long, accelEvents: Long = 0, gyroEvents: Long = 0, calibrationState: String = "unknown"): Pair<List<Map<String, Any?>>, List<Map<String, Any?>>> {
         fun yn(value: Boolean) = if (value) "yes" else "no"
         fun absent(id: String, kind: String, requested: Boolean, supported: Boolean, reason: String) = mapOf(
             "sensor_id" to id, "kind" to kind, "requested" to yn(requested), "supported" to yn(supported),
@@ -78,7 +78,7 @@ object H264Evidence {
             motion("gyro", plan.gyroSupported, gyroEvents),
             absent("depth", "depth", plan.depthRequested, plan.depthSupported, "depth_not_in_profile_revision"),
         )
-        val calibrations = listOf(mapOf("calibration_id" to RGB_CALIBRATION, "stream_id" to "rgb", "state" to "unknown", "model" to "pinhole"))
+        val calibrations = listOf(mapOf("calibration_id" to RGB_CALIBRATION, "stream_id" to "rgb", "state" to calibrationState, "model" to "pinhole"))
         return sensors to calibrations
     }
 }

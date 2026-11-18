@@ -25,6 +25,7 @@ class ArRecordingConfigManager extends ChangeNotifier {
        _rgbCodec = rgbCodec ?? RgbVideoCodec.fromBuildValue(_buildRgbCodec),
        _h264SimulationMode =
            h264SimulationMode ?? _parseSimulationFlag(_buildSimulation) {
+    _rgbHz = _defaultRgbHz;
     if (_h264SimulationMode && _rgbCodec != RgbVideoCodec.h264) {
       throw ArgumentError(
         "STATEACTION_H264_SIMULATION requires STATEACTION_RGB_CODEC=h264",
@@ -106,7 +107,13 @@ class ArRecordingConfigManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  int _rgbHz = RecordingConfig.defaultSpatialHz;
+  int get _defaultRgbHz =>
+      defaultTargetPlatform == TargetPlatform.android &&
+          _rgbCodec == RgbVideoCodec.jpeg
+      ? 15
+      : RecordingConfig.defaultSpatialHz;
+
+  late int _rgbHz;
 
   /// RGB frame rate in Hz. Setting it also moves [depthHz] and [pointCloudHz]
   /// while [syncHz] is on.
@@ -341,11 +348,8 @@ class ArRecordingConfigManager extends ChangeNotifier {
       defaultValue: true,
     )!;
     _rgbHz = _sanitizeSpatialHz(
-      _prefs.get<int>(
-            RecorderPrefKeys.rgbHz,
-            defaultValue: RecordingConfig.defaultSpatialHz,
-          ) ??
-          RecordingConfig.defaultSpatialHz,
+      _prefs.get<int>(RecorderPrefKeys.rgbHz, defaultValue: _defaultRgbHz) ??
+          _defaultRgbHz,
     );
     _depthHz = _sanitizeSpatialHz(
       _prefs.get<int>(

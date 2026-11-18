@@ -6,6 +6,25 @@ import "package:stera_recorder/stera_recorder.dart";
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    "Android JPEG defaults to the supported rate and preserves saved requests",
+    () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final preferences = InMemoryRecorderPreferences();
+      final manager = ArRecordingConfigManager(
+        preferences: preferences,
+        rgbCodec: RgbVideoCodec.jpeg,
+      );
+      addTearDown(manager.dispose);
+      manager.loadPersistedToggles();
+      expect(manager.recordingConfig.toMap()["rgbHz"], 15);
+      manager.rgbHz = 30;
+      manager.loadPersistedToggles();
+      expect(manager.recordingConfig.toMap()["rgbHz"], 30);
+    },
+  );
+
   test("legacy configuration stays JPEG without simulation", () {
     final map = const RecordingConfig().toMap();
     expect(map["rgbCodec"], "jpeg");

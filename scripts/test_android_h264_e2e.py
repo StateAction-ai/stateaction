@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -80,6 +81,85 @@ def validate(files: list[Path], outcome: str, output: Path, name: str) -> dict:
             f"Independent validation failed for {name}: {run.stdout[-1500:]}{run.stderr[-800:]}"
         )
     return json.loads(run.stdout)
+
+
+def check_calibration(sessions: Path, receipt: dict, validated: dict) -> dict:
+    """Independently relates the persisted calibration to the decoded MCAP of the same take (ffprobe dimensions)."""
+    by_path = {Path(f["path"]).parent.name: f for f in validated["files"]}
+    checked = []
+    for take in receipt["takes"]:
+        metadata = json.loads(
+            (sessions / take["directory"] / "metadata.json").read_text()
+        )
+        calibration = metadata["saved_calibration"]
+        decoded = by_path[take["directory"]]
+        stream = decoded["decode"]["stream"]
+        revision = calibration["revisions"][0]
+        k = revision["intrinsics"]
+        source = revision["source_intrinsics"]
+        inventory = decoded["inventory_calibrations"]
+        problems = []
+        if calibration["state"] != "yes" or inventory[0]["state"] != "yes":
+            problems.append("calibration state is not yes")
+        if (calibration["encoded_width"], calibration["encoded_height"]) != (
+            stream["width"],
+            stream["height"],
+        ):
+            problems.append("persisted encoded size differs from ffprobe")
+        if (k["imageWidth"], k["imageHeight"]) != (stream["width"], stream["height"]):
+            problems.append("K image size differs from decoded raster")
+        if not (
+            0 < k["principalPointX"] < stream["width"]
+            and 0 < k["principalPointY"] < stream["height"]
+        ):
+            problems.append("principal point outside the decoded raster")
+        if (
+            revision["K_3x3_row_major"][0] != k["focalLengthX"]
+            or revision["P_3x4_row_major"][5] != k["focalLengthY"]
+        ):
+            problems.append("K/P do not match intrinsics")
+        if (
+            not revision["saved_raster"]["is_identity"]
+            or source.keys() != k.keys()
+            or any(
+                not math.isclose(source[key], k[key], rel_tol=1e-7, abs_tol=1e-7)
+                for key in k
+            )
+        ):
+            problems.append(
+                "source and saved calibration differ for an identity raster"
+            )
+        if calibration["accepted_frames"] != decoded["acquired_frames"]:
+            problems.append("accepted calibration frames differ from acquired frames")
+        if calibration["rejected_frames"]:
+            problems.append("rejected calibration frames")
+        settings = metadata["capture_settings"]
+        if settings["requested"]["imu_hz"] != take["requested_imu_hz"]:
+            problems.append("requested IMU rate not persisted")
+        if problems:
+            raise RuntimeError(
+                f"Calibration cross-check failed for {take['directory']}: {problems}"
+            )
+        checked.append(
+            {
+                "directory": take["directory"],
+                "ffprobe_size": [stream["width"], stream["height"]],
+                "K": k,
+                "pose_events": decoded["pose_events"],
+                "tracking_states": decoded["tracking_states"],
+                "motion_events": decoded["close"]["motion_events"],
+                "capture_settings": settings,
+                "pose_missing_but_rgb_continued": decoded["pose_events"][
+                    "invalid_with_written_rgb"
+                ]
+                > 0,
+            }
+        )
+    if not any(
+        f["pose_events"]["invalid_with_written_rgb"] for f in validated["files"]
+    ):
+        raise RuntimeError("No written RGB frame was associated with an invalid pose")
+    return {"takes": checked}
 
 
 def main() -> None:
@@ -167,7 +247,11 @@ def main() -> None:
         + "\n"
     )
     receipts = {}
-    for name in ("h264-lifecycle-result.json", "h264-failure-result.json"):
+    for name in (
+        "h264-lifecycle-result.json",
+        "h264-failure-result.json",
+        "h264-calibration-result.json",
+    ):
         text = device.adb(
             "exec-out",
             "run-as",
@@ -180,7 +264,7 @@ def main() -> None:
         )
         (output / name).write_text(text + "\n")
         receipts[name] = json.loads(text)
-    if not re.search(r"OK \(2 tests\)", log) or "FAILURES!!!" in log:
+    if not re.search(r"OK \(3 tests\)", log) or "FAILURES!!!" in log:
         raise RuntimeError(
             f"Actual recorder instrumentation failed; inspect {output / 'instrumentation.log'}"
         )
@@ -216,8 +300,12 @@ def main() -> None:
         text=True,
     )
     (output / "validator-startup-failure.json").write_text(startup_run.stdout)
+    calibration = check_calibration(
+        sessions, receipts["h264-calibration-result.json"], results["completed"]
+    )
     receipt = {
         "status": "passed_native_controller_emulator",
+        "calibration_cross_check": calibration,
         "emulator": args.serial,
         "personalUser": 0,
         "install": install,

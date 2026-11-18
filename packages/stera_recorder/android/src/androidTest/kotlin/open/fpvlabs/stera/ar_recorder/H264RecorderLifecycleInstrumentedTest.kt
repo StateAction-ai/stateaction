@@ -190,6 +190,67 @@ class H264RecorderLifecycleInstrumentedTest {
         }
     }
 
+    /** SA-54: unusable saved settings fail before any side effect; a real take persists requested vs effective
+     * settings and the saved-pixel calibration of the raster the codec actually emitted. */
+    @Test fun invalidSettingsAreRefusedBeforeSideEffectsAndTakePersistsActualCalibration() {
+        requireEmulator()
+        val activity = launch(faults = false)
+        val recorder = activity.recorder
+        val receipt = JSONObject().put("fixture_kind", "existing_recorder_arcore_emulator_simulation")
+            .put("hardware_qualified", false).put("takes", JSONArray()).put("rejections", JSONArray())
+        try {
+            ready(recorder)
+            val sessions = File(activity.getExternalFilesDir(null), "ar_sessions")
+            val before = sessions.list()?.toSet().orEmpty()
+            val invalid = mapOf(
+                // Flutter's default 1080p30 request on the legacy CPU JPEG profile: no hidden 15 Hz fallback.
+                "legacy_cpu_profile_30hz" to mapOf("rgbCodec" to "jpeg", "rgbHz" to 30, "rgbVideoHeight" to 1080),
+                "unsupported_simulation_raster" to (config + ("rgbVideoHeight" to 720)),
+                "conflicting_rate_aliases" to (config + ("rgbHz" to 15)),
+                "unsupported_imu_rate" to (config + ("imuHz" to 200)),
+                "rgb_disabled" to (config + ("recordRgb" to false)),
+                "raw_imu_disabled" to (config + ("recordImu" to false)),
+                "non_boolean_toggle" to (config + ("recordDepth" to "yes")))
+            for ((name, settings) in invalid) {
+                val result = recorder.startRecording(settings)
+                assertEquals("$name: $result", false, result["success"])
+                assertEquals("$name: $result", "INVALID_CAPTURE_SETTINGS", result["errorCode"])
+                assertEquals("READY", recorder.getRecordingState()["state"])
+                assertEquals("$name created files", before, sessions.list()?.toSet().orEmpty())
+                receipt.getJSONArray("rejections").put(JSONObject().put("case", name).put("error", result["error"]))
+            }
+            // A valid take that asks for streams this profile revision cannot deliver and a non-default IMU rate.
+            val requested = config + mapOf("imuHz" to 50, "recordDepth" to true, "recordPointCloud" to true, "recordMesh" to true)
+            val start = recorder.startRecording(requested)
+            assertEquals(start.toString(), true, start["success"])
+            @Suppress("UNCHECKED_CAST") val startSettings = start["captureSettings"] as Map<String, Any?>
+            @Suppress("UNCHECKED_CAST") val deviations = startSettings["deviations"] as List<String>
+            assertTrue(deviations.toString(), deviations.contains("mesh_not_recorded_by_android_capture"))
+            SystemClock.sleep(5000)
+            val stop = recorder.stopRecording()
+            assertEquals(stop.toString(), true, stop["success"])
+            assertTrue("No actual frames: $stop", (stop["framesRecorded"] as Number).toInt() > 10)
+            val result = take(stop, "settings_and_calibration").put("requested_imu_hz", 50)
+            assertEquals("completed", result.getString("capture_outcome"))
+            val metadata = JSONObject(File(stop["outputDirectory"] as String, "metadata.json").readText())
+            val calibration = metadata.getJSONObject("saved_calibration")
+            assertEquals("yes", calibration.getString("state"))
+            assertEquals(640, calibration.getInt("encoded_width")); assertEquals(480, calibration.getInt("encoded_height"))
+            assertTrue(calibration.getBoolean("encoded_dimensions_match_saved_raster"))
+            assertEquals(0, calibration.getInt("rejected_frames"))
+            val settings = metadata.getJSONObject("capture_settings")
+            assertEquals(50, settings.getJSONObject("requested").getInt("imu_hz"))
+            assertFalse(settings.getJSONObject("effective").getBoolean("record_depth"))
+            assertEquals("h264_mcap_simulation_v1", settings.getString("profile"))
+            receipt.getJSONArray("takes").put(result)
+            receipt.put("status", "passed")
+        } finally {
+            File(instrumentation.context.filesDir, "h264-calibration-result.json").writeText(receipt.toString(2))
+            recorder.disposeSession()
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     @Test fun startupAndWriterFailuresFinalizeExplicitlyAndAllowRetry() {
         requireEmulator()
         val activity = launch(faults = true)
