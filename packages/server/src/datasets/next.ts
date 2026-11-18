@@ -107,6 +107,8 @@ export function datasetRouteHandlers(get: () => AuthRuntime = authRuntime) {
     readDatasetClip: guarded((r) => r.readDatasetClip),
     listClips: guarded((r) => r.listClips),
     getClip: guarded((r) => r.getClip),
+    getClipReview: guarded((r) => r.getClipReview),
+    commitClipReview: guarded((r) => r.commitClipReview),
     readClip: guarded((r) => r.readClip),
   };
 }

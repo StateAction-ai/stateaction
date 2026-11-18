@@ -16,6 +16,11 @@ import {
   renameDatasetRecord,
 } from "./mutations.js";
 import {
+  commitClipReview,
+  getClipReviewState,
+  type ClipReviewCommand,
+} from "./review.js";
+import {
   getClip,
   getDataset,
   listDatasetClips,
@@ -39,6 +44,8 @@ import {
  *   GET    /api/v1/clips                                  staff (All clips)
  *   GET    /api/v1/clips/{clipId}                         staff, customer*
  *   POST   /api/v1/clips/{clipId}/reads                   staff, customer*
+ *   GET    /api/v1/clips/{clipId}/review                  staff (review state)
+ *   POST   /api/v1/clips/{clipId}/review                  staff (atomic review command)
  *  (* customers: authorized through any dataset currently granted to them)
  *
  * Authentication is injected: production binds the Better Auth session guard
@@ -410,6 +417,30 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
           clipId: pathId(clipId, "clipId"),
         }),
       })),
+    getClipReview: (request: Request, clipId: string) =>
+      run(request, "staff", async (p) => {
+        readQuery(request, []);
+        return {
+          data: await getClipReviewState(pool, {
+            viewerUserId: p.userId,
+            clipId: pathId(clipId, "clipId"),
+          }),
+        };
+      }),
+    commitClipReview: (request: Request, clipId: string) =>
+      run(request, "staff", async (p) => {
+        const id = pathId(clipId, "clipId");
+        const body = await readContract<ClipReviewCommand>(
+          request,
+          "http.clip-review-command.v1",
+        );
+        const out = await commitClipReview(pool, {
+          clipId: id,
+          reviewerUserId: p.userId,
+          command: body,
+        });
+        return { status: out.replayed ? 200 : 201, data: out.review };
+      }),
     readClip: (request: Request, clipId: string) =>
       run(request, "member", (p) => read(p, request, pathId(clipId, "clipId"))),
   };

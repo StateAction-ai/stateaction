@@ -49,7 +49,7 @@ class _Entry {
   final List<Rule> rules;
 }
 
-/// Validators built from the current catalog (api/catalog.v9.json, an exact
+/// Validators built from the current catalog (api/catalog.v10.json, an exact
 /// superset of the immutable catalog.v8.json, catalog.v7.json, catalog.v6.json, catalog.v5.json, catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json) and the
 /// schema documents it lists.
 /// [readSchema] receives catalog-relative paths (for example `http/x.v1.schema.json`).
@@ -127,6 +127,46 @@ class ContractRegistry {
         (a is num && found is num && a == found),
   );
 
+  /// json_schema 5.2.2 locates a propertyNames error at the named child,
+  /// while the shared adapters also report the containing object. Keep the
+  /// dependency's precise errors and add that container location; validation
+  /// decisions and frozen schema documents are unchanged.
+  Iterable<ContractError> _propertyNameLocations(
+    JsonSchema schema,
+    Object? value,
+    String path,
+    int depth,
+  ) sync* {
+    if (depth >= _maxDepth) return;
+    if (value is Map<String, Object?>) {
+      final names = schema.propertyNamesSchema;
+      if (names != null &&
+          value.keys.any((name) => !names.validate(name).isValid)) {
+        yield ContractError(path, 'Invalid property name.');
+      }
+      for (final entry in value.entries) {
+        final child = schema.properties[entry.key];
+        if (child == null) continue;
+        final key = entry.key.replaceAll('~', '~0').replaceAll('/', '~1');
+        yield* _propertyNameLocations(
+          child,
+          entry.value,
+          '$path/$key',
+          depth + 1,
+        );
+      }
+    } else if (value is List<Object?>) {
+      final tuple = schema.itemsList;
+      for (var i = 0; i < value.length; i++) {
+        final child =
+            schema.items ??
+            (tuple != null && i < tuple.length ? tuple[i] : null);
+        if (child == null) continue;
+        yield* _propertyNameLocations(child, value[i], '$path/$i', depth + 1);
+      }
+    }
+  }
+
   ValidationResult validateValue(String contract, Object? value) {
     final entry = _entry(contract);
     if (!_wellFormed(value, 0)) return ValidationResult.fail('malformed_json');
@@ -144,6 +184,7 @@ class ContractRegistry {
     if (!report.isValid) {
       return ValidationResult.schema([
         for (final e in report.errors) ContractError(e.instancePath, e.message),
+        ..._propertyNameLocations(entry.schema, value, '', 0),
       ]);
     }
     for (final rule in entry.rules) {

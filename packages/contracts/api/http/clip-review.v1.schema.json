@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/clip-review.v1.json",
+  "title": "Clip review result v1",
+  "description": "Data payload of POST /api/v1/clips/{clipId}/review (staff only): the stored review revision. 201 when created, 200 on an identical replay (no new revision). Re-read the review state for resulting memberships and dataset revisions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reviewId",
+    "clipId",
+    "jobId",
+    "resultManifestSha256",
+    "revision",
+    "decision",
+    "taskLabel",
+    "notes",
+    "datasetSelection",
+    "createdAt"
+  ],
+  "properties": {
+    "reviewId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clipId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "resultManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "decision": { "enum": ["approved", "rejected"] },
+    "taskLabel": { "type": ["string", "null"], "maxLength": 200 },
+    "notes": { "type": ["string", "null"], "maxLength": 4000 },
+    "datasetSelection": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["datasetIds", "expectedRevisions"],
+      "properties": {
+        "datasetIds": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          }
+        },
+        "expectedRevisions": {
+          "type": "object",
+          "maxProperties": 200,
+          "propertyNames": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  }
+}
