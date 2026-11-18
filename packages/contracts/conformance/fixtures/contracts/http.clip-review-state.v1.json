@@ -1,0 +1,1002 @@
+{
+  "contract": "http.clip-review-state.v1",
+  "cases": [
+    {
+      "name": "unreviewed legacy clip",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "not_evaluated",
+            "checks": []
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "reviewed with membership",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "not_evaluated",
+            "checks": []
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 1,
+            "decision": "approved",
+            "taskLabel": "pour",
+            "notes": "n",
+            "reviewedAt": "2026-11-02T14:00:00.123456Z"
+          },
+          "history": [
+            {
+              "revision": 1,
+              "decision": "approved",
+              "taskLabel": "pour",
+              "notes": "n",
+              "reviewedAt": "2026-11-02T14:00:00.123456Z"
+            }
+          ],
+          "memberships": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 3,
+              "addedAt": "2026-11-02T14:00:00.123456Z"
+            }
+          ],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "evaluated checks keep measured",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "evaluated",
+            "checks": [
+              {
+                "id": "hand_detection_summary",
+                "status": "measured",
+                "ruleRevision": 1,
+                "measurements": {
+                  "frames_with_hand": "12"
+                }
+              },
+              {
+                "id": "frame_gap",
+                "status": "fail"
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "sixty-four checks",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "evaluated",
+            "checks": [
+              {
+                "id": "c_0",
+                "status": "pass"
+              },
+              {
+                "id": "c_1",
+                "status": "pass"
+              },
+              {
+                "id": "c_2",
+                "status": "pass"
+              },
+              {
+                "id": "c_3",
+                "status": "pass"
+              },
+              {
+                "id": "c_4",
+                "status": "pass"
+              },
+              {
+                "id": "c_5",
+                "status": "pass"
+              },
+              {
+                "id": "c_6",
+                "status": "pass"
+              },
+              {
+                "id": "c_7",
+                "status": "pass"
+              },
+              {
+                "id": "c_8",
+                "status": "pass"
+              },
+              {
+                "id": "c_9",
+                "status": "pass"
+              },
+              {
+                "id": "c_10",
+                "status": "pass"
+              },
+              {
+                "id": "c_11",
+                "status": "pass"
+              },
+              {
+                "id": "c_12",
+                "status": "pass"
+              },
+              {
+                "id": "c_13",
+                "status": "pass"
+              },
+              {
+                "id": "c_14",
+                "status": "pass"
+              },
+              {
+                "id": "c_15",
+                "status": "pass"
+              },
+              {
+                "id": "c_16",
+                "status": "pass"
+              },
+              {
+                "id": "c_17",
+                "status": "pass"
+              },
+              {
+                "id": "c_18",
+                "status": "pass"
+              },
+              {
+                "id": "c_19",
+                "status": "pass"
+              },
+              {
+                "id": "c_20",
+                "status": "pass"
+              },
+              {
+                "id": "c_21",
+                "status": "pass"
+              },
+              {
+                "id": "c_22",
+                "status": "pass"
+              },
+              {
+                "id": "c_23",
+                "status": "pass"
+              },
+              {
+                "id": "c_24",
+                "status": "pass"
+              },
+              {
+                "id": "c_25",
+                "status": "pass"
+              },
+              {
+                "id": "c_26",
+                "status": "pass"
+              },
+              {
+                "id": "c_27",
+                "status": "pass"
+              },
+              {
+                "id": "c_28",
+                "status": "pass"
+              },
+              {
+                "id": "c_29",
+                "status": "pass"
+              },
+              {
+                "id": "c_30",
+                "status": "pass"
+              },
+              {
+                "id": "c_31",
+                "status": "pass"
+              },
+              {
+                "id": "c_32",
+                "status": "pass"
+              },
+              {
+                "id": "c_33",
+                "status": "pass"
+              },
+              {
+                "id": "c_34",
+                "status": "pass"
+              },
+              {
+                "id": "c_35",
+                "status": "pass"
+              },
+              {
+                "id": "c_36",
+                "status": "pass"
+              },
+              {
+                "id": "c_37",
+                "status": "pass"
+              },
+              {
+                "id": "c_38",
+                "status": "pass"
+              },
+              {
+                "id": "c_39",
+                "status": "pass"
+              },
+              {
+                "id": "c_40",
+                "status": "pass"
+              },
+              {
+                "id": "c_41",
+                "status": "pass"
+              },
+              {
+                "id": "c_42",
+                "status": "pass"
+              },
+              {
+                "id": "c_43",
+                "status": "pass"
+              },
+              {
+                "id": "c_44",
+                "status": "pass"
+              },
+              {
+                "id": "c_45",
+                "status": "pass"
+              },
+              {
+                "id": "c_46",
+                "status": "pass"
+              },
+              {
+                "id": "c_47",
+                "status": "pass"
+              },
+              {
+                "id": "c_48",
+                "status": "pass"
+              },
+              {
+                "id": "c_49",
+                "status": "pass"
+              },
+              {
+                "id": "c_50",
+                "status": "pass"
+              },
+              {
+                "id": "c_51",
+                "status": "pass"
+              },
+              {
+                "id": "c_52",
+                "status": "pass"
+              },
+              {
+                "id": "c_53",
+                "status": "pass"
+              },
+              {
+                "id": "c_54",
+                "status": "pass"
+              },
+              {
+                "id": "c_55",
+                "status": "pass"
+              },
+              {
+                "id": "c_56",
+                "status": "pass"
+              },
+              {
+                "id": "c_57",
+                "status": "pass"
+              },
+              {
+                "id": "c_58",
+                "status": "pass"
+              },
+              {
+                "id": "c_59",
+                "status": "pass"
+              },
+              {
+                "id": "c_60",
+                "status": "pass"
+              },
+              {
+                "id": "c_61",
+                "status": "pass"
+              },
+              {
+                "id": "c_62",
+                "status": "pass"
+              },
+              {
+                "id": "c_63",
+                "status": "pass"
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "sixty-five checks",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "evaluated",
+            "checks": [
+              {
+                "id": "c_0",
+                "status": "pass"
+              },
+              {
+                "id": "c_1",
+                "status": "pass"
+              },
+              {
+                "id": "c_2",
+                "status": "pass"
+              },
+              {
+                "id": "c_3",
+                "status": "pass"
+              },
+              {
+                "id": "c_4",
+                "status": "pass"
+              },
+              {
+                "id": "c_5",
+                "status": "pass"
+              },
+              {
+                "id": "c_6",
+                "status": "pass"
+              },
+              {
+                "id": "c_7",
+                "status": "pass"
+              },
+              {
+                "id": "c_8",
+                "status": "pass"
+              },
+              {
+                "id": "c_9",
+                "status": "pass"
+              },
+              {
+                "id": "c_10",
+                "status": "pass"
+              },
+              {
+                "id": "c_11",
+                "status": "pass"
+              },
+              {
+                "id": "c_12",
+                "status": "pass"
+              },
+              {
+                "id": "c_13",
+                "status": "pass"
+              },
+              {
+                "id": "c_14",
+                "status": "pass"
+              },
+              {
+                "id": "c_15",
+                "status": "pass"
+              },
+              {
+                "id": "c_16",
+                "status": "pass"
+              },
+              {
+                "id": "c_17",
+                "status": "pass"
+              },
+              {
+                "id": "c_18",
+                "status": "pass"
+              },
+              {
+                "id": "c_19",
+                "status": "pass"
+              },
+              {
+                "id": "c_20",
+                "status": "pass"
+              },
+              {
+                "id": "c_21",
+                "status": "pass"
+              },
+              {
+                "id": "c_22",
+                "status": "pass"
+              },
+              {
+                "id": "c_23",
+                "status": "pass"
+              },
+              {
+                "id": "c_24",
+                "status": "pass"
+              },
+              {
+                "id": "c_25",
+                "status": "pass"
+              },
+              {
+                "id": "c_26",
+                "status": "pass"
+              },
+              {
+                "id": "c_27",
+                "status": "pass"
+              },
+              {
+                "id": "c_28",
+                "status": "pass"
+              },
+              {
+                "id": "c_29",
+                "status": "pass"
+              },
+              {
+                "id": "c_30",
+                "status": "pass"
+              },
+              {
+                "id": "c_31",
+                "status": "pass"
+              },
+              {
+                "id": "c_32",
+                "status": "pass"
+              },
+              {
+                "id": "c_33",
+                "status": "pass"
+              },
+              {
+                "id": "c_34",
+                "status": "pass"
+              },
+              {
+                "id": "c_35",
+                "status": "pass"
+              },
+              {
+                "id": "c_36",
+                "status": "pass"
+              },
+              {
+                "id": "c_37",
+                "status": "pass"
+              },
+              {
+                "id": "c_38",
+                "status": "pass"
+              },
+              {
+                "id": "c_39",
+                "status": "pass"
+              },
+              {
+                "id": "c_40",
+                "status": "pass"
+              },
+              {
+                "id": "c_41",
+                "status": "pass"
+              },
+              {
+                "id": "c_42",
+                "status": "pass"
+              },
+              {
+                "id": "c_43",
+                "status": "pass"
+              },
+              {
+                "id": "c_44",
+                "status": "pass"
+              },
+              {
+                "id": "c_45",
+                "status": "pass"
+              },
+              {
+                "id": "c_46",
+                "status": "pass"
+              },
+              {
+                "id": "c_47",
+                "status": "pass"
+              },
+              {
+                "id": "c_48",
+                "status": "pass"
+              },
+              {
+                "id": "c_49",
+                "status": "pass"
+              },
+              {
+                "id": "c_50",
+                "status": "pass"
+              },
+              {
+                "id": "c_51",
+                "status": "pass"
+              },
+              {
+                "id": "c_52",
+                "status": "pass"
+              },
+              {
+                "id": "c_53",
+                "status": "pass"
+              },
+              {
+                "id": "c_54",
+                "status": "pass"
+              },
+              {
+                "id": "c_55",
+                "status": "pass"
+              },
+              {
+                "id": "c_56",
+                "status": "pass"
+              },
+              {
+                "id": "c_57",
+                "status": "pass"
+              },
+              {
+                "id": "c_58",
+                "status": "pass"
+              },
+              {
+                "id": "c_59",
+                "status": "pass"
+              },
+              {
+                "id": "c_60",
+                "status": "pass"
+              },
+              {
+                "id": "c_61",
+                "status": "pass"
+              },
+              {
+                "id": "c_62",
+                "status": "pass"
+              },
+              {
+                "id": "c_63",
+                "status": "pass"
+              },
+              {
+                "id": "c_64",
+                "status": "pass"
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "not_evaluated carries no checks",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "not_evaluated",
+            "checks": [
+              {
+                "id": "a",
+                "status": "pass"
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "measurements are decimal strings",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "evaluated",
+            "checks": [
+              {
+                "id": "a",
+                "status": "measured",
+                "measurements": {
+                  "n": 1.5
+                }
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "raw message is not a field",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "evaluated",
+            "checks": [
+              {
+                "id": "a",
+                "status": "pass",
+                "message": "/srv/x"
+              }
+            ]
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "no internal identity",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "not_evaluated",
+            "checks": []
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "membershipsTruncated": false,
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false,
+          "reviewerUserId": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "truncation flag required",
+      "input": {
+        "document": {
+          "qualityChecks": {
+            "status": "not_evaluated",
+            "checks": []
+          },
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "current": true,
+          "capabilities": {
+            "canReview": true
+          },
+          "review": {
+            "revision": 0,
+            "decision": null,
+            "taskLabel": null,
+            "notes": null,
+            "reviewedAt": null
+          },
+          "history": [],
+          "memberships": [],
+          "availableDatasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen",
+              "revision": 2,
+              "member": false,
+              "shared": false
+            }
+          ],
+          "availableDatasetsTruncated": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}

@@ -535,84 +535,278 @@ export type ReviewInput = {
   notes?: string;
   datasetSelection?: DatasetSelection;
 };
+export type ReviewRecord = {
+  reviewId: string;
+  clipId: string;
+  jobId: string;
+  resultManifestSha256: string;
+  revision: number;
+  decision: "approved" | "rejected";
+  taskLabel: string | null;
+  notes: string | null;
+  datasetSelection: DatasetSelection | null;
+  createdAt: string;
+};
+export const MAX_TASK_LABEL = 200;
+export const MAX_NOTES = 4000;
+const LOCK_TIMEOUT = "5s";
+
+type ReviewRow = {
+  id: string;
+  clip_id: string;
+  job_id: string;
+  result_manifest_sha256: string;
+  revision: number;
+  reviewer_user_id: string;
+  decision: "approved" | "rejected";
+  task_label: string | null;
+  notes: string | null;
+  dataset_selection: DatasetSelection | null;
+  created_at: string;
+};
+const canonicalSelection = (s: DatasetSelection | null | undefined) =>
+  s
+    ? JSON.stringify({
+        d: [...s.datasetIds].sort(),
+        r: Object.entries(s.expectedRevisions).sort(([a], [b]) =>
+          a < b ? -1 : a > b ? 1 : 0,
+        ),
+      })
+    : null;
+
 /**
- * Appends a review revision. Approval applies an optional complete desired
- * membership set atomically; rejection removes all working memberships and
- * advances each affected dataset revision. Validation precedes any write.
+ * Appends a review revision atomically with its dataset membership effect.
+ * Approval applies an optional complete desired membership set (omitted
+ * preserves existing memberships; an explicit empty set clears them all);
+ * rejection (also the withdrawal of an approval) removes every working
+ * membership. Every affected dataset advances exactly once. All validation
+ * and every staleness check precedes any write, and any failure rolls back
+ * the review, memberships and revisions together.
+ *
+ * Lock order: staff role, clip lock, (replay lookup), dataset rows sorted by
+ * UUID FOR UPDATE, recipient evidence FOR SHARE (inside dataset_sharing_ok).
+ * `reviewId` is the idempotency key: an identical replay by the same reviewer
+ * returns the stored review without a new revision; a different body under
+ * the same id is an idempotency conflict.
  */
-export async function appendReview(pool: Queryable, input: ReviewInput) {
-  const selection =
-    input.decision === "approved" && input.datasetSelection
-      ? sortedUnique(input.datasetSelection.datasetIds, "datasetIds")
-      : undefined;
-  if (input.decision === "approved" && !input.taskLabel?.trim())
+export async function appendReview(
+  pool: Queryable,
+  input: ReviewInput,
+): Promise<{
+  revision: number;
+  added: string[];
+  removed: string[];
+  review: ReviewRecord;
+  replayed: boolean;
+}> {
+  const clipId = uuid(input.clipId, "clipId");
+  const reviewId = uuid(input.reviewId, "reviewId");
+  uuid(input.jobId, "jobId");
+  if (!SHA.test(input.resultManifestSha256))
+    throw new CatalogError("invalid_request", "resultManifestSha256 invalid");
+  if (
+    !Number.isInteger(input.expectedRevision) ||
+    input.expectedRevision < 0 ||
+    input.expectedRevision >= 2147483647
+  )
+    throw new CatalogError("invalid_request", "expectedRevision invalid");
+  const taskLabel = input.taskLabel?.trim() || null;
+  const notes = input.notes?.trim() ? input.notes : null;
+  if (taskLabel && taskLabel.length > MAX_TASK_LABEL)
+    throw new CatalogError("invalid_request", "Task label is too long");
+  if (notes && notes.length > MAX_NOTES)
+    throw new CatalogError("invalid_request", "Notes are too long");
+  if (input.decision === "approved" && !taskLabel)
     throw new CatalogError("invalid_request", "Approval requires a task label");
+  if (input.decision === "rejected" && input.datasetSelection)
+    throw new CatalogError(
+      "invalid_request",
+      "A rejection carries no dataset selection",
+    );
+  const selection = input.datasetSelection
+    ? sortedUnique(input.datasetSelection.datasetIds, "datasetIds")
+    : undefined;
+  const expected = input.datasetSelection?.expectedRevisions ?? {};
+  for (const [id, revision] of Object.entries(expected)) {
+    uuid(id, "expectedRevisions key");
+    if (!Number.isInteger(revision) || revision < 1)
+      throw new CatalogError("invalid_request", "expectedRevisions invalid");
+  }
+  const storedSelection: DatasetSelection | null = selection
+    ? {
+        datasetIds: selection,
+        expectedRevisions: Object.fromEntries(
+          Object.entries(expected).sort(([a], [b]) => (a < b ? -1 : 1)),
+        ),
+      }
+    : null;
+  const record = (row: ReviewRow): ReviewRecord => ({
+    reviewId: row.id,
+    clipId: row.clip_id,
+    jobId: row.job_id,
+    resultManifestSha256: row.result_manifest_sha256,
+    revision: row.revision,
+    decision: row.decision,
+    taskLabel: row.task_label,
+    notes: row.notes,
+    datasetSelection: row.dataset_selection,
+    createdAt: row.created_at,
+  });
+  const COLUMNS = `id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id,
+    decision, task_label, notes, dataset_selection,
+    to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`;
+
   return inTransaction(pool, async (tx) => {
+    await tx.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
     await requireRole(tx, input.reviewerUserId, "staff");
-    await lockClips(tx, [uuid(input.clipId, "clipId")]);
+    await lockClips(tx, [clipId]);
+
+    // Idempotent replay (append-only rows are stable once visible).
+    const prior = (
+      await tx.query<ReviewRow>(
+        `SELECT ${COLUMNS} FROM reviews WHERE id = $1`,
+        [reviewId],
+      )
+    ).rows[0];
+    if (prior) {
+      if (
+        prior.clip_id !== clipId ||
+        prior.reviewer_user_id !== input.reviewerUserId ||
+        prior.job_id !== input.jobId ||
+        prior.result_manifest_sha256 !== input.resultManifestSha256 ||
+        prior.revision !== input.expectedRevision + 1 ||
+        prior.decision !== input.decision ||
+        prior.task_label !== taskLabel ||
+        prior.notes !== notes ||
+        canonicalSelection(prior.dataset_selection) !==
+          canonicalSelection(storedSelection)
+      )
+        throw new CatalogError(
+          "idempotency_conflict",
+          "reviewId was already used with a different request",
+        );
+      return {
+        revision: prior.revision,
+        added: [],
+        removed: [],
+        review: record(prior),
+        replayed: true,
+      };
+    }
+
+    const clip = await tx.query(
+      "SELECT 1 FROM clips WHERE id = $1 AND job_id = $2",
+      [clipId, input.jobId],
+    );
+    if (!clip.rowCount) {
+      const exists = await tx.query("SELECT 1 FROM clips WHERE id = $1", [
+        clipId,
+      ]);
+      throw exists.rowCount
+        ? new CatalogError("conflict", "Clip result identity changed")
+        : new CatalogError("not_found", "Clip not found");
+    }
     const latest = await tx.query<{ revision: number | null }>(
       "SELECT max(revision) AS revision FROM reviews WHERE clip_id = $1",
-      [input.clipId],
+      [clipId],
     );
     if ((latest.rows[0]?.revision ?? 0) !== input.expectedRevision)
       throw new CatalogError("conflict", "Stale review revision");
+    const currentResult = await tx.query(
+      `SELECT 1 FROM clips c
+       JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
+         AND j.result_manifest_sha256 = $3
+       JOIN recordings rec ON rec.id = c.recording_id
+         AND rec.current_job_id = c.job_id AND rec.deleted_at IS NULL
+       WHERE c.id = $1 AND c.job_id = $2`,
+      [clipId, input.jobId, input.resultManifestSha256],
+    );
+    if (!currentResult.rowCount) {
+      const identity = await tx.query(
+        "SELECT 1 FROM jobs WHERE id = $1 AND result_manifest_sha256 = $2",
+        [input.jobId, input.resultManifestSha256],
+      );
+      if (!identity.rowCount)
+        throw new CatalogError(
+          "invalid_request",
+          "Job and result manifest hash do not identify a result",
+        );
+      throw new CatalogError(
+        "conflict",
+        "This is no longer the recording's current accepted result",
+      );
+    }
+
     const current = (
       await tx.query<{ dataset_id: string }>(
         "SELECT dataset_id FROM dataset_clips WHERE clip_id = $1",
-        [input.clipId],
+        [clipId],
       )
     ).rows.map((r) => r.dataset_id);
-    const affected =
-      input.decision === "approved"
-        ? selection
-          ? [...new Set([...current, ...selection])]
-          : []
-        : current;
+    const approved = input.decision === "approved";
+    const desired = approved && selection ? selection : undefined;
+    const affected = !approved
+      ? current
+      : desired
+        ? [...new Set([...current, ...desired])]
+        : [];
     const revisions = await lockDatasets(tx, affected);
-    if (selection)
-      for (const id of affected)
-        if (input.datasetSelection?.expectedRevisions[id] !== revisions.get(id))
-          throw new CatalogError("conflict", "Stale dataset revision");
-    const removals =
-      input.decision === "approved"
-        ? selection
-          ? current.filter((id) => !selection.includes(id))
-          : []
-        : current;
-    const additions = selection
-      ? selection.filter((id) => !current.includes(id))
+    if (desired) {
+      const keys = Object.keys(expected);
+      if (
+        keys.length !== affected.length ||
+        affected.some((id) => expected[id] !== revisions.get(id))
+      )
+        throw new CatalogError("conflict", "Stale dataset revision");
+    }
+    const removals = !approved
+      ? current
+      : desired
+        ? current.filter((id) => !desired.includes(id))
+        : [];
+    const additions = desired
+      ? desired.filter((id) => !current.includes(id))
       : [];
+    // Same predicate the member-add trigger enforces (SAC05), checked first
+    // for a precise refusal before any write.
+    for (const id of additions) {
+      const ok = await tx.query<{ ok: boolean }>(
+        "SELECT public.dataset_sharing_ok($1, $2) AS ok",
+        [id, clipId],
+      );
+      if (!ok.rows[0]?.ok)
+        throw new CatalogError(
+          "forbidden",
+          "A dataset is shared: every enabled recipient needs active sharing permission clearing this clip before it is added",
+        );
+    }
     for (const id of removals)
       await tx.query(
         "DELETE FROM dataset_clips WHERE dataset_id = $1 AND clip_id = $2",
-        [id, input.clipId],
+        [id, clipId],
       );
-    await tx.query(
+    const inserted = await tx.query<ReviewRow>(
       `INSERT INTO reviews (id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id,
          decision, task_label, notes, dataset_selection)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING ${COLUMNS}`,
       [
-        uuid(input.reviewId, "reviewId"),
-        input.clipId,
+        reviewId,
+        clipId,
         input.jobId,
         input.resultManifestSha256,
         input.expectedRevision + 1,
         input.reviewerUserId,
         input.decision,
-        input.taskLabel?.trim() ?? null,
-        input.notes ?? null,
-        input.decision === "approved" && input.datasetSelection
-          ? {
-              datasetIds: selection,
-              expectedRevisions: input.datasetSelection.expectedRevisions,
-            }
-          : null,
+        taskLabel,
+        notes,
+        approved ? storedSelection : null,
       ],
     );
     for (const id of additions)
       await tx.query(
         "INSERT INTO dataset_clips (dataset_id, clip_id, added_by) VALUES ($1, $2, $3)",
-        [id, input.clipId, input.reviewerUserId],
+        [id, clipId, input.reviewerUserId],
       );
     for (const id of [...removals, ...additions].sort())
       await bumpDataset(tx, id, input.reviewerUserId);
@@ -620,6 +814,8 @@ export async function appendReview(pool: Queryable, input: ReviewInput) {
       revision: input.expectedRevision + 1,
       added: additions,
       removed: removals,
+      review: record(inserted.rows[0] as ReviewRow),
+      replayed: false,
     };
   });
 }

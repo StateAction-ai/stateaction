@@ -29,6 +29,7 @@ const SQLSTATE: Record<string, CatalogErrorCode> = {
   "23502": "invalid_request", // not_null_violation
   "22P02": "invalid_request", // invalid_text_representation
   "40P01": "conflict", // deadlock_detected (should not occur with lock order)
+  "55P03": "conflict", // lock_not_available (lock_timeout): safe to retry
 };
 
 export function toCatalogError(error: unknown): unknown {

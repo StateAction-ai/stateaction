@@ -842,7 +842,10 @@ describe("append-only reviews and approved-only datasets", () => {
         expectedRevisions: { [d1]: 2, [d2]: 1 },
       },
     });
-    assert.deepEqual(moved, { revision: 2, added: [d2], removed: [] });
+    assert.deepEqual(
+      { revision: moved.revision, added: moved.added, removed: moved.removed },
+      { revision: 2, added: [d2], removed: [] },
+    );
     // Rejection removes every membership and advances both revisions.
     const rejected = await approve(db.app, p, c1, 2, {
       decision: "rejected",
@@ -870,11 +873,15 @@ describe("append-only reviews and approved-only datasets", () => {
       0,
     );
     // Reapproval without a selection restores nothing; an explicit empty selection is valid.
-    assert.deepEqual(await approve(db.app, p, c1, 3), {
-      revision: 4,
-      added: [],
-      removed: [],
-    });
+    const reapproved = await approve(db.app, p, c1, 3);
+    assert.deepEqual(
+      {
+        revision: reapproved.revision,
+        added: reapproved.added,
+        removed: reapproved.removed,
+      },
+      { revision: 4, added: [], removed: [] },
+    );
     assert.equal(
       (
         await db.app.query(
@@ -899,10 +906,15 @@ describe("append-only reviews and approved-only datasets", () => {
       ),
       "SAC02",
     );
+    const cleared = await approve(db.app, p, c1, 4, {
+      datasetSelection: { datasetIds: [], expectedRevisions: { [d1]: 4 } },
+    });
     assert.deepEqual(
-      await approve(db.app, p, c1, 4, {
-        datasetSelection: { datasetIds: [], expectedRevisions: { [d1]: 4 } },
-      }),
+      {
+        revision: cleared.revision,
+        added: cleared.added,
+        removed: cleared.removed,
+      },
       { revision: 5, added: [], removed: [d1] },
     );
     // Dataset revisions always advance by exactly one.

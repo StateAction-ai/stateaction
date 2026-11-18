@@ -342,6 +342,82 @@ export type ClipRead = {
   expiresAt: Rfc3339Utc;
   ttlSeconds: number;
 };
+// SA-36 staff clip review (catalog.v10, /api/v1). Staff only.
+export type ClipReviewDecision = "approved" | "rejected";
+export type ClipReviewCommand = {
+  reviewId: Uuid;
+  expectedReviewRevision: number;
+  jobId: Uuid;
+  resultManifestSha256: Sha256Hex;
+  decision: ClipReviewDecision;
+  taskLabel?: string;
+  notes?: string;
+  datasetSelection?: {
+    datasetIds: Uuid[];
+    expectedRevisions: Record<Uuid, number>;
+  };
+};
+export type ClipReview = {
+  reviewId: Uuid;
+  clipId: Uuid;
+  jobId: Uuid;
+  resultManifestSha256: Sha256Hex;
+  revision: number;
+  decision: ClipReviewDecision;
+  taskLabel: string | null;
+  notes: string | null;
+  datasetSelection: {
+    datasetIds: Uuid[];
+    expectedRevisions: Record<Uuid, number>;
+  } | null;
+  createdAt: Rfc3339Utc;
+};
+export type ClipQualityCheck = {
+  id: string;
+  status: "pass" | "warn" | "fail" | "measured" | "not_evaluated" | "unknown";
+  ruleRevision?: number;
+  measurements?: Record<string, string>;
+};
+export type ClipReviewState = {
+  qualityChecks:
+    | { status: "not_evaluated"; checks: [] }
+    | { status: "evaluated"; checks: ClipQualityCheck[] };
+  clipId: Uuid;
+  recordingId: Uuid;
+  jobId: Uuid;
+  resultManifestSha256: Sha256Hex;
+  current: boolean;
+  capabilities: { canReview: boolean };
+  review: {
+    revision: number;
+    decision: ClipReviewDecision | null;
+    taskLabel: string | null;
+    notes: string | null;
+    reviewedAt: Rfc3339Utc | null;
+  };
+  history: {
+    revision: number;
+    decision: ClipReviewDecision;
+    taskLabel: string | null;
+    notes: string | null;
+    reviewedAt: Rfc3339Utc;
+  }[];
+  memberships: {
+    datasetId: Uuid;
+    name: string;
+    revision: number;
+    addedAt: Rfc3339Utc;
+  }[];
+  membershipsTruncated: boolean;
+  availableDatasets: {
+    datasetId: Uuid;
+    name: string;
+    revision: number;
+    member: boolean;
+    shared: boolean;
+  }[];
+  availableDatasetsTruncated: boolean;
+};
 export type DatasetChange = {
   revision: number;
   datasetId?: Uuid;

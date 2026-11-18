@@ -1,0 +1,121 @@
+{
+  "contract": "http.clip-review.v1",
+  "cases": [
+    {
+      "name": "stored review",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "revision": 1,
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": null,
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          },
+          "createdAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "rejection without label",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "revision": 1,
+          "decision": "rejected",
+          "taskLabel": null,
+          "notes": null,
+          "datasetSelection": null,
+          "createdAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "revision is positive",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "revision": 0,
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": null,
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          },
+          "createdAt": "2026-11-02T14:00:00.123456Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/revision"
+        ]
+      }
+    },
+    {
+      "name": "closed object",
+      "input": {
+        "document": {
+          "reviewId": "00000000-0000-4000-8000-00000000e001",
+          "clipId": "019a4b2c-3d4e-7f51-9b6c-8d9e0f1a2b3c",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "abababababababababababababababababababababababababababababababab",
+          "revision": 1,
+          "decision": "approved",
+          "taskLabel": "pour water",
+          "notes": null,
+          "datasetSelection": {
+            "datasetIds": [
+              "00000000-0000-4000-8000-00000000d001",
+              "00000000-0000-4000-8000-00000000d002"
+            ],
+            "expectedRevisions": {
+              "00000000-0000-4000-8000-00000000d001": 2,
+              "00000000-0000-4000-8000-00000000d002": 5
+            }
+          },
+          "createdAt": "2026-11-02T14:00:00.123456Z",
+          "reviewerUserId": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}
