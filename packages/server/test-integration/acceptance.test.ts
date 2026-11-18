@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acceptProcessingResult } from "../src/catalog/catalog.js";
-import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { fixtureAcceptResult, fixtureRunJob } from "../src/jobs/fixtures.js";
 import { getClipReviewState } from "../src/datasets/review.js";
 import {
   advanceResult,
@@ -13,7 +13,17 @@ import {
   recordExecutionEvidence,
   requestJobCancel,
 } from "../src/jobs/service.js";
-import { TransportError, allocateJobOutput } from "../src/transport/index.js";
+import {
+  finalizeCancellations,
+  flagUncertain,
+  retryJob,
+} from "../src/jobs/recovery.js";
+import {
+  TransportError,
+  allocateJobOutput,
+  signParts,
+} from "../src/transport/index.js";
+import { putPart } from "./transport-harness.js";
 import {
   acceptanceDatabase,
   acceptanceDeps,
@@ -777,6 +787,241 @@ test("a verified candidate's clip plan and checks are immutable on EVERY transit
     await advanceResult(s.accept, s.job.jobId);
     const st = await state(s.db, s.job.jobId);
     assert.deepEqual([st.state, st.clips], ["succeeded", 1]);
+  } finally {
+    await s.db.close();
+  }
+});
+
+/** Real flagUncertain after a short initial deadline (no timestamp rewrite). */
+async function toNeedsAttention(s: Awaited<ReturnType<typeof scenario>>) {
+  await new Promise((r) => setTimeout(r, 2200));
+  await s.db.owner.query(
+    "UPDATE jobs SET controller_lease_expires_at = now() - interval '1 second' WHERE id = $1",
+    [s.job.jobId],
+  );
+  const repair = {
+    pool: s.db.app,
+    config: { repair: { dispatchWindowSeconds: 0, leaseGraceSeconds: 0 } },
+  };
+  const flagged = await flagUncertain(repair, { limit: 5 });
+  assert.deepEqual(flagged.attention, [s.job.jobId]);
+}
+
+test("a running job without a candidate settles only after result grace", async () => {
+  const s = await scenario();
+  try {
+    await evidence(s.db, s.job.jobId);
+    await repairResults(s.accept);
+    let st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.holder], ["running", s.job.jobId]);
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await repairResults({
+      ...s.accept,
+      config: { ...s.accept.config, graceSeconds: 1 },
+    });
+    st = await state(s.db, s.job.jobId);
+    assert.deepEqual(
+      [st.state, st.holder, st.error_code, st.clips],
+      ["failed", null, "worker_exited_without_result", 0],
+    );
+  } finally {
+    await s.db.close();
+  }
+});
+
+test("needs_attention without proof stays held; exact late proof settles failed once, releases the slot and accepts no clip", async () => {
+  const s = await scenario({ deadlineSeconds: 2 });
+  let unfinished:
+    | { object_key: string; provider_upload_id: string }
+    | undefined;
+  try {
+    // A real provider part exists, but its receipt/complete/close never arrived.
+    const body = Buffer.from("partial-output");
+    const partial = await allocateJobOutput(s.transport, s.job.authority, {
+      slot: "clips/000/hands.npz",
+      role: "hand_arrays_npz",
+      sizeBytes: String(body.length),
+      sha256: sha(body),
+    });
+    const signed = await signParts(
+      s.transport,
+      s.job.authority,
+      partial.fileId,
+      {
+        expectedTransportEpoch: partial.transportEpoch,
+        partNumbers: [1],
+      },
+    );
+    await putPart(signed.parts[0]!, body);
+    const partialRow = async () =>
+      (
+        await s.db.owner.query(
+          "SELECT id, state, object_key, provider_upload_id, transport_epoch, size_bytes::text, sha256 FROM files WHERE id = $1",
+          [partial.fileId],
+        )
+      ).rows[0];
+    const originalPartial = await partialRow();
+    unfinished = originalPartial;
+    assert.equal(originalPartial.state, "uploading");
+    await toNeedsAttention(s);
+    // No proof yet: repair must not settle, the slot stays held.
+    await repairResults(s.accept);
+    let st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.holder], ["needs_attention", s.job.jobId]);
+    await assert.rejects(
+      retryJob(
+        { pool: s.db.app },
+        { jobId: s.job.jobId, expectedState: "needs_attention" },
+      ),
+    );
+    await assert.rejects(
+      recordExecutionEvidence(
+        { pool: s.db.app },
+        {
+          jobId: s.job.jobId,
+          recordedBy: "controller-test",
+          evidence: {
+            kind: "local_child_reaped",
+            executionRef: "different-attempt",
+          },
+        },
+      ),
+      /exact recorded execution/,
+    );
+    await repairResults(s.accept);
+    st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.holder], ["needs_attention", s.job.jobId]);
+    // Real evidence arrives late (existing recorder path), then concurrent repairs.
+    await evidence(s.db, s.job.jobId);
+    await Promise.all([
+      repairResults(s.accept),
+      repairResults(s.accept),
+      advanceResult(s.accept, s.job.jobId),
+    ]);
+    st = await state(s.db, s.job.jobId);
+    assert.deepEqual(
+      {
+        state: st.state,
+        code: st.error_code,
+        clips: st.clips,
+        holder: st.holder,
+      },
+      {
+        state: "failed",
+        code: "worker_exited_without_result",
+        clips: 0,
+        holder: null,
+      },
+    );
+    // Replay is a no-op.
+    await repairResults(s.accept);
+    assert.equal((await state(s.db, s.job.jobId)).state, "failed");
+    // New-ID operator retry from the same immutable source; old job/source/output rows retained.
+    const old = (
+      await s.db.owner.query(
+        `SELECT source_manifest_sha256 AS sha,
+                (SELECT count(*)::int FROM files f WHERE f.recording_id = j.recording_id) AS files
+         FROM jobs j WHERE j.id = $1`,
+        [s.job.jobId],
+      )
+    ).rows[0];
+    const retried = await retryJob(
+      { pool: s.db.app },
+      { jobId: s.job.jobId, expectedState: "failed" },
+    );
+    assert.notEqual(retried.jobId, s.job.jobId);
+    const fresh = (
+      await s.db.owner.query(
+        `SELECT source_manifest_sha256 AS sha, state,
+                (SELECT count(*)::int FROM files f WHERE f.recording_id = j.recording_id) AS files
+         FROM jobs j WHERE j.id = $1`,
+        [retried.jobId],
+      )
+    ).rows[0];
+    assert.deepEqual(fresh, { ...old, state: "queued" });
+    assert.equal((await state(s.db, s.job.jobId)).state, "failed");
+    assert.deepEqual(await partialRow(), originalPartial);
+    const retainedParts = await s.transport.provider.listParts(
+      unfinished!.object_key,
+      unfinished!.provider_upload_id,
+      1,
+      1,
+    );
+    assert.equal(retainedParts.length, 1);
+    assert.equal(retainedParts[0]!.sizeBytes, BigInt(body.length));
+    assert.equal(
+      (
+        await s.db.owner.query(
+          "SELECT count(*)::int AS n FROM job_output_closures WHERE job_id = $1",
+          [s.job.jobId],
+        )
+      ).rows[0].n,
+      0,
+    );
+    await fixtureRunJob(s.db.owner, retried.jobId);
+    await assert.rejects(
+      evidence(s.db, s.job.jobId),
+      /job holding the admission slot/,
+    );
+    await repairResults(s.accept);
+    assert.equal((await state(s.db, retried.jobId)).holder, retried.jobId);
+  } finally {
+    // Fixture teardown only, after proving business repair retained the old MPU.
+    try {
+      if (unfinished)
+        await s.transport.provider.abortUpload(
+          unfinished.object_key,
+          unfinished.provider_upload_id,
+        );
+    } finally {
+      await s.db.close();
+    }
+  }
+});
+
+test("a candidate that already exists is never overridden by late-proof settlement", async () => {
+  const s = await scenario();
+  try {
+    const { manifest, doc } = await uploadResult(s);
+    await closeOutputs(s.accept, {
+      jobId: s.job.jobId,
+      invocationNonce: s.job.nonce,
+      outcome: "succeeded",
+    });
+    await submitCandidate(s.accept, candidateBody(s.job, manifest, doc));
+    await evidence(s.db, s.job.jobId);
+    await repairResults(s.accept);
+    const st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.clips], ["succeeded", 1]);
+  } finally {
+    await s.db.close();
+  }
+});
+
+test("cancel of a needs_attention job stays a cancellation; late proof never turns it failed", async () => {
+  const s = await scenario({ deadlineSeconds: 2 });
+  try {
+    await toNeedsAttention(s);
+    assert.equal(
+      (await requestJobCancel({ pool: s.db.app }, s.job.jobId)).state,
+      "cancel_requested",
+    );
+    await evidence(s.db, s.job.jobId);
+    await repairResults(s.accept);
+    let st = await state(s.db, s.job.jobId);
+    assert.equal(st.state, "cancel_requested");
+    await finalizeCancellations(
+      { pool: s.db.app },
+      { recordedBy: "repair:t", limit: 5 },
+    );
+    st = await state(s.db, s.job.jobId);
+    assert.deepEqual([st.state, st.clips, st.holder], ["cancelled", 0, null]);
+    const retried = await retryJob(
+      { pool: s.db.app },
+      { jobId: s.job.jobId, expectedState: "cancelled" },
+    );
+    assert.notEqual(retried.jobId, s.job.jobId);
   } finally {
     await s.db.close();
   }

@@ -194,7 +194,9 @@ test("a spawn that never answers is bounded and surfaces as a failure the contro
   assert.equal(calls, 1, "the adapter never retries a spawn");
 });
 
-test("a function lookup that resolves after the spawn bound cannot issue a call", async () => {
+test("a function lookup that resolves after the spawn timer fires cannot issue a call", async (t) => {
+  // Timers can fire while the high-resolution deadline is still in the future.
+  t.mock.method(performance, "now", () => 0);
   const lookup = Promise.withResolvers<void>();
   const { log, mod } = fakeSdk(
     async () => undefined,

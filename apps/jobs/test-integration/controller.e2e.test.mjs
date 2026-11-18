@@ -399,6 +399,50 @@ describe("SA-26 controller on the official Render local runner with real API, Po
     evidence.adopt = { executionRef: ref, originalPid: pids[0] };
   });
 
+  test("SA-72 late proof: controller lost past a short initial deadline -> needs_attention (slot held) -> real late evidence -> repair fails the job and frees the slot", async () => {
+    const w = await world();
+    const job = await w.queuedJob();
+    // Short initial immutable deadline via the library admission seam; never rewritten.
+    assert.equal((await w.admitWithDeadline(12)).state, "admitted");
+    const first = controllerProcess(w, job.jobId, "run-late", 60);
+    const ref = await until(
+      "claimed child",
+      async () =>
+        (await w.row(job.jobId)).claimed_at &&
+        (await w.row(job.jobId)).execution_call_id,
+    );
+    process.kill(-first.child.pid, "SIGKILL"); // controller loss; child survives
+    await first.done;
+    const deadline = Date.parse((await w.row(job.jobId)).execution_deadline);
+    await sleep(Math.max(0, deadline - Date.now()) + 2000);
+    await w.lapseLease(job.jobId);
+    await w.admit(); // real Next reconcile: no evidence yet -> needs_attention
+    let r = await w.row(job.jobId);
+    assert.equal(r.state, "needs_attention");
+    assert.equal(r.slot_holder, job.jobId);
+    assert.equal(r.evidence, null, "no proof: not failed, slot held");
+    await w.admit();
+    assert.equal((await w.row(job.jobId)).state, "needs_attention");
+    // The restarted controller (same run) proves the physical end for real.
+    const second = controllerProcess(w, job.jobId, "run-late");
+    const out = await second.done;
+    assert.equal(out.evidence, "recorded", JSON.stringify(out));
+    assert.equal(workers(ref).length, 0);
+    await w.admit(); // reconcile repair settles with the late proof
+    r = await w.row(job.jobId);
+    assert.equal(r.state, "failed");
+    assert.equal(r.slot_holder, null);
+    const err = await w.owner.query(
+      "SELECT error_code, (SELECT count(*)::int FROM clips WHERE job_id = $1) AS clips FROM jobs WHERE id = $1",
+      [job.jobId],
+    );
+    assert.deepEqual(err.rows[0], {
+      error_code: "worker_exited_without_result",
+      clips: 0,
+    });
+    evidence.lateProof = { executionRef: ref, finalState: r.state };
+  });
+
   test("runner loss: killing the official runner leaves the child; a new runner's different run is refused with no effects; same-run recovery adopts", async () => {
     const w = await world();
     const job = await w.queuedJob();

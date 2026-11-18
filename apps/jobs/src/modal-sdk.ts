@@ -69,13 +69,17 @@ async function bounded<T>(
   label: string,
   ms: number,
   op: Promise<T>,
+  onTimeout?: () => void,
 ): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   try {
     return await Promise.race([
       op,
       new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new ModalOperationTimeout(label)), ms);
+        timer = setTimeout(() => {
+          onTimeout?.();
+          reject(new ModalOperationTimeout(label));
+        }, ms);
       }),
     ]);
   } finally {
@@ -123,6 +127,7 @@ export function createModalSdkClient(
     ): Promise<string> {
       const deadline = performance.now() + settings.apiTimeoutMs;
       let issued = false;
+      let expired = false;
       try {
         return await bounded(
           "spawn",
@@ -138,12 +143,15 @@ export function createModalSdkClient(
             );
             // One JSON argument keeps the bootstrap out of argv, env and logs.
             const args = [JSON.stringify(bootstrap)];
-            if (performance.now() >= deadline || !canSubmit())
+            if (expired || performance.now() >= deadline || !canSubmit())
               throw new ModalSpawnNotSent();
             issued = true;
             const call = await fn.spawn(args);
             return call.functionCallId;
           })(),
+          () => {
+            expired = true;
+          },
         );
       } catch (error) {
         if (!issued && error instanceof ModalOperationTimeout)
