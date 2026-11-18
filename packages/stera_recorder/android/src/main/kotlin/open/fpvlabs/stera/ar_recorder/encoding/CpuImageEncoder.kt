@@ -10,10 +10,10 @@ import open.fpvlabs.stera.ar_recorder.geometry.ImagePlanePacking
 import java.io.ByteArrayOutputStream
 
 /** Saved RGB uses the calibrated CPU image; display texture UVs are only for the preview. */
-class CpuImageEncoder {
+open class CpuImageEncoder {
     data class EncodedImage(val jpeg: ByteArray, val timestampNs: Long, val width: Int, val height: Int)
 
-    fun encode(frame: Frame, intrinsics: Map<String, Any>, quality: Int, previousRgbTimestampNs: Long? = null,
+    open fun encode(frame: Frame, intrinsics: Map<String, Any>, quality: Int, previousRgbTimestampNs: Long? = null,
                onDiagnostics: (Map<String, Any?>) -> Unit = {}): EncodedImage =
         encodeImage(frame.timestamp, frame.androidCameraTimestamp, { frame.acquireCameraImage() },
             intrinsics, quality, previousRgbTimestampNs, onDiagnostics)

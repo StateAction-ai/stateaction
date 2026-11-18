@@ -260,6 +260,13 @@ def validate(path: Path, profile: str, synthetic: bool = False) -> dict:
     else:
         # A take that ended before its first access unit has nothing to decode.
         video = {"stream": None, "pict_types": {}, "decoded_keyframes": 0}
+    inventory = [json.loads(m) for m in _json_topic(flat, "/stateaction/inventory")][0]
+    pose_events = [
+        e
+        for e in map(json.loads, _json_topic(flat, "/stateaction/sensor_events"))
+        if e.get("stream_id") == "pose"
+    ]
+    written_ids = {f["source_frame_id"] for f in written}
     pts = [int(f["encoder_pts_us"]) for f in frames if f["state"] == "acquired"]
     require(
         len(pts) == len(set(pts)) and pts == sorted(pts),
@@ -286,6 +293,18 @@ def validate(path: Path, profile: str, synthetic: bool = False) -> dict:
         )
         if written
         else 0,
+        "inventory_calibrations": inventory["calibrations"],
+        "acquired_frames": sum(1 for f in frames if f["state"] == "acquired"),
+        "pose_events": {
+            "valid": sum(1 for e in pose_events if e.get("pose_valid") is True),
+            "invalid": sum(1 for e in pose_events if e.get("pose_valid") is False),
+            "invalid_with_written_rgb": sum(
+                1
+                for e in pose_events
+                if e.get("pose_valid") is False
+                and e.get("association_source_frame_id") in written_ids
+            ),
+        },
         "tracking_states": sorted(
             {
                 e["tracking_state"]

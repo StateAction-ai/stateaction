@@ -49,7 +49,6 @@ import open.fpvlabs.stera.ar_recorder.metrics.RecordingMetricsCollector
 import open.fpvlabs.stera.ar_recorder.metrics.RecordingMetricsCollectorImpl
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollector
 import open.fpvlabs.stera.ar_recorder.sensors.ImuCollectorImpl
-import open.fpvlabs.stera.ar_recorder.sensors.DEFAULT_MOTION_RATE_HZ
 import open.fpvlabs.stera.ar_recorder.coordination.MotionCaptureController
 import open.fpvlabs.stera.ar_recorder.coordination.MotionDrainCoordinator
 import open.fpvlabs.stera.ar_recorder.coordination.MotionScheduler
@@ -243,6 +242,7 @@ class ArRecorderImpl(
     private var activeRecordingConfig = RecordingConfig()
     private var sessionConfig = RecordingConfig()
     private var h264TerminalStats: Map<String, Any?> = emptyMap()
+    private var h264CalibrationReport: Map<String, Any?> = emptyMap()
     private val failureStopPosted = AtomicBoolean(false)
 
     // ── SA-56 bounded finalization state ───────────────────────────────
@@ -297,7 +297,10 @@ class ArRecorderImpl(
                 )
             }
 
-            sessionConfig = RecordingConfig.fromMap(arguments)
+            // Reject unusable saved settings before any session/EGL/sensor side effect.
+            sessionConfig = try { RecordingConfig.fromMap(arguments) } catch (e: InvalidRecordingConfig) {
+                return createErrorResult("Invalid capture settings: ${e.message}") + mapOf("errorCode" to "INVALID_CAPTURE_SETTINGS")
+            }
             applyRgbTargets(sessionConfig)
             sessionManager.configureCameraTarget(sessionConfig.rgbLandscapeWidth, sessionConfig.rgbLandscapeHeight, sessionConfig.isH264)
 
@@ -535,7 +538,10 @@ class ArRecorderImpl(
             if (!recordingStateManager.canStart(currentState)) {
                 return createErrorResult("Session not ready. Current state: ${currentState.name}")
             }
-            val recordingConfig = RecordingConfig.fromMap(arguments)
+            // Validate the saved profile first: nothing below (state, writers, producers) may run for an invalid one.
+            val recordingConfig = try { RecordingConfig.fromMap(arguments) } catch (e: InvalidRecordingConfig) {
+                return createErrorResult("Invalid capture settings: ${e.message}") + mapOf("errorCode" to "INVALID_CAPTURE_SETTINGS")
+            }
             if (!recordingConfig.isH264 && !sessionManager.isSessionReady) {
                 return createErrorResult("Tracking not stable. Wait for TRACKING state.")
             }
@@ -543,6 +549,7 @@ class ArRecorderImpl(
             activeRecordingConfig = recordingConfig
             failureStopPosted.set(false)
             applyRgbTargets(recordingConfig)
+            frameOrchestrator.channels = recordingConfig
             // H.264 camera raster is checked by the preflight below with an explicit error code.
             if (!recordingConfig.isH264) sessionManager.configureCameraTarget(recordingConfig.rgbLandscapeWidth, recordingConfig.rgbLandscapeHeight, false)
 
@@ -558,6 +565,7 @@ class ArRecorderImpl(
             // H.264 preflight runs before any file exists: unsupported encoder, camera raster/clock or an
             // emulator/hardware profile mismatch is an explicit start error, never a lowered-quality fallback.
             h264TerminalStats = emptyMap()
+            h264CalibrationReport = emptyMap()
             val h264Controller = if (recordingConfig.isH264) try {
                 val camera = checkNotNull(sessionManager.session) { "AR session unavailable" }.cameraConfig
                 if (camera.imageSize.width != recordingConfig.rgbLandscapeWidth || camera.imageSize.height != recordingConfig.rgbLandscapeHeight) {
@@ -650,8 +658,8 @@ class ArRecorderImpl(
             datasetWriter.logSystem("Recording resolution: $recordingResolution")
             datasetWriter.logSystem("Low quality mode: $isLowQualityMode (${lowQualityReason ?: "none"})")
             datasetWriter.logSystem(
-                "Sensor sampling: independent accelerometer and gyroscope, ${DEFAULT_MOTION_RATE_HZ} Hz requested each " +
-                    "(samplingPeriodUs=${1_000_000 / DEFAULT_MOTION_RATE_HZ}, maxReportLatencyUs=0); original SensorEvent timestamps"
+                "Sensor sampling: independent accelerometer and gyroscope, ${recordingConfig.imuHz} Hz requested each " +
+                    "(samplingPeriodUs=${1_000_000 / recordingConfig.imuHz}, maxReportLatencyUs=0); original SensorEvent timestamps"
             )
             datasetWriter.logSystem("Pool capacities: depth=$DEPTH_POOL_CAPACITY pointcloud=$POINTCLOUD_POOL_CAPACITY")
 
@@ -666,7 +674,8 @@ class ArRecorderImpl(
                 else "JPEG capture mode: width=${metrics.configuredVideoWidth} height=${metrics.configuredVideoHeight} fps=${metrics.targetEncodeFps} topic=/camera/rgb/compressed"
             )
 
-            motionCapture.start(motionScheduler(), DEFAULT_MOTION_RATE_HZ)
+            datasetWriter.logSystem("Capture settings requested vs effective: ${recordingConfig.effective()}")
+            motionCapture.start(motionScheduler(), recordingConfig.imuHz)
             isRecording.set(true)
             isPaused.set(false)
 
@@ -679,7 +688,9 @@ class ArRecorderImpl(
                 lowQualityReason = lowQualityReason,
                 cameraResolution = cameraResolution,
                 recordingResolution = recordingResolution
-            ) + mapOf("recordingId" to h264Controller?.recordingId, "rgbCodec" to recordingConfig.rgbCodec)
+            ) + mapOf("recordingId" to h264Controller?.recordingId, "rgbCodec" to recordingConfig.rgbCodec,
+                // Requested vs effective settings, including every stream that is not delivered, reach the caller.
+                "captureSettings" to recordingConfig.effective())
         } catch (e: Exception) {
             isRecording.set(false)
             var cleanupSucceeded = true
@@ -909,6 +920,7 @@ class ArRecorderImpl(
                 closedWriterEvidence = datasetWriter.h264Capture()?.let {
                     if (it.stats()["close_outcome"] == "completed") it.sourceManifestEvidence() else null
                 }
+                h264CalibrationReport = h264.calibrationReport()
             }
 
             datasetWriter.captureFreeStorageAfterSnapshot()
@@ -948,6 +960,8 @@ class ArRecorderImpl(
                 )
             )
 
+            // Requested vs effective settings and every unrequested-but-not-delivered stream are durable evidence.
+            finalizationResult.metadata["capture_settings"] = activeRecordingConfig.effective()
             if (activeRecordingConfig.isH264) {
                 finalizationResult.metadata["rgb_codec"] = "h264"
                 finalizationResult.metadata["recording_id"] = h264TerminalStats["recording_id"]
@@ -964,6 +978,7 @@ class ArRecorderImpl(
                     "rgb_capture_time" to "foxglove_CompressedVideo_timestamp_with_clock_provenance",
                     "depth" to "not_recorded_by_profile_revision", "cross_stream_clock_verified" to false)
                 finalizationResult.metadata["h264_terminal"] = h264TerminalStats
+                finalizationResult.metadata["saved_calibration"] = h264CalibrationReport
                 finalizationResult.metadata["qualification"] = if (activeRecordingConfig.h264SimulationMode) "simulation_only" else "unqualified"
             }
             // Provisional sidecar: conservative until the container is proven closed and the final sidecar is read back.

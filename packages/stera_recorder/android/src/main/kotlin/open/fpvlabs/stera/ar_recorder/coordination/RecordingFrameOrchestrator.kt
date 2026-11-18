@@ -4,7 +4,9 @@ import android.os.Handler
 import android.os.SystemClock
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoder
+import open.fpvlabs.stera.ar_recorder.RecordingConfig
 import open.fpvlabs.stera.ar_recorder.geometry.CaptureGeometry
+import open.fpvlabs.stera.ar_recorder.geometry.SavedRaster
 import com.google.ar.core.Coordinates2d
 import open.fpvlabs.stera.ar_recorder.encoding.FrameSampler
 import open.fpvlabs.stera.ar_recorder.session.ArFrameProcessor
@@ -38,10 +40,13 @@ class RecordingFrameOrchestrator(
     private val frameSampler: FrameSampler,
     private val datasetWriter: DatasetWriter,
     private val sessionManager: ArSessionManager,
-    private val recordError: (String, Throwable?) -> Unit
+    private val recordError: (String, Throwable?) -> Unit,
+    private val cpuImageEncoder: CpuImageEncoder = CpuImageEncoder()
 ) {
-    private val cpuImageEncoder = CpuImageEncoder()
     var h264Controller: H264RecordingController? = null
+
+    /** Saved channel selection for the current recording; set by the recorder before frames flow. */
+    @Volatile var channels: RecordingConfig = RecordingConfig()
 
     private data class CapturedDepth(val timestampNs: Long, val width: Int, val height: Int,
                                      val intrinsics: Map<String, Any>, val mapping: DoubleArray)
@@ -87,7 +92,8 @@ class RecordingFrameOrchestrator(
             trackingPauseTotalOffsetNs = metrics.trackingPauseTotalOffsetNs,
             wasTrackingInPreviousFrame = metrics.wasTrackingInPreviousFrame,
             depthCadenceResetCount = metrics.depthCadenceResetCount,
-            onTrackingPauseOffset = { offsetNs -> frameSampler.recordTrackingPauseOffset(offsetNs) }
+            // RGB keeps its own cadence through tracking loss, so the schedule is never shifted by it.
+            onTrackingPauseOffset = { }
         )
         metrics.trackingPausedAtNs = trackingTransition.trackingPausedAtNs
         metrics.trackingPauseCount = trackingTransition.trackingPauseCount
@@ -109,6 +115,8 @@ class RecordingFrameOrchestrator(
             // RGB follows the native camera cadence even while AR tracking is paused or lost; tracking state is
             // written as explicit per-frame pose evidence instead of gating capture.
             metrics.rgbEncodeAttemptCount++
+            // Saved-pixel calibration follows the exact encoded raster; unavailable intrinsics are an explicit state.
+            val sourceIntrinsics = runCatching { frameProcessor.extractIntrinsics(camera) }.getOrNull()
             val poseSnapshot = if (isTracking) frameProcessor.extractPose(camera) else null
             val poseState = when {
                 trackingState == "TRACKING" && poseSnapshot != null -> "tracking"
@@ -117,25 +125,31 @@ class RecordingFrameOrchestrator(
                 trackingState == "TRACKING" -> "lost"
                 else -> "unknown"
             }
-            if (activeH264.capture(frame, poseState, poseSnapshot) && poseSnapshot != null) {
+            if (activeH264.capture(frame, poseState, poseSnapshot, sourceIntrinsics) && poseSnapshot != null) {
                 metrics.poseFrameCount.incrementAndGet(); metrics.poseTimestampRange.record(timestamp)
             }
             metrics.frameCount++
             return
         }
 
+        // Tracking loss invalidates the estimated pose, never the required RGB: a pose is exported only
+        // from a TRACKING camera and is otherwise absent, with the ARCore failure reason recorded.
         val pose = if (isTracking) frameProcessor.extractPose(camera) else null
-        val shouldSample = pose != null && frameSampler.shouldEncodeFrame(timestamp)
+        val trackingFailureReason = if (isTracking) null else runCatching { camera.trackingFailureReason.name }.getOrDefault("UNKNOWN")
+        val shouldSample = frameSampler.shouldEncodeFrame(timestamp)
 
-        if (isTracking && !shouldSample) {
+        if (!shouldSample) {
             metrics.rgbSamplingSkippedCount++
         }
+        var savedRaster: SavedRaster? = null
+        var sourceCalibration: Map<String, Any>? = null
 
-        if (shouldSample && pose != null) {
+        if (shouldSample) {
             metrics.rgbEncodeAttemptCount++
-            val intrinsics = frameProcessor.extractIntrinsics(camera)
             rgbImage = try {
-                cpuImageEncoder.encode(frame, intrinsics, JPEG_QUALITY, metrics.lastCapturedRgbTimestampNs) { rgbCaptureDiagnostics = it }
+                // Intrinsics are read per frame so a frame without them is rejected, not saved uncalibrated.
+                val sourceIntrinsics = frameProcessor.extractIntrinsics(camera).also { sourceCalibration = it }
+                cpuImageEncoder.encode(frame, sourceIntrinsics, JPEG_QUALITY, metrics.lastCapturedRgbTimestampNs) { rgbCaptureDiagnostics = it }
             } catch (error: Exception) {
                 if (metrics.firstRgbCaptureError == null) {
                     metrics.firstRgbCaptureError = "${error.javaClass.simpleName}: ${error.message}"
@@ -144,9 +158,20 @@ class RecordingFrameOrchestrator(
                 null
             }
             val image = rgbImage
-            val submitted = image != null && writerHandler != null && writerHandler.post {
+            // Calibration describes the pixels actually saved (identity for the CPU path), not the preview.
+            val raster = image?.let { SavedRaster.identity(it.width, it.height) }
+            val intrinsics = if (raster != null) {
+                try { raster.intrinsics(checkNotNull(sourceCalibration)) } catch (error: Exception) {
+                    if (metrics.firstRgbCaptureError == null) {
+                        metrics.firstRgbCaptureError = "${error.javaClass.simpleName}: ${error.message}"
+                    }
+                    recordError("Saved-raster calibration rejected: ${error.message}", error); null
+                }
+            } else null
+            savedRaster = raster
+            val submitted = image != null && intrinsics != null && writerHandler != null && writerHandler.post {
                 datasetWriter.writeIntrinsics(image.timestampNs, intrinsics)
-                datasetWriter.writePoseRow(timestamp, pose, trackingState)
+                if (pose != null) datasetWriter.writePoseRow(timestamp, pose, trackingState)
                 datasetWriter.writeCompressedRgbFrame(image.timestampNs, image.jpeg, associationTimestampNs = timestamp)
             }
             if (submitted && image != null) {
@@ -154,10 +179,16 @@ class RecordingFrameOrchestrator(
                 rgbIntrinsics = intrinsics
                 metrics.actualVideoWidth = image.width
                 metrics.actualVideoHeight = image.height
-                metrics.poseFrameCount.incrementAndGet()
-                metrics.poseTimestampRange.record(timestamp)
-                pointCloudAvailable = processPointCloud(frame, timestamp, globalFrameIndex, writerHandler)
-                capturedDepth = processDepth(frame, timestamp, globalFrameIndex, isTracking, intrinsics, writerHandler)
+                if (pose != null) {
+                    metrics.poseFrameCount.incrementAndGet()
+                    metrics.poseTimestampRange.record(timestamp)
+                }
+                if (isTracking && channels.recordPointCloud) {
+                    pointCloudAvailable = processPointCloud(frame, timestamp, globalFrameIndex, writerHandler)
+                }
+                if (channels.recordDepth) {
+                    capturedDepth = processDepth(frame, timestamp, globalFrameIndex, isTracking, intrinsics!!, writerHandler)
+                }
                 depthAvailable = capturedDepth != null
                 encoded = true
                 metrics.rgbTimestampRange.record(image.timestampNs)
@@ -166,7 +197,7 @@ class RecordingFrameOrchestrator(
                 metrics.encodedVideoFrameCount.incrementAndGet()
                 metrics.submittedToEncoderFrameCount.incrementAndGet()
             } else {
-                if (image != null) {
+                if (image != null && intrinsics != null) {
                     datasetWriter.recordWriteFailure("Writer queue rejected RGB capture")
                     if (metrics.firstRgbCaptureError == null) metrics.firstRgbCaptureError = "Writer queue rejected RGB capture"
                 }
@@ -190,6 +221,11 @@ class RecordingFrameOrchestrator(
             "rgb_timestamp_ns" to if (encoded) rgbImage?.timestampNs else null,
             "depth_timestamp_ns" to capturedDepth?.timestampNs,
             "tracking_state" to trackingState,
+            "pose_valid" to (pose != null && encoded),
+            "tracking_failure_reason" to trackingFailureReason,
+            "pose_exported" to (pose != null && encoded),
+            "saved_raster" to if (encoded) savedRaster?.toMap() else null,
+            "calibration_source" to "camera.imageIntrinsics_mapped_through_saved_raster",
             "rgb_encoded" to encoded,
             "depth_available" to depthAvailable,
             "rgb_width" to if (encoded) rgbImage?.width else null,

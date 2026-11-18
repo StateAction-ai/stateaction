@@ -2,7 +2,7 @@
 
 The existing Stera recorder (`packages/stera_recorder`) can record RGB as hardware H.264 access units inside the
 published `stateaction.capture.v1.1` MCAP contract ([wire contract](../../packages/contracts/capture/README.md)).
-JPEG remains the default; H.264 is an explicit build selection. Nothing here claims physical-device, clock
+JPEG is the default. Android preflights the exact H.264 profile when selected with `STATEACTION_RGB_CODEC=h264`. Nothing here claims physical-device, clock
 synchronization, thermal or model-accuracy qualification.
 
 ## Profiles
@@ -61,14 +61,35 @@ close the take as `failed`.
 
 ## Not in this revision
 
-Depth and confidence (SA-55), saved calibration values and calibration resets (SA-54; the one declared calibration is
-`state=unknown`), inventory hashing/manifest (SA-18), iOS.
+Depth and confidence (SA-55), calibration values inside the MCAP (the v1.1 Inventory carries only the calibration
+_state_), and iOS.
+
+## Saved calibration and settings (SA-54)
+
+- **Calibration follows the saved pixels.** The H.264 path encodes ARCore's CPU image without crop, resize, rotation
+  or mirroring, so the saved raster is the identity of the actual source image (`geometry/SavedRaster`,
+  `geometry/H264Calibration`). Each frame's `camera.imageIntrinsics` must describe the source image and that image
+  must match the encoder raster. The recorder rejects and counts mismatches (`calibration_rejected_frames`).
+  The Inventory calibration is `state=yes` only when one verified calibration covers every accepted
+  frame, `unknown` if intrinsics changed or frames were rejected, `no`/`unavailable` otherwise.
+- **Values live in `metadata.json`.** The `saved_calibration` report contains source intrinsics, saved K 3x3 and P 3x4,
+  the saved-raster transform, frame counts and the raster dimensions reported by the codec. The MCAP v1.1 Inventory
+  carries the calibration state. Storing K/P in MCAP requires an additive contract change.
+- **Settings are honored or refused before any side effect.** `RecordingConfig.fromMap` is strict: wrong types,
+  unsupported values and conflicting `rgbHz`/`recordingHz` aliases return `INVALID_CAPTURE_SETTINGS` from
+  `initializeSession`/`startRecording`. The legacy CPU JPEG profile (`rgbCodec=jpeg`) records 15 Hz only and refuses
+  30/60 Hz. Fresh Android JPEG settings request 15 Hz. Saved settings still reach native validation. The
+  explicit H.264 hardware profile requests 1080p30. The native motion producer uses
+  `imuHz` as its sampling target. Start (`captureSettings`) and `metadata.json` (`capture_settings`) report the request,
+  capture targets, and any requested streams the profile omits. Delivered cadence remains unverified.
+- **Tracking loss never suppresses RGB.** Pose is exported only for a TRACKING camera; otherwise only an explicit
+  `pose_valid=false` sensor event is written and RGB, intrinsics and raw motion continue.
 
 ## Reproduce locally
 
 ```sh
 source scripts/env.sh
-scripts/start_capture_emulator.sh --ar -no-window      # dedicated single-user emulator-5582
+scripts/supervise_capture_emulator.sh --ar -no-window      # dedicated single-user emulator-5582
 python3 scripts/test_android_h264_e2e.py --serial emulator-5582
 ```
 

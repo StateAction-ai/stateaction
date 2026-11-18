@@ -23,6 +23,7 @@ import open.fpvlabs.stera.ar_recorder.encoding.H264EncoderProfile
 import open.fpvlabs.stera.ar_recorder.encoding.H264PreflightException
 import open.fpvlabs.stera.ar_recorder.encoding.H264RgbEncoder
 import open.fpvlabs.stera.ar_recorder.data.h264.FramePts
+import open.fpvlabs.stera.ar_recorder.geometry.H264Calibration
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -51,6 +52,8 @@ class H264RecordingController(
     private val pending = LinkedHashMap<Long, Pending>()
     private val pts = FramePts()
     private val gate = CameraTimestampGate()
+    /** Saved-raster calibration for exactly the pixels this take encodes (identity: no crop/resize/rotation). */
+    val calibration = H264Calibration(encoderProfile.width, encoderProfile.height)
     private val queuedWrites = AtomicInteger()
     private val queuedVideoBytes = AtomicLong()
     private val peakQueuedVideoBytes = AtomicLong()
@@ -67,6 +70,7 @@ class H264RecordingController(
     private var repeatedCpuImages = 0L
     private var cpuImageFrameMismatches = 0L
     private var codecInputDrops = 0L
+    private var calibrationRejected = 0L
     @Volatile var failure: String? = null; private set
     @Volatile var interruptionReason: String? = null; private set
     val setup: H264CaptureSetup
@@ -98,7 +102,7 @@ class H264RecordingController(
         )
         if (encoderProfile.simulation) profile["mapped_timeline_semantics"] = "simulation_transport_only"
         setup = H264CaptureSetup(profile, H264Evidence.clocks(recordingId, anchor, rgbClock, realtimeCameraClock)) { acquired, accel, gyro ->
-            H264Evidence.inventory(plan, acquired, accel, gyro)
+            H264Evidence.inventory(plan, acquired, accel, gyro, calibration.inventoryState)
         }
     }
 
@@ -106,7 +110,7 @@ class H264RecordingController(
      * Called on the producer thread for every unique ARCore frame while recording. Returns true only when an acquired
      * image was queued into the codec. Tracking state never gates RGB; it is recorded as explicit pose evidence.
      */
-    fun capture(frame: Frame, trackingState: String, pose: FloatArray?): Boolean {
+    fun capture(frame: Frame, trackingState: String, pose: FloatArray?, sourceIntrinsics: Map<String, Any>?): Boolean {
         if (failure != null) return false
         return try {
             encoder.drain()
@@ -140,6 +144,13 @@ class H264RecordingController(
                 }
                 if (image.width != encoderProfile.width || image.height != encoderProfile.height) {
                     throw H264PreflightException("Camera image ${image.width}x${image.height} differs from ${encoderProfile.width}x${encoderProfile.height}; no resize fallback")
+                }
+                // The calibration must describe the pixels about to be encoded; an impossible mapping is rejected here,
+                // before any frame identity exists, and counted.
+                calibration.observe(nextSourceId, image.width, image.height, sourceIntrinsics)?.let { reason ->
+                    calibrationRejected++
+                    if (metrics.firstRgbCaptureError == null) metrics.firstRgbCaptureError = "Calibration rejected: $reason"
+                    return false
                 }
                 val id = nextSourceId++
                 val mappedNs = anchor.map(accepted.cameraNs)
@@ -195,13 +206,19 @@ class H264RecordingController(
         try { encoder.close() } finally { pending.clear() }
     }
 
+    /** Persisted calibration evidence; encoded size is the codec's actual output format, never the request. */
+    fun calibrationReport(): Map<String, Any?> {
+        val format = encoder.outputFormat
+        return calibration.report(format["width"] as? Int, format["height"] as? Int)
+    }
+
     fun terminalStats(): Map<String, Any?> = mapOf(
         "recording_id" to recordingId, "profile" to encoderProfile.name,
         "qualification" to if (encoderProfile.simulation) "simulation_only" else "unqualified",
         "camera_clock" to rgbClock, "camera_clock_source_realtime" to realtimeCameraClock,
         "encoder" to encoder.identity(), "unresolved_encoder_identities" to pending.size,
         "camera_image_unavailable" to cameraImageUnavailable, "pre_acquisition_backpressure_skips" to backpressureSkips,
-        "codec_input_drops" to codecInputDrops, "repeated_cpu_images_skipped" to repeatedCpuImages,
+        "codec_input_drops" to codecInputDrops, "calibration_rejected_frames" to calibrationRejected, "repeated_cpu_images_skipped" to repeatedCpuImages,
         "cpu_image_frame_timestamp_mismatches" to cpuImageFrameMismatches,
         "cpu_image_frame_mismatch_policy" to if (encoderProfile.simulation) "recorded_simulation_only" else "skipped_not_acquired", "clock_waits" to gate.waits, "duplicate_camera_frames" to gate.duplicates,
         "metadata_timestamp_stale" to gate.staleMetadata, "metadata_timestamp_ahead" to gate.aheadMetadata,
