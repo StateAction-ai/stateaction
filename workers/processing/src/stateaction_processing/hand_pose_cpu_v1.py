@@ -267,12 +267,117 @@ def _check_counts(checks: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
+_DIAG_STAGES = {
+    "inference": "while decoding and inferring frames",
+    "source_verification": "at the final whole-source verification",
+    "manifest": "while building the result manifest",
+}
+_DIAG_COUNTS = (
+    "source_bytes_read",
+    "video_messages",
+    "frames_decoded",
+    "frames_inferred",
+    "clips_written",
+    "files_put",
+)
+
+
+_INT64_MAX = 2**63 - 1
+
+
+def _failure_evidence(
+    error: BaseException | None, uploaded: int
+) -> tuple[str, dict[str, str], bool]:
+    """Curated stage message, int64-decimal counters and the proven-source flag.
+
+    Only allowlisted stage and count names are read; exception text, paths and payloads are never
+    copied. A count that is not an int in [0, int64 max] is omitted, never clamped (a clamped
+    value would be an invented measurement). `files_uploaded` is what the server-backed sink
+    actually stored before the failure. The source counts as verified only when the exporter set
+    its boolean at the proven EOF/hash gate, the stage is `manifest` and the byte count is present.
+    """
+    diag = getattr(error, "diagnostics", None)
+    stage = diag.get("stage") if isinstance(diag, dict) else None
+    counts = diag.get("counts") if isinstance(diag, dict) else None
+    measurements: dict[str, str] = {}
+    if isinstance(counts, dict):
+        for name in _DIAG_COUNTS:
+            value = counts.get(name)
+            if (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and 0 <= value <= _INT64_MAX
+            ):
+                measurements[name] = str(value)
+    measurements["files_uploaded"] = str(max(0, int(uploaded)))
+    verified = (
+        isinstance(diag, dict)
+        and diag.get("source_verified") is True
+        and stage == "manifest"
+        and measurements.get("source_bytes_read", "0") != "0"
+    )
+    where = _DIAG_STAGES.get(stage if isinstance(stage, str) else "")
+    message = (
+        f"Processing failed {where}; no accepted result exists."
+        if where
+        else "Processing failed before a complete verified result existed."
+    )
+    return message, measurements, verified
+
+
 def _failure_manifest(
-    grant: dict[str, Any], task: dict[str, Any], nonce: str, code: str
+    grant: dict[str, Any],
+    task: dict[str, Any],
+    nonce: str,
+    code: str,
+    error: BaseException | None = None,
+    uploaded: int = 0,
 ) -> bytes:
     from .artifact_types import RULE_REVISION
 
+    message, measurements, verified = _failure_evidence(error, uploaded)
+
     digests = grant["digests"]
+    source = next(i for i in grant["inputs"] if i["role"] == "source_mcap")
+    # The bytes actually read must equal the granted MCAP size when the grant states one.
+    verified = (
+        verified
+        and str(source.get("sizeBytes", measurements["source_bytes_read"]))
+        == (measurements["source_bytes_read"])
+    )
+
+    def check(
+        name: str, status: str, text: str, meas: dict[str, str]
+    ) -> dict[str, Any]:
+        return {
+            "code": name,
+            "status": status,
+            "message": text,
+            "rule_revision": RULE_REVISION,
+            "measurements": meas,
+        }
+
+    if verified:
+        # Attest only the MCAP named by source_file_id, matching successful exports.
+        # Other inputs are not claimed as verified; the failed candidate accepts no clips.
+        source_check = check(
+            "source_accepted",
+            "pass",
+            "The source MCAP alone was verified to footer, CRC, SHA-256 and Close before the "
+            "failure; the candidate still failed and no result is accepted.",
+            {
+                k: measurements[k]
+                for k in ("source_bytes_read", "video_messages", "frames_decoded")
+                if k in measurements
+            },
+        )
+    else:
+        source_check = check(
+            "source_accepted",
+            "not_evaluated",
+            "Not evaluated: processing failed before the source was verified.",
+            {},
+        )
     doc: dict[str, Any] = {
         "schema": "stateaction.processing_result.v2",
         "job_id": grant["jobId"],
@@ -290,17 +395,29 @@ def _failure_manifest(
             },
             "rerun_sdk_version": "0.41.0",
         },
-        "verified_sources": [],
+        "verified_sources": (
+            [
+                {
+                    "file_id": source["fileId"],
+                    "size_bytes": measurements["source_bytes_read"],
+                    "sha256": source["sha256"],
+                }
+            ]
+            if verified
+            else []
+        ),
         "outputs": [],
         "clips": [],
         "checks": [
-            {
-                "code": code,
-                "status": "fail",
-                "message": "Processing failed before a complete verified result existed.",
-                "rule_revision": RULE_REVISION,
-                "measurements": {},
-            }
+            check(code, "fail", message, measurements),
+            source_check,
+            # No complete detection summary was finalized for a failed candidate.
+            check(
+                "hand_detection_summary",
+                "not_evaluated",
+                "Not evaluated: no complete detection summary was finalized.",
+                {},
+            ),
         ],
         "metric_accuracy_validated": False,
         "limitations": [
@@ -309,10 +426,8 @@ def _failure_manifest(
         "attestation": {
             "invocation_nonce": nonce,
             "rgb_profile": task["rgbProfile"],
-            "source_file_id": next(
-                i["fileId"] for i in grant["inputs"] if i["role"] == "source_mcap"
-            ),
-            "source_eof_verified": False,
+            "source_file_id": source["fileId"],
+            "source_eof_verified": verified,
         },
     }
     sim = _snake_simulation(task.get("simulation"))
@@ -467,7 +582,9 @@ def _fail(
     code = _error_code(error)
     print(f"Worker failed: {code}")
     try:
-        data = _failure_manifest(grant, task, api.nonce, code)
+        data = _failure_manifest(
+            grant, task, api.nonce, code, error, len(sink.receipts)
+        )
         path = scratch / "result-manifest.json"
         path.write_bytes(data)
         out = make_output("result_manifest", "result-manifest.json", path, None)

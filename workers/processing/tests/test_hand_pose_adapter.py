@@ -119,7 +119,7 @@ class Stub(BaseHTTPRequestHandler):
             self._reply({"accepted": True})
 
 
-def install_fakes(fail: bool):
+def install_fakes(fail: bool, diagnostic: "bool | dict" = False):
     from stateaction_processing.artifact_types import make_output
 
     export = types.ModuleType("stateaction_processing.artifact_export")
@@ -128,6 +128,28 @@ def install_fakes(fail: bool):
     streams.StreamLimits = lambda: object()  # type: ignore[attr-defined]
 
     def export_artifacts(raw, sink, ctx, **kw):
+        if fail and diagnostic:
+            path = Path(tempfile.mkdtemp(prefix="fake-clip-")) / "a.bin"
+            path.write_bytes(b"clip bytes")
+            sink.put(make_output("hand_arrays_npz", "clips/000/hands.npz", path, None))
+            error = RuntimeError("secret /home/someone/private.mcap token=abc")
+            error.diagnostics = (
+                diagnostic
+                if isinstance(diagnostic, dict)
+                else {  # type: ignore[attr-defined]
+                    "stage": "source_verification",
+                    "counts": {
+                        "frames_decoded": 5,
+                        "frames_inferred": 5,
+                        "clips_written": 1,
+                        "files_put": 1,
+                        "path": "/home/someone/private.mcap",  # not allowlisted
+                        "video_messages": -3,  # invalid: dropped
+                    },
+                    "detail": "token=abc",
+                }
+            )
+            raise error
         if fail:
             raise RuntimeError("boom")
         manifest = {
@@ -153,14 +175,17 @@ class AdapterProtocolTests(unittest.TestCase):
         Stub.calls, Stub.blobs, Stub.sizes, Stub.counter = [], {}, {}, 0
         self.server = HTTPServer(("127.0.0.1", 0), Stub)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
         for name in ("artifact_export", "capture_stream"):
             self.addCleanup(sys.modules.pop, f"stateaction_processing.{name}", None)
 
-    def run_adapter(self, fail: bool) -> int:
+    def run_adapter(
+        self, fail: bool, diagnostic: "bool | dict" = False, size: "str | None" = None
+    ) -> int:
         from stateaction_processing import hand_model, hand_pose_cpu_v1
 
-        install_fakes(fail)
+        install_fakes(fail, diagnostic)
         port = self.server.server_port
         grant = {
             "jobId": JOB,
@@ -173,7 +198,8 @@ class AdapterProtocolTests(unittest.TestCase):
             },
             "inputs": [
                 {"fileId": MCAP, "role": "source_mcap", "sha256": "a" * 64,
-                 "readUrl": f"http://127.0.0.1:{port}/source"},
+                 "readUrl": f"http://127.0.0.1:{port}/source",
+                 **({"sizeBytes": size} if size is not None else {})},
                 {"fileId": MAN, "role": "source_manifest", "sha256": SHA0, "readUrl": ""},
             ],
         }  # fmt: skip
@@ -233,6 +259,189 @@ class AdapterProtocolTests(unittest.TestCase):
         self.assertEqual(result["summary"]["errorCode"], "runtimeerror")
         self.assertEqual(result["summary"]["clipCount"], 0)
         self.assertEqual(result["summary"]["checks"]["fail"], 1)
+
+    def test_failure_after_uploads_reports_curated_counters_and_closes_failed(self):
+        self.assertEqual(self.run_adapter(fail=True, diagnostic=True), 3)
+        from stateaction_contracts import validate_bytes
+
+        blob = next(
+            b
+            for b in Stub.blobs.values()
+            if b.startswith(b"{") and b"processing_result" in b
+        )
+        verdict = validate_bytes("artifacts.processing-result.v2", blob)
+        self.assertTrue(verdict.valid, (verdict.code, verdict.errors[:3]))
+        manifests = [
+            json.loads(b)
+            for b in Stub.blobs.values()
+            if b.startswith(b"{") and b"processing_result" in b
+        ]
+        self.assertEqual(len(manifests), 1)
+        manifest = manifests[0]
+        self.assertEqual(manifest["clips"], [])
+        self.assertEqual(
+            manifest["outputs"], []
+        )  # nothing uploaded is cited as a result
+        self.assertFalse(manifest["attestation"]["source_eof_verified"])
+        by_code = {c["code"]: c for c in manifest["checks"]}
+        fail = by_code["runtimeerror"]
+        self.assertEqual(fail["status"], "fail")
+        self.assertIn("final whole-source verification", fail["message"])
+        self.assertEqual(
+            fail["measurements"],
+            {
+                "frames_decoded": "5",
+                "frames_inferred": "5",
+                "clips_written": "1",
+                "files_put": "1",
+                "files_uploaded": "1",  # the uploaded diagnostic file stays retained, unaccepted
+            },
+        )
+        for code in ("source_accepted", "hand_detection_summary"):
+            self.assertEqual(by_code[code]["status"], "not_evaluated")
+            self.assertEqual(by_code[code]["measurements"], {})
+        # Bounded and free of caller text, paths and tokens.
+        raw = json.dumps(manifest)
+        for leaked in ("someone", "private.mcap", "token=abc", "secret"):
+            self.assertNotIn(leaked, raw)
+        self.assertLess(len(raw), 16 * 1024)
+        close = next(b for m, p, b in Stub.calls if p.endswith("/outputs/close"))
+        self.assertEqual(close["outcome"], "failed")
+        result = Stub.calls[-1][2]
+        self.assertEqual(result["summary"]["outcome"], "failed")
+        self.assertEqual(result["summary"]["clipCount"], 0)
+        self.assertEqual(
+            result["summary"]["checks"],
+            {"pass": 0, "warn": 0, "fail": 1, "measured": 0, "notEvaluated": 2},
+        )
+        names = [p.split(f"{JOB}/")[-1] for _, p, _ in Stub.calls if JOB in p]
+        self.assertLess(
+            names.index("outputs/close"), names.index("result")
+        )  # inventory closed before the candidate
+
+    def failed_manifest(self, diagnostic, size=None):
+        from stateaction_contracts import validate_bytes
+
+        self.assertEqual(
+            self.run_adapter(fail=True, diagnostic=diagnostic, size=size), 3
+        )
+        blob = next(
+            b
+            for b in Stub.blobs.values()
+            if b.startswith(b"{") and b"processing_result" in b
+        )
+        verdict = validate_bytes("artifacts.processing-result.v2", blob)
+        self.assertTrue(verdict.valid, (verdict.code, verdict.errors[:3]))
+        manifest = json.loads(blob)
+        by_code = {c["code"]: c for c in manifest["checks"]}
+        result = Stub.calls[-1][2]
+        # The summary counts always equal the manifest's own check statuses.
+        expected = {"pass": 0, "warn": 0, "fail": 0, "measured": 0, "notEvaluated": 0}
+        for c in manifest["checks"]:
+            expected[
+                "notEvaluated" if c["status"] == "not_evaluated" else c["status"]
+            ] += 1
+        self.assertEqual(result["summary"]["checks"], expected)
+        self.assertEqual(result["summary"]["outcome"], "failed")
+        self.assertEqual(result["summary"]["clipCount"], 0)
+        self.assertEqual(manifest["clips"], [])
+        self.assertEqual(manifest["outputs"], [])
+        return manifest, by_code
+
+    def test_failure_after_proven_source_reports_source_check_but_stays_failed(self):
+        manifest, by_code = self.failed_manifest(
+            {
+                "stage": "manifest",
+                "source_verified": True,
+                "counts": {
+                    "source_bytes_read": 1234,
+                    "video_messages": 5,
+                    "frames_decoded": 5,
+                },
+            }
+        )
+        source = by_code["source_accepted"]
+        self.assertEqual(source["status"], "pass")
+        self.assertNotIn("before the source was verified", source["message"])
+        self.assertEqual(
+            source["measurements"],
+            {"source_bytes_read": "1234", "video_messages": "5", "frames_decoded": "5"},
+        )
+        # The attestation names exactly the proven MCAP, never unread input files.
+        self.assertTrue(manifest["attestation"]["source_eof_verified"])
+        self.assertEqual(manifest["attestation"]["source_file_id"], MCAP)
+        self.assertEqual(
+            manifest["verified_sources"],
+            [
+                {
+                    "file_id": MCAP,
+                    "size_bytes": "1234",
+                    "sha256": "a" * 64,
+                }
+            ],
+        )
+        self.assertEqual(by_code["runtimeerror"]["status"], "fail")
+        self.assertEqual(by_code["hand_detection_summary"]["status"], "not_evaluated")
+
+    def test_source_is_never_inferred_verified(self):
+        # Flag missing, false, truthy-but-not-True, wrong stage, or no byte count: not evaluated.
+        cases = [
+            {"stage": "manifest", "counts": {"source_bytes_read": 9}},
+            {
+                "stage": "manifest",
+                "source_verified": False,
+                "counts": {"source_bytes_read": 9},
+            },
+            {
+                "stage": "manifest",
+                "source_verified": 1,
+                "counts": {"source_bytes_read": 9},
+            },
+            {
+                "stage": "source_verification",
+                "source_verified": True,
+                "counts": {"source_bytes_read": 9},
+            },
+            {"stage": "manifest", "source_verified": True, "counts": {}},
+        ]
+        for diag in cases:
+            with self.subTest(diag=diag):
+                Stub.calls, Stub.blobs, Stub.sizes, Stub.counter = [], {}, {}, 0
+                manifest, by_code = self.failed_manifest(diag)
+                self.assertEqual(by_code["source_accepted"]["status"], "not_evaluated")
+                self.assertFalse(manifest["attestation"]["source_eof_verified"])
+                self.assertEqual(manifest["verified_sources"], [])
+
+    def test_granted_size_must_equal_bytes_read(self):
+        diag = {
+            "stage": "manifest",
+            "source_verified": True,
+            "counts": {"source_bytes_read": 9},
+        }
+        _m, by_code = self.failed_manifest(diag, size="9")
+        self.assertEqual(by_code["source_accepted"]["status"], "pass")
+        Stub.calls, Stub.blobs, Stub.sizes, Stub.counter = [], {}, {}, 0
+        _m, by_code = self.failed_manifest(diag, size="10")
+        self.assertEqual(by_code["source_accepted"]["status"], "not_evaluated")
+
+    def test_out_of_range_and_invalid_counts_are_omitted_never_clamped(self):
+        _manifest, by_code = self.failed_manifest(
+            {
+                "stage": "inference",
+                "counts": {
+                    "frames_decoded": 2**63,  # over int64: omitted, not clamped
+                    "frames_inferred": 2**63 - 1,  # exactly int64 max: kept
+                    "clips_written": True,  # bool
+                    "files_put": -1,  # negative
+                    "video_messages": "7",  # non-int
+                    "source_bytes_read": 1.5,  # non-int
+                },
+            }
+        )
+        self.assertEqual(
+            by_code["runtimeerror"]["measurements"],
+            {"frames_inferred": str(2**63 - 1), "files_uploaded": "1"},
+        )
 
 
 if __name__ == "__main__":
