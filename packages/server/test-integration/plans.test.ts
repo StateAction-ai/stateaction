@@ -247,7 +247,7 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
   const reads: Record<string, [string, unknown[]]> = {
     customerDatasetGrid: [
       DATASET_CLIPS_SQL,
-      [actors.customer, datasetId, null, null, 25],
+      [actors.customer, datasetId, null, null, 25, "", ""],
     ],
     staffAllClipsPending: [
       `SELECT c.id, coalesce(lr.decision, 'pending') FROM clips c
@@ -256,7 +256,10 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
        ORDER BY c.created_at DESC, c.id DESC LIMIT 25`,
       [],
     ],
-    customerDatasetList: [LIST_DATASETS_SQL, [actors.customer, null, null, 25]],
+    customerDatasetList: [
+      LIST_DATASETS_SQL,
+      [actors.customer, null, null, 25, ""],
+    ],
     staffDatasetListAfterCursor: [
       LIST_DATASETS_SQL,
       [
@@ -264,6 +267,7 @@ test("bounded catalog reads use indexes and LIMIT on a large catalog", async () 
         new Date().toISOString(),
         "ffffffff-ffff-4fff-bfff-ffffffffffff",
         25,
+        "",
       ],
     ],
     latestReview: [

@@ -187,6 +187,8 @@ async function readContract<T>(request: Request, contract: string): Promise<T> {
 }
 
 type Query = {
+  q?: string;
+  label?: string;
   cursor?: string;
   limit?: number;
   reviewStatus?: "pending" | "approved" | "rejected";
@@ -200,7 +202,11 @@ function readQuery(request: Request, allowed: readonly (keyof Query)[]): Query {
     if (seen.has(key) || !(allowed as readonly string[]).includes(key))
       throw invalid(`Unsupported query parameter ${key}`);
     seen.add(key);
-    if (key === "cursor") {
+    if (key === "q" || key === "label") {
+      if (value.length > 160 || /[\u0000-\u001f\u007f]/.test(value))
+        throw invalid("Invalid search");
+      out[key] = value.trim();
+    } else if (key === "cursor") {
       if (!value || value.length > 300) throw invalid("Invalid cursor");
       out.cursor = value;
     } else if (key === "limit") {
@@ -293,7 +299,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
   return {
     listDatasets: (request: Request) =>
       run(request, "member", async (p) => {
-        const q = readQuery(request, ["cursor", "limit"]);
+        const q = readQuery(request, ["cursor", "limit", "q"]);
         const page = await listDatasets(pool, { viewerUserId: p.userId, ...q });
         return { data: { datasets: page.items, nextCursor: page.nextCursor } };
       }),
@@ -341,7 +347,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
     listDatasetClips: (request: Request, datasetId: string) =>
       run(request, "member", async (p) => {
         const id = pathId(datasetId, "datasetId");
-        const q = readQuery(request, ["cursor", "limit"]);
+        const q = readQuery(request, ["cursor", "limit", "q", "label"]);
         const page = await listDatasetClips(pool, {
           viewerUserId: p.userId,
           datasetId: id,
@@ -403,6 +409,8 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
           "limit",
           "reviewStatus",
           "recordingId",
+          "q",
+          "label",
         ]);
         const page = await listStaffClips(pool, {
           viewerUserId: p.userId,
