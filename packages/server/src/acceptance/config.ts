@@ -63,7 +63,13 @@ export function acceptanceConfigFromEnv(
       1,
       64 * 1024 ** 3,
     ),
-    verifyMaxFiles: DEFAULTS.verifyMaxFiles,
+    verifyMaxFiles: bounded(
+      env,
+      "ACCEPTANCE_VERIFY_MAX_FILES",
+      DEFAULTS.verifyMaxFiles,
+      1,
+      2000,
+    ),
     verifyObjectTimeoutMs: bounded(
       env,
       "ACCEPTANCE_VERIFY_OBJECT_TIMEOUT_MS",

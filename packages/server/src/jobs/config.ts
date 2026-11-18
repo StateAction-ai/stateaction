@@ -76,6 +76,15 @@ export function jobsConfigFromEnv(
     throw new Error(
       "Missing or invalid server setting: PROCESSING_EXECUTION_BACKEND",
     );
+  const maxOutputFiles = Number(env.PROCESSING_MAX_OUTPUT_FILES ?? 512);
+  if (
+    !Number.isSafeInteger(maxOutputFiles) ||
+    maxOutputFiles < 1 ||
+    maxOutputFiles > 2000
+  )
+    throw new Error(
+      "PROCESSING_MAX_OUTPUT_FILES must be an integer in 1..2000",
+    );
   return {
     executionBackend: backend,
     codeRevision: setting(env, "PROCESSING_CODE_REVISION", REVISION),
@@ -83,7 +92,7 @@ export function jobsConfigFromEnv(
     modelSha256: setting(env, "PROCESSING_MODEL_SHA256", SHA),
     configSha256: setting(env, "PROCESSING_CONFIG_SHA256", SHA),
     limits: {
-      maxOutputFiles: 512,
+      maxOutputFiles,
       maxOutputBytes: "68719476736",
       maxControlDocumentBytes: 1048576,
     },

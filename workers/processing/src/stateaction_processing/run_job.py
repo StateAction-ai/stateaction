@@ -14,6 +14,7 @@ import errno
 import importlib
 import json
 import os
+import platform
 import re
 import sys
 import time
@@ -52,9 +53,27 @@ class WorkerExit(Exception):
         self.label = label
 
 
-def enforce_single_process() -> None:
-    """Install an irreversible no-process-creation filter before fixture work."""
+class _ArgCmp(ctypes.Structure):
+    _fields_ = [
+        ("arg", ctypes.c_uint),
+        ("op", ctypes.c_int),
+        ("mask", ctypes.c_uint64),
+        ("value", ctypes.c_uint64),
+    ]
+
+
+def enforce_single_process(*, allow_threads: bool = False) -> None:
+    """Allow only the existing process, optionally with native threads."""
     try:
+        if allow_threads and (
+            sys.platform != "linux"
+            or platform.machine() != "x86_64"
+            or not hasattr(os, "pidfd_open")
+        ):
+            raise OSError("thread group isolation unavailable")
+        if allow_threads:
+            # Verify kernel support before acknowledging the filter to the controller.
+            os.close(os.pidfd_open(os.getpid()))
         lib = ctypes.CDLL("libseccomp.so.2")
         lib.seccomp_init.argtypes = [ctypes.c_uint32]
         lib.seccomp_init.restype = ctypes.c_void_p
@@ -65,6 +84,13 @@ def enforce_single_process() -> None:
             ctypes.c_uint32,
             ctypes.c_int,
             ctypes.c_uint,
+        ]
+        lib.seccomp_rule_add_array.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.POINTER(_ArgCmp),
         ]
         lib.seccomp_load.argtypes = [ctypes.c_void_p]
         lib.seccomp_release.argtypes = [ctypes.c_void_p]
@@ -85,7 +111,23 @@ def enforce_single_process() -> None:
                 b"execveat",
             ):
                 number = lib.seccomp_syscall_resolve_name(name)
-                if number < 0 or lib.seccomp_rule_add(ctx, deny, number, 0) != 0:
+                if number < 0:
+                    raise OSError("seccomp_syscall_resolve_name")
+                if allow_threads and name == b"clone":
+                    # Linux x86-64 clone flags are arg0. Deny any call without CLONE_THREAD.
+                    thread_mask = _ArgCmp(0, 7, 0x10000, 0)  # SCMP_CMP_MASKED_EQ
+                    result = lib.seccomp_rule_add_array(
+                        ctx, deny, number, 1, ctypes.byref(thread_mask)
+                    )
+                else:
+                    # glibc falls back to clone on ENOSYS. clone3 flags are in a pointer.
+                    action = (
+                        (0x00050000 | errno.ENOSYS)
+                        if allow_threads and name == b"clone3"
+                        else deny
+                    )
+                    result = lib.seccomp_rule_add(ctx, action, number, 0)
+                if result != 0:
                     raise OSError("seccomp_rule_add")
             if lib.seccomp_load(ctx) != 0:
                 raise OSError("seccomp_load")
@@ -205,23 +247,35 @@ def _post(url: str, token: str, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def run(execution_ref: str) -> int:
-    isolation_requested = os.environ.get("STATEACTION_FIXTURE_ISOLATION_FD") == "3"
-    if isolation_requested:
-        if not _pipeline_present(_FIXTURE_PIPELINE):
+    isolated_pipeline = None
+    if os.environ.get("STATEACTION_FIXTURE_ISOLATION_FD") == "3":
+        isolated_pipeline = _FIXTURE_PIPELINE
+    elif os.environ.get("STATEACTION_THREADED_ISOLATION_FD") == "3":
+        isolated_pipeline = "hand_pose_cpu_v1"
+    if isolated_pipeline:
+        if not _pipeline_present(isolated_pipeline):
             raise WorkerExit(EXIT_PIPELINE_UNAVAILABLE, "PipelineUnavailable")
-        enforce_single_process()
+        allow_threads = isolated_pipeline != _FIXTURE_PIPELINE
+        enforce_single_process(allow_threads=allow_threads)
         try:
-            os.write(_ISOLATION_FD, b"1")
+            os.write(_ISOLATION_FD, b"2" if allow_threads else b"1")
         finally:
             os.close(_ISOLATION_FD)
     boot = _read_bootstrap(execution_ref)
     pipeline = boot["pipeline"]
-    if isolation_requested and pipeline != _FIXTURE_PIPELINE:
+    if isolated_pipeline and (
+        pipeline != isolated_pipeline or boot["executorKind"] != "local"
+    ):
+        raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap")
+    if isolated_pipeline == "hand_pose_cpu_v1" and (
+        os.environ.get("APP_ENV") != "local"
+        or urlparse(boot["apiUrl"]).hostname not in ("127.0.0.1", "localhost", "::1")
+    ):
         raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap")
     if not _pipeline_present(pipeline):
         # Fail closed BEFORE the claim: an unavailable pipeline never takes a claim it cannot honour.
         raise WorkerExit(EXIT_PIPELINE_UNAVAILABLE, "PipelineUnavailable")
-    if pipeline == _FIXTURE_PIPELINE and not isolation_requested:
+    if pipeline == _FIXTURE_PIPELINE and not isolated_pipeline:
         enforce_single_process()
     nonce = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
     claim = {

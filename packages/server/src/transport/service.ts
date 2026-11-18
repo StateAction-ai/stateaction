@@ -64,7 +64,6 @@ export const OUTPUT_ROLES = [
 export const MAX_SOURCE_MANIFEST_BYTES = 1_048_576n;
 /** Per-file / per-job caps for worker outputs (bounded inventory). */
 export const MAX_OUTPUT_FILE_BYTES = 34_359_738_368n; // 32 GiB
-export const MAX_JOB_OUTPUT_FILES = 512;
 export const MAX_JOB_OUTPUT_BYTES = 68_719_476_736n; // 64 GiB
 const SHA = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -260,15 +259,25 @@ export async function allocateJobOutput(
           );
         return existing.rows[0].file_id;
       }
-      const totals = await tx.query<{ n: string; bytes: string }>(
-        `SELECT count(*)::text AS n, COALESCE(sum(size_bytes), 0)::text AS bytes
-         FROM files WHERE job_id = $1 AND purpose = 'output'
-           AND state NOT IN ('cancelled', 'failed', 'expired')`,
+      const {
+        rows: [inventory],
+      } = await tx.query<{
+        max_output_files: number;
+        n: string;
+        bytes: string;
+      }>(
+        `SELECT i.max_output_files, count(f.id)::text AS n,
+                COALESCE(sum(f.size_bytes), 0)::text AS bytes
+         FROM job_inputs i LEFT JOIN files f ON f.job_id = i.job_id
+           AND f.purpose = 'output' AND f.state NOT IN ('cancelled', 'failed', 'expired')
+         WHERE i.job_id = $1 GROUP BY i.max_output_files`,
         [jobId],
       );
+      if (!inventory)
+        throw new TransportError("forbidden", "Job input limits unavailable");
       if (
-        Number(totals.rows[0]!.n) >= MAX_JOB_OUTPUT_FILES ||
-        BigInt(totals.rows[0]!.bytes) + size > MAX_JOB_OUTPUT_BYTES
+        Number(inventory.n) >= inventory.max_output_files ||
+        BigInt(inventory.bytes) + size > MAX_JOB_OUTPUT_BYTES
       )
         throw new TransportError(
           "conflict",

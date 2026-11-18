@@ -131,6 +131,10 @@ class RrdWriter:
         self.sx, self.sy = self.pw / w, self.ph / h
         self.encoder = ProxyEncoder(self.pw, self.ph, limits)
         self._source_frames: dict[int, int] = {}
+        # The SDK retains orphaned streams and their native threads after
+        # disconnect. Collect them before opening another stream without
+        # creating a global recording.
+        rr.init(APPLICATION_ID, init_logging=False)
         self.rec = rr.RecordingStream(APPLICATION_ID, recording_id=clip_id)
         self.rec.save(str(path))
         self.samples = 0
@@ -148,7 +152,7 @@ class RrdWriter:
         if extra_note:
             note += " " + extra_note
         self.rec.log("notes/model_relative_3d", rr.TextDocument(note), static=True)
-        self.rec.send_blueprint(
+        self._send_blueprint(
             rrb.Horizontal(
                 rrb.Spatial2DView(origin="rgb", name="RGB + detected hands (image px)"),
                 rrb.Vertical(
@@ -165,6 +169,29 @@ class RrdWriter:
                 column_shares=[3, 2],
             )
         )
+
+    def _send_blueprint(self, layout: Any) -> None:
+        # Keep the temporary blueprint stream available so we can disconnect
+        # its memory sink. The pinned SDK's send_blueprint drops the Python
+        # handle while the native memory sink still retains the stream.
+        rr = self._rr
+        blueprint = rr.RecordingStream._from_native(
+            rr.bindings.new_blueprint(
+                application_id=APPLICATION_ID,
+                make_default=False,
+                make_thread_default=False,
+                default_enabled=True,
+            )
+        )
+        try:
+            blueprint.set_time("blueprint", sequence=0)
+            layout.to_blueprint()._log_to_stream(blueprint)
+            memory = blueprint.memory_recording()
+            rr.bindings.send_blueprint(
+                memory.storage, True, True, recording=self.rec.to_native()
+            )
+        finally:
+            blueprint.disconnect()
 
     def add(
         self,

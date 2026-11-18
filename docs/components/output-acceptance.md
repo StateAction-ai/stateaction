@@ -77,3 +77,19 @@ Selected by the stdlib-only `run_job` after the claim is won; nothing heavy is i
 - A signed source URL lives at most 15 minutes and is requested once per run; a resumable ranged source read is not implemented.
 - A worker cannot delete uploaded objects of a failed run; they stay in the closed (failed) inventory for diagnostics.
 - Not Render/Modal/R2/phone qualification.
+
+## File budgets for long-input qualification
+
+Admission pins `PROCESSING_MAX_OUTPUT_FILES` on each new job (default 512).
+Acceptance separately checks `ACCEPTANCE_VERIFY_MAX_FILES` (default 600).
+Both accept integers from 1 to 2,000. For a dedicated long-input run, set both
+to the same value before admitting a recording so the API can verify every
+output the job can reserve. Each clip needs six files, and the job needs one
+result manifest. A two-hour source cut at the default 30-second target needs
+about 1,441 files. Allow for the actual IDR cut boundaries when sizing the job.
+
+The 1 MiB manifest and control-document limits still apply, as do the
+per-object, aggregate byte, verification wall and worker scratch limits.
+If measured output exceeds the default 4 GiB verification budget, configure
+`ACCEPTANCE_VERIFY_MAX_BYTES` within its existing 64 GiB ceiling. Keep these
+overrides on the isolated qualification runtime.
