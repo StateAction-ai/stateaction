@@ -85,6 +85,23 @@ class FinalizationDurabilityTest {
         assertEquals(false, AtomicFiles.syncDirectoryReporting(File(temp.root, "missing_dir")))
     }
 
+    @Test fun closeUsesOnlyTheExactWriterFilename() {
+        val directory = temp.newFolder()
+        val file = File(directory, "writer.mcap")
+        val writer = MCAPWriter()
+        assertTrue(writer.open(file))
+        writer.finish()
+        val finished = checkNotNull(writer.finishedMcap)
+        assertEquals("writer.mcap", finished.relativePath)
+        assertEquals(file, finished.findIn(directory))
+
+        val decoy = file.copyTo(File(directory, "decoy.mcap"))
+        assertNull(finished.findIn(directory))
+        assertTrue(file.delete())
+        assertTrue(decoy.isFile)
+        assertNull(finished.findIn(directory))
+    }
+
     @Test fun emptyCaptureWithCleanCloseIsFailedQuarantinedAndNeverFinalized() {
         val zeroFrames = "Recording failed: no RGB frames were saved. Diagnostic files were preserved."
         // Clean H.264 Close(outcome=completed), closed container, no writer error, zero frames written.

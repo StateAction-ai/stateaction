@@ -1,6 +1,7 @@
 package open.fpvlabs.stera.ar_recorder.finalization
 
 import open.fpvlabs.stera.ar_recorder.data.h264.CaptureProtocol
+import open.fpvlabs.stera.source_integrity.ClosedSourceIdentity
 import org.json.JSONObject
 import java.io.File
 
@@ -35,12 +36,14 @@ class FinalizationJournal private constructor(private val file: File, private va
         stopReason: String? = entry.stopReason,
         containerState: String? = entry.containerState,
         captureOutcome: String? = entry.captureOutcome,
+        sourceIdentity: ClosedSourceIdentity? = null,
     ): JournalEntry {
         check(phase.ordinal >= entry.phase.ordinal) { "Journal cannot move backwards from ${entry.phase} to $phase" }
         check(entry.phase != FinalizationPhase.FINALIZED) { "Journal is already finalized" }
+        check(sourceIdentity == null || phase == FinalizationPhase.FINALIZED) { "Source identity requires FINALIZED" }
         val next = entry.copy(phase = phase, sequence = entry.sequence + 1, stopReason = stopReason,
             containerState = containerState, captureOutcome = captureOutcome)
-        write(file, next)
+        write(file, next, sourceIdentity)
         entry = next
         return next
     }
@@ -75,12 +78,15 @@ class FinalizationJournal private constructor(private val file: File, private va
             }
         }
 
-        private fun write(file: File, entry: JournalEntry) {
-            val body = CaptureProtocol.json(mapOf(
+        private fun write(file: File, entry: JournalEntry, sourceIdentity: ClosedSourceIdentity? = null) {
+            val fields = mutableMapOf<String, Any?>(
                 "version" to VERSION, "recording_id" to entry.recordingId, "session_name" to entry.sessionName,
                 "phase" to entry.phase.name, "sequence" to entry.sequence, "stop_reason" to entry.stopReason,
                 "container_state" to entry.containerState, "capture_outcome" to entry.captureOutcome,
-                "final" to (entry.phase == FinalizationPhase.FINALIZED)))
+                "final" to (entry.phase == FinalizationPhase.FINALIZED))
+            // Additive private evidence for upload recovery. Legacy phase readers ignore it.
+            if (sourceIdentity != null) fields["source_identity"] = sourceIdentity.toJson()
+            val body = CaptureProtocol.json(fields)
             AtomicFiles.write(file, body.toByteArray(Charsets.UTF_8))
         }
     }

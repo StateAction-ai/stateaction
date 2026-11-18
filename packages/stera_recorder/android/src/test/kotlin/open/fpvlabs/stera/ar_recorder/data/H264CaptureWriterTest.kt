@@ -93,6 +93,14 @@ class H264CaptureWriterTest {
         assertEquals(listOf(mapOf("reason" to "codec_input_backpressure", "count" to "1")), close["drops"])
         assertEquals(5L, capture.stats()["pose_messages"])
         assertEquals(1L, capture.stats()["invalid_pose_events"])
+        val declaration = capture.sourceManifestEvidence()
+        assertEquals(mapOf("video_frames" to "5", "dropped_video_frames" to "1", "motion_events" to "8"), declaration["counts"])
+        val declaredChannels = declaration["channels"] as List<Map<String, Any?>>
+        assertEquals("5", declaredChannels.single { it["topic"] == "/camera/rgb/video" }["message_count"])
+        assertEquals("1", declaredChannels.single { it["topic"] == "/stateaction/close" }["message_count"])
+        assertEquals(45L, declaredChannels.sumOf { (it["message_count"] as String).toLong() })
+        assertTrue(declaredChannels.all { it["clock_domain"] == "unix" })
+        assertTrue((declaration["clockDomains"] as List<*>).contains(H264Evidence.CAMERA_CLOCK))
         export(file)
     }
 
@@ -108,6 +116,7 @@ class H264CaptureWriterTest {
         val close = capture.close("completed", null, sensors, calibrations)
         mcap.finish()
         assertEquals("failed", close["outcome"])
+        assertThrows(IllegalStateException::class.java) { capture.sourceManifestEvidence() }
         assertEquals("unresolved_frames", close["failure_reason"])
         assertEquals("1", (close["frames"] as Map<*, *>)["unresolved"])
         export(file)

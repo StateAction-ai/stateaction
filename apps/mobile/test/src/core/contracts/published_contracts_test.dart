@@ -2,6 +2,7 @@ import "dart:convert";
 import "dart:io";
 
 import "package:flutter_test/flutter_test.dart";
+import "package:stateaction_contracts/stateaction_contracts.dart";
 import "package:stera/src/core/contracts/published_contracts.dart";
 import "package:stera/src/core/contracts/published_contracts.g.dart";
 import "package:stera/src/modules/auth/session/server_identity.dart";
@@ -16,6 +17,56 @@ Map<String, Object?> _json(String path) =>
 List<int> _envelope(Object? data) =>
     utf8.encode(jsonEncode({"data": data, "requestId": _requestId}));
 
+// Interpret every shared fixture form; missing fixture input must never pass
+// an invalid-case assertion accidentally by validating null instead.
+ValidationResult _runFixture(String contract, Map<String, Object?> input) {
+  final registry = PublishedContracts.registry;
+  List<int> read(String path) => File(
+    "../../packages/contracts/conformance/fixtures/$path",
+  ).readAsBytesSync();
+  if (input.containsKey("document")) {
+    return registry.validateValue(contract, input["document"]);
+  }
+  if (input.containsKey("json")) {
+    return registry.validateBytes(
+      contract,
+      utf8.encode(input["json"]! as String),
+    );
+  }
+  if (input.containsKey("base64")) {
+    return registry.validateBytes(
+      contract,
+      base64Decode(input["base64"]! as String),
+    );
+  }
+  if (input.containsKey("file")) {
+    return registry.validateBytes(contract, read(input["file"]! as String));
+  }
+  if (input.containsKey("pad")) {
+    final pad = input["pad"]! as Map;
+    final bytes = read(pad["file"]! as String);
+    return registry.validateBytes(contract, [
+      ...bytes,
+      ...List.filled((pad["totalBytes"]! as int) - bytes.length, 0x20),
+    ]);
+  }
+  if (input.containsKey("repeat")) {
+    final repeat = input["repeat"]! as Map;
+    final document = jsonDecode(jsonEncode(repeat["document"]));
+    dynamic node = document;
+    for (final raw in (repeat["pointer"]! as String).split("/").skip(1)) {
+      final part = raw.replaceAll("~1", "/").replaceAll("~0", "~");
+      node = node is List ? node[int.parse(part)] : (node as Map)[part];
+    }
+    final items = node as List;
+    while (items.length < (repeat["count"]! as int)) {
+      items.add(jsonDecode(jsonEncode(items.first)));
+    }
+    return registry.validateValue(contract, document);
+  }
+  throw StateError("Unknown shared fixture form: ${input.keys}");
+}
+
 void main() {
   group("embedded published contracts", () {
     test("schema documents are byte-identical to packages/contracts/api", () {
@@ -26,17 +77,27 @@ void main() {
     });
 
     test("catalog entries match the published catalog verbatim", () {
-      final published = _json("$_api/catalog.v2.json");
+      final published = _json("$_api/catalog.v6.json");
       final subset = jsonDecode(publishedCatalogSubset) as Map<String, Object?>;
       expect(subset["catalog"], published["catalog"]);
       expect(publishedCatalogName, published["catalog"]);
       expect(subset["common"], published["common"]);
       expect(subset["maxDepth"], published["maxDepth"]);
       final contracts = subset["contracts"]! as Map<String, Object?>;
-      expect(contracts.keys, {
-        PublishedContracts.successEnvelope,
-        PublishedContracts.me,
-      });
+      expect(
+        contracts.keys,
+        containsAll({
+          PublishedContracts.successEnvelope,
+          PublishedContracts.me,
+          "http.recording-create.v1",
+          "http.recording-create.v2",
+          "http.recording-registration.v1",
+          "http.recording-registration.v2",
+          "http.recording-seal.v1",
+          "artifacts.recording-source.v1",
+          "artifacts.recording-source.v2",
+        }),
+      );
       for (final MapEntry(:key, :value) in contracts.entries) {
         expect(
           value,
@@ -47,28 +108,23 @@ void main() {
     });
   });
 
-  group("http.me.v1 shared conformance fixtures", () {
-    for (final contract in [
-      PublishedContracts.me,
-      PublishedContracts.successEnvelope,
-    ]) {
+  group("embedded shared conformance fixtures", () {
+    for (final contract
+        in ((jsonDecode(publishedCatalogSubset) as Map)["contracts"] as Map)
+            .keys
+            .cast<String>()) {
       final cases =
           _json("$_fixtures/$contract.json")["cases"]! as List<Object?>;
       for (final raw in cases.cast<Map<String, Object?>>()) {
         final input = raw["input"]! as Map<String, Object?>;
         final expected = raw["expect"]! as Map<String, Object?>;
         test("$contract: ${raw["name"]}", () {
-          final result = input.containsKey("json")
-              ? PublishedContracts.registry.validateBytes(
-                  contract,
-                  utf8.encode(input["json"]! as String),
-                )
-              : PublishedContracts.registry.validateValue(
-                  contract,
-                  input["document"],
-                );
+          final result = _runFixture(contract, input);
           expect(result.valid, expected["valid"], reason: "$result");
           if (expected["code"] != null) expect(result.code, expected["code"]);
+          for (final path in expected["paths"] as List? ?? const []) {
+            expect(result.errors.map((e) => e.path), contains(path));
+          }
         });
         if (contract == PublishedContracts.me &&
             input.containsKey("document")) {

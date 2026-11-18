@@ -188,6 +188,31 @@ class H264CaptureWriter(
 
     @Synchronized fun acquiredCount(): Long = ledger.acquired
 
+    /** Small source-manifest declaration from the actual closed writer, never from file names alone.
+     * clock_domain describes MCAP log/publish time (Unix); original native clocks remain in payloads.
+     * Hashes and sizes are deliberately absent: SA-18 computes them after final metadata closes.
+     */
+    @Synchronized fun sourceManifestEvidence(): Map<String, Any?> {
+        check(closed && closeOutcome == "completed") { "Capture is not a completed source" }
+        val nativeClocks = (clocks["stream_clocks"] as Map<*, *>).values.map { it as String }
+        val declarations = channels.keys.sorted().map { topic ->
+            val encoding = when (topic) { CaptureProtocol.VIDEO -> "protobuf"; POSE_TOPIC -> "cdr"; else -> "json" }
+            val schema = when (topic) {
+                CaptureProtocol.VIDEO -> "foxglove.CompressedVideo"
+                POSE_TOPIC -> POSE_SCHEMA
+                else -> "stateaction.capture.${JSON_TOPICS.toMap().getValue(topic)}.v1"
+            }
+            mapOf("topic" to topic, "message_encoding" to encoding, "schema_name" to schema,
+                "clock_domain" to "unix", "message_count" to sequences.getOrDefault(topic, 0).toString())
+        }
+        return mapOf(
+            "clockDomains" to (nativeClocks + "unix").distinct().sorted(),
+            "channels" to declarations,
+            "counts" to mapOf("video_frames" to videoMessages.toString(), "dropped_video_frames" to ledger.dropped.toString(),
+                "motion_events" to motionCounts.values.sum().toString()),
+        )
+    }
+
     @Synchronized fun stats(): Map<String, Any?> = ledger.stats() + mapOf(
         "video_messages" to videoMessages, "pose_messages" to poseMessages, "invalid_pose_events" to invalidPoses,
         "sensor_events" to sensorEvents, "drops" to dropReasons.toMap(),

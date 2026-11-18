@@ -2,23 +2,56 @@
 // Exact copies of packages/contracts/api documents.
 
 /// Catalog name the entries below were taken from.
-const publishedCatalogName = "stateaction.contracts.catalog.v2";
+const publishedCatalogName = "stateaction.contracts.catalog.v6";
 
 /// Subset of the published catalog with verbatim entries.
 const publishedCatalogSubset = r'''
 {
-  "catalog": "stateaction.contracts.catalog.v2",
+  "catalog": "stateaction.contracts.catalog.v6",
   "common": "common.v1.schema.json",
   "maxDepth": 32,
   "contracts": {
-    "http.success-envelope.v1": {
-      "schema": "http/success-envelope.v1.schema.json",
-      "id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
-      "casing": "camelCase",
+    "artifacts.recording-source.v1": {
+      "schema": "artifacts/recording-source.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/recording-source.v1.json",
+      "casing": "snake_case",
       "version": {
-        "path": "/api/v1|/internal/v1"
+        "field": "schema",
+        "accepted": [
+          "stateaction.recording_source.v1"
+        ]
       },
       "maxBytes": 1048576,
+      "rules": [
+        "recording_source"
+      ]
+    },
+    "artifacts.recording-source.v2": {
+      "schema": "artifacts/recording-source.v2.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/recording-source.v2.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": [
+          "stateaction.recording_source.v2"
+        ]
+      },
+      "maxBytes": 1048576,
+      "rules": [
+        "recording_source"
+      ]
+    },
+    "artifacts.simulation-provenance.v1": {
+      "schema": "artifacts/simulation-provenance.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/artifacts/simulation-provenance.v1.json",
+      "casing": "snake_case",
+      "version": {
+        "field": "schema",
+        "accepted": [
+          "stateaction.simulation_provenance.v1"
+        ]
+      },
+      "maxBytes": 4096,
       "rules": []
     },
     "http.me.v1": {
@@ -30,6 +63,105 @@ const publishedCatalogSubset = r'''
       },
       "maxBytes": 16384,
       "rules": []
+    },
+    "http.recording-create.v1": {
+      "schema": "http/recording-create.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-create.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-create.v2": {
+      "schema": "http/recording-create.v2.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-create.v2.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schema",
+        "accepted": [
+          "stateaction.recording_create.v2"
+        ]
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-registration.v1": {
+      "schema": "http/recording-registration.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-registration.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-registration.v2": {
+      "schema": "http/recording-registration.v2.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-registration.v2.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording-seal.v1": {
+      "schema": "http/recording-seal.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording-seal.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": [
+        "unique_file_ids",
+        "sealed_inventory"
+      ]
+    },
+    "http.recording.v1": {
+      "schema": "http/recording.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.recording.v2": {
+      "schema": "http/recording.v2.schema.json",
+      "id": "https://stateaction.ai/schemas/http/recording.v2.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.simulation-provenance.v1": {
+      "schema": "http/simulation-provenance.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "field": "schema",
+        "accepted": [
+          "stateaction.simulation_provenance.v1"
+        ]
+      },
+      "maxBytes": 4096,
+      "rules": []
+    },
+    "http.success-envelope.v1": {
+      "schema": "http/success-envelope.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1|/internal/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
     }
   }
 }
@@ -37,6 +169,428 @@ const publishedCatalogSubset = r'''
 
 /// Catalog-relative schema path -> exact published file text.
 const publishedSchemaDocuments = <String, String>{
+  "artifacts/recording-source.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/recording-source.v1.json",
+  "title": "Recording source declaration v1",
+  "description": "Client-declared source inventory, uploaded as the sealed file with role source_manifest. Written after every other source file is closed and hashed. files lists exactly the other sealed files and never this declaration (no source_manifest entry, no self-hash). SHA-256 of the exact stored bytes is the recording's sourceManifestSha256 / source_manifest_sha256. Capture-format details (channels/clocks/profile fields) are owned by the capture contracts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "client_recording_id",
+    "owner_user_id",
+    "capture_format",
+    "rgb_profile",
+    "capture_config_sha256",
+    "close_status",
+    "files",
+    "clock_domains",
+    "channels",
+    "counts",
+    "collection_permission_ref",
+    "source_verification"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording_source.v1"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "client_recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "owner_user_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "capture_format": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgb_profile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1"]
+    },
+    "capture_config_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "close_status": {
+      "type": "string",
+      "enum": ["closed_clean", "closed_after_recovery"]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "role", "required", "size_bytes", "sha256"],
+        "properties": {
+          "file_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2000
+    },
+    "clock_domains": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "message_encoding",
+          "schema_name",
+          "clock_domain",
+          "message_count"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^/[A-Za-z0-9_/.-]{1,127}$"
+          },
+          "message_encoding": {
+            "type": "string",
+            "enum": ["protobuf", "cdr", "json"]
+          },
+          "schema_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,127}$"
+          },
+          "clock_domain": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+          },
+          "message_count": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["video_frames", "dropped_video_frames", "motion_events"],
+      "properties": {
+        "video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "dropped_video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "motion_events": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        }
+      }
+    },
+    "collection_permission_ref": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    },
+    "source_verification": {
+      "const": "pending"
+    }
+  }
+}
+''',
+  "artifacts/recording-source.v2.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/recording-source.v2.json",
+  "title": "Recording source declaration v2",
+  "description": "Additive successor of recording-source.v1 (which stays frozen). Same sealed-file semantics: written after every other source file is closed and hashed; files lists exactly the other sealed files and never this declaration; SHA-256 of the exact stored bytes is sourceManifestSha256. Differences: (1) rgb_profile also admits h264_mcap_simulation_v1, which REQUIRES the explicit `simulation` marker (artifacts.simulation-provenance.v1) and is only admitted by development servers that explicitly enable simulated inputs; hardware h264_mcap_v1 must NOT carry `simulation`; (2) channel schema_name also allows bounded ROS-style slash names such as geometry_msgs/msg/PoseStamped (1-3 segments, each starting with a letter; no traversal, empty segment, control character or leading/trailing slash). Hardware documents may use v2 too.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "client_recording_id",
+    "owner_user_id",
+    "capture_format",
+    "rgb_profile",
+    "capture_config_sha256",
+    "close_status",
+    "files",
+    "clock_domains",
+    "channels",
+    "counts",
+    "collection_permission_ref",
+    "source_verification"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording_source.v2"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "client_recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "owner_user_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "capture_format": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgb_profile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "capture_config_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "close_status": {
+      "type": "string",
+      "enum": ["closed_clean", "closed_after_recovery"]
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "role", "required", "size_bytes", "sha256"],
+        "properties": {
+          "file_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 2,
+      "maxItems": 2000
+    },
+    "clock_domains": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+      },
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "message_encoding",
+          "schema_name",
+          "clock_domain",
+          "message_count"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^/[A-Za-z0-9_/.-]{1,127}$"
+          },
+          "message_encoding": {
+            "type": "string",
+            "enum": ["protobuf", "cdr", "json"]
+          },
+          "schema_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,63}(/[A-Za-z][A-Za-z0-9_.]{0,63}){0,2}$"
+          },
+          "clock_domain": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+          },
+          "message_count": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["video_frames", "dropped_video_frames", "motion_events"],
+      "properties": {
+        "video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "dropped_video_frames": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "motion_events": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        }
+      }
+    },
+    "collection_permission_ref": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    },
+    "source_verification": {
+      "const": "pending"
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/artifacts/simulation-provenance.v1.json"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgb_profile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgb_profile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgb_profile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgb_profile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}
+''',
+  "artifacts/simulation-provenance.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/simulation-provenance.v1.json",
+  "title": "Simulation provenance v1",
+  "description": "Explicit marker for emulator/simulated capture (rgb_profile h264_mcap_simulation_v1), embedded as `simulation` in recording-source.v2 and carried unchanged to manifests, admission evidence, job input and read surfaces. A simulated capture is never hardware evidence: qualification is always simulation_only and production_qualified is always false. Camera, encoder and clock provenance are each either known (a bounded label) or explicitly unknown; unknown is never filled in with a hardware value. Downstream outputs (for example an output manifest) reuse this exact object to preserve the marker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "qualification",
+    "mapped_timeline_semantics",
+    "production_qualified",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.simulation_provenance.v1"
+    },
+    "qualification": {
+      "const": "simulation_only"
+    },
+    "mapped_timeline_semantics": {
+      "const": "simulation_transport_only"
+    },
+    "production_qualified": {
+      "const": false
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["camera", "encoder", "clock"],
+      "properties": {
+        "camera": {
+          "$ref": "#/$defs/source"
+        },
+        "encoder": {
+          "$ref": "#/$defs/source"
+        },
+        "clock": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "description": "Provenance of one capture component: known with a bounded label, or explicitly unknown.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "label"],
+          "properties": {
+            "status": {
+              "const": "known"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+''',
   "common.v1.schema.json": r'''
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -195,25 +749,6 @@ const publishedSchemaDocuments = <String, String>{
   }
 }
 ''',
-  "http/success-envelope.v1.schema.json": r'''
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
-  "title": "API success envelope v1",
-  "description": "Success body wrapper for every /api/v1 and /internal/v1 route.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["data", "requestId"],
-  "properties": {
-    "data": {
-      "description": "Route-specific payload validated by its own contract."
-    },
-    "requestId": {
-      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
-    }
-  }
-}
-''',
   "http/me.v1.schema.json": r'''
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -310,6 +845,592 @@ const publishedSchemaDocuments = <String, String>{
           "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
         }
       }
+    }
+  }
+}
+''',
+  "http/recording-create.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-create.v1.json",
+  "title": "Create recording request v1",
+  "description": "POST /api/v1/recordings. The owner is the authenticated actor; no owner field is accepted. Idempotency scope: (actor, recordings.create, clientRecordingId) plus request digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clientRecordingId",
+    "captureFormat",
+    "rgbProfile",
+    "startedAt",
+    "device"
+  ],
+  "properties": {
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "captureFormat": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1"]
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "osVersion", "appVersion"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "osVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "appVersion": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        }
+      }
+    }
+  }
+}
+''',
+  "http/recording-create.v2.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-create.v2.json",
+  "title": "Create recording request v2",
+  "description": "POST /api/v1/recordings with body `schema` stateaction.recording_create.v2 (v1 bodies, which carry no `schema`, stay hardware-only and frozen). The owner is the authenticated actor; no owner field is accepted. rgbProfile also admits h264_mcap_simulation_v1, which REQUIRES the explicit `simulation` marker and is accepted only by development servers that enable simulated inputs. Hardware h264_mcap_v1 must not carry `simulation`. Idempotency scope: (actor, recordings.create, clientRecordingId) plus request digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "clientRecordingId",
+    "captureFormat",
+    "rgbProfile",
+    "startedAt",
+    "device"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording_create.v2"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "captureFormat": {
+      "const": "stateaction.capture.v1"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "osVersion", "appVersion"],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "osVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "appVersion": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        }
+      }
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}
+''',
+  "http/recording-registration.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-registration.v1.json",
+  "title": "Recording registration response v1",
+  "description": "POST /api/v1/recordings success data, carried as `data` inside http.success-envelope.v1: 201 when created, 200 for an exact replay. `recording` is the unchanged http.recording.v1 shape. `collectionPermissionRef` is the server-bound operator approval recorded for the authenticated owner at registration; the phone copies it into recording-source/v1 `collection_permission_ref`. It identifies server state and is never accepted from a client as authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording", "collectionPermissionRef"],
+  "properties": {
+    "recording": {
+      "$ref": "https://stateaction.ai/schemas/http/recording.v1.json"
+    },
+    "collectionPermissionRef": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    }
+  }
+}
+''',
+  "http/recording-registration.v2.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-registration.v2.json",
+  "title": "Recording registration response v2",
+  "description": "POST /api/v1/recordings success data for a recording-create.v2 request (Content-Type application/vnd.stateaction.recording.v2+json): 201 when created, 200 for an exact replay. `recording` is http.recording.v2. `collectionPermissionRef` keeps its v1 meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recording", "collectionPermissionRef"],
+  "properties": {
+    "recording": {
+      "$ref": "https://stateaction.ai/schemas/http/recording.v2.json"
+    },
+    "collectionPermissionRef": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    }
+  }
+}
+''',
+  "http/recording-seal.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-seal.v1.json",
+  "title": "Seal recording inventory request v1",
+  "description": "POST /api/v1/recordings/{recordingId}/seal. Freezes the exact logical file inventory; changed replay is 409 idempotency_conflict. fileId values are unique. The inventory holds exactly one required source_manifest (the uploaded recording-source/v1 bytes) plus exactly the files that declaration lists: one required source_mcap and at least one required recorder_metadata. The API checks the stored manifest bytes against this seal with checkSealedInventory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["files"],
+  "properties": {
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fileId", "role", "sizeBytes", "sha256", "required"],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "if": {
+          "required": ["role"],
+          "properties": {
+            "role": {
+              "const": "source_manifest"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "sizeBytes": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 2000
+    }
+  }
+}
+''',
+  "http/recording.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording.v1.json",
+  "title": "Recording response v1",
+  "description": "GET /api/v1/recordings/{recordingId} data payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "status",
+    "createdAt",
+    "files",
+    "missingRequiredRoles"
+  ],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "uploading",
+        "sealed",
+        "uploaded",
+        "processing",
+        "reviewable",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "role",
+          "sizeBytes",
+          "sha256",
+          "required",
+          "state"
+        ],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "uploading",
+              "completing",
+              "completed",
+              "verified",
+              "cancelled",
+              "failed",
+              "expired"
+            ]
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000
+    },
+    "missingRequiredRoles": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+      },
+      "minItems": 0,
+      "maxItems": 3,
+      "uniqueItems": true
+    }
+  }
+}
+''',
+  "http/recording.v2.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording.v2.json",
+  "title": "Recording response v2",
+  "description": "GET /api/v1/recordings/{recordingId} data payload for clients that send Accept application/vnd.stateaction.recording.v2+json. Adds rgbProfile and, for simulated recordings only, the explicit `simulation` marker. A simulated recording is never served as v1 (v1 has no field that could conceal it).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "status",
+    "rgbProfile",
+    "createdAt",
+    "files",
+    "missingRequiredRoles"
+  ],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registered",
+        "uploading",
+        "sealed",
+        "uploaded",
+        "processing",
+        "reviewable",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fileId",
+          "role",
+          "sizeBytes",
+          "sha256",
+          "required",
+          "state"
+        ],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "reserved",
+              "uploading",
+              "completing",
+              "completed",
+              "verified",
+              "cancelled",
+              "failed",
+              "expired"
+            ]
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000
+    },
+    "missingRequiredRoles": {
+      "type": "array",
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+      },
+      "minItems": 0,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}
+''',
+  "http/simulation-provenance.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json",
+  "title": "Simulation provenance HTTP view v1",
+  "description": "camelCase wire form of artifacts/simulation-provenance.v1 for HTTP and job contracts; the same fields and meaning. Embedded as `simulation` in recording-create.v2, recording.v2, recording-registration.v2 and task-input.v2. Simulated capture is never hardware evidence: qualification is always simulation_only and productionQualified is always false. Unknown provenance stays explicit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "qualification",
+    "mappedTimelineSemantics",
+    "productionQualified",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.simulation_provenance.v1"
+    },
+    "qualification": {
+      "const": "simulation_only"
+    },
+    "mappedTimelineSemantics": {
+      "const": "simulation_transport_only"
+    },
+    "productionQualified": {
+      "const": false
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["camera", "encoder", "clock"],
+      "properties": {
+        "camera": {
+          "$ref": "#/$defs/source"
+        },
+        "encoder": {
+          "$ref": "#/$defs/source"
+        },
+        "clock": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "description": "Provenance of one capture component: known with a bounded label, or explicitly unknown.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "label"],
+          "properties": {
+            "status": {
+              "const": "known"
+            },
+            "label": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "const": "unknown"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+''',
+  "http/success-envelope.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/success-envelope.v1.json",
+  "title": "API success envelope v1",
+  "description": "Success body wrapper for every /api/v1 and /internal/v1 route.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["data", "requestId"],
+  "properties": {
+    "data": {
+      "description": "Route-specific payload validated by its own contract."
+    },
+    "requestId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
     }
   }
 }

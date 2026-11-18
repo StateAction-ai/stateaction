@@ -66,6 +66,7 @@ class MCAPDatasetWriter(
     @Volatile internal var containerSyncHook: ((java.io.FileOutputStream) -> Unit)? = null
     /** Durability proof of the last finished container: bytes fsynced; directory entry forced (true), unsupported (false) or not attempted (null). */
     @Volatile override var containerDurable: Boolean = false; private set
+    @Volatile override var finishedMcap: FinishedMcap? = null; private set
     @Volatile override var sessionDirectorySynced: Boolean? = null; private set
     private var mcapFile: File? = null
 
@@ -169,6 +170,9 @@ class MCAPDatasetWriter(
             val directory = File(outputBase, "session_${timestamp}_${UUID.randomUUID().toString().take(8)}")
             check(directory.mkdir()) { "Could not create a unique session directory" }
             sessionDir = directory
+            mcapFile = null
+            finishedMcap = null
+            containerDurable = false
 
             freeStorageBeforeBytes = sessionDir?.usableSpace ?: 0L
             println("Session directory created: ${sessionDir?.absolutePath}")
@@ -223,6 +227,7 @@ class MCAPDatasetWriter(
             val writer = MCAPWriter()
             containerSyncHook?.let { writer.containerSync = it }
             containerDurable = false
+            finishedMcap = null
             sessionDirectorySynced = null
             val setup = h264Setup
             // The H.264 profile mixes Protobuf, CDR and JSON: its header profile is generic (empty), never ros2.
@@ -886,6 +891,7 @@ class MCAPDatasetWriter(
             writer.finish()
         } finally {
             containerDurable = writer.containerDurable
+            finishedMcap = writer.finishedMcap
             sessionDirectorySynced = writer.sessionDirectorySynced
             mcapWriter = null
         }
@@ -920,6 +926,7 @@ class MCAPDatasetWriter(
         freeStorageBeforeBytes = 0L
         mcapWriter = null
         mcapFile = null
+        finishedMcap = null
         println("MCAP dataset writer released")
     }
 
