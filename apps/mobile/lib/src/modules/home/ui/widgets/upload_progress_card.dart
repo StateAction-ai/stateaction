@@ -73,12 +73,18 @@ class UploadProgressCard extends StatelessWidget {
                 ? null
                 : () async {
                     final up = context.read<UploadProvider>();
-                    final np = context.read<NavigationProvider>();
-                    np.setCurrentPage(CurrentPage.addUpload);
+                    // Record while this card is still mounted: switching tabs
+                    // first disposes it, and the record flow stops at its
+                    // mounted check so the recorder never opened from Home.
                     await up.picker.recordVideosForUpload(
                       context,
                       up.selection,
                     );
+                    if (context.mounted) {
+                      context.read<NavigationProvider>().setCurrentPage(
+                        CurrentPage.addUpload,
+                      );
+                    }
                   },
           ),
         ],
