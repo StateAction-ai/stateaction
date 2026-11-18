@@ -11,12 +11,11 @@ import { after, before, describe, test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer, request } from "node:http";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
+import { findChrome, launchChrome } from "./chrome.mjs";
 import { validateValue } from "@stateaction/contracts";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
 
@@ -133,93 +132,6 @@ const moveExpiry = (token, interval) =>
   psql(
     `UPDATE session SET "expiresAt" = now() + interval '${interval}' WHERE token = '${token.replace(/[^A-Za-z0-9_-]/g, "")}'`,
   );
-
-/** Headless Chrome over the DevTools protocol (no extra dependency). */
-async function findChrome() {
-  for (const candidate of [
-    process.env.CHROME_BIN,
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ].filter(Boolean)) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {}
-  }
-  return null;
-}
-
-async function launchChrome(binary) {
-  const profile = await mkdtemp(join(tmpdir(), "sa15-chrome-"));
-  const child = spawn(
-    binary,
-    [
-      "--headless=new",
-      "--no-first-run",
-      "--no-default-browser-check",
-      "--disable-gpu",
-      "--disable-extensions",
-      // Root, or a CI runner whose kernel forbids Chrome's user-namespace
-      // sandbox. The page is this test's own loopback server.
-      ...(process.getuid?.() === 0 || process.env.CI === "true"
-        ? ["--no-sandbox"]
-        : []),
-      `--user-data-dir=${profile}`,
-      "--remote-debugging-port=0",
-      "about:blank",
-    ],
-    { stdio: "ignore", detached: true },
-  );
-  let port;
-  for (let i = 0; i < 100 && !port; i++) {
-    try {
-      port = (
-        await readFile(join(profile, "DevToolsActivePort"), "utf8")
-      ).split("\n")[0];
-    } catch {
-      await sleep(100);
-    }
-  }
-  if (!port) throw new Error("Chrome did not expose DevTools");
-  const targets = await (
-    await fetch(`http://127.0.0.1:${port}/json/list`)
-  ).json();
-  const ws = new WebSocket(
-    targets.find((t) => t.type === "page").webSocketDebuggerUrl,
-  );
-  await new Promise((resolve, reject) => {
-    ws.onopen = resolve;
-    ws.onerror = reject;
-  });
-  let id = 0;
-  const pending = new Map();
-  ws.onmessage = ({ data }) => {
-    const message = JSON.parse(data);
-    const waiter = pending.get(message.id);
-    if (!waiter) return;
-    pending.delete(message.id);
-    if (message.error) waiter.reject(new Error(message.error.message));
-    else waiter.resolve(message.result);
-  };
-  const send = (method, params = {}) =>
-    new Promise((resolve, reject) => {
-      pending.set(++id, { resolve, reject });
-      ws.send(JSON.stringify({ id, method, params }));
-    });
-  return {
-    send,
-    async close() {
-      ws.close();
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {}
-      await sleep(300);
-      await rm(profile, { recursive: true, force: true });
-    },
-  };
-}
 
 function assertNoStore(res, what) {
   assert.match(

@@ -30,6 +30,7 @@ process.argv = [
   process.execPath,
   cli,
   command,
+  ...(command === "dev" ? ["--webpack"] : []),
   "--hostname",
   hostname,
   "--port",

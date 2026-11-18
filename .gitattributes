@@ -6,3 +6,6 @@ packages/contracts/conformance/fixtures/** -text
 # RawImage protobuf descriptors are digest-covered binary fixtures.
 packages/contracts/capture/foxglove-raw-image.desc binary
 packages/stera_recorder/android/src/main/assets/stateaction/capture/foxglove-raw-image.desc binary
+
+# Real worker RRD fixture for the viewer test: exact bytes.
+apps/web/test-e2e/fixtures/*.rrd -text binary

@@ -54,6 +54,8 @@ export class Jar {
 export async function startStack({
   storage = false,
   storagePublicEndpoint,
+  storageProxy = startOutageProxy,
+  viewerHarness = false,
 } = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
   const db = await startCatalogPostgres();
@@ -62,7 +64,7 @@ export async function startStack({
   try {
     if (storage) {
       s3 = await startSeaweedfs();
-      outage = await startOutageProxy(s3.endpoint);
+      outage = await storageProxy(s3.endpoint);
     }
   } catch (error) {
     outage?.stop();
@@ -86,6 +88,9 @@ export async function startStack({
     NEXT_TELEMETRY_DISABLED: "1",
     ...(s3 && {
       S3_ENDPOINT: outage.endpoint,
+      ...(viewerHarness && {
+        STATEACTION_VIEWER_HARNESS_ORIGIN: outage.endpoint,
+      }),
       ...(storagePublicEndpoint && {
         S3_PUBLIC_ENDPOINT: storagePublicEndpoint,
       }),
