@@ -18,6 +18,12 @@ import "fake_better_auth_server.dart";
 /// auth bypass off. They exercise the real client, cookie jar, controller,
 /// ledger, gate and policy over real loopback HTTP; the server is a test
 /// double, so these are not Google/real-backend qualification.
+/// Everything stored except the non-secret credential revision floor.
+Map<String, String> _credentials(MemorySecretStore store) => {
+  for (final e in store.values.entries)
+    if (e.key != SecretKeys.sessionRevisionFloor) e.key: e.value,
+};
+
 void main() {
   late FakeBetterAuthServer server;
   late MemorySecretStore secrets;
@@ -111,9 +117,10 @@ void main() {
       final stored = secrets.values[SecretKeys.sessionCookies]!;
       expect(stored, contains(FakeBetterAuthServer.cookieName));
       expect(stored, contains(FakeBetterAuthServer.dataCookieName));
-      expect(secrets.values.keys, {
+      expect(secrets.values.keys.toSet(), {
         SecretKeys.sessionCookies,
         SecretKeys.offlineEligibility,
+        SecretKeys.sessionRevisionFloor,
       });
     },
   );
@@ -250,7 +257,7 @@ void main() {
     final confirmation = await controller.logout();
     expect(confirmation, SignOutConfirmation.confirmed);
     expect(server.sessions, isEmpty);
-    expect(secrets.values, isEmpty);
+    expect(_credentials(secrets), isEmpty);
     expect(controller.state, isA<AuthSignedOut>());
     expect(await capture("s-after-logout"), isA<RecordingStartDenied>());
     expect((ledger.ownerOfSession("s-alice-1") as OwnedBy).authUserId, aliceId);
@@ -267,7 +274,7 @@ void main() {
         (controller.state as AuthSignedOut).lastSignOut,
         SignOutConfirmation.unconfirmed,
       );
-      expect(secrets.values, isEmpty);
+      expect(_credentials(secrets), isEmpty);
       server = await FakeBetterAuthServer.start();
     },
   );

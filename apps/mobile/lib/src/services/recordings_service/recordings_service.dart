@@ -173,8 +173,13 @@ class RecordingsService {
 
   static DateTime _parseSessionTimestamp(String dirName) {
     try {
-      final ts = dirName.replaceFirst("session_", "");
-      if (ts.length != 15) return DateTime.fromMillisecondsSinceEpoch(0);
+      final full = dirName.replaceFirst("session_", "");
+      // Newer recorder names append `_<millis>_<id>` after the 15-character
+      // `YYYYMMDD_HHMMSS` stamp.
+      if (full.length < 15 || (full.length > 15 && full[15] != "_")) {
+        return DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      final ts = full.substring(0, 15);
       final yyyy = int.parse(ts.substring(0, 4));
       final mm = int.parse(ts.substring(4, 6));
       final dd = int.parse(ts.substring(6, 8));

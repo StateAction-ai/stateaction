@@ -96,6 +96,12 @@ class _BarrierStore extends MemorySecretStore {
   }
 }
 
+/// Everything stored except the non-secret credential revision floor.
+Map<String, String> _credentials(MemorySecretStore store) => {
+  for (final e in store.values.entries)
+    if (e.key != SecretKeys.sessionRevisionFloor) e.key: e.value,
+};
+
 void main() {
   final origin = BackendOrigin.parse("http://127.0.0.1:4100");
   late _Gate gate;
@@ -152,7 +158,7 @@ void main() {
       expect(controller.state, isA<AuthSignedOut>());
       expect(controller.captureOwnerId, isNull);
       expect(await client.jar.cookies(), isEmpty);
-      expect(secrets.values, isEmpty);
+      expect(_credentials(secrets), isEmpty);
     },
   );
 

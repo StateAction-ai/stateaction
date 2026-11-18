@@ -1,3 +1,4 @@
+import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "dart:async";
 import "dart:io";
 
@@ -1114,6 +1115,8 @@ class UploadQueueManager extends ChangeNotifier {
   }
 
   void _deleteRecordingFiles(Upload upload) {
+    // The native owner-bound pipeline owns this source; never delete it.
+    if (NativeSourceGuard.ownsPath(upload.filepath)) return;
     try {
       final sessionDir = Directory(p.dirname(upload.filepath));
       if (p.basename(sessionDir.path).startsWith("session_") &&
@@ -1129,6 +1132,7 @@ class UploadQueueManager extends ChangeNotifier {
   }
 
   Future<void> _deleteRecordingDirectory(Upload upload) async {
+    if (NativeSourceGuard.ownsPath(upload.filepath)) return;
     try {
       final resolvedPath = await ResolveFilePath.resolve(upload.filepath);
       final sessionDir = Directory(resolvedPath).parent;

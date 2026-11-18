@@ -47,6 +47,28 @@ class SealPlan {
   final int peakHashBufferBytes;
 }
 
+/// Identity of one logical file a server reservation is requested for.
+class FileReservationRequest {
+  const FileReservationRequest({
+    required this.clientUploadId,
+    required this.role,
+    required this.sizeBytes,
+    required this.sha256,
+  });
+
+  /// Stable per logical file, so a lost reply is recovered by repeating the
+  /// identical request (never by allocating another file).
+  final String clientUploadId;
+  final String role;
+  final String sizeBytes;
+  final String sha256;
+}
+
+/// Reserves one exact file with the server and returns the server-chosen file
+/// id. The callee must refuse a reply whose recording, role, size or digest
+/// differs from the request.
+typedef ReserveFile = Future<String> Function(FileReservationRequest request);
+
 class SourceSealer {
   SourceSealer({required this.registry, required this.hasher, Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
@@ -100,6 +122,80 @@ class SourceSealer {
     });
   }
 
+  /// Idempotency key of the reservation of local file [localFileId].
+  String clientUploadId(SourceJournal j, String localFileId) => _uuid.v5(
+    Namespace.url.value,
+    "stateaction:upload:${j.clientRecordingId}:$localFileId",
+  );
+
+  /// The id the server knows a file by: its recorded reservation, or (only in
+  /// standalone planning without a server) the deterministic local id.
+  String _wire(SourceJournal j, Object? localFileId) =>
+      (j.reservations[localFileId]?["serverFileId"] as String?) ??
+      localFileId! as String;
+
+  Future<void> _reserve(
+    OwnerContext ctx,
+    SourceJournal j,
+    ReserveFile reserve,
+    String localFileId,
+    String role,
+    String sizeBytes,
+    String sha256,
+  ) async {
+    if (j.reservations.containsKey(localFileId)) return;
+    final request = FileReservationRequest(
+      clientUploadId: clientUploadId(j, localFileId),
+      role: role,
+      sizeBytes: sizeBytes,
+      sha256: sha256,
+    );
+    final serverFileId = await reserve(request);
+    await j.recordReservation(ctx, {
+      "localFileId": localFileId,
+      "serverFileId": serverFileId,
+      "clientUploadId": request.clientUploadId,
+      "role": role,
+      "sizeBytes": sizeBytes,
+      "sha256": sha256,
+    });
+  }
+
+  /// Rebuilds the byte-identical `http.recording-seal.v1` body of a journal
+  /// that already reached `seal_ready`, without rehashing any source.
+  SealPlan planFromSealed(SourceJournal journal) {
+    final closed = journal.stateData("closed")!;
+    final built = journal.stateData("manifest_built")!;
+    final facts = journal.hashedFiles;
+    final recorded = (closed["files"]! as List).cast<Map<String, Object?>>();
+    final body = <String, Object?>{
+      "files": [
+        for (final f in recorded)
+          {
+            "fileId": _wire(journal, f["fileId"]),
+            "role": f["role"],
+            "sizeBytes": facts[f["fileId"]]!["sizeBytes"],
+            "sha256": facts[f["fileId"]]!["sha256"],
+            "required": f["required"],
+          },
+        {
+          "fileId": _wire(journal, closed["manifestFileId"]),
+          "role": "source_manifest",
+          "sizeBytes": built["sizeBytes"],
+          "sha256": built["sha256"],
+          "required": true,
+        },
+      ],
+    };
+    return SealPlan(
+      manifestPath: manifestPathFor(journal),
+      manifestSha256: built["sha256"]! as String,
+      manifestSizeBytes: int.parse(built["sizeBytes"]! as String),
+      sealBody: body,
+      peakHashBufferBytes: 0,
+    );
+  }
+
   /// File ids are derived from the frozen client recording id, so concurrent
   /// or retried seals freeze identical facts instead of racing random ids.
   String _id(SourceJournal j, String key) => _uuid.v5(
@@ -142,6 +238,7 @@ class SourceSealer {
     ClosedSourceAck ack, {
     HashCancellation? cancel,
     HashProbes? probes,
+    ReserveFile? reserve,
   }) async {
     if (!journal.visibleTo(ctx)) throw const OwnerMismatch();
     if (journal.hasConflict) throw const SourceConflict("journal");
@@ -306,6 +403,25 @@ class SourceSealer {
     await journal.advance(ctx, "hashed", {
       "files": [for (final f in recorded) f["fileId"]],
     });
+    // Production: every original file is reserved with the server (by stable
+    // clientUploadId) and its server id durably bound to its exact local
+    // role/size/digest BEFORE the manifest is built, because the manifest
+    // lists the files by the ids the server knows. Standalone planning
+    // (reserve == null) keeps the deterministic local ids.
+    if (reserve != null) {
+      for (final f in recorded) {
+        final fact = facts[f["fileId"]]!;
+        await _reserve(
+          ctx,
+          journal,
+          reserve,
+          f["fileId"]! as String,
+          f["role"]! as String,
+          fact["sizeBytes"]! as String,
+          fact["sha256"]! as String,
+        );
+      }
+    }
 
     final manifest = _manifest(journal, reg, closed, recorded, facts);
     final bytes = utf8.encode(canonicalJson(manifest));
@@ -370,19 +486,30 @@ class SourceSealer {
       await _writeAtomic(path, bytes);
     }
     await journal.advance(ctx, "manifest_built", built);
+    if (reserve != null) {
+      await _reserve(
+        ctx,
+        journal,
+        reserve,
+        closed["manifestFileId"]! as String,
+        "source_manifest",
+        built["sizeBytes"]! as String,
+        manifestSha,
+      );
+    }
 
     final body = <String, Object?>{
       "files": [
         for (final f in recorded)
           {
-            "fileId": f["fileId"],
+            "fileId": _wire(journal, f["fileId"]),
             "role": f["role"],
             "sizeBytes": facts[f["fileId"]]!["sizeBytes"],
             "sha256": facts[f["fileId"]]!["sha256"],
             "required": f["required"],
           },
         {
-          "fileId": closed["manifestFileId"],
+          "fileId": _wire(journal, closed["manifestFileId"]),
           "role": "source_manifest",
           "sizeBytes": bytes.length.toString(),
           "sha256": manifestSha,
@@ -431,7 +558,7 @@ class SourceSealer {
     "files": [
       for (final f in recorded)
         {
-          "file_id": f["fileId"],
+          "file_id": _wire(j, f["fileId"]),
           "role": f["role"],
           "required": f["required"],
           "size_bytes": facts[f["fileId"]]!["sizeBytes"],

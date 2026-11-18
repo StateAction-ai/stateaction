@@ -162,6 +162,38 @@ const publishedCatalogSubset = r'''
       },
       "maxBytes": 1048576,
       "rules": []
+    },
+    "http.upload-create.v1": {
+      "schema": "http/upload-create.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-create.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
+    },
+    "http.upload-plan.v1": {
+      "schema": "http/upload-plan.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-plan.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": [
+        "upload_plan"
+      ]
+    },
+    "http.upload-transition.v1": {
+      "schema": "http/upload-transition.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/upload-transition.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
+      "rules": []
     }
   }
 }
@@ -1431,6 +1463,150 @@ const publishedSchemaDocuments = <String, String>{
     },
     "requestId": {
       "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}
+''',
+  "http/upload-create.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/upload-create.v1.json",
+  "title": "Allocate source upload request v1",
+  "description": "POST /api/v1/uploads. The server freezes the part plan from sizeBytes; clients cannot choose ranges, keys or part sizes. The source_manifest declaration uses this same transport and is limited to 1 MiB.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recordingId", "clientUploadId", "role", "sizeBytes", "sha256"],
+  "properties": {
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientUploadId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "role": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+    },
+    "sizeBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+    },
+    "sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    }
+  },
+  "if": {
+    "required": ["role"],
+    "properties": {
+      "role": {
+        "const": "source_manifest"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "sizeBytes": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+      }
+    }
+  }
+}
+''',
+  "http/upload-plan.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/upload-plan.v1.json",
+  "title": "Upload plan response v1",
+  "description": "POST /api/v1/uploads and GET /api/v1/uploads/{fileId} data payload. partCount must equal ceil(sizeBytes / partSizeBytes).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fileId",
+    "recordingId",
+    "role",
+    "sizeBytes",
+    "sha256",
+    "transportEpoch",
+    "partSizeBytes",
+    "partCount",
+    "state",
+    "transportExpiresAt"
+  ],
+  "properties": {
+    "fileId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "role": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+    },
+    "sizeBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+    },
+    "sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "transportEpoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "partSizeBytes": {
+      "const": "67108864"
+    },
+    "partCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "reserved",
+        "uploading",
+        "completing",
+        "completed",
+        "verified",
+        "cancelled",
+        "failed",
+        "expired"
+      ]
+    },
+    "transportExpiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  },
+  "if": {
+    "required": ["role"],
+    "properties": {
+      "role": {
+        "const": "source_manifest"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "sizeBytes": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceManifestSizeBytes"
+      }
+    }
+  }
+}
+''',
+  "http/upload-transition.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/upload-transition.v1.json",
+  "title": "Upload transport transition request v1",
+  "description": "POST /api/v1/uploads/{fileId}/{reconcile,complete,cancel,restart}. Clients never supply completion lists or object keys; stale epochs return 409. Every transition responds with a success envelope whose data is http.upload-plan.v1 (the file's current plan/state; restart returns the new transportEpoch).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expectedTransportEpoch"],
+  "properties": {
+    "expectedTransportEpoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
     }
   }
 }

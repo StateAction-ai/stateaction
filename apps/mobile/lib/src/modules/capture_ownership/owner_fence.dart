@@ -1,6 +1,7 @@
 import "package:stera/src/modules/auth/session/auth_services.dart";
 import "package:stera/src/modules/capture_ownership/capture_access_policy.dart";
 import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
+import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 
 /// App-wide owner checks for upload/listing code that has no session wiring.
 /// Every answer fails closed when auth services are absent.
@@ -9,6 +10,9 @@ class OwnerFence {
   static bool isVisible(String filepath) {
     final services = AuthServices.maybeInstance;
     if (services == null) return false;
+    // A source already owned by the native owner-bound uploader is never
+    // offered to (or resumed by) the legacy queue.
+    if (NativeSourceGuard.ownsPath(filepath)) return false;
     return services.policy.forPath(services.controller.state, filepath) ==
         CaptureAccess.owner;
   }
@@ -16,6 +20,7 @@ class OwnerFence {
   static bool isSessionVisible(String sessionDirName) {
     final services = AuthServices.maybeInstance;
     if (services == null) return false;
+    if (NativeSourceGuard.ownsSession(sessionDirName)) return false;
     return services.policy.forSession(
           services.controller.state,
           sessionDirName,
@@ -27,6 +32,7 @@ class OwnerFence {
   static bool mayUpload(String filepath) {
     final services = AuthServices.maybeInstance;
     if (services == null) return false;
+    if (NativeSourceGuard.ownsPath(filepath)) return false;
     return services.policy.mayUpload(services.controller.state, filepath);
   }
 

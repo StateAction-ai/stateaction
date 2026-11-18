@@ -4,6 +4,7 @@ import "package:stera/src/modules/demo/providers/demo_video_preload_provider.dar
 import "package:stera/src/modules/ar_recorder/adapters/recorder_host_adapters.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
 import "package:stera/src/modules/auth/session/auth_services.dart";
+import "package:stera/src/modules/owner_upload/owner_upload_services.dart";
 import "package:stera/src/modules/home/providers/navigation_provider.dart";
 import "package:stera/src/modules/onboarding/providers/onboarding_provider.dart";
 import "package:stera/src/modules/profile/providers/profile_provider.dart";
@@ -11,6 +12,8 @@ import "package:stera/src/modules/recordings/providers/recordings_provider.dart"
 import "package:stera/src/modules/startup/ui/startup_view.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 import "package:stera/src/modules/uploaded_videos/providers/uploaded_videos_provider.dart";
+import "package:flutter/foundation.dart";
+import "package:flutter/semantics.dart";
 import "package:flutter/widgets.dart";
 import "package:flutter_dotenv/flutter_dotenv.dart";
 import "package:provider/provider.dart";
@@ -19,6 +22,13 @@ import "package:stera_recorder/stera_recorder.dart";
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Emulator qualification only (debug build AND an explicit define): keep the
+  // semantics tree on so the host UI driver always sees the real labels.
+  if (kDebugMode &&
+      const String.fromEnvironment("STATEACTION_E2E").isNotEmpty) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
 
   // `.env` must load before anything reads `AppConfig`. Everything else now
   // bootstraps inside `StartupViewModel`.
@@ -48,17 +58,28 @@ void main(List<String> args) async {
 /// exactly one place — the two lists below cannot drift apart.
 ChangeNotifierProvider<ArRecorderProvider> _arRecorderProvider() =>
     ChangeNotifierProvider(
-      create: (context) => ArRecorderProvider(
-        preferences: const KvStoreRecorderPreferences(),
-        permissions: const AppRecorderPermissions(),
-        // The authenticated build stamps a verified owner before every Start
-        // and refuses Start without one. The auth-free harness keeps its
-        // honest ownerless behavior (those captures need explicit recovery
-        // if later opened in an authenticated build).
-        startGate: AppConfig.noAuthMode
-            ? const OpenRecordingStartGate()
-            : AuthServices.lazyCaptureGate(),
-      ),
+      create: (context) {
+        final provider = ArRecorderProvider(
+          preferences: const KvStoreRecorderPreferences(),
+          permissions: const AppRecorderPermissions(),
+          // The authenticated build stamps a verified owner before every Start
+          // and refuses Start without one. The auth-free harness keeps its
+          // honest ownerless behavior (those captures need explicit recovery
+          // if later opened in an authenticated build).
+          startGate: AppConfig.noAuthMode
+              ? const OpenRecordingStartGate()
+              : AuthServices.lazyCaptureGate(),
+        );
+        if (!AppConfig.noAuthMode) {
+          // Native uploads pause for capture and the pause is lifted when the
+          // recorder stops (no-op while the native uploader is gated off).
+          OwnerUploadServices.whenReady((services) {
+            services.pause.attach(provider);
+            services.pause.reconcileOnStartup();
+          });
+        }
+        return provider;
+      },
     );
 
 List<SingleChildWidget> _appProviders() => [

@@ -1,5 +1,6 @@
 import "dart:async";
 
+import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "package:stera/src/services/recordings_service/data/models/recording_session.dart";
 import "package:stera/src/services/recordings_service/recordings_service.dart";
 import "package:flutter/foundation.dart";
@@ -78,6 +79,12 @@ class RecordingsProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSession(String dirName) async {
+    final blocked = NativeSourceGuard.deleteBlockReason(dirName);
+    if (blocked != null) {
+      _error = blocked;
+      notifyListeners();
+      return;
+    }
     final ok = await RecordingsService.deleteSession(dirName);
     if (!ok) {
       _error = "Failed to delete recording.";
@@ -89,8 +96,18 @@ class RecordingsProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSelectedSessions() async {
-    final ids = _selectedSessionIds.toList(growable: false);
-    if (ids.isEmpty) return;
+    final selected = _selectedSessionIds.toList(growable: false);
+    final ids = [
+      for (final id in selected)
+        if (NativeSourceGuard.deleteBlockReason(id) == null) id,
+    ];
+    if (ids.length != selected.length) {
+      _error = "Recordings that are still uploading were kept.";
+    }
+    if (ids.isEmpty) {
+      notifyListeners();
+      return;
+    }
     final deleted = await RecordingsService.deleteSessions(ids);
     if (deleted != ids.length) {
       _error = "Some recordings could not be deleted.";

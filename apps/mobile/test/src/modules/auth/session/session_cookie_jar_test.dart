@@ -5,6 +5,12 @@ import "package:stera/src/modules/auth/session/backend_origin.dart";
 import "package:stera/src/modules/auth/session/secret_store.dart";
 import "package:stera/src/modules/auth/session/session_cookie_jar.dart";
 
+/// Everything stored except the non-secret credential revision floor.
+Map<String, String> _credentials(MemorySecretStore store) => {
+  for (final e in store.values.entries)
+    if (e.key != SecretKeys.sessionRevisionFloor) e.key: e.value,
+};
+
 void main() {
   final origin = BackendOrigin.parse(
     "https://tim-work-pc.taila68f99.ts.net:8444",
@@ -78,7 +84,7 @@ void main() {
       "__Secure-better-auth.session_data=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Secure",
     ]);
     expect(await j.cookieHeaderFor(at("/api/v1/me")), isNull);
-    expect(store.values, isEmpty);
+    expect(_credentials(store), isEmpty);
   });
 
   test(

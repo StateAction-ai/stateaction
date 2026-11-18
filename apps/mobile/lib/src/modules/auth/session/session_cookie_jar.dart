@@ -95,12 +95,20 @@ class SessionCookieJar {
 
   final Map<String, StoredCookie> _cookies = <String, StoredCookie>{};
   int _generation = 0;
+  int _revision = 0;
   Future<void> _tail = Future<void>.value();
 
   /// Incremented by every [clear]. Callers capture it before a request and
   /// pass it to [ingest]/[clearIfGeneration] so a late response from an older
   /// session can neither reinstall cookies nor wipe a newer session.
   int get generation => _generation;
+
+  /// Monotonic version of the credential set. Every change that installs,
+  /// rotates, deletes or clears cookies increments it, and it survives logout
+  /// and restart (a separate persisted floor), so a native copy of this
+  /// session can be ordered against the Dart copy. A legacy record without a
+  /// revision loads as 0.
+  int get revision => _revision;
 
   /// Serializes store writes so a clear can never be overtaken by an earlier
   /// persist that completes later.
@@ -121,6 +129,13 @@ class SessionCookieJar {
 
   Future<void> _load() async {
     final generation = _generation;
+    var floor = 0;
+    try {
+      final storedFloor = await _store.read(SecretKeys.sessionRevisionFloor);
+      floor = int.tryParse(storedFloor ?? "") ?? 0;
+    } catch (_) {
+      floor = 0;
+    }
     final String? raw;
     try {
       raw = await _store.read(SecretKeys.sessionCookies);
@@ -128,13 +143,17 @@ class SessionCookieJar {
       // Fail closed: unreadable storage means no session.
       return;
     }
-    if (raw == null || generation != _generation) return;
+    if (generation != _generation) return;
+    if (floor > _revision) _revision = floor;
+    if (raw == null) return;
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map || decoded["origin"] != origin.value) {
         await _serial(() => _store.delete(SecretKeys.sessionCookies));
         return;
       }
+      final recorded = decoded["revision"];
+      if (recorded is int && recorded > _revision) _revision = recorded;
       final list = decoded["cookies"];
       if (list is! List) return;
       final now = _clock();
@@ -214,7 +233,10 @@ class SessionCookieJar {
       );
       changed = true;
     }
-    if (changed) await _persist();
+    if (changed) {
+      _revision++;
+      await _persist();
+    }
     return rejections;
   }
 
@@ -277,8 +299,13 @@ class SessionCookieJar {
   Future<void> clear() async {
     await load();
     _generation++;
+    _revision++;
     _cookies.clear();
-    await _serial(() => _store.delete(SecretKeys.sessionCookies));
+    final floor = _revision.toString();
+    await _serial(() async {
+      await _store.write(SecretKeys.sessionRevisionFloor, floor);
+      await _store.delete(SecretKeys.sessionCookies);
+    });
   }
 
   /// Clears only if no other clear happened since [generation] was captured.
@@ -293,16 +320,69 @@ class SessionCookieJar {
     _cookies.removeWhere((_, c) => c.isExpired(now));
     // Snapshot synchronously: the serialized write reflects the jar as of
     // this change, and a later clear is queued behind it.
+    final floor = _revision.toString();
     final snapshot = _cookies.isEmpty
         ? null
         : jsonEncode({
             "origin": origin.value,
+            "revision": _revision,
             "cookies": _cookies.values.map((c) => c.toJson()).toList(),
           });
-    return _serial(
-      () => snapshot == null
-          ? _store.delete(SecretKeys.sessionCookies)
-          : _store.write(SecretKeys.sessionCookies, snapshot),
-    );
+    return _serial(() async {
+      await _store.write(SecretKeys.sessionRevisionFloor, floor);
+      if (snapshot == null) {
+        await _store.delete(SecretKeys.sessionCookies);
+      } else {
+        await _store.write(SecretKeys.sessionCookies, snapshot);
+      }
+    });
+  }
+
+  /// Copy of the live credential set and its revision, for handing the same
+  /// Better Auth session to the native uploader. Callers must never log it.
+  Future<({int revision, int generation, List<StoredCookie> cookies})>
+  snapshot() async {
+    final live = await cookies();
+    return (revision: _revision, generation: _generation, cookies: live);
+  }
+
+  /// Installs a newer credential snapshot that the native uploader rotated
+  /// while Dart was suspended. All of these must hold, otherwise nothing
+  /// changes and false is returned:
+  /// - [expectedGeneration] is still the jar generation (no logout, sign-in or
+  ///   account switch happened since the caller decided to adopt);
+  /// - [revision] is strictly greater than this jar's revision;
+  /// - every cookie is valid for this exact origin (secure only over https,
+  ///   absolute path, name/prefix rules, unexpired) and at least one remains.
+  /// The generation is not bumped (this is a rotation, not a logout).
+  Future<bool> adoptSnapshot({
+    required int expectedGeneration,
+    required int revision,
+    required Iterable<StoredCookie> cookies,
+  }) async {
+    await load();
+    if (expectedGeneration != _generation) return false;
+    if (revision <= _revision) return false;
+    final now = _clock();
+    final incoming = <String, StoredCookie>{};
+    for (final cookie in cookies) {
+      if (cookie.name.isEmpty ||
+          !cookie.path.startsWith("/") ||
+          cookie.isExpired(now) ||
+          (cookie.secure && !origin.isSecure) ||
+          (cookie.name.startsWith("__Secure-") && !cookie.secure) ||
+          (cookie.name.startsWith("__Host-") &&
+              (!cookie.secure || cookie.path != "/"))) {
+        return false;
+      }
+      incoming[_key(cookie.name, cookie.path)] = cookie;
+    }
+    if (incoming.isEmpty) return false;
+    _cookies
+      ..clear()
+      ..addAll(incoming);
+    _revision = revision;
+    await _persist();
+    return true;
   }
 }

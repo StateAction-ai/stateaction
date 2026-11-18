@@ -302,7 +302,12 @@ void main() {
       expect(d.secrets.values.keys, {
         SecretKeys.sessionCookies,
         SecretKeys.offlineEligibility,
+        SecretKeys.sessionRevisionFloor,
       });
+      expect(
+        d.secrets.values[SecretKeys.sessionRevisionFloor],
+        d.client.jar.revision.toString(),
+      );
       expect(
         await _rawMeStatus(
           origin,
@@ -478,8 +483,12 @@ void main() {
         isA<RecordingStartAllowed>(),
       );
 
+      final revisionBeforeLogout = d.client.jar.revision;
       expect(await d.controller.logout(), SignOutConfirmation.unconfirmed);
-      expect(d.secrets.values, isEmpty);
+      expect(d.client.jar.revision, greaterThan(revisionBeforeLogout));
+      expect(d.secrets.values, {
+        SecretKeys.sessionRevisionFloor: d.client.jar.revision.toString(),
+      });
       expect(
         (await d.capture(tmp, "after-logout")).$1,
         isA<RecordingStartDenied>(),
@@ -501,11 +510,15 @@ void main() {
     final d = await device();
     await d.signIn(users["collector"]!, password);
     final cookie = await d.cookieHeader();
+    final revisionBeforeLogout = d.client.jar.revision;
     expect(await sessions("collector"), 1);
     expect(await d.controller.logout(), SignOutConfirmation.confirmed);
     expect(await sessions("collector"), 0);
     expect(await _rawMeStatus(origin, cookie), 401);
-    expect(d.secrets.values, isEmpty);
+    expect(d.client.jar.revision, greaterThan(revisionBeforeLogout));
+    expect(d.secrets.values, {
+      SecretKeys.sessionRevisionFloor: d.client.jar.revision.toString(),
+    });
   });
 
   test(

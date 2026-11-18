@@ -64,6 +64,21 @@ class AppConfig {
       });
 
   @visibleForTesting
+  static bool? debugOverrideOwnerNativeUpload;
+
+  /// Owner-bound native Android upload (SA-22 over the SA-57 engine). Fails
+  /// closed: off unless `.env` sets `OWNER_NATIVE_UPLOAD=true` *and* the native
+  /// build enables its own gate. Never implied by environment.
+  static bool get ownerNativeUpload {
+    if (debugOverrideOwnerNativeUpload != null) {
+      return debugOverrideOwnerNativeUpload!;
+    }
+    if (!dotenv.isInitialized) return false;
+    final raw = dotenv.env["OWNER_NATIVE_UPLOAD"]?.trim().toLowerCase();
+    return raw == "true" || raw == "1";
+  }
+
+  @visibleForTesting
   static bool? debugOverrideLocalPasswordAuth;
 
   /// Opt-in local email/password sign-in against the same Better Auth

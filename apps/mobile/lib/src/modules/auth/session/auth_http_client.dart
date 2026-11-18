@@ -44,6 +44,23 @@ class AuthUnavailable<T> extends AuthOutcome<T> {
 /// revocation is only confirmed when the server answered.
 enum SignOutConfirmation { confirmed, unconfirmed }
 
+/// A complete `/api/v1` HTTP exchange. Any status is returned; callers decide
+/// what it means. Bodies may hold sensitive data: never log them.
+class ApiExchange {
+  const ApiExchange({
+    required this.statusCode,
+    required this.bodyBytes,
+    required this.jarGeneration,
+  });
+  final int statusCode;
+  final List<int> bodyBytes;
+
+  /// Cookie-jar generation the request was sent with.
+  final int jarGeneration;
+
+  bool get isSuccess => statusCode >= 200 && statusCode < 300;
+}
+
 /// Small HTTP client for the StateAction Better Auth instance and `/api/v1`.
 ///
 /// - Session transport is the Better Auth cookie only; it never sends an
@@ -130,6 +147,47 @@ class AuthHttpClient {
           }
         }
         return _reject(response, signIn: false);
+      case _Transport(:final failure):
+        return AuthUnavailable(failure!.message, offline: failure.offline);
+    }
+  }
+
+  /// Authenticated `/api/v1` control call with the same Better Auth session
+  /// cookie as every other call. Same exact origin only, no redirects, no
+  /// `Authorization` header, rotated `Set-Cookie` applied under the jar's
+  /// generation fence. [expectedJarGeneration] makes the call fail closed with
+  /// [AuthUnavailable] when a logout/sign-in happened after the caller decided
+  /// to send it. Bodies are small JSON control documents; media bytes never
+  /// travel through this client.
+  Future<AuthOutcome<ApiExchange>> sendApi(
+    String method,
+    String path, {
+    Map<String, Object?>? jsonBody,
+    Map<String, String> headers = const {},
+    int? expectedJarGeneration,
+  }) async {
+    if (!path.startsWith("$apiBasePath/")) {
+      throw ArgumentError.value(path, "path", "must be under $apiBasePath");
+    }
+    if (expectedJarGeneration != null &&
+        expectedJarGeneration != jar.generation) {
+      return const AuthUnavailable("The session changed; request not sent.");
+    }
+    final result = await _send(
+      method,
+      path,
+      body: jsonBody,
+      extraHeaders: headers,
+    );
+    switch (result) {
+      case _Transport(:final response?):
+        return AuthOk(
+          ApiExchange(
+            statusCode: response.statusCode,
+            bodyBytes: response.bodyBytes,
+            jarGeneration: result.generation,
+          ),
+        );
       case _Transport(:final failure):
         return AuthUnavailable(failure!.message, offline: failure.offline);
     }
@@ -232,6 +290,7 @@ class AuthHttpClient {
     Map<String, Object?>? body,
     String? cookieOverride,
     bool applyCookies = true,
+    Map<String, String> extraHeaders = const {},
   }) async {
     final generation = jar.generation;
     final uri = origin.resolve(path);
@@ -245,6 +304,13 @@ class AuthHttpClient {
       request.headers["origin"] = origin.value;
       request.headers["content-type"] = "application/json";
       request.body = jsonEncode(body ?? const <String, Object?>{});
+    }
+    for (final entry in extraHeaders.entries) {
+      final name = entry.key.toLowerCase();
+      if (name == "cookie" || name == "authorization" || name == "origin") {
+        throw ArgumentError.value(entry.key, "headers", "reserved");
+      }
+      request.headers[name] = entry.value;
     }
     final cookie = cookieOverride ?? await jar.cookieHeaderFor(uri);
     if (cookie != null) request.headers["cookie"] = cookie;
@@ -261,7 +327,7 @@ class AuthHttpClient {
           expectedGeneration: generation,
         );
       }
-      return _Transport(response: response);
+      return _Transport(response: response, generation: generation);
     } on TimeoutException {
       return const _Transport(
         failure: _Failure("The server did not respond in time.", offline: true),
@@ -291,7 +357,8 @@ class _Failure {
 }
 
 class _Transport {
-  const _Transport({this.response, this.failure});
+  const _Transport({this.response, this.failure, this.generation = 0});
   final http.Response? response;
   final _Failure? failure;
+  final int generation;
 }

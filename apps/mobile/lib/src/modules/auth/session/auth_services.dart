@@ -14,6 +14,7 @@ import "package:stera/src/modules/auth/session/session_cookie_jar.dart";
 import "package:stera/src/modules/capture_ownership/capture_access_policy.dart";
 import "package:stera/src/modules/capture_ownership/capture_owner_gate.dart";
 import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
+import "package:stera/src/modules/owner_upload/owner_upload_services.dart";
 
 /// Composition root for the authenticated build: one origin, one cookie jar,
 /// one controller and one owner ledger. Never created in `NO_AUTH_MODE`.
@@ -95,5 +96,6 @@ class AuthServices {
   static CaptureOwnerGate lazyCaptureGate() => CaptureOwnerGate.lazy(
     session: () => _instance?.controller.state ?? const AuthRestoring(),
     ledger: () => _instance?.ledger,
+    pause: () => OwnerUploadServices.maybeInstance?.pause,
   );
 }

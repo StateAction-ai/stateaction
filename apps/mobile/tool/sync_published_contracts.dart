@@ -17,6 +17,10 @@ const contracts = [
   "http.recording-registration.v1",
   "http.recording-registration.v2",
   "http.recording-seal.v1",
+  "http.recording.v2",
+  "http.upload-create.v1",
+  "http.upload-plan.v1",
+  "http.upload-transition.v1",
   "artifacts.recording-source.v1",
   "artifacts.recording-source.v2",
 ];
