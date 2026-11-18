@@ -18,6 +18,11 @@ import open.fpvlabs.stera.ar_recorder.finalization.FinalizationJournal
 import open.fpvlabs.stera.ar_recorder.finalization.FinalizationPhase
 import open.fpvlabs.stera.ar_recorder.finalization.RecoveryScanner
 import open.fpvlabs.stera.ar_recorder.finalization.SalvageService
+import open.fpvlabs.stera.source_integrity.AndroidFdOps
+import open.fpvlabs.stera.source_integrity.ConfinedFdHasher
+import open.fpvlabs.stera.source_integrity.FdIdentity
+import open.fpvlabs.stera.source_integrity.FdKey
+import open.fpvlabs.stera.source_integrity.SourceReadIdentity
 
 /**
  * SA-56 on the real ArRecorderImpl / ARCore / MediaCodec path of the accelerated emulator: reasoned stops, a stop
@@ -67,6 +72,102 @@ class FinalizationLifecycleInstrumentedTest {
     private fun journalPhase(dir: File) = (FinalizationJournal.read(dir) as FinalizationJournal.ReadResult.Present).entry.phase
     private fun metadata(dir: File) = JSONObject(File(dir, "metadata.json").readText())
     private fun sessions(activity: H264RecorderTestActivity) = File(activity.getExternalFilesDir(null), "ar_sessions")
+
+    @Test fun completedStopPublishesFinalSourceClosure() {
+        requireEmulator()
+        val activity = launch(); val recorder = activity.recorder
+        try {
+            ready(recorder)
+            val start = recorder.startRecording(config)
+            assertEquals(start.toString(), true, start["success"])
+            val dir = File(start["outputDirectory"] as String)
+            assertFalse("An open take must not have a source closure", File(dir, "metadata.json").takeIf { it.exists() }?.readText()?.contains("stateaction.native_source_close.v1") == true)
+            SystemClock.sleep(3500)
+            val stop = recorder.stopRecording()
+            assertEquals(stop.toString(), true, stop["success"])
+            assertEquals("completed", stop["captureOutcome"])
+            assertEquals("closed", stop["containerState"])
+            assertEquals("none", stop["recoveryState"])
+            val closure = JSONObject(stop["sourceClosure"] as Map<*, *>)
+            assertEquals("stateaction.native_source_close.v1", closure.getString("schema"))
+            assertEquals(stop["recordingId"], closure.getString("recordingId"))
+            assertEquals(stop["finalizationToken"], closure.getString("finalizationToken"))
+            assertTrue(closure.getBoolean("eosDrained")); assertTrue(closure.getBoolean("footerClosed"))
+            assertEquals(0, closure.getInt("unresolvedFrames"))
+            assertTrue(closure.getString("durationMicros").toLong() > 0)
+            val sidecar = metadata(dir)
+            assertEquals(closure.getString("finalizationToken"), sidecar.getJSONObject("source_closure").getString("finalizationToken"))
+            assertEquals(closure.getString("recordingId"), sidecar.getJSONObject("source_closure").getString("recordingId"))
+            assertTrue(sidecar.getBoolean("container_fsync"))
+            assertTrue(closedMagic(dir)); assertEquals(FinalizationPhase.FINALIZED, journalPhase(dir))
+            val files = closure.getJSONArray("files")
+            assertEquals(2, files.length())
+            val closeIdentity = JSONObject(stop["sourceIdentity"] as Map<*, *>)
+            val persisted = JSONObject(File(dir, FinalizationJournal.FILE_NAME).readText()).getJSONObject("source_identity")
+            assertEquals(stop["finalizationToken"], closeIdentity.getString("finalizationToken"))
+            assertEquals(persisted.toString(), closeIdentity.toString())
+            assertFalse(sidecar.has("source_identity"))
+            assertEquals(files.length(), closeIdentity.getJSONObject("files").length())
+            val directory = closeIdentity.getJSONObject("directory")
+            val rootKey = FdKey(directory.getString("dev").toLong(), directory.getString("inode").toLong())
+            for (i in 0 until files.length()) {
+                val file = files.getJSONObject(i)
+                val relativePath = file.getString("relativePath")
+                val identity = closeIdentity.getJSONObject("files").getJSONObject(relativePath)
+                fun field(name: String) = identity.getString(name).toLong()
+                val expected = FdIdentity(field("dev"), field("inode"), field("size"), field("mtimeNs"), field("ctimeNs"))
+                val result = ConfinedFdHasher(AndroidFdOps(), SourceReadIdentity(expected, rootKey))
+                    .hash(dir.canonicalPath, relativePath, 64 * 1024, 1L shl 30) { false }
+                assertTrue(file.getBoolean("required"))
+                assertEquals(expected, result.identity)
+                assertEquals(File(dir, relativePath).length(), result.sizeBytes)
+                assertFalse(file.has("sha256")); assertFalse(file.has("sizeBytes"))
+            }
+            val counts = closure.getJSONObject("counts")
+            assertTrue(counts.getString("video_frames").toLong() > 0)
+            assertEquals(sidecar.getJSONObject("h264_terminal").getJSONObject("evidence").getLong("video_messages"), counts.getString("video_frames").toLong())
+            val channels = closure.getJSONArray("channels")
+            assertTrue((0 until channels.length()).any { channels.getJSONObject(it).getString("schema_name") == "geometry_msgs/msg/PoseStamped" })
+            assertTrue((0 until channels.length()).all { channels.getJSONObject(it).getString("clock_domain") == "unix" })
+            receipt("source-closure.json", JSONObject().put("status", "passed").put("directory", dir.name).put("stop", JSONObject(stop)))
+        } finally {
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
+    @Test fun sameNameMcapReplacementAfterWriterCloseDoesNotPublishSourceIdentity() {
+        requireEmulator()
+        val activity = launch(); val recorder = activity.recorder
+        try {
+            ready(recorder)
+            val start = recorder.startRecording(config)
+            assertEquals(start.toString(), true, start["success"])
+            val dir = File(start["outputDirectory"] as String)
+            SystemClock.sleep(3500)
+            var swapped: Pair<File, File>? = null
+            recorder.phaseFaultHook = { phase ->
+                if (phase == FinalizationPhase.FINALIZING_METADATA) {
+                    val path = dir.listFiles { f -> f.extension == "mcap" }!!.single()
+                    val original = File(dir, "${path.name}.original")
+                    assertTrue(path.renameTo(original))
+                    original.copyTo(path)
+                    swapped = original to path
+                }
+            }
+            val stop = recorder.stopRecording()
+            assertEquals(stop.toString(), true, stop["success"])
+            assertEquals("completed", stop["captureOutcome"])
+            assertNull(stop["sourceClosure"])
+            assertNull(stop["sourceIdentity"])
+            val journal = JSONObject(File(dir, FinalizationJournal.FILE_NAME).readText())
+            assertFalse(journal.has("source_identity"))
+            val (original, replacement) = checkNotNull(swapped)
+            assertEquals(sha256(original), sha256(replacement))
+        } finally {
+            recorder.phaseFaultHook = null
+            recorder.disposeSession(); instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
 
     @Test fun reasonedStopsCloseCleanlyAndStayInterrupted() {
         requireEmulator()

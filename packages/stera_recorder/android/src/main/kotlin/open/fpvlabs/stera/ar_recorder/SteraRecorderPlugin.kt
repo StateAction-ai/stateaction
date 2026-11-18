@@ -4,6 +4,7 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.BinaryMessenger
+import open.fpvlabs.stera.source_integrity.SourceHashMethodChannelHandler
 import io.flutter.view.TextureRegistry
 
 /**
@@ -20,14 +21,18 @@ class SteraRecorderPlugin : FlutterPlugin, ActivityAware {
     private var binaryMessenger: BinaryMessenger? = null
     private var textureRegistry: TextureRegistry? = null
     private var handler: ArRecorderMethodChannelHandler? = null
+    private var sourceHash: SourceHashMethodChannelHandler? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         binaryMessenger = binding.binaryMessenger
         textureRegistry = binding.textureRegistry
+        sourceHash = SourceHashMethodChannelHandler(binding.binaryMessenger)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         disposeHandler()
+        sourceHash?.dispose()
+        sourceHash = null
         binaryMessenger = null
         textureRegistry = null
     }

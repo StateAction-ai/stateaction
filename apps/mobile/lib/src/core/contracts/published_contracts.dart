@@ -4,9 +4,9 @@ import "package:stateaction_contracts/stateaction_contracts.dart";
 import "package:stera/src/core/contracts/published_contracts.g.dart";
 
 /// Shared validator ([ContractRegistry] from `packages/contracts/dart`) built
-/// from exact copies of the published `http.success-envelope.v1` and
-/// `http.me.v1` documents. Same schema and fail-closed codes as the server
-/// and the TypeScript/Python adapters; no app-local relaxation.
+/// from exact published auth, recording registration, source and seal documents,
+/// including their referenced schemas. Same fail-closed rules as the server
+/// and TypeScript/Python adapters; existing v1 documents remain unchanged.
 final class PublishedContracts {
   PublishedContracts._();
 

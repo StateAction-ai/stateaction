@@ -2,6 +2,7 @@ package open.fpvlabs.stera.ar_recorder.data
 
 import java.io.File
 import open.fpvlabs.stera.ar_recorder.finalization.AtomicFiles
+import open.fpvlabs.stera.source_integrity.AndroidFdOps
 import java.io.FileOutputStream
 import java.io.BufferedOutputStream
 import java.nio.ByteBuffer
@@ -75,6 +76,7 @@ class MCAPWriter {
     @Volatile var sessionDirectorySynced: Boolean? = null; private set
     /** True only after the container bytes were flushed and fsynced in finish(). */
     @Volatile var containerDurable: Boolean = false; private set
+    @Volatile var finishedMcap: FinishedMcap? = null; private set
     private var offset: Long = 0
     private var messageCount: Long = 0
     private var messageStartTime: Long = Long.MAX_VALUE
@@ -350,10 +352,14 @@ class MCAPWriter {
         os.flush()
         val raw = checkNotNull(fileStream) { "MCAP container has no syncable file stream; refusing a silent no-op durability claim" }
         containerSync(raw)
+        val identity = AndroidFdOps.finishedWriterIdentity(raw.fd)
         containerDurable = true
         os.close()
         outputStream = null
-        containerFile?.parentFile?.let { sessionDirectorySynced = AtomicFiles.syncDirectoryReporting(it) }
+        containerFile?.let { file ->
+            file.parentFile?.let { sessionDirectorySynced = AtomicFiles.syncDirectoryReporting(it) }
+            finishedMcap = FinishedMcap(file.name, identity)
+        }
         } catch (e: Exception) {
             finishFailure = e
             containerDurable = false

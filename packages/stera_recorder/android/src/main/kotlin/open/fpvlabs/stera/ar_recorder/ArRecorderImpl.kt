@@ -59,9 +59,14 @@ import open.fpvlabs.stera.ar_recorder.session.ArSessionManager
 import open.fpvlabs.stera.ar_recorder.session.ArSessionManagerImpl
 import open.fpvlabs.stera.ar_recorder.session.FrameProcessingPipeline
 import open.fpvlabs.stera.ar_recorder.session.SessionLifecycleManager
+import open.fpvlabs.stera.source_integrity.AndroidFdOps
+import open.fpvlabs.stera.source_integrity.ConfinedFdHasher
+import open.fpvlabs.stera.source_integrity.MAX_FINAL_METADATA_BYTES
+import open.fpvlabs.stera.source_integrity.SourceHashException
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Frame
 import io.flutter.view.TextureRegistry
+import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.Date
@@ -889,6 +894,7 @@ class ArRecorderImpl(
             // H.264: drain the codec to end of stream and write Inventory/Close only after every admitted motion
             // event is written, so the Close counts and outcome cover the whole take.
             val h264 = frameOrchestrator.h264Controller
+            var closedWriterEvidence: Map<String, Any?>? = null
             journal?.advance(FinalizationPhase.DRAINING_ENCODER)
             phaseFaultHook?.invoke(FinalizationPhase.DRAINING_ENCODER)
             if (h264 != null) {
@@ -898,6 +904,11 @@ class ArRecorderImpl(
                 frameOrchestrator.h264Controller = null
                 drainWriterQueue(budget.phaseTimeoutMs("close_barrier", FinalizationBudget.WRITER_BARRIER_CAP_MS))
                 h264TerminalStats = h264.terminalStats() + mapOf("evidence" to datasetWriter.h264Capture()?.stats())
+                // finalize() releases the writer reference. Snapshot its actual completed
+                // inventory now; publish it only after the later container/sidecar fsync.
+                closedWriterEvidence = datasetWriter.h264Capture()?.let {
+                    if (it.stats()["close_outcome"] == "completed") it.sourceManifestEvidence() else null
+                }
             }
 
             datasetWriter.captureFreeStorageAfterSnapshot()
@@ -1016,7 +1027,9 @@ class ArRecorderImpl(
             val writtenRgbFrames = (stats["rgbFrameCount"] as? Int) ?: metrics.encodedVideoFrameCount.get()
             var captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
             val sessionFile = outputDir?.let(::File)
-            val mcapFile = sessionFile?.listFiles { f -> f.name.endsWith(".mcap") }?.firstOrNull()
+            val finishedMcap = datasetWriter.finishedMcap
+            val mcapFile = sessionFile?.let { finishedMcap?.findIn(it) }
+            val mcapIdentity = finishedMcap?.identity
             // Closed requires the writer to have finished AND the container bytes to have been fsynced; a missing or failed
             // sync is never a closed container.
             val containerState = if (mcapFile != null) CaptureOutcomePolicy.containerState(zipSuccess && datasetWriter.containerDurable, mcapFile) else CaptureOutcomePolicy.UNCLOSED
@@ -1027,6 +1040,48 @@ class ArRecorderImpl(
             } else if (captureFailure == null) "completed" else "failed"
             val recoveryState = CaptureOutcomePolicy.recoveryState(containerState, captureOutcome)
             val finalizationToken = java.util.UUID.randomUUID().toString()
+            fun matchesFinalizationToken(bytes: ByteArray): Boolean =
+                runCatching { JSONObject(bytes.toString(Charsets.UTF_8)).getString("finalization_token") == finalizationToken }
+                    .getOrDefault(false)
+
+            fun readFinalMetadata(file: File): Boolean {
+                if (!file.isFile) return false
+                file.inputStream().use { input ->
+                    val bytes = ByteArray(MAX_FINAL_METADATA_BYTES + 1)
+                    var used = 0
+                    while (used < bytes.size) {
+                        val count = input.read(bytes, used, bytes.size - used)
+                        if (count < 0) return matchesFinalizationToken(bytes.copyOf(used))
+                        used += count
+                    }
+                    return false
+                }
+            }
+
+            val sourceFiles = mcapFile?.let {
+                listOf(
+                    "source_mcap" to it.name,
+                    "recorder_metadata" to "metadata.json",
+                )
+            }
+            val closedSource = if (activeRecordingConfig.isH264 && captureOutcome == "completed" &&
+                containerState == CaptureOutcomePolicy.CLOSED && sourceFiles != null) {
+                val encoder = h264TerminalStats["encoder"] as? Map<*, *>
+                val unresolved = (evidence?.get("unresolved") as? Number)?.toLong() ?: -1L
+                if (encoder?.get("end_of_stream") == true && unresolved == 0L) {
+                    closedWriterEvidence?.plus(mapOf(
+                        "schema" to "stateaction.native_source_close.v1",
+                        "recordingId" to h264TerminalStats["recording_id"],
+                        "finalizationToken" to finalizationToken,
+                        "outcome" to captureOutcome, "closeStatus" to "closed_clean",
+                        "eosDrained" to true, "footerClosed" to true, "unresolvedFrames" to 0,
+                        "durationMicros" to (durationSeconds * 1_000_000).toLong().toString(),
+                        "files" to sourceFiles.map { (role, path) ->
+                            mapOf("role" to role, "relativePath" to path, "required" to true)
+                        },
+                    ))
+                } else null
+            } else null
             finalizationResult.metadata["capture_result_valid"] = captureFailure == null
             finalizationResult.metadata["first_writer_error"] = datasetWriter.getWriteFailure()
             finalizationResult.metadata["finalization_complete"] = containerState == CaptureOutcomePolicy.CLOSED && datasetWriter.getWriteFailure() == null && captureFailure == null
@@ -1043,12 +1098,29 @@ class ArRecorderImpl(
             // Closed bytes are not upload admission: the recorder does not evaluate hashes, manifests or ownership.
             finalizationResult.metadata["upload_admission"] = "not_evaluated_by_recorder"
             finalizationResult.metadata["finalization_token"] = finalizationToken
+            // Final sidecar declares itself without a recursive size/hash. Hashes live in the external source journal.
+            finalizationResult.metadata["source_closure"] = closedSource
             journal?.advance(FinalizationPhase.FINALIZING_METADATA, containerState = containerState, captureOutcome = captureOutcome)
             phaseFaultHook?.invoke(FinalizationPhase.FINALIZING_METADATA)
             // Final sidecar write and read-back are bounded too; a late worker is cancelled and cannot publish afterwards.
-            val sidecarDurable = boundedPhases.run(budget, "final_sidecar", FinalizationBudget.METADATA_CAP_MS) { token ->
+            val (sidecarDurable, sourceIdentity) = boundedPhases.run(budget, "final_sidecar", FinalizationBudget.METADATA_CAP_MS) { token ->
                 if (!token.cancelled) datasetWriter.writeMetadata(finalizationResult.metadata)
-                !token.cancelled && sessionFile?.let { File(it, "metadata.json").takeIf(File::isFile)?.readText()?.contains(finalizationToken) } == true
+                val identity = if (!token.cancelled && closedSource != null && sourceFiles != null &&
+                    journal != null && mcapIdentity != null &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        ConfinedFdHasher(AndroidFdOps()).snapshotClose(
+                            sessionFile.canonicalPath, sourceFiles.map { it.second },
+                            finalizationToken, mapOf(mcapFile.name to mcapIdentity), ::matchesFinalizationToken,
+                        )
+                    } catch (_: SourceHashException) {
+                        // Preserve a playable take even when exact source identity is unavailable.
+                        null
+                    }
+                } else null
+                val durable = !token.cancelled && (identity != null ||
+                    sessionFile?.let { readFinalMetadata(File(it, "metadata.json")) } == true)
+                Pair(durable, if (durable) identity else null)
             }
             captureFailure = metrics.captureFailureReason(writtenRgbFrames, datasetWriter.getWriteFailure())
             // FINALIZED only after the final sidecar is read back from disk and the container is proven closed.
@@ -1059,7 +1131,9 @@ class ArRecorderImpl(
                     RecoveryScanner.quarantine(sessionFile, if (!durablyFinal) "finalization_incomplete:container=$containerState,sidecar=$sidecarDurable" else "capture_outcome_$captureOutcome", System.currentTimeMillis())
                 } catch (error: Throwable) { recordError("Could not write recovery marker", error) }
             }
-            if (CaptureOutcomePolicy.mayPublishFinalized(durablyFinal, captureFailure)) journal?.advance(FinalizationPhase.FINALIZED)
+            if (CaptureOutcomePolicy.mayPublishFinalized(durablyFinal, captureFailure)) {
+                journal?.advance(FinalizationPhase.FINALIZED, sourceIdentity = sourceIdentity)
+            }
             frameProcessor.releaseRecordingBuffers()
             // Publish READY only after the final sidecar is durably persisted. Pollers may
             // immediately start a new recording once this state becomes observable.
@@ -1102,6 +1176,10 @@ class ArRecorderImpl(
                 "captureOutcome" to captureOutcome,
                 "recoveryState" to recoveryState,
                 "interruptionReason" to stopReason,
+                // This response is reached only after final metadata read-back and the bounded writer close.
+                "finalizationToken" to if (durablyFinal) finalizationToken else null,
+                "sourceClosure" to if (durablyFinal && sourceIdentity != null) closedSource else null,
+                "sourceIdentity" to if (durablyFinal) sourceIdentity?.toJson() else null,
                 "error" to null
             )
         } catch (e: Exception) {

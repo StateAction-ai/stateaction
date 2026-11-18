@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Headless on purpose: no activity, no launcher, no foreground window.
+         The service hosts a real FlutterEngine (plugins auto-registered, so
+         SteraRecorderPlugin registers the source_hash channel) and runs lib/main.dart. -->
+    <application
+        android:label="source_probe"
+        android:name="${applicationName}"
+        android:allowBackup="false">
+        <service android:name=".ProbeService" android:exported="true" />
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>

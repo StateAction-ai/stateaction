@@ -3,7 +3,15 @@ package open.fpvlabs.stera.ar_recorder.data
 import open.fpvlabs.stera.ar_recorder.sensors.RawMotionEvent
 import open.fpvlabs.stera.ar_recorder.session.DepthFrameData
 import open.fpvlabs.stera.ar_recorder.session.PointCloudFrameData
+import open.fpvlabs.stera.source_integrity.FdIdentity
 import java.io.File
+
+/** The actual file opened by the writer and its descriptor identity at durable close. */
+data class FinishedMcap(val relativePath: String, val identity: FdIdentity?) {
+    fun findIn(directory: File): File? =
+        directory.listFiles { file -> file.extension == "mcap" }
+            ?.singleOrNull()?.takeIf { it.name == relativePath && it.isFile }
+}
 
 interface DatasetWriter {
     /** Opt-in for the next session only; null keeps the historical JPEG profile. */
@@ -25,6 +33,7 @@ interface DatasetWriter {
 
     /** True only when the finished container's bytes were fsynced to storage. Writers that cannot prove it stay false (never a silent no-op claim). */
     val containerDurable: Boolean get() = false
+    val finishedMcap: FinishedMcap? get() = null
 
     /** Session directory sync after the container fsync: true forced, false unsupported by the filesystem, null not attempted. */
     val sessionDirectorySynced: Boolean? get() = null

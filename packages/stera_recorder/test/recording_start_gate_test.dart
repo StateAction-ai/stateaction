@@ -41,6 +41,7 @@ void main() {
     WidgetTester tester,
     RecordingStartClearance clearance, {
     bool nativeSucceeds = true,
+    Map<String, Object?>? stopResult,
   }) async {
     final events = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -54,6 +55,8 @@ void main() {
           return nativeSucceeds
               ? {"success": true, "outputDirectory": "/x/ar_sessions/s1"}
               : {"success": false, "error": "camera busy"};
+        case "stopRecording":
+          return stopResult ?? {"success": true};
         default:
           return {"success": true};
       }
@@ -69,6 +72,38 @@ void main() {
   }
 
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+  testWidgets(
+    "completed close evidence is copied and cleared before a new take",
+    (tester) async {
+      final (provider, _) = await setUpProvider(
+        tester,
+        const RecordingStartAllowed("intent-close"),
+        stopResult: {
+          "success": true,
+          "containerState": "closed",
+          "captureOutcome": "completed",
+          "recoveryState": "none",
+          "sourceClosure": {
+            "counts": {"video_frames": "12"},
+          },
+        },
+      );
+      await provider.startRecording();
+      await provider.stopRecording();
+      final copy = provider.lastCompletedStop!;
+      ((copy["sourceClosure"]! as Map)["counts"] as Map)["video_frames"] =
+          "999";
+      expect(
+        ((provider.lastCompletedStop!["sourceClosure"]! as Map)["counts"]
+            as Map)["video_frames"],
+        "12",
+      );
+      await provider.startRecording();
+      expect(provider.lastCompletedStop, isNull);
+      provider.dispose();
+    },
+  );
 
   testWidgets("owner clearance is obtained before native Start, then bound", (
     tester,

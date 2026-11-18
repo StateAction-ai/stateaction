@@ -1,4 +1,5 @@
 import "dart:async";
+import "dart:convert";
 
 import "package:flutter/foundation.dart";
 
@@ -52,6 +53,17 @@ class ArRecorderProvider extends ChangeNotifier {
 
   String? _outputDirectory;
   String? get outputDirectory => _outputDirectory;
+
+  Map<String, Object?>? _lastCompletedStop;
+
+  /// Actual native close response for the latest completed take. Consumers
+  /// must bind it to the owner ledger and session directory before sealing.
+  /// A defensive copy prevents one consumer changing another's evidence.
+  Map<String, Object?>? get lastCompletedStop => _lastCompletedStop == null
+      ? null
+      : Map<String, Object?>.from(
+          jsonDecode(jsonEncode(_lastCompletedStop)) as Map,
+        );
 
   bool _isLowQualityMode = false;
   bool get isLowQualityMode => _isLowQualityMode;
@@ -335,6 +347,7 @@ class ArRecorderProvider extends ChangeNotifier {
     }
 
     var started = false;
+    _lastCompletedStop = null;
     try {
       final result = await ArRecorderService.startRecording(
         config: recordingConfig,
@@ -417,6 +430,13 @@ class ArRecorderProvider extends ChangeNotifier {
 
       if (result["success"] == true) {
         _isRecording = false;
+        _lastCompletedStop =
+            result["sourceClosure"] is Map &&
+                result["containerState"] == "closed" &&
+                result["captureOutcome"] == "completed" &&
+                result["recoveryState"] == "none"
+            ? Map<String, Object?>.from(result)
+            : null;
         _isPaused = false;
         _state = ArRecorderState.ready;
         _outputDirectory = result["outputDirectory"] as String?;
