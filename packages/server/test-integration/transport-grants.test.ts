@@ -31,7 +31,7 @@ test("005 through 007 are applied through the real migrator with the published 0
     applied.rows,
     files.map((m) => ({ version: m.version, sha256: m.sha256 })),
   );
-  assert.equal(applied.rows.at(-1)?.version, 8);
+  assert.equal(applied.rows.at(-1)?.version, 9);
 });
 
 test("restricted-role matrix for the transport tables", async () => {

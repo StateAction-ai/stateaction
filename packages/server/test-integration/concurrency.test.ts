@@ -1,10 +1,11 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import pg from "pg";
 import { recordSharingPermission } from "../src/datasets/operator.js";
 import {
-  acceptProcessingResult,
   addClipsToDataset,
   appendReview,
   createDataset,
@@ -55,7 +56,7 @@ const settle = async <T>(work: Promise<T>[]) => {
 };
 async function accepted(clipCount: number): Promise<Processed> {
   const p = await processedRecording(db.app, actors, clipCount);
-  await acceptProcessingResult(db.app, {
+  await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
     jobId: p.jobId,
     manifestFileId: p.manifestFileId,
     manifestSha256: p.manifestSha256,
@@ -514,21 +515,10 @@ test("seal and source reservation serialize in both orders; seal stays a closed 
   evidence.sealVersusReserve = results;
 });
 
-test("output insertion and result acceptance serialize on the job", async () => {
+test("output insertion and result acceptance serialize on the job: the closed inventory refuses late outputs", async () => {
   const p = await processedRecording(db.app, actors, 1);
-  const holder = new pg.Client({ connectionString: db.appUrl });
-  await holder.connect();
-  try {
-    await holder.query("BEGIN");
-    await holder.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [
-      p.jobId,
-    ]);
-    await holder.query(
-      "UPDATE jobs SET state = 'succeeded', result_manifest_file_id = $2, result_manifest_sha256 = $3, finished_at = now() WHERE id = $1",
-      [p.jobId, p.manifestFileId, p.manifestSha256],
-    );
-    const id = randomUUID();
-    const late = db.app.query(
+  const late = (id: string) =>
+    db.app.query(
       `INSERT INTO files (id, recording_id, job_id, purpose, role, size_bytes, sha256, object_key, part_size_bytes, part_count)
        VALUES ($1, $2, $3, 'output', 'viewer_rrd', 100, $4, $5, 67108864, 1)`,
       [
@@ -539,17 +529,20 @@ test("output insertion and result acceptance serialize on the job", async () => 
         `jobs/${p.jobId}/outputs/${id}/e1/late.rrd`,
       ],
     );
-    // Observe the rejection before COMMIT: it can settle in the same I/O turn
-    // as the COMMIT reply, which would otherwise be an unhandled rejection.
-    const rejected = expectCode(late, "SAC04");
-    await new Promise((r) => setTimeout(r, 300));
-    await holder.query("COMMIT");
-    await rejected;
-    evidence.outputVersusAcceptance =
-      "late output rejected after acceptance commit";
-  } finally {
-    await holder.end();
-  }
+  // Before, during and after acceptance: the inventory was closed while the
+  // job ran, so a late output is never admitted, whatever the interleaving.
+  const before = expectCode(late(randomUUID()), "SAC04");
+  const accepting = fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
+    jobId: p.jobId,
+    manifestFileId: p.manifestFileId,
+    manifestSha256: p.manifestSha256,
+    clips: p.clips,
+  });
+  const during = expectCode(late(randomUUID()), "SAC04");
+  await Promise.all([before, accepting, during]);
+  await expectCode(late(randomUUID()), "SAC04");
+  evidence.outputVersusAcceptance =
+    "late output rejected before, during and after acceptance";
 });
 
 test("seal may precede completion; replay is idempotent; admission creates exactly one first job", async () => {

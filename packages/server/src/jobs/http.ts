@@ -7,6 +7,16 @@ import {
   type InputRead,
   type ReconcileResult,
 } from "@stateaction/contracts";
+import {
+  advanceResult,
+  closeOutputs,
+  repairResults,
+  submitCandidate,
+  type AcceptanceDeps,
+  type CandidateBody,
+  type OutputClosure,
+  type ResultAck,
+} from "../acceptance/service.js";
 import { TransportError } from "../transport/errors.js";
 import { errorResponse, readBoundedJson } from "../transport/http.js";
 import {
@@ -19,6 +29,7 @@ import {
   parseExecutor,
   recordExecutionEvidence,
   recordExecutionRef,
+  readTaskInput,
   recordHeartbeat,
   recordWorkerSubmissionIntent,
   recordWorkflowRun,
@@ -73,6 +84,28 @@ function checked<T>(contract: string, doc: unknown): T {
 
 const iso = (d: Date) => d.toISOString();
 
+function acceptanceOf(d: JobsDeps): AcceptanceDeps {
+  if (!d.acceptance)
+    throw new TransportError(
+      "provider_unavailable",
+      "Output acceptance is not configured",
+    );
+  return { pool: d.pool, ...d.acceptance };
+}
+
+/** Best-effort acceptance step after an event; reconcile repairs a failure. */
+async function advanceQuietly(d: JobsDeps, jobId: string): Promise<void> {
+  if (!d.acceptance) return;
+  try {
+    await advanceResult(acceptanceOf(d), jobId);
+  } catch (error) {
+    console.error(
+      "[jobs] acceptance step failed",
+      error instanceof Error ? error.name : "error",
+    );
+  }
+}
+
 /**
  * Framework-neutral job handlers. Authentication (machine capabilities for the
  * scope each route needs; never a human session) happens before these run, in
@@ -84,6 +117,9 @@ export function jobHandlers(deps: () => JobsDeps) {
     reconcile: (_request: Request) =>
       respond(async () => {
         const d = deps();
+        // Repair first: a result whose facts are now complete frees the slot
+        // before this pass tries to admit the next job.
+        if (d.acceptance) await repairResults(acceptanceOf(d));
         const admission = await admitNextJob(d);
         const pendingDispatches = await listPendingDispatches(d);
         return checked<ReconcileResult>("jobs.reconcile-result.v1", {
@@ -155,8 +191,8 @@ export function jobHandlers(deps: () => JobsDeps) {
               });
             case "mark_submit_unknown":
               return markSubmissionUnknown(d, { jobId, owner: a.owner });
-            case "record_execution_evidence":
-              return recordExecutionEvidence(d, {
+            case "record_execution_evidence": {
+              const recorded = await recordExecutionEvidence(d, {
                 jobId,
                 recordedBy: principalId,
                 evidence:
@@ -168,6 +204,15 @@ export function jobHandlers(deps: () => JobsDeps) {
                         detail: a.evidence.detail,
                       },
               });
+              // Either arrival order converges here: the evidence may be the
+              // last fact an already verified result was waiting for.
+              await advanceQuietly(d, jobId);
+              const held = await d.pool.query(
+                "SELECT 1 FROM dispatch_admission WHERE slot = 1 AND job_id = $1",
+                [jobId],
+              );
+              return { ...recorded, slotReleased: held.rowCount === 0 };
+            }
           }
         };
         return checked<ControllerResult>(
@@ -216,6 +261,60 @@ export function jobHandlers(deps: () => JobsDeps) {
           accepted: true,
           executionDeadline: iso(r.executionDeadline),
         });
+      }),
+
+    /** GET /internal/v1/jobs/{id}/task-input: the admitted task input of the claimed job. */
+    taskInput: (_request: Request, jobId: string) =>
+      respond(async () =>
+        checked<Record<string, unknown>>(
+          "jobs.task-input.v2",
+          await readTaskInput(deps(), { jobId }),
+        ),
+      ),
+
+    /** POST /internal/v1/jobs/{id}/outputs/close: seal the output inventory. */
+    closeOutputs: (request: Request, jobId: string) =>
+      respond(async () => {
+        const body = (await readBoundedJson(
+          request,
+          "jobs.output-close.v1",
+        )) as {
+          jobId: string;
+          invocationNonce: string;
+          outcome: "succeeded" | "failed";
+        };
+        if (body.jobId !== jobId) throw bad("jobId does not match the route");
+        return checked<OutputClosure>(
+          "jobs.output-closure.v1",
+          await closeOutputs(acceptanceOf(deps()), {
+            jobId,
+            invocationNonce: body.invocationNonce,
+            outcome: body.outcome,
+          }),
+        );
+      }),
+
+    /** POST /internal/v1/jobs/{id}/result: provisional candidate; selects nothing. */
+    result: (request: Request, jobId: string) =>
+      respond(async () => {
+        const body = (await readBoundedJson(
+          request,
+          "jobs.result-candidate.v1",
+        )) as CandidateBody;
+        if (body.jobId !== jobId) throw bad("jobId does not match the route");
+        const a = acceptanceOf(deps());
+        const received = await submitCandidate(a, body);
+        let ack: ResultAck = received;
+        try {
+          ack = (await advanceResult(a, jobId)) ?? received;
+        } catch (error) {
+          // The candidate is durably recorded; reconcile continues the work.
+          console.error(
+            "[jobs] acceptance step failed",
+            error instanceof Error ? error.name : "error",
+          );
+        }
+        return checked<ResultAck>("jobs.result-ack.v1", ack);
       }),
 
     inputRead: (_request: Request, jobId: string, fileId: string) =>

@@ -1,7 +1,8 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
-import { acceptProcessingResult } from "../src/catalog/catalog.js";
 import {
   getPipelineDetail,
   listPipelineRecordings,
@@ -37,7 +38,7 @@ before(async () => {
     [actors.collector],
   );
   completed = await processedRecording(db.app, actors, 2);
-  await acceptProcessingResult(db.app, {
+  await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
     jobId: completed.jobId,
     manifestFileId: completed.manifestFileId,
     manifestSha256: completed.manifestSha256,

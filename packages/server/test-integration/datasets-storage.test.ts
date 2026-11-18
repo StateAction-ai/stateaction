@@ -1,11 +1,10 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { after, before, describe, test } from "node:test";
-import {
-  acceptProcessingResult,
-  appendReview,
-} from "../src/catalog/catalog.js";
+import { appendReview } from "../src/catalog/catalog.js";
 import { issueRead, S3ReadSigner } from "../src/datasets/broker.js";
 import {
   addDatasetMembers,
@@ -50,7 +49,7 @@ after(async () => {
 describe("real signed reads", () => {
   test("thumbnail and viewer fetch, expiry, tamper and revocation", async () => {
     const p = await processedRecording(db.app, actors, 1);
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,

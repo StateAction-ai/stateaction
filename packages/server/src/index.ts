@@ -13,4 +13,5 @@ export { CatalogError } from "./catalog/errors.js";
 export * as admission from "./admission/index.js";
 export * from "./transport/index.js";
 export * as jobs from "./jobs/index.js";
+export * as acceptance from "./acceptance/index.js";
 export * as datasets from "./datasets/index.js";

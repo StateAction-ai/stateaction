@@ -1,10 +1,9 @@
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { ownerPoolFor } from "./harness.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
-import {
-  acceptProcessingResult,
-  appendReview,
-} from "../src/catalog/catalog.js";
+import { appendReview } from "../src/catalog/catalog.js";
 import type { ReadSigner } from "../src/datasets/broker.js";
 import {
   datasetRoutes,
@@ -77,7 +76,7 @@ const json = (body: unknown) => ({
 describe("dataset HTTP routes", () => {
   test("staff create/add/rename/remove, customer reads, private error envelopes", async () => {
     const p = await processedRecording(db.app, actors, 2);
-    await acceptProcessingResult(db.app, {
+    await fixtureAcceptResult(ownerPoolFor(db.app), db.app, {
       jobId: p.jobId,
       manifestFileId: p.manifestFileId,
       manifestSha256: p.manifestSha256,

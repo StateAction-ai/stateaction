@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/output-close.v1.json",
+  "title": "Close output inventory request v1",
+  "description": "POST /internal/v1/jobs/{jobId}/outputs/close. The claiming invocation seals its output inventory once every output file is completed. No file list is accepted: the server closes exactly the files it reserved for this job. Idempotent for the same nonce.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId", "invocationNonce", "outcome"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["succeeded", "failed"],
+      "description": "The outcome the worker will report. A failed run's inventory may contain partial clip files; they are retained for diagnostics and never accepted."
+    }
+  }
+}

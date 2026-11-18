@@ -119,6 +119,7 @@ class RrdWriter:
         clip_id: str,
         raster: tuple[int, int],
         limits: ExportLimits,
+        extra_note: str | None = None,
     ):
         import rerun as rr
         import rerun.blueprint as rrb
@@ -144,6 +145,8 @@ class RrdWriter:
             f" Preview re-encoded from decoded pixels at {self.pw}x{self.ph}."
             f" Source MP4 raster is {w}x{h} with overlay scale {self.sx:g} by {self.sy:g}."
         )
+        if extra_note:
+            note += " " + extra_note
         self.rec.log("notes/model_relative_3d", rr.TextDocument(note), static=True)
         self.rec.send_blueprint(
             rrb.Horizontal(

@@ -307,6 +307,29 @@ class RealPipelineTests(unittest.TestCase):
                 if p.is_file():
                     self.assertNotIn(str(Path.home()).encode(), p.read_bytes())
 
+    def test_attested_v2_export_round_trips_through_reader(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch) / "out"
+            result = artifact_export.export_artifacts(
+                ForwardOnly(self.golden()),
+                artifact_types.LocalDirectorySink(root),
+                context(
+                    source_file_id=JOB,
+                    attestation=artifact_types.Attestation(
+                        invocation_nonce="a" * 43,
+                        rgb_profile="h264_mcap_v1",
+                    ),
+                ),
+            )
+
+            read = artifact_reader.open_result(root, require_contracts=True)
+            self.assertTrue(read.contract_validated)
+            self.assertEqual(
+                read.manifest["schema"], "stateaction.processing_result.v2"
+            )
+            self.assertEqual(read.manifest_sha256, result.manifest_sha256)
+            self.assertEqual(read.clips[0].verify_roundtrip()["frames"], 5)
+
     def test_manifest_cites_store_receipt_ids_and_rejects_wrong_receipts(self):
         ids = {}
 

@@ -8,6 +8,9 @@ import {
   type ServiceScope,
 } from "../auth/service.js";
 import { serverConfig } from "../config.js";
+import { acceptanceConfigFromEnv } from "../acceptance/config.js";
+import { s3ObjectHasher } from "../acceptance/storage.js";
+import { s3ObjectReader } from "../admission/object-reader.js";
 import { presignObject } from "../storage.js";
 import { JobCapabilityStore, WORKER_AUDIENCE } from "../transport/runtime.js";
 import {
@@ -45,6 +48,11 @@ export function jobsDepsFromEnv(
     config: jobsConfigFromEnv(env),
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
+    acceptance: {
+      config: acceptanceConfigFromEnv(env),
+      reader: s3ObjectReader(config, { timeoutMs: 15000 }),
+      hasher: s3ObjectHasher(config),
+    },
   };
 }
 
@@ -150,6 +158,30 @@ export function jobRouteHandlers(
         worker,
         { kinds: ["worker"], scope: "job:heartbeat" },
         (h) => h.heartbeat(request, jobId),
+      ),
+    taskInput: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        worker,
+        { kinds: ["worker"], scope: "job:input" },
+        (h) => h.taskInput(request, jobId),
+      ),
+    closeOutputs: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        worker,
+        { kinds: ["worker"], scope: "job:output" },
+        (h) => h.closeOutputs(request, jobId),
+      ),
+    result: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        worker,
+        { kinds: ["worker"], scope: "job:result" },
+        (h) => h.result(request, jobId),
       ),
     inputRead: (request: Request, jobId: string, fileId: string) =>
       fileOk(fileId)
