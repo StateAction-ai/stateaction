@@ -11,7 +11,12 @@
       "options": {
         "command": "pnpm --filter @stateaction/web build"
       },
-      "outputs": ["{projectRoot}/.next"]
+      "outputs": ["{projectRoot}/.next", "{projectRoot}/public/rerun"],
+      "inputs": [
+        "production",
+        "^production",
+        "{workspaceRoot}/scripts/platform/rerun-assets.mjs"
+      ]
     },
     "typecheck": {
       "executor": "nx:run-commands",
@@ -31,7 +36,8 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec prettier --check \"apps/web/app/**/*\" \"apps/web/test/**/*\" \"apps/web/test-e2e/**/*\" \"apps/web/*.json\" \"apps/web/next.config.ts\""
-      }
+      },
+      "inputs": ["default", "{workspaceRoot}/.prettierignore"]
     },
     "auth-e2e": {
       "executor": "nx:run-commands",
