@@ -246,6 +246,16 @@ test("a failure report carries diagnostics only and never outputs", () => {
 test("acceptance budgets are finite and validated", () => {
   const defaults = acceptanceConfigFromEnv({});
   assert.equal(defaults.verifyMaxFiles, 600);
+  assert.equal(
+    acceptanceConfigFromEnv({ ACCEPTANCE_VERIFY_MAX_FILES: "1800" })
+      .verifyMaxFiles,
+    1800,
+  );
+  for (const value of ["0", "2001", "1.5", "NaN"])
+    assert.throws(
+      () => acceptanceConfigFromEnv({ ACCEPTANCE_VERIFY_MAX_FILES: value }),
+      /ACCEPTANCE_VERIFY_MAX_FILES/,
+    );
   assert.ok(defaults.verifyMaxBytes > 0 && defaults.graceSeconds > 0);
   assert.throws(() =>
     acceptanceConfigFromEnv({ ACCEPTANCE_VERIFY_MAX_BYTES: "0" }),

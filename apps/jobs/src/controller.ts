@@ -7,6 +7,7 @@ import {
   awaitWorkerExit,
   inspect,
   spawnChild,
+  supportsLocalPipeline,
   type Bootstrap,
   type Exit,
 } from "./local-process.js";
@@ -163,7 +164,7 @@ async function drive(
     return unknown(deps, id, "journal_run_mismatch", journal.executionRef);
 
   if (!journal) {
-    if (settings.pipeline !== "local_fixture_noop")
+    if (!supportsLocalPipeline(settings))
       return {
         outcome: "needs_operator",
         reason: "execution_isolation_unproven",
@@ -191,6 +192,9 @@ async function drive(
       runRef: id.runRef,
       executionRef: `local-${randomUUID()}`,
       phase: "intent",
+      ...(settings.pipeline === "hand_pose_cpu_v1"
+        ? { threadedPipeline: true }
+        : {}),
       bootId: currentBoot,
       startDeadline: sub.startDeadline,
       executionDeadline: sub.executionDeadline,
@@ -204,7 +208,11 @@ async function drive(
     return unknown(deps, id, "spawn_outcome_uncertain", journal.executionRef);
 
   if (journal.phase === "intent") {
-    if (settings.pipeline !== "local_fixture_noop")
+    if (
+      !supportsLocalPipeline(settings) ||
+      Boolean(journal.threadedPipeline) !==
+        (settings.pipeline === "hand_pose_cpu_v1")
+    )
       return unknown(
         deps,
         id,
@@ -225,7 +233,11 @@ async function drive(
   }
 
   if (journal.phase === "execution_recorded") {
-    if (settings.pipeline !== "local_fixture_noop")
+    if (
+      !supportsLocalPipeline(settings) ||
+      Boolean(journal.threadedPipeline) !==
+        (settings.pipeline === "hand_pose_cpu_v1")
+    )
       return unknown(
         deps,
         id,
@@ -261,7 +273,7 @@ async function drive(
       store.write(journal);
       if (lost())
         return { outcome: "lease_lost", executionRef: journal.executionRef };
-      if (journal.singleProcess)
+      if (journal.singleProcess || journal.pidNamespace)
         bootstrap = {
           schemaVersion: 1,
           apiUrl: settings.apiUrl,
@@ -308,7 +320,7 @@ async function supervise(
   emit: (event: string, detail?: Record<string, unknown>) => void,
 ): Promise<Outcome> {
   const { settings, store } = deps;
-  if (!start.singleProcess)
+  if (!start.singleProcess && !start.pidNamespace)
     return unknown(
       deps,
       id,
@@ -334,7 +346,7 @@ async function supervise(
   if (journal.phase === "running") {
     for (;;) {
       if (lost()) return leaseLost();
-      const state = inspect(journal);
+      const state = inspect(journal, settings.python);
       if (lost()) return leaseLost();
       if (state.kind === "unknown") return unknown(deps, id, state.reason, ref);
       if (state.kind === "gone") break;
@@ -392,7 +404,8 @@ async function supervise(
     emit("child_exited", { exit: journal.exit });
   }
 
-  // The verified fixture could not create child processes.
+  // Neither isolation mode could create a child process. The threaded mode
+  // also requires a process-wide exit observation before reaching this point.
   if (lost()) return leaseLost();
   let evidence: Evidence = "withheld";
   if (!journal.evidenceRecorded) {
@@ -407,12 +420,16 @@ async function supervise(
           detail: {
             observation: observed
               ? "reaped_by_controller"
-              : "adopted_single_process_exited",
+              : journal.pidNamespace
+                ? "adopted_thread_group_exited"
+                : "adopted_single_process_exited",
             exitCode: String(journal.exit?.code ?? "null"),
             exitSignal: String(journal.exit?.signal ?? "null"),
             termination,
             recovery,
-            proof: "seccomp_single_process_exited",
+            proof: journal.pidNamespace
+              ? "seccomp_pidfd_thread_group_exited"
+              : "seccomp_single_process_exited",
             runRef: id.runRef,
           },
         },

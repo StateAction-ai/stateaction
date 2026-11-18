@@ -43,6 +43,8 @@ export type Journal = {
   sid?: number;
   startTicks?: string;
   singleProcess?: true;
+  threadedPipeline?: true;
+  pidNamespace?: string;
   exit?: { code: number | null; signal: string | null };
   evidenceRecorded?: boolean;
 };
@@ -101,6 +103,8 @@ const KEYS = new Set([
   "sid",
   "startTicks",
   "singleProcess",
+  "threadedPipeline",
+  "pidNamespace",
   "exit",
   "evidenceRecorded",
 ]);
@@ -172,6 +176,20 @@ export function validateJournal(value: unknown, jobId: string): Journal {
   if (
     j.singleProcess !== undefined &&
     (j.singleProcess !== true ||
+      j.startTicks === undefined ||
+      (phase !== "running" && phase !== "exited"))
+  )
+    return bad();
+  if (
+    (j.threadedPipeline !== undefined && j.threadedPipeline !== true) ||
+    (j.threadedPipeline && j.singleProcess)
+  )
+    return bad();
+  if (
+    j.pidNamespace !== undefined &&
+    (j.threadedPipeline !== true ||
+      typeof j.pidNamespace !== "string" ||
+      !/^pid:\[\d+\]$/.test(j.pidNamespace) ||
       j.startTicks === undefined ||
       (phase !== "running" && phase !== "exited"))
   )

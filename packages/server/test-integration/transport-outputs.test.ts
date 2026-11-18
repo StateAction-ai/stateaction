@@ -40,12 +40,25 @@ const code = async (promise: Promise<unknown>) =>
         : `unexpected:${String(error)}`,
   );
 
-async function runningJob() {
+async function runningJob(maxOutputFiles?: number) {
   // A RUNNING job (the only state that may write outputs) through the real
   // admission/claim state machine (a fixture holder is retired by the fixture).
   const { jobId, recordingId: recording } = await queuedJob(db);
-  await fixtureRunJob(db.owner, jobId);
+  await fixtureRunJob(db.owner, jobId, { maxOutputFiles });
   return { jobId, recordingId: recording };
+}
+
+async function seedOutputInventory(
+  { jobId, recordingId }: { jobId: string; recordingId: string },
+  count: number,
+) {
+  await db.owner.query(
+    `INSERT INTO files (id, recording_id, job_id, purpose, role, size_bytes, sha256, object_key, part_size_bytes, part_count)
+     SELECT g.id, $2::uuid, $1::uuid, 'output', 'clip_mp4', 1, repeat('a', 64),
+            'jobs/' || $1 || '/outputs/' || g.id || '/e1/filler', 67108864, 1
+     FROM (SELECT gen_random_uuid() AS id FROM generate_series(1, $3::int)) g`,
+    [jobId, recordingId, count],
+  );
 }
 
 before(async () => {
@@ -304,13 +317,7 @@ test("per-file, per-job byte and file-count caps bound the output inventory", as
   );
   // Count cap: fill to 512 live outputs directly, then one more is refused.
   const filler = await runningJob();
-  await db.owner.query(
-    `INSERT INTO files (id, recording_id, job_id, purpose, role, size_bytes, sha256, object_key, part_size_bytes, part_count)
-     SELECT g.id, $2::uuid, $1::uuid, 'output', 'clip_mp4', 1, repeat('a', 64),
-            'jobs/' || $1 || '/outputs/' || g.id || '/e1/filler', 67108864, 1
-     FROM (SELECT gen_random_uuid() AS id FROM generate_series(1, 512)) g`,
-    [filler.jobId, filler.recordingId],
-  );
+  await seedOutputInventory(filler, 512);
   const live = await db.owner.query(
     "SELECT count(*)::int AS n FROM files WHERE job_id = $1 AND purpose = 'output' AND state NOT IN ('cancelled','failed','expired')",
     [filler.jobId],
@@ -328,4 +335,48 @@ test("per-file, per-job byte and file-count caps bound the output inventory", as
   );
   assert.ok(recordingId);
   void newRecording;
+});
+
+test("worker output route follows the frozen job limit past 512", async () => {
+  const limit = 514;
+  const admitted = await runningJob(limit);
+  await seedOutputInventory(admitted, 511);
+  const worker: Authority = { kind: "job", jobId: admitted.jobId };
+  const allocate = (ordinal: number) =>
+    transportHandlers(deps).createJobOutput(
+      new Request(`http://localhost/internal/v1/jobs/${worker.jobId}/outputs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(output(`bound/${ordinal}`)),
+      }),
+      worker,
+    );
+
+  let lastFileId: string | undefined;
+  for (let ordinal = 512; ordinal <= limit; ordinal++) {
+    const response = await allocate(ordinal);
+    const body = await response.json();
+    assert.equal(
+      response.status,
+      200,
+      `ordinal ${ordinal}: ${body.error?.message ?? ""}`,
+    );
+    lastFileId = body.data.fileId;
+  }
+  const replay = await allocate(limit);
+  assert.equal(replay.status, 200);
+  assert.equal((await replay.json()).data.fileId, lastFileId);
+
+  const rejected = await allocate(limit + 1);
+  assert.equal(rejected.status, 409);
+  assert.deepEqual((await rejected.json()).error, {
+    code: "conflict",
+    message: "Job output inventory cap reached",
+    retryable: false,
+  });
+  const { rows } = await db.owner.query(
+    `SELECT count(*)::int AS n FROM files WHERE job_id = $1 AND purpose = 'output'`,
+    [worker.jobId],
+  );
+  assert.equal(rows[0].n, limit);
 });

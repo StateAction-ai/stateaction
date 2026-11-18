@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readlinkSync } from "node:fs";
 import type { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { LocalControllerSettings } from "./config.js";
@@ -31,9 +31,9 @@ export type Inspection =
   | { kind: "gone" }
   | { kind: "unknown"; reason: string };
 
-export function inspect(journal: Journal): Inspection {
+export function inspect(journal: Journal, python?: string): Inspection {
   try {
-    return inspectUnchecked(journal);
+    return inspectUnchecked(journal, python);
   } catch (error) {
     if (error instanceof ProcUnavailable)
       // Unavailable facts are never interpreted as "gone".
@@ -42,7 +42,7 @@ export function inspect(journal: Journal): Inspection {
   }
 }
 
-function inspectUnchecked(journal: Journal): Inspection {
+function inspectUnchecked(journal: Journal, python?: string): Inspection {
   if (journal.bootId !== bootId())
     return { kind: "unknown", reason: "boot_changed" };
   if (
@@ -56,6 +56,38 @@ function inspectUnchecked(journal: Journal): Inspection {
   const leader = readStat(journal.pid);
   if (leader && !matchesJournal(leader, journal))
     return { kind: "unknown", reason: "leader_identity_changed" };
+  if (journal.pidNamespace) {
+    if (
+      leader &&
+      isLive(leader) &&
+      cmdlineHas(leader.pid, journal.executionRef)
+    )
+      return { kind: "alive", leader };
+    if (!python) return { kind: "unknown", reason: "worker_exit_unproven" };
+    const result = spawnSync(
+      python,
+      ["-m", "stateaction_processing.local_signal", "--status"],
+      {
+        input: JSON.stringify({
+          bootId: journal.bootId,
+          pidNamespace: journal.pidNamespace,
+          leader: {
+            pid: journal.pid,
+            pgrp: journal.pgid,
+            session: journal.sid,
+            startTicks: journal.startTicks,
+          },
+        }),
+        timeout: 1000,
+        killSignal: "SIGKILL",
+        stdio: ["pipe", "ignore", "ignore"],
+        env: { PATH: process.env.PATH ?? "", PYTHONNOUSERSITE: "1" },
+      },
+    );
+    if (result.status === 0) return { kind: "gone" };
+    if (result.status === 1 && leader) return { kind: "alive", leader };
+    return { kind: "unknown", reason: "worker_exit_unproven" };
+  }
   if (isLive(leader)) {
     if (cmdlineHas(leader.pid, journal.executionRef))
       return { kind: "alive", leader };
@@ -100,6 +132,7 @@ function killVerified(
         bootId: journal.bootId,
         executionRef: journal.executionRef,
         leader: state.leader,
+        pidNamespace: journal.pidNamespace,
         leaseUntil,
       }),
       timeout,
@@ -123,11 +156,11 @@ export async function awaitWorkerExit(
   for (;;) {
     const leaseUntil = leaseDeadline();
     if (leaseUntil === undefined) return false;
-    const state = inspect(journal);
+    const state = inspect(journal, python);
     if (state.kind === "gone") return true;
     if (state.kind !== "alive") return false;
     if (!killVerified(python, journal, state, Math.min(leaseUntil, until)))
-      return inspect(journal).kind === "gone";
+      return inspect(journal, python).kind === "gone";
     if (Date.now() >= until) return false;
     await sleep(Math.min(pollMs, 50));
   }
@@ -139,7 +172,7 @@ export type Spawned = {
   provideBootstrap: (bootstrap?: Bootstrap) => void;
 };
 
-function waitForFixtureIsolation(proof: Readable): Promise<boolean> {
+function awaitIsolation(proof: Readable, marker: string): Promise<boolean> {
   return new Promise((resolve) => {
     function finish(confirmed: boolean) {
       clearTimeout(timer);
@@ -147,10 +180,30 @@ function waitForFixtureIsolation(proof: Readable): Promise<boolean> {
       resolve(confirmed);
     }
     const timer = setTimeout(() => finish(false), 5000);
-    proof.once("data", (data: Buffer) => finish(data.toString() === "1"));
+    proof.once("data", (data: Buffer) => finish(data.toString() === marker));
     proof.once("end", () => finish(false));
     proof.once("error", () => finish(false));
   });
+}
+
+export function supportsLocalPipeline(
+  settings: LocalControllerSettings,
+): boolean {
+  if (settings.pipeline === "local_fixture_noop") return true;
+  if (process.platform !== "linux" || process.arch !== "x64") return false;
+  try {
+    return (
+      ["127.0.0.1", "localhost", "[::1]"].includes(
+        new URL(settings.apiUrl).hostname,
+      ) &&
+      readFileSync("/proc/self/cgroup", "utf8").includes(
+        "/agent-work.slice/",
+      ) &&
+      readlinkSync("/proc/self") === String(process.pid)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -165,6 +218,7 @@ export async function spawnChild(
   journal: Journal,
 ): Promise<Spawned> {
   const fixture = settings.pipeline === "local_fixture_noop";
+  const pidNamespace = fixture ? undefined : readlinkSync("/proc/self/ns/pid");
   const log = openSync(store.logPath(journal.jobId), "a", 0o600);
   const child = spawn(
     settings.python,
@@ -178,7 +232,7 @@ export async function spawnChild(
     {
       shell: false,
       detached: true,
-      stdio: ["pipe", log, log, fixture ? "pipe" : "ignore"],
+      stdio: ["pipe", log, log, "pipe"],
       // No inherited provider, database, storage or controller credentials.
       env: {
         PATH: process.env.PATH ?? "",
@@ -186,7 +240,9 @@ export async function spawnChild(
         PYTHONUNBUFFERED: "1",
         APP_ENV: process.env.APP_ENV ?? "",
         WORKER_PIPELINE: settings.pipeline,
-        ...(fixture ? { STATEACTION_FIXTURE_ISOLATION_FD: "3" } : {}),
+        ...(fixture
+          ? { STATEACTION_FIXTURE_ISOLATION_FD: "3" }
+          : { STATEACTION_THREADED_ISOLATION_FD: "3" }),
       },
     },
   );
@@ -200,12 +256,10 @@ export async function spawnChild(
   const stdin = child.stdin;
   if (!stdin) throw new Error("Local child has no stdin pipe");
   stdin.on("error", () => undefined);
-  if (fixture) {
-    const proof = child.stdio[3] as Readable | null;
-    if (!proof || !(await waitForFixtureIsolation(proof))) {
-      stdin.end();
-      throw new Error("Local fixture isolation was not confirmed");
-    }
+  const proof = child.stdio[3] as Readable | null;
+  if (!proof || !(await awaitIsolation(proof, fixture ? "1" : "2"))) {
+    stdin.end();
+    throw new Error("Local worker isolation was not confirmed");
   }
   let stat: ProcStat | undefined;
   try {
@@ -239,6 +293,7 @@ export async function spawnChild(
     sid: pid,
     ...(stat ? { startTicks: stat.startTicks } : {}),
     ...(stat && fixture ? { singleProcess: true } : {}),
+    ...(stat && pidNamespace ? { pidNamespace } : {}),
   };
   return {
     journal: running,

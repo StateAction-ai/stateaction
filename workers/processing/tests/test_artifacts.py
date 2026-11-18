@@ -3,6 +3,8 @@ import hashlib
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import types
 import unittest
@@ -94,6 +96,46 @@ class PureTests(unittest.TestCase):
         self.assertTrue(re_enc and w <= 1280 and h <= 720 and w % 2 == 0 and h % 2 == 0)
         w, h, re_enc = artifact_rrd.proxy_shape(1080, 1920, lim)
         self.assertTrue(re_enc and (w, h) == (720, 1280))
+
+    @unittest.skipUnless(
+        Path("/proc/self/task").is_dir(), "Linux task accounting is required"
+    )
+    def test_closed_rrd_streams_do_not_accumulate_native_threads(self):
+        # Run in a fresh process so earlier SDK or MediaPipe thread pools
+        # cannot move the baseline while we exercise the same writer.
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                """
+import os
+import tempfile
+import uuid
+from pathlib import Path
+
+from stateaction_processing.artifact_rrd import RrdWriter
+from stateaction_processing.artifact_types import ExportLimits
+
+
+def write_preview(path):
+    writer = RrdWriter(path, str(uuid.uuid4()), (64, 48), ExportLimits())
+    writer.abort()
+
+
+with tempfile.TemporaryDirectory() as root:
+    samples = []
+    for index in range(24):
+        write_preview(Path(root) / f"{index}.rrd")
+        samples.append(len(os.listdir("/proc/self/task")))
+    assert max(samples[-4:]) <= max(samples[3:7]) + 4, samples
+""",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
 
     def test_fitting_raster_proxy_excludes_native_user_data_sei(self):
         width, height = 64, 48
