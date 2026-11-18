@@ -22,7 +22,41 @@ export type JobsConfig = {
   leaseSeconds: number;
   /** Signed source read URL lifetime (capped by the execution deadline). */
   readUrlSeconds: number;
+  /** Repair pass bounds; every field has an explicit finite default. */
+  repair?: Partial<RepairLimits>;
 };
+
+/** Hard bounds for one minute repair pass (SA-27). Nothing waits or retries unboundedly. */
+export type RepairLimits = {
+  /** Max jobs touched per repair step and Render starts per pass. */
+  batchLimit: number;
+  /** Wall-clock budget for the whole pass; no new start begins after it. */
+  wallBudgetMs: number;
+  /** Abort for one Render task start. */
+  startTimeoutMs: number;
+  /**
+   * An admitted job whose controller never recorded a worker submission is
+   * failed (never submitted, proven by the database) after this window.
+   */
+  dispatchWindowSeconds: number;
+  /** A controller lease must be expired this long before repair acts on it. */
+  leaseGraceSeconds: number;
+};
+
+export const DEFAULT_REPAIR_LIMITS: RepairLimits = {
+  batchLimit: 5,
+  wallBudgetMs: 40_000,
+  startTimeoutMs: 10_000,
+  dispatchWindowSeconds: 1800,
+  leaseGraceSeconds: 60,
+};
+
+export const repairLimits = (
+  config: Pick<JobsConfig, "repair">,
+): RepairLimits => ({
+  ...DEFAULT_REPAIR_LIMITS,
+  ...config.repair,
+});
 
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 const SHA = /^[0-9a-f]{64}$/;

@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v10.json is the current registry; catalog.v1.json through
-// catalog.v9.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v10.json"));
+// catalog.v11.json is the current registry; catalog.v1.json through
+// catalog.v10.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v11.json"));
+const catalogV10 = JSON.parse(text("catalog.v10.json"));
 const catalogV9 = JSON.parse(text("catalog.v9.json"));
 const catalogV8 = JSON.parse(text("catalog.v8.json"));
 const catalogV7 = JSON.parse(text("catalog.v7.json"));
@@ -495,10 +496,10 @@ const V10_ADDED = [
 ];
 
 test("catalog v10 (SA-36) is an exact superset of catalog v9 adding only the staff clip review contracts", () => {
-  assertExactSuperset(catalog, catalogV9, ["v9", "v10"], V10_ADDED);
-  assert.equal(Object.keys(catalog.contracts).length, 63);
+  assertExactSuperset(catalogV10, catalogV9, ["v9", "v10"], V10_ADDED);
+  assert.equal(Object.keys(catalogV10.contracts).length, 63);
   for (const id of V10_ADDED) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV10.contracts[id];
     assert.equal(entry.casing, "camelCase", id);
     assert.deepEqual(entry.version, { path: "/api/v1" }, id);
     assert.deepEqual(entry.rules, [], id);
@@ -523,6 +524,37 @@ test("v10 lock entries are unchanged and every v10 file keeps its exact bytes", 
     assert.equal(sha256(file), hash, `${file}: published bytes changed`);
   }
   assert.equal(Object.keys(PUBLISHED_V10_LOCK).length, 4);
+});
+
+const V11_ADDED = ["http.job-control-command.v1", "http.job-control-result.v1"];
+
+test("catalog v11 (SA-27) is an exact superset of catalog v10 adding only the staff job control contracts", () => {
+  assertExactSuperset(catalog, catalogV10, ["v10", "v11"], V11_ADDED);
+  assert.equal(Object.keys(catalog.contracts).length, 65);
+  for (const id of V11_ADDED) {
+    const entry = catalog.contracts[id];
+    assert.equal(entry.casing, "camelCase", id);
+    assert.deepEqual(entry.version, { path: "/api/v1" }, id);
+    assert.deepEqual(entry.rules, [], id);
+  }
+});
+
+/** Lock entries published with SA-27 (catalog v11). Frozen once released. */
+const PUBLISHED_V11_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v11.json":
+    "60e83cc9cabdd87cb9ee398c0de4e175ca6d33e7cd115a0d8b9a13311af613d8",
+  "http/job-control-command.v1.schema.json":
+    "72c7c78ec195bd098c597fa2b70e2121b8d52394a97894c09481a035eb835cc5",
+  "http/job-control-result.v1.schema.json":
+    "d3f1ca0c45a501fe17029791cf91afee4072452e7659e95057cbde3e783d6960",
+};
+
+test("v11 lock entries are unchanged and every v11 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V11_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V11_LOCK).length, 3);
 });
 
 test("published schema bytes match the immutability lock", () => {

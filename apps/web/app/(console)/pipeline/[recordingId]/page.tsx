@@ -12,6 +12,7 @@ import { Card, CardBody, CardHeader } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/pipeline/status-badge";
 import { StageList } from "../../../../components/pipeline/stage-list";
+import { JobControls } from "../../../../components/pipeline/job-controls";
 
 export const metadata = { title: "Recording · StateAction.ai" };
 export const dynamic = "force-dynamic";
@@ -52,6 +53,10 @@ export default async function PipelineRecordingPage({
   }
   if (!detail) notFound();
   const actions = await reads.actions(detail);
+  const guidance =
+    actions.control.length > 0
+      ? await reads.guidance(detail).catch(() => null)
+      : null;
 
   return (
     <>
@@ -99,11 +104,17 @@ export default async function PipelineRecordingPage({
             ) : null}
             {actions.control.length === 0 ? (
               <p className="m-0 text-xs text-muted">
-                Cancel, retry and reconcile controls appear here only when the
-                job service reports them for this attempt.
+                No job action is available for this attempt right now.
               </p>
             ) : null}
           </div>
+          {actions.control.length > 0 ? (
+            <JobControls
+              key={detail.jobId}
+              controls={actions.control}
+              instruction={guidance}
+            />
+          ) : null}
         </CardBody>
       </Card>
 

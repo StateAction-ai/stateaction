@@ -66,7 +66,7 @@ export function call(origin, path, { method = "GET", body, token } = {}) {
 }
 
 /** A private world: database, bucket, Next API, credentials and a sealed recording per job. */
-export async function startWorld() {
+export async function startWorld(extraEnv = {}) {
   if (!process.env.STATEACTION_LOCAL_FIXTURES)
     throw new Error(
       "STATEACTION_LOCAL_FIXTURES (bounded external fixtures) is required; Docker is never used",
@@ -95,14 +95,14 @@ export async function startWorld() {
     await s3.stop();
   };
   try {
-    return await buildWorld(db, s3, world, teardown);
+    return await buildWorld(db, s3, world, teardown, extraEnv);
   } catch (error) {
     await teardown();
     throw error;
   }
 }
 
-async function buildWorld(db, s3, world, teardown) {
+async function buildWorld(db, s3, world, teardown, extraEnv) {
   const dbName = db.name;
   const ownerUrl = db.ownerUrl;
   const appUrl = db.appUrl;
@@ -133,6 +133,7 @@ async function buildWorld(db, s3, world, teardown) {
     PROCESSING_MODEL_SHA256: sha("model"),
     PROCESSING_CONFIG_SHA256: sha("config"),
     NEXT_TELEMETRY_DISABLED: "1",
+    ...extraEnv,
   };
   const boot = spawnSync(
     process.execPath,
@@ -284,7 +285,7 @@ async function buildWorld(db, s3, world, teardown) {
     });
     return { jobId, recordingId };
   }
-  /** The admission step SA-26's dispatcher would receive (cron credential, jobs:repair). */
+  /** Run admission through the API with the repair-scoped credential. */
   async function admit() {
     const res = await call(origin, "/internal/v1/jobs/reconcile", {
       method: "POST",

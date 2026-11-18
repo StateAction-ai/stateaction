@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/job-control-result.v1.json",
+  "title": "Job control result v1",
+  "description": "Result of POST /api/v1/jobs/{jobId}/control. state is the job's state after the action; cancel_requested is not stopped. retryJobId is the new job for a retry (null otherwise). replayed is true when an identical retry request had already created retryJobId. guidance is state-derived operator text containing no identifiers or secrets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "action",
+    "jobId",
+    "state",
+    "retryJobId",
+    "replayed",
+    "guidance"
+  ],
+  "properties": {
+    "action": {
+      "enum": ["cancel", "retry", "reconcile"]
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "state": {
+      "enum": [
+        "queued",
+        "submitting",
+        "submit_unknown",
+        "running",
+        "result_pending",
+        "succeeded",
+        "failed",
+        "cancel_requested",
+        "cancelled",
+        "needs_attention"
+      ]
+    },
+    "retryJobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "guidance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "instruction"],
+      "properties": {
+        "code": {
+          "enum": [
+            "none",
+            "in_progress",
+            "cancel_pending_termination",
+            "unknown_spawn",
+            "needs_operator",
+            "retry_available",
+            "reupload_required",
+            "retry_blocked_termination_unproven",
+            "superseded"
+          ]
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    }
+  }
+}
