@@ -16,6 +16,8 @@ export "src/data/enums/ar_tracking_state.dart";
 export "src/data/enums/rgb_video_resolution.dart";
 export "src/data/models/recording_config.dart";
 export "src/managers/ar_recording_config_manager.dart";
+export "src/native_upload/native_upload_bridge.dart";
+export "src/native_upload/native_upload_types.dart";
 export "src/providers/ar_recorder_provider.dart";
 export "src/service/ar_recorder_service.dart";
 export "src/services/audio_cue_service.dart";
