@@ -21,6 +21,10 @@
       "types": "./dist/admission/next.d.ts",
       "default": "./dist/admission/next.js"
     },
+    "./source-cleanup": {
+      "types": "./dist/source-cleanup/next.d.ts",
+      "default": "./dist/source-cleanup/next.js"
+    },
     "./datasets": {
       "types": "./dist/datasets/next.d.ts",
       "default": "./dist/datasets/next.js"

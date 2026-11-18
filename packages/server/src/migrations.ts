@@ -152,6 +152,11 @@ export async function grantAppRole(
     await client.query("SELECT stateaction_grant_output_acceptance($1)", [
       role,
     ]);
+  const { rowCount: sourceCleanup } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_source_cleanup(name)') IS NOT NULL",
+  );
+  if (sourceCleanup)
+    await client.query("SELECT stateaction_grant_source_cleanup($1)", [role]);
   return true;
 }
 

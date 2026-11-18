@@ -81,6 +81,11 @@
     "http/job-control-command.v1.schema.json": "72c7c78ec195bd098c597fa2b70e2121b8d52394a97894c09481a035eb835cc5",
     "http/job-control-result.v1.schema.json": "d3f1ca0c45a501fe17029791cf91afee4072452e7659e95057cbde3e783d6960",
     "catalog.v12.json": "674b089a92875402ac5ebedfc53f9f906c3e609390a48bb56007e6fdb24937d9",
-    "jobs/job-status.v2.schema.json": "d633d785b58ce4eefdcc0caf5efb4158f0f4cac046fa46ec9a425177d313b36f"
+    "jobs/job-status.v2.schema.json": "d633d785b58ce4eefdcc0caf5efb4158f0f4cac046fa46ec9a425177d313b36f",
+    "catalog.v13.json": "f4b21846bb013049c68c7c48650ee76e35d7ac8d2ac34c96a5ae239c2f74fddf",
+    "http/source-copy-confirm.v1.schema.json": "41c0569543bb37d1721698a2272dfdf4b33588f42f6f3250e4aa37da65977d0a",
+    "http/cleanup-proof-request.v1.schema.json": "ffbc3d836f82dc6eb7c47e0f3161bbfc773b21bb0742ea931b919b16bd4d2b42",
+    "http/source-copy-confirmation.v1.schema.json": "209a25ed618c7924c8e96b44a760b9f9f3b78cb04271430fbccac0e7ac9840fb",
+    "http/cleanup-proof.v1.schema.json": "38a851690e9702c9793e28721f5f1f5319cef6b3e8ed6cf5dc418fe92954dc81"
   }
 }

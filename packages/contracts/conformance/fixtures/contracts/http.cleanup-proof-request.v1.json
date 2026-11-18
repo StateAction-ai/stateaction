@@ -1,0 +1,80 @@
+{
+  "contract": "http.cleanup-proof-request.v1",
+  "cases": [
+    {
+      "name": "owner proof request",
+      "input": {
+        "document": {
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "owner identity is refused",
+      "input": {
+        "document": {
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00",
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "client recording id is a UUID",
+      "input": {
+        "document": {
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "clientRecordingId": "not-a-uuid"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/clientRecordingId"
+        ]
+      }
+    },
+    {
+      "name": "manifest digest length",
+      "input": {
+        "document": {
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "ab",
+          "clientRecordingId": "0d9e8f7a-1b2c-4d3e-8f4a-5b6c7d8e9f00"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sourceManifestSha256"
+        ]
+      }
+    },
+    {
+      "name": "client recording id is required",
+      "input": {
+        "document": {
+          "sealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "sourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

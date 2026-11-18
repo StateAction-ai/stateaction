@@ -40,6 +40,8 @@ const TABLES = [
   "reviews",
   "service_capabilities",
   "session",
+  "source_cleanup_proofs",
+  "source_copy_confirmations",
   "user",
   "verification",
 ].sort();
@@ -59,7 +61,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006, 007, 008 and 009 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-010 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -69,7 +71,8 @@ test("published migrations 001-005 are byte-identical; 006, 007, 008 and 009 fol
   assert.equal(files[6]?.name, "007_job_admission_claims.sql");
   assert.equal(files[7]?.name, "008_dataset_sharing.sql");
   assert.equal(files[8]?.name, "009_output_acceptance.sql");
-  assert.equal(files.length, 9);
+  assert.equal(files[9]?.name, "010_source_cleanup_proof.sql");
+  assert.equal(files.length, 10);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -84,7 +87,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -97,7 +100,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
       adopted: [],
       appRoleGranted: true,
     });
@@ -142,8 +145,8 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const broken = [
       ...files,
       {
-        version: 10,
-        name: "010_broken.sql",
+        version: 11,
+        name: "011_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -155,7 +158,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const left = await db.owner.query(
       "SELECT to_regclass('releases') AS t, max(version) AS v FROM platform_schema_migrations",
     );
-    assert.deepEqual(left.rows[0], { t: null, v: 9 });
+    assert.deepEqual(left.rows[0], { t: null, v: 10 });
   } finally {
     await db.close();
   }
@@ -171,7 +174,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -189,9 +192,9 @@ test("concurrent migrators serialize and apply each version once", async () => {
         migrateDatabase({ ownerUrl: db.ownerUrl }),
       ),
     );
-    assert.equal(reports.filter((r) => r.applied.length === 9).length, 1);
+    assert.equal(reports.filter((r) => r.applied.length === 10).length, 1);
     assert.equal(
-      reports.filter((r) => r.alreadyApplied.length === 9).length,
+      reports.filter((r) => r.alreadyApplied.length === 10).length,
       3,
     );
   } finally {

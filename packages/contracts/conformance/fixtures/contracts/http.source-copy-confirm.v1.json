@@ -1,0 +1,112 @@
+{
+  "contract": "http.source-copy-confirm.v1",
+  "cases": [
+    {
+      "name": "staff confirmation request",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": 3
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "owner identity is refused",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": 3,
+          "ownerUserId": "Xk9pQ2rT7vW1yZ4bN6mC8dF3hJ5kL0sA"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "staff identity is refused",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": 3,
+          "confirmedByUserId": "Ym2nR8sT4vW6xZ1cB3dF5gH7jK9lM0pQ"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "seal digest is lowercase hex",
+      "input": {
+        "document": {
+          "expectedSealSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": 3
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedSealSha256"
+        ]
+      }
+    },
+    {
+      "name": "file count lower bound",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": 2
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedFileCount"
+        ]
+      }
+    },
+    {
+      "name": "file count is an integer",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedSourceManifestSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+          "expectedFileCount": "3"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/expectedFileCount"
+        ]
+      }
+    },
+    {
+      "name": "sealed identities are required",
+      "input": {
+        "document": {
+          "expectedSealSha256": "5555555555555555555555555555555555555555555555555555555555555555",
+          "expectedFileCount": 3
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

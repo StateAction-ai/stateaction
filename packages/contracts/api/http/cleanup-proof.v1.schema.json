@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/cleanup-proof.v1.json",
+  "title": "Cleanup proof v1",
+  "description": "A fresh, server-issued proof for the original owner that every sealed original was re-streamed and matched its sealed length and SHA-256 at EOF just now, under an explicit staff confirmation. It grants NO storage capability and is not deletion intent: a consumer must also hold the owner's separate explicit intent, compare these identities with its own journal, treat the proof as unusable at expiresAt (measured with a monotonic clock started before the request, not by comparing phone and server clocks) and never reuse a cached proof.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "proofId",
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "sealSha256",
+    "sourceManifestSha256",
+    "confirmationId",
+    "confirmedAt",
+    "verification",
+    "fileCount",
+    "totalBytes",
+    "files",
+    "issuedAt",
+    "expiresAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "proofId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "sealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "sourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "confirmationId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "confirmedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "verification": { "const": "rehash" },
+    "fileCount": { "type": "integer", "minimum": 3, "maximum": 2000 },
+    "totalBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 2000,
+      "items": { "$ref": "#/$defs/evidenceFile" }
+    },
+    "issuedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "expiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  },
+  "$defs": {
+    "evidenceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "role", "required", "sizeBytes", "sha256"],
+      "properties": {
+        "fileId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "role": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+        },
+        "required": { "type": "boolean" },
+        "sizeBytes": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+        },
+        "sha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

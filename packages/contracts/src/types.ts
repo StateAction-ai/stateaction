@@ -576,6 +576,58 @@ export type JobStatus = {
   createdAt: Rfc3339Utc;
   updatedAt: Rfc3339Utc;
 };
+/** SA-73 (catalog.v13): one sealed original with its server-verified identity. */
+export type SourceEvidenceFileV1 = {
+  fileId: Uuid;
+  role: "source_mcap" | "recorder_metadata" | "calibration" | "source_manifest";
+  required: boolean;
+  sizeBytes: DecimalBytes;
+  sha256: Sha256Hex;
+};
+/** Staff request: the exact sealed inventory reviewed. No owner or staff identity. */
+export type SourceCopyConfirmRequestV1 = {
+  expectedSealSha256: Sha256Hex;
+  expectedSourceManifestSha256: Sha256Hex;
+  expectedFileCount: number;
+};
+/** Original-owner request: the identities held by the phone. */
+export type CleanupProofRequestV1 = {
+  sealSha256: Sha256Hex;
+  sourceManifestSha256: Sha256Hex;
+  clientRecordingId: Uuid;
+};
+export type SourceCopyConfirmationV1 = {
+  schemaVersion: 1;
+  confirmationId: Uuid;
+  recordingId: Uuid;
+  clientRecordingId: Uuid;
+  sealSha256: Sha256Hex;
+  sourceManifestSha256: Sha256Hex;
+  fileCount: number;
+  totalBytes: DecimalBytes;
+  files: SourceEvidenceFileV1[];
+  confirmedByUserId: string;
+  verifiedAt: Rfc3339Utc;
+  confirmedAt: Rfc3339Utc;
+};
+/** Fresh, server-issued, expiring evidence. Grants no storage capability; not deletion intent. */
+export type CleanupProofV1 = {
+  schemaVersion: 1;
+  proofId: Uuid;
+  recordingId: Uuid;
+  clientRecordingId: Uuid;
+  ownerUserId: string;
+  sealSha256: Sha256Hex;
+  sourceManifestSha256: Sha256Hex;
+  confirmationId: Uuid;
+  confirmedAt: Rfc3339Utc;
+  verification: "rehash";
+  fileCount: number;
+  totalBytes: DecimalBytes;
+  files: SourceEvidenceFileV1[];
+  issuedAt: Rfc3339Utc;
+  expiresAt: Rfc3339Utc;
+};
 /** SA-42 (catalog.v12): the status plus the recorded execution identity. An identity only; never spawn authority. */
 export type JobStatusV2 = JobStatus & {
   executionBackend: "local" | "modal" | null;

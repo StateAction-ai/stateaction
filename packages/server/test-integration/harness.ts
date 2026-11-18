@@ -1,5 +1,5 @@
 import { fixtureCloseOutputs, fixtureRunJob } from "../src/jobs/fixtures.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
 import {
@@ -178,7 +178,24 @@ export async function processedRecording(
   app: pg.Pool,
   actors: Actors,
   clipCount = 2,
-  options: { open?: boolean } = {},
+  options: {
+    open?: boolean;
+    /**
+     * Real source bytes: size and SHA-256 come from the body, and `stored` is
+     * called with the catalog object key so a test can PUT the bytes.
+     */
+    sources?: {
+      body(
+        role: "source_manifest" | "source_mcap" | "recorder_metadata",
+      ): Buffer;
+      stored(file: {
+        fileId: string;
+        role: string;
+        objectKey: string;
+        body: Buffer;
+      }): Promise<void>;
+    };
+  } = {},
 ): Promise<Processed> {
   const recordingId = randomUUID();
   await registerRecording(app, {
@@ -198,14 +215,17 @@ export async function processedRecording(
   ] as const) {
     const fileId = randomUUID();
     if (role === "source_manifest") manifestFileId = fileId;
+    const body = options.sources?.body(role);
     await reserveSourceFile(app, {
       fileId,
       recordingId,
       ownerUserId: actors.collector,
       clientUploadId: randomUUID(),
       role,
-      sizeBytes: "1000",
-      sha256: seedSha(`${recordingId}:${role}`),
+      sizeBytes: body ? String(body.length) : "1000",
+      sha256: body
+        ? createHash("sha256").update(body).digest("hex")
+        : seedSha(`${recordingId}:${role}`),
       required: true,
       partSizeBytes: "67108864",
       partCount: 1,
@@ -213,8 +233,20 @@ export async function processedRecording(
     await recordFileCompleted(app, {
       fileId,
       expectedTransportEpoch: 1,
-      observedSizeBytes: "1000",
+      observedSizeBytes: body ? String(body.length) : "1000",
     });
+    if (body && options.sources) {
+      const key = await app.query<{ object_key: string }>(
+        "SELECT object_key FROM files WHERE id = $1",
+        [fileId],
+      );
+      await options.sources.stored({
+        fileId,
+        role,
+        objectKey: key.rows[0]!.object_key,
+        body,
+      });
+    }
   }
   await sealRecording(app, {
     recordingId,

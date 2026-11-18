@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/source-copy-confirm.v1.json",
+  "title": "Source copy confirmation request v1",
+  "description": "POST /api/v1/recordings/{recordingId}/source-copy-confirmation body (active staff only). Names the exact sealed inventory the staff member reviewed: the seal digest (sa-cjson-v1 over the normalized file inventory), the SHA-256 of the source_manifest OBJECT (a different identity) and the sealed file count. It carries no owner or staff identity: the server derives the owner from the recording and the actor from the session. The server streams and hashes every sealed original before it records the confirmation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "expectedSealSha256",
+    "expectedSourceManifestSha256",
+    "expectedFileCount"
+  ],
+  "properties": {
+    "expectedSealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "expectedSourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "expectedFileCount": { "type": "integer", "minimum": 3, "maximum": 2000 }
+  }
+}
