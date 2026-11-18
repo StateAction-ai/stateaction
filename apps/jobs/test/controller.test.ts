@@ -221,6 +221,8 @@ describe("shared controller with real spawned children and a contract-shaped stu
       state: "submitting",
       submission: "recorded",
       executionDeadline: new Date(Date.now() + 4000),
+      // Let the controller enforce its deadline before the worker can exit on its own.
+      workerExecutionDeadline: new Date(Date.now() + 60_000),
     });
     const cfg = settings(stub.url, 120);
     const store = new JournalStore(cfg.stateDir);
@@ -240,6 +242,9 @@ describe("shared controller with real spawned children and a contract-shaped stu
         actions.indexOf("record_execution"),
     );
     assert.equal(actions.at(-1), "record_execution_evidence");
+    assert.partialDeepStrictEqual(stub.calls.at(-1)?.body, {
+      evidence: { detail: { termination: "execution_deadline" } },
+    });
     const claimAt = stub.calls.findIndex((c) => c.path.endsWith("/claim"));
     assert.ok(
       claimAt >
