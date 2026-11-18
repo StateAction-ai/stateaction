@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/job-status.v2.json",
+  "title": "Job status v2",
+  "description": "Compact job state for staff/controller reads. Adds the recorded execution identity (the exact local execution ref or Modal function call ID the server holds for this job) and the immutable worker start and absolute execution deadlines, so a controller on another instance can adopt a known call and still enforce both deadlines. A processing retry is a new job linked by previousJobId. The reference is an identity only: it never authorizes a spawn and is not termination evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "kind",
+    "targetId",
+    "state",
+    "previousJobId",
+    "createdAt",
+    "updatedAt",
+    "executionBackend",
+    "executionRef",
+    "startDeadline",
+    "executionDeadline"
+  ],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "kind": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobKind"
+    },
+    "targetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "state": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobState"
+    },
+    "previousJobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "updatedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "executionBackend": {
+      "oneOf": [
+        {
+          "enum": ["local", "modal"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "executionRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "startDeadline": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "executionDeadline": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

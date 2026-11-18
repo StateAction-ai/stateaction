@@ -4,6 +4,7 @@ import { JobsApi } from "./api-client.js";
 import { controllerSettings, controllerToken } from "./config.js";
 import { runController } from "./controller.js";
 import { JournalStore } from "./journal.js";
+import { createModalSdkClient } from "./modal-sdk.js";
 
 /**
  * The ONE production task definition for processing, shared by the official
@@ -31,9 +32,23 @@ export const processRecording = task(
       controllerToken(),
       settings.apiTimeoutMs,
     );
-    return runController(
-      { settings, api, store: new JournalStore(settings.stateDir) },
-      { jobId: input.jobId, runRef },
-    );
+    // The Modal client (and its credential) exists only in the controller, never the worker.
+    const modal =
+      settings.executor === "modal"
+        ? createModalSdkClient(settings)
+        : undefined;
+    try {
+      return await runController(
+        {
+          settings,
+          api,
+          store: new JournalStore(settings.stateDir),
+          ...(modal ? { modal } : {}),
+        },
+        { jobId: input.jobId, runRef },
+      );
+    } finally {
+      modal?.close?.();
+    }
   },
 );

@@ -74,7 +74,9 @@ The local runner uses `local_fixture_noop` with `APP_ENV=local` to exercise clai
 
 The hand-pose worker adapter and output protocol are described in [output acceptance](output-acceptance.md).
 
-`hand_pose_cpu_v1` needs the real extractor and a qualified containment strategy before the local controller can run it. A journal from an earlier run without containment proof cannot produce automatic exit evidence. Modal and hosted execution remain separate. Journals stay on one controller machine. Keep `JOBS_STATE_DIR` and its parent directories protected from replacement by other users. Credential files must be regular, non-symlink files owned by the controller user and mode 0600. The API URL must be a bare HTTPS origin or HTTP on loopback. The worker refuses redirects.
+`hand_pose_cpu_v1` needs the real extractor and a qualified containment strategy before the local controller can run it. A journal from an earlier run without containment proof cannot produce automatic exit evidence. Journals stay on one controller machine. Keep `JOBS_STATE_DIR` and its parent directories protected from replacement by other users. Credential files must be regular, non-symlink files owned by the controller user and mode 0600. The API URL must be a bare HTTPS origin or HTTP on loopback. The worker refuses redirects.
+
+The [Modal executor](modal-executor.md) is selected explicitly. A different controller instance can adopt a known call through the recorded `executionRef` in `jobs.job-status.v2` (catalog v12).
 
 ## SA-27 repair, cancellation and operator recovery
 
@@ -95,4 +97,4 @@ The hand-pose worker adapter and output protocol are described in [output accept
 
 **Unknown local spawn / escaped child** stays fail-closed: the controller never respawns or records evidence it cannot prove; the instruction is to let the controller recover from its local journal on the controller host or inspect the host, never to clear the slot by hand.
 
-Not implemented (honest limits): no persisted re-upload request (guidance only), no Modal, export or iOS. Tests: `packages/server/test-integration/recovery.test.ts` (real restricted Postgres), `apps/web/test-e2e/job-control.e2e.test.mjs` (production Next, real sessions), `apps/web/test-e2e/job-control-browser.mjs` (real browser click path, run inside one guarded job), the SA-27 case in `apps/jobs/test-integration/controller.e2e.test.mjs` (repair pass -> API starts the official local runner task), `test/recovery-unit.test.ts`, `apps/jobs/test/repair.test.ts`, `infra/test/blueprint.test.mjs`, contract conformance for catalog v11.
+Not implemented (honest limits): no persisted re-upload request (guidance only), no export or iOS (the Modal executor is source-complete but not qualified, see [Modal executor](modal-executor.md)). Tests: `packages/server/test-integration/recovery.test.ts` (real restricted Postgres), `apps/web/test-e2e/job-control.e2e.test.mjs` (production Next, real sessions), `apps/web/test-e2e/job-control-browser.mjs` (real browser click path, run inside one guarded job), the SA-27 case in `apps/jobs/test-integration/controller.e2e.test.mjs` (repair pass -> API starts the official local runner task), `test/recovery-unit.test.ts`, `apps/jobs/test/repair.test.ts`, `infra/test/blueprint.test.mjs`, contract conformance for catalog v11.

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { AmbiguousApiError, ApiRejection, type JobsApi } from "./api-client.js";
-import type { ControllerSettings } from "./config.js";
+import type { ControllerSettings, LocalControllerSettings } from "./config.js";
 import { JournalCorrupt, type Journal, type JournalStore } from "./journal.js";
 import {
   awaitWorkerExit,
@@ -10,6 +10,9 @@ import {
   type Bootstrap,
   type Exit,
 } from "./local-process.js";
+import { driveModal } from "./modal-controller.js";
+import type { ModalClient } from "./modal-executor.js";
+import { markUnknown, type Evidence, type Outcome } from "./outcomes.js";
 import { bootId } from "./proc.js";
 
 /**
@@ -19,20 +22,7 @@ import { bootId } from "./proc.js";
  * slot release needs terminal business state (SA-28) PLUS the physical
  * evidence recorded here.
  */
-export type Outcome =
-  | { outcome: "not_admitted"; state: string }
-  | { outcome: "no_effect"; reason: string }
-  | {
-      outcome: "child_exited";
-      executionRef: string;
-      exit: Exit;
-      evidence: Evidence;
-    }
-  | { outcome: "submit_unknown"; reason: string }
-  | { outcome: "needs_operator"; reason: string; executionRef?: string }
-  | { outcome: "lease_lost"; executionRef?: string };
-export type Evidence = "recorded" | "unconfirmed" | "withheld";
-
+export type { Evidence, Outcome } from "./outcomes.js";
 const ACTIVE = new Set([
   "submitting",
   "submit_unknown",
@@ -47,6 +37,8 @@ export type ControllerDeps = {
   settings: ControllerSettings;
   api: JobsApi;
   store: JournalStore;
+  /** The Modal client (controller-side only); required for, and only used by, the Modal executor. */
+  modal?: ModalClient;
   /** Test seam only: observe controller milestones. */
   onEvent?: (event: string, detail?: Record<string, unknown>) => void;
 };
@@ -115,7 +107,13 @@ export async function runController(
     }
   })();
   try {
-    return await drive(deps, { jobId, runRef, owner }, leaseDeadline, emit);
+    return await drive(
+      deps,
+      { jobId, runRef, owner },
+      status.executionBackend,
+      leaseDeadline,
+      emit,
+    );
   } finally {
     stopRenew.stop = true;
     await renewer.catch(() => undefined);
@@ -125,6 +123,7 @@ export async function runController(
 async function drive(
   deps: ControllerDeps,
   id: { jobId: string; runRef: string; owner: string },
+  executionBackend: Awaited<ReturnType<JobsApi["status"]>>["executionBackend"],
   leaseDeadline: () => number | undefined,
   emit: (event: string, detail?: Record<string, unknown>) => void,
 ): Promise<Outcome> {
@@ -132,6 +131,18 @@ async function drive(
   const { jobId, owner } = id;
   const lost = () => leaseDeadline() === undefined;
   if (lost()) return { outcome: "lease_lost" };
+  if (settings.executor === "modal") {
+    // The Modal path has its own journal and ordering (the call ID exists only after the spawn).
+    if (!deps.modal)
+      return { outcome: "no_effect", reason: "modal_client_missing" };
+    return driveModal({ ...deps, settings, modal: deps.modal }, id, lost, emit);
+  }
+  // SA-42: the local executor never spawns for a job admitted to another backend, and never
+  // guesses around a Modal journal (that call may be billing).
+  if (store.hasModalJournal(jobId))
+    return unknown(deps, id, "foreign_modal_journal");
+  if (executionBackend !== "local")
+    return { outcome: "needs_operator", reason: "backend_mismatch" };
   const currentBoot = bootId();
   let journal: Journal | undefined;
   try {
@@ -267,15 +278,29 @@ async function drive(
     }
     store.discardToken(jobId);
     emit("child_running", { pid: journal.pid });
-    return supervise(deps, id, journal, spawned.exited, leaseDeadline, emit);
+    return supervise(
+      { ...deps, settings },
+      id,
+      journal,
+      spawned.exited,
+      leaseDeadline,
+      emit,
+    );
   }
 
   // phase running | exited: adopt the known execution; never spawn.
-  return supervise(deps, id, journal, undefined, leaseDeadline, emit);
+  return supervise(
+    { ...deps, settings },
+    id,
+    journal,
+    undefined,
+    leaseDeadline,
+    emit,
+  );
 }
 
 async function supervise(
-  deps: ControllerDeps,
+  deps: ControllerDeps & { settings: LocalControllerSettings },
   id: { jobId: string; owner: string; runRef: string },
   start: Journal,
   ownChild: Promise<Exit> | undefined,
@@ -420,17 +445,5 @@ async function unknown(
   reason: string,
   executionRef?: string,
 ): Promise<Outcome> {
-  // Intent exists; ambiguity is recorded for SA-27 repair. Never respawn, never evidence, never release.
-  try {
-    await deps.api.act(id.jobId, {
-      action: "mark_submit_unknown",
-      owner: id.owner,
-    });
-  } catch (error) {
-    if (!(error instanceof AmbiguousApiError || error instanceof ApiRejection))
-      throw error;
-  }
-  return executionRef
-    ? { outcome: "needs_operator", reason, executionRef }
-    : { outcome: "submit_unknown", reason };
+  return markUnknown(deps.api, id, reason, executionRef);
 }

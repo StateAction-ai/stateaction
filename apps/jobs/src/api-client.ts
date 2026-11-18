@@ -23,6 +23,13 @@ export type JobStatus = {
   state: string;
   kind: string;
   targetId: string;
+  /** SA-42: server-recorded identity only. Adoption of a known call; never spawn authority. */
+  executionBackend: "local" | "modal" | null;
+  executionRef: string | null;
+  /** Immutable worker start deadline; null before the submission intent. */
+  startDeadline: string | null;
+  /** Immutable absolute execution deadline; null before admission. */
+  executionDeadline: string | null;
 };
 
 /** Machine-credential HTTP client over SA-25's /internal/v1/jobs (never SQL, never S3). */
@@ -98,9 +105,9 @@ export class JobsApi {
     const data = (await this.call(
       `/internal/v1/jobs/${jobId}`,
       "GET",
-      "jobs.job-status.v1",
+      "jobs.job-status.v2",
     )) as Record<string, unknown>;
-    return this.checked<JobStatus>("jobs.job-status.v1", data);
+    return this.checked<JobStatus>("jobs.job-status.v2", data);
   }
 
   async act(

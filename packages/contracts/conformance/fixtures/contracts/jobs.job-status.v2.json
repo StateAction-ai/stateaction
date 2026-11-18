@@ -1,0 +1,258 @@
+{
+  "contract": "jobs.job-status.v2",
+  "cases": [
+    {
+      "name": "recorded modal call",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recorded local execution",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "local",
+          "executionRef": "local-3f2c1b9a",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "nothing recorded yet",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": null,
+          "executionRef": null,
+          "startDeadline": null,
+          "executionDeadline": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "backend admitted before any reference",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": null,
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown backend",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "gpu",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/executionBackend"
+        ]
+      }
+    },
+    {
+      "name": "reference charset",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc 1/2",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/executionRef"
+        ]
+      }
+    },
+    {
+      "name": "reference bound",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/executionRef"
+        ]
+      }
+    },
+    {
+      "name": "deadline is an RFC 3339 UTC instant or null",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "tomorrow"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/executionDeadline"
+        ]
+      }
+    },
+    {
+      "name": "start deadline is an RFC 3339 UTC instant or null",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "soon",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/startDeadline"
+        ]
+      }
+    },
+    {
+      "name": "reference is required",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown field",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z",
+          "functionCallId": "fc-1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

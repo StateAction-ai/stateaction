@@ -29,6 +29,9 @@ EXIT_CLAIM_LOST = 75
 EXIT_PIPELINE_UNAVAILABLE = 78
 
 _REF = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+# A Modal function call ID, exactly as the controller contract pins it (SA-42).
+_CALL_ID = re.compile(r"^fc-[A-Za-z0-9]{1,77}$")
+_EXECUTORS = ("local", "modal")
 _TOKEN = re.compile(r"^sa_svc_[A-Za-z0-9_-]{43}$")
 # Pipelines are resolved from this fixed table; never from caller-supplied names.
 _PIPELINES = {
@@ -110,6 +113,7 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             "executionRef",
             "pipeline",
             "fixtureHoldSeconds",
+            "executorKind",
         }
         if not isinstance(value, dict) or not set(value) <= allowed:
             raise ValueError("shape")
@@ -123,7 +127,20 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             raise ValueError("ref")
         if value["pipeline"] not in _PIPELINES:
             raise ValueError("pipeline")
+        kind = value.setdefault("executorKind", "local")
+        if kind not in _EXECUTORS:
+            raise ValueError("executor")
+        # The kind and the reference shape must agree: a call ID is never a local ref, and vice versa.
+        if (kind == "modal") != bool(_CALL_ID.match(execution_ref)):
+            raise ValueError("executor_ref")
         value["apiUrl"] = _strict_origin(value["apiUrl"])
+        if kind == "modal" and (
+            value["pipeline"] != "hand_pose_cpu_v1"
+            or not value["apiUrl"].startswith("https://")
+            or urlparse(value["apiUrl"]).hostname in ("127.0.0.1", "localhost", "::1")
+        ):
+            # Modal runs only the production pipeline and can never reach a loopback API.
+            raise ValueError("modal_bootstrap")
         return value
     except (ValueError, KeyError, TypeError) as error:
         raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap") from error
@@ -210,7 +227,11 @@ def run(execution_ref: str) -> int:
         "schemaVersion": 1,
         "jobId": boot["jobId"],
         "invocationNonce": nonce,
-        "executor": {"kind": "local", "localExecutionRef": execution_ref},
+        "executor": (
+            {"kind": "modal", "functionCallId": execution_ref}
+            if boot["executorKind"] == "modal"
+            else {"kind": "local", "localExecutionRef": execution_ref}
+        ),
     }
     try:
         grant = _post(
@@ -234,6 +255,7 @@ def run(execution_ref: str) -> int:
         "capability": capability,
         "post": _post,
         "fixtureHoldSeconds": boot.get("fixtureHoldSeconds"),
+        "executorKind": boot["executorKind"],
     }
     return int(module.run(grant, context))
 

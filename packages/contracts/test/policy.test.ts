@@ -5,9 +5,10 @@ import test from "node:test";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v11.json is the current registry; catalog.v1.json through
-// catalog.v10.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v11.json"));
+// catalog.v12.json is the current registry; catalog.v1.json through
+// catalog.v11.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v12.json"));
+const catalogV11 = JSON.parse(text("catalog.v11.json"));
 const catalogV10 = JSON.parse(text("catalog.v10.json"));
 const catalogV9 = JSON.parse(text("catalog.v9.json"));
 const catalogV8 = JSON.parse(text("catalog.v8.json"));
@@ -529,14 +530,46 @@ test("v10 lock entries are unchanged and every v10 file keeps its exact bytes", 
 const V11_ADDED = ["http.job-control-command.v1", "http.job-control-result.v1"];
 
 test("catalog v11 (SA-27) is an exact superset of catalog v10 adding only the staff job control contracts", () => {
-  assertExactSuperset(catalog, catalogV10, ["v10", "v11"], V11_ADDED);
-  assert.equal(Object.keys(catalog.contracts).length, 65);
+  assertExactSuperset(catalogV11, catalogV10, ["v10", "v11"], V11_ADDED);
+  assert.equal(Object.keys(catalogV11.contracts).length, 65);
   for (const id of V11_ADDED) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV11.contracts[id];
     assert.equal(entry.casing, "camelCase", id);
     assert.deepEqual(entry.version, { path: "/api/v1" }, id);
     assert.deepEqual(entry.rules, [], id);
   }
+});
+
+const V12_ADDED = ["jobs.job-status.v2"];
+
+test("catalog v12 (SA-42) is an exact superset of catalog v11 adding only the job status with the recorded execution identity", () => {
+  assertExactSuperset(catalog, catalogV11, ["v11", "v12"], V12_ADDED);
+  assert.equal(Object.keys(catalog.contracts).length, 66);
+  const entry = catalog.contracts["jobs.job-status.v2"];
+  assert.equal(entry.casing, "camelCase");
+  assert.deepEqual(entry.version, { path: "/internal/v1" });
+  assert.deepEqual(entry.rules, []);
+  // The published v1 status stays deep-equal; v2 never edits it.
+  assert.deepEqual(
+    catalog.contracts["jobs.job-status.v1"],
+    catalogV11.contracts["jobs.job-status.v1"],
+  );
+});
+
+/** Lock entries published with SA-42 (catalog v12). Frozen once released. */
+const PUBLISHED_V12_LOCK: Readonly<Record<string, string>> = {
+  "catalog.v12.json":
+    "674b089a92875402ac5ebedfc53f9f906c3e609390a48bb56007e6fdb24937d9",
+  "jobs/job-status.v2.schema.json":
+    "d633d785b58ce4eefdcc0caf5efb4158f0f4cac046fa46ec9a425177d313b36f",
+};
+
+test("v12 lock entries are unchanged and every v12 file keeps its exact bytes", () => {
+  for (const [file, hash] of Object.entries(PUBLISHED_V12_LOCK)) {
+    assert.equal(lock.files[file], hash, `${file}: lock entry changed`);
+    assert.equal(sha256(file), hash, `${file}: published bytes changed`);
+  }
+  assert.equal(Object.keys(PUBLISHED_V12_LOCK).length, 2);
 });
 
 /** Lock entries published with SA-27 (catalog v11). Frozen once released. */

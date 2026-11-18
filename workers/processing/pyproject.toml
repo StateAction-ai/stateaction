@@ -37,6 +37,7 @@ files = [
   "src/stateaction_processing/cli.py",
   "src/stateaction_processing/run_job.py",
   "src/stateaction_processing/local_signal.py",
+  "src/stateaction_processing/hand_pose_cpu_v1.py",
   "src/stateaction_processing/fixture_noop.py",
   "src/stateaction_processing/mcap_stream.py",
   "src/stateaction_processing/capture_stream.py",
@@ -68,5 +69,5 @@ select = ["E4", "E7", "E9", "F", "I"]
 known-first-party = ["stateaction_processing"]
 
 [[tool.mypy.overrides]]
-module = ["rerun.*", "stateaction_contracts.*"]
+module = ["av", "av.*", "rerun.*", "stateaction_contracts.*"]
 ignore_missing_imports = true

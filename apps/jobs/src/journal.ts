@@ -47,6 +47,37 @@ export type Journal = {
   evidenceRecorded?: boolean;
 };
 
+/**
+ * SA-42 Modal journal: the same write-before-effect discipline, but the physical
+ * identity is a provider function call ID that exists only AFTER the spawn.
+ * `spawning` without a `callId` therefore means "the spawn may or may not have
+ * happened": it is never repeated. Stored in its own file so a local controller
+ * can never misread it (and vice versa).
+ */
+export type ModalPhase =
+  | "intent" // server submission intent recorded, token saved locally; nothing spawned
+  | "spawning" // written BEFORE the single spawn; without a callId the outcome is uncertain
+  | "submitted" // callId durably known; supervise/poll only
+  | "terminal"; // a structured terminal result for this exact call was observed
+
+export type ModalJournal = {
+  version: 1;
+  executor: "modal";
+  jobId: string;
+  runRef: string;
+  phase: ModalPhase;
+  startDeadline: string;
+  executionDeadline: string;
+  callId?: string;
+  /** The server acknowledged record_execution for callId (or the worker claim already set it). */
+  executionRecorded?: boolean;
+  /** A provider cancel REQUEST was sent. A request is never termination proof. */
+  cancelRequestedAt?: string;
+  termination?: string;
+  exitCode?: number;
+  evidenceRecorded?: boolean;
+};
+
 export class JournalCorrupt extends Error {}
 
 const PHASES: readonly Phase[] = [
@@ -153,6 +184,75 @@ export function validateJournal(value: unknown, jobId: string): Journal {
   return j as unknown as Journal;
 }
 
+const MODAL_KEYS = new Set([
+  "version",
+  "executor",
+  "jobId",
+  "runRef",
+  "phase",
+  "startDeadline",
+  "executionDeadline",
+  "callId",
+  "executionRecorded",
+  "cancelRequestedAt",
+  "termination",
+  "exitCode",
+  "evidenceRecorded",
+]);
+const MODAL_PHASES: readonly ModalPhase[] = [
+  "intent",
+  "spawning",
+  "submitted",
+  "terminal",
+];
+/** Same shape the contract enforces for a Modal function call ID. */
+export const CALL_ID = /^fc-[A-Za-z0-9]{1,77}$/;
+
+export function validateModalJournal(
+  value: unknown,
+  jobId: string,
+): ModalJournal {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return bad();
+  const j = value as Record<string, unknown>;
+  for (const key of Object.keys(j)) if (!MODAL_KEYS.has(key)) return bad();
+  if (j.version !== 1 || j.executor !== "modal") return bad();
+  if (j.jobId !== jobId || !UUID.test(jobId)) return bad();
+  if (typeof j.runRef !== "string" || !RUN.test(j.runRef)) return bad();
+  if (!MODAL_PHASES.includes(j.phase as ModalPhase)) return bad();
+  if (instant(j.startDeadline) > instant(j.executionDeadline)) return bad();
+  const phase = j.phase as ModalPhase;
+  const hasId = j.callId !== undefined;
+  if (hasId && !(typeof j.callId === "string" && CALL_ID.test(j.callId)))
+    return bad();
+  // A call ID exists exactly from `submitted` on; before that the spawn has not been acknowledged.
+  if (hasId !== (phase === "submitted" || phase === "terminal")) return bad();
+  if (j.executionRecorded !== undefined && j.executionRecorded !== true)
+    return bad();
+  if (j.executionRecorded !== undefined && !hasId) return bad();
+  if (j.cancelRequestedAt !== undefined) {
+    if (!hasId) return bad();
+    instant(j.cancelRequestedAt);
+  }
+  if (
+    j.termination !== undefined &&
+    (typeof j.termination !== "string" || !/^[a-z_]{1,40}$/.test(j.termination))
+  )
+    return bad();
+  if (phase === "terminal") {
+    if (
+      typeof j.exitCode !== "number" ||
+      !Number.isSafeInteger(j.exitCode) ||
+      Math.abs(j.exitCode) > 255
+    )
+      return bad();
+  } else if (j.exitCode !== undefined || j.evidenceRecorded !== undefined)
+    return bad();
+  if (j.evidenceRecorded !== undefined && j.evidenceRecorded !== true)
+    return bad();
+  return j as unknown as ModalJournal;
+}
+
 export class JournalStore {
   constructor(private readonly root: string) {}
 
@@ -171,7 +271,7 @@ export class JournalStore {
     requirePrivateDirectory(lstatSync(this.dir(jobId)));
   }
 
-  read(jobId: string): Journal | undefined {
+  private readJournal(jobId: string, filename: string): unknown {
     let raw: string;
     try {
       const dir = openSync(
@@ -182,7 +282,7 @@ export class JournalStore {
         requirePrivateDirectory(fstatSync(dir));
         // Anchor the read to the directory we validated, even if it is renamed.
         const fd = openSync(
-          `/proc/self/fd/${dir}/journal.json`,
+          `/proc/self/fd/${dir}/${filename}`,
           constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
         );
         try {
@@ -204,14 +304,52 @@ export class JournalStore {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw new JournalCorrupt("Journal unreadable");
     }
-    let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      return JSON.parse(raw);
     } catch {
-      // Torn or tampered: never guess what happened physically.
       throw new JournalCorrupt("Journal corrupt");
     }
-    return validateJournal(parsed, jobId);
+  }
+
+  read(jobId: string): Journal | undefined {
+    const parsed = this.readJournal(jobId, "journal.json");
+    return parsed === undefined ? undefined : validateJournal(parsed, jobId);
+  }
+
+  readModal(jobId: string): ModalJournal | undefined {
+    const parsed = this.readJournal(jobId, "modal-journal.json");
+    return parsed === undefined
+      ? undefined
+      : validateModalJournal(parsed, jobId);
+  }
+
+  writeModal(journal: ModalJournal): void {
+    validateModalJournal(journal, journal.jobId);
+    this.ensure(journal.jobId);
+    atomicWrite(
+      join(this.dir(journal.jobId), "modal-journal.json"),
+      JSON.stringify(journal),
+    );
+  }
+
+  /** True when a MODAL journal exists for this job (a local controller must not guess around it). */
+  hasModalJournal(jobId: string): boolean {
+    return this.hasJournal(jobId, "modal-journal.json");
+  }
+
+  /** True when a LOCAL journal exists for this job (a Modal controller must not guess around it). */
+  hasLocalJournal(jobId: string): boolean {
+    return this.hasJournal(jobId, "journal.json");
+  }
+
+  private hasJournal(jobId: string, filename: string): boolean {
+    try {
+      lstatSync(join(this.dir(jobId), filename));
+      return true;
+    } catch (error) {
+      // An unreadable entry cannot prove that the other executor left no journal.
+      return (error as NodeJS.ErrnoException).code !== "ENOENT";
+    }
   }
 
   write(journal: Journal): void {

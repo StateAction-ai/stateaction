@@ -958,8 +958,13 @@ export async function getJobStatus(
     previous_job_id: string | null;
     created_at: Date;
     updated_at: Date;
+    execution_backend: "local" | "modal" | null;
+    execution_call_id: string | null;
+    start_deadline: Date | null;
+    execution_deadline: Date | null;
   }>(
-    `SELECT id, kind, recording_id, state, previous_job_id, created_at, updated_at
+    `SELECT id, kind, recording_id, state, previous_job_id, created_at, updated_at,
+            execution_backend, execution_call_id, start_deadline, execution_deadline
      FROM jobs WHERE id = $1`,
     [jobId],
   );
@@ -973,8 +978,14 @@ export async function getJobStatus(
     previousJobId: j.previous_job_id,
     createdAt: iso(j.created_at),
     updatedAt: iso(j.updated_at),
+    // SA-42: the recorded identity only (set by the controller or the winning worker claim).
+    // It lets a controller on another instance ADOPT a known call; it never authorizes a spawn.
+    executionBackend: j.execution_backend,
+    executionRef: j.execution_call_id,
+    startDeadline: j.start_deadline ? iso(j.start_deadline) : null,
+    executionDeadline: j.execution_deadline ? iso(j.execution_deadline) : null,
   };
-  const valid = validateValue("jobs.job-status.v1", status);
+  const valid = validateValue("jobs.job-status.v2", status);
   if (!valid.valid) throw new Error(`job status invalid: ${valid.code}`);
   return status;
 }
