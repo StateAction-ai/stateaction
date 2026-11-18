@@ -36,6 +36,7 @@ stateaction-contracts = { path = "../../packages/contracts/python", editable = t
 files = [
   "src/stateaction_processing/cli.py",
   "src/stateaction_processing/run_job.py",
+  "src/stateaction_processing/resource_probe.py",
   "src/stateaction_processing/local_signal.py",
   "src/stateaction_processing/hand_pose_cpu_v1.py",
   "src/stateaction_processing/fixture_noop.py",

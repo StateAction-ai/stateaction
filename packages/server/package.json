@@ -52,6 +52,7 @@
     "storage:presign": "node --conditions=react-server --env-file=../../.env --import tsx src/cli.ts presign-check",
     "hosted:presign-check": "node dist/cli.js presign-check",
     "dataset-sharing": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/dataset-sharing-cli.ts",
+    "ops-report": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ops-report-cli.ts",
     "job-recovery": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/job-recovery-cli.ts",
     "ingest-permission": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ingest-permission-cli.ts"
   },

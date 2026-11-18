@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -247,17 +248,56 @@ def run(execution_ref: str) -> int:
         raise WorkerExit(EXIT_CLAIM_LOST, "ClaimLost") from error
     del boot["bootstrapToken"]
     # Only now may heavy or pipeline code load and signed URLs be touched.
-    module = importlib.import_module(f"stateaction_processing.{_PIPELINES[pipeline]}")
-    context = {
-        "apiUrl": boot["apiUrl"],
-        "jobId": boot["jobId"],
-        "nonce": nonce,
-        "capability": capability,
-        "post": _post,
-        "fixtureHoldSeconds": boot.get("fixtureHoldSeconds"),
-        "executorKind": boot["executorKind"],
-    }
-    return int(module.run(grant, context))
+    # SA-45: resource facts start AFTER the claim; the probe guards the import AND the
+    # processing, and emitting can never replace the return code or a raised exception.
+    probe = _start_probe(boot, execution_ref)
+    code: int | None = None
+    outcome = "raised"
+    try:
+        imported = time.monotonic()
+        module = importlib.import_module(
+            f"stateaction_processing.{_PIPELINES[pipeline]}"
+        )
+        if probe is not None:
+            probe.import_seconds = time.monotonic() - imported
+        context = {
+            "apiUrl": boot["apiUrl"],
+            "jobId": boot["jobId"],
+            "nonce": nonce,
+            "capability": capability,
+            "post": _post,
+            "fixtureHoldSeconds": boot.get("fixtureHoldSeconds"),
+            "executorKind": boot["executorKind"],
+            "metrics": probe,
+        }
+        code = int(module.run(grant, context))
+        outcome = "returned"
+        return code
+    finally:
+        _emit_probe(probe, code, outcome)
+
+
+def _emit_probe(probe: Any, code: int | None, outcome: str) -> None:
+    """Instrumentation failures are suppressed; the original result/exception propagates."""
+    if probe is None:
+        return
+    try:
+        probe.emit(code, outcome)
+    except Exception:
+        return
+
+
+def _start_probe(boot: dict[str, Any], execution_ref: str) -> Any:
+    try:
+        from .resource_probe import ResourceProbe
+
+        return ResourceProbe(
+            job_id=boot["jobId"],
+            backend=boot["executorKind"],
+            execution_ref=execution_ref,
+        )
+    except Exception:
+        return None
 
 
 def main(execution_ref: str) -> int:

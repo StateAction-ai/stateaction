@@ -477,9 +477,20 @@ def _report(
     )
 
 
+def _probe_call(metrics: Any, method: str, *args: Any) -> None:
+    """SA-45 resource facts are best-effort and can never change the processing result."""
+    try:
+        getattr(metrics, method)(*args)
+    except Exception:
+        return
+
+
 def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
     api = Api(context)
     scratch = Path(tempfile.mkdtemp(prefix="sa28-worker-"))
+    metrics = context.get("metrics")
+    if metrics is not None:
+        _probe_call(metrics, "register_scratch", scratch)
     beater = _Beater(api)
     beater.start()
     sink = ServerOutputSink(api, beater)
@@ -495,6 +506,8 @@ def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
         return _fail(api, sink, grant, task, error, scratch)
     finally:
         beater.stop()
+        if metrics is not None:
+            _probe_call(metrics, "sample_now")
         shutil.rmtree(scratch, ignore_errors=True)
 
 
