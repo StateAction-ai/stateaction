@@ -216,6 +216,7 @@ const CHECK_NAMES: Record<string, string> = {
   arrays_valid: "Hand arrays",
   output_bounds: "Preview files",
   hand_detection_summary: "Hand detections",
+  capture_counts: "Capture frame counts",
   native_mp4_remux: "Original video preservation",
   clip_bounds: "Clip duration and frame limits",
   proxy_rrd_bounds: "Rerun preview limits",

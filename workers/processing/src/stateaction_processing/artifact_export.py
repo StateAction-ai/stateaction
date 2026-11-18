@@ -164,6 +164,11 @@ def export_artifacts(
     writer: ClipWriter | None = None
     peak_clip_bytes = 0
     config_hash = config_sha256(limits, stream_limits)
+    inferred = 0  # frames that completed inference before any failure
+    stage = "inference"  # curated failure stage; see `failure_diagnostics`
+    source_verified = (
+        False  # True only once EOF, whole-source SHA and profile are all proven
+    )
     att = context.attestation
     sim_note = simulation_note(att.simulation) if att else None
 
@@ -202,6 +207,7 @@ def export_artifacts(
         with HandInferencer(verified) as inferencer:
             for frame in stream:
                 obs = inferencer.infer(frame)  # the only inference of this frame
+                inferred += 1
                 if writer is not None and plan_cut(frame):
                     close_clip()
                 if writer is None:
@@ -225,6 +231,7 @@ def export_artifacts(
         if writer is not None:
             close_clip()
         # Acceptance gate: the whole source (footer/CRC/SHA/Close) and the decoder flush.
+        stage = "source_verification"
         report = stream.require_accepted()
         stats = stream.decode_stats
         if stats is None or frames_inferred != stats.frames_out or frames_inferred == 0:
@@ -234,6 +241,10 @@ def export_artifacts(
             raise ExportError("E_SOURCE_SHA_MISMATCH", sha)
         if att is not None:
             _check_actual_profile(report.profile, att)
+        source_verified = (
+            True  # proven; a later failure cannot un-prove it, nor accept anything
+        )
+        stage = "manifest"
         manifest = build_manifest(
             context, report, sha, nbytes, clips_meta, outputs, receipts, miss, stats, frames_inferred,
             total_ms, digest.hexdigest(), config_hash, limits,
@@ -269,6 +280,9 @@ def export_artifacts(
     except BaseException as e:
         if writer is not None:
             writer.abort()
+        _attach_diagnostics(
+            e, stage, stream, inferred, clips_meta, receipts, source_verified
+        )
         sink.abort(getattr(e, "code", type(e).__name__))
         raise
     finally:
@@ -291,6 +305,44 @@ def export_artifacts(
         observations_sha256=digest.hexdigest(),
         peak_scratch_clip_bytes=peak_clip_bytes,
     )
+
+
+FAILURE_STAGES = ("inference", "source_verification", "manifest")
+
+
+def _attach_diagnostics(
+    error: BaseException,
+    stage: str,
+    stream: FrameStream,
+    inferred: int,
+    clips_meta: list[dict[str, Any]],
+    receipts: dict[str, OutputReceipt],
+    source_verified: bool = False,
+) -> None:
+    """Attach bounded, curated counters to a failing export (never text, paths or payloads).
+
+    Counts are what had actually happened when the run stopped; they describe progress, not
+    quality, and a failed run still publishes no manifest or accepted clip. `source_verified` is
+    a boolean set only by the exporter at the proven final EOF/hash/profile gate; it is never
+    derived from exception text or stage names, and it accepts nothing.
+    """
+    try:
+        stats = stream.decode_stats
+        report = stream.report
+        error.diagnostics = {  # type: ignore[attr-defined]
+            "stage": stage,
+            "source_verified": source_verified is True,
+            "counts": {
+                "source_bytes_read": report.source.bytes_read,
+                "video_messages": report.video_messages,
+                "frames_decoded": stats.frames_out if stats is not None else 0,
+                "frames_inferred": inferred,
+                "clips_written": len(clips_meta),
+                "files_put": len(receipts),
+            },
+        }
+    except Exception:  # diagnostics must never mask the real failure
+        pass
 
 
 def _check_actual_profile(profile: dict[str, Any] | None, att: Attestation) -> None:
@@ -387,6 +439,16 @@ def build_manifest(
                d(max_rrd_bytes=limits.max_rrd_bytes, largest_rrd_bytes=max(rrd_bytes),
                  proxy_reencoded_clips=sum(1 for r in reencoded if r),
                  proxy_max_width=limits.proxy_max_width, proxy_max_height=limits.proxy_max_height)),
+        # Verified capture-side accounting (Close counts were already checked against the stream);
+        # recorded as coverage counts, never as a quality or accuracy claim.
+        _check("capture_counts", "measured", "Verified capture frame and sensor-event counts; coverage only.",
+               d(acquired=report.frame_counts["acquired"], submitted=report.frame_counts["submitted"],
+                 written=report.frame_counts["written"], dropped=report.frame_counts["dropped"],
+                 unresolved=report.unresolved_frames, video_messages=report.video_messages,
+                 sensor_events=report.sensor_events, pose_messages=report.pose_messages,
+                 unassociated_sensor_events=report.unassociated_sensor_events,
+                 sensor_events_for_dropped_frames=report.sensor_events_for_dropped_frames,
+                 sensor_events_unmatched=report.sensor_events_unmatched)),
         _check("hand_detection_summary", "measured", "Detection counts only; not an accuracy claim.",
                d(**dataclasses.asdict(miss), inference_us_mean=round(total_ms * 1000 / frames))),
     ]  # fmt: skip
