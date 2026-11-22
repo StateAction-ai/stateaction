@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { after, describe, test } from "node:test";
+import { after, afterEach, describe, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { Render } from "@renderinc/sdk";
 import { call, freePort, jobsDir, startWorld } from "./harness.mjs";
@@ -115,11 +115,11 @@ function controllerProcess(w, jobId, runRef, hold = 0) {
   child.stdout.on("data", (c) => (out += c));
   child.stderr.on("data", (c) => (out += c));
   const done = new Promise((resolve) =>
-    child.on("close", () => {
+    child.on("close", (code, signal) => {
       try {
         resolve(JSON.parse(out.trim().split("\n").at(-1)));
       } catch {
-        resolve({ crashed: out.slice(-500) });
+        resolve({ crashed: out.slice(-500), code, signal });
       }
     }),
   );
@@ -239,14 +239,24 @@ function reapOwnedChildren() {
   }
 }
 
-after(async () => {
-  for (const p of procs) {
+// Tear down every process a case started (Next API, runner, controller, child) as
+// soon as the case ends, not at the end of the file. The CI guard runs the whole
+// stage in one scope capped at 256 tasks (threads included); worlds kept alive until
+// the end exhausted it on the fifth case, and Node then aborted (SIGABRT) with no
+// output when libuv could not create a worker thread (clone3 EAGAIN).
+async function teardownCase() {
+  for (const p of procs.splice(0)) {
     try {
       process.kill(-p.pid, "SIGKILL");
     } catch {}
   }
   reapOwnedChildren();
-  for (const w of worlds) await w.stop().catch(() => {});
+  for (const w of worlds.splice(0)) await w.stop().catch(() => {});
+}
+afterEach(teardownCase);
+
+after(async () => {
+  await teardownCase();
   if (process.env.SA26_E2E_EVIDENCE)
     process.stdout.write(`SA26_E2E_EVIDENCE ${JSON.stringify(evidence)}\n`);
 });
