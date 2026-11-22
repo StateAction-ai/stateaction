@@ -82,9 +82,9 @@ const output = (slot: string, over: object = {}) => ({
 
 test("worker outputs use multipart even when tiny, under server-chosen job keys", async () => {
   const plan = await allocateJobOutput(deps, job, output("clips/0001/rgb.mp4"));
-  // Output plans are the published http.output-plan.v1 (output roles); the
+  // Output plans are the published http.output-plan.v2 (output roles); the
   // source http.upload-plan.v1 stays source-role only and refuses them.
-  assert.equal(validateValue("http.output-plan.v1", plan).valid, true);
+  assert.equal(validateValue("http.output-plan.v2", plan).valid, true);
   assert.equal(validateValue("http.upload-plan.v1", plan).valid, false);
   assert.equal(plan.role, "clip_mp4");
   assert.equal(plan.recordingId, recordingId);
@@ -379,4 +379,40 @@ test("worker output route follows the frozen job limit past 512", async () => {
     [worker.jobId],
   );
   assert.equal(rows[0].n, limit);
+});
+
+test("a non-recipe job is refused the annotation roles with a stable error, never a 500", async () => {
+  const handlers = transportHandlers(deps);
+  const slots: Record<string, string> = {
+    segments_json: "segments.json",
+    captions_json: "captions.json",
+    hand_presence_json: "hand-presence.json",
+    recording_mp4: "recording.mp4",
+    diagnostic_blob: "diagnostics/segment/windows.jsonl",
+  };
+  for (const [role, slot] of Object.entries(slots)) {
+    const response = await handlers.createJobOutput(
+      new Request("http://x", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(output(slot, { role })),
+      }),
+      job,
+    );
+    // The contract accepts the role (a 400 here would be the old v1 rejection);
+    // the migration 011 recipe rule refuses it for a job without a recipe.
+    assert.equal(response.status, 403, role);
+    const body = (await response.json()) as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden", role);
+  }
+  // A role outside common.v2 stays invalid_request (400).
+  const bad = await handlers.createJobOutput(
+    new Request("http://x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(output("x/ok", { role: "dag_run_json" })),
+    }),
+    job,
+  );
+  assert.equal(bad.status, 400);
 });

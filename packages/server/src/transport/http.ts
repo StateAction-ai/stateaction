@@ -172,7 +172,7 @@ export function transportHandlers(deps: TransportDeps) {
     route(async (request, authority, fileId) =>
       parseContract(
         authority.kind === "job"
-          ? "http.output-plan.v1"
+          ? "http.output-plan.v2"
           : "http.upload-plan.v1",
         await run(
           deps,
@@ -215,7 +215,7 @@ export function transportHandlers(deps: TransportDeps) {
       // source roles for the human route, output roles for the job route.
       parseContract(
         authority.kind === "job"
-          ? "http.output-plan.v1"
+          ? "http.output-plan.v2"
           : "http.upload-plan.v1",
         await getUploadPlan(deps, authority, fileId ?? ""),
       ),
@@ -243,11 +243,11 @@ export function transportHandlers(deps: TransportDeps) {
       need(authority, "job");
       const body = (await readBoundedJson(
         request,
-        "http.output-create.v1",
-        contractMaxBytes("http.output-create.v1"),
+        "http.output-create.v2",
+        contractMaxBytes("http.output-create.v2"),
       )) as OutputRequest;
       return parseContract(
-        "http.output-plan.v1",
+        "http.output-plan.v2",
         await allocateJobOutput(
           deps,
           authority as Extract<Authority, { kind: "job" }>,

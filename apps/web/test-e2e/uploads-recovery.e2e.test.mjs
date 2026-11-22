@@ -326,7 +326,7 @@ const objectSha = async (key) =>
 const validOwnerPlan = (plan) =>
   assert.equal(validateValue("http.upload-plan.v1", plan).valid, true);
 const validOutputPlan = (plan) =>
-  assert.equal(validateValue("http.output-plan.v1", plan).valid, true);
+  assert.equal(validateValue("http.output-plan.v2", plan).valid, true);
 
 before(async () => {
   stack = await startStack({ storage: true });

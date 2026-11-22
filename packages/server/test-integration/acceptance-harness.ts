@@ -13,6 +13,8 @@ import {
   type Authority,
   type TransportDeps,
 } from "../src/transport/index.js";
+import { transportHandlers } from "../src/transport/http.js";
+import type { UploadPlan } from "../src/transport/service.js";
 import {
   createActors,
   freshDatabase,
@@ -77,21 +79,46 @@ export type Uploaded = {
 };
 
 /** Real multipart upload of one output through the job-scoped transport. */
+async function reserveOverHttp(
+  transport: TransportDeps,
+  job: RunningJob,
+  body: object,
+): Promise<UploadPlan> {
+  const response = await transportHandlers(transport).createJobOutput(
+    new Request("http://worker.invalid/internal/v1/jobs/outputs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    job.authority,
+  );
+  const envelope = (await response.json()) as { data?: UploadPlan };
+  if (response.status !== 200 || !envelope.data)
+    throw new Error(`HTTP reserve failed: ${response.status}`);
+  return envelope.data;
+}
+
 export async function uploadOutput(
   transport: TransportDeps,
   job: RunningJob,
   slot: string,
   role: string,
   body: Buffer,
-  options: { declaredSha?: string } = {},
+  options: { declaredSha?: string; http?: boolean } = {},
 ): Promise<Uploaded> {
   const declared = options.declaredSha ?? sha(body);
-  const plan = await allocateJobOutput(transport, job.authority, {
+  const request = {
     slot,
     role: role as never,
     sizeBytes: String(body.length),
     sha256: declared,
-  });
+  };
+  // http: reserve through the real worker route handler, so the request is
+  // parsed as http.output-create.v2 and the plan is checked as
+  // http.output-plan.v2 (the SA-103 contract path for the annotation roles).
+  const plan: UploadPlan = options.http
+    ? await reserveOverHttp(transport, job, request)
+    : await allocateJobOutput(transport, job.authority, request);
   const signed = await signParts(transport, job.authority, plan.fileId, {
     expectedTransportEpoch: plan.transportEpoch,
     partNumbers: [1],

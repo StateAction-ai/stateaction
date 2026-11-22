@@ -241,6 +241,56 @@ class AdapterProtocolTests(unittest.TestCase):
             result["manifestFileId"], "00000000-0000-4000-8000-000000000001"
         )
 
+    def _sink(self):
+        from stateaction_processing.hand_pose_cpu_v1 import Api, ServerOutputSink
+
+        api = Api(
+            {
+                "apiUrl": f"http://127.0.0.1:{self.server.server_port}",
+                "jobId": JOB,
+                "nonce": NONCE,
+                "capability": "sa_svc_" + "B" * 43,
+            }
+        )
+        return ServerOutputSink(api)
+
+    def _output(self, role: str, slot: str, body: bytes):
+        from stateaction_processing.artifact_types import OutputFile
+
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(
+            lambda: [f.unlink() for f in directory.iterdir()] or directory.rmdir()
+        )
+        path = directory / "payload"
+        path.write_bytes(body)
+        return OutputFile(role, slot, path, len(body), hashlib.sha256(body).hexdigest())
+
+    def test_an_annotation_role_uploads_end_to_end_and_the_receipt_keeps_the_role(self):
+        # SA-103: http.output-create.v2 / output-plan.v2 accept the annotation roles.
+        out = self._output("hand_presence_json", "hand-presence.json", b'{"lanes":[]}')
+        receipt = self._sink()._upload(out)
+        self.assertEqual(receipt.role, "hand_presence_json")
+        alloc = next(
+            b for m, p, b in Stub.calls if p.endswith("/outputs") and m == "POST"
+        )
+        self.assertEqual(alloc["role"], "hand_presence_json")
+        self.assertEqual(alloc["slot"], "hand-presence.json")
+        self.assertEqual(next(iter(Stub.blobs.values())), b'{"lanes":[]}')
+
+    def test_a_plan_with_a_different_role_is_an_output_plan_mismatch(self):
+        out = self._output("segments_json", "segments.json", b"{}")
+        original = Stub._reply
+
+        def swapped(handler, data, headers=None):
+            if isinstance(data, dict) and data.get("role") == "segments_json":
+                data = dict(data, role="clip_mp4")
+            original(handler, data, headers)
+
+        Stub._reply = swapped
+        self.addCleanup(setattr, Stub, "_reply", original)
+        with self.assertRaisesRegex(RuntimeError, "output_plan_mismatch"):
+            self._sink()._upload(out)
+
     def test_pipeline_failure_reports_a_failed_candidate_with_a_diagnostic_manifest(
         self,
     ):

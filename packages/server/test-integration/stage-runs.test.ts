@@ -400,6 +400,7 @@ async function runRecipe(
     "segments.json",
     "segments_json",
     json(segments),
+    { http: true },
   );
   const diag = await uploadOutput(
     s.transport,
@@ -407,6 +408,7 @@ async function runRecipe(
     "diagnostics/segment/windows.jsonl",
     "diagnostic_blob",
     Buffer.from('{"window":0}\n'),
+    { http: true },
   );
   await finish(s, seg, [segFile, diag], { segments: 3, failed_windows: 1 });
 
@@ -425,6 +427,7 @@ async function runRecipe(
     "captions.json",
     "captions_json",
     json(captions),
+    { http: true },
   );
   await finish(s, cap, [capFile], { captions_complete: 2 });
 
@@ -435,6 +438,7 @@ async function runRecipe(
     "hand-presence.json",
     "hand_presence_json",
     json(handPresenceDoc(s)),
+    { http: true },
   );
   const mp4 = await uploadOutput(
     s.transport,
@@ -442,6 +446,7 @@ async function runRecipe(
     "recording.mp4",
     "recording_mp4",
     Buffer.from(`mp4:${randomUUID()}`),
+    { http: true },
   );
   const files = [segFile, diag, capFile, hp, mp4];
   const bytes = await manifestFor(s.db, hand.job, [], (doc) => {

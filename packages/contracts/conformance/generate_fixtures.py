@@ -3352,6 +3352,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa87_fixtures import render_sa87
 
     files.update(render_sa87())
+    # SA-103 adds only new fixture files for the catalog.v15 worker output contracts.
+    from generate_sa103_fixtures import render_sa103
+
+    files.update(render_sa103())
     return files
 
 
