@@ -18,10 +18,9 @@ from referencing.jsonschema import DRAFT202012
 from .canonical import MalformedJsonError, loads_strict
 from .rules import RULES
 
-# Current registry: an exact superset of the immutable catalog.v8.json, which
-# is an exact superset of catalog.v7.json, catalog.v6.json, catalog.v5.json, catalog.v4.json, catalog.v3.json,
-# catalog.v2.json and catalog.v1.json (all immutable).
-CATALOG_FILE = "catalog.v13.json"
+# Current registry: an exact superset of the immutable catalog.v13.json, which
+# is an exact superset of catalog.v12.json through catalog.v1.json (all immutable).
+CATALOG_FILE = "catalog.v14.json"
 
 
 def _api_dir() -> Path:
@@ -76,7 +75,11 @@ def _catalog() -> dict[str, Any]:
 def _validators() -> dict[str, Any]:
     api = _api_dir()
     catalog = _catalog()
-    paths = [catalog["common"], *(c["schema"] for c in catalog["contracts"].values())]
+    paths = [
+        catalog["common"],
+        *catalog.get("shared", []),
+        *(c["schema"] for c in catalog["contracts"].values()),
+    ]
     loaded = {p: json.loads((api / p).read_text("utf-8")) for p in paths}
     registry: Registry[Any] = Registry().with_resources(
         (doc["$id"], Resource.from_contents(doc, default_specification=DRAFT202012))

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/task-input.v3.json",
+  "title": "Compute task input v3",
+  "description": "Additive successor of task-input.v2 (v2 stays published and valid): process_recording also carries the inline processing recipe (jobs/recipe.v1) and recipeSha256, the sa-cjson-v1 digest of exactly that recipe object (rule task_input_recipe checks the digest and applies the recipe rules at /recipe). export_release is unchanged apart from schemaVersion 3. Secret-free references only.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "targetId",
+        "profileRevision",
+        "kind",
+        "sourceManifestSha256",
+        "rgbProfile",
+        "recipe",
+        "recipeSha256"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 3
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "targetId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "kind": {
+          "const": "process_recording"
+        },
+        "sourceManifestSha256": {
+          "description": "SHA-256 of the exact sealed source_manifest file bytes (recording-source/v1).",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "rgbProfile": {
+          "type": "string",
+          "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+        },
+        "simulation": {
+          "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+        },
+        "recipe": {
+          "$ref": "https://stateaction.ai/schemas/jobs/recipe.v1.json"
+        },
+        "recipeSha256": {
+          "description": "sa-cjson-v1 digest of recipe.",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "rgbProfile": {
+                "const": "h264_mcap_simulation_v1"
+              }
+            },
+            "required": ["rgbProfile"]
+          },
+          "then": {
+            "properties": {
+              "simulation": {}
+            },
+            "required": ["simulation"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "rgbProfile": {
+                "const": "h264_mcap_v1"
+              }
+            },
+            "required": ["rgbProfile"]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "simulation": {}
+              },
+              "required": ["simulation"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "jobId",
+        "targetId",
+        "profileRevision",
+        "kind",
+        "selectionSha256"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 3
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "targetId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "profileRevision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "kind": {
+          "const": "export_release"
+        },
+        "selectionSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  ]
+}

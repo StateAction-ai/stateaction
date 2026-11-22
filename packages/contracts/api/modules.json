@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "modules": [
+    {
+      "moduleId": "stub_segmenter",
+      "version": 1,
+      "stage": "segment",
+      "description": "Deterministic synthetic segments with failure injection, for CI and local tests only.",
+      "license": {
+        "id": "LicenseRef-StateAction-Internal",
+        "commercialUse": true
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": true,
+      "outputs": ["segments_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "stub_segmenter",
+        "modelRevision": null,
+        "engine": "stub",
+        "requires": []
+      }
+    },
+    {
+      "moduleId": "stub_captioner",
+      "version": 1,
+      "stage": "caption",
+      "description": "Deterministic synthetic captions with failure injection, for CI and local tests only.",
+      "license": {
+        "id": "LicenseRef-StateAction-Internal",
+        "commercialUse": true
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": true,
+      "outputs": ["captions_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "stub_captioner",
+        "modelRevision": null,
+        "engine": "stub",
+        "requires": []
+      }
+    },
+    {
+      "moduleId": "replay_segmenter",
+      "version": 1,
+      "stage": "segment",
+      "description": "Replays cached FLORA TempSeg output through the production adapter; provenance is labelled replay.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": true,
+      "outputs": ["segments_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "replay_flora_tempseg",
+        "modelRevision": null,
+        "engine": "replay",
+        "requires": ["weights_sha256", "prompt_sha256"]
+      }
+    },
+    {
+      "moduleId": "replay_captioner",
+      "version": 1,
+      "stage": "caption",
+      "description": "Replays cached FLORA Captioner output through the production adapter; provenance is labelled replay.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": true,
+      "outputs": ["captions_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "replay_flora_captioner",
+        "modelRevision": null,
+        "engine": "replay",
+        "requires": ["weights_sha256", "prompt_sha256"]
+      }
+    },
+    {
+      "moduleId": "flora_tempseg_vllm_fp8",
+      "version": 1,
+      "stage": "segment",
+      "description": "NVIDIA FLORA TempSeg (merged adapter) on vLLM, restored from the published fp8_per_tensor checkpoint.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "H100",
+        "supported": ["H100", "RTX-PRO-6000"]
+      },
+      "localOnly": false,
+      "outputs": ["segments_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "nvidia/Flora-TempSeg",
+        "modelRevision": "114a1076f70eb53f4a58ac045505db3087e79347",
+        "engine": "vllm",
+        "requires": [
+          "observed_gpu",
+          "model_revision",
+          "weights_sha256",
+          "prompt_sha256",
+          "quant"
+        ]
+      }
+    },
+    {
+      "moduleId": "flora_captioner_vllm_fp8",
+      "version": 1,
+      "stage": "caption",
+      "description": "NVIDIA FLORA Captioner on vLLM, restored from the published fp8_per_tensor checkpoint.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "H100",
+        "supported": ["H100", "RTX-PRO-6000"]
+      },
+      "localOnly": false,
+      "outputs": ["captions_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "nvidia/Flora-Captioner",
+        "modelRevision": null,
+        "engine": "vllm",
+        "requires": [
+          "observed_gpu",
+          "model_revision",
+          "weights_sha256",
+          "prompt_sha256",
+          "quant"
+        ]
+      }
+    },
+    {
+      "moduleId": "flora_tempseg_hf",
+      "version": 1,
+      "stage": "segment",
+      "description": "NVIDIA FLORA TempSeg on Hugging Face transformers at full precision; fallback module.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "A100-40GB",
+        "supported": ["A100-40GB", "A100-80GB", "H100", "RTX-PRO-6000"]
+      },
+      "localOnly": false,
+      "outputs": ["segments_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "nvidia/Flora-TempSeg",
+        "modelRevision": "114a1076f70eb53f4a58ac045505db3087e79347",
+        "engine": "transformers",
+        "requires": [
+          "observed_gpu",
+          "model_revision",
+          "weights_sha256",
+          "prompt_sha256"
+        ]
+      }
+    },
+    {
+      "moduleId": "flora_captioner_hf",
+      "version": 1,
+      "stage": "caption",
+      "description": "NVIDIA FLORA Captioner on Hugging Face transformers at full precision; fallback module.",
+      "license": {
+        "id": "LicenseRef-NVIDIA-Flora-NC",
+        "commercialUse": false
+      },
+      "gpu": {
+        "minimum": "H100",
+        "supported": ["H100", "RTX-PRO-6000"]
+      },
+      "localOnly": false,
+      "outputs": ["captions_json", "diagnostic_blob"],
+      "provenance": {
+        "modelName": "nvidia/Flora-Captioner",
+        "modelRevision": null,
+        "engine": "transformers",
+        "requires": [
+          "observed_gpu",
+          "model_revision",
+          "weights_sha256",
+          "prompt_sha256"
+        ]
+      }
+    },
+    {
+      "moduleId": "hand_pose_cpu_v1",
+      "version": 1,
+      "stage": "hand_pose",
+      "description": "Mandatory 21-landmark CPU hand inference (SA-30); writes clips, hand presence and the review video, then seals the job.",
+      "license": {
+        "id": "Apache-2.0",
+        "commercialUse": true
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": false,
+      "outputs": [
+        "clip_mp4",
+        "hand_arrays_npz",
+        "hand_observations_json",
+        "frame_map_json",
+        "thumbnail_jpeg",
+        "viewer_rrd",
+        "hand_presence_json",
+        "recording_mp4",
+        "diagnostic_blob"
+      ],
+      "provenance": {
+        "modelName": "mediapipe_hand_landmarker",
+        "modelRevision": null,
+        "engine": "mediapipe",
+        "requires": ["weights_sha256"]
+      }
+    }
+  ]
+}

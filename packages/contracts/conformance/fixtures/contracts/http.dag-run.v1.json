@@ -1,0 +1,898 @@
+{
+  "contract": "http.dag-run.v1",
+  "cases": [
+    {
+      "name": "run with a failed caption stage shown truthfully",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "disabled caption stage is not_run with a reason",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": false,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "not_run",
+              "errorCode": "stage_disabled",
+              "callId": null,
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": null,
+              "finishedAt": null,
+              "counts": {},
+              "estimatedCostUsd": null,
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "running job with pending stages",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "running",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": null,
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "pending",
+              "errorCode": null,
+              "callId": null,
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": null,
+              "finishedAt": null,
+              "counts": {},
+              "estimatedCostUsd": null,
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "pending",
+              "errorCode": null,
+              "callId": null,
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": null,
+              "finishedAt": null,
+              "counts": {},
+              "estimatedCostUsd": null,
+              "receiptSha256": null
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a disabled stage never ran",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": false,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/stages/0/state"
+        ]
+      }
+    },
+    {
+      "name": "a failed stage names its error",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": null,
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/stages/1/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "not_run names its reason",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": false,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "not_run",
+              "errorCode": null,
+              "callId": null,
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": null,
+              "finishedAt": null,
+              "counts": {},
+              "estimatedCostUsd": null,
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/stages/1/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "succeeded only with a recorded receipt",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": null
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/stages/2/receiptSha256"
+        ]
+      }
+    },
+    {
+      "name": "stages are in recipe order",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/stages/0/stage"
+        ]
+      }
+    },
+    {
+      "name": "finished after it started",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T09:00:00.000Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/stages/0/finishedAt"
+        ]
+      }
+    },
+    {
+      "name": "one node per stage",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": "0.16",
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages"
+        ]
+      }
+    },
+    {
+      "name": "cost estimates are decimal strings",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "jobState": "succeeded",
+          "recipeId": "flora_fp8@1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "maxJobCostUsd": "3.00",
+          "estimatedCostUsd": "0.41",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "fc-01HSEG123",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              },
+              "startedAt": "2026-11-22T10:00:00.000Z",
+              "finishedAt": "2026-11-22T10:03:12.250Z",
+              "counts": {
+                "segments": 4,
+                "failed_windows": 1
+              },
+              "estimatedCostUsd": 0.16,
+              "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "state": "failed",
+              "errorCode": "stage_timeout",
+              "callId": "fc-01HCAP456",
+              "gpu": {
+                "requestedType": "RTX-PRO-6000",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:03:13.000Z",
+              "finishedAt": "2026-11-22T10:08:13.000Z",
+              "counts": {},
+              "estimatedCostUsd": "0.25",
+              "receiptSha256": null
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "state": "succeeded",
+              "errorCode": null,
+              "callId": "child-1",
+              "gpu": {
+                "requestedType": "none",
+                "observedType": null
+              },
+              "startedAt": "2026-11-22T10:08:14.000Z",
+              "finishedAt": "2026-11-22T10:20:00.000Z",
+              "counts": {
+                "clips": 12
+              },
+              "estimatedCostUsd": null,
+              "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+            }
+          ],
+          "renderedAt": "2026-11-22T10:20:01.000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -5,8 +5,12 @@ export * from "./validate.js";
 export * from "./types.js";
 export * from "./simulation.js";
 export {
+  captionSteps,
   checkSealedInventory,
   HAND_ARRAY_SHAPES,
+  SEGMENT_ID_NAMESPACE,
+  segmentId,
+  STAGE_ROLES,
   type RuleViolation,
 } from "./rules.js";
 export type PlatformVerifyRequest = { requestId: string };

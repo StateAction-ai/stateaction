@@ -1,12 +1,15 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v13.json (checked by tests).
-// catalog.v13.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v14.json (checked by tests).
+// catalog.v14.json is the current registry: an exact superset of the immutable
+// catalog.v13.json (adds only the SA-87 segment, caption, recipe and stage-run contracts and the
+// shared common.v2.schema.json), itself a superset of the immutable
 // catalog.v12.json (adds only the SA-73 source-copy confirmation and cleanup-proof contracts), itself a superset of the immutable
 // catalog.v11.json (adds only jobs.job-status.v2, SA-42), itself a superset of the immutable
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v13.json" with { type: "json" };
+import catalog from "../api/catalog.v14.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
+import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
 import s1 from "../api/artifacts/hand-observations.v1.schema.json" with { type: "json" };
 import s2 from "../api/artifacts/processing-result.v1.schema.json" with { type: "json" };
@@ -77,8 +80,21 @@ import s66 from "../api/http/source-copy-confirm.v1.schema.json" with { type: "j
 import s67 from "../api/http/cleanup-proof-request.v1.schema.json" with { type: "json" };
 import s68 from "../api/http/source-copy-confirmation.v1.schema.json" with { type: "json" };
 import s69 from "../api/http/cleanup-proof.v1.schema.json" with { type: "json" };
+import s70 from "../api/artifacts/segments.v1.schema.json" with { type: "json" };
+import s71 from "../api/artifacts/captions.v1.schema.json" with { type: "json" };
+import s72 from "../api/artifacts/hand-presence.v1.schema.json" with { type: "json" };
+import s73 from "../api/artifacts/processing-result.v3.schema.json" with { type: "json" };
+import s74 from "../api/jobs/recipe.v1.schema.json" with { type: "json" };
+import s75 from "../api/jobs/module-manifest.v1.schema.json" with { type: "json" };
+import s76 from "../api/jobs/task-input.v3.schema.json" with { type: "json" };
+import s77 from "../api/jobs/controller-action.v2.schema.json" with { type: "json" };
+import s78 from "../api/jobs/heartbeat.v2.schema.json" with { type: "json" };
+import s79 from "../api/jobs/stage-receipt.v1.schema.json" with { type: "json" };
+import s80 from "../api/http/dag-run.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
+/** Shared definition documents listed in the catalog `shared` key (common.v2). */
+export const sharedSchemas: readonly object[] = [commonV2];
 export const contractSchemas: Readonly<Record<string, object>> = {
   "artifacts.frame-map.v1": s0,
   "artifacts.hand-observations.v1": s1,
@@ -150,4 +166,15 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "native.capture-error.v1": s24,
   "native.capture-recoverable.v1": s25,
   "native.capture-snapshot.v1": s26,
+  "artifacts.segments.v1": s70,
+  "artifacts.captions.v1": s71,
+  "artifacts.hand-presence.v1": s72,
+  "artifacts.processing-result.v3": s73,
+  "jobs.recipe.v1": s74,
+  "jobs.module-manifest.v1": s75,
+  "jobs.task-input.v3": s76,
+  "jobs.controller-action.v2": s77,
+  "jobs.heartbeat.v2": s78,
+  "jobs.stage-receipt.v1": s79,
+  "http.dag-run.v1": s80,
 };

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/hand-presence.v1.json",
+  "title": "Hand presence lanes v1",
+  "description": "Recording-level run-length lanes of left and right hand presence (output role hand_presence_json), written by the hand_pose stage. Each lane covers every decoded source frame exactly once, in order: spans are contiguous (each start is the previous end), adjacent spans differ in state, frames sums to frame_count, and the last span ends at end of stream. present means the side was detected; no_hand is an explicit detection result with no hand of that side; failed means inference did not produce a result for the frame and is never folded into no_hand.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "recording_id",
+    "source_manifest_sha256",
+    "clock_domain",
+    "frame_count",
+    "producer",
+    "lanes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.hand_presence.v1"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "source_manifest_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clock_domain": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000000
+    },
+    "producer": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/producer"
+    },
+    "lanes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right"],
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/lane"
+        },
+        "right": {
+          "$ref": "#/$defs/lane"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "lane": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "frames", "state"],
+        "properties": {
+          "start": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/frameRef"
+          },
+          "end": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/endFrameRef"
+          },
+          "frames": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000
+          },
+          "state": {
+            "type": "string",
+            "enum": ["present", "no_hand", "failed"]
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 100000
+    }
+  }
+}

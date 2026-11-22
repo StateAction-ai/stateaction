@@ -1,5 +1,11 @@
 // Cross-field rules; same order, codes and paths as packages/contracts/src/rules.ts.
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
+import 'canonical.dart';
+
 typedef Json = Map<String, Object?>;
 typedef Violation = ({String code, String path});
 typedef Rule = Violation? Function(Json doc);
@@ -321,7 +327,7 @@ Violation? _processingResult(Json doc) {
   return null;
 }
 
-final Map<String, Rule> rules = {
+final Map<String, Rule> _baseRules = {
   'unique_file_ids': (doc) =>
       _duplicate(_list(doc['files']), 'fileId', '/files'),
   'sealed_inventory': (doc) {
@@ -389,3 +395,476 @@ final Map<String, Rule> rules = {
   'hand_observations': _handObservations,
   'processing_result': _processingResult,
 };
+
+// ---------------------------------------------------------------- SA-87 stage contracts
+
+const _stageRoles = <String, List<String>>{
+  'segment': ['segments_json', 'diagnostic_blob'],
+  'caption': ['captions_json', 'diagnostic_blob'],
+  'hand_pose': [
+    'clip_mp4',
+    'hand_arrays_npz',
+    'hand_observations_json',
+    'frame_map_json',
+    'thumbnail_jpeg',
+    'viewer_rrd',
+    'hand_presence_json',
+    'recording_mp4',
+    'diagnostic_blob',
+  ],
+};
+const _primaryRoles = <String, List<String>>{
+  'segment': ['segments_json'],
+  'caption': ['captions_json'],
+  'hand_pose': ['hand_presence_json', 'recording_mp4'],
+};
+const _codedStates = {'failed', 'cancelled', 'not_run'};
+const _stageOrder = ['segment', 'caption', 'hand_pose'];
+
+/// uuid5(NAMESPACE_URL, "https://stateaction.ai/schemas/artifacts/segments.v1.json").
+const segmentIdNamespace = 'a505457d-7470-5704-b995-1b3d1e3638df';
+
+/// RFC 9562 UUIDv5 of a UTF-8 name.
+String uuid5(String namespace, String name) {
+  final ns = <int>[
+    for (var i = 0; i < 32; i += 2)
+      int.parse(namespace.replaceAll('-', '').substring(i, i + 2), radix: 16),
+  ];
+  final hash = sha1.convert([...ns, ...utf8.encode(name)]).bytes.toList();
+  hash[6] = (hash[6] & 0x0f) | 0x50;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+  final hex = [
+    for (final b in hash.take(16)) b.toRadixString(16).padLeft(2, '0'),
+  ].join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
+String _segmentId(
+  Object? sourceManifestSha256,
+  String moduleRef,
+  Object? paramsSha256,
+  Object? startFrameId,
+  Object? endFrameId,
+) => uuid5(
+  segmentIdNamespace,
+  [
+    sourceManifestSha256,
+    moduleRef,
+    paramsSha256,
+    startFrameId,
+    endFrameId ?? 'end',
+  ].join('|'),
+);
+
+bool _isEnd(Json ref) => ref['source_frame_id'] == null;
+bool _before(Json a, Json b) {
+  if (_isEnd(b)) return !_isEnd(a);
+  if (_isEnd(a)) return false;
+  return _big(a['source_frame_id']) < _big(b['source_frame_id']) &&
+      _big(a['timestamp_ns']) < _big(b['timestamp_ns']);
+}
+
+bool _atOrBefore(Json a, Json b) {
+  if (_isEnd(b)) return true;
+  if (_isEnd(a)) return false;
+  return _big(a['source_frame_id']) <= _big(b['source_frame_id']) &&
+      _big(a['timestamp_ns']) <= _big(b['timestamp_ns']);
+}
+
+bool _sameRef(Json a, Json b) =>
+    a['source_frame_id'] == b['source_frame_id'] &&
+    a['timestamp_ns'] == b['timestamp_ns'];
+
+String _ref(Object? id, Object? version) => '$id@${(version! as num).toInt()}';
+
+/// text split on commas, each step trimmed of spaces and tabs, empty steps dropped.
+List<String> captionSteps(String text) => [
+  for (final step in text.split(','))
+    if (step.replaceAll(RegExp(r'^[ \t]+|[ \t]+$'), '').isNotEmpty)
+      step.replaceAll(RegExp(r'^[ \t]+|[ \t]+$'), ''),
+];
+
+Json _moduleIndex(Json manifest) => {
+  for (final m in _list(manifest['modules']).map(_obj))
+    _ref(m['moduleId'], m['version']): m,
+};
+
+Violation? _producerRule(Json modules, Json doc, String stage) {
+  final p = _obj(doc['producer']);
+  if (p['stage'] != stage) return _v('reference_mismatch', '/producer/stage');
+  final module = modules[_ref(p['module_id'], p['module_version'])];
+  if (module == null || _obj(module)['stage'] != stage) {
+    return _v('reference_mismatch', '/producer/module_id');
+  }
+  final m = _obj(module);
+  final provenance = _obj(m['provenance']);
+  if (provenance['modelName'] != p['model_name']) {
+    return _v('reference_mismatch', '/producer/model_name');
+  }
+  if (provenance['engine'] != _obj(p['engine'])['name']) {
+    return _v('reference_mismatch', '/producer/engine/name');
+  }
+  final gpu = _obj(p['gpu']);
+  for (final field in _list(provenance['requires'])) {
+    final (value, path) = field == 'observed_gpu'
+        ? (gpu['observed_type'], '/producer/gpu/observed_type')
+        : (p[field], '/producer/$field');
+    if (value == null && (field == 'observed_gpu' || p.containsKey(field))) {
+      return _v('reference_mismatch', path);
+    }
+  }
+  if (!_list(_obj(m['gpu'])['supported']).contains(gpu['requested_type'])) {
+    return _v('reference_mismatch', '/producer/gpu/requested_type');
+  }
+  return null;
+}
+
+Violation? _recipeRule(Json modules, Json doc, String base) {
+  final stages = _list(doc['stages']).map(_obj).toList();
+  if (stages[1]['enabled'] == true && stages[0]['enabled'] != true) {
+    return _v('reference_mismatch', '$base/stages/1/enabled');
+  }
+  for (var i = 0; i < stages.length; i++) {
+    final stage = stages[i];
+    final module = modules[stage['module']];
+    if (module == null || _obj(module)['stage'] != stage['stage']) {
+      return _v('reference_mismatch', '$base/stages/$i/module');
+    }
+    if (!_list(
+      _obj(_obj(module)['gpu'])['supported'],
+    ).contains(_obj(stage['resources'])['gpu'])) {
+      return _v('reference_mismatch', '$base/stages/$i/resources/gpu');
+    }
+  }
+  return null;
+}
+
+Violation? _stageReceiptRule(Json doc, String base) {
+  if ((doc['status'] == 'succeeded') != (doc['errorCode'] == null)) {
+    return _v('outcome_mismatch', '$base/errorCode');
+  }
+  final outputs = _list(doc['outputs']).map(_obj).toList();
+  final dup = _duplicate(outputs, 'fileId', '$base/outputs');
+  if (dup != null) return dup;
+  final allowed = _stageRoles[doc['stage']]!;
+  for (var i = 0; i < outputs.length; i++) {
+    if (!allowed.contains(outputs[i]['role'])) {
+      return _v('reference_mismatch', '$base/outputs/$i/role');
+    }
+  }
+  if (doc['status'] == 'succeeded' && doc['stage'] != 'hand_pose') {
+    for (final role in _primaryRoles[doc['stage']]!) {
+      if (outputs.where((o) => o['role'] == role).length != 1) {
+        return _v('inventory_incomplete', '$base/outputs');
+      }
+    }
+  }
+  if (_instant(doc['finishedAt']).compareTo(_instant(doc['startedAt'])) < 0) {
+    return _v('ordering_violation', '$base/finishedAt');
+  }
+  return null;
+}
+
+Violation? _segments(Json modules, Json doc) {
+  final found = _producerRule(modules, doc, 'segment');
+  if (found != null) return found;
+  final windows = _obj(doc['windows']);
+  final failed = _list(windows['failed']).map(_obj).toList();
+  final spans = _list(windows['failed_core_spans']).map(_obj).toList();
+  if (!_same((windows['ok']! as num) + failed.length, windows['total'])) {
+    return _v('progress_mismatch', '/windows/ok');
+  }
+  final dup = _duplicate(failed, 'window_index', '/windows/failed');
+  if (dup != null) return dup;
+  for (var i = 0; i < spans.length; i++) {
+    final span = spans[i];
+    final p = '/windows/failed_core_spans/$i';
+    if (!_before(_obj(span['start']), _obj(span['end']))) {
+      return _v('ordering_violation', '$p/end');
+    }
+    if (i > 0 && !_atOrBefore(_obj(spans[i - 1]['end']), _obj(span['start']))) {
+      return _v('ordering_violation', '$p/start');
+    }
+  }
+  final covered = <int>{};
+  for (var i = 0; i < failed.length; i++) {
+    final start = _obj(failed[i]['core_start']);
+    final end = _obj(failed[i]['core_end']);
+    if (!_before(start, end)) {
+      return _v('ordering_violation', '/windows/failed/$i/core_end');
+    }
+    final k = spans.indexWhere(
+      (span) =>
+          _atOrBefore(_obj(span['start']), start) &&
+          _atOrBefore(end, _obj(span['end'])),
+    );
+    // A failed window must lie inside a recorded failed core span.
+    if (k < 0) return _v('reference_mismatch', '/windows/failed/$i');
+    covered.add(k);
+  }
+  for (var i = 0; i < spans.length; i++) {
+    if (!covered.contains(i)) {
+      return _v('reference_mismatch', '/windows/failed_core_spans/$i');
+    }
+  }
+  final rows = _list(doc['rows']).map(_obj).toList();
+  final p0 = _obj(doc['producer']);
+  final moduleRef = _ref(p0['module_id'], p0['module_version']);
+  final seen = <Object?>{};
+  for (var i = 0; i < rows.length; i++) {
+    final row = rows[i];
+    final p = '/rows/$i';
+    if (!_same(row['ordinal'], i))
+      return _v('ordering_violation', '$p/ordinal');
+    if (!seen.add(row['segment_id'])) {
+      return _v('duplicate_identity', '$p/segment_id');
+    }
+    final start = _obj(row['start']);
+    final end = _obj(row['end']);
+    if (!_before(start, end)) return _v('ordering_violation', '$p/end');
+    if (i > 0 && !_atOrBefore(_obj(rows[i - 1]['end']), start)) {
+      return _v('ordering_violation', '$p/start');
+    }
+    final expected = _segmentId(
+      doc['source_manifest_sha256'],
+      moduleRef,
+      p0['params_sha256'],
+      start['source_frame_id'],
+      end['source_frame_id'],
+    );
+    if (row['segment_id'] != expected) {
+      return _v('reference_mismatch', '$p/segment_id');
+    }
+  }
+  // Failed windows are rows too: failed_window rows equal the failed core spans, in order.
+  var k = 0;
+  for (var i = 0; i < rows.length; i++) {
+    final row = rows[i];
+    if (row['status'] != 'failed_window') continue;
+    if (k >= spans.length ||
+        !_sameRef(_obj(spans[k]['start']), _obj(row['start'])) ||
+        !_sameRef(_obj(spans[k]['end']), _obj(row['end']))) {
+      return _v('reference_mismatch', '/rows/$i/status');
+    }
+    k++;
+  }
+  if (k < spans.length) {
+    return _v('reference_mismatch', '/windows/failed_core_spans/$k');
+  }
+  return null;
+}
+
+Violation? _captions(Json modules, Json doc) {
+  final found = _producerRule(modules, doc, 'caption');
+  if (found != null) return found;
+  final rows = _list(doc['rows']).map(_obj).toList();
+  final dup = _duplicate(rows, 'segment_id', '/rows');
+  if (dup != null) return dup;
+  for (var i = 0; i < rows.length; i++) {
+    final row = rows[i];
+    if (row['status'] != 'complete') continue;
+    final steps = _list(_obj(row['derived'])['steps']);
+    final expected = captionSteps(row['text']! as String);
+    var same = steps.length == expected.length;
+    for (var j = 0; same && j < steps.length; j++) {
+      same = steps[j] == expected[j];
+    }
+    if (!same) return _v('reference_mismatch', '/rows/$i/derived/steps');
+  }
+  return null;
+}
+
+Violation? _handPresence(Json modules, Json doc) {
+  final found = _producerRule(modules, doc, 'hand_pose');
+  if (found != null) return found;
+  final lanes = _obj(doc['lanes']);
+  for (final side in const ['left', 'right']) {
+    final base = '/lanes/$side';
+    final spans = _list(lanes[side]).map(_obj).toList();
+    num frames = 0;
+    for (var i = 0; i < spans.length; i++) {
+      final span = spans[i];
+      final p = '$base/$i';
+      if (!_before(_obj(span['start']), _obj(span['end']))) {
+        return _v('ordering_violation', '$p/end');
+      }
+      if (i > 0) {
+        final prev = spans[i - 1];
+        if (!_sameRef(_obj(prev['end']), _obj(span['start']))) {
+          return _v('ordering_violation', '$p/start');
+        }
+        if (prev['state'] == span['state']) {
+          return _v('ordering_violation', '$p/state');
+        }
+      }
+      frames += span['frames']! as num;
+    }
+    final last = spans.length - 1;
+    if (!_isEnd(_obj(spans[last]['end']))) {
+      return _v('dimension_mismatch', '$base/$last/end');
+    }
+    if (!_same(frames, doc['frame_count'])) {
+      return _v('dimension_mismatch', base);
+    }
+  }
+  return null;
+}
+
+Violation? _moduleManifest(Json doc) {
+  final modules = _list(doc['modules']).map(_obj).toList();
+  final seen = <String>{};
+  for (var i = 0; i < modules.length; i++) {
+    final module = modules[i];
+    final p = '/modules/$i';
+    if (!seen.add(_ref(module['moduleId'], module['version']))) {
+      return _v('duplicate_identity', '$p/version');
+    }
+    final gpu = _obj(module['gpu']);
+    if (!_list(gpu['supported']).contains(gpu['minimum'])) {
+      return _v('reference_mismatch', '$p/gpu/minimum');
+    }
+    final allowed = _stageRoles[module['stage']]!;
+    final outputs = _list(module['outputs']);
+    for (var j = 0; j < outputs.length; j++) {
+      if (!allowed.contains(outputs[j])) {
+        return _v('reference_mismatch', '$p/outputs/$j');
+      }
+    }
+  }
+  return null;
+}
+
+Violation? _processingResultNodes(Json doc) {
+  final outputs = _list(doc['outputs']).map(_obj).toList();
+  final roles = {for (final o in outputs) o['file_id']: o['role']! as String};
+  final claimed = <Object?>{};
+  final nodes = _list(doc['nodes']).map(_obj).toList();
+  for (var i = 0; i < nodes.length; i++) {
+    final node = nodes[i];
+    final p = '/nodes/$i';
+    if ((node['status'] == 'succeeded') != (node['error_code'] == null)) {
+      return _v('outcome_mismatch', '$p/error_code');
+    }
+    final files = _list(node['outputs']);
+    if (node['status'] == 'not_run' && files.isNotEmpty) {
+      return _v('outcome_mismatch', '$p/outputs');
+    }
+    final allowed = _stageRoles[node['stage']]!;
+    final nodeRoles = <String>[];
+    for (var j = 0; j < files.length; j++) {
+      final role = roles[files[j]];
+      if (role == null || !allowed.contains(role)) {
+        return _v('reference_mismatch', '$p/outputs/$j');
+      }
+      if (!claimed.add(files[j])) {
+        return _v('duplicate_identity', '$p/outputs/$j');
+      }
+      nodeRoles.add(role);
+    }
+    if (node['status'] == 'succeeded') {
+      for (final role in _primaryRoles[node['stage']]!) {
+        if (nodeRoles.where((r) => r == role).length != 1) {
+          return _v('inventory_incomplete', '$p/outputs');
+        }
+      }
+    }
+  }
+  for (var k = 0; k < outputs.length; k++) {
+    if (!claimed.contains(outputs[k]['file_id'])) {
+      return _v('reference_mismatch', '/outputs/$k/file_id');
+    }
+  }
+  return null;
+}
+
+Violation? _stageRunAction(Json doc) {
+  if (doc['action'] != 'record_stage_run') return null;
+  final state = doc['state']! as String;
+  if (doc.containsKey('errorCode') != _codedStates.contains(state)) {
+    return _v('outcome_mismatch', '/errorCode');
+  }
+  final terminal = state == 'succeeded' || state == 'failed';
+  if (doc.containsKey('receipt') ? !terminal : state == 'succeeded') {
+    return _v('outcome_mismatch', '/receipt');
+  }
+  if (!doc.containsKey('receipt')) return null;
+  final receipt = _obj(doc['receipt']);
+  if (receipt['stage'] != doc['stage']) {
+    return _v('reference_mismatch', '/receipt/stage');
+  }
+  if (receipt['module'] != doc['module']) {
+    return _v('reference_mismatch', '/receipt/module');
+  }
+  if (receipt['status'] != state) {
+    return _v('outcome_mismatch', '/receipt/status');
+  }
+  return _stageReceiptRule(receipt, '/receipt');
+}
+
+Violation? _dagRun(Json doc) {
+  final stages = _list(doc['stages']).map(_obj).toList();
+  for (var i = 0; i < stages.length; i++) {
+    final node = stages[i];
+    final p = '/stages/$i';
+    if (i >= _stageOrder.length || node['stage'] != _stageOrder[i]) {
+      return _v('ordering_violation', '$p/stage');
+    }
+    final state = node['state']! as String;
+    if (node['enabled'] != true && state != 'not_run') {
+      return _v('outcome_mismatch', '$p/state');
+    }
+    if (_codedStates.contains(state) != (node['errorCode'] != null)) {
+      return _v('outcome_mismatch', '$p/errorCode');
+    }
+    if (state == 'succeeded' && node['receiptSha256'] == null) {
+      return _v('outcome_mismatch', '$p/receiptSha256');
+    }
+    if (node['startedAt'] != null &&
+        node['finishedAt'] != null &&
+        _instant(node['finishedAt']).compareTo(_instant(node['startedAt'])) <
+            0) {
+      return _v('ordering_violation', '$p/finishedAt');
+    }
+  }
+  return null;
+}
+
+/// Rules that resolve modules in the committed api/modules.json.
+const moduleRules = {
+  'segments',
+  'captions',
+  'hand_presence',
+  'recipe',
+  'task_input_recipe',
+};
+
+/// All rules; [modulesManifest] is the committed api/modules.json.
+Map<String, Rule> buildRules(Json modulesManifest) {
+  final modules = _moduleIndex(modulesManifest);
+  return {
+    ..._baseRules,
+    'segments': (doc) => _segments(modules, doc),
+    'captions': (doc) => _captions(modules, doc),
+    'hand_presence': (doc) => _handPresence(modules, doc),
+    'recipe': (doc) => _recipeRule(modules, doc, ''),
+    'module_manifest': _moduleManifest,
+    'task_input_recipe': (doc) {
+      if (doc['kind'] != 'process_recording') return null;
+      final found = _recipeRule(modules, _obj(doc['recipe']), '/recipe');
+      if (found != null) return found;
+      return requestSha256(doc['recipe']) == doc['recipeSha256']
+          ? null
+          : _v('reference_mismatch', '/recipeSha256');
+    },
+    'processing_result_nodes': _processingResultNodes,
+    'heartbeat_stage': (doc) =>
+        (doc['phase'] == 'segmenting' && doc['stage'] != 'segment') ||
+            (doc['phase'] == 'captioning' && doc['stage'] != 'caption')
+        ? _v('reference_mismatch', '/phase')
+        : null,
+    'stage_receipt': (doc) => _stageReceiptRule(doc, ''),
+    'stage_run_action': _stageRunAction,
+    'dag_run': _dagRun,
+  };
+}

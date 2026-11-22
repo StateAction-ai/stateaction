@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/stage-receipt.v1.json",
+  "title": "Stage receipt v1",
+  "description": "Bounded (64 KiB) summary a stage run returns to the controller: its outcome, the job output files it uploaded (by fileId and sha256, so the next stage can read them through the job's own completed outputs), counts such as segments, failed windows and captions, and the requested and observed GPU. Job data itself never travels in a receipt. Rule stage_receipt: succeeded requires errorCode null and failed a code; outputs are unique and use roles of the stage; a succeeded segment or caption receipt lists exactly one segments_json or captions_json; finishedAt is not before startedAt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "stage",
+    "module",
+    "status",
+    "errorCode",
+    "outputs",
+    "counts",
+    "gpu",
+    "startedAt",
+    "finishedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "stage": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+    },
+    "module": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed"]
+    },
+    "errorCode": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fileId", "role", "sizeBytes", "sha256"],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/outputFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 64
+    },
+    "counts": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedType", "observedType"],
+      "properties": {
+        "requestedType": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+        },
+        "observedType": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/observedGpu"
+        }
+      }
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "finishedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/module-manifest.v1.json",
+  "title": "Stage module manifest v1",
+  "description": "Registry of replaceable stage modules (committed as api/modules.json). Each module_id@version entry is append-only: once published its stage, licence, GPU qualification, outputs and provenance requirements never change; a change is a new version. gpu.supported lists every accelerator the module is qualified on and includes gpu.minimum; a recipe GPU outside that list is rejected. provenance.requires names the producer fields that must be non-null in every document the module writes. localOnly modules (stub and replay) never run in a hosted recipe.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "modules"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "moduleId",
+          "version",
+          "stage",
+          "description",
+          "license",
+          "gpu",
+          "localOnly",
+          "outputs",
+          "provenance"
+        ],
+        "properties": {
+          "moduleId": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleId"
+          },
+          "version": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleVersion"
+          },
+          "stage": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "license": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "commercialUse"],
+            "properties": {
+              "id": {
+                "description": "SPDX identifier or LicenseRef-*.",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]{0,63}$"
+              },
+              "commercialUse": {
+                "type": "boolean"
+              }
+            }
+          },
+          "gpu": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["minimum", "supported"],
+            "properties": {
+              "minimum": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+              },
+              "supported": {
+                "type": "array",
+                "items": {
+                  "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+                },
+                "minItems": 1,
+                "maxItems": 11,
+                "uniqueItems": true
+              }
+            }
+          },
+          "localOnly": {
+            "type": "boolean"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/outputFileRole"
+            },
+            "minItems": 1,
+            "maxItems": 12,
+            "uniqueItems": true
+          },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["modelName", "modelRevision", "engine", "requires"],
+            "properties": {
+              "modelName": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._/@+-]{0,127}$"
+              },
+              "modelRevision": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "engine": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+              },
+              "requires": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "model_revision",
+                    "weights_sha256",
+                    "quant",
+                    "prompt_sha256",
+                    "observed_gpu"
+                  ]
+                },
+                "minItems": 0,
+                "maxItems": 5,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 256
+    }
+  }
+}

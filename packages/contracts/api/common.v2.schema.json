@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/common.v2.json",
+  "title": "StateAction shared definitions v2",
+  "description": "Additive definitions for the SA-87 segment, caption and stage-run contracts (catalog.v14). common.v1.schema.json stays published and unchanged; its definitions are still referenced from there. outputFileRole here is an exact superset of the v1 enum.",
+  "$defs": {
+    "outputFileRole": {
+      "description": "Superset of common.v1 outputFileRole. segments_json, captions_json and hand_presence_json are the recording-level annotation documents; recording_mp4 is the full-recording native remux for review; diagnostic_blob is staff-only stage evidence (stage logs, windows.jsonl, checkpoints) and is never served to customers.",
+      "type": "string",
+      "enum": [
+        "result_manifest",
+        "clip_mp4",
+        "hand_arrays_npz",
+        "hand_observations_json",
+        "frame_map_json",
+        "thumbnail_jpeg",
+        "viewer_rrd",
+        "segments_json",
+        "captions_json",
+        "hand_presence_json",
+        "recording_mp4",
+        "diagnostic_blob"
+      ]
+    },
+    "stage": {
+      "description": "Recipe stage. The MVP order is sequential: segment, caption, then hand_pose, which seals the job.",
+      "type": "string",
+      "enum": ["segment", "caption", "hand_pose"]
+    },
+    "stageRunState": {
+      "description": "Recorded state of one stage run. not_run carries a reason code; a failed stage is recorded as failed, never as an empty success.",
+      "type": "string",
+      "enum": [
+        "pending",
+        "submitting",
+        "submit_unknown",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "not_run"
+      ]
+    },
+    "gpuType": {
+      "description": "Requested accelerator, as named by the executor (Modal GPU names). none means CPU only. No ordering is implied; a module manifest lists the types it is qualified on.",
+      "type": "string",
+      "enum": [
+        "none",
+        "T4",
+        "L4",
+        "A10G",
+        "L40S",
+        "A100-40GB",
+        "A100-80GB",
+        "RTX-PRO-6000",
+        "H100",
+        "H200",
+        "B200"
+      ]
+    },
+    "observedGpu": {
+      "description": "Accelerator name the container reported (for example from nvidia-smi), or null when no GPU was attached or the name is unknown. Never copied from the request.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,127}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "moduleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "moduleVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 999999
+    },
+    "moduleRef": {
+      "description": "module_id@version, resolved in api/modules.json.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$"
+    },
+    "recipeRef": {
+      "description": "recipe_id@version.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$"
+    },
+    "errorCode": {
+      "description": "Stable machine-readable failure or reason code.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "nullableErrorCode": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/errorCode"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "usdAmount": {
+      "description": "US dollars as an exact decimal string with two fraction digits (0.00..999999.99). Never a float.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,5})[.][0-9]{2}$"
+    },
+    "nullableUsdAmount": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/usdAmount"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "scalar": {
+      "description": "Parameter value. Fractions are decimal strings (\"0.9\"), so every value stays inside the sa-cjson-v1 digest domain.",
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 256
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "paramMap": {
+      "description": "Flat bounded parameter map. Its sa-cjson-v1 digest is params_sha256.",
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/scalar"
+      }
+    },
+    "countMap": {
+      "description": "Bounded named counters.",
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/safeCount"
+      }
+    },
+    "frameRef": {
+      "description": "A decoded source frame: its native source_frame_id and integer timestamp in the document's clock_domain.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_frame_id", "timestamp_ns"],
+      "properties": {
+        "source_frame_id": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        "timestamp_ns": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+        }
+      }
+    },
+    "endFrameRef": {
+      "description": "Exclusive end: the first source frame after the span, or the end-of-stream sentinel (both fields null) when the span runs to the last decoded frame. No timestamp is invented for end of stream.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/frameRef"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_frame_id", "timestamp_ns"],
+          "properties": {
+            "source_frame_id": {
+              "type": "null"
+            },
+            "timestamp_ns": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "producer": {
+      "description": "Provenance recorded with every generated segment, caption and hand-presence document. Nullable fields are null only when the module manifest does not require them (stub and replay modules); a required field is never fabricated.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "module_id",
+        "module_version",
+        "model_name",
+        "model_revision",
+        "weights_sha256",
+        "quant",
+        "prompt_sha256",
+        "params_sha256",
+        "decoding_params",
+        "engine",
+        "gpu"
+      ],
+      "properties": {
+        "stage": {
+          "$ref": "#/$defs/stage"
+        },
+        "module_id": {
+          "$ref": "#/$defs/moduleId"
+        },
+        "module_version": {
+          "$ref": "#/$defs/moduleVersion"
+        },
+        "model_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/@+-]{0,127}$"
+        },
+        "model_revision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weights_sha256": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quant": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["method", "checkpoint_manifest_sha256"],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "checkpoint_manifest_sha256": {
+                  "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_sha256": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "params_sha256": {
+          "description": "sa-cjson-v1 digest of the recipe stage params this run used.",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "decoding_params": {
+          "$ref": "#/$defs/paramMap"
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+            }
+          }
+        },
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested_type", "observed_type"],
+          "properties": {
+            "requested_type": {
+              "$ref": "#/$defs/gpuType"
+            },
+            "observed_type": {
+              "$ref": "#/$defs/observedGpu"
+            }
+          }
+        }
+      }
+    }
+  }
+}

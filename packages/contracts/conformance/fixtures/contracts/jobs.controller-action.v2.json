@@ -1,0 +1,589 @@
+{
+  "contract": "jobs.controller-action.v2",
+  "cases": [
+    {
+      "name": "v1 action unchanged: record workflow run",
+      "input": {
+        "document": {
+          "action": "record_workflow_run",
+          "runRef": "run-e2e-1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: claim lease",
+      "input": {
+        "document": {
+          "action": "claim_lease",
+          "runRef": "run-e2e-1",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: renew lease",
+      "input": {
+        "document": {
+          "action": "renew_lease",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: record worker submission",
+      "input": {
+        "document": {
+          "action": "record_worker_submission",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: record local execution",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "local",
+            "localExecutionRef": "child-1"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: record modal execution",
+      "input": {
+        "document": {
+          "action": "record_execution",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "executor": {
+            "kind": "modal",
+            "functionCallId": "fc-01HABC123"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: mark submit unknown",
+      "input": {
+        "document": {
+          "action": "mark_submit_unknown",
+          "owner": "ctl-1-3f9a8c2b7d41"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: local child reaped evidence",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "local_child_reaped",
+            "executionRef": "child-1",
+            "detail": {
+              "exit": "0"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: provider call terminal evidence",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "provider_call_terminal",
+            "executionRef": "fc-01HABC123"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 action unchanged: pre-submission rejection",
+      "input": {
+        "document": {
+          "action": "record_execution_evidence",
+          "evidence": {
+            "kind": "pre_submission_rejected"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "issue a stage claim",
+      "input": {
+        "document": {
+          "action": "issue_stage_claim",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "caption"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record a submitted stage",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "submitting",
+          "module": "flora_tempseg_vllm_fp8@1"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record a running stage with its call",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "running",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "callId": "fc-01HSEG123"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record a succeeded stage with its receipt",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "succeeded",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "callId": "fc-01HSEG123",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record a failed stage",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "failed",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "callId": "fc-01HSEG123",
+          "errorCode": "stage_timeout",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "failed",
+            "errorCode": "stage_timeout",
+            "outputs": [],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "record a disabled stage as not run",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "not_run",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "errorCode": "stage_disabled"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "succeeded stage requires a receipt",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "succeeded",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "callId": "fc-01HSEG123"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/receipt"
+        ]
+      }
+    },
+    {
+      "name": "not_run requires a reason",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "not_run",
+          "module": "flora_tempseg_vllm_fp8@1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "a running stage has no error",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "running",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "errorCode": "stage_timeout"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/errorCode"
+        ]
+      }
+    },
+    {
+      "name": "a running stage has no receipt",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "running",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/receipt"
+        ]
+      }
+    },
+    {
+      "name": "receipt is for this stage",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "succeeded",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "caption",
+            "module": "flora_captioner_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/receipt/stage"
+        ]
+      }
+    },
+    {
+      "name": "receipt status matches the state",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "failed",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "errorCode": "stage_timeout",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/receipt/status"
+        ]
+      }
+    },
+    {
+      "name": "receipt rules apply inside the action",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "succeeded",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "receipt": {
+            "schemaVersion": 1,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T09:00:00.000Z"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/receipt/finishedAt"
+        ]
+      }
+    },
+    {
+      "name": "stage actions are lease-fenced",
+      "input": {
+        "document": {
+          "action": "issue_stage_claim",
+          "stage": "caption"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown stage",
+      "input": {
+        "document": {
+          "action": "issue_stage_claim",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "trim"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown stage state",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "ctl-1-3f9a8c2b7d41",
+          "stage": "segment",
+          "state": "done",
+          "module": "flora_tempseg_vllm_fp8@1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

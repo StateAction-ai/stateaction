@@ -1,0 +1,410 @@
+{
+  "contract": "jobs.module-manifest.v1",
+  "cases": [
+    {
+      "name": "the committed api/modules.json",
+      "input": {
+        "file": "../../api/modules.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "one module",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a second version of a module",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            },
+            {
+              "moduleId": "stub_segmenter",
+              "version": 2,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "module_id@version is unique",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            },
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/modules/1/version"
+        ]
+      }
+    },
+    {
+      "name": "minimum GPU is a supported GPU",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "T4",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/modules/0/gpu/minimum"
+        ]
+      }
+    },
+    {
+      "name": "outputs belong to the module stage",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "captions_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/modules/0/outputs/0"
+        ]
+      }
+    },
+    {
+      "name": "unknown GPU type",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "TPU"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/modules/0/gpu/supported/0"
+        ]
+      }
+    },
+    {
+      "name": "licence is required",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": []
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "provenance requirements use producer field names",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": [
+            {
+              "moduleId": "stub_segmenter",
+              "version": 1,
+              "stage": "segment",
+              "description": "Synthetic segments.",
+              "license": {
+                "id": "LicenseRef-StateAction-Internal",
+                "commercialUse": true
+              },
+              "gpu": {
+                "minimum": "none",
+                "supported": [
+                  "none"
+                ]
+              },
+              "localOnly": true,
+              "outputs": [
+                "segments_json"
+              ],
+              "provenance": {
+                "modelName": "stub_segmenter",
+                "modelRevision": null,
+                "engine": "stub",
+                "requires": [
+                  "checkpoint"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/modules/0/provenance/requires/0"
+        ]
+      }
+    },
+    {
+      "name": "a manifest lists modules",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "modules": []
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

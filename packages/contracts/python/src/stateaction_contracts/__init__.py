@@ -10,7 +10,13 @@ from .canonical import (
     sha256_hex,
     verify_stored_bytes,
 )
-from .rules import HAND_ARRAY_SHAPES, check_sealed_inventory
+from .rules import (
+    HAND_ARRAY_SHAPES,
+    STAGE_ROLES,
+    caption_steps,
+    check_sealed_inventory,
+    segment_id,
+)
 from .validate import (
     ContractViolation,
     ValidationResult,
@@ -23,17 +29,20 @@ from .validate import (
 __version__ = "0.1.0"
 __all__ = [
     "HAND_ARRAY_SHAPES",
+    "STAGE_ROLES",
     "ContractViolation",
     "MalformedJsonError",
     "NoncanonicalValueError",
     "ValidationResult",
     "canonical_json",
+    "caption_steps",
     "canonical_json_text",
     "check_sealed_inventory",
     "classify_replay",
     "contract_ids",
     "parse_contract",
     "request_sha256",
+    "segment_id",
     "sha256_hex",
     "validate_bytes",
     "validate_value",

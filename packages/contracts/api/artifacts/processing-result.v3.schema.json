@@ -1,0 +1,658 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/processing-result.v3.json",
+  "title": "Processing result manifest v3",
+  "description": "Additive successor of processing-result.v2 (v1 and v2 stay published and valid), posted by the sealing hand_pose stage. Adds the recipe identity (recipe_id, recipe_sha256) and nodes, one per recipe stage in order, each with its status, module, error_code and the output files it produced. Output roles come from common.v2 and add segments_json, captions_json, hand_presence_json, recording_mp4 and diagnostic_blob (staff-only stage logs, windows.jsonl and checkpoints). clips may be empty. A failed GPU stage leaves the job sealable: its node is failed with a code, never an empty success. Rule processing_result_nodes: every output belongs to exactly one node and has a role of that node's stage, error_code is null exactly for succeeded, and a succeeded segment, caption or hand_pose node lists exactly one segments_json, captions_json, or hand_presence_json and recording_mp4. Everything else is identical to v2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "recording_id",
+    "source_manifest_sha256",
+    "provenance",
+    "verified_sources",
+    "outputs",
+    "clips",
+    "checks",
+    "metric_accuracy_validated",
+    "limitations",
+    "attestation",
+    "recipe_id",
+    "recipe_sha256",
+    "nodes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.processing_result.v3"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "source_manifest_sha256": {
+      "description": "SHA-256 of the exact sealed source_manifest file bytes.",
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code_revision",
+        "image_spec_sha256",
+        "config_sha256",
+        "profile_revision",
+        "model",
+        "rerun_sdk_version"
+      ],
+      "properties": {
+        "code_revision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "image_spec_sha256": {
+          "description": "SHA-256 of the locked worker image build specification. Not a Modal image ID or OCI registry digest.",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "config_sha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "profile_revision": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "asset_sha256", "license"],
+          "properties": {
+            "name": {
+              "const": "mediapipe_hand_landmarker"
+            },
+            "asset_sha256": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            "license": {
+              "const": "Apache-2.0"
+            }
+          }
+        },
+        "rerun_sdk_version": {
+          "const": "0.41.0"
+        }
+      }
+    },
+    "verified_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_id", "size_bytes", "sha256"],
+        "properties": {
+          "file_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "size_bytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000,
+      "description": "Server-verified non-manifest source files: exactly the recording-source/v1 files, unique by file_id. The manifest itself is pinned by source_manifest_sha256."
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file_id",
+          "role",
+          "relative_path",
+          "size_bytes",
+          "sha256"
+        ],
+        "properties": {
+          "file_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/outputFileRole"
+          },
+          "relative_path": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/safeRelativePath"
+          },
+          "size_bytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 2000
+    },
+    "clips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clip_id",
+          "clip_ordinal",
+          "title",
+          "source_start_ns",
+          "source_end_ns",
+          "duration_ns",
+          "clock_domain",
+          "raster",
+          "frame_count",
+          "files",
+          "hand_arrays",
+          "frame_map_schema",
+          "hand_observations_schema"
+        ],
+        "properties": {
+          "clip_id": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "clip_ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 999
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "source_start_ns": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+          },
+          "source_end_ns": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+          },
+          "duration_ns": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+          },
+          "clock_domain": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+          },
+          "raster": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/raster"
+          },
+          "frame_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7200
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rgb_mp4",
+              "hand_arrays_npz",
+              "hand_observations_json",
+              "frame_map_json",
+              "thumbnail_jpeg",
+              "viewer_rrd"
+            ],
+            "properties": {
+              "rgb_mp4": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "hand_arrays_npz": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "hand_observations_json": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "frame_map_json": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "thumbnail_jpeg": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "viewer_rrd": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              }
+            }
+          },
+          "hand_arrays": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["format", "joint_order_ref", "arrays"],
+            "properties": {
+              "format": {
+                "const": "npz"
+              },
+              "joint_order_ref": {
+                "const": "stateaction.hand_observations.v1#joint_order"
+              },
+              "arrays": {
+                "type": "array",
+                "minItems": 8,
+                "maxItems": 8,
+                "prefixItems": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "image_landmarks_px"
+                      },
+                      "dtype": {
+                        "const": "float32"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 4,
+                        "maxItems": 4
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "image_landmarks_mask"
+                      },
+                      "dtype": {
+                        "const": "bool"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "model_relative_joints"
+                      },
+                      "dtype": {
+                        "const": "float32"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 4,
+                        "maxItems": 4
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "model_relative_mask"
+                      },
+                      "dtype": {
+                        "const": "bool"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "hand_detected"
+                      },
+                      "dtype": {
+                        "const": "bool"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "handedness_score"
+                      },
+                      "dtype": {
+                        "const": "float32"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    }
+                  },
+                  {
+                    "description": "Predicted side per detector slot: 0 left, 1 right, -1 none (exactly where hand_detected is false). Slot index never implies side; two slots may predict the same side.",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "handedness"
+                      },
+                      "dtype": {
+                        "const": "int8"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "dtype", "shape"],
+                    "properties": {
+                      "name": {
+                        "const": "frame_index"
+                      },
+                      "dtype": {
+                        "const": "int64"
+                      },
+                      "shape": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 7200
+                        },
+                        "minItems": 1,
+                        "maxItems": 1
+                      }
+                    }
+                  }
+                ],
+                "items": false
+              }
+            }
+          },
+          "frame_map_schema": {
+            "const": "stateaction.frame_map.v1"
+          },
+          "hand_observations_schema": {
+            "const": "stateaction.hand_observations.v1"
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 1000
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "status", "message", "rule_revision"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pass", "warn", "fail", "measured", "not_evaluated"]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rule_revision": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+          },
+          "measurements": {
+            "type": "object",
+            "maxProperties": 16,
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "additionalProperties": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+            }
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "metric_accuracy_validated": {
+      "const": false
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "minItems": 0,
+      "maxItems": 32
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invocation_nonce",
+        "rgb_profile",
+        "source_file_id",
+        "source_eof_verified"
+      ],
+      "properties": {
+        "invocation_nonce": {
+          "description": "The claiming physical invocation (32 random bytes, unpadded base64url); the server requires equality with the job's recorded claim.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "rgb_profile": {
+          "type": "string",
+          "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+        },
+        "source_file_id": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "source_eof_verified": {
+          "description": "True only when the worker read the whole source MCAP to its footer and hashed every byte; verified_sources then carries that hash. A failed run that stopped earlier says false and lists no verified source.",
+          "type": "boolean"
+        }
+      }
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/artifacts/simulation-provenance.v1.json"
+    },
+    "recipe_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/recipeRef"
+    },
+    "recipe_sha256": {
+      "description": "sa-cjson-v1 digest of the task recipe (TaskInput v3 recipeSha256).",
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "nodes": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "status",
+            "module",
+            "error_code",
+            "outputs",
+            "counts"
+          ],
+          "properties": {
+            "stage": {
+              "const": "segment"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["succeeded", "failed", "not_run"]
+            },
+            "module": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+            },
+            "error_code": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+            },
+            "outputs": {
+              "description": "file_id of every output this stage produced.",
+              "type": "array",
+              "items": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "minItems": 0,
+              "maxItems": 2000
+            },
+            "counts": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "status",
+            "module",
+            "error_code",
+            "outputs",
+            "counts"
+          ],
+          "properties": {
+            "stage": {
+              "const": "caption"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["succeeded", "failed", "not_run"]
+            },
+            "module": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+            },
+            "error_code": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+            },
+            "outputs": {
+              "description": "file_id of every output this stage produced.",
+              "type": "array",
+              "items": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "minItems": 0,
+              "maxItems": 2000
+            },
+            "counts": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "status",
+            "module",
+            "error_code",
+            "outputs",
+            "counts"
+          ],
+          "properties": {
+            "stage": {
+              "const": "hand_pose"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["succeeded", "failed"]
+            },
+            "module": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+            },
+            "error_code": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+            },
+            "outputs": {
+              "description": "file_id of every output this stage produced.",
+              "type": "array",
+              "items": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "minItems": 0,
+              "maxItems": 2000
+            },
+            "counts": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+            }
+          }
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

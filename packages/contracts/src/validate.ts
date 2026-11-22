@@ -1,7 +1,12 @@
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 import { isWellFormed } from "./canonical.js";
 import { RULES } from "./rules.js";
-import { catalog, commonSchema, contractSchemas } from "./schemas.js";
+import {
+  catalog,
+  commonSchema,
+  contractSchemas,
+  sharedSchemas,
+} from "./schemas.js";
 
 export type ContractError = { path: string; message: string };
 export type ValidationResult =
@@ -32,6 +37,7 @@ const ajv = new Ajv2020({
   validateFormats: false,
 });
 ajv.addSchema(commonSchema);
+for (const shared of sharedSchemas) ajv.addSchema(shared);
 // Register every contract first so cross-contract $refs resolve by absolute $id.
 for (const id of contractIds) ajv.addSchema(contractSchemas[id]!);
 const compiled = new Map<string, ValidateFunction>();
