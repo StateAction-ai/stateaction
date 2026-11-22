@@ -12,7 +12,11 @@ import { inTransaction } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { JOB_CURRENT_SQL, JOB_OUTPUT_OPEN_SQL } from "../jobs/current.js";
 import { TransportError } from "../transport/errors.js";
-import type { AcceptanceConfig } from "./config.js";
+import {
+  jobOutputByteLimit,
+  jobOutputFileLimit,
+  type AcceptanceConfig,
+} from "./config.js";
 import {
   checkManifest,
   type AnnotationFiles,
@@ -436,10 +440,11 @@ async function verifyCandidate(
   const required =
     cand.outcome === "succeeded" ? files : files.filter((f) => f === manifest);
   const totalBytes = required.reduce((n, f) => n + Number(f.size_bytes), 0);
-  if (
-    files.length > config.verifyMaxFiles ||
-    totalBytes > config.verifyMaxBytes
-  )
+  // Per-job budget from the closure's declared clip count, never above the
+  // configured hard ceiling (SA-89).
+  const maxFiles = jobOutputFileLimit(config.verifyMaxFiles, cand.clip_count);
+  const maxBytes = jobOutputByteLimit(config.verifyMaxBytes, cand.clip_count);
+  if (files.length > maxFiles || totalBytes > maxBytes)
     return reject("verification_budget_exceeded");
 
   const inputs = (
