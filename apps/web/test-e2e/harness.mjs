@@ -56,6 +56,9 @@ export async function startStack({
   storagePublicEndpoint,
   storageProxy = startOutageProxy,
   viewerHarness = false,
+  // TEST-ONLY. Default trusts the loopback harness peer so tests can simulate
+  // client addresses; pass "" to run exactly like the production default.
+  trustedProxies = "127.0.0.1,::1",
 } = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
   const db = await startCatalogPostgres();
@@ -78,6 +81,8 @@ export async function startStack({
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     APP_ENV: "local",
+    // TEST-ONLY: trust the loopback harness peer for simulated client addresses (rejected on hosted).
+    ...(trustedProxies && { AUTH_TRUSTED_PROXIES: trustedProxies }),
     DATABASE_HOST: new URL(db.appUrl).hostname,
     DATABASE_PORT: new URL(db.appUrl).port,
     DATABASE_NAME: new URL(db.appUrl).pathname.slice(1),

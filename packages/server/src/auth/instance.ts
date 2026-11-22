@@ -83,9 +83,11 @@ export function createAuth(
     },
     rateLimit: { enabled: true, storage: "memory" },
     advanced: {
-      // Only the single-value X-Forwarded-For set by the selected ingress
-      // (Tailscale Serve overwrites it; it preserves a forged X-Real-IP), never
-      // X-Real-IP or other client-controlled headers. See auth-and-access.md.
+      // Only X-Forwarded-For, which apps/web/instrumentation.ts rewrites from the
+      // socket peer (or from a trusted proxy's chain, AUTH_TRUSTED_PROXIES)
+      // before any route runs; a client-sent value never reaches this key.
+      // Never X-Real-IP or other client-controlled headers. See
+      // auth-and-access.md.
       ipAddress: { ipAddressHeaders: ["x-forwarded-for"] },
       useSecureCookies: config.secureCookies,
       // Explicit so NODE_ENV=test never silently skips the checks.

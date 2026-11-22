@@ -88,6 +88,8 @@ services:
       # environment. AUTH_LOCAL_PASSWORD must never be set here: it is refused on Render.
       # Do NOT set BETTER_AUTH_TRUSTED_ORIGINS or BETTER_AUTH_SECRETS (unsupported overrides);
       # add AUTH_TRUSTED_ORIGINS only for extra exact HTTPS origins.
+      # AUTH_TRUSTED_PROXIES stays unset until Render proxy ranges are measured
+      # (docs/components/auth-and-access.md); unset = x-forwarded-for is ignored.
       - key: BETTER_AUTH_URL
         sync: false
       - key: BETTER_AUTH_SECRET

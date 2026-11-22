@@ -9,6 +9,13 @@ import {
   type Server,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import {
+  applyClientAddress,
+  parseTrustedProxies,
+} from "../src/auth/client-address.js";
+
+// TEST-ONLY: trust the loopback harness peer so simulated x-forwarded-for works.
+const TRUSTED = parseTrustedProxies({ AUTH_TRUSTED_PROXIES: "127.0.0.1,::1" });
 
 export const SESSION_COOKIE = "better-auth.session_token";
 
@@ -80,6 +87,7 @@ export async function startHarness(
   let origin = "";
   const server: Server = createServer(async (req, res) => {
     try {
+      applyClientAddress(req, TRUSTED);
       const response = await route(await toRequest(req, origin));
       const headers: Record<string, string | string[]> = {};
       response.headers.forEach((value, key) => {

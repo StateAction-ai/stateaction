@@ -119,6 +119,7 @@ try {
     BETTER_AUTH_URL: origin,
     BETTER_AUTH_SECRET: randomBytes(32).toString("base64url"),
     AUTH_LOCAL_PASSWORD: "true",
+    AUTH_TRUSTED_PROXIES: "127.0.0.1,::1", // TEST-ONLY: the emulator relay and test client connect from loopback; honor their per-device x-forwarded-for
     NEXT_TELEMETRY_DISABLED: "1",
   };
   const boot = spawnSync(
