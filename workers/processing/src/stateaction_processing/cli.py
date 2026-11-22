@@ -33,12 +33,22 @@ def main() -> None:
     commands.add_parser("health")
     run_job = commands.add_parser("run-job")
     run_job.add_argument("--execution-ref", required=True)
+    run_stage = commands.add_parser("run-stage")
+    run_stage.add_argument("execution_ref", nargs="?")
+    run_stage.add_argument("--io-dir")
     args = parser.parse_args()
     if args.command == "run-job":
         # Stdlib-only until the claim is won; see run_job.py.
         from .run_job import main as run_job_main
 
         raise SystemExit(run_job_main(args.execution_ref))
+    if args.command == "run-stage":
+        # Stdlib-only until the stage claim is won; see stage_entry.py.
+        from .stage_entry import main as run_stage_main
+
+        if args.execution_ref is None and args.io_dir is None:
+            parser.error("execution_ref is required without --io-dir")
+        raise SystemExit(run_stage_main(args.execution_ref, args.io_dir))
     try:
         raw = sys.stdin.buffer.read(4097)
         if len(raw) > 4096:

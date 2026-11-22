@@ -1,0 +1,12 @@
+{
+ "captions": [
+  {
+   "caption": "pick up knife with right hand",
+   "segment_id": 0,
+   "status": "complete"
+  }
+ ],
+ "schema": "stateaction.flora_captions.v1",
+ "segments_sha256": "97974d9a5459d703bd2df938089b2949fdbd7776c83619030900092f7071091c",
+ "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
