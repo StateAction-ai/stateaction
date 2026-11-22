@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test, { afterEach, beforeEach } from "node:test";
-import { controllerSettings, modalCredentials } from "../src/config.js";
+import {
+  controllerSettings,
+  modalAppFor,
+  modalCredentials,
+  modalFunctionFor,
+} from "../src/config.js";
 
 const KEYS = [
   "APP_ENV",
@@ -12,6 +17,7 @@ const KEYS = [
   "MODAL_APP_NAME",
   "MODAL_FUNCTION_NAME",
   "MODAL_ENVIRONMENT",
+  "MODAL_STAGE_FUNCTIONS",
   "MODAL_TOKEN_ID",
   "MODAL_TOKEN_SECRET",
 ];
@@ -133,4 +139,67 @@ test("Modal credentials are read only controller-side and both are required", ()
     tokenId: "ak-x",
     tokenSecret: "as-y",
   });
+});
+
+test("MODAL_STAGE_FUNCTIONS binds a module to a function, optionally in another Modal app", () => {
+  env({
+    ...modal,
+    MODAL_STAGE_FUNCTIONS:
+      "flora_tempseg_vllm_fp8@1=stateaction-flora-stages/flora_tempseg,flora_captioner_vllm_fp8@1=flora_captioner",
+  });
+  const s = controllerSettings();
+  assert.equal(s.executor, "modal");
+  if (s.executor !== "modal") return;
+  assert.deepEqual(s.stageFunctions, {
+    "flora_tempseg_vllm_fp8@1": "flora_tempseg",
+    "flora_captioner_vllm_fp8@1": "flora_captioner",
+  });
+  assert.equal(
+    modalAppFor(s, "flora_tempseg_vllm_fp8@1"),
+    "stateaction-flora-stages",
+  );
+  // No app in the binding: the controller's single MODAL_APP_NAME.
+  assert.equal(
+    modalAppFor(s, "flora_captioner_vllm_fp8@1"),
+    "stateaction-processing",
+  );
+  assert.equal(modalAppFor(s, "hand_pose_cpu_v1@1"), "stateaction-processing");
+  for (const bad of [
+    "flora_tempseg_vllm_fp8@1=a/b/c",
+    "flora_tempseg_vllm_fp8@1=/flora_tempseg",
+    "flora_tempseg_vllm_fp8@1=stateaction-flora-stages/",
+    "flora_tempseg_vllm_fp8@1=",
+    "flora_tempseg_vllm_fp8@1=a b/flora_tempseg",
+    "flora_tempseg_vllm_fp8@1=x/y,flora_tempseg_vllm_fp8@1=x/y",
+    "hand_pose_cpu_v1@1=other/hand_pose",
+  ]) {
+    env({ ...modal, MODAL_STAGE_FUNCTIONS: bad });
+    assert.throws(() => controllerSettings(), /MODAL_STAGE_FUNCTIONS/, bad);
+  }
+});
+
+test("the exact MODAL_STAGE_FUNCTIONS string the FLORA app emits (controller_env) is accepted and routes to its app", () => {
+  // Copied from workers/flora/tests/test_stage_runner.py, which asserts controller_env() equals it.
+  env({
+    ...modal,
+    MODAL_STAGE_FUNCTIONS:
+      "flora_captioner_hf@1=stateaction-flora-stages/flora_captioner," +
+      "flora_captioner_vllm_fp8@1=stateaction-flora-stages/flora_captioner," +
+      "flora_tempseg_hf@1=stateaction-flora-stages/flora_tempseg," +
+      "flora_tempseg_vllm_fp8@1=stateaction-flora-stages/flora_tempseg",
+  });
+  const s = controllerSettings();
+  assert.equal(s.executor, "modal");
+  if (s.executor !== "modal") return;
+  for (const [module, fn] of [
+    ["flora_captioner_hf@1", "flora_captioner"],
+    ["flora_captioner_vllm_fp8@1", "flora_captioner"],
+    ["flora_tempseg_hf@1", "flora_tempseg"],
+    ["flora_tempseg_vllm_fp8@1", "flora_tempseg"],
+  ] as const) {
+    assert.equal(modalAppFor(s, module), "stateaction-flora-stages");
+    assert.equal(modalFunctionFor(s, module), fn);
+  }
+  assert.equal(modalAppFor(s, "hand_pose_cpu_v1@1"), "stateaction-processing");
+  assert.equal(modalFunctionFor(s, "hand_pose_cpu_v1@1"), "process_recording");
 });

@@ -4,7 +4,7 @@
 `load` imports the module and is called only after the claim was won. A module is a callable
 `run(ctx: StageContext) -> ModuleOutput` (see `stage_docs`). Modules marked `localOnly` in
 `api/modules.json` are refused unless `APP_ENV=local`, like `local_fixture_noop`. GPU modules are
-added to `REGISTRY` by the ticket that ships them; an unregistered module is unavailable, never
+added to `REGISTRY` by the ticket that ships them (SA-94: the four `flora_*` modules); an unregistered module is unavailable, never
 silently substituted.
 """
 
@@ -25,6 +25,24 @@ REGISTRY: dict[tuple[str, str], str] = {
         "caption",
         "replay_captioner",
     ): "stateaction_processing.modules.replay:run_caption",
+    # SA-94: real FLORA on Modal GPUs. Importing these runs no model code; the GPU stack is imported
+    # only when the function runs, after the claim.
+    (
+        "segment",
+        "flora_tempseg_vllm_fp8",
+    ): "stateaction_processing.modules.flora:run_segment_vllm",
+    (
+        "caption",
+        "flora_captioner_vllm_fp8",
+    ): "stateaction_processing.modules.flora:run_caption_vllm",
+    (
+        "segment",
+        "flora_tempseg_hf",
+    ): "stateaction_processing.modules.flora:run_segment_hf",
+    (
+        "caption",
+        "flora_captioner_hf",
+    ): "stateaction_processing.modules.flora:run_caption_hf",
 }
 
 

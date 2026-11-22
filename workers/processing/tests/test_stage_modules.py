@@ -59,7 +59,7 @@ class RegistryTests(unittest.TestCase):
             for stage, ref, code in (
                 ("segment", "nope@1", "module_unknown"),
                 ("caption", "stub_segmenter@1", "module_unknown"),
-                ("segment", "flora_tempseg_vllm_fp8@1", "module_unavailable"),
+                ("segment", "hand_pose_cpu_v1@1", "module_unknown"),
                 ("segment", "stub_segmenter", "module_ref_invalid"),
             ):
                 with (

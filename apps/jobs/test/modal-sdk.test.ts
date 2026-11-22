@@ -92,6 +92,62 @@ const withCreds = async <T>(fn: () => Promise<T>) => {
   }
 };
 
+test("a stage spawn looks the function up in the app its module binding names", async () => {
+  const stage = (module: string) => ({
+    schemaVersion: 2 as const,
+    apiUrl: "https://stateaction.example.com",
+    jobId: "7e0b7a58-0f3b-4b0f-9d1a-2f6a1b0c1d2e",
+    bootstrapToken: `sa_svc_${"A".repeat(43)}`,
+    stage: "segment" as const,
+    module,
+    recipeSha256: "a".repeat(64),
+  });
+  const bound: ModalControllerSettings = {
+    ...settings,
+    stageFunctions: {
+      "flora_tempseg_vllm_fp8@1": "flora_tempseg",
+      "flora_captioner_vllm_fp8@1": "flora_captioner",
+    },
+    stageApps: { "flora_tempseg_vllm_fp8@1": "stateaction-flora-stages" },
+  };
+  const lookups: Array<[unknown, unknown]> = [];
+  for (const [module, app, fn] of [
+    ["flora_tempseg_vllm_fp8@1", "stateaction-flora-stages", "flora_tempseg"],
+    ["flora_captioner_vllm_fp8@1", "stateaction-processing", "flora_captioner"],
+  ]) {
+    const { log, mod } = fakeSdk(async () => undefined);
+    const client = createModalSdkClient(bound, async () => mod as never);
+    const id = await withCreds(() =>
+      client.spawn(stage(module!) as never, () => true),
+    );
+    assert.equal(id, "fc-ABC123");
+    lookups.push([
+      (log.from as { a: unknown }).a,
+      (log.from as { n: unknown }).n,
+    ]);
+    assert.deepEqual(lookups.at(-1), [app, fn]);
+  }
+  // The hand_pose v1 bootstrap keeps the controller's app and function.
+  const { log, mod } = fakeSdk(async () => undefined);
+  const client = createModalSdkClient(bound, async () => mod as never);
+  await withCreds(() =>
+    client.spawn(
+      {
+        schemaVersion: 1,
+        apiUrl: "https://stateaction.example.com",
+        jobId: "7e0b7a58-0f3b-4b0f-9d1a-2f6a1b0c1d2e",
+        bootstrapToken: `sa_svc_${"A".repeat(43)}`,
+        pipeline: "hand_pose_cpu_v1",
+      },
+      () => true,
+    ),
+  );
+  assert.deepEqual(
+    [(log.from as { a: unknown }).a, (log.from as { n: unknown }).n],
+    ["stateaction-processing", "process_recording"],
+  );
+});
+
 test("spawn passes ONE JSON string argument and returns the provider call ID; credentials stay in the client", async () => {
   const { log, mod } = fakeSdk(async () => undefined);
   const client = createModalSdkClient(settings, async () => mod as never);

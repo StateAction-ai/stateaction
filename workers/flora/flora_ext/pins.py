@@ -30,3 +30,28 @@ MODELS = {
     "captioner": {"repo": CAPTIONER_REPO, "revision": CAPTIONER_REV},
     "tempseg": {"repo": TEMPSEG_REPO, "revision": TEMPSEG_REV},
 }
+
+# SA-94 (T09): the checkpoints the vLLM stage modules are bound to. A module loads exactly this
+# published directory and refuses any other: `checkpoint_missing` when it is absent,
+# `checkpoint_mismatch` when MANIFEST.json (its sha256) or the file set differs. api/modules.json has
+# no checkpoint field (changing that four-language contract is out of scope), so the binding is here.
+PUBLISHED = {
+    "captioner": {
+        "checkpoint_id": "captioner-fef0bbfe-fp8_per_tensor-compressed-tensors-v1",
+        "manifest_sha256": "77e6b9075f62c771441af50ac2d88ac92ea055d93fefd1e159194353420478a9",
+    },
+    "tempseg": {
+        "checkpoint_id": "tempseg-114a1076-fp8_per_tensor-compressed-tensors-v1",
+        "manifest_sha256": "019d2e3a22183ef5a9c5cc9052a224bc978dadbb210320016ab98dc2c93ebcde",
+    },
+}
+CHECKPOINT_ROOT = (
+    "/models/flora"  # the models Volume, mounted read-only in the stage containers
+)
+# stage module id -> (model, engine)
+MODULES = {
+    "flora_tempseg_vllm_fp8": ("tempseg", "vllm"),
+    "flora_captioner_vllm_fp8": ("captioner", "vllm"),
+    "flora_tempseg_hf": ("tempseg", "hf"),
+    "flora_captioner_hf": ("captioner", "hf"),
+}

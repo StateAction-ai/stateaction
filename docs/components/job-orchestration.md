@@ -175,7 +175,7 @@ Per stage, in order:
 
 - A `localOnly` module (stub or replay) runs only with `APP_ENV=local` on the local executor, the `local_fixture_noop` pattern.
 - The local executor runs CPU modules only.
-- The Modal executor runs a module only with a deployed function binding, set in `MODAL_STAGE_FUNCTIONS="module@version=function,..."`. `hand_pose_cpu_v1@1` always uses `MODAL_FUNCTION_NAME`.
+- The Modal executor runs a module only with a deployed function binding, set in `MODAL_STAGE_FUNCTIONS="module@version=function,..."`; a binding written `module@version=app/function` looks the function up in that Modal app instead of `MODAL_APP_NAME` (the FLORA GPU functions live in `stateaction-flora-stages`; `workers/flora` `controller_env()` prints the exact value). `hand_pose_cpu_v1@1` always uses `MODAL_FUNCTION_NAME`.
 
 **Limits:**
 

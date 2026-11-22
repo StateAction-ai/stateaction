@@ -320,6 +320,28 @@ class SealExportTests(unittest.TestCase):
         )
         self.assertEqual(check["status"], "not_evaluated")
 
+    def test_flora_stage_diagnostics_are_accepted_by_the_seal(self):
+        # SA-94: GPU stages upload provenance.json, native_segments.json and caption_inputs.json as
+        # diagnostic_blob next to the document; a failed stage keeps them as evidence like any diagnostic.
+        seg_files = [
+            stored("diagnostic_blob", f"diagnostics/segment/{n}", b"{}\n")
+            for n in ("provenance.json", "native_segments.json", "windows.jsonl")
+        ]
+        cap_files = [
+            stored("diagnostic_blob", f"diagnostics/caption/{n}", b"{}\n")
+            for n in ("provenance.json", "caption_inputs.json")
+        ]
+        prior = [
+            {"stage": "segment", "state": "failed", "errorCode": "engine_failed",
+             "counts": {}, "outputs": seg_files},
+            {"stage": "caption", "state": "failed", "errorCode": "checkpoint_missing",
+             "counts": {}, "outputs": cap_files},
+        ]  # fmt: skip
+        res, _, _root = self.export(self.plan(prior, {}))
+        seg, cap, _hp = res.manifest["nodes"]
+        self.assertEqual(seg["outputs"], [f["fileId"] for f in seg_files])
+        self.assertEqual(cap["outputs"], [f["fileId"] for f in cap_files])
+
     def test_check_fails_when_a_caption_names_an_unknown_segment(self):
         seg_doc, seg, cap_doc, _ = stub_documents()
         cap_doc["rows"][0]["segment_id"] = str(

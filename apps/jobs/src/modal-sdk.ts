@@ -1,5 +1,6 @@
 import {
   modalCredentials,
+  modalAppFor,
   modalFunctionFor,
   type ModalControllerSettings,
 } from "./config.js";
@@ -137,6 +138,10 @@ export function createModalSdkClient(
           ? modalFunctionFor(settings, bootstrap.module)
           : settings.functionName;
       if (functionName === undefined) throw new ModalSpawnNotSent();
+      const appName =
+        bootstrap.schemaVersion === 2
+          ? modalAppFor(settings, bootstrap.module)
+          : settings.appName;
       let issued = false;
       let expired = false;
       try {
@@ -146,7 +151,7 @@ export function createModalSdkClient(
           (async () => {
             const { client } = await sdk();
             const fn = await client.functions.fromName(
-              settings.appName,
+              appName,
               functionName,
               settings.environmentName === undefined
                 ? undefined

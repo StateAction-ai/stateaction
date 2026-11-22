@@ -56,7 +56,7 @@ The same driver runs one recipe stage at a time (`driveModal` with a stage):
 
 Function and bootstrap per stage:
 
-- **Segment and caption:** the function per module comes from `MODAL_STAGE_FUNCTIONS`, and the spawn argument is the stage bootstrap v2.
+- **Segment and caption:** the function per module comes from `MODAL_STAGE_FUNCTIONS` (`module@version=function`, or `module@version=app/function` when the function lives in another Modal app than `MODAL_APP_NAME`, as the FLORA GPU functions do), and the spawn argument is the stage bootstrap v2.
 - **hand_pose:** stays `MODAL_FUNCTION_NAME` with the `run-job` v1 bootstrap plus `stage`, `module`, `recipeSha256` and `priorStages`. The SA-92 wrapper returns v2 with the receipt; a v1 return is still accepted and recorded `failed (receipt_missing)`.
 
 The Modal wrappers for the GPU modules are SA-94. See [Job orchestration](job-orchestration.md#recipe-stage-runner-sa-91-appsjobs).

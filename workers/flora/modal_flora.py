@@ -966,3 +966,27 @@ def verify_checkpoint(model: str, deep: bool = True):
 @app.local_entrypoint()
 def clean(scratch: bool = True, staging: bool = True):
     print(cleanup.remote(scratch, staging))
+
+
+@app.local_entrypoint()
+def smoke(
+    fixture: str = "homer_33",
+    only: str = "tempseg,captioner",
+    t08: str = os.environ.get("FLORA_T08_DIR", "/home/wearaway/flora-work/sa93-art"),
+    out: str = "artifacts/flora-stage",
+    hf_fixture: str = "homer_37",
+    hf_segments: int = 3,
+    hf_deadline_s: int = 1200,
+):
+    """SA-94 smoke of the FLORA stage modules through the SA-90 `--io-dir` harness (billable, operator-run).
+
+    The stage functions live in `modal_stage.py` (their own app) and the smoke functions in
+    `modal_stage_smoke.py` (another app, never deployed); this entrypoint runs that app and compares with the T08 restored outputs.
+    Upload the fixtures first (see README): `modal volume put stateaction-flora-smoke <store>/<ep> /<ep>`.
+    """
+    import modal_stage_smoke
+
+    with modal_stage_smoke.app.run():
+        modal_stage_smoke.run_smoke(
+            fixture, only, t08, out, hf_fixture, hf_segments, hf_deadline_s
+        )

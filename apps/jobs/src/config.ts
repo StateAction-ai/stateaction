@@ -51,6 +51,11 @@ export type ModalControllerSettings = BaseSettings & {
    * binding is never spawned.
    */
   stageFunctions?: Readonly<Record<string, string>>;
+  /**
+   * Modal app per bound module, for a binding written `module@version=app/function`. A module
+   * bound without an app uses `appName` (the single source of truth for the app is the binding).
+   */
+  stageApps?: Readonly<Record<string, string>>;
 };
 
 export type ControllerSettings =
@@ -213,9 +218,9 @@ function modalSettings(): ModalControllerSettings {
   const environmentName = process.env.MODAL_ENVIRONMENT;
   if (environmentName !== undefined && !NAME.test(environmentName))
     throw new Error("MODAL_ENVIRONMENT is invalid");
-  const stageFunctions = stageFunctionBindings(
-    process.env.MODAL_STAGE_FUNCTIONS,
-  );
+  const bindings = stageFunctionBindings(process.env.MODAL_STAGE_FUNCTIONS);
+  const stageFunctions = bindings?.functions;
+  const stageApps = bindings?.apps;
   return {
     executor: "modal",
     apiUrl: api,
@@ -225,35 +230,59 @@ function modalSettings(): ModalControllerSettings {
     ...common(),
     pipeline: "hand_pose_cpu_v1",
     ...(stageFunctions ? { stageFunctions } : {}),
+    ...(stageApps && Object.keys(stageApps).length > 0 ? { stageApps } : {}),
   };
 }
 
 const MODULE_REF = /^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$/;
 const HAND_POSE_MODULE = "hand_pose_cpu_v1@1";
 
-/** `module@version=function,...`: strict, unique, never the hand-pose module (it is fixed). */
+/**
+ * `module@version=function,...` or `module@version=app/function,...` (a module whose function lives
+ * in another Modal app, such as the FLORA GPU functions): strict, unique, never the hand-pose
+ * module (it is fixed).
+ */
 function stageFunctionBindings(
   raw: string | undefined,
-): Record<string, string> | undefined {
+):
+  | { functions: Record<string, string>; apps: Record<string, string> }
+  | undefined {
   if (raw === undefined || raw === "") return undefined;
-  const out: Record<string, string> = {};
+  const functions: Record<string, string> = {};
+  const apps: Record<string, string> = {};
   for (const pair of raw.split(",")) {
-    const [ref, fn, extra] = pair.trim().split("=");
+    const [ref, target, extra] = pair.trim().split("=");
+    const parts = target?.split("/") ?? [];
+    const [app, fn] = parts.length === 2 ? parts : [undefined, parts[0]];
     if (
       extra !== undefined ||
       !ref ||
       !fn ||
+      parts.length > 2 ||
       !MODULE_REF.test(ref) ||
       !NAME.test(fn) ||
+      (app !== undefined && !NAME.test(app)) ||
       ref === HAND_POSE_MODULE ||
-      ref in out ||
+      ref in functions ||
       !moduleManifestEntry(ref) ||
       moduleManifestEntry(ref)!.localOnly
     )
       throw new Error("MODAL_STAGE_FUNCTIONS is invalid");
-    out[ref] = fn;
+    functions[ref] = fn;
+    if (app !== undefined) apps[ref] = app;
   }
-  return out;
+  return { functions, apps };
+}
+
+/** The Modal app that holds the function of one stage module (`appName` unless it is bound to another app). */
+export function modalAppFor(
+  settings: ModalControllerSettings,
+  module: string,
+): string {
+  if (module === HAND_POSE_MODULE) return settings.appName;
+  return Object.hasOwn(settings.stageApps ?? {}, module)
+    ? settings.stageApps![module]!
+    : settings.appName;
 }
 
 /** The deployed Modal function of one stage module, or undefined when none is bound. */

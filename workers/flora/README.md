@@ -62,3 +62,40 @@ If parity fails, nothing is published and load-time quantization stays the docum
 ```sh
 python3 -m unittest discover -s workers/flora/tests -v
 ```
+
+## Stage modules on Modal GPUs (SA-94, T09)
+
+`modal_stage.py` (app `stateaction-flora-stages`) defines `flora_tempseg` and `flora_captioner`: one single-use RTX PRO 6000
+container per stage (`retries=0`, `max_containers=1`, `min_containers=0`, `single_use_containers`, `restrict_modal_access`, no
+secrets, timeout from the recipe `budgetSeconds` in `flora_ext/stage_settings.py`, models Volume read-only). Each takes the stage
+bootstrap JSON (SA-90 `schemaVersion 2`) and runs `python -m stateaction_processing run-stage <call id>`. The module comes from
+`recipe.<stage>.module`: `flora_tempseg_vllm_fp8`, `flora_captioner_vllm_fp8` (restore the published checkpoint pinned in
+`flora_ext/pins.py::PUBLISHED`; `checkpoint_missing` / `checkpoint_mismatch`; nothing quantizes at job time) or the HF reference
+fallbacks `flora_tempseg_hf`, `flora_captioner_hf` (BF16, batch 1, FP32 originals downloaded to the container's ephemeral disk;
+never selected automatically). Code: `flora_ext/stage_glue.py` (params, guards, provenance), `flora_ext/stage_runtime.py` (engines),
+`flora_ext/longvideo/` (our wrapper, copied into the cloned FLORA `tempseg/batch_utils/` at image build).
+
+Operator commands (billable; fixtures first, remove the smoke Volume afterwards):
+
+```sh
+modal volume create --version 2 stateaction-flora-smoke
+modal volume put stateaction-flora-smoke <store>/homer_33 /homer_33     # also homer_37; source.mp4 only for the direct job
+uv run --project workers/processing modal run workers/flora/modal_stage_smoke.py::dry_run                       # CPU only
+uv run --project workers/processing modal run workers/flora/modal_flora.py::smoke --fixture homer_33     # GPU, both vLLM modules
+uv run --project workers/processing modal run workers/flora/modal_flora.py::smoke --fixture homer_33 --only hf --hf-fixture homer_37
+```
+
+`--only` takes `tempseg`, `tempseg_cli`, `captioner`, `captioner_direct`, `hf` (comma list). Keep the local command alive until it
+prints the summary: a killed client leaves results lost and the container running (`modal app stop --yes <id>`).
+
+### What the header hashes and measurements mean (SA-94 review)
+
+- `producer.weights_sha256` is not a hash of the bytes a container loaded. vLLM modules: digest of the file hashes in the pinned
+  published MANIFEST (manifest sha256, file set and sizes are checked at load, content was hashed at publish). HF TempSeg: the pinned
+  adapter sha256 constant. HF Captioner: sha256 of the downloaded `SOURCE_MANIFEST.sha256`. `decoding_params.weights_hash_kind` names
+  which. `flora_captioner_hf` has never run on a GPU (109 GB FP32 download); do not select it until a smoke ran under a recorded cap.
+- `decoding_params.batch_size` is the batch size that actually ran: after a failed batched call every window or caption ran alone, so it
+  is 1 with `batch_fallback=true` and `batch_requested` keeping the recipe value. `dt_bias_fp32` comes from the engine's own dtypes.
+- A model segment fully covered by its predecessor is dropped from the rows and recorded in `segments.json` on the covering row
+  (`ext.flora_dropped`: reason `dropped_covered_by_predecessor`, count, ids, native frame spans) and in `decoding_params.covered_dropped`.
+- Spawn seam: set the controller's `MODAL_STAGE_FUNCTIONS` to `controller_env()` from `flora_ext/stage_settings.py` (`APP_NAME`, `FUNCTION_OF_MODULE`; entries are `module@1=stateaction-flora-stages/function`, so `MODAL_APP_NAME` stays the hand_pose app); smoke and dry-run live in `modal_stage_smoke.py` so `modal deploy workers/flora/modal_stage.py` has two functions.
