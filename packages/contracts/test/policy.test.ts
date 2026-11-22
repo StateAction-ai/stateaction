@@ -6,9 +6,10 @@ import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v16.json is the current registry; catalog.v1.json through
-// catalog.v15.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v16.json"));
+// catalog.v17.json is the current registry; catalog.v1.json through
+// catalog.v16.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v17.json"));
+const catalogV16 = JSON.parse(text("catalog.v16.json"));
 const catalogV15 = JSON.parse(text("catalog.v15.json"));
 const catalogV14 = JSON.parse(text("catalog.v14.json"));
 const catalogV13 = JSON.parse(text("catalog.v13.json"));
@@ -728,8 +729,14 @@ test("schemas are closed, bounded and use the documented casing", () => {
   ];
   for (const file of all) {
     // common.v2 holds the snake_case artifact definitions (frameRef, producer).
+    // A catalog entry may declare snake_case for a document that embeds artifacts
+    // (http.recording-annotations.v1); embedded parts are checked as their own files.
     const snake =
-      file.startsWith("artifacts/") || file === "common.v2.schema.json";
+      file.startsWith("artifacts/") ||
+      file === "common.v2.schema.json" ||
+      Object.values<any>(catalog.contracts).some(
+        (c) => c.schema === file && c.casing === "snake_case",
+      );
     for (const [node, at] of walk(JSON.parse(text(file)), file)) {
       assert.ok(
         !("format" in node),
@@ -773,7 +780,10 @@ test("schemas are closed, bounded and use the documented casing", () => {
 
 test("every contract declares a byte bound and version discriminator", () => {
   for (const [id, c] of Object.entries<any>(catalog.contracts)) {
-    assert.ok(c.maxBytes > 0 && c.maxBytes <= 16 * 1048576, id);
+    // The annotations document embeds up to three 16 MiB artifacts (SA-98).
+    const bound =
+      id === "http.recording-annotations.v1" ? 64 * 1048576 : 16 * 1048576;
+    assert.ok(c.maxBytes > 0 && c.maxBytes <= bound, id);
     assert.ok(c.version, `${id}: version`);
   }
 });
@@ -1005,10 +1015,10 @@ test("published module manifest entries are append-only", () => {
 const V16_ADDED = ["jobs.prior-stages.v1"];
 
 test("catalog v16 (SA-91) is an exact superset of catalog v15 adding only jobs.prior-stages.v1", () => {
-  assertExactSuperset(catalog, catalogV15, ["v15", "v16"], V16_ADDED);
-  assert.deepEqual(catalog.shared, catalogV15.shared);
-  assert.equal(Object.keys(catalog.contracts).length, 84);
-  const entry = catalog.contracts["jobs.prior-stages.v1"];
+  assertExactSuperset(catalogV16, catalogV15, ["v15", "v16"], V16_ADDED);
+  assert.deepEqual(catalogV16.shared, catalogV15.shared);
+  assert.equal(Object.keys(catalogV16.contracts).length, 84);
+  const entry = catalogV16.contracts["jobs.prior-stages.v1"];
   assert.equal(entry.casing, "camelCase");
   assert.equal(entry.maxBytes, 65536);
   assert.deepEqual(entry.rules, []);
@@ -1017,7 +1027,32 @@ test("catalog v16 (SA-91) is an exact superset of catalog v15 adding only jobs.p
 test("v16 lock entries are present and match the published bytes", () => {
   const files = [
     "catalog.v16.json",
-    ...V16_ADDED.map((id) => catalog.contracts[id].schema),
+    ...V16_ADDED.map((id) => catalogV16.contracts[id].schema),
+  ];
+  for (const file of files)
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+const V17_ADDED = ["http.recording-annotations.v1"];
+
+test("catalog v17 (SA-98) is an exact superset of catalog v16 adding only http.recording-annotations.v1", () => {
+  assertExactSuperset(catalog, catalogV16, ["v16", "v17"], V17_ADDED);
+  assert.deepEqual(catalog.shared, catalogV16.shared);
+  assert.equal(Object.keys(catalog.contracts).length, 85);
+  const entry = catalog.contracts["http.recording-annotations.v1"];
+  assert.equal(entry.casing, "snake_case");
+  assert.deepEqual(entry.version, {
+    field: "schema",
+    accepted: ["stateaction.recording-annotations.v1"],
+  });
+  assert.equal(entry.maxBytes, 67108864);
+  assert.deepEqual(entry.rules, ["recording_annotations"]);
+});
+
+test("v17 lock entries are present and match the published bytes", () => {
+  const files = [
+    "catalog.v17.json",
+    ...V17_ADDED.map((id) => catalog.contracts[id].schema),
   ];
   for (const file of files)
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);

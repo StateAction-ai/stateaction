@@ -736,6 +736,37 @@ def dag_run(doc: Any) -> Violation:
     return None
 
 
+def recording_annotations(doc: Any) -> Violation:
+    parts = (
+        ("segments", "job_id", "recording_id", segments),
+        ("captions", "job_id", "recording_id", captions),
+        ("hand_presence", "job_id", "recording_id", hand_presence),
+        ("dag_run", "jobId", "recordingId", dag_run),
+    )
+    # Every present part names the document's job and recording (dag_run in camelCase).
+    for key, job_key, recording_key, _ in parts:
+        part = doc[key]
+        if part is None:
+            continue
+        if part[job_key] != doc["job_id"]:
+            return ("reference_mismatch", f"/{key}/{job_key}")
+        if part[recording_key] != doc["recording_id"]:
+            return ("reference_mismatch", f"/{key}/{recording_key}")
+    # Each embedded part keeps its own cross-field rules.
+    for key, _, _, rule in parts:
+        if doc[key] is None:
+            continue
+        found = rule(doc[key])
+        if found:
+            return (found[0], f"/{key}{found[1]}")
+    if doc["segments"] is not None and doc["captions"] is not None:
+        ids = {row["segment_id"] for row in doc["segments"]["rows"]}
+        for i, row in enumerate(doc["captions"]["rows"]):
+            if row["segment_id"] not in ids:
+                return ("reference_mismatch", f"/captions/rows/{i}/segment_id")
+    return None
+
+
 RULES: dict[str, Callable[[Any], Violation]] = {
     "unique_file_ids": unique_file_ids,
     "sealed_inventory": sealed_inventory,
@@ -762,4 +793,5 @@ RULES: dict[str, Callable[[Any], Violation]] = {
     "stage_receipt": stage_receipt,
     "stage_run_action": stage_run_action,
     "dag_run": dag_run,
+    "recording_annotations": recording_annotations,
 }

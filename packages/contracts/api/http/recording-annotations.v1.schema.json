@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-annotations.v1.json",
+  "title": "Recording annotations v1",
+  "description": "GET /api/v1/recordings/{recordingId}/annotations (staff) and its ?download=1 file: the review document of one recording's accepted job. Each part is the published stage artifact (segments.v1, captions.v1, hand-presence.v1) or the http.dag-run.v1 rendering, embedded unchanged, so the parts keep their own casing (snake_case artifacts, camelCase dag_run). A part is null only when its stage produced nothing; dag_run says why. The recording_annotations rule checks that every present part names the same job and recording and that every caption row names a segment row.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "job_id",
+    "segments",
+    "captions",
+    "hand_presence",
+    "dag_run"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording-annotations.v1"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "segments": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/segments.v1.json"
+        }
+      ]
+    },
+    "captions": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/captions.v1.json"
+        }
+      ]
+    },
+    "hand_presence": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/hand-presence.v1.json"
+        }
+      ]
+    },
+    "dag_run": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/http/dag-run.v1.json"
+        }
+      ]
+    }
+  }
+}

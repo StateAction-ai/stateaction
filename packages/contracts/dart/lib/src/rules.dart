@@ -830,11 +830,56 @@ Violation? _dagRun(Json doc) {
   return null;
 }
 
+Violation? _recordingAnnotations(Json modules, Json doc) {
+  // Every present part names the document's job and recording (dag_run in camelCase).
+  const parts = [
+    ('segments', 'job_id', 'recording_id'),
+    ('captions', 'job_id', 'recording_id'),
+    ('hand_presence', 'job_id', 'recording_id'),
+    ('dag_run', 'jobId', 'recordingId'),
+  ];
+  for (final (key, jobKey, recordingKey) in parts) {
+    final part = doc[key];
+    if (part == null) continue;
+    if (_obj(part)[jobKey] != doc['job_id']) {
+      return _v('reference_mismatch', '/$key/$jobKey');
+    }
+    if (_obj(part)[recordingKey] != doc['recording_id']) {
+      return _v('reference_mismatch', '/$key/$recordingKey');
+    }
+  }
+  // Each embedded part keeps its own cross-field rules.
+  for (final (key, _, _) in parts) {
+    final part = doc[key];
+    if (part == null) continue;
+    final found = switch (key) {
+      'segments' => _segments(modules, _obj(part)),
+      'captions' => _captions(modules, _obj(part)),
+      'hand_presence' => _handPresence(modules, _obj(part)),
+      _ => _dagRun(_obj(part)),
+    };
+    if (found != null) return _v(found.code, '/$key${found.path}');
+  }
+  if (doc['segments'] != null && doc['captions'] != null) {
+    final ids = _list(
+      _obj(doc['segments'])['rows'],
+    ).map((row) => _obj(row)['segment_id']).toSet();
+    final rows = _list(_obj(doc['captions'])['rows']);
+    for (var i = 0; i < rows.length; i++) {
+      if (!ids.contains(_obj(rows[i])['segment_id'])) {
+        return _v('reference_mismatch', '/captions/rows/$i/segment_id');
+      }
+    }
+  }
+  return null;
+}
+
 /// Rules that resolve modules in the committed api/modules.json.
 const moduleRules = {
   'segments',
   'captions',
   'hand_presence',
+  'recording_annotations',
   'recipe',
   'task_input_recipe',
 };
@@ -866,5 +911,6 @@ Map<String, Rule> buildRules(Json modulesManifest) {
     'stage_receipt': (doc) => _stageReceiptRule(doc, ''),
     'stage_run_action': _stageRunAction,
     'dag_run': _dagRun,
+    'recording_annotations': (doc) => _recordingAnnotations(modules, doc),
   };
 }

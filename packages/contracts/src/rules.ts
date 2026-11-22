@@ -764,4 +764,36 @@ export const RULES: Readonly<Record<string, Rule>> = {
     return null;
   },
   ...STAGE_RULES,
+  recording_annotations: (doc) => {
+    // Every present part names the document's job and recording (dag_run in camelCase).
+    const parts: [string, string, string, string][] = [
+      ["segments", "job_id", "recording_id", "segments"],
+      ["captions", "job_id", "recording_id", "captions"],
+      ["hand_presence", "job_id", "recording_id", "hand_presence"],
+      ["dag_run", "jobId", "recordingId", "dag_run"],
+    ];
+    for (const [key, jobKey, recordingKey] of parts) {
+      const part = doc[key];
+      if (part === null) continue;
+      if (obj(part)[jobKey] !== doc.job_id)
+        return v("reference_mismatch", `/${key}/${jobKey}`);
+      if (obj(part)[recordingKey] !== doc.recording_id)
+        return v("reference_mismatch", `/${key}/${recordingKey}`);
+    }
+    // Each embedded part keeps its own cross-field rules.
+    for (const [key, , , rule] of parts) {
+      if (doc[key] === null) continue;
+      const found = RULES[rule]!(obj(doc[key]));
+      if (found) return v(found.code, `/${key}${found.path}`);
+    }
+    if (doc.segments !== null && doc.captions !== null) {
+      const ids = new Set(
+        list(obj(doc.segments).rows).map((row) => obj(row).segment_id),
+      );
+      for (const [i, row] of list(obj(doc.captions).rows).entries())
+        if (!ids.has(obj(row).segment_id))
+          return v("reference_mismatch", `/captions/rows/${i}/segment_id`);
+    }
+    return null;
+  },
 };

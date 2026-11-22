@@ -104,6 +104,8 @@
     "http/output-create.v2.schema.json": "90a4fb790e00bc09ca1d34999227dd6f8d39cc5a02504121d42fed18d6875863",
     "http/output-plan.v2.schema.json": "a47b80ef4752669d10591d2038b908a539b28669f7ffac4d71a48902a3d74422",
     "catalog.v16.json": "a91aea4e4c58c4a883a81631f88029b958accb6392b42a5de3b6884648e98b7e",
-    "jobs/prior-stages.v1.schema.json": "8435521e45d07decf299adee9982c9d31469742e396cb5b95086b0ae991808a7"
+    "jobs/prior-stages.v1.schema.json": "8435521e45d07decf299adee9982c9d31469742e396cb5b95086b0ae991808a7",
+    "catalog.v17.json": "64582d6a2ea012b185f7fa9c34253bd8e4903dd75c40821cce3690cbc48eddd4",
+    "http/recording-annotations.v1.schema.json": "4fa7e22d8d12630a5107ce57f43a1089476f743c896e67278f9b6e0c7d3699ca"
   }
 }

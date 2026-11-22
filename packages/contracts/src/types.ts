@@ -1271,3 +1271,18 @@ export type PriorStagesV1 = {
     }[];
   }[];
 };
+
+/**
+ * GET /api/v1/recordings/{recordingId}/annotations and its ?download=1 file (staff). Each part is the
+ * published stage artifact embedded unchanged (dag_run keeps its camelCase rendering); a part is null
+ * only when its stage produced nothing and dag_run says why.
+ */
+export type RecordingAnnotationsV1 = {
+  schema: "stateaction.recording-annotations.v1";
+  recording_id: Uuid;
+  job_id: Uuid;
+  segments: SegmentsV1 | null;
+  captions: CaptionsV1 | null;
+  hand_presence: HandPresenceV1 | null;
+  dag_run: DagRunV1 | null;
+};

@@ -100,7 +100,8 @@ describe("role-protected console pages (real session, live roles)", () => {
     assertPrivate(pipeline, "pipeline");
     assert.match(pipeline.text, /href="\/pipeline"/);
     assert.match(pipeline.text, /href="\/data-browser"/);
-    assert.doesNotMatch(pipeline.text, />(Releases|Review|Projects?)</);
+    assert.match(pipeline.text, /href="\/review"/);
+    assert.doesNotMatch(pipeline.text, />(Releases|Projects?)</);
     const data = await navigate("/data-browser", jar);
     assert.equal(data.status, 200);
     const home = await navigate("/", jar);

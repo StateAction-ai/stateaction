@@ -9,3 +9,6 @@ packages/stera_recorder/android/src/main/assets/stateaction/capture/foxglove-raw
 
 # Real worker RRD fixture for the viewer test: exact bytes.
 apps/web/test-e2e/fixtures/*.rrd -text binary
+
+# SA-98 synthetic ffmpeg testsrc review video (exact bytes).
+apps/web/test-e2e/fixtures/review-24s.mp4 binary
