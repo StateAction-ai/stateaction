@@ -7,14 +7,40 @@ import type { OpsReceipt } from "./receipt.js";
  * is unknown. The result is an estimate, never an invoice, and spend alerts
  * built on it are not billing hard caps.
  */
-export const RATE_ITEMS = [
+/** Accelerators a recipe stage may request (common.v2 gpuType without `none`). */
+export const GPU_TYPES = [
+  "T4",
+  "L4",
+  "A10G",
+  "L40S",
+  "A100-40GB",
+  "A100-80GB",
+  "RTX-PRO-6000",
+  "H100",
+  "H200",
+  "B200",
+] as const;
+export type GpuRateType = (typeof GPU_TYPES)[number];
+export type GpuRateItem = `gpu_second:${GpuRateType}`;
+export const gpuRateItem = (type: GpuRateType): GpuRateItem =>
+  `gpu_second:${type}`;
+
+const BASE_RATE_ITEMS = [
   "cpu_core_second",
   "memory_gib_second",
   "disk_gib_second",
   "transfer_gb",
   "storage_gb_month",
 ] as const;
-export type RateItem = (typeof RATE_ITEMS)[number];
+/**
+ * One `gpu_second:<type>` item per accelerator type. Like every item, its
+ * rate comes only from the operator card; none is defined here.
+ */
+export type RateItem = (typeof BASE_RATE_ITEMS)[number] | GpuRateItem;
+export const RATE_ITEMS: readonly RateItem[] = [
+  ...BASE_RATE_ITEMS,
+  ...GPU_TYPES.map(gpuRateItem),
+];
 
 /**
  * The exact unit each rate item is priced in. A rate whose declared unit is not
@@ -28,6 +54,9 @@ export const RATE_UNITS: Record<RateItem, string> = {
   disk_gib_second: "GiB-second",
   transfer_gb: "GB",
   storage_gb_month: "GB-month",
+  ...(Object.fromEntries(
+    GPU_TYPES.map((t) => [gpuRateItem(t), "GPU-second"]),
+  ) as Record<GpuRateItem, string>),
 };
 
 /** Every charge category an operator should know about; rated or listed as unknown. */
@@ -237,7 +266,7 @@ export type QuantityKind =
   | "unknown";
 
 export type CostLine = {
-  item: (typeof CHARGE_CATEGORIES)[number];
+  item: (typeof CHARGE_CATEGORIES)[number] | GpuRateItem;
   quantity: Measured<number>;
   quantityKind: QuantityKind;
   /** True when the true quantity is at least this (unknown extra usage exists). */
@@ -296,9 +325,23 @@ function combine(parts: Bytes[], scale = 1): Bytes {
   return { value: wrap((total / GB) * scale), kind };
 }
 
+/** Recorded container seconds of one GPU stage (from its stage run). */
+export type GpuStageUsage = {
+  stage: string;
+  gpuType: GpuRateType;
+  /** Null when the stage has no measured duration: the line stays unknown. */
+  seconds: number | null;
+};
+
+/**
+ * `gpuStages` adds one line per GPU stage run: recorded GPU seconds times the
+ * operator's `gpu_second:<type>` rate, or `unknown` without a rate or a
+ * measured duration. CPU-only runs add no GPU lines.
+ */
 export function estimateRun(
   receipt: OpsReceipt,
   card?: RateCard,
+  gpuStages: readonly GpuStageUsage[] = [],
 ): CostEstimate {
   const lines: CostLine[] = [];
   const wall = receipt.worker.wallSeconds;
@@ -385,6 +428,19 @@ export function estimateRun(
     "retained output + RRD bytes x operator-stated storageMonths (assumption)",
     false,
   );
+  for (const g of gpuStages) {
+    const seconds: Measured<number> =
+      g.seconds !== null && Number.isFinite(g.seconds) && g.seconds >= 0
+        ? wrap(g.seconds)
+        : UNKNOWN;
+    add(
+      gpuRateItem(g.gpuType),
+      seconds,
+      seconds.status === "measured" ? "allocated_x_measured_wall" : "unknown",
+      `recorded ${g.stage} stage container seconds x operator ${g.gpuType} GPU-second rate (excludes provisioning and cold start)`,
+      true,
+    );
+  }
   for (const item of [
     "provider_request_fees",
     "transfer_retries",

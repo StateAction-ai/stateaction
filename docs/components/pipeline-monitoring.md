@@ -46,6 +46,18 @@ failed with "the stage is not recorded"; an uncertain submission stays unknown.
 Staff see curated explanations for recognized error codes and a generic
 message for unknown codes. The read query leaves worker error text in storage.
 
+### Recipe stages (SA-97)
+
+When the job has a recipe, the stage card lists one row per recipe stage from
+`job_stage_runs` (via the same document as `GET /api/v1/jobs/{jobId}/dag-run`):
+module, state, duration, cost estimate, GPU requested/observed/VRAM/rate,
+output counts (failed counts shown as failed), error code, `not_run` reasons and
+the stage receipt digest, plus the `dag-run.json` panel with Copy and Download.
+A job without a recipe keeps the five derived stages. The list adds segment,
+caption and team-check counts (team checks show an em dash until SA-99) and a
+Review column that says review is not available yet once annotations are
+accepted (no link until the SA-98 route exists).
+
 ## Actions
 
 - **Review clips** appears only when the current job is `succeeded` with

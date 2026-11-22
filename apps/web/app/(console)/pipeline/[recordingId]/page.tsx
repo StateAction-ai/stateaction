@@ -5,6 +5,12 @@ import {
   parseRecordingId,
   pipelineQueryString,
   pipelineReads,
+  buildRunStages,
+  buildRunSummary,
+  dagRunFilename,
+  dagRunJson,
+  formatDuration,
+  formatUsd,
   type PipelineDetail,
 } from "@stateaction/server/pipeline";
 import { requireConsoleSession } from "../../../../lib/server-session";
@@ -13,6 +19,8 @@ import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/pipeline/status-badge";
 import { StageList } from "../../../../components/pipeline/stage-list";
 import { JobControls } from "../../../../components/pipeline/job-controls";
+import { RecipeStageList } from "../../../../components/pipeline/recipe-stage-list";
+import { DagRunPanel } from "../../../../components/pipeline/dag-run-panel";
 
 export const metadata = { title: "Recording · StateAction.ai" };
 export const dynamic = "force-dynamic";
@@ -53,6 +61,19 @@ export default async function PipelineRecordingPage({
   }
   if (!detail) notFound();
   const actions = await reads.actions(detail);
+  let run: Awaited<ReturnType<typeof reads.recipeRun>> = null;
+  try {
+    run = await reads.recipeRun(detail);
+  } catch (error) {
+    console.error(
+      "[pipeline] recipe run unavailable:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  const stages = run ? buildRunStages(run, reads.rates()) : [];
+  const summary = run ? buildRunSummary(run, detail.annotations) : null;
+  const failedStages = stages.filter((s) => s.state === "failed");
+  const count = (n: number | null) => (n === null ? "—" : String(n));
   const guidance =
     actions.control.length > 0
       ? await reads.guidance(detail).catch(() => null)
@@ -73,50 +94,127 @@ export default async function PipelineRecordingPage({
         Upload and processing details for this recording.
       </p>
 
-      <Card className="mb-5">
-        <CardHeader className="flex items-center justify-between gap-3">
-          <h2 className="m-0 text-base font-bold">Processing stages</h2>
-          <StatusBadge status={detail.status} />
-        </CardHeader>
-        <CardBody className="grid gap-4">
-          <StageList stages={detail.stages} />
-          <p className="m-0 text-xs text-muted">
-            Stages are shown only from recorded evidence; a stage with no
-            recorded evidence stays unknown. Processing completion is separate
-            from human review.
-          </p>
-          {detail.error ? (
-            <div
-              role="alert"
-              className="rounded-lg border border-[#edc8cc] bg-danger-soft px-4 py-3 text-sm text-[#7b2b31]"
-            >
-              <p className="m-0 font-semibold">Action required</p>
-              <p className="m-0 mt-1 break-words">{detail.error.summary}</p>
+      {summary ? (
+        <dl
+          data-testid="run-summary"
+          className="m-0 mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5"
+        >
+          {(
+            [
+              [
+                "Job",
+                summary.jobState.replace(/_/g, " "),
+                failedStages.length > 0
+                  ? `${failedStages.map((s) => s.stage).join(", ")} failed`
+                  : null,
+              ],
+              [
+                "Wall time",
+                formatDuration(summary.wallSeconds),
+                summary.wallSeconds === null ? "not recorded" : null,
+              ],
+              [
+                "Cost (estimate)",
+                formatUsd(summary.costUsd),
+                `cap $${summary.maxJobCostUsd} recorded for this job`,
+              ],
+              [
+                "Segments",
+                count(summary.segments),
+                summary.failedWindows
+                  ? `${summary.failedWindows} failed windows`
+                  : summary.segments === null
+                    ? "not accepted"
+                    : null,
+              ],
+              [
+                "Captions",
+                count(summary.captions),
+                summary.captionsFailed
+                  ? `${summary.captionsFailed} failed`
+                  : summary.captions === null
+                    ? "not accepted"
+                    : null,
+              ],
+            ] as const
+          ).map(([label, value, note]) => (
+            <Card key={label} className="px-5 py-4">
+              <dt className="text-[13px] text-muted">{label}</dt>
+              <dd className="m-0 mt-1 text-[26px] font-bold tracking-[-0.02em] capitalize">
+                {value}
+              </dd>
+              {note ? (
+                <dd className="m-0 mt-0.5 text-xs text-muted">{note}</dd>
+              ) : null}
+            </Card>
+          ))}
+        </dl>
+      ) : null}
+
+      <div
+        className={
+          run ? "grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_420px]" : ""
+        }
+      >
+        <Card className="mb-5">
+          <CardHeader className="flex items-center justify-between gap-3">
+            <h2 className="m-0 text-base font-bold">
+              {run ? `Stages · recipe ${run.recipeId}` : "Processing stages"}
+            </h2>
+            <StatusBadge status={detail.status} />
+          </CardHeader>
+          <CardBody className="grid gap-4">
+            {run ? (
+              <RecipeStageList stages={stages} />
+            ) : (
+              <StageList stages={detail.stages} />
+            )}
+            <p className="m-0 text-xs text-muted">
+              {run
+                ? "One row per recipe stage from the recorded stage runs. A stage that was never started shows not run with its reason. Failed windows and captions are recorded as failed, never as empty results. Costs are estimates. Processing completion is separate from human review."
+                : "Stages are shown only from recorded evidence; a stage with no recorded evidence stays unknown. Processing completion is separate from human review."}
+            </p>
+            {detail.error ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-[#edc8cc] bg-danger-soft px-4 py-3 text-sm text-[#7b2b31]"
+              >
+                <p className="m-0 font-semibold">Action required</p>
+                <p className="m-0 mt-1 break-words">{detail.error.summary}</p>
+              </div>
+            ) : detail.statusNote ? (
+              <p className="m-0 text-sm text-muted">{detail.statusNote}</p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-3">
+              {actions.reviewClipsHref ? (
+                <Button asChild>
+                  <Link href={actions.reviewClipsHref}>Review clips</Link>
+                </Button>
+              ) : null}
+              {actions.control.length === 0 ? (
+                <p className="m-0 text-xs text-muted">
+                  No job action is available for this attempt right now.
+                </p>
+              ) : null}
             </div>
-          ) : detail.statusNote ? (
-            <p className="m-0 text-sm text-muted">{detail.statusNote}</p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-3">
-            {actions.reviewClipsHref ? (
-              <Button asChild>
-                <Link href={actions.reviewClipsHref}>Review clips</Link>
-              </Button>
+            {actions.control.length > 0 ? (
+              <JobControls
+                key={detail.jobId}
+                controls={actions.control}
+                instruction={guidance}
+              />
             ) : null}
-            {actions.control.length === 0 ? (
-              <p className="m-0 text-xs text-muted">
-                No job action is available for this attempt right now.
-              </p>
-            ) : null}
-          </div>
-          {actions.control.length > 0 ? (
-            <JobControls
-              key={detail.jobId}
-              controls={actions.control}
-              instruction={guidance}
+          </CardBody>
+        </Card>
+        {run ? (
+          <Card className="mb-5 min-w-0">
+            <DagRunPanel
+              json={dagRunJson(run)}
+              filename={dagRunFilename(run)}
             />
-          ) : null}
-        </CardBody>
-      </Card>
+          </Card>
+        ) : null}
+      </div>
 
       <Card>
         <CardHeader>
