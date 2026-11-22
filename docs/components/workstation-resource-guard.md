@@ -96,6 +96,14 @@ Where agents still wait: a `ci` ticket behind another gate of the same repositor
 another build, an emulator session behind another, any lane job behind the machine-wide reservation.
 Free work never waits.
 
+## Agent-facing limits summary
+
+- Exactly one Android emulator across all projects, AVDs, ports and agents. Use the shared guarded SDK/launcher; never invoke `emulator.agent-vendor` directly or bypass the machine-wide lock.
+- Run every local heavy build/test/probe through `agent-resource run -- <command>`. This includes newly generated Flutter projects and direct Gradle commands. `scripts/mobile/run.py` enters the guard automatically. If the guard is missing or refuses admission, stop; no unbounded retry.
+- On this workstation the shared cgroup has zero swap and a dynamic hard RAM cap of at most 24 GiB, with 6 GiB each for the sole emulator and one heavy job (1 GiB per service). Host usage must stay under 80% of MemTotal: the cap is `min(24 GiB, our anon memory + (MemAvailable - 20% reserve))`, kept at 12 GiB until the current-policy watchdog heartbeats, so other applications are accounted for and agents never take 80% on top of them. Admission requires the 20% reserve plus 8 GiB available (20 GiB at 60 GiB RAM); the watchdog stops our workloads below the 20% reserve plus 1 GiB and tightens the cap if other apps grow. Limits cover descendants and leftover daemons.
+- Use pinned JDK21, Gradle heap at most 2 GiB, two workers, in-process Kotlin compilation and no persistent Gradle/Kotlin daemons. The guard overrides generated 8 GiB template defaults. Check and clean our leftover processes after tests.
+- Preserve KVM/x86_64/host-GPU verification and personal-profile-only physical-device rules. Installation and proof are below.
+
 ## Memory policy (exact formulas)
 
 With `T` = MemTotal, `A` = MemAvailable and `H` = our slice's anonymous memory
