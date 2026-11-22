@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Full local CI for StateAction: guarded, serial, bound to an exact Git tree.
 
-  local_ci.py run --staged          test the index tree about to be committed (pre-commit)
-  local_ci.py run --tree REV        test a clean commit tree (rebased head before merge)
+  local_ci.py run --tree REV        the single required pass: a clean commit tree (rebased head)
   local_ci.py verify --head REV     validate the PASS receipt for REV against origin/main
   local_ci.py merge --pr N          verify, then squash merge through the GitHub CLI
 
@@ -448,7 +447,7 @@ def stage_env(
             ANDROID_SDK_ROOT=str(tools / "android-sdk"),
         )
     if cache_dir is not None:
-        # One private cache shared by every staged export; correctness comes from Nx's
+        # One private cache shared by every exported tree; correctness comes from Nx's
         # input hashes (sources, lockfiles, nx.json runtime/toolchain inputs), not paths.
         env["NX_CACHE_DIRECTORY"] = str(cache_dir)
     if workspace_data_dir is not None:
@@ -783,31 +782,8 @@ def run_child(
 # ------------------------------------------------------------------------- export
 
 
-def index_tree(repo: Path) -> str:
-    return git(repo, "write-tree")
-
-
-def current_tree(repo: Path, mode: str, rev: str) -> str:
-    return (
-        index_tree(repo)
-        if mode == "staged"
-        else git(repo, "rev-parse", f"{rev}^{{tree}}")
-    )
-
-
-def require_clean_for_staged(repo: Path) -> None:
-    """Tests cover the index; any other state would make the result misleading."""
-    unstaged = git(repo, "diff", "--name-only", check=False)
-    if unstaged:
-        names = ", ".join(unstaged.splitlines()[:5])
-        raise Refused(
-            "Staged and working-tree content differ ("
-            + names
-            + "). Stage the whole intended change or "
-            "set the rest aside yourself; nothing was stashed or discarded."
-        )
-    if git(repo, "ls-files", "--unmerged"):
-        raise Refused("The index has unmerged paths.")
+def current_tree(repo: Path, rev: str) -> str:
+    return git(repo, "rev-parse", f"{rev}^{{tree}}")
 
 
 def require_clean_for_tree(repo: Path, rev: str) -> None:
@@ -1072,25 +1048,47 @@ def record_attempt(
     )
 
 
-def invalidate_best_effort(
-    repo: Path, mode: str, rev: str, home: Path | None = None
-) -> None:
-    """Called before the guard or any other precondition can refuse the run."""
-    with contextlib.suppress(Refused, OSError):
-        invalidate(
-            private_dir(home or local_ci_home()), current_tree(Path(repo), mode, rev)
-        )
-
-
 def receipt_digest(receipt: dict) -> str:
     body = {k: v for k, v in receipt.items() if k != "receiptSha256"}
     return sha256_bytes(json.dumps(body, sort_keys=True).encode())
 
 
+def format_timing(record: dict) -> str:
+    """Per-stage wall time table (PASS, FAIL or INTERRUPTED), for budgeting the gate."""
+    rows = [("stage", "status", "seconds", "cache hits")]
+    for item in record["stages"]:
+        cache = item.get("cache") or {}
+        hit_text = f"{cache.get('hits', 0)}/{cache.get('tasks', 0)}" if cache else "-"
+        rows.append(
+            (
+                item["id"],
+                item["status"],
+                f"{item.get('durationSec', 0.0):.1f}",
+                hit_text,
+            )
+        )
+    rows.append(
+        (
+            "TOTAL",
+            record["verdict"],
+            f"{record.get('totalDurationSec', 0.0):.1f}",
+            f"wall {record.get('wallSec', 0.0):.1f}s",
+        )
+    )
+    widths = [max(len(r[i]) for r in rows) for i in range(4)]
+    lines = [
+        "  ".join(
+            c.ljust(w) if i in (0, 1) else c.rjust(w)
+            for i, (c, w) in enumerate(zip(r, widths))
+        )
+        for r in rows
+    ]
+    return "[local-ci] stage wall time\n" + "\n".join(lines)
+
+
 def run_pipeline(
     repo: Path,
     *,
-    mode: str,
     rev: str = "HEAD",
     home: Path | None = None,
     guard: dict | None = None,
@@ -1111,11 +1109,8 @@ def run_pipeline(
     service_check = service_check or service_proof
     if guard is None:
         raise GuardError("A verified guard proof is required.")
-    if mode == "staged":
-        require_clean_for_staged(repo)
-    else:
-        require_clean_for_tree(repo, rev)
-    tree = current_tree(repo, mode, rev)
+    require_clean_for_tree(repo, rev)
+    tree = current_tree(repo, rev)
     head = git(repo, "rev-parse", "HEAD", check=False) or None
     stages_text = blob(repo, tree, STAGES_PATH)
     if stages_text is None:
@@ -1167,7 +1162,7 @@ def run_pipeline(
     secrets_: list[str] = []
     record = {
         "runId": run_id,
-        "mode": mode,
+        "mode": "tree",
         "tree": tree,
         "head": head,
         "stages": [],
@@ -1188,16 +1183,8 @@ def run_pipeline(
     toolchain: dict[str, str] = {}
     try:
         set_subreaper()
-        export_tree(repo, tree, export)
-        init_export_repo(export)
-        snapshot = take_snapshot(repo, tree, export)
-        for item in stages:
-            for needed in item.get("requiresPaths", []):
-                if not (export / needed).exists():
-                    raise Refused(
-                        f"Stage {item['id']} needs {needed}, which is not in the exported tree. "
-                        "Initialize the submodule or set STATEACTION_LOCAL_CI_SUBMODULES=<dir containing it>."
-                    )
+        # Fixture health first: a dead PostgreSQL/S3 fixture or a missing service
+        # cgroup proof fails in seconds, before the export and any stage.
         if any(s.get("fixtures") for s in stages):
             fixtures = load_fixtures(
                 fixtures_path
@@ -1212,6 +1199,16 @@ def run_pipeline(
             fd = os.open(fixture_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as file:
                 file.write("".join(f"{k}={v}\n" for k, v in sorted(fixtures.items())))
+        export_tree(repo, tree, export)
+        init_export_repo(export)
+        snapshot = take_snapshot(repo, tree, export)
+        for item in stages:
+            for needed in item.get("requiresPaths", []):
+                if not (export / needed).exists():
+                    raise Refused(
+                        f"Stage {item['id']} needs {needed}, which is not in the exported tree. "
+                        "Initialize the submodule or set STATEACTION_LOCAL_CI_SUBMODULES=<dir containing it>."
+                    )
         for stage in stages:
             if stop["requested"]:
                 record["stages"].append({"id": stage["id"], "status": "interrupted"})
@@ -1269,7 +1266,7 @@ def run_pipeline(
                     if k and v
                 }
             # The tree under test must be exactly what is being committed.
-            observed = current_tree(repo, mode, rev)
+            observed = current_tree(repo, rev)
             if observed != tree and result["status"] == "passed":
                 entry["status"] = "tree-changed"
                 entry["detail"] = (
@@ -1292,7 +1289,7 @@ def run_pipeline(
                 break
         passed = [s for s in record["stages"] if s["status"] == "passed"]
         complete = len(passed) == len(stages) == len(record["stages"])
-        final = current_tree(repo, mode, rev)
+        final = current_tree(repo, rev)
         if final != tree:
             complete = False
             record["detail"] = "tree changed during the run"
@@ -1318,6 +1315,10 @@ def run_pipeline(
         with contextlib.suppress(Refused):
             reap_subtree()
         record["finishedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        record["totalDurationSec"] = round(
+            sum(s.get("durationSec", 0.0) for s in record["stages"]), 2
+        )
+        record["wallSec"] = round(time.time() - started_at, 2)
         peak = peak_memory(guard)
         record["guard"] = {
             **{k: v for k, v in guard.items() if k != "cgroup"},
@@ -1327,11 +1328,12 @@ def run_pipeline(
             shutil.rmtree(work, ignore_errors=True)
         os.close(lock_fd)
         write_json_private(logs / "run.json", record)
+        log(format_timing(record))
     if record["verdict"] == "PASS":
         receipt = {
             "schema": RECEIPT_SCHEMA,
             "verdict": "PASS",
-            "mode": mode,
+            "mode": "tree",
             "tree": tree,
             "head": head,
             "base": {"ref": "origin/main", "sha": base_sha},
@@ -1387,41 +1389,6 @@ def run_pipeline(
 # ------------------------------------------------------------------- verification
 
 
-def commit_parents(repo: Path, sha: str) -> list[str] | None:
-    """Parents of an existing commit, or None when `sha` is not a local commit object."""
-    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
-        return None
-    fields = git(repo, "rev-list", "--parents", "-n", "1", sha, check=False).split()
-    # rev-list dereferences tags: require the very commit object that was named.
-    return fields[1:] if fields and fields[0] == sha else None
-
-
-def receipt_context_matches(
-    repo: Path, receipt: dict, head_sha: str, base_sha: str
-) -> bool:
-    """Was the receipt produced for exactly this commit context?
-
-    `tree` receipts name the head itself. A `staged` (pre-commit) receipt names the
-    HEAD that was current when the staged tree was tested: the resulting commit's
-    parent for a normal commit, or the retained previous owned head for a
-    single-commit amend. For an amend, the previous head and the resulting commit
-    must both have exactly one parent, equal to the receipt's tested base and the
-    latest origin/main. Arbitrary ancestry is never accepted.
-    """
-    recorded = receipt.get("head")
-    if receipt.get("mode") == "tree":
-        return recorded == head_sha
-    if receipt.get("mode") != "staged":
-        return False
-    parents = commit_parents(repo, head_sha)
-    if parents is not None and parents == [recorded]:
-        return True
-    tested_base = (receipt.get("base") or {}).get("sha")
-    if parents != [base_sha] or tested_base != base_sha:
-        return False
-    return commit_parents(repo, recorded) == [base_sha]
-
-
 def verify_receipt(
     repo: Path,
     head: str = "HEAD",
@@ -1473,7 +1440,7 @@ def verify_receipt(
         errors.append(
             "a newer attempt on this tree superseded or invalidated the receipt"
         )
-    if not receipt_context_matches(repo, receipt, head_sha, base_sha):
+    if receipt.get("mode") != "tree" or receipt.get("head") != head_sha:
         errors.append(
             "receipt was produced for a different commit context; run `pnpm ci:local` on this head"
         )
@@ -1571,14 +1538,13 @@ def merge_pr(
     execute: bool,
     home: Path | None = None,
 ) -> int:
-    """Serialize with every other CI run/merge on this CI home, then merge."""
-    lock = acquire_lock(private_dir(Path(home) if home else local_ci_home()))
-    try:
-        return _merge_pr(
-            repo, number, github_repo=github_repo, execute=execute, home=home
-        )
-    finally:
-        os.close(lock)
+    """Verify the receipt for the exact head, then merge.
+
+    No run lock: ci:merge never waits for, and is never blocked by, a running
+    ci:local. A run that starts later only invalidates the receipt, which makes the
+    final verification fail closed, and `--match-head-commit` pins the head.
+    """
+    return _merge_pr(repo, number, github_repo=github_repo, execute=execute, home=home)
 
 
 def _merge_pr(
@@ -1660,6 +1626,127 @@ def _merge_pr(
 # -------------------------------------------------------------------------- cli
 
 
+HEAVY_POLL_SEC = 5.0
+HEAVY_POLL_MAX_SEC = 30.0
+HEAVY_SLICE_SEC = 1.0  # signals take effect within one slice
+WAIT_MIN_ENV = "STATEACTION_LOCAL_CI_WAIT_MIN"
+WAIT_MIN_DEFAULT = 60.0
+WAIT_TIMEOUT_EXIT = 76
+
+
+def heavy_lock_path() -> Path:
+    return Path(f"/run/user/{os.getuid()}/agent-resource-guard/heavy-job.lock")
+
+
+def describe_holder(directory: Path, proc: Path = Path("/proc"), now=time.time) -> str:
+    """Name the live agent-resource heavy-job owner: pid, project root and age."""
+    owner = directory / f"{BUILD_SCOPE}.owner"
+    try:
+        pid = int(json.loads(owner.read_text())["pid"])
+        started = owner.stat().st_mtime
+        if not (proc / str(pid)).exists():
+            return "an agent-resource heavy job (its owner process has exited)"
+    except (OSError, ValueError, KeyError, TypeError):
+        return "another agent-resource heavy job (owner unknown)"
+    try:
+        project = os.readlink(proc / str(pid) / "cwd")
+    except OSError:
+        project = "unknown"
+    minutes = max(0, int((now() - started) // 60))
+    return f"pid {pid}, project {project}, running {minutes} min"
+
+
+def heavy_slot_holder() -> str | None:
+    """None when agent-resource's machine-wide heavy-job slot is free, else the holder."""
+    path = heavy_lock_path()
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+    except OSError:
+        return None  # no lock file yet: nobody holds it
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return describe_holder(path.parent)
+    finally:
+        os.close(fd)
+    return None
+
+
+def wait_limit_sec() -> float:
+    with contextlib.suppress(KeyError, ValueError):
+        return float(os.environ[WAIT_MIN_ENV]) * 60
+    return WAIT_MIN_DEFAULT * 60
+
+
+def wait_and_spawn_guarded(
+    launcher: str,
+    command: list[str],
+    *,
+    sleep=time.sleep,
+    clock=time.monotonic,
+    spawn=subprocess.Popen,
+    limit: float | None = None,
+) -> None:
+    """Run the guard launcher as a child, waiting while the heavy-job slot is busy.
+
+    The guard's own non-blocking slot is unchanged, so two heavy jobs still never run
+    at once; this only retries with backoff (5 s growing to 30 s, in 1 s slices so a
+    signal acts within about a second). One deadline (default 60 min, env
+    STATEACTION_LOCAL_CI_WAIT_MIN) covers the whole wait, including retries after a
+    lost race; on expiry it exits 76 naming the holder. Waiters poll and race, so
+    ordering between several waiting runs is not guaranteed.
+    """
+    limit = wait_limit_sec() if limit is None else limit
+    deadline = clock() + limit
+    delay = HEAVY_POLL_SEC
+    state: dict = {"signal": None, "child": None}
+
+    def forward(signum, _frame):
+        state["signal"] = signum
+        if state["child"] is not None:
+            with contextlib.suppress(ProcessLookupError):
+                state["child"].send_signal(signum)
+
+    for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(name, forward)
+    announced = None
+    while True:
+        holder = heavy_slot_holder()
+        while holder is not None:
+            if holder != announced:
+                announced = holder
+                print(
+                    f"[local-ci] waiting for the heavy-job slot (held by {holder})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+            if clock() >= deadline:
+                print(
+                    f"LOCAL CI WAIT TIMEOUT: the heavy-job slot stayed busy for "
+                    f"{limit / 60:.0f} min (held by {holder}). Nothing was run and "
+                    f"no receipt was touched; raise {WAIT_MIN_ENV} or retry later.",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                raise SystemExit(WAIT_TIMEOUT_EXIT)
+            left = delay
+            while left > 0:
+                if state["signal"] is not None:
+                    raise SystemExit(130)
+                step = min(HEAVY_SLICE_SEC, left)
+                sleep(step)
+                left -= step
+            delay = min(delay * 1.5, HEAVY_POLL_MAX_SEC)
+            holder = heavy_slot_holder()
+        if state["signal"] is not None:
+            raise SystemExit(130)
+        state["child"] = spawn(command)
+        code = state["child"].wait()
+        if code == 75 and heavy_slot_holder() is not None:
+            continue  # lost the race for the slot to another job: wait again
+        raise SystemExit(code)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(
@@ -1667,9 +1754,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")
-    group = run.add_mutually_exclusive_group(required=True)
-    group.add_argument("--staged", action="store_true")
-    group.add_argument("--tree", metavar="REV")
+    run.add_argument("--tree", metavar="REV", required=True)
     run.add_argument("--keep-going", action="store_true")
     run.add_argument(
         "--fresh", action="store_true", help="bypass every cache (cold evidence run)"
@@ -1700,14 +1785,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if not errors else 1
         if args.command == "merge":
             return merge_pr(repo, args.pr, github_repo=args.repo, execute=args.execute)
-        invalidate_best_effort(
-            repo, "staged" if args.staged else "tree", args.tree or "HEAD"
+        guard = ensure_guard(
+            [str(Path(__file__).resolve()), *argv], execv=wait_and_spawn_guarded
         )
-        guard = ensure_guard([str(Path(__file__).resolve()), *argv])
         record = run_pipeline(
             repo,
-            mode="staged" if args.staged else "tree",
-            rev=args.tree or "HEAD",
+            rev=args.tree,
             guard=guard,
             keep_going=args.keep_going,
             keep_work=args.keep_work,

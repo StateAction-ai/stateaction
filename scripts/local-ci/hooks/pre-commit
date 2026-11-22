@@ -1,6 +1,7 @@
 #!/bin/sh
-# Tracked pre-commit entry: previous/staged-content checks, then the full guarded local CI.
-# Installed per worktree by scripts/local-ci/install.py. No environment variable skips it.
+# Tracked pre-commit entry: previous/staged-content checks only. The whole suite is the
+# explicit `pnpm ci:local` run, never a per-commit hook. Installed per worktree by
+# scripts/local-ci/install.py.
 top=$(git rev-parse --show-toplevel) || exit 1
 cd "$top" || exit 1
 previous_dir=${STATEACTION_PREVIOUS_HOOKS:-$(git rev-parse --git-common-dir)/hooks}
@@ -9,4 +10,3 @@ if [ -x "$previous_dir/pre-commit" ]; then
 elif [ -f scripts/platform/check-staged.mjs ]; then
   node scripts/platform/check-staged.mjs || exit $?
 fi
-exec python3 scripts/local-ci/local_ci.py run --staged

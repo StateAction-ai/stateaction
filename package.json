@@ -24,7 +24,6 @@
     "hooks:install": "node scripts/platform/install-hooks.mjs",
     "hooks:install-local": "python3 scripts/local-ci/install.py",
     "ci:local": "python3 scripts/local-ci/local_ci.py run --tree HEAD",
-    "ci:local:staged": "python3 scripts/local-ci/local_ci.py run --staged",
     "ci:verify": "python3 scripts/local-ci/local_ci.py verify --head HEAD",
     "ci:merge": "python3 scripts/local-ci/local_ci.py merge",
     "syntax": "nx run-many -t syntax",
