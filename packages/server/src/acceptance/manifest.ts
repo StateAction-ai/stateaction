@@ -5,7 +5,8 @@ import {
 } from "@stateaction/contracts";
 
 /**
- * Pure semantic checks of a processing-result.v2 manifest against catalog
+ * Pure semantic checks of a processing-result.v2 (or, for a recipe job,
+ * processing-result.v3) manifest against catalog
  * facts. The contract (schema + cross-reference rules) is validated before this
  * runs; this binds the document to the exact job, claim, source, admitted
  * identity and closed output inventory. No I/O: every input is a plain value so
@@ -54,6 +55,20 @@ export type ManifestFacts = {
   /** Closed output inventory EXCLUDING the result manifest itself. */
   outputs: InventoryFile[];
   sources: SourceFile[];
+  /**
+   * SA-88 recipe job (processing-result.v3): the admitted recipe and the
+   * recorded stage runs. Absent for the single-claim path (v2).
+   */
+  recipe?: {
+    recipeId: string;
+    recipeSha256: string;
+    modules: Record<string, string>;
+    enabled: Record<string, boolean>;
+    runs: Record<
+      string,
+      { state: string; receiptFileIds: string[] } | undefined
+    >;
+  };
 };
 
 type Obj = Record<string, unknown>;
@@ -79,8 +94,15 @@ export type ClipPlanRow = {
   viewerRrdFileId: string;
 };
 
+/** Recording-level annotation documents a v3 result lists (by file id). */
+export type AnnotationFiles = {
+  segments: string | null;
+  captions: string | null;
+  handPresence: string | null;
+};
+
 export type ManifestVerdict =
-  | { ok: true; clipPlan: ClipPlanRow[] }
+  | { ok: true; clipPlan: ClipPlanRow[]; annotations?: AnnotationFiles }
   | { ok: false; code: string; detail?: string };
 
 const bad = (code: string, detail?: string): ManifestVerdict => ({
@@ -164,6 +186,10 @@ export function checkManifest(
     return bad("summary_mismatch");
 
   const outputs = arr(manifest.outputs).map(obj);
+  if (facts.recipe) {
+    const found = checkRecipeNodes(manifest, facts);
+    if (found) return found;
+  }
   if (facts.outcome === "failed") {
     // A failure report carries diagnostics only: no clips, no accepted outputs.
     return clips.length === 0 && outputs.length === 0
@@ -177,7 +203,10 @@ export function checkManifest(
     return bad("source_identity_mismatch", "source_file_id");
   if (!listed.some((s) => s.file_id === mcap.fileId))
     return bad("source_identity_mismatch", "source_mcap not verified");
-  if (clips.length < 1) return bad("no_clips");
+  // A recipe result may have no clips: its hand_pose node then still lists
+  // hand-presence.json (rule processing_result_nodes), so the recording is
+  // reviewable through its annotations.
+  if (clips.length < 1 && !facts.recipe) return bad("no_clips");
   const byId = new Map(facts.outputs.map((o) => [o.fileId, o]));
   // Explicit duplicate guards (the contract rules report them too): no file id
   // or slot may be listed twice, whatever the manifest claims.
@@ -242,5 +271,70 @@ export function checkManifest(
     return bad("clip_slot_mismatch", "a file belongs to more than one clip");
   if (new Set(plan.map((c) => c.clipId)).size !== plan.length)
     return bad("manifest_duplicate_clip");
-  return { ok: true, clipPlan: plan };
+  if (!facts.recipe) return { ok: true, clipPlan: plan };
+  const one = (role: string) =>
+    outputs.find((o) => o.role === role)?.file_id as string | undefined;
+  return {
+    ok: true,
+    clipPlan: plan,
+    annotations: {
+      segments: one("segments_json") ?? null,
+      captions: one("captions_json") ?? null,
+      handPresence: one("hand_presence_json") ?? null,
+    },
+  };
+}
+
+const STAGE_FOR_NODE = ["segment", "caption", "hand_pose"] as const;
+
+/**
+ * v3 nodes against the admitted recipe and the recorded stage runs: the same
+ * recipe, each node's module is the recipe module, a GPU stage node states
+ * what its recorded terminal run states (succeeded, failed or cancelled as
+ * failed, not_run) and lists only files its run receipt named, and a
+ * succeeded result has a succeeded hand_pose (seal) node.
+ */
+function checkRecipeNodes(
+  manifest: Obj,
+  facts: ManifestFacts,
+): ManifestVerdict | null {
+  const recipe = facts.recipe!;
+  if (
+    manifest.recipe_id !== recipe.recipeId ||
+    manifest.recipe_sha256 !== recipe.recipeSha256
+  )
+    return bad("manifest_recipe_mismatch");
+  const nodes = arr(manifest.nodes).map(obj);
+  for (const [i, stage] of STAGE_FOR_NODE.entries()) {
+    const node = nodes[i] ?? {};
+    if (node.module !== recipe.modules[stage])
+      return bad("manifest_node_mismatch", `${stage} module`);
+    if (stage === "hand_pose") {
+      if (facts.outcome === "succeeded" && node.status !== "succeeded")
+        return bad("manifest_node_mismatch", "hand_pose status");
+      continue;
+    }
+    const run = recipe.runs[stage];
+    // Stages are sequential: before the seal, every enabled GPU stage has a
+    // terminal recorded run (the database refuses acceptance otherwise).
+    if (
+      recipe.enabled[stage] &&
+      !["succeeded", "failed", "cancelled", "not_run"].includes(
+        run?.state ?? "",
+      )
+    )
+      return bad("stage_not_settled", stage);
+    const recorded =
+      run === undefined
+        ? "not_run"
+        : run.state === "cancelled"
+          ? "failed"
+          : run.state;
+    if (node.status !== recorded)
+      return bad("manifest_node_mismatch", `${stage} status`);
+    for (const fileId of arr(node.outputs))
+      if (!run?.receiptFileIds.includes(String(fileId)))
+        return bad("manifest_node_mismatch", `${stage} output`);
+  }
+  return null;
 }

@@ -60,7 +60,16 @@ export const OUTPUT_ROLES = [
   "frame_map_json",
   "thumbnail_jpeg",
   "viewer_rrd",
+  // SA-88 recording-level annotation outputs (common.v2 outputFileRole). The
+  // database accepts them only in their fixed slots and only for recipe jobs.
+  "segments_json",
+  "captions_json",
+  "hand_presence_json",
+  "recording_mp4",
+  "diagnostic_blob",
 ] as const;
+/** Staff-only stage evidence stays small (also a database CHECK). */
+export const MAX_DIAGNOSTIC_BLOB_BYTES = 67_108_864n; // 64 MiB
 export const MAX_SOURCE_MANIFEST_BYTES = 1_048_576n;
 /** Per-file / per-job caps for worker outputs (bounded inventory). */
 export const MAX_OUTPUT_FILE_BYTES = 34_359_738_368n; // 32 GiB
@@ -223,6 +232,8 @@ export async function allocateJobOutput(
   const size = BigInt(request.sizeBytes);
   if (size > MAX_OUTPUT_FILE_BYTES)
     throw invalid("Output exceeds the per-file cap");
+  if (request.role === "diagnostic_blob" && size > MAX_DIAGNOSTIC_BLOB_BYTES)
+    throw invalid("Diagnostic output exceeds its 64 MiB cap");
   const plan = planFor(size);
   const digest = createHash("sha256")
     .update(

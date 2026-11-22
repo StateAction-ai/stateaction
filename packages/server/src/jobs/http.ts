@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
+  validateBytes,
   validateValue,
-  type ControllerAction,
+  type ControllerActionV2,
   type ControllerResult,
   type HeartbeatAck,
   type InputRead,
@@ -18,7 +19,11 @@ import {
   type ResultAck,
 } from "../acceptance/service.js";
 import { TransportError } from "../transport/errors.js";
-import { errorResponse, readBoundedJson } from "../transport/http.js";
+import {
+  errorResponse,
+  readBoundedBytes,
+  readBoundedJson,
+} from "../transport/http.js";
 import { runRepair } from "./recovery.js";
 import {
   admitNextJob,
@@ -37,6 +42,17 @@ import {
   renewControllerLease,
   type JobsDeps,
 } from "./service.js";
+import {
+  claimStage,
+  issueStageClaim,
+  readStageOutput,
+  recordStageHeartbeat,
+  recordStageRun,
+  stageOfCredential,
+} from "./stages.js";
+
+/** controller-action.v2 bodies may carry a stage receipt (<= 64 KiB). */
+const CONTROLLER_BODY_MAX_BYTES = 81920;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -169,11 +185,12 @@ export function jobHandlers(deps: () => JobsDeps) {
 
     controller: (request: Request, jobId: string, principalId: string) =>
       respond(async () => {
+        // v2 is an exact superset of v1 (SA-87): the v1 actions are unchanged.
         const a = (await readBoundedJson(
           request,
-          "jobs.controller-action.v1",
-          4096,
-        )) as ControllerAction;
+          "jobs.controller-action.v2",
+          CONTROLLER_BODY_MAX_BYTES,
+        )) as ControllerActionV2;
         const d = deps();
         const out = async (): Promise<unknown> => {
           switch (a.action) {
@@ -241,6 +258,31 @@ export function jobHandlers(deps: () => JobsDeps) {
               );
               return { ...recorded, slotReleased: held.rowCount === 0 };
             }
+            case "issue_stage_claim": {
+              const r = await issueStageClaim(d, {
+                jobId,
+                owner: a.owner,
+                stage: a.stage,
+              });
+              return r.state === "recorded"
+                ? {
+                    ...r,
+                    startDeadline: iso(r.startDeadline),
+                    executionDeadline: iso(r.executionDeadline),
+                  }
+                : r;
+            }
+            case "record_stage_run":
+              return recordStageRun(d, {
+                jobId,
+                owner: a.owner,
+                stage: a.stage,
+                state: a.state,
+                module: a.module,
+                callId: a.callId,
+                errorCode: a.errorCode,
+                receipt: a.receipt,
+              });
           }
         };
         return checked<ControllerResult>(
@@ -249,7 +291,7 @@ export function jobHandlers(deps: () => JobsDeps) {
         );
       }),
 
-    claim: (request: Request, jobId: string) =>
+    claim: (request: Request, jobId: string, principalId = "") =>
       respond(async () => {
         const body = (await readBoundedJson(
           request,
@@ -260,6 +302,14 @@ export function jobHandlers(deps: () => JobsDeps) {
           executor: unknown;
         };
         if (body.jobId !== jobId) throw bad("jobId does not match the route");
+        // A stage bootstrap (SA-88 recipe job) claims exactly its stage.
+        if (stageOfCredential(principalId))
+          return claimStage(deps(), {
+            jobId,
+            bootstrapToken: bearer(request),
+            invocationNonce: body.invocationNonce,
+            executor: parseExecutor(body.executor),
+          });
         return claimWorker(deps(), {
           jobId,
           bootstrapToken: bearer(request),
@@ -268,23 +318,63 @@ export function jobHandlers(deps: () => JobsDeps) {
         });
       }),
 
-    heartbeat: (request: Request, jobId: string) =>
+    heartbeat: (request: Request, jobId: string, principalId = "") =>
       respond(async () => {
-        const body = (await readBoundedJson(request, "jobs.heartbeat.v1")) as {
+        // heartbeat.v2 (SA-88) names the stage; v1 stays the single-claim path.
+        const bytes = await readBoundedBytes(request);
+        let version: unknown;
+        try {
+          version = (
+            JSON.parse(new TextDecoder().decode(bytes)) as {
+              schemaVersion?: unknown;
+            }
+          )?.schemaVersion;
+        } catch {
+          version = undefined;
+        }
+        const contract =
+          version === 2 ? "jobs.heartbeat.v2" : "jobs.heartbeat.v1";
+        const parsed = validateBytes(contract, bytes);
+        if (!parsed.valid)
+          throw bad(
+            `${contract}: ${parsed.code}${parsed.errors[0] ? ` at ${parsed.errors[0].path || "/"}` : ""}`,
+          );
+        const body = parsed.value as {
           jobId: string;
           invocationNonce: string;
+          stage?: "segment" | "caption" | "hand_pose";
           phase: string;
           processedFrames?: string;
           totalFrames?: string | null;
         };
         if (body.jobId !== jobId) throw bad("jobId does not match the route");
-        const r = await recordHeartbeat(deps(), {
-          jobId,
-          invocationNonce: body.invocationNonce,
-          phase: body.phase,
-          processedFrames: body.processedFrames,
-          totalFrames: body.totalFrames,
-        });
+        const caller = stageOfCredential(principalId);
+        if (
+          body.stage !== undefined &&
+          caller !== null &&
+          caller !== body.stage
+        )
+          throw new TransportError(
+            "forbidden",
+            "Heartbeat stage does not match the capability",
+          );
+        const r =
+          body.stage !== undefined
+            ? await recordStageHeartbeat(deps(), {
+                jobId,
+                stage: body.stage,
+                invocationNonce: body.invocationNonce,
+                phase: body.phase,
+                processedFrames: body.processedFrames,
+                totalFrames: body.totalFrames,
+              })
+            : await recordHeartbeat(deps(), {
+                jobId,
+                invocationNonce: body.invocationNonce,
+                phase: body.phase,
+                processedFrames: body.processedFrames,
+                totalFrames: body.totalFrames,
+              });
         return checked<HeartbeatAck>("jobs.heartbeat-ack.v1", {
           accepted: true,
           executionDeadline: iso(r.executionDeadline),
@@ -293,12 +383,15 @@ export function jobHandlers(deps: () => JobsDeps) {
 
     /** GET /internal/v1/jobs/{id}/task-input: the admitted task input of the claimed job. */
     taskInput: (_request: Request, jobId: string) =>
-      respond(async () =>
-        checked<Record<string, unknown>>(
-          "jobs.task-input.v2",
-          await readTaskInput(deps(), { jobId }),
-        ),
-      ),
+      respond(async () => {
+        const task = await readTaskInput(deps(), { jobId });
+        return checked<Record<string, unknown>>(
+          task.schemaVersion === 3
+            ? "jobs.task-input.v3"
+            : "jobs.task-input.v2",
+          task,
+        );
+      }),
 
     /** POST /internal/v1/jobs/{id}/outputs/close: seal the output inventory. */
     closeOutputs: (request: Request, jobId: string) =>
@@ -350,6 +443,27 @@ export function jobHandlers(deps: () => JobsDeps) {
         checked<InputRead>(
           "http.input-read.v1",
           await refreshInputReadUrl(deps(), { jobId, fileId }),
+        ),
+      ),
+
+    /**
+     * POST /internal/v1/jobs/{id}/outputs/{fileId}/read (SA-88): the caption
+     * stage reads the completed segments_json output of the same job.
+     */
+    outputRead: (
+      _request: Request,
+      jobId: string,
+      fileId: string,
+      principalId = "",
+    ) =>
+      respond(async () =>
+        checked<InputRead>(
+          "http.input-read.v1",
+          await readStageOutput(deps(), {
+            jobId,
+            fileId,
+            stage: stageOfCredential(principalId),
+          }),
         ),
       ),
   };

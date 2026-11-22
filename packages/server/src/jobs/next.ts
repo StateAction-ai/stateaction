@@ -21,7 +21,7 @@ import {
 import { jobsConfigFromEnv } from "./config.js";
 import { renderTaskStarterFromEnv } from "./dispatch.js";
 import { datasetAuthenticator } from "../datasets/next.js";
-import { jobControlRoutes } from "./control.js";
+import { jobControlRoutes, jobDagRunRoutes } from "./control.js";
 import { jobHandlers, type JobHandlers } from "./http.js";
 import type { JobsDeps } from "./service.js";
 
@@ -166,7 +166,7 @@ export function jobRouteHandlers(
         jobId,
         (pool) => new BootstrapCapabilityStore(pool),
         { kinds: ["worker"], scope: "job:claim" },
-        (h) => h.claim(request, jobId),
+        (h, principal) => h.claim(request, jobId, principal),
       ),
     heartbeat: (request: Request, jobId: string) =>
       guarded(
@@ -174,7 +174,7 @@ export function jobRouteHandlers(
         jobId,
         worker,
         { kinds: ["worker"], scope: "job:heartbeat" },
-        (h) => h.heartbeat(request, jobId),
+        (h, principal) => h.heartbeat(request, jobId, principal),
       ),
     taskInput: (request: Request, jobId: string) =>
       guarded(
@@ -208,6 +208,17 @@ export function jobRouteHandlers(
             worker,
             { kinds: ["worker"], scope: "job:input" },
             (h) => h.inputRead(request, jobId, fileId),
+          )
+        : Promise.resolve(notFound()),
+    /** SA-88: the caption stage reads the job's completed segments_json (job:input). */
+    outputRead: (request: Request, jobId: string, fileId: string) =>
+      fileOk(fileId)
+        ? guarded(
+            request,
+            jobId,
+            worker,
+            { kinds: ["worker"], scope: "job:input" },
+            (h, principal) => h.outputRead(request, jobId, fileId, principal),
           )
         : Promise.resolve(notFound()),
   };
@@ -249,6 +260,40 @@ export function jobControlRouteHandlers(get: () => AuthRuntime = authRuntime) {
         }
       }
       return routes.control(request, jobId);
+    },
+  };
+}
+
+const DAG_RUN_KEY = Symbol.for("stateaction.jobs.dag-run");
+/** Staff recipe-run view binding (/api/v1/jobs/{jobId}/dag-run), staff session guard. */
+export function jobDagRunRouteHandlers(get: () => AuthRuntime = authRuntime) {
+  return {
+    dagRun: (request: Request, jobId: string): Promise<Response> => {
+      const holder = globalThis as {
+        [DAG_RUN_KEY]?: ReturnType<typeof jobDagRunRoutes>;
+      };
+      let routes = holder[DAG_RUN_KEY];
+      if (!routes) {
+        try {
+          routes = holder[DAG_RUN_KEY] = jobDagRunRoutes({
+            pool: get().pool,
+            authenticate: datasetAuthenticator(get),
+          });
+        } catch (error) {
+          console.error(
+            "[jobs] dag-run unavailable:",
+            error instanceof Error ? error.message : "error",
+          );
+          return Promise.resolve(
+            authError(
+              "provider_unavailable",
+              "Job service is temporarily unavailable",
+              newRequestId(),
+            ),
+          );
+        }
+      }
+      return routes.dagRun(request, jobId);
     },
   };
 }

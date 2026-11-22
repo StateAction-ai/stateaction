@@ -64,3 +64,59 @@ test("job states match and job kinds are the MVP subset", () => {
   assert.ok(common.$defs.jobKind.enum.includes("process_recording"));
   assert.doesNotMatch(sql, /CREATE TABLE releases/);
 });
+
+/**
+ * SA-88 (migration 011): the replaced CHECK vocabularies match the common.v2
+ * and heartbeat.v2 contracts (v2 roles are an exact superset of v1).
+ */
+const sql011 = await readFile(
+  new URL("../migrations/011_stage_runs.sql", import.meta.url),
+  "utf8",
+);
+const common2 = await schema("common.v2.schema.json");
+const heartbeat2 = await schema("jobs/heartbeat.v2.schema.json");
+const list011 = (marker: RegExp) => {
+  const match = marker.exec(sql011);
+  assert.ok(match?.[1], `CHECK list not found: ${marker}`);
+  return [...match[1].matchAll(/'([A-Za-z_0-9.-]+)'/g)].map((m) => m[1]).sort();
+};
+
+test("011 file roles match the v1 source roles plus the common.v2 output roles", () => {
+  assert.deepEqual(
+    list011(/files_role_v2_check CHECK \(role IN \(([^)]*)\)\)/),
+    sorted([
+      ...common.$defs.sourceFileRole.enum,
+      ...common2.$defs.outputFileRole.enum,
+    ]),
+  );
+  assert.deepEqual(
+    sorted(
+      common.$defs.outputFileRole.enum.filter(
+        (r: string) => !common2.$defs.outputFileRole.enum.includes(r),
+      ),
+    ),
+    [],
+  );
+});
+test("011 heartbeat phases, stages, stage states and GPU types match the contracts", () => {
+  assert.deepEqual(
+    list011(
+      /jobs_heartbeat_phase_v2_check CHECK \(heartbeat_phase IN \(([^)]*)\)\)/,
+    ),
+    sorted(heartbeat2.properties.phase.enum),
+  );
+  assert.deepEqual(
+    list011(/state text NOT NULL CHECK \(state IN \(([^)]*)\)\)/),
+    sorted(common2.$defs.stageRunState.enum),
+  );
+  assert.deepEqual(
+    list011(/stage text NOT NULL CHECK \(stage IN \(([^)]*)\)\)/),
+    sorted(common2.$defs.stage.enum),
+  );
+  assert.deepEqual(
+    list011(
+      /requested_gpu text NOT NULL CHECK \(requested_gpu IN \(([^)]*)\)\)/,
+    ),
+    sorted(common2.$defs.gpuType.enum),
+  );
+});

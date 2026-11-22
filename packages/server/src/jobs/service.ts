@@ -248,8 +248,13 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         profileRevision: c.profile_revision,
         sourceManifestSha256: c.source_manifest_sha256,
       });
+      // v3 (SA-88) carries the inline recipe; v1/v2 keep the single-claim path.
       const contract =
-        task.schemaVersion === 2 ? "jobs.task-input.v2" : "jobs.task-input.v1";
+        task.schemaVersion === 3
+          ? "jobs.task-input.v3"
+          : task.schemaVersion === 2
+            ? "jobs.task-input.v2"
+            : "jobs.task-input.v1";
       if (!contractIds.includes(contract))
         throw new TransportError(
           "invalid_request",
@@ -290,12 +295,23 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         [c.id],
       );
       const admittedAt = won.rows[0]!.admitted_at;
+      // The recipe (if any) is stored with the admission, written once and
+      // checked by the database against the persisted task input.
+      const recipe = task.schemaVersion === 3 ? task.recipe : null;
       const updated = await tx.query<{ execution_deadline: Date }>(
         `UPDATE jobs SET state = 'submitting', admitted_at = $2, dispatch_key = 'job:' || id::text,
            execution_backend = $3,
-           execution_deadline = $2::timestamptz + make_interval(secs => $4)
+           execution_deadline = $2::timestamptz + make_interval(secs => $4),
+           recipe = $5::jsonb, recipe_sha256 = $6
          WHERE id = $1 AND state = 'queued' RETURNING execution_deadline`,
-        [c.id, admittedAt, cfg.executionBackend, cfg.executionDeadlineSeconds],
+        [
+          c.id,
+          admittedAt,
+          cfg.executionBackend,
+          cfg.executionDeadlineSeconds,
+          recipe === null ? null : JSON.stringify(recipe),
+          recipe === null ? null : task.recipeSha256,
+        ],
       );
       return {
         state: "admitted",
@@ -649,11 +665,45 @@ export async function recordExecutionEvidence(
       ? null
       : pattern(ev.executionRef, REF, "executionRef");
   return run(deps.pool, async (tx) => {
-    const { rows } = await tx.query<{ state: string }>(
-      "SELECT state FROM jobs WHERE id = $1 FOR UPDATE",
+    const { rows } = await tx.query<{ state: string; recipe: boolean }>(
+      "SELECT state, recipe IS NOT NULL AS recipe FROM jobs WHERE id = $1 FOR UPDATE",
       [jobId],
     );
     if (!rows[0]) throw new TransportError("not_found", "Job not found");
+    // SA-88 recipe job: the proof first names the exact call of one stage
+    // (job_stage_evidence). It is also the job's terminal evidence only when
+    // that stage is the latest issued and no later stage can still run (the
+    // sealing hand_pose stage, or a job that can no longer continue).
+    if (rows[0].recipe && ev.kind !== "pre_submission_rejected") {
+      const stage = (
+        await tx.query<{ stage: string }>(
+          "SELECT job_stage_record_evidence($1, $2, $3, $4::jsonb, $5) AS stage",
+          [jobId, ev.kind, ref, JSON.stringify(ev.detail ?? {}), by],
+        )
+      ).rows[0]!.stage;
+      const latest = (
+        await tx.query<{ stage: string }>(
+          `SELECT stage FROM job_stage_claims WHERE job_id = $1
+           ORDER BY job_stage_ord(stage) DESC LIMIT 1`,
+          [jobId],
+        )
+      ).rows[0]?.stage;
+      const final =
+        stage === latest &&
+        (stage === "hand_pose" ||
+          !["submitting", "submit_unknown", "running"].includes(rows[0].state));
+      const already = await tx.query(
+        "SELECT 1 FROM job_execution_evidence WHERE job_id = $1",
+        [jobId],
+      );
+      if (!final || already.rows[0]) {
+        const held = await tx.query(
+          "SELECT 1 FROM dispatch_admission WHERE slot = 1 AND job_id = $1",
+          [jobId],
+        );
+        return { recorded: true, slotReleased: held.rowCount === 0 } as const;
+      }
+    }
     await tx.query(
       `INSERT INTO job_execution_evidence (job_id, kind, execution_ref, detail, recorded_by)
        VALUES ($1, $2, $3, $4, $5)`,

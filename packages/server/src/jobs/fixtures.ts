@@ -213,7 +213,7 @@ export async function fixtureCloseOutputs(
   const stats = (
     await owner.query<{ files: number; bytes: string; clips: number }>(
       `SELECT count(*)::int AS files, coalesce(sum(f.size_bytes), 0)::text AS bytes,
-              count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE f.role <> 'result_manifest')::int AS clips
+              count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE s.slot LIKE 'clips/%')::int AS clips
        FROM files f LEFT JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
        WHERE f.job_id = $1 AND f.purpose = 'output'`,
       [input.jobId],

@@ -15,6 +15,7 @@ import { TransportError } from "../transport/errors.js";
 import type { AcceptanceConfig } from "./config.js";
 import {
   checkManifest,
+  type AnnotationFiles,
   type InventoryFile,
   type ManifestFacts,
   type SourceFile,
@@ -35,6 +36,14 @@ export type AcceptanceDeps = {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NONCE = /^[A-Za-z0-9_-]{43}$/;
 const MANIFEST_CONTRACT = "artifacts.processing-result.v2";
+/** SA-88: a recipe job's sealing hand_pose stage posts processing-result.v3. */
+const MANIFEST_CONTRACT_V3 = "artifacts.processing-result.v3";
+/**
+ * Bounded read of each recording-level annotation document (segments,
+ * captions, hand presence) at acceptance. Larger documents are rejected
+ * (`annotation_too_large`), never truncated.
+ */
+export const ANNOTATION_MAX_BYTES = 32 * 1024 ** 2;
 const SHA_ZERO = "0".repeat(64);
 const MANIFEST_MAX_BYTES = 1048576;
 
@@ -155,7 +164,7 @@ export async function closeOutputs(
       manifest: string | null;
     }>(
       `SELECT count(*)::int AS files, coalesce(sum(f.size_bytes), 0)::text AS bytes,
-              count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE f.role <> 'result_manifest')::int AS clips,
+              count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE s.slot LIKE 'clips/%')::int AS clips,
               (array_agg(f.id) FILTER (WHERE f.role = 'result_manifest'))[1] AS manifest
        FROM files f LEFT JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
        WHERE f.job_id = $1 AND f.purpose = 'output'`,
@@ -214,12 +223,21 @@ type CandidateRow = {
   summary: ManifestFacts["summary"] & { outcome: string };
   status: "provisional" | "verified" | "accepted" | "rejected";
   clip_plan: unknown[] | null;
+  verified_counts: AnnotationCounts | null;
   reason_code: string | null;
   received_at: Date;
 };
 
+/** Accepted annotation counts (null: that document was not produced). */
+export type AnnotationCounts = {
+  segmentCount: number | null;
+  failedWindowCount: number | null;
+  captionCount: number | null;
+  captionFailedCount: number | null;
+};
+
 const CANDIDATE_COLUMNS = `job_id, invocation_nonce, manifest_file_id, manifest_sha256, inventory_sha256,
-  outcome, clip_count, error_code, summary, status, clip_plan, reason_code, received_at`;
+  outcome, clip_count, error_code, summary, status, clip_plan, verified_counts, reason_code, received_at`;
 
 function ackOf(jobId: string, cand: CandidateRow, jobState: string): ResultAck {
   return {
@@ -455,7 +473,11 @@ async function verifyCandidate(
     sha256Hex(bytes) !== cand.manifest_sha256
   )
     return reject("manifest_hash_mismatch");
-  const verdict = validateBytes(MANIFEST_CONTRACT, bytes);
+  const recipe = await recipeFacts(pool, st.job.id);
+  const verdict = validateBytes(
+    recipe ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
+    bytes,
+  );
   if (!verdict.valid) return reject("manifest_contract_invalid", verdict.code);
 
   const sources: SourceFile[] = (
@@ -505,8 +527,33 @@ async function verifyCandidate(
     },
     outputs,
     sources,
+    ...(recipe ? { recipe } : {}),
   });
   if (!checked.ok) return reject(checked.code, checked.detail);
+  let counts: AnnotationCounts | null = null;
+  if (recipe && cand.outcome === "succeeded") {
+    const annotated = await checkAnnotations(
+      deps,
+      files,
+      checked.annotations!,
+      {
+        jobId: st.job.id,
+        recordingId: st.job.recording_id,
+        sourceManifestSha256: inputs.source_manifest_sha256,
+      },
+    );
+    if (annotated.kind === "incomplete") return transientOrExpired();
+    if (annotated.kind === "rejected")
+      return reject(annotated.code, annotated.detail);
+    counts = annotated.counts;
+  } else if (recipe) {
+    counts = {
+      segmentCount: null,
+      failedWindowCount: null,
+      captionCount: null,
+      captionFailedCount: null,
+    };
+  }
   const taken = await pool.query(
     "SELECT 1 FROM clips WHERE id = ANY($1::uuid[]) LIMIT 1",
     [checked.clipPlan.map((c) => c.clipId)],
@@ -549,7 +596,8 @@ async function verifyCandidate(
   }
   await run(pool, async (tx) => {
     await tx.query(
-      `UPDATE job_result_candidates SET status = 'verified', clip_plan = $2, verified_checks = $3, verified_at = now()
+      `UPDATE job_result_candidates SET status = 'verified', clip_plan = $2, verified_checks = $3,
+         verified_counts = $4::jsonb, verified_at = now()
        WHERE job_id = $1 AND status = 'provisional'`,
       [
         st.job.id,
@@ -558,10 +606,173 @@ async function verifyCandidate(
           ((verdict.value as Record<string, unknown>).checks as unknown[]) ??
             [],
         ),
+        counts === null ? null : JSON.stringify(counts),
       ],
     );
   });
   return { kind: "verified" };
+}
+
+// ------------------------------------------------------- SA-88 recipe facts
+
+/** The admitted recipe and recorded stage runs of a recipe job, else null. */
+async function recipeFacts(
+  pool: pg.Pool,
+  jobId: string,
+): Promise<NonNullable<ManifestFacts["recipe"]> | null> {
+  const job = (
+    await pool.query<{
+      recipe: {
+        recipeId: string;
+        stages: { stage: string; enabled: boolean; module: string }[];
+      } | null;
+      recipe_sha256: string | null;
+    }>("SELECT recipe, recipe_sha256 FROM jobs WHERE id = $1", [jobId])
+  ).rows[0];
+  if (!job?.recipe || !job.recipe_sha256) return null;
+  const runs = (
+    await pool.query<{
+      stage: string;
+      state: string;
+      receipt: { outputs?: { fileId: string }[] } | null;
+    }>("SELECT stage, state, receipt FROM job_stage_runs WHERE job_id = $1", [
+      jobId,
+    ])
+  ).rows;
+  return {
+    recipeId: job.recipe.recipeId,
+    recipeSha256: job.recipe_sha256,
+    modules: Object.fromEntries(
+      job.recipe.stages.map((x) => [x.stage, x.module]),
+    ),
+    enabled: Object.fromEntries(
+      job.recipe.stages.map((x) => [x.stage, x.enabled]),
+    ),
+    runs: Object.fromEntries(
+      runs.map((r) => [
+        r.stage,
+        {
+          state: r.state,
+          receiptFileIds: (r.receipt?.outputs ?? []).map((o) => o.fileId),
+        },
+      ]),
+    ),
+  };
+}
+
+type Annotated =
+  | { kind: "ok"; counts: AnnotationCounts }
+  | { kind: "incomplete" }
+  | { kind: "rejected"; code: string; detail?: string };
+
+/**
+ * Bounded read and contract check of the recording-level annotation
+ * documents of a succeeded v3 result: each is the exact stored bytes, a valid
+ * segments.v1 / captions.v1 / hand-presence.v1 for this job, recording and
+ * source; captions pin the exact segments bytes and caption only accepted
+ * segments. Returns the counts acceptance stores.
+ */
+async function checkAnnotations(
+  deps: AcceptanceDeps,
+  files: OutputRow[],
+  listed: AnnotationFiles,
+  ids: { jobId: string; recordingId: string; sourceManifestSha256: string },
+): Promise<Annotated> {
+  const byId = new Map(files.map((f) => [f.id, f]));
+  type Doc = Record<string, unknown>;
+  const load = async (
+    fileId: string | null,
+    contract: string,
+  ): Promise<
+    | { kind: "ok"; doc: Doc | null; file: OutputRow | null }
+    | Exclude<Annotated, { kind: "ok" }>
+  > => {
+    if (fileId === null) return { kind: "ok", doc: null, file: null };
+    const file = byId.get(fileId);
+    if (!file) return { kind: "rejected", code: "annotation_missing" };
+    let bytes: Uint8Array;
+    try {
+      bytes = await deps.reader.read(file.object_key, ANNOTATION_MAX_BYTES);
+    } catch (error) {
+      if (error instanceof ObjectTooLargeError)
+        return {
+          kind: "rejected",
+          code: "annotation_too_large",
+          detail: file.slot,
+        };
+      return { kind: "incomplete" };
+    }
+    if (
+      bytes.byteLength !== Number(file.size_bytes) ||
+      sha256Hex(bytes) !== file.sha256
+    )
+      return {
+        kind: "rejected",
+        code: "output_hash_mismatch",
+        detail: file.slot,
+      };
+    const verdict = validateBytes(contract, bytes);
+    if (!verdict.valid)
+      return {
+        kind: "rejected",
+        code: "annotation_contract_invalid",
+        detail: `${file.slot}: ${verdict.code}`,
+      };
+    const doc = verdict.value as Doc;
+    if (
+      doc.job_id !== ids.jobId ||
+      doc.recording_id !== ids.recordingId ||
+      doc.source_manifest_sha256 !== ids.sourceManifestSha256
+    )
+      return {
+        kind: "rejected",
+        code: "annotation_identity_mismatch",
+        detail: file.slot,
+      };
+    return { kind: "ok", doc, file };
+  };
+  const seg = await load(listed.segments, "artifacts.segments.v1");
+  if (seg.kind !== "ok") return seg;
+  const cap = await load(listed.captions, "artifacts.captions.v1");
+  if (cap.kind !== "ok") return cap;
+  const hand = await load(listed.handPresence, "artifacts.hand-presence.v1");
+  if (hand.kind !== "ok") return hand;
+  if (!hand.doc) return { kind: "rejected", code: "annotation_missing" };
+  const rows = (d: Doc | null) =>
+    (Array.isArray(d?.rows) ? d.rows : []) as Record<string, unknown>[];
+  let counts: AnnotationCounts = {
+    segmentCount: null,
+    failedWindowCount: null,
+    captionCount: null,
+    captionFailedCount: null,
+  };
+  if (seg.doc) {
+    const windows = (seg.doc.windows ?? {}) as { failed?: unknown[] };
+    counts = {
+      ...counts,
+      segmentCount: rows(seg.doc).filter((r) => r.status === "ok").length,
+      failedWindowCount: (windows.failed ?? []).length,
+    };
+  }
+  if (cap.doc) {
+    if (!seg.doc || cap.doc.segments_sha256 !== seg.file!.sha256)
+      return { kind: "rejected", code: "captions_segments_mismatch" };
+    const known = new Set(rows(seg.doc).map((r) => r.segment_id));
+    const unknown = rows(cap.doc).find((r) => !known.has(r.segment_id));
+    if (unknown)
+      return {
+        kind: "rejected",
+        code: "caption_unknown_segment",
+        detail: String(unknown.segment_id),
+      };
+    counts = {
+      ...counts,
+      captionCount: rows(cap.doc).filter((r) => r.status === "complete").length,
+      captionFailedCount: rows(cap.doc).filter((r) => r.status === "failed")
+        .length,
+    };
+  }
+  return { kind: "ok", counts };
 }
 
 // ----------------------------------------------------------------- disposition
@@ -751,10 +962,22 @@ async function acceptVerified(
        WHERE recording_id = $1 AND purpose = 'source' AND role = 'source_mcap' AND state = 'completed'`,
       [recordingId],
     );
+    // Recipe jobs store the verified annotation counts with the success (the
+    // database requires them to equal the candidate's verified counts).
+    const n = cand.verified_counts;
     await tx.query(
       `UPDATE jobs SET state = 'succeeded', result_manifest_file_id = $2, result_manifest_sha256 = $3,
+         segment_count = $4, failed_window_count = $5, caption_count = $6, caption_failed_count = $7,
          finished_at = now() WHERE id = $1`,
-      [jobId, cand.manifest_file_id, cand.manifest_sha256],
+      [
+        jobId,
+        cand.manifest_file_id,
+        cand.manifest_sha256,
+        n?.segmentCount ?? null,
+        n?.failedWindowCount ?? null,
+        n?.captionCount ?? null,
+        n?.captionFailedCount ?? null,
+      ],
     );
     await tx.query(
       "UPDATE recordings SET status = 'reviewable' WHERE id = $1 AND current_job_id = $2",
