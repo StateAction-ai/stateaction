@@ -48,6 +48,17 @@ uv run --locked python -m stateaction_processing.artifact_cli read NEWPREFIX --v
 
 `export` needs `--source-manifest FILE` (hashed) or `--source-manifest-sha256`; the source manifest is not fabricated. The reader (`artifact_reader.py`, stdlib + numpy) verifies every listed byte and rejects unlisted files, then exposes `arrays()`, `frame_map()`, `timestamps()`, `hand_observations()`, `provenance`, `verify_roundtrip()` (NPZ == JSON == frame map) and `verify_mp4()`.
 
+## Recipe seal: review video, hand presence and `processing-result.v3` (SA-92)
+
+With a recipe, `hand_pose_cpu_v1` is the last stage and seals the job; without one nothing below runs and the output is the unchanged `processing-result.v2` path. The bootstrap of the stage carries `stage: "hand_pose"`, `module`, `recipeSha256` and `priorStages` (the server rows of `segment` and `caption`: state, error code, counts and every completed file with its slot, role, size and SHA-256). The worker takes the recipe from `task-input.v3` after the claim and refuses a digest, module or stage mismatch.
+
+In the same single pass that writes the clips (`artifact_export.export_artifacts(seal=...)`, `artifact_seal.py`) it also writes:
+
+- `recording.mp4` (role `recording_mp4`): every access unit of the recording remuxed natively, verified by demuxing (PTS and VCL NAL bytes) like a clip's `rgb.mp4`. No decode, no encode, no frame-rate conversion.
+- `hand-presence.json` (`hand-presence.v1`, role `hand_presence_json`): run-length left and right lanes over every frame. `present`, `no_hand` (an explicit result) and `failed` (no inference result) are separate states; the model thresholds are only recorded.
+
+The clip files keep their 60 s ceiling and six roles per clip. The result is `processing-result.v3`: `outputs` lists every completed output of the job (earlier-stage files included), `nodes[]` has one node per stage copied from the server rows (a failed or `not_run` stage appears as such, its files absent or present as diagnostics, never an empty success), and `hand_pose` lists its own files. The worker then closes the inventory and posts the candidate as before. A stage `receipt.json` is not a job output: the server keeps it on the stage run, and a file no node can name would block the seal.
+
 ## Not covered
 
 Backend multipart output/acceptance (SA-28), failure manifests (the backend protocol owns them), sensor-evidence files (no output role exists in the frozen contract), physical-phone/hardware-encoder qualification, 100 GiB or two-hour runs, accuracy or metric claims, and hosted CI (billing-blocked). Crop, rotation and mirror of the capture raster remain unknown in contract v1.

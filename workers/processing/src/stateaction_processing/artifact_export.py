@@ -29,6 +29,7 @@ from typing import Any, BinaryIO
 
 from . import hand_model
 from .artifact_clip import ClipWriter
+from .artifact_seal import RecordingWriter, SealPlan, to_v3
 from .artifact_types import (
     FILE_NAMES,
     MANIFEST_NAME,
@@ -126,6 +127,7 @@ def export_artifacts(
     stream_limits: StreamLimits | None = None,
     scratch_dir: Path | None = None,
     on_clip_closed: Callable[[dict[str, Any]], None] | None = None,
+    seal: SealPlan | None = None,
 ) -> ExportResult:
     limits = limits or ExportLimits()
     require(
@@ -143,6 +145,11 @@ def export_artifacts(
         "E_IDENTITY_REQUIRED",
         "production exports need caller-supplied recording_id, source_file_id and "
         "expected_source_sha256 (the admitted source bytes the whole-source hash is compared to)",
+    )
+    require(
+        seal is None or context.attestation is not None,
+        "E_SEAL_NEEDS_ATTESTATION",
+        "a recipe seal is a backend job: it needs the claim-bound attestation",
     )
     stream_limits = stream_limits or StreamLimits()
     own_scratch = scratch_dir is None
@@ -162,6 +169,7 @@ def export_artifacts(
     outputs: list[OutputFile] = []
     receipts: dict[str, OutputReceipt] = {}  # relative_path -> what the sink stored
     writer: ClipWriter | None = None
+    recording: RecordingWriter | None = None  # recipe seal only: full-recording remux
     peak_clip_bytes = 0
     config_hash = config_sha256(limits, stream_limits)
     inferred = 0  # frames that completed inference before any failure
@@ -223,6 +231,10 @@ def export_artifacts(
                         sim_note,
                     )
                 writer.add(frame, obs)
+                if seal is not None:
+                    if recording is None:
+                        recording = RecordingWriter(scratch, frame)
+                    recording.add(frame, obs)
                 miss.add(obs)
                 obs.digest_into(digest)
                 total_ms += obs.inference_ms
@@ -245,17 +257,42 @@ def export_artifacts(
             True  # proven; a later failure cannot un-prove it, nor accept anything
         )
         stage = "manifest"
+        if seal is not None:
+            assert recording is not None
+            require(
+                recording.frames == report.video_messages == frames_inferred,
+                "E_RECORDING_FRAME_COUNT",
+                (recording.frames, report.video_messages, frames_inferred),
+            )
+            for f in recording.close(seal, context):
+                _scan_forbidden(f.path, forbidden)
+                rc = sink.put(f)
+                require(
+                    (rc.role, rc.size_bytes, rc.sha256)
+                    == (f.role, f.size_bytes, f.sha256),
+                    "E_RECEIPT_MISMATCH",
+                    f.relative_path,
+                )
+                receipts[f.relative_path] = rc
+                f.path.unlink(missing_ok=True)
+                outputs.append(f)
         manifest = build_manifest(
             context, report, sha, nbytes, clips_meta, outputs, receipts, miss, stats, frames_inferred,
             total_ms, digest.hexdigest(), config_hash, limits,
         )  # fmt: skip
+        if seal is not None:
+            manifest = to_v3(
+                seal, manifest, outputs, frames_inferred, len(clips_meta), miss
+            )
         data = json.dumps(
             manifest, sort_keys=True, separators=(",", ":"), allow_nan=False
         ).encode()
         from stateaction_contracts import validate_bytes
 
         verdict = validate_bytes(
-            "artifacts.processing-result.v2"
+            "artifacts.processing-result.v3"
+            if seal is not None
+            else "artifacts.processing-result.v2"
             if att is not None
             else "artifacts.processing-result.v1",
             data,
@@ -280,6 +317,8 @@ def export_artifacts(
     except BaseException as e:
         if writer is not None:
             writer.abort()
+        if recording is not None:
+            recording.abort()
         _attach_diagnostics(
             e, stage, stream, inferred, clips_meta, receipts, source_verified
         )

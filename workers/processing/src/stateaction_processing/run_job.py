@@ -35,6 +35,8 @@ _REF = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _CALL_ID = re.compile(r"^fc-[A-Za-z0-9]{1,77}$")
 _EXECUTORS = ("local", "modal")
 _TOKEN = re.compile(r"^sa_svc_[A-Za-z0-9_-]{43}$")
+_MODULE_REF = re.compile(r"^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 # Pipelines are resolved from this fixed table; never from caller-supplied names.
 _PIPELINES = {
     "hand_pose_cpu_v1": "hand_pose_cpu_v1",
@@ -157,6 +159,12 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             "pipeline",
             "fixtureHoldSeconds",
             "executorKind",
+            # SA-92: a recipe job's last stage (hand_pose) claims under its stage bootstrap and
+            # carries the earlier stages' server rows it must seal into processing-result.v3.
+            "stage",
+            "module",
+            "recipeSha256",
+            "priorStages",
         }
         if not isinstance(value, dict) or not set(value) <= allowed:
             raise ValueError("shape")
@@ -170,6 +178,18 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             raise ValueError("ref")
         if value["pipeline"] not in _PIPELINES:
             raise ValueError("pipeline")
+        recipe_keys = {"stage", "module", "recipeSha256", "priorStages"} & set(value)
+        if recipe_keys and (
+            recipe_keys != {"stage", "module", "recipeSha256", "priorStages"}
+            or value["stage"] != "hand_pose"
+            or value["pipeline"] != "hand_pose_cpu_v1"
+            or not isinstance(value["module"], str)
+            or not _MODULE_REF.match(value["module"])
+            or not isinstance(value["recipeSha256"], str)
+            or not _SHA256.match(value["recipeSha256"])
+            or not isinstance(value["priorStages"], list)
+        ):
+            raise ValueError("recipe_stage")
         kind = value.setdefault("executorKind", "local")
         if kind not in _EXECUTORS:
             raise ValueError("executor")
@@ -323,6 +343,11 @@ def run(execution_ref: str) -> int:
             "fixtureHoldSeconds": boot.get("fixtureHoldSeconds"),
             "executorKind": boot["executorKind"],
             "metrics": probe,
+            **{
+                key: boot[key]
+                for key in ("stage", "module", "recipeSha256", "priorStages")
+                if key in boot
+            },
         }
         code = int(module.run(grant, context))
         outcome = "returned"
