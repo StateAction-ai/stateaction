@@ -3,5 +3,8 @@ packages/contracts/conformance/fixtures/
 packages/contracts/capture/golden/
 packages/contracts/capture/fixtures/encoder_buffers.json
 
+# Hand-written FLORA-native replay fixtures: captions.json pins the sha256 of segments.json bytes.
+workers/processing/tests/fixtures/flora_native/
+
 # Binary recording fixtures for the Rerun browser test.
 apps/web/test-e2e/fixtures/*.rrd

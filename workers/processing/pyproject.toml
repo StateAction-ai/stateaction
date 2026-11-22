@@ -56,6 +56,14 @@ files = [
   "src/stateaction_processing/artifact_export.py",
   "src/stateaction_processing/artifact_reader.py",
   "src/stateaction_processing/artifact_cli.py",
+  "src/stateaction_processing/caption_rule.py",
+  "src/stateaction_processing/stage_media.py",
+  "src/stateaction_processing/stage_docs.py",
+  "src/stateaction_processing/flora_adapter.py",
+  "src/stateaction_processing/stage_entry.py",
+  "src/stateaction_processing/modules/__init__.py",
+  "src/stateaction_processing/modules/stub.py",
+  "src/stateaction_processing/modules/replay.py",
 ]
 strict = true
 follow_imports = "skip"

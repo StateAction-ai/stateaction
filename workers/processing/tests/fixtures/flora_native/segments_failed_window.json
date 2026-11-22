@@ -1,0 +1,92 @@
+{
+ "assembly": "vendor_engine",
+ "engine_error": null,
+ "provenance": {
+  "decoding": {
+   "do_sample": false,
+   "max_new_tokens": 1024,
+   "num_beams": 1,
+   "processor": {
+    "fps": 4,
+    "max_frames": 128
+   }
+  },
+  "prompt_sha256": "2121212121212121212121212121212121212121212121212121212121212121",
+  "tempseg_adapter_sha256": "1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d",
+  "tempseg_weights_revision_pinned_in_models_json": "114a1076f70eb53f4a58ac045505db3087e79347"
+ },
+ "schema_version": "flora_tempseg_long_v1",
+ "segments": [
+  {
+   "crosses_core_boundary": false,
+   "end_frame_exclusive": 31,
+   "end_s": 1.0,
+   "id": 0,
+   "provenance": "fine",
+   "start_frame": 0,
+   "start_s": 0.0,
+   "stitched": false,
+   "window_ids": [
+    "w:0"
+   ],
+   "window_indices": [
+    0
+   ]
+  },
+  {
+   "crosses_core_boundary": false,
+   "end_frame_exclusive": 100,
+   "end_s": 3.3,
+   "id": 1,
+   "provenance": "fine",
+   "start_frame": 61,
+   "start_s": 2.0,
+   "stitched": false,
+   "window_ids": [
+    "w:0"
+   ],
+   "window_indices": [
+    0
+   ]
+  }
+ ],
+ "source": {
+  "constant_frame_rate": true,
+  "duration_s": 3.3,
+  "fps": "30",
+  "frames": 100,
+  "path_name": "synthetic.mp4",
+  "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "size": [
+   64,
+   48
+  ]
+ },
+ "unresolved_components": [],
+ "windows": {
+  "failed": [
+   {
+    "end_s": 2.0,
+    "error_code": "Unexpected Error",
+    "error_detail": "injected",
+    "start_s": 1.0,
+    "window_id": "w:1",
+    "window_index": 1
+   }
+  ],
+  "failed_core_spans": [
+   {
+    "end_s": 2.0,
+    "start_s": 1.0,
+    "window_indices": [
+     1
+    ]
+   }
+  ],
+  "grid": {
+   "core_s": 12
+  },
+  "ok": 2,
+  "total": 3
+ }
+}

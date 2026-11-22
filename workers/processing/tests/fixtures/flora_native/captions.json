@@ -1,0 +1,22 @@
+{
+ "captions": [
+  {
+   "caption": "pick up knife with right hand",
+   "segment_id": 0,
+   "status": "complete"
+  },
+  {
+   "error": "empty_caption",
+   "segment_id": 1,
+   "status": "failed"
+  },
+  {
+   "caption": "hold onion with left hand, cut onion with knife in right hand",
+   "segment_id": 2,
+   "status": "complete"
+  }
+ ],
+ "schema": "stateaction.flora_captions.v1",
+ "segments_sha256": "cad4abf08a5f7b20b478d274b6b240d2f7b2c6f6447958956aba29ac26717917",
+ "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
