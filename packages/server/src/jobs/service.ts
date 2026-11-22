@@ -11,7 +11,12 @@ import { inTransaction, type Queryable } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { hashServiceToken } from "../auth/service.js";
 import { TransportError } from "../transport/errors.js";
-import type { JobsConfig } from "./config.js";
+import type { RecipeV1 } from "@stateaction/contracts";
+import {
+  admissionDeadlineSeconds,
+  RECIPE_DEADLINE_ERROR_CODE,
+  type JobsConfig,
+} from "./config.js";
 import { assertJobCurrent, JOB_CURRENT_SQL } from "./current.js";
 
 type Tx = pg.PoolClient;
@@ -184,10 +189,10 @@ export type AdmittedJob = {
   executionDeadline: Date;
 };
 export type AdmitResult =
-  | { state: "admitted"; job: AdmittedJob }
+  | { state: "admitted"; job: AdmittedJob; rejectedJobIds?: string[] }
   | { state: "slot_busy"; holderJobId: string }
   /** No queued job is eligible (none queued, or revoked/deleted/retired). */
-  | { state: "idle" };
+  | { state: "idle"; rejectedJobIds?: string[] };
 
 /**
  * Default builder: jobs.task-input.v2 from the immutable admission evidence of
@@ -233,6 +238,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
        ORDER BY j.created_at, j.id
        FOR UPDATE OF j SKIP LOCKED LIMIT 25`,
     );
+    const rejectedJobIds: string[] = [];
     for (const c of candidates.rows) {
       const ok = await tx.query<{ ok: boolean }>(
         `SELECT catalog_has_role($2, 'collector') AND EXISTS (
@@ -267,6 +273,30 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           `task input rejected: ${valid.code}`,
         );
       const cfg = deps.config;
+      // Deadline from the recipe (SA-89), or the fallback without one. A
+      // recipe over the 12 h bound is refused here, before any write.
+      let deadlineSeconds: number;
+      try {
+        // The v3 task input was validated above, so its recipe has the RecipeV1 shape.
+        deadlineSeconds = admissionDeadlineSeconds(
+          cfg,
+          task.schemaVersion === 3 ? (task.recipe as RecipeV1) : null,
+        );
+      } catch (error) {
+        // Reject THIS job (queued -> cancelled with the code) and keep going,
+        // so a permanently over-limit recipe never blocks the jobs behind it.
+        await tx.query(
+          `UPDATE jobs SET state = 'cancelled', error_code = $2, error_message = $3, finished_at = now()
+           WHERE id = $1 AND state = 'queued'`,
+          [
+            c.id,
+            RECIPE_DEADLINE_ERROR_CODE,
+            (error as Error).message.slice(0, 2000),
+          ],
+        );
+        rejectedJobIds.push(c.id);
+        continue;
+      }
       await tx.query(
         `INSERT INTO job_inputs (job_id, source_manifest_sha256, profile_revision, execution_backend,
            code_revision, image_spec_sha256, model_sha256, config_sha256, max_output_files,
@@ -308,13 +338,14 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           c.id,
           admittedAt,
           cfg.executionBackend,
-          cfg.executionDeadlineSeconds,
+          deadlineSeconds,
           recipe === null ? null : JSON.stringify(recipe),
           recipe === null ? null : task.recipeSha256,
         ],
       );
       return {
         state: "admitted",
+        ...(rejectedJobIds.length > 0 ? { rejectedJobIds } : {}),
         job: {
           jobId: c.id,
           recordingId: c.recording_id,
@@ -325,7 +356,9 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         },
       };
     }
-    return { state: "idle" };
+    return rejectedJobIds.length > 0
+      ? { state: "idle", rejectedJobIds }
+      : { state: "idle" };
   });
 }
 

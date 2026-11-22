@@ -11,11 +11,17 @@ const settings = {
 };
 
 test("admitted jobs pin a bounded output file budget", () => {
-  assert.equal(jobsConfigFromEnv(settings).limits.maxOutputFiles, 512);
+  // The 2 h budget (737) under the default 2000-file ceiling.
+  assert.equal(jobsConfigFromEnv(settings).limits.maxOutputFiles, 737);
   assert.equal(
     jobsConfigFromEnv({ ...settings, PROCESSING_MAX_OUTPUT_FILES: "1800" })
       .limits.maxOutputFiles,
-    1800,
+    737,
+  );
+  assert.equal(
+    jobsConfigFromEnv({ ...settings, PROCESSING_MAX_OUTPUT_FILES: "512" })
+      .limits.maxOutputFiles,
+    512,
   );
   for (const value of ["0", "2001", "1.5", "NaN"])
     assert.throws(

@@ -1,3 +1,6 @@
+import type { RecipeV1 } from "@stateaction/contracts";
+import { clipsForSeconds, jobOutputFileLimit } from "../acceptance/config.js";
+
 /**
  * Explicit, fail-closed job orchestration settings. Identical locally,
  * in development and on Render: only the injected environment differs. The
@@ -10,11 +13,15 @@ export type JobsConfig = {
   modelSha256: string;
   configSha256: string;
   limits: {
+    /** Per-job output file budget (pinned at admission), never above the ceiling. */
     maxOutputFiles: number;
     maxOutputBytes: string;
     maxControlDocumentBytes: number;
   };
-  /** Absolute job deadline anchored to first admission, never reset. */
+  /**
+   * Absolute job deadline anchored to first admission, never reset. Fallback
+   * for jobs without a recipe; recipe jobs use recipeExecutionDeadlineSeconds.
+   */
   executionDeadlineSeconds: number;
   /** Time a submitted worker has to win its physical claim. */
   startDeadlineSeconds: number;
@@ -58,6 +65,44 @@ export const repairLimits = (
   ...config.repair,
 });
 
+/** Longest recording the admission-time output budget covers (2 h). */
+export const MAX_RECORDING_SECONDS = 7200;
+/** Margin added to the sum of enabled stage budgets. */
+export const RECIPE_DEADLINE_MARGIN_SECONDS = 1800;
+export const RECIPE_DEADLINE_MIN_SECONDS = 3600;
+export const RECIPE_DEADLINE_MAX_SECONDS = 43200;
+/** Stable code for a recipe whose stage budgets cannot fit the deadline bounds. */
+export const RECIPE_DEADLINE_ERROR_CODE = "recipe_deadline_exceeded";
+
+/**
+ * Execution deadline for a recipe job: the sum of enabled stage budgets plus a
+ * fixed margin, clamped to [1 h, 12 h]. A sum above the 12 h bound is refused
+ * with RECIPE_DEADLINE_ERROR_CODE rather than clamped, so no job runs past it.
+ */
+export function recipeExecutionDeadlineSeconds(
+  recipe: Pick<RecipeV1, "stages">,
+): number {
+  const budget = recipe.stages
+    .filter((stage) => stage.enabled)
+    .reduce((sum, stage) => sum + stage.resources.budgetSeconds, 0);
+  const total = budget + RECIPE_DEADLINE_MARGIN_SECONDS;
+  if (total > RECIPE_DEADLINE_MAX_SECONDS)
+    throw new Error(
+      `${RECIPE_DEADLINE_ERROR_CODE}: enabled stage budgets need ${total} s, above the ${RECIPE_DEADLINE_MAX_SECONDS} s maximum`,
+    );
+  return Math.max(RECIPE_DEADLINE_MIN_SECONDS, total);
+}
+
+/** Deadline written once at admission: the recipe's, else the configured fallback. */
+export function admissionDeadlineSeconds(
+  config: Pick<JobsConfig, "executionDeadlineSeconds">,
+  recipe: Pick<RecipeV1, "stages"> | null,
+): number {
+  return recipe === null
+    ? config.executionDeadlineSeconds
+    : recipeExecutionDeadlineSeconds(recipe);
+}
+
 const REVISION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
 const SHA = /^[0-9a-f]{64}$/;
 
@@ -76,15 +121,17 @@ export function jobsConfigFromEnv(
     throw new Error(
       "Missing or invalid server setting: PROCESSING_EXECUTION_BACKEND",
     );
-  const maxOutputFiles = Number(env.PROCESSING_MAX_OUTPUT_FILES ?? 512);
-  if (
-    !Number.isSafeInteger(maxOutputFiles) ||
-    maxOutputFiles < 1 ||
-    maxOutputFiles > 2000
-  )
+  // PROCESSING_MAX_OUTPUT_FILES is the hard ceiling; the pinned per-job value
+  // is the 2 h budget (737 files at the default), never above that ceiling.
+  const ceiling = Number(env.PROCESSING_MAX_OUTPUT_FILES ?? 2000);
+  if (!Number.isSafeInteger(ceiling) || ceiling < 1 || ceiling > 2000)
     throw new Error(
       "PROCESSING_MAX_OUTPUT_FILES must be an integer in 1..2000",
     );
+  const maxOutputFiles = jobOutputFileLimit(
+    ceiling,
+    clipsForSeconds(MAX_RECORDING_SECONDS),
+  );
   return {
     executionBackend: backend,
     codeRevision: setting(env, "PROCESSING_CODE_REVISION", REVISION),

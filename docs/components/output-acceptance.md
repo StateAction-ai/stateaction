@@ -32,7 +32,7 @@ Database triggers also refuse any new output file, slot or receipt, and any stat
 
 ## Verification (no transaction held)
 
-`advanceResult` runs it. Every bound is finite and configured (`acceptance/config.ts`): at most 600 files, 4 GiB aggregate (`ACCEPTANCE_VERIFY_MAX_BYTES`), 120 s per object (`ACCEPTANCE_VERIFY_OBJECT_TIMEOUT_MS`), 25 s per call slice, a one-hour verification wall, after which the job goes to `needs_attention` (candidate untouched, slot held) rather than being failed. Reads use catalog-generated object keys and the configured bucket only, sequentially, one streaming SHA-256 each, never loading an object into memory, with no redirect handling and a size cut-off at the declared size. Progress is durable per file in `job_output_verifications` (bound to the closed inventory digest), so a request that ends mid-way resumes from `reconcile` without repeating files.
+`advanceResult` runs it. Every bound is finite and configured (`acceptance/config.ts`). Per job, the file and byte budgets come from the closure's clip count (SA-89): `6 × clips + 17` files, and 4 GiB + 12 × 64 MiB + 128 MiB per clip bytes, each capped by the hard ceilings `ACCEPTANCE_VERIFY_MAX_FILES` (default 2000) and `ACCEPTANCE_VERIFY_MAX_BYTES` (default 16 GiB). A 2 h job (120 clips) has a 737-file budget. Also 120 s per object (`ACCEPTANCE_VERIFY_OBJECT_TIMEOUT_MS`), 25 s per call slice, a one-hour verification wall, after which the job goes to `needs_attention` (candidate untouched, slot held) rather than being failed. Reads use catalog-generated object keys and the configured bucket only, sequentially, one streaming SHA-256 each, never loading an object into memory, with no redirect handling and a size cut-off at the declared size. Progress is durable per file in `job_output_verifications` (bound to the closed inventory digest), so a request that ends mid-way resumes from `reconcile` without repeating files.
 
 Checks, each with an actionable `reasonCode`: the manifest (≤ the admitted control-document size) hashes to the declared SHA-256 and validates as `artifacts.processing-result.v2`; job, recording, source-manifest digest and provenance (code revision, image spec, MediaPipe model `fbc2a300…cde1`, config digest, profile revision) equal the immutable `job_inputs`; the **attestation** names the exact claim nonce and the ACTUAL capture profile, which must equal the admitted one; simulated captures must carry the identical simulation marker, hardware captures none, unknown camera/encoder/clock staying unknown; a succeeded result states the source was read to EOF and lists the catalog `source_mcap` with identical id, size and SHA-256; the manifest `outputs` equal the closed inventory exactly (id, role, slot, size, SHA-256) and every clip names six files at its own `clips/NNN/` slot; `summary` equals the manifest (check counts, clip count); a success has at least one clip; each stored object hashes to its declared SHA-256 and size.
 
@@ -80,18 +80,17 @@ Selected by the stdlib-only `run_job` after the claim is won; nothing heavy is i
 
 ## File budgets for long-input qualification
 
-Admission pins `PROCESSING_MAX_OUTPUT_FILES` on each new job (default 512).
-Acceptance separately checks `ACCEPTANCE_VERIFY_MAX_FILES` (default 600).
-Both accept integers from 1 to 2,000. For a dedicated long-input run, set both
-to the same value before admitting a recording so the API can verify every
-output the job can reserve. Each clip needs six files, and the job needs one
-result manifest. A two-hour source cut at the default 30-second target needs
-about 1,441 files. Allow for the actual IDR cut boundaries when sizing the job.
+Admission pins the per-job file limit on each new job: the 2 h budget (737
+files) under the hard ceiling `PROCESSING_MAX_OUTPUT_FILES` (default 2000).
+Acceptance checks the per-job budget from the closure's clip count, under
+`ACCEPTANCE_VERIFY_MAX_FILES` (default 2000). Both accept integers from 1 to
+2,000. Each clip needs six files, and the job needs one result manifest plus
+four annotation files and up to twelve diagnostics.
 
 The 1 MiB manifest and control-document limits still apply, as do the
 per-object, aggregate byte, verification wall and worker scratch limits.
-If measured output exceeds the default 4 GiB verification budget, configure
-`ACCEPTANCE_VERIFY_MAX_BYTES` within its existing 64 GiB ceiling. Keep these
+If measured output exceeds the per-job byte budget, raise
+`ACCEPTANCE_VERIFY_MAX_BYTES` (default 16 GiB ceiling; accepts up to 64 GiB). Keep these
 overrides on the isolated qualification runtime.
 
 ## Annotation outputs (SA-88, migration 011)
