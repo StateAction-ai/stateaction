@@ -4,6 +4,8 @@ any service, and never touch the checkout they run from."""
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import shlex
@@ -96,14 +98,20 @@ class RepoCase(unittest.TestCase):
         }
         (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
 
-    def run_staged(self, **kwargs):
+    def commit_pending(self, message="change"):
+        sh(self.repo, "git", "add", "-A")
+        if sh(self.repo, "git", "diff", "--cached", "--name-only"):
+            sh(self.repo, "git", "commit", "-qm", message)
+
+    def run_tree(self, **kwargs):
+        """Commit whatever the test staged, then gate the clean HEAD (tree mode)."""
+        self.commit_pending()
         kwargs.setdefault("probe_fixtures", False)
+        kwargs.setdefault("log", lambda _m: None)
         return local_ci.run_pipeline(
             self.repo,
-            mode="staged",
             home=self.home,
             guard=FAKE_GUARD,
-            log=lambda _m: None,
             **kwargs,
         )
 
@@ -261,7 +269,7 @@ class GuardTests(RepoCase):
 
     def test_pipeline_refuses_without_proof(self):
         with self.assertRaises(local_ci.GuardError):
-            local_ci.run_pipeline(self.repo, mode="staged", home=self.home, guard=None)
+            local_ci.run_pipeline(self.repo, home=self.home, guard=None)
         self.assertFalse((self.home / "work").exists())
 
     def test_cli_refuses_when_guard_is_missing(self):
@@ -272,18 +280,20 @@ class GuardTests(RepoCase):
             local_ci, "ensure_guard", side_effect=local_ci.GuardError("no guard")
         ):
             with mock.patch.object(local_ci, "run_pipeline") as pipeline:
-                self.assertEqual(local_ci.main(["run", "--staged"]), 75)
+                self.assertEqual(local_ci.main(["run", "--tree", "HEAD"]), 75)
         pipeline.assert_not_called()
 
 
 class PipelineTests(RepoCase):
-    def test_pass_writes_receipt_bound_to_the_index_tree(self):
+    def test_pass_writes_receipt_bound_to_the_head_tree(self):
         self.stage_change()
-        record = self.run_staged()
+        record = self.run_tree()
         self.assertEqual(record["verdict"], "PASS")
-        tree = sh(self.repo, "git", "write-tree")
+        tree = sh(self.repo, "git", "rev-parse", "HEAD^{tree}")
         receipt = json.loads(Path(record["receipt"]).read_text())
         self.assertEqual(receipt["tree"], tree)
+        self.assertEqual(receipt["mode"], "tree")
+        self.assertEqual(receipt["head"], sh(self.repo, "git", "rev-parse", "HEAD"))
         self.assertEqual(receipt["stages"][0]["status"], "passed")
         self.assertEqual(receipt["unautomated"], ["physical device"])
         self.assertEqual(receipt["guard"]["swapMaxBytes"], 0)
@@ -292,41 +302,47 @@ class PipelineTests(RepoCase):
             list((self.home / "work").iterdir()), "private export is removed"
         )
 
-    def test_unstaged_changes_are_refused_not_stashed(self):
-        self.stage_change()
-        (self.repo / "app.txt").write_text("three\n")  # partial staging
-        with self.assertRaisesRegex(local_ci.Refused, "differ"):
-            self.run_staged()
+    def test_dirty_worktree_is_refused_not_stashed(self):
+        (self.repo / "app.txt").write_text("three\n")
+        with self.assertRaisesRegex(local_ci.Refused, "clean checkout"):
+            local_ci.run_pipeline(
+                self.repo,
+                home=self.home,
+                guard=FAKE_GUARD,
+                log=lambda _m: None,
+                probe_fixtures=False,
+            )
         self.assertEqual((self.repo / "app.txt").read_text(), "three\n")
         self.assertEqual(sh(self.repo, "git", "stash", "list"), "")
         self.assertEqual(self.receipts(), [])
 
-    def test_tests_run_on_the_index_not_the_worktree(self):
+    def test_tests_run_on_the_committed_tree_not_ignored_files(self):
         marker = self.tmp / "seen.txt"
         self.set_stages(
             [
                 stage(
                     "read",
-                    f"import pathlib; pathlib.Path({str(marker)!r}).write_text(open('app.txt').read())",
+                    f"import pathlib, os; pathlib.Path({str(marker)!r}).write_text(open('app.txt').read() + str(os.path.exists('ignored.env')))",
                 )
             ]
         )
-        self.stage_change("staged-content\n")
-        sh(self.repo, "git", "add", "-A")
-        self.run_staged()
-        self.assertEqual(marker.read_text(), "staged-content\n")
+        (self.repo / ".gitignore").write_text("ignored.env\n")
+        (self.repo / "ignored.env").write_text("SECRET=1\n")
+        self.stage_change("committed-content\n")
+        self.run_tree()
+        self.assertEqual(marker.read_text(), "committed-content\nFalse")
 
     def test_edit_during_run_invalidates_the_result(self):
         self.set_stages(
             [
                 stage(
                     "edit",
-                    f"import subprocess; open({str(self.repo / 'late.txt')!r}, 'w').write('x'); subprocess.run(['git', '-C', {str(self.repo)!r}, 'add', 'late.txt'], check=True)",
+                    f"import subprocess; open({str(self.repo / 'late.txt')!r}, 'w').write('x'); subprocess.run(['git', '-C', {str(self.repo)!r}, 'add', 'late.txt'], check=True); subprocess.run(['git', '-C', {str(self.repo)!r}, 'commit', '-qm', 'late'], check=True)",
                 )
             ]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(record["stages"][0]["status"], "tree-changed")
         self.assertEqual(self.receipts(), [])
@@ -339,8 +355,8 @@ class PipelineTests(RepoCase):
                 stage("later", f"open({str(marker)!r}, 'w').write('x')"),
             ]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual([s["status"] for s in record["stages"]], ["failed"])
         self.assertFalse(marker.exists())
@@ -351,14 +367,14 @@ class PipelineTests(RepoCase):
         self.set_stages(
             [stage("bad", "import sys; sys.exit(1)"), stage("good", "print(1)")]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged(keep_going=True)
+        self.commit_pending()
+        record = self.run_tree(keep_going=True)
         self.assertEqual([s["status"] for s in record["stages"]], ["failed", "passed"])
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(self.receipts(), [])
 
     def test_partial_stage_selection_never_yields_a_receipt(self):
-        record = self.run_staged(only=["ok"])
+        record = self.run_tree(only=["ok"])
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(self.receipts(), [])
 
@@ -366,8 +382,8 @@ class PipelineTests(RepoCase):
         pidfile = self.tmp / "grandchild.pid"
         code = f"import subprocess, time; p = subprocess.Popen(['sleep', '60']); open({str(pidfile)!r}, 'w').write(str(p.pid)); time.sleep(60)"
         self.set_stages([stage("hang", code, timeoutSec=2)])
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "timeout")
         pid = int(pidfile.read_text())
         time.sleep(0.2)
@@ -384,8 +400,8 @@ class PipelineTests(RepoCase):
                 )
             ]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "output-limit")
         self.assertLessEqual(record["stages"][0]["logBytes"], 20000)
 
@@ -400,10 +416,10 @@ class PipelineTests(RepoCase):
                 )
             ]
         )
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
         script = (
             "import sys; sys.path.insert(0, %r); import local_ci; "
-            "r = local_ci.run_pipeline(%r, mode='staged', home=%r, guard=%r, log=lambda m: None); "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: None); "
             "sys.exit(0 if r['verdict'] == 'PASS' else 130 if r['verdict'] == 'INTERRUPTED' else 1)"
         ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
         runner = subprocess.Popen([sys.executable, "-c", script])
@@ -430,8 +446,8 @@ class PipelineTests(RepoCase):
         self.set_stages(
             [stage(f"s{n}", body.format(log=str(log), n=n)) for n in (1, 2, 3)]
         )
-        sh(self.repo, "git", "add", "-A")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
+        self.commit_pending()
+        self.assertEqual(self.run_tree()["verdict"], "PASS")
         self.assertEqual(
             log.read_text().split("\n")[:-1],
             ["start 1", "end 1", "start 2", "end 2", "start 3", "end 3"],
@@ -445,7 +461,7 @@ class PipelineTests(RepoCase):
             json.dump({{'env': dict(os.environ), 'docker': docker}}, open({str(out)!r}, 'w'))
         """
         self.set_stages([stage("env", code)])
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
         with mock.patch.dict(
             os.environ,
             {
@@ -456,7 +472,7 @@ class PipelineTests(RepoCase):
                 "NPM_PASSWORD": "p",
             },
         ):
-            self.assertEqual(self.run_staged()["verdict"], "PASS")
+            self.assertEqual(self.run_tree()["verdict"], "PASS")
         seen = json.loads(out.read_text())
         env = seen["env"]
         self.assertEqual(seen["docker"], 126)
@@ -478,7 +494,7 @@ class PipelineTests(RepoCase):
 
     def test_runner_must_match_the_tree_under_test(self):
         with self.assertRaisesRegex(local_ci.Refused, "differs"):
-            self.run_staged(runner_text=b"tampered")
+            self.run_tree(runner_text=b"tampered")
 
     def detached_stage(self, pidfile, exit_code=0, sleep=False):
         code = (
@@ -502,8 +518,8 @@ class PipelineTests(RepoCase):
     def test_detached_grandchild_after_success_fails_the_stage_and_is_reaped(self):
         pidfile = self.tmp / "d1.pid"
         self.set_stages([self.detached_stage(pidfile)])
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "leaked-process")
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(self.receipts(), [])
@@ -519,11 +535,11 @@ class PipelineTests(RepoCase):
             f"open({str(pidfile)!r}, 'w').write(str(p.pid))"
         )
         self.set_stages([stage("mobile-android-dart", code)])
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
         with mock.patch.object(
             local_ci, "is_gradle_daemon", return_value=True
         ) as match:
-            record = self.run_staged()
+            record = self.run_tree()
         match.assert_called_with(int(pidfile.read_text()))
         self.assertEqual(record["stages"][0]["status"], "passed")
         self.assertDead(pidfile)
@@ -531,26 +547,26 @@ class PipelineTests(RepoCase):
     def test_mobile_stage_still_reaps_unrelated_detached_grandchild(self):
         pidfile = self.tmp / "unrelated.pid"
         self.set_stages([{**self.detached_stage(pidfile), "id": "mobile-android-dart"}])
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "leaked-process")
         self.assertDead(pidfile)
 
     def test_detached_grandchild_after_failure_is_reaped(self):
         pidfile = self.tmp / "d2.pid"
         self.set_stages([self.detached_stage(pidfile, exit_code=2)])
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "failed")
         self.assertDead(pidfile)
 
     def test_detached_grandchild_is_reaped_on_cancellation(self):
         pidfile = self.tmp / "d3.pid"
         self.set_stages([self.detached_stage(pidfile, sleep=True)])
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
         script = (
             "import sys; sys.path.insert(0, %r); import local_ci; "
-            "r = local_ci.run_pipeline(%r, mode='staged', home=%r, guard=%r, log=lambda m: None); "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: None); "
             "sys.exit(130 if r['verdict'] == 'INTERRUPTED' else 1)"
         ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
         runner = subprocess.Popen([sys.executable, "-c", script])
@@ -570,8 +586,8 @@ class PipelineTests(RepoCase):
             f"capture_output=True, text=True, check=True); open({str(out)!r}, 'w').write(r.stdout)"
         )
         self.set_stages([stage("ls", code)])
-        sh(self.repo, "git", "add", "-A")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
+        self.commit_pending()
+        self.assertEqual(self.run_tree()["verdict"], "PASS")
         self.assertIn("app.txt", out.read_text().split())
         self.assertEqual(sh(self.repo, "git", "stash", "list"), "")
 
@@ -579,15 +595,15 @@ class PipelineTests(RepoCase):
         self.set_stages(
             [stage("rewrite", "open('app.txt', 'w').write('changed by a stage')")]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "source-modified")
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(self.receipts(), [])
 
     def test_new_attempt_removes_old_pass_even_when_it_fails_or_is_refused(self):
         self.stage_change()
-        first = self.run_staged()
+        first = self.run_tree()
         self.assertEqual(first["verdict"], "PASS")
         self.assertEqual(len(self.receipts()), 1)
         # The same tree, rerun with a failing stage list is impossible without changing the
@@ -595,10 +611,9 @@ class PipelineTests(RepoCase):
         with mock.patch.object(
             local_ci, "export_tree", side_effect=local_ci.Refused("export failed")
         ):
-            second = self.run_staged()
+            second = self.run_tree()
         self.assertEqual(second["verdict"], "FAIL")
         self.assertEqual(self.receipts(), [])
-        sh(self.repo, "git", "commit", "-qm", "c")
         self.assertTrue(
             any(
                 "no PASS receipt" in e
@@ -606,12 +621,303 @@ class PipelineTests(RepoCase):
             )
         )
 
-    def test_cli_invalidates_before_the_guard_can_refuse(self):
+    def test_run_prints_a_per_stage_wall_time_table_for_pass_and_fail(self):
+        self.set_stages(
+            [stage("alpha", "print(1)"), stage("beta", "import sys; sys.exit(2)")]
+        )
+        lines = []
+        record = self.run_tree(log=lines.append)
+        self.assertEqual(record["verdict"], "FAIL")
+        table = next(x for x in lines if "stage wall time" in x)
+        self.assertRegex(table, r"stage\s+status\s+seconds\s+cache hits")
+        self.assertRegex(table, r"alpha\s+passed\s+\d")
+        self.assertRegex(table, r"beta\s+failed\s+\d")
+        self.assertRegex(table, r"TOTAL\s+FAIL\s+\d")
+        run = json.loads((Path(record["logDir"]) / "run.json").read_text())
+        self.assertIn("durationSec", run["stages"][0])
+        self.assertIn("totalDurationSec", run)
+        lines.clear()
+        self.set_stages([stage("alpha", "print(1)")])
+        self.assertEqual(self.run_tree(log=lines.append)["verdict"], "PASS")
+        self.assertRegex(next(x for x in lines if "wall time" in x), r"TOTAL\s+PASS")
+
+    def test_interrupted_run_still_prints_the_table(self):
+        self.set_stages([stage("hang", "import time; time.sleep(60)", timeoutSec=60)])
+        self.commit_pending()
+        script = (
+            "import sys; sys.path.insert(0, %r); import local_ci; "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: print(m, flush=True)); "
+            "sys.exit(130 if r['verdict'] == 'INTERRUPTED' else 1)"
+        ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
+        out = self.tmp / "out.txt"
+        with open(out, "w") as sink:
+            runner = subprocess.Popen([sys.executable, "-c", script], stdout=sink)
+            for _ in range(100):
+                if "stage hang" in out.read_text():
+                    break
+                time.sleep(0.1)
+            runner.send_signal(signal.SIGTERM)
+            self.assertEqual(runner.wait(timeout=30), 130)
+        self.assertRegex(out.read_text(), r"TOTAL\s+INTERRUPTED")
+
+    def test_only_a_run_that_starts_supersedes_the_receipt(self):
         self.stage_change()
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
-        tree = sh(self.repo, "git", "write-tree")
-        local_ci.invalidate_best_effort(self.repo, "staged", "HEAD", self.home)
+        self.assertEqual(self.run_tree()["verdict"], "PASS")
+        receipt = self.receipts()[0]
+        before = receipt.read_text()
+        # Refused before it starts (no guard proof): the PASS stays.
+        with self.assertRaises(local_ci.GuardError):
+            local_ci.run_pipeline(
+                self.repo, home=self.home, guard=None, probe_fixtures=False
+            )
+        # Waiting for the slot (main never reaches run_pipeline) leaves it alone.
+        cwd = os.getcwd()
+        os.chdir(self.repo)
+        self.addCleanup(os.chdir, cwd)
+        with mock.patch.object(
+            local_ci, "ensure_guard", side_effect=SystemExit(130)
+        ):  # cancelled while waiting
+            with self.assertRaises(SystemExit):
+                local_ci.main(["run", "--tree", "HEAD"])
+        self.assertEqual(receipt.read_text(), before)
+        self.assertEqual(local_ci.verify_receipt(self.repo, "HEAD", home=self.home), [])
+        # A run that starts removes it, even if it then fails at the fixture probe.
+        self.set_stages([stage("fx", "print(1)", fixtures=True)])
+        self.commit_pending()
+        tree = sh(self.repo, "git", "rev-parse", "HEAD^{tree}")
+        started = local_ci.run_pipeline(
+            self.repo,
+            home=self.home,
+            guard=FAKE_GUARD,
+            probe_fixtures=False,
+            log=lambda _m: None,
+        )
+        self.assertEqual(started["verdict"], "FAIL")
         self.assertFalse((self.home / "receipts" / f"{tree}.json").exists())
+
+
+class HeavySlotWaitTests(RepoCase):
+    """ci:local waits for the machine-wide heavy-job slot instead of exiting 75.
+
+    The fake launcher has the real non-blocking semantics of agent-resource: it takes
+    the lock with flock(LOCK_NB) and exits 75 when it is held. ensure_guard and the
+    wait/retry logic are the real ones.
+    """
+
+    LAUNCHER = """#!/usr/bin/env python3
+import fcntl, os, sys
+fd = os.open(os.environ["FAKE_HEAVY_LOCK"], os.O_RDWR | os.O_CREAT, 0o600)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print("RESOURCE GUARD REFUSED: Another heavy-job already owns the machine-wide slot")
+    sys.exit(75)
+open(os.environ["FAKE_RAN"], "a").write("ran\\n")
+"""
+
+    def setUp(self):
+        super().setUp()
+        self.lock = self.tmp / "heavy-job.lock"
+        self.ran = self.tmp / "ran.txt"
+        self.launcher = self.tmp / "agent-resource"
+        self.launcher.write_text(self.LAUNCHER)
+        self.launcher.chmod(0o755)
+        # A realistic guard directory: the service scopes always have owner files too.
+        for name in ("agent-service-postgres.scope", "agent-service-storage.scope"):
+            (self.tmp / f"{name}.owner").write_text(json.dumps({"pid": 1}))
+        (self.tmp / f"{local_ci.BUILD_SCOPE}.owner").write_text(
+            json.dumps({"pid": os.getpid()})
+        )
+        env = {
+            "FAKE_HEAVY_LOCK": str(self.lock),
+            "FAKE_RAN": str(self.ran),
+            "AGENT_RESOURCE_BIN": str(self.launcher),
+        }
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # The gate itself runs these tests inside a re-executed guard.
+        os.environ.pop("STATEACTION_LOCAL_CI_REEXEC", None)
+        patch = mock.patch.object(local_ci, "heavy_lock_path", lambda: self.lock)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(os.environ.pop, "STATEACTION_LOCAL_CI_REEXEC", None)
+
+    def hold(self):
+        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        def release():
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+        self.addCleanup(release)
+        return fd
+
+    def ensure(self, sleep):
+        """The real ensure_guard (outside any cgroup) re-executes through the waiting spawn."""
+
+        def outside(*_args):
+            raise local_ci.GuardError("outside the guard scope")
+
+        return local_ci.ensure_guard(
+            ["x"],
+            check=outside,
+            execv=lambda launcher, command: local_ci.wait_and_spawn_guarded(
+                launcher, command, sleep=sleep
+            ),
+        )
+
+    def test_busy_slot_is_waited_for_with_backoff_and_then_used(self):
+        holder = self.hold()
+        sleeps = []
+
+        def release_after_backoff(seconds):
+            sleeps.append(seconds)
+            if abs(sum(sleeps) - 12.5) < 1e-9:  # first wait 5 s, second 7.5 s
+                os.close(holder)
+
+        with self.assertRaises(SystemExit) as raised:
+            self.ensure(release_after_backoff)
+        self.assertEqual(raised.exception.code, 0)
+        self.assertLessEqual(max(sleeps), local_ci.HEAVY_SLICE_SEC, "short slices")
+        self.assertAlmostEqual(sum(sleeps), 12.5)
+        self.assertEqual(self.ran.read_text(), "ran\n")
+
+    def test_message_names_the_holder_and_no_exit_75(self):
+        holder = self.hold()
+        calls = []
+
+        def release(seconds):
+            calls.append(seconds)
+            if len(calls) == 1:
+                os.close(holder)
+
+        with mock.patch("sys.stderr") as err:
+            with self.assertRaises(SystemExit) as raised:
+                self.ensure(release)
+        self.assertNotEqual(raised.exception.code, 75)
+        written = "".join(c.args[0] for c in err.write.call_args_list)
+        self.assertIn("waiting for the heavy-job slot (held by", written)
+        self.assertIn(f"pid {os.getpid()}", written, "names the heavy-job owner")
+        self.assertIn("project ", written)
+        self.assertNotIn("pid 1,", written, "not a postgres/storage service owner")
+
+    def test_wait_has_a_deadline_that_names_the_holder(self):
+        self.hold()
+        clock = {"now": 0.0}
+
+        def sleep(seconds):
+            clock["now"] += seconds
+
+        with mock.patch("sys.stderr") as err:
+            with self.assertRaises(SystemExit) as raised:
+                local_ci.wait_and_spawn_guarded(
+                    str(self.launcher),
+                    [str(self.launcher)],
+                    sleep=sleep,
+                    clock=lambda: clock["now"],
+                    limit=60,
+                )
+        self.assertEqual(raised.exception.code, local_ci.WAIT_TIMEOUT_EXIT)
+        written = "".join(c.args[0] for c in err.write.call_args_list)
+        self.assertIn("LOCAL CI WAIT TIMEOUT", written)
+        self.assertIn(f"pid {os.getpid()}", written)
+        self.assertFalse(self.ran.exists())
+
+    def test_deadline_also_bounds_retries_after_a_lost_race(self):
+        self.hold()
+        clock = {"now": 0.0}
+
+        def sleep(seconds):
+            clock["now"] += seconds
+
+        # The probe always says free but the launcher always refuses with 75: after the
+        # first refusal the holder is seen busy, so the loop waits and then times out.
+        probes = iter([None])
+        with mock.patch.object(
+            local_ci,
+            "heavy_slot_holder",
+            side_effect=lambda: next(probes, "pid 9, project /x, running 1 min"),
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                local_ci.wait_and_spawn_guarded(
+                    str(self.launcher),
+                    [str(self.launcher)],
+                    sleep=sleep,
+                    clock=lambda: clock["now"],
+                    limit=20,
+                )
+        self.assertEqual(raised.exception.code, local_ci.WAIT_TIMEOUT_EXIT)
+
+    def test_signal_while_waiting_takes_effect_within_a_slice(self):
+        self.hold()
+        calls = []
+
+        def sleep(seconds):
+            calls.append(seconds)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        old = {
+            n: signal.getsignal(n)
+            for n in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+        }
+        self.addCleanup(lambda: [signal.signal(n, h) for n, h in old.items()])
+        with self.assertRaises(SystemExit) as raised:
+            local_ci.wait_and_spawn_guarded(
+                str(self.launcher), [str(self.launcher)], sleep=sleep, limit=3600
+            )
+        self.assertEqual(raised.exception.code, 130)
+        self.assertEqual(len(calls), 1)
+
+    def test_describe_holder_reports_pid_project_and_age_and_skips_dead_owner(self):
+        proc = self.tmp / "proc"
+        (proc / "777").mkdir(parents=True)
+        os.symlink("/work/project-x", proc / "777" / "cwd")
+        owner = self.tmp / f"{local_ci.BUILD_SCOPE}.owner"
+        owner.write_text(json.dumps({"pid": 777}))
+        text = local_ci.describe_holder(
+            self.tmp, proc=proc, now=lambda: owner.stat().st_mtime + 600
+        )
+        self.assertEqual(text, "pid 777, project /work/project-x, running 10 min")
+        owner.write_text(json.dumps({"pid": 778}))
+        self.assertIn("has exited", local_ci.describe_holder(self.tmp, proc=proc))
+
+    def test_losing_the_race_after_the_probe_waits_again_instead_of_refusing(self):
+        holder = self.hold()
+        # The first probe says free although the lock is held, so the launcher refuses
+        # with 75; the holder is then found busy and the loop waits until it is free.
+        probes = iter([None, "pid 1 (job)", "pid 1 (job)", None])
+
+        released = []
+
+        def release(_seconds):
+            if not released:
+                released.append(True)
+                os.close(holder)
+
+        with mock.patch.object(
+            local_ci, "heavy_slot_holder", side_effect=lambda: next(probes)
+        ):
+            with self.assertRaises(SystemExit) as raised:
+                self.ensure(release)
+        self.assertEqual(raised.exception.code, 0)
+        self.assertEqual(self.ran.read_text(), "ran\n")
+
+    def test_ci_never_runs_two_heavy_jobs_at_once(self):
+        self.hold()
+        with self.assertRaises(SystemExit) as raised:
+            with mock.patch.object(
+                local_ci, "heavy_slot_holder", return_value=None
+            ):  # probe lies; the guard's own non-blocking slot still refuses
+                local_ci.wait_and_spawn_guarded(
+                    str(self.launcher),
+                    [str(self.launcher)],
+                    sleep=lambda _s: None,
+                )
+        # With a lying probe the child's 75 is final (not retried): fail closed.
+        self.assertEqual(raised.exception.code, 75)
+        self.assertFalse(self.ran.exists(), "nothing ran while the slot was held")
 
 
 class FixtureTests(RepoCase):
@@ -629,11 +935,11 @@ class FixtureTests(RepoCase):
 
     def test_missing_fixture_file_fails_closed_without_docker(self):
         self.set_stages([self.fixture_stage()])
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("STATEACTION_LOCAL_FIXTURES", None)
             os.environ.pop("E2E_EXTERNAL_FIXTURES", None)
-            record = self.run_staged()
+            record = self.run_tree()
         self.assertEqual(record["verdict"], "FAIL")
         self.assertIn("STATEACTION_LOCAL_FIXTURES", record["detail"])
         self.assertEqual(record["stages"], [])
@@ -711,17 +1017,49 @@ class FixtureTests(RepoCase):
 
     def test_pipeline_fails_closed_when_service_proof_is_unavailable(self):
         self.set_stages([self.fixture_stage()])
-        sh(self.repo, "git", "add", "-A")
+        self.commit_pending()
 
         def refuse(role, port):
             raise local_ci.Refused("not in service scope")
 
-        record = self.run_staged(
-            fixtures_path=self.fixture_file(), service_check=refuse
-        )
+        record = self.run_tree(fixtures_path=self.fixture_file(), service_check=refuse)
         self.assertEqual(record["verdict"], "FAIL")
         self.assertEqual(record["stages"], [])
         self.assertEqual(self.receipts(), [])
+
+    def test_dead_fixture_or_missing_service_proof_fails_before_export_and_any_stage(
+        self,
+    ):
+        marker = self.tmp / "ran.txt"
+        self.set_stages(
+            [
+                stage("first", f"open({str(marker)!r}, 'w').write('x')"),
+                self.fixture_stage(),
+            ]
+        )
+        self.commit_pending()
+
+        def refuse(role, port):
+            raise local_ci.Refused("agent-resource serve --name postgres")
+
+        with mock.patch.object(local_ci, "export_tree") as export:
+            record = self.run_tree(
+                fixtures_path=self.fixture_file(), service_check=refuse
+            )
+            export.assert_not_called()
+        self.assertEqual(record["verdict"], "FAIL")
+        self.assertIn("agent-resource serve", record["detail"])
+        self.assertEqual(record["stages"], [])
+        self.assertFalse(marker.exists(), "no stage ran before the fixture check")
+        # An unreachable fixture is refused by the probe the same way.
+        record = self.run_tree(
+            fixtures_path=self.fixture_file(
+                FIXTURE_ENV.replace("54340", "1").replace("19000", "1")
+            ),
+            probe_fixtures=True,
+        )
+        self.assertIn("not reachable", record["detail"])
+        self.assertFalse(marker.exists())
 
     def test_only_allow_listed_keys_reach_stages_and_secrets_stay_out_of_evidence(self):
         self.set_stages(
@@ -733,8 +1071,8 @@ class FixtureTests(RepoCase):
                 ),
             ]
         )
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged(
+        self.commit_pending()
+        record = self.run_tree(
             fixtures_path=self.fixture_file(), service_check=FAKE_SERVICE
         )
         self.assertEqual(record["verdict"], "PASS", record)
@@ -758,9 +1096,8 @@ class FixtureTests(RepoCase):
 class VerifyTests(RepoCase):
     def commit_passed(self, text="two\n"):
         self.stage_change(text)
-        record = self.run_staged()
+        record = self.run_tree()  # commits the change, then gates that exact head
         self.assertEqual(record["verdict"], "PASS")
-        sh(self.repo, "git", "commit", "-qm", "change")
         return record
 
     def errors(self):
@@ -810,7 +1147,7 @@ class VerifyTests(RepoCase):
         sh(self.repo, "git", "add", "y.txt")
         sh(self.repo, "git", "commit", "-qm", "first")
         # Tree after a second commit that changes nothing observable: empty commit.
-        record = self.run_staged()
+        record = self.run_tree()
         sh(self.repo, "git", "commit", "-q", "--allow-empty", "-m", "empty")
         self.assertEqual(record["verdict"], "PASS")
         self.assertTrue(any("exactly one commit" in e for e in self.errors()))
@@ -837,6 +1174,23 @@ class VerifyTests(RepoCase):
         self.assertTrue(any("stage list changed" in e for e in errors))
         self.assertTrue(any("runner changed" in e for e in errors))
 
+    def test_staged_mode_receipt_is_rejected_even_with_a_valid_digest(self):
+        record = self.commit_passed()
+        self.assertEqual(self.errors(), [])
+        self.rewrite(record, lambda d: d.update(mode="staged"))
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+        parent = sh(self.repo, "git", "rev-parse", "HEAD^")
+        self.rewrite(record, lambda d: d.update(mode="staged", head=parent))
+        self.assertTrue(any("different commit context" in e for e in self.errors()))
+
+    def test_tree_receipt_for_the_head_directly_above_origin_main_is_accepted(self):
+        self.commit_passed()
+        self.assertEqual(
+            sh(self.repo, "git", "rev-parse", "HEAD^"),
+            sh(self.repo, "git", "rev-parse", "origin/main"),
+        )
+        self.assertEqual(self.errors(), [])
+
     def test_receipt_from_another_parent_context_is_rejected(self):
         record = self.commit_passed()
         self.rewrite(record, lambda d: d.update(head="0" * 40))
@@ -855,117 +1209,30 @@ class VerifyTests(RepoCase):
 
 
 class AmendVerifyTests(RepoCase):
-    """Receipts for a normal `git commit --amend` of a single-commit PR (real Git)."""
+    """An amend changes the tree or head: the receipt never carries over."""
 
     commit_passed = VerifyTests.commit_passed
     errors = VerifyTests.errors
-    rewrite = VerifyTests.rewrite
 
-    def head(self, ref="HEAD"):
-        return sh(self.repo, "git", "rev-parse", ref)
-
-    def amend_passed(self, text="three\n"):
-        """Commit, then test a staged amend with HEAD = the previous owned head."""
+    def test_amended_head_needs_a_new_run(self):
         self.commit_passed()
-        self.old_head = self.head()
-        self.stage_change(text)
-        record = self.run_staged()
-        self.assertEqual(record["verdict"], "PASS")
-        self.assertEqual(
-            json.loads(Path(record["receipt"]).read_text())["head"], self.old_head
-        )
         sh(self.repo, "git", "commit", "-q", "--amend", "-m", "amended")
-        self.assertNotEqual(self.head(), self.old_head)
-        return record
-
-    def move_main(self):
-        sh(self.repo, "git", "checkout", "-q", "--detach", "origin/main")
-        sh(self.repo, "git", "commit", "-q", "--allow-empty", "-m", "main moved")
-        newer = self.head()
-        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", newer)
-        sh(self.repo, "git", "checkout", "-q", "main")
-        return newer
-
-    def test_normal_amend_of_a_single_commit_is_accepted(self):
-        self.amend_passed()
+        self.assertTrue(
+            any(
+                "different commit context" in e or "no PASS receipt" in e
+                for e in self.errors()
+            ),
+            self.errors(),
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS")
         self.assertEqual(self.errors(), [])
 
     def test_amend_with_different_content_than_tested_is_rejected(self):
-        self.amend_passed()
+        self.commit_passed()
         (self.repo / "app.txt").write_text("untested\n")
         sh(self.repo, "git", "commit", "-qa", "--amend", "-m", "again")
         self.assertTrue(any("no PASS receipt" in e for e in self.errors()))
-
-    def test_amend_after_the_base_moved_is_rejected(self):
-        self.amend_passed()
-        self.move_main()
-        self.assertTrue(any("latest origin/main" in e for e in self.errors()))
-
-    def test_same_tree_replayed_on_a_newer_base_is_rejected(self):
-        self.amend_passed()
-        newer = self.move_main()
-        tree = self.head("HEAD^{tree}")
-        replayed = sh(self.repo, "git", "commit-tree", tree, "-p", newer, "-m", "r")
-        sh(self.repo, "git", "reset", "-q", "--hard", replayed)
-        self.assertTrue(
-            any("different commit context" in e for e in self.errors()), self.errors()
-        )
-
-    def test_old_head_with_several_commits_is_rejected(self):
-        self.commit_passed()
-        (self.repo / "y.txt").write_text("y")
-        sh(self.repo, "git", "add", "y.txt")
-        sh(self.repo, "git", "commit", "-qm", "second")
-        self.stage_change("three\n")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
-        sh(self.repo, "git", "reset", "-q", "--soft", "origin/main")
-        sh(self.repo, "git", "commit", "-qm", "squashed")
-        self.assertTrue(any("different commit context" in e for e in self.errors()))
-
-    def test_old_head_that_is_a_merge_is_rejected(self):
-        self.commit_passed()
-        first = self.head()
-        sh(self.repo, "git", "checkout", "-q", "-b", "side", "origin/main")
-        (self.repo / "side.txt").write_text("s")
-        sh(self.repo, "git", "add", "side.txt")
-        sh(self.repo, "git", "commit", "-qm", "side")
-        sh(self.repo, "git", "merge", "-q", "--no-ff", "-m", "merge", first)
-        self.stage_change("three\n")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
-        sh(self.repo, "git", "reset", "-q", "--soft", "origin/main")
-        sh(self.repo, "git", "commit", "-qm", "squashed")
-        self.assertTrue(any("different commit context" in e for e in self.errors()))
-
-    def test_missing_old_head_object_is_rejected(self):
-        record = self.amend_passed()
-        sh(self.repo, "git", "reflog", "expire", "--expire=now", "--all")
-        sh(self.repo, "git", "prune", "--expire=now")
-        self.assertEqual(
-            sh(self.repo, "git", "cat-file", "-t", self.old_head, check=False), ""
-        )
-        self.assertTrue(any("different commit context" in e for e in self.errors()))
-        self.rewrite(record, lambda d: d.update(head="f" * 40))
-        self.assertTrue(any("different commit context" in e for e in self.errors()))
-
-    def test_malformed_or_annotated_tag_old_head_is_rejected(self):
-        record = self.amend_passed()
-        sh(self.repo, "git", "tag", "-a", "-m", "t", "oldtag", self.old_head)
-        tag = self.head("oldtag")
-        self.assertNotEqual(tag, self.old_head)
-        for bad in (tag, 1, ["x"], {"a": 1}, True):
-            self.rewrite(record, lambda d, bad=bad: d.update(head=bad))
-            self.assertTrue(
-                any("different commit context" in e for e in self.errors()), bad
-            )
-
-    def test_amend_with_failed_or_superseded_attempt_is_rejected(self):
-        record = self.amend_passed()
-        self.rewrite(record, lambda d: d["stages"][0].update(status="failed"))
-        self.assertTrue(any("did not pass" in e for e in self.errors()))
-        self.rewrite(record, lambda d: d["stages"][0].update(status="passed"))
-        self.assertEqual(self.errors(), [])
-        local_ci.record_attempt(self.home, self.head("HEAD^{tree}"), "newer", "running")
-        self.assertTrue(any("superseded" in e for e in self.errors()))
 
 
 class InstallerTests(unittest.TestCase):
@@ -1076,7 +1343,10 @@ class InstallerTests(unittest.TestCase):
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir(exist_ok=True)
         self.trace = self.tmp / "trace"
-        for name, code in (("node", "0"), ("python3", "${PYTHON_EXIT:-0}")):
+        for name, code in (
+            ("node", "${NODE_EXIT:-0}"),
+            ("python3", "${PYTHON_EXIT:-0}"),
+        ):
             shim = bin_dir / name
             shim.write_text(
                 f'#!/bin/sh\necho "{name} $@" >> {self.trace}\nexit {code}\n'
@@ -1088,7 +1358,7 @@ class InstallerTests(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if k != "STATEACTION_PREVIOUS_HOOKS"}
         return {**env, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
-    def test_pre_commit_chains_checks_then_local_ci_and_cannot_be_bypassed_by_environment(
+    def test_pre_commit_runs_only_the_staged_checks_and_never_local_ci(
         self,
     ):
         hooks = self.linked / "scripts/local-ci/hooks"
@@ -1101,27 +1371,18 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(ok.returncode, 0)
         self.assertEqual(
             self.trace.read_text().split("\n")[:-1],
-            [
-                "node scripts/platform/check-staged.mjs",
-                "python3 scripts/local-ci/local_ci.py run --staged",
-            ],
+            ["node scripts/platform/check-staged.mjs"],
         )
+        self.assertNotIn("local_ci.py", self.trace.read_text())
+        self.assertNotIn("local_ci.py", (HERE / "hooks/pre-commit").read_text())
         self.trace.unlink()
-        bypass = {
-            **env,
-            "STATEACTION_LOCAL_CI_ACTIVE": "1",
-            "LEFTHOOK": "0",
-            "PYTHON_EXIT": "1",
-            "CI": "1",
-        }
         failing = subprocess.run(
-            [str(hooks / "pre-commit")], cwd=self.linked, env=bypass
+            [str(hooks / "pre-commit")],
+            cwd=self.linked,
+            env={**env, "NODE_EXIT": "1"},
         )
         self.assertEqual(
-            failing.returncode, 1, "no environment variable may skip the local CI"
-        )
-        self.assertIn(
-            "python3 scripts/local-ci/local_ci.py run --staged", self.trace.read_text()
+            failing.returncode, 1, "a staged-content failure still blocks the commit"
         )
 
     def test_pre_commit_chains_the_previous_worktree_hooks_directory(self):
@@ -1147,17 +1408,14 @@ class InstallerTests(unittest.TestCase):
             0,
         )
         self.assertEqual(trace.read_text(), "previous\n")
-        self.assertIn("local_ci.py run --staged", self.trace.read_text())
-        self.trace.unlink()
+        self.assertFalse(self.trace.exists(), "the hook never starts local_ci.py")
         blocked = subprocess.run(
             [str(Path(info["hooksPath"]) / "pre-commit")],
             cwd=self.linked,
             env={**env, "PREV_EXIT": "1"},
         )
         self.assertEqual(blocked.returncode, 1)
-        self.assertFalse(
-            self.trace.exists(), "a failing previous hook stops before local CI"
-        )
+        self.assertFalse(self.trace.exists())
 
     def push(self, hook, lines, env=None):
         return subprocess.run(
@@ -1232,15 +1490,51 @@ class MergePostconditionTests(unittest.TestCase):
         with self.assertRaises(local_ci.MergedOnUntestedBase):
             self.check(parents=[self.BASE], tree=self.HEAD_TREE, merged=False)
 
-    def test_merge_is_serialized_with_ci_runs_and_the_cli_reports_fatal(self):
+    def test_merge_refuses_without_a_valid_receipt_and_never_calls_gh_merge(self):
+        policy = mock.Mock()
+        policy.validate_pr.return_value = "SA-1"
+        policy.primary_declaration.return_value = "Refs SA-1"
+        pr = {"draft": False, "title": "SA-1: x", "head": {"sha": "a" * 40}}
+
+        def gh(*args):
+            return (
+                {"login": "timothywangdev"}
+                if args == ("api", "user")
+                else (
+                    pr if "pulls/1" in args[1] and "--paginate" not in args else [[pr]]
+                )
+            )
+
+        with mock.patch.dict(sys.modules, {"github_policy": policy}):
+            with mock.patch.object(local_ci, "gh_json", side_effect=gh):
+                with mock.patch.object(local_ci, "git", return_value="a" * 40):
+                    with mock.patch.object(
+                        local_ci,
+                        "verify_receipt",
+                        return_value=["no PASS receipt for tree t"],
+                    ):
+                        with mock.patch.object(local_ci.subprocess, "run") as run:
+                            with self.assertRaisesRegex(
+                                local_ci.Refused, "Local receipt rejected"
+                            ):
+                                local_ci._merge_pr(
+                                    Path("."), 1, github_repo="o/r", execute=True
+                                )
+                            run.assert_not_called()
+
+    def test_merge_is_not_blocked_by_a_running_ci_and_the_cli_reports_fatal(self):
         home = Path(tempfile.mkdtemp(prefix="local-ci-merge-"))
         self.addCleanup(shutil.rmtree, home, ignore_errors=True)
-        fd = local_ci.acquire_lock(local_ci.private_dir(home))
+        fd = local_ci.acquire_lock(local_ci.private_dir(home))  # a ci:local is running
         try:
-            with self.assertRaisesRegex(local_ci.Refused, "owns this CI home"):
-                local_ci.merge_pr(
-                    Path("."), 1, github_repo="o/r", execute=False, home=home
+            with mock.patch.object(local_ci, "_merge_pr", return_value=0) as inner:
+                self.assertEqual(
+                    local_ci.merge_pr(
+                        Path("."), 1, github_repo="o/r", execute=False, home=home
+                    ),
+                    0,
                 )
+                inner.assert_called_once()
         finally:
             os.close(fd)
         with mock.patch.object(
@@ -1344,8 +1638,8 @@ class CacheTests(RepoCase):
         """
         spec = stage("fake-nx", code, cache="nx")
         self.set_stages([spec])
-        sh(self.repo, "git", "add", "-A")
-        record = self.run_staged()
+        self.commit_pending()
+        record = self.run_tree()
         entry = record["stages"][0]
         self.assertEqual(entry["status"], "passed")
         # The fake is not an nx invocation, so it is neither scanned nor given cache mode.
@@ -1367,7 +1661,7 @@ class CacheTests(RepoCase):
 
     def test_fresh_run_is_recorded_and_still_passes_every_stage(self):
         self.stage_change()
-        record = self.run_staged(fresh=True)
+        record = self.run_tree(fresh=True)
         receipt = json.loads(Path(record["receipt"]).read_text())
         self.assertTrue(receipt["fresh"])
         self.assertEqual(receipt["stages"][0]["status"], "passed")
@@ -1381,13 +1675,12 @@ class CacheTests(RepoCase):
 
     def test_changed_inputs_never_reuse_an_old_receipt_or_attempt(self):
         self.stage_change("one\n")
-        first = self.run_staged()
+        first = self.run_tree()
         self.assertEqual(first["verdict"], "PASS")
         self.stage_change("source changed\n")
-        second = self.run_staged()
+        second = self.run_tree()
         self.assertNotEqual(first["tree"], second["tree"])
         self.assertEqual(len(self.receipts()), 2)
-        sh(self.repo, "git", "commit", "-qm", "c")
         self.assertEqual(local_ci.verify_receipt(self.repo, "HEAD", home=self.home), [])
         # Tampering with the recorded toolchain (stale compiler/runtime) is detected.
         receipt_path = Path(second["receipt"])
@@ -1402,19 +1695,19 @@ class CacheTests(RepoCase):
             )
         )
 
-    def test_one_run_per_ci_home_and_fixed_export_path(self):
+    def test_one_run_at_a_time_per_ci_home_and_fixed_export_path(self):
         fd = local_ci.acquire_lock(local_ci.private_dir(self.home))
         try:
             with self.assertRaisesRegex(local_ci.Refused, "owns this CI home"):
-                self.run_staged()
+                self.run_tree()
         finally:
             os.close(fd)
         paths = self.tmp / "paths.txt"
         code = f"import os; open({str(paths)!r}, 'a').write(os.getcwd() + chr(10))"
         self.set_stages([stage("where", code)])
-        sh(self.repo, "git", "add", "-A")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
-        self.assertEqual(self.run_staged()["verdict"], "PASS")
+        self.commit_pending()
+        self.assertEqual(self.run_tree()["verdict"], "PASS")
+        self.assertEqual(self.run_tree()["verdict"], "PASS")
         first, second = paths.read_text().split()
         self.assertEqual(
             first, second, "stable export path keeps path-sensitive caches valid"
