@@ -86,6 +86,19 @@
     "http/source-copy-confirm.v1.schema.json": "41c0569543bb37d1721698a2272dfdf4b33588f42f6f3250e4aa37da65977d0a",
     "http/cleanup-proof-request.v1.schema.json": "ffbc3d836f82dc6eb7c47e0f3161bbfc773b21bb0742ea931b919b16bd4d2b42",
     "http/source-copy-confirmation.v1.schema.json": "209a25ed618c7924c8e96b44a760b9f9f3b78cb04271430fbccac0e7ac9840fb",
-    "http/cleanup-proof.v1.schema.json": "38a851690e9702c9793e28721f5f1f5319cef6b3e8ed6cf5dc418fe92954dc81"
+    "http/cleanup-proof.v1.schema.json": "38a851690e9702c9793e28721f5f1f5319cef6b3e8ed6cf5dc418fe92954dc81",
+    "catalog.v14.json": "9c2d92158b46199c9146f27c3a7c943d7dc5a61e8ff662a6db1f63e0c79dfb60",
+    "common.v2.schema.json": "628726e19f85dd56a093dbeb53b07c726e26a89ced857978bd6077c0191435e6",
+    "artifacts/captions.v1.schema.json": "925df11d77faad24223b486357bed1487dc5f5777b835095fdbc226af9162677",
+    "artifacts/hand-presence.v1.schema.json": "354a75c3007171bf00fce5bc1d90a63c1cd758c078022037b75094b6291062e2",
+    "artifacts/processing-result.v3.schema.json": "19ced7a1e46d0eea3aa6a037538ab4f23cf69cac244a9662553744567408c9b4",
+    "artifacts/segments.v1.schema.json": "5ba2a6397e54e599f0e497470b9c36ddf1fe118fdb3a7d7642fcb3673a953a40",
+    "http/dag-run.v1.schema.json": "17b40797bb7147a64a4230afb2b0f473670f3bd38ff4a24f1428ed80446afb85",
+    "jobs/controller-action.v2.schema.json": "12ed8db66ddff84072fbabe585a9999067e4c0702a5f4f367d80cf85c7b14b09",
+    "jobs/heartbeat.v2.schema.json": "5ad2b868ac6c136860cd230055ac1c7099fe6ebfc0bc8c2ad8d4bdc32900c5a7",
+    "jobs/module-manifest.v1.schema.json": "dbe6e57c4bceffeb307ed7d00f62d2e33658cda4cb8bc14f7f41d73df7a1c834",
+    "jobs/recipe.v1.schema.json": "f1ba8086b8d1a6a091cc79d8b2fb0d2d3d18ea70a8cd66a5e8445b7e9d187a0f",
+    "jobs/stage-receipt.v1.schema.json": "46291c2747e40c7f7ffc5c4dc84dee081d5691f0f3bab6ff2a1fc4a0dec56bc8",
+    "jobs/task-input.v3.schema.json": "968cf5ac089992d6c3ec5760a56737488ceb54f1fd61d6e2f093eda999892dda"
   }
 }

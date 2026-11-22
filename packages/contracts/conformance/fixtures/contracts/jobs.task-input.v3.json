@@ -1,0 +1,605 @@
+{
+  "contract": "jobs.task-input.v3",
+  "cases": [
+    {
+      "name": "process recording with an inline recipe",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "stub recipe",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "local_stub@1",
+            "maxJobCostUsd": "0.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "stub_segmenter@1",
+                "params": {
+                  "fail_windows": "3"
+                },
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 60,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "stub_captioner@1",
+                "params": {
+                  "fail_captions": "1"
+                },
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 60,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "e62989654bcd8aa51c3076748cf47c57e25484a43923acd983b381e7bc945445"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recipe digest is canonical, not byte order",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "maxJobCostUsd": "3.00",
+            "recipeId": "flora_fp8@1",
+            "schemaVersion": 1,
+            "stages": [
+              {
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "batch_size": 8,
+                  "grid_profile": "human_16s_4hz",
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "budgetSeconds": 1800,
+                  "gpu": "RTX-PRO-6000",
+                  "maxContainers": 1,
+                  "retries": 0
+                },
+                "stage": "segment"
+              },
+              {
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "overlap": true,
+                  "temperature": "0.0"
+                },
+                "resources": {
+                  "budgetSeconds": 3600,
+                  "gpu": "RTX-PRO-6000",
+                  "maxContainers": 1,
+                  "retries": 0
+                },
+                "stage": "caption"
+              },
+              {
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "budgetSeconds": 7200,
+                  "gpu": "none",
+                  "maxContainers": 1,
+                  "retries": 0
+                },
+                "stage": "hand_pose"
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "export release is unchanged",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "export_release",
+          "selectionSha256": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recipe digest must match the recipe",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "e62989654bcd8aa51c3076748cf47c57e25484a43923acd983b381e7bc945445"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/recipeSha256"
+        ]
+      }
+    },
+    {
+      "name": "caption enabled without segment",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": false,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "3c349b95061c9f3cd02d35cea11e2743ad28fcc5e9265eb144157624526d04cd"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/recipe/stages/1/enabled"
+        ]
+      }
+    },
+    {
+      "name": "GPU below the module minimum",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "L4",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "72098dc4e064743ef52677eb1ac7c565964bf8c418f984a2553d308d0750494d"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/recipe/stages/0/resources/gpu"
+        ]
+      }
+    },
+    {
+      "name": "recipe is required",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "retries in an inline recipe must be 0",
+      "input": {
+        "document": {
+          "schemaVersion": 3,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 2
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "v2 task inputs are a different contract",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    }
+  ]
+}

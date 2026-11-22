@@ -1,0 +1,1746 @@
+{
+  "contract": "artifacts.captions.v1",
+  "cases": [
+    {
+      "name": "complete, failed and not_captioned rows",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "no captions",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "empty caption text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "whitespace-only caption text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "   ",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "caption text is a single trimmed line",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher\nwith right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "failed caption stored as empty text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames",
+              "text": ""
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "failed caption carries no text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames",
+              "text": "pick up pitcher"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "complete caption requires text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "complete caption has no error code",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": "unsupported_target_frames",
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "failed caption requires an error code",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": null
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "not_captioned requires a reason code",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "derived fields only with text",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "derived rule version is pinned",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@2",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rows/0/derived/rule"
+        ]
+      }
+    },
+    {
+      "name": "derived hand vocabulary",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "unknown",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/rows/0/derived/hand"
+        ]
+      }
+    },
+    {
+      "name": "steps are the caption split on commas",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "rotate pitcher with both hands"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/rows/0/derived/steps"
+        ]
+      }
+    },
+    {
+      "name": "one caption per segment",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "duplicate_identity",
+        "paths": [
+          "/rows/1/segment_id"
+        ]
+      }
+    },
+    {
+      "name": "producer engine matches the manifest",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "stub",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/engine/name"
+        ]
+      }
+    },
+    {
+      "name": "producer is a caption module",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_tempseg_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-TempSeg",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/module_id"
+        ]
+      }
+    },
+    {
+      "name": "captioned segments are pinned by digest",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "other caption versions are rejected",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v0",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schema"
+        ]
+      }
+    }
+  ]
+}

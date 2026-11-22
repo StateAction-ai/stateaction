@@ -49,7 +49,7 @@ class _Entry {
   final List<Rule> rules;
 }
 
-/// Validators built from the current catalog (api/catalog.v13.json, an exact
+/// Validators built from the current catalog (api/catalog.v14.json, an exact
 /// superset of the immutable catalog.v10.json, catalog.v9.json, catalog.v8.json, catalog.v7.json, catalog.v6.json, catalog.v5.json, catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json) and the
 /// schema documents it lists.
 /// [readSchema] receives catalog-relative paths (for example `http/x.v1.schema.json`).
@@ -61,8 +61,22 @@ class ContractRegistry {
     Map<String, Object?> Function(String path) readSchema,
   ) {
     final contracts = catalog['contracts']! as Map<String, Object?>;
+    // Only a catalog with module-resolving rules needs api/modules.json, so a
+    // subset catalog (the mobile app's) never has to supply it.
+    final needsModules = contracts.values.any(
+      (c) => ((c! as Map<String, Object?>)['rules']! as List<Object?>).any(
+        moduleRules.contains,
+      ),
+    );
+    final rules = buildRules(
+      needsModules
+          ? readSchema('modules.json')
+          : const {'modules': <Object?>[]},
+    );
     final paths = [
       catalog['common']! as String,
+      if (catalog['shared'] != null)
+        for (final s in catalog['shared']! as List<Object?>) s! as String,
       for (final c in contracts.values)
         (c! as Map<String, Object?>)['schema']! as String,
     ];

@@ -960,3 +960,295 @@ export type CaptureRecoverable = {
   commandId: Uuid;
   captures: CaptureSnapshot[];
 };
+
+// ------------------------------------------------ SA-87 (catalog.v14) stage contracts
+/** common.v2 outputFileRole: an exact superset of the v1 roles. */
+export type OutputFileRoleV2 =
+  | OutputFileRole
+  | "segments_json"
+  | "captions_json"
+  | "hand_presence_json"
+  | "recording_mp4"
+  | "diagnostic_blob";
+export type Stage = "segment" | "caption" | "hand_pose";
+export type StageRunState =
+  | "pending"
+  | "submitting"
+  | "submit_unknown"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "not_run";
+export type GpuType =
+  | "none"
+  | "T4"
+  | "L4"
+  | "A10G"
+  | "L40S"
+  | "A100-40GB"
+  | "A100-80GB"
+  | "RTX-PRO-6000"
+  | "H100"
+  | "H200"
+  | "B200";
+/** module_id@version, resolved in api/modules.json. */
+export type ModuleRef = string;
+/** Fractions are decimal strings so a map stays in the sa-cjson-v1 domain. */
+export type ParamMap = Record<string, string | number | boolean | null>;
+/** Two-fraction-digit decimal string, for example "3.00". */
+export type UsdAmount = string;
+export type FrameRef = {
+  source_frame_id: Int64Decimal;
+  timestamp_ns: TimestampNs;
+};
+/** Exclusive end; both fields null means end of stream. */
+export type EndFrameRef =
+  | FrameRef
+  | { source_frame_id: null; timestamp_ns: null };
+export type Producer = {
+  stage: Stage;
+  module_id: string;
+  module_version: number;
+  model_name: string;
+  model_revision: string | null;
+  weights_sha256: Sha256Hex | null;
+  quant: { method: string; checkpoint_manifest_sha256: Sha256Hex } | null;
+  prompt_sha256: Sha256Hex | null;
+  params_sha256: Sha256Hex;
+  decoding_params: ParamMap;
+  engine: { name: string; version: string };
+  gpu: { requested_type: GpuType; observed_type: string | null };
+};
+type RecordingDocument = {
+  job_id: Uuid;
+  recording_id: Uuid;
+  source_manifest_sha256: Sha256Hex;
+  producer: Producer;
+};
+export type SegmentsV1 = RecordingDocument & {
+  schema: "stateaction.segments.v1";
+  clock_domain: ClockDomain;
+  windows: {
+    total: number;
+    ok: number;
+    failed: {
+      window_index: number;
+      error_code: string;
+      core_start: FrameRef;
+      core_end: EndFrameRef;
+    }[];
+    failed_core_spans: { start: FrameRef; end: EndFrameRef }[];
+  };
+  rows: {
+    /** uuid5, see segmentId(). */
+    segment_id: Uuid;
+    ordinal: number;
+    start: FrameRef;
+    end: EndFrameRef;
+    status: "ok" | "failed_window";
+    ext: Record<string, Record<string, string | number | boolean | null>>;
+  }[];
+};
+export type CaptionDerived = {
+  rule: "caption_rule@1";
+  short_label: string;
+  hand: "left" | "right" | "both" | "none";
+  steps: string[];
+};
+export type CaptionRow =
+  | {
+      segment_id: Uuid;
+      status: "complete";
+      error_code: null;
+      text: string;
+      lang: string;
+      derived: CaptionDerived;
+    }
+  | {
+      segment_id: Uuid;
+      status: "failed" | "not_captioned";
+      error_code: string;
+    };
+export type CaptionsV1 = RecordingDocument & {
+  schema: "stateaction.captions.v1";
+  segments_sha256: Sha256Hex;
+  rows: CaptionRow[];
+};
+export type HandPresenceSpan = {
+  start: FrameRef;
+  end: EndFrameRef;
+  frames: number;
+  state: "present" | "no_hand" | "failed";
+};
+export type HandPresenceV1 = RecordingDocument & {
+  schema: "stateaction.hand_presence.v1";
+  clock_domain: ClockDomain;
+  frame_count: number;
+  lanes: { left: HandPresenceSpan[]; right: HandPresenceSpan[] };
+};
+export type StageResources = {
+  gpu: GpuType;
+  budgetSeconds: number;
+  maxContainers: number;
+  retries: 0;
+};
+type RecipeStage<S extends Stage> = {
+  stage: S;
+  enabled: S extends "hand_pose" ? true : boolean;
+  module: ModuleRef;
+  params: ParamMap;
+  resources: StageResources;
+};
+export type RecipeV1 = {
+  schemaVersion: 1;
+  recipeId: string;
+  maxJobCostUsd: UsdAmount;
+  stages: [
+    RecipeStage<"segment">,
+    RecipeStage<"caption">,
+    RecipeStage<"hand_pose">,
+  ];
+};
+export type ModuleManifestEntry = {
+  moduleId: string;
+  version: number;
+  stage: Stage;
+  description: string;
+  license: { id: string; commercialUse: boolean };
+  gpu: { minimum: GpuType; supported: GpuType[] };
+  localOnly: boolean;
+  outputs: OutputFileRoleV2[];
+  provenance: {
+    modelName: string;
+    modelRevision: string | null;
+    engine: string;
+    requires: (
+      | "model_revision"
+      | "weights_sha256"
+      | "quant"
+      | "prompt_sha256"
+      | "observed_gpu"
+    )[];
+  };
+};
+export type ModuleManifestV1 = {
+  schemaVersion: 1;
+  modules: ModuleManifestEntry[];
+};
+export type TaskInputV3 =
+  | (Omit<
+      Extract<TaskInputV2, { kind: "process_recording" }>,
+      "schemaVersion"
+    > & {
+      schemaVersion: 3;
+      recipe: RecipeV1;
+      /** sa-cjson-v1 digest of recipe. */
+      recipeSha256: Sha256Hex;
+    })
+  | (Omit<Extract<TaskInputV2, { kind: "export_release" }>, "schemaVersion"> & {
+      schemaVersion: 3;
+    });
+export type StageReceiptV1 = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  stage: Stage;
+  module: ModuleRef;
+  status: "succeeded" | "failed";
+  errorCode: string | null;
+  outputs: {
+    fileId: Uuid;
+    role: OutputFileRoleV2;
+    sizeBytes: DecimalBytes;
+    sha256: Sha256Hex;
+  }[];
+  counts: Record<string, number>;
+  gpu: { requestedType: GpuType; observedType: string | null };
+  startedAt: Rfc3339Utc;
+  finishedAt: Rfc3339Utc;
+};
+export type ControllerActionV2 =
+  | ControllerAction
+  | { action: "issue_stage_claim"; owner: string; stage: Stage }
+  | {
+      action: "record_stage_run";
+      owner: string;
+      stage: Stage;
+      state: StageRunState;
+      module: ModuleRef;
+      /** Executor call identity only; never spawn authority. */
+      callId?: string;
+      /** Present exactly for failed, cancelled and not_run. */
+      errorCode?: string;
+      /** Required for succeeded; allowed for failed. */
+      receipt?: StageReceiptV1;
+    };
+export type HeartbeatV2 = Omit<Heartbeat, "schemaVersion" | "phase"> & {
+  schemaVersion: 2;
+  stage: Stage;
+  phase: Heartbeat["phase"] | "remuxing" | "segmenting" | "captioning";
+};
+export type ResultNode<S extends Stage> = {
+  stage: S;
+  status: S extends "hand_pose"
+    ? "succeeded" | "failed"
+    : "succeeded" | "failed" | "not_run";
+  module: ModuleRef;
+  error_code: string | null;
+  outputs: Uuid[];
+  counts: Record<string, number>;
+};
+export type ProcessingResultV3 = Omit<
+  ProcessingResultV1,
+  "schema" | "outputs"
+> & {
+  schema: "stateaction.processing_result.v3";
+  outputs: {
+    file_id: Uuid;
+    role: OutputFileRoleV2;
+    relative_path: string;
+    size_bytes: DecimalBytes;
+    sha256: Sha256Hex;
+  }[];
+  attestation: {
+    invocation_nonce: string;
+    rgb_profile: HardwareRgbProfile | SimulationRgbProfile;
+    source_file_id: Uuid;
+    source_eof_verified: boolean;
+  };
+  simulation?: unknown;
+  recipe_id: string;
+  recipe_sha256: Sha256Hex;
+  nodes: [
+    ResultNode<"segment">,
+    ResultNode<"caption">,
+    ResultNode<"hand_pose">,
+  ];
+};
+export type DagRunNode = {
+  stage: Stage;
+  enabled: boolean;
+  module: ModuleRef;
+  state: StageRunState;
+  errorCode: string | null;
+  callId: string | null;
+  gpu: { requestedType: GpuType; observedType: string | null };
+  startedAt: Rfc3339Utc | null;
+  finishedAt: Rfc3339Utc | null;
+  counts: Record<string, number>;
+  estimatedCostUsd: UsdAmount | null;
+  receiptSha256: Sha256Hex | null;
+};
+/** Server-rendered from recorded stage runs; never an uploaded output. */
+export type DagRunV1 = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  recordingId: Uuid;
+  jobState: JobState;
+  recipeId: string;
+  recipeSha256: Sha256Hex;
+  maxJobCostUsd: UsdAmount;
+  estimatedCostUsd: UsdAmount | null;
+  stages: DagRunNode[];
+  renderedAt: Rfc3339Utc;
+};

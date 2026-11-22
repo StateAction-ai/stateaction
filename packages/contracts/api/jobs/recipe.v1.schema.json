@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/recipe.v1.json",
+  "title": "Processing recipe v1",
+  "description": "Which module runs each stage, with what parameters and resources, and the job cost cap. stages is a union discriminated by stage, in the fixed MVP order segment, caption, hand_pose; hand_pose always runs because it seals the job. Every value stays in the sa-cjson-v1 domain (fractions are decimal strings), so recipeSha256 is the sa-cjson-v1 digest of this object. Cross-field rules (rule recipe, against api/modules.json): caption.enabled requires segment.enabled, every module must exist for its stage, and its GPU must be one the module manifest is qualified on (anything below the manifest minimum is rejected). retries is always 0: a failed stage is recorded, never silently retried.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "recipeId", "maxJobCostUsd", "stages"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "recipeId": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/recipeRef"
+    },
+    "maxJobCostUsd": {
+      "description": "Hard cap on the estimated GPU and CPU cost of one job, in US dollars.",
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+    },
+    "stages": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/segmentStage"
+        },
+        {
+          "$ref": "#/$defs/captionStage"
+        },
+        {
+          "$ref": "#/$defs/handPoseStage"
+        }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    }
+  },
+  "$defs": {
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gpu", "budgetSeconds", "maxContainers", "retries"],
+      "properties": {
+        "gpu": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+        },
+        "budgetSeconds": {
+          "description": "Wall-clock budget of the stage; the executor timeout.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "maxContainers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "retries": {
+          "const": 0
+        }
+      }
+    },
+    "segmentStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "enabled", "module", "params", "resources"],
+      "properties": {
+        "stage": {
+          "const": "segment"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "module": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+        },
+        "params": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/paramMap"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        }
+      }
+    },
+    "captionStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "enabled", "module", "params", "resources"],
+      "properties": {
+        "stage": {
+          "const": "caption"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "module": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+        },
+        "params": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/paramMap"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        }
+      }
+    },
+    "handPoseStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "enabled", "module", "params", "resources"],
+      "properties": {
+        "stage": {
+          "const": "hand_pose"
+        },
+        "enabled": {
+          "const": true
+        },
+        "module": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+        },
+        "params": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/paramMap"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        }
+      }
+    }
+  }
+}

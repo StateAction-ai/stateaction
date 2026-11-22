@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/heartbeat.v2.json",
+  "title": "Worker heartbeat v2",
+  "description": "Additive successor of heartbeat.v1 (v1 stays published and valid): every heartbeat names the recipe stage it reports for, and the stage phases remuxing, segmenting and captioning are added. segmenting is only valid in the segment stage and captioning only in the caption stage (rule heartbeat_stage). Unknown totals are null, never fabricated. Heartbeats never extend hard deadlines.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "jobId", "invocationNonce", "stage", "phase"],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "invocationNonce": {
+      "description": "Fresh per physical invocation: 32 random bytes, unpadded base64url.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "stage": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "hashing_source",
+        "decoding",
+        "inference",
+        "writing_outputs",
+        "uploading",
+        "sealing",
+        "remuxing",
+        "segmenting",
+        "captioning"
+      ]
+    },
+    "processedFrames": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "totalFrames": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,1346 @@
+{
+  "contract": "jobs.recipe.v1",
+  "cases": [
+    {
+      "name": "default FLORA fp8 recipe",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "local stub recipe",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "local_stub@1",
+          "maxJobCostUsd": "0.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "stub_segmenter@1",
+              "params": {
+                "fail_windows": "3"
+              },
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 60,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "stub_captioner@1",
+              "params": {
+                "fail_captions": "1"
+              },
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 60,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "segment only, caption disabled",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": false,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "hand pose only",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": false,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": false,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "HF fallback segmenter on an A100",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_hf@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "A100-40GB",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "caption enabled without segment",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": false,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/1/enabled"
+        ]
+      }
+    },
+    {
+      "name": "GPU below the module minimum",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "L4",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/0/resources/gpu"
+        ]
+      }
+    },
+    {
+      "name": "fp8 module on a GPU it is not qualified on",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "A100-80GB",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/1/resources/gpu"
+        ]
+      }
+    },
+    {
+      "name": "CPU module asked for a GPU",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "T4",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/2/resources/gpu"
+        ]
+      }
+    },
+    {
+      "name": "unknown module",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@2",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/0/module"
+        ]
+      }
+    },
+    {
+      "name": "module of another stage",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/stages/0/module"
+        ]
+      }
+    },
+    {
+      "name": "retries must be 0",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 1
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/resources/retries"
+        ]
+      }
+    },
+    {
+      "name": "hand pose always runs",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": false,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/2/enabled"
+        ]
+      }
+    },
+    {
+      "name": "stages are in recipe order",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "every stage is present",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "cost cap is a decimal string, never a float",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": 3.5,
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/maxJobCostUsd"
+        ]
+      }
+    },
+    {
+      "name": "cost cap has two fraction digits",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.5",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/maxJobCostUsd"
+        ]
+      }
+    },
+    {
+      "name": "fractional params are decimal strings",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": 0.5,
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "params are flat",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true,
+                "processor": {
+                  "fps": 2
+                }
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "budget is bounded",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 0,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/resources/budgetSeconds"
+        ]
+      }
+    },
+    {
+      "name": "recipe id carries a version",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "recipeId": "flora_fp8",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/recipeId"
+        ]
+      }
+    },
+    {
+      "name": "other recipe versions are rejected",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    }
+  ]
+}

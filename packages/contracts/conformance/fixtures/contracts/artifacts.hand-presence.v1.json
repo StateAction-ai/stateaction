@@ -1,0 +1,1220 @@
+{
+  "contract": "artifacts.hand-presence.v1",
+  "cases": [
+    {
+      "name": "left and right lanes with explicit no_hand and failed frames",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "every frame failed",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "failed"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "failed"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "spans are contiguous",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1210",
+                  "timestamp_ns": "11999999930"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/lanes/left/1/start"
+        ]
+      }
+    },
+    {
+      "name": "runs are merged",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/lanes/left/1/state"
+        ]
+      }
+    },
+    {
+      "name": "span ends after it starts",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/lanes/left/0/end"
+        ]
+      }
+    },
+    {
+      "name": "frames cover the recording",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 199,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/lanes/left"
+        ]
+      }
+    },
+    {
+      "name": "lane runs to end of stream",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1600",
+                  "timestamp_ns": "24999999800"
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/lanes/right/0/end"
+        ]
+      }
+    },
+    {
+      "name": "failed is not folded into no_hand or unknown",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "unknown"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/lanes/left/2/state"
+        ]
+      }
+    },
+    {
+      "name": "a lane is never empty",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": []
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/lanes/right"
+        ]
+      }
+    },
+    {
+      "name": "hand model weights hash is required",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": null,
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/weights_sha256"
+        ]
+      }
+    },
+    {
+      "name": "CPU module never requests a GPU",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v1",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "T4",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/gpu/requested_type"
+        ]
+      }
+    },
+    {
+      "name": "other hand presence versions are rejected",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schema"
+        ]
+      }
+    }
+  ]
+}

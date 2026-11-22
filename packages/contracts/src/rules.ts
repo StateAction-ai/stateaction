@@ -7,6 +7,10 @@ export type RuleViolation = { code: string; path: string };
 type Json = Record<string, unknown>;
 type Rule = (doc: Json) => RuleViolation | null;
 
+import { createHash } from "node:crypto";
+import { requestSha256 } from "./canonical.js";
+import modulesManifest from "../api/modules.json" with { type: "json" };
+
 const PART_SIZE = 67108864n;
 const obj = (value: unknown) => value as Json;
 const list = (value: unknown) => value as unknown[];
@@ -147,6 +151,402 @@ function masks(
       return v("mask_mismatch", `${path}/${j}`);
   return null;
 }
+
+// ---------------------------------------------------------------- SA-87 stage contracts
+
+type Module = {
+  moduleId: string;
+  version: number;
+  stage: string;
+  gpu: { minimum: string; supported: string[] };
+  outputs: string[];
+  provenance: { modelName: string; engine: string; requires: string[] };
+};
+/** The committed module manifest (api/modules.json, jobs.module-manifest.v1). */
+const MODULES = new Map(
+  (modulesManifest.modules as Module[]).map((m) => [
+    `${m.moduleId}@${m.version}`,
+    m,
+  ]),
+);
+
+/** Output roles each stage may produce. */
+export const STAGE_ROLES: Readonly<Record<string, readonly string[]>> = {
+  segment: ["segments_json", "diagnostic_blob"],
+  caption: ["captions_json", "diagnostic_blob"],
+  hand_pose: [
+    "clip_mp4",
+    "hand_arrays_npz",
+    "hand_observations_json",
+    "frame_map_json",
+    "thumbnail_jpeg",
+    "viewer_rrd",
+    "hand_presence_json",
+    "recording_mp4",
+    "diagnostic_blob",
+  ],
+};
+/** Roles a succeeded stage must list exactly once. */
+const PRIMARY_ROLES: Readonly<Record<string, readonly string[]>> = {
+  segment: ["segments_json"],
+  caption: ["captions_json"],
+  hand_pose: ["hand_presence_json", "recording_mp4"],
+};
+const CODED_STATES = new Set(["failed", "cancelled", "not_run"]);
+const STAGE_ORDER = ["segment", "caption", "hand_pose"];
+
+/** UUIDv5 namespace: uuid5(NAMESPACE_URL, "https://stateaction.ai/schemas/artifacts/segments.v1.json"). */
+export const SEGMENT_ID_NAMESPACE = "a505457d-7470-5704-b995-1b3d1e3638df";
+
+/** RFC 9562 UUIDv5 of a UTF-8 name. */
+export function uuid5(namespace: string, name: string): string {
+  const ns = Buffer.from(namespace.replace(/-/g, ""), "hex");
+  const hash = createHash("sha1")
+    .update(Buffer.concat([ns, Buffer.from(name, "utf8")]))
+    .digest();
+  hash[6] = (hash[6]! & 0x0f) | 0x50;
+  hash[8] = (hash[8]! & 0x3f) | 0x80;
+  const hex = hash.subarray(0, 16).toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * segment_id: uuid5(SEGMENT_ID_NAMESPACE, "<source_manifest_sha256>|<module_id>@<module_version>|
+ * <params_sha256>|<start source_frame_id>|<end source_frame_id, or "end" at end of stream>").
+ */
+export function segmentId(
+  sourceManifestSha256: string,
+  moduleRef: string,
+  paramsSha256: string,
+  startFrameId: string,
+  endFrameId: string | null,
+): string {
+  return uuid5(
+    SEGMENT_ID_NAMESPACE,
+    [
+      sourceManifestSha256,
+      moduleRef,
+      paramsSha256,
+      startFrameId,
+      endFrameId ?? "end",
+    ].join("|"),
+  );
+}
+
+/** Frame refs compare on both identity and timestamp; a null end is end of stream. */
+const isEnd = (ref: Json) => ref.source_frame_id === null;
+function before(a: Json, b: Json): boolean {
+  if (isEnd(b)) return !isEnd(a);
+  if (isEnd(a)) return false;
+  return (
+    big(a.source_frame_id) < big(b.source_frame_id) &&
+    big(a.timestamp_ns) < big(b.timestamp_ns)
+  );
+}
+function atOrBefore(a: Json, b: Json): boolean {
+  if (isEnd(b)) return true;
+  if (isEnd(a)) return false;
+  return (
+    big(a.source_frame_id) <= big(b.source_frame_id) &&
+    big(a.timestamp_ns) <= big(b.timestamp_ns)
+  );
+}
+const sameRef = (a: Json, b: Json) =>
+  a.source_frame_id === b.source_frame_id && a.timestamp_ns === b.timestamp_ns;
+
+/** The producer names a manifest module of this stage and carries its required provenance. */
+function producerRule(doc: Json, stage: string): RuleViolation | null {
+  const p = obj(doc.producer);
+  if (p.stage !== stage) return v("reference_mismatch", "/producer/stage");
+  const module = MODULES.get(`${p.module_id}@${p.module_version}`);
+  if (!module || module.stage !== stage)
+    return v("reference_mismatch", "/producer/module_id");
+  if (module.provenance.modelName !== p.model_name)
+    return v("reference_mismatch", "/producer/model_name");
+  if (module.provenance.engine !== obj(p.engine).name)
+    return v("reference_mismatch", "/producer/engine/name");
+  const gpu = obj(p.gpu);
+  for (const field of module.provenance.requires) {
+    const [value, path] =
+      field === "observed_gpu"
+        ? [gpu.observed_type, "/producer/gpu/observed_type"]
+        : [p[field], `/producer/${field}`];
+    if (value === null) return v("reference_mismatch", path);
+  }
+  if (!module.gpu.supported.includes(gpu.requested_type as string))
+    return v("reference_mismatch", "/producer/gpu/requested_type");
+  return null;
+}
+
+function recipeRule(doc: Json, base: string): RuleViolation | null {
+  const stages = list(doc.stages).map(obj);
+  if (stages[1]!.enabled === true && stages[0]!.enabled !== true)
+    return v("reference_mismatch", `${base}/stages/1/enabled`);
+  for (const [i, stage] of stages.entries()) {
+    const module = MODULES.get(stage.module as string);
+    if (!module || module.stage !== stage.stage)
+      return v("reference_mismatch", `${base}/stages/${i}/module`);
+    if (!module.gpu.supported.includes(obj(stage.resources).gpu as string))
+      return v("reference_mismatch", `${base}/stages/${i}/resources/gpu`);
+  }
+  return null;
+}
+
+function stageReceiptRule(doc: Json, base: string): RuleViolation | null {
+  if ((doc.status === "succeeded") !== (doc.errorCode === null))
+    return v("outcome_mismatch", `${base}/errorCode`);
+  const outputs = list(doc.outputs).map(obj);
+  const dup = firstDuplicate(outputs, "fileId", `${base}/outputs`);
+  if (dup) return dup;
+  const allowed = STAGE_ROLES[doc.stage as string]!;
+  for (const [i, output] of outputs.entries())
+    if (!allowed.includes(output.role as string))
+      return v("reference_mismatch", `${base}/outputs/${i}/role`);
+  if (doc.status === "succeeded" && doc.stage !== "hand_pose")
+    for (const role of PRIMARY_ROLES[doc.stage as string]!)
+      if (outputs.filter((o) => o.role === role).length !== 1)
+        return v("inventory_incomplete", `${base}/outputs`);
+  if (instant(doc.finishedAt) < instant(doc.startedAt))
+    return v("ordering_violation", `${base}/finishedAt`);
+  return null;
+}
+
+/** text split on commas, each step trimmed of spaces and tabs, empty steps dropped. */
+export function captionSteps(text: string): string[] {
+  return text
+    .split(",")
+    .map((step) => step.replace(/^[ \t]+|[ \t]+$/g, ""))
+    .filter((step) => step.length > 0);
+}
+
+const STAGE_RULES: Readonly<Record<string, Rule>> = {
+  segments: (doc) => {
+    const found = producerRule(doc, "segment");
+    if (found) return found;
+    const windows = obj(doc.windows);
+    const failed = list(windows.failed).map(obj);
+    const spans = list(windows.failed_core_spans).map(obj);
+    if ((windows.ok as number) + failed.length !== windows.total)
+      return v("progress_mismatch", "/windows/ok");
+    const dup = firstDuplicate(failed, "window_index", "/windows/failed");
+    if (dup) return dup;
+    for (const [i, span] of spans.entries()) {
+      const p = `/windows/failed_core_spans/${i}`;
+      if (!before(obj(span.start), obj(span.end)))
+        return v("ordering_violation", `${p}/end`);
+      if (i > 0 && !atOrBefore(obj(spans[i - 1]!.end), obj(span.start)))
+        return v("ordering_violation", `${p}/start`);
+    }
+    const covered = new Set<number>();
+    for (const [i, window] of failed.entries()) {
+      const start = obj(window.core_start);
+      const end = obj(window.core_end);
+      if (!before(start, end))
+        return v("ordering_violation", `/windows/failed/${i}/core_end`);
+      const k = spans.findIndex(
+        (span) =>
+          atOrBefore(obj(span.start), start) && atOrBefore(end, obj(span.end)),
+      );
+      // A failed window must lie inside a recorded failed core span.
+      if (k < 0) return v("reference_mismatch", `/windows/failed/${i}`);
+      covered.add(k);
+    }
+    for (const i of spans.keys())
+      if (!covered.has(i))
+        return v("reference_mismatch", `/windows/failed_core_spans/${i}`);
+    const rows = list(doc.rows).map(obj);
+    const p0 = obj(doc.producer);
+    const moduleRef = `${p0.module_id}@${p0.module_version}`;
+    const seen = new Set<unknown>();
+    for (const [i, row] of rows.entries()) {
+      const p = `/rows/${i}`;
+      if (row.ordinal !== i) return v("ordering_violation", `${p}/ordinal`);
+      if (seen.has(row.segment_id))
+        return v("duplicate_identity", `${p}/segment_id`);
+      seen.add(row.segment_id);
+      const start = obj(row.start);
+      const end = obj(row.end);
+      if (!before(start, end)) return v("ordering_violation", `${p}/end`);
+      if (i > 0 && !atOrBefore(obj(rows[i - 1]!.end), start))
+        return v("ordering_violation", `${p}/start`);
+      const expected = segmentId(
+        doc.source_manifest_sha256 as string,
+        moduleRef,
+        p0.params_sha256 as string,
+        start.source_frame_id as string,
+        end.source_frame_id as string | null,
+      );
+      if (row.segment_id !== expected)
+        return v("reference_mismatch", `${p}/segment_id`);
+    }
+    // Failed windows are rows too: failed_window rows equal the failed core spans, in order.
+    let k = 0;
+    for (const [i, row] of rows.entries()) {
+      if (row.status !== "failed_window") continue;
+      const span = spans[k];
+      if (
+        !span ||
+        !sameRef(obj(span.start), obj(row.start)) ||
+        !sameRef(obj(span.end), obj(row.end))
+      )
+        return v("reference_mismatch", `/rows/${i}/status`);
+      k++;
+    }
+    if (k < spans.length)
+      return v("reference_mismatch", `/windows/failed_core_spans/${k}`);
+    return null;
+  },
+  captions: (doc) => {
+    const found = producerRule(doc, "caption");
+    if (found) return found;
+    const rows = list(doc.rows).map(obj);
+    const dup = firstDuplicate(rows, "segment_id", "/rows");
+    if (dup) return dup;
+    for (const [i, row] of rows.entries()) {
+      if (row.status !== "complete") continue;
+      const steps = list(obj(row.derived).steps);
+      const expected = captionSteps(row.text as string);
+      if (
+        steps.length !== expected.length ||
+        steps.some((step, j) => step !== expected[j])
+      )
+        return v("reference_mismatch", `/rows/${i}/derived/steps`);
+    }
+    return null;
+  },
+  hand_presence: (doc) => {
+    const found = producerRule(doc, "hand_pose");
+    if (found) return found;
+    const lanes = obj(doc.lanes);
+    for (const side of ["left", "right"]) {
+      const base = `/lanes/${side}`;
+      const spans = list(lanes[side]).map(obj);
+      let frames = 0;
+      for (const [i, span] of spans.entries()) {
+        const p = `${base}/${i}`;
+        if (!before(obj(span.start), obj(span.end)))
+          return v("ordering_violation", `${p}/end`);
+        if (i > 0) {
+          const prev = spans[i - 1]!;
+          if (!sameRef(obj(prev.end), obj(span.start)))
+            return v("ordering_violation", `${p}/start`);
+          if (prev.state === span.state)
+            return v("ordering_violation", `${p}/state`);
+        }
+        frames += span.frames as number;
+      }
+      const last = spans.length - 1;
+      if (!isEnd(obj(spans[last]!.end)))
+        return v("dimension_mismatch", `${base}/${last}/end`);
+      if (frames !== doc.frame_count) return v("dimension_mismatch", base);
+    }
+    return null;
+  },
+  recipe: (doc) => recipeRule(doc, ""),
+  module_manifest: (doc) => {
+    const modules = list(doc.modules).map(obj);
+    const seen = new Set<string>();
+    for (const [i, module] of modules.entries()) {
+      const p = `/modules/${i}`;
+      const ref = `${module.moduleId}@${module.version}`;
+      if (seen.has(ref)) return v("duplicate_identity", `${p}/version`);
+      seen.add(ref);
+      const gpu = obj(module.gpu);
+      if (!list(gpu.supported).includes(gpu.minimum))
+        return v("reference_mismatch", `${p}/gpu/minimum`);
+      const allowed = STAGE_ROLES[module.stage as string]!;
+      for (const [j, role] of list(module.outputs).entries())
+        if (!allowed.includes(role as string))
+          return v("reference_mismatch", `${p}/outputs/${j}`);
+    }
+    return null;
+  },
+  task_input_recipe: (doc) => {
+    if (doc.kind !== "process_recording") return null;
+    const found = recipeRule(obj(doc.recipe), "/recipe");
+    if (found) return found;
+    return requestSha256(doc.recipe) === doc.recipeSha256
+      ? null
+      : v("reference_mismatch", "/recipeSha256");
+  },
+  processing_result_nodes: (doc) => {
+    const outputs = list(doc.outputs).map(obj);
+    const roles = new Map(outputs.map((o) => [o.file_id, o.role as string]));
+    const claimed = new Set<unknown>();
+    for (const [i, node] of list(doc.nodes).map(obj).entries()) {
+      const p = `/nodes/${i}`;
+      if ((node.status === "succeeded") !== (node.error_code === null))
+        return v("outcome_mismatch", `${p}/error_code`);
+      const files = list(node.outputs);
+      if (node.status === "not_run" && files.length > 0)
+        return v("outcome_mismatch", `${p}/outputs`);
+      const allowed = STAGE_ROLES[node.stage as string]!;
+      const nodeRoles: string[] = [];
+      for (const [j, fileId] of files.entries()) {
+        const role = roles.get(fileId);
+        if (role === undefined || !allowed.includes(role))
+          return v("reference_mismatch", `${p}/outputs/${j}`);
+        if (claimed.has(fileId))
+          return v("duplicate_identity", `${p}/outputs/${j}`);
+        claimed.add(fileId);
+        nodeRoles.push(role);
+      }
+      if (node.status === "succeeded")
+        for (const role of PRIMARY_ROLES[node.stage as string]!)
+          if (nodeRoles.filter((r) => r === role).length !== 1)
+            return v("inventory_incomplete", `${p}/outputs`);
+    }
+    for (const [k, output] of outputs.entries())
+      if (!claimed.has(output.file_id))
+        return v("reference_mismatch", `/outputs/${k}/file_id`);
+    return null;
+  },
+  heartbeat_stage: (doc) =>
+    (doc.phase === "segmenting" && doc.stage !== "segment") ||
+    (doc.phase === "captioning" && doc.stage !== "caption")
+      ? v("reference_mismatch", "/phase")
+      : null,
+  stage_receipt: (doc) => stageReceiptRule(doc, ""),
+  stage_run_action: (doc) => {
+    if (doc.action !== "record_stage_run") return null;
+    const state = doc.state as string;
+    if ("errorCode" in doc !== CODED_STATES.has(state))
+      return v("outcome_mismatch", "/errorCode");
+    const terminal = state === "succeeded" || state === "failed";
+    if ("receipt" in doc ? !terminal : state === "succeeded")
+      return v("outcome_mismatch", "/receipt");
+    if (!("receipt" in doc)) return null;
+    const receipt = obj(doc.receipt);
+    if (receipt.stage !== doc.stage)
+      return v("reference_mismatch", "/receipt/stage");
+    if (receipt.module !== doc.module)
+      return v("reference_mismatch", "/receipt/module");
+    if (receipt.status !== state)
+      return v("outcome_mismatch", "/receipt/status");
+    return stageReceiptRule(receipt, "/receipt");
+  },
+  dag_run: (doc) => {
+    for (const [i, node] of list(doc.stages).map(obj).entries()) {
+      const p = `/stages/${i}`;
+      if (node.stage !== STAGE_ORDER[i])
+        return v("ordering_violation", `${p}/stage`);
+      const state = node.state as string;
+      if (node.enabled !== true && state !== "not_run")
+        return v("outcome_mismatch", `${p}/state`);
+      if (CODED_STATES.has(state) !== (node.errorCode !== null))
+        return v("outcome_mismatch", `${p}/errorCode`);
+      if (state === "succeeded" && node.receiptSha256 === null)
+        return v("outcome_mismatch", `${p}/receiptSha256`);
+      if (
+        node.startedAt !== null &&
+        node.finishedAt !== null &&
+        instant(node.finishedAt) < instant(node.startedAt)
+      )
+        return v("ordering_violation", `${p}/finishedAt`);
+    }
+    return null;
+  },
+};
 
 export const RULES: Readonly<Record<string, Rule>> = {
   unique_file_ids: (doc) => firstDuplicate(list(doc.files), "fileId", "/files"),
@@ -352,4 +752,5 @@ export const RULES: Readonly<Record<string, Rule>> = {
     }
     return null;
   },
+  ...STAGE_RULES,
 };

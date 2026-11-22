@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
+import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v13.json is the current registry; catalog.v1.json through
-// catalog.v12.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v13.json"));
+// catalog.v14.json is the current registry; catalog.v1.json through
+// catalog.v13.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v14.json"));
+const catalogV13 = JSON.parse(text("catalog.v13.json"));
 const catalogV12 = JSON.parse(text("catalog.v12.json"));
 const catalogV11 = JSON.parse(text("catalog.v11.json"));
 const catalogV10 = JSON.parse(text("catalog.v10.json"));
@@ -594,7 +596,13 @@ test("v11 lock entries are unchanged and every v11 file keeps its exact bytes", 
 test("published schema bytes match the immutability lock", () => {
   const actual = Object.fromEntries(
     files()
-      .filter((f) => f.endsWith(".json") && f !== "schemas.lock.json")
+      // modules.json is the append-only module registry, pinned per entry below.
+      .filter(
+        (f) =>
+          f.endsWith(".json") &&
+          f !== "schemas.lock.json" &&
+          f !== "modules.json",
+      )
       .sort()
       .map((f) => [
         f,
@@ -688,6 +696,8 @@ test("pattern policy rejects engine-dependent regex features", () => {
 
 type Schema = Record<string, any>;
 function* walk(node: Schema, path: string): Generator<[Schema, string]> {
+  // A boolean subschema (`false` forbids a property) has no keywords to check.
+  if (typeof node !== "object" || node === null) return;
   yield [node, path];
   for (const key of [
     "items",
@@ -711,10 +721,13 @@ function* walk(node: Schema, path: string): Generator<[Schema, string]> {
 test("schemas are closed, bounded and use the documented casing", () => {
   const all = [
     "common.v1.schema.json",
+    ...catalog.shared,
     ...Object.values(catalog.contracts).map((c: any) => c.schema),
   ];
   for (const file of all) {
-    const snake = file.startsWith("artifacts/");
+    // common.v2 holds the snake_case artifact definitions (frameRef, producer).
+    const snake =
+      file.startsWith("artifacts/") || file === "common.v2.schema.json";
     for (const [node, at] of walk(JSON.parse(text(file)), file)) {
       assert.ok(
         !("format" in node),
@@ -771,10 +784,10 @@ const V13_ADDED = [
 ];
 
 test("catalog v13 (SA-73) is an exact superset of catalog v12 adding only the source-copy confirmation and cleanup-proof contracts", () => {
-  assertExactSuperset(catalog, catalogV12, ["v12", "v13"], V13_ADDED);
-  assert.equal(Object.keys(catalog.contracts).length, 70);
+  assertExactSuperset(catalogV13, catalogV12, ["v12", "v13"], V13_ADDED);
+  assert.equal(Object.keys(catalogV13.contracts).length, 70);
   for (const id of V13_ADDED) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV13.contracts[id];
     assert.equal(entry.casing, "camelCase", id);
     assert.deepEqual(entry.version, { path: "/api/v1" }, id);
     assert.deepEqual(entry.rules, [], id);
@@ -791,4 +804,155 @@ test("v13 lock entries are present and match the published bytes", () => {
   ];
   for (const file of files)
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+const V14_ADDED = [
+  "artifacts.captions.v1",
+  "artifacts.hand-presence.v1",
+  "artifacts.processing-result.v3",
+  "artifacts.segments.v1",
+  "http.dag-run.v1",
+  "jobs.controller-action.v2",
+  "jobs.heartbeat.v2",
+  "jobs.module-manifest.v1",
+  "jobs.recipe.v1",
+  "jobs.stage-receipt.v1",
+  "jobs.task-input.v3",
+];
+
+test("catalog v14 (SA-87) is an exact superset of catalog v13 adding only the stage contracts and common.v2", () => {
+  const { shared, ...rest } = catalog;
+  assertExactSuperset(rest, catalogV13, ["v13", "v14"], V14_ADDED);
+  assert.deepEqual(shared, ["common.v2.schema.json"]);
+  assert.equal(Object.keys(catalog.contracts).length, 81);
+  for (const id of V14_ADDED) {
+    const entry = catalog.contracts[id];
+    const artifact = id.startsWith("artifacts.");
+    assert.equal(entry.casing, artifact ? "snake_case" : "camelCase", id);
+    assert.ok(entry.rules.length > 0, `${id}: cross-field rules`);
+  }
+  // Every earlier version of an evolved contract stays published and deep-equal.
+  for (const id of [
+    "artifacts.processing-result.v1",
+    "artifacts.processing-result.v2",
+    "jobs.task-input.v2",
+    "jobs.controller-action.v1",
+    "jobs.heartbeat.v1",
+  ])
+    assert.deepEqual(catalog.contracts[id], catalogV13.contracts[id], id);
+  assert.equal(catalog.contracts["jobs.stage-receipt.v1"].maxBytes, 65536);
+  // A controller action carries at most one 64 KiB receipt plus its envelope.
+  assert.ok(catalog.contracts["jobs.controller-action.v2"].maxBytes > 65536);
+});
+
+test("common.v2 is additive: v1 stays locked and v2 output roles are a superset", () => {
+  const v1 = JSON.parse(text("common.v1.schema.json")).$defs;
+  const v2 = JSON.parse(text("common.v2.schema.json")).$defs;
+  assert.equal(
+    sha256("common.v1.schema.json"),
+    PUBLISHED_V1_LOCK["common.v1.schema.json"],
+  );
+  assert.deepEqual(
+    v2.outputFileRole.enum.slice(0, v1.outputFileRole.enum.length),
+    v1.outputFileRole.enum,
+  );
+  assert.deepEqual(
+    v2.outputFileRole.enum.slice(v1.outputFileRole.enum.length),
+    [
+      "segments_json",
+      "captions_json",
+      "hand_presence_json",
+      "recording_mp4",
+      "diagnostic_blob",
+    ],
+  );
+  // common.v2 never redefines a v1 name with a different meaning.
+  for (const name of Object.keys(v2))
+    if (name in v1 && name !== "outputFileRole")
+      assert.fail(`${name} shadows common.v1`);
+});
+
+test("the module manifest lists every MVP module with its licence, GPU and provenance", () => {
+  const manifest = JSON.parse(text("modules.json"));
+  const ids = manifest.modules.map((m: any) => m.moduleId);
+  assert.deepEqual(ids, [
+    "stub_segmenter",
+    "stub_captioner",
+    "replay_segmenter",
+    "replay_captioner",
+    "flora_tempseg_vllm_fp8",
+    "flora_captioner_vllm_fp8",
+    "flora_tempseg_hf",
+    "flora_captioner_hf",
+    "hand_pose_cpu_v1",
+  ]);
+  for (const m of manifest.modules) {
+    const local = /^(stub|replay)_/.test(m.moduleId);
+    assert.equal(m.localOnly, local, `${m.moduleId}: localOnly`);
+    assert.ok(m.gpu.supported.includes(m.gpu.minimum), m.moduleId);
+    if (m.moduleId.startsWith("flora_")) {
+      // FLORA is NVIDIA non-commercial research only and never runs on CPU.
+      assert.equal(m.license.commercialUse, false, m.moduleId);
+      assert.ok(!m.gpu.supported.includes("none"), m.moduleId);
+      for (const field of [
+        "model_revision",
+        "weights_sha256",
+        "prompt_sha256",
+        "observed_gpu",
+      ])
+        assert.ok(
+          m.provenance.requires.includes(field),
+          `${m.moduleId}: ${field}`,
+        );
+    }
+    if (m.moduleId.includes("_fp8"))
+      assert.ok(m.provenance.requires.includes("quant"), m.moduleId);
+  }
+});
+
+test("v14 lock entries are present and match the published bytes", () => {
+  const files = [
+    "catalog.v14.json",
+    "common.v2.schema.json",
+    ...V14_ADDED.map((id) => catalog.contracts[id].schema),
+  ];
+  for (const file of files)
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+/**
+ * Module manifest entries published with SA-87. api/modules.json is append-only:
+ * each published module_id@version entry keeps its exact sa-cjson-v1 digest, and
+ * a change to a module is a new version entry.
+ */
+const PUBLISHED_MODULES: Readonly<Record<string, string>> = {
+  "stub_segmenter@1":
+    "c38f4fc652430e8c747d261cab6bdd713825a0f29d921da96c041bc573a19481",
+  "stub_captioner@1":
+    "f8c9f83b360b73e48b35ae54f5f74a621e2ad8755840887a41b494fd099c281c",
+  "replay_segmenter@1":
+    "bf970126bfef4e4742ea22aecff21c851d79c0aed1fceef3e4a90035b12a3e75",
+  "replay_captioner@1":
+    "ce2f9b0de6076cb23569f2df967d67e8228f833edf12c571be3edd73dfba95c0",
+  "flora_tempseg_vllm_fp8@1":
+    "66553e893d99951f33ea6c84a37916e10cb762461f1d5ea7ce2490b6a3c4882d",
+  "flora_captioner_vllm_fp8@1":
+    "e4384b2d63b79361e140b8830f5d43b279f337e3ad862a9b9ac802c5b5001bf3",
+  "flora_tempseg_hf@1":
+    "444e753f7fadb4512db3208463fca6fd5412a795da1c3ab39f46c7ebb08bce9d",
+  "flora_captioner_hf@1":
+    "86b643693cea191e22957f8296a534eead2a899c75bbd0ffda2366f2703b19ff",
+  "hand_pose_cpu_v1@1":
+    "16c7120de377158507bc64819013abfacc0493b8d1dd2e06f1dc98d68d32af19",
+};
+
+test("published module manifest entries are append-only", () => {
+  const manifest = JSON.parse(text("modules.json"));
+  const entries = new Map(
+    manifest.modules.map((m: any) => [`${m.moduleId}@${m.version}`, m]),
+  );
+  for (const [ref, digest] of Object.entries(PUBLISHED_MODULES)) {
+    assert.ok(entries.has(ref), `${ref}: published module removed`);
+    assert.equal(requestSha256(entries.get(ref)), digest, `${ref} changed`);
+  }
 });
