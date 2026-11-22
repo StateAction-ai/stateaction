@@ -31,3 +31,6 @@ dist/
 
 # The imported app is ordinary source; preserve any old checkout locally.
 /stera-app/
+
+# SA-86 FLORA fixture store (HomER media, CC BY-NC-SA; local only).
+/artifacts/fixtures/
