@@ -6,8 +6,11 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # Generated projects share the same enforced budget as the actual app.
-if ! python3 -c 'import pathlib; p=pathlib.Path("/proc/self/cgroup").read_text(); raise SystemExit(0 if p.strip().endswith("/agent-mobile-build.scope") and "/agent-work.slice/" in p else 1)'; then
-  exec "$HOME/.local/bin/agent-resource" run -- bash "$SCRIPT_DIR/source_hash_probe.sh" "$@"
+# One emulator-lane ticket covers the build and the emulator run (lanes never nest). The lane is
+# verified from the kernel cgroup, never from an environment variable; inside another lane the guard
+# refuses (exit 64).
+if ! python3 -c 'import pathlib,re; p=pathlib.Path("/proc/self/cgroup").read_text().strip().rsplit("/",1)[-1]; raise SystemExit(0 if re.fullmatch(r"agent-lane-emulator-[0-9a-f]{8}\.scope", p) else 1)'; then
+  exec "$HOME/.local/bin/agent-resource" run --lane emulator -- bash "$SCRIPT_DIR/source_hash_probe.sh" "$@"
 fi
 source "$SCRIPT_DIR/env.sh"
 SERIAL="${1:-emulator-5582}"
@@ -20,9 +23,7 @@ mkdir -p "$OUT"
 ( cd "$PROBE" && flutter build apk --debug --target-platform android-x64 ) | tee "$OUT/build.log" | tail -2
 APK="$PROBE/build/app/outputs/flutter-apk/app-debug.apk"
 git -C "$ROBOTICS_CAPTURE_ROOT" rev-parse HEAD > "$OUT/source-head.txt"
-# Shared mobile lock, bounded wait; held only for install+run (headless, short).
-exec 9>/tmp/stateaction-mobile-validation.lock
-flock -w 60 9 || { echo "mobile lock busy >60s; not running" >&2; exit 3; }
+# Exclusive emulator use is the emulator lane ticket entered above; no second lock.
 PD=(python3 "$SCRIPT_DIR/android_personal_device.py" --serial "$SERIAL" --user 0)
 "${PD[@]}" install --package "$PKG" --apk "$APK"
 adb -s "$SERIAL" shell am force-stop --user 0 "$PKG"

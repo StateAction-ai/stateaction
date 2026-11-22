@@ -1,9 +1,9 @@
 # Mobile source and checks
 
 Local builds, tests and generated probes must use
-`agent-resource run -- <command>` and the shared guarded emulator. The launcher
+`agent-resource run [--lane ci|android-build|emulator] -- <command>` and the shared guarded emulator. The launcher
 and both installed SDK entrypoints enforce one VM across all AVDs/ports. A shared
-dynamic cgroup (zero swap, at most 24 GiB, bounded by the 80% host-RAM ceiling), 6 GiB per workload, a serialized build slot and host
+dynamic cgroup (zero swap, at most 24 GiB, bounded by the 80% host-RAM ceiling), 6 GiB per lane job, Free commands (6 GiB default, no slot), per-project `ci`/`android-build` lanes, one `emulator` lane and host
 memory reserve prevent unbounded Gradle/emulator work. Install and verify the
 [workstation guard](../../docs/components/workstation-resource-guard.md) first;
 refusal never permits an unbounded retry. Local `run.py` enters it automatically.

@@ -28,7 +28,7 @@ becomes `StateAction Dev`. The original `open.fpvlabs.stera` package is untouche
 ```sh
 source scripts/env.sh
 cd apps/mobile
-flock /tmp/stateaction-mobile-validation.lock agent-resource run -- \
+agent-resource run --lane android-build -- \
   flutter build apk --debug --target-platform android-x64 --no-pub \
   --dart-define=STATEACTION_RGB_CODEC=h264 --dart-define=STATEACTION_H264_SIMULATION=true \
   --android-project-arg=stateactionApplicationId=ai.stateaction.collector.dev
@@ -36,7 +36,8 @@ flock /tmp/stateaction-mobile-validation.lock agent-resource run -- \
 
 The shared installed workstation guard pins JDK21 and bounds Gradle to 2 GiB,
 two workers and in-process Kotlin. It enforces a 12 GiB aggregate budget, no
-swap, one emulator and one heavy job. Generated probes use the same guard.
+swap, one emulator and the `ci`, `android-build` and `emulator` lanes
+(see the workstation guard doc). Generated probes use the same guard.
 An ARM64 hardware-profile build (`STATEACTION_H264_SIMULATION=false`) remains
 separate from this simulation evidence.
 
@@ -45,7 +46,7 @@ separate from this simulation evidence.
 ```sh
 source scripts/env.sh
 agent-resource run -- bash scripts/start_capture_emulator.sh --ar --verify-only
-flock /tmp/stateaction-mobile-validation.lock agent-resource run -- \
+agent-resource run --lane emulator -- \
   python3 scripts/test_android_joined_app_e2e.py --login-fixture /path/to/private/0600.json --seconds 20
 ```
 

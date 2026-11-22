@@ -9,8 +9,12 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
+import re
+import resource
+import secrets
 import shutil
 import signal
 import stat
@@ -51,6 +55,51 @@ ADMISSION_MIN = RESERVE_MIN + ADMISSION_MARGIN
 SLICE = "agent-work.slice"
 BUILD = "agent-mobile-build.scope"
 EMULATOR = "agent-android-emulator.scope"
+# SA-124 lanes (agentqueue). A lane job runs in its own scope per lane and project; the Free
+# class (every `run` without --lane in a registered root) takes no slot and never waits.
+FREE_SLICE = "agent-work-free.slice"  # child of agent-work.slice by systemd's dash rule
+FREE_JOB_MAX = 6 * GIB  # per-command default, the old per-job cap; `--mem` lowers it
+FREE_OOM_ADJUST = 500  # Free processes are the kernel OOM killer's first victims
+FREE_LOW = 4 * GIB  # MemoryLow of the Free slice, reserved out of the lane budget
+EMULATOR_SHARE = 6 * GIB  # the warm emulator scope is outside the lane queue
+FREE_DENY = ("gradle", "gradlew", "emulator", "emulator.agent-vendor")
+LANES = ("ci", "android-build", "emulator")
+MACHINE_LANES = ("emulator",)  # one state dir for all registered roots
+LANE_SCOPE = re.compile(r"agent-lane-(ci|android-build|emulator)-[0-9a-f]{8}\.scope")
+LANE_ENV_PASS = (
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_CONFIG_DIR",
+    "GH_HOST",
+    "SSH_AUTH_SOCK",
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "DISPLAY",
+    "XAUTHORITY",
+    "NVM_DIR",
+    "NODE_OPTIONS",
+    "PNPM_HOME",
+    "PUB_CACHE",
+    "FLUTTER_ROOT",
+    "ANDROID_HOME",
+    "ANDROID_SDK_ROOT",
+    "ANDROID_AVD_HOME",
+    "ANDROID_SERIAL",
+    "CI",
+    "GIT_CONFIG_GLOBAL",
+)
+LANE_ENV_PREFIXES = (
+    "STATEACTION_",
+    "AGENT_RESOURCE_",
+    "UV_",
+    "NX_",
+    "CARGO_",
+    "RUSTUP_",
+    "GIT_",
+)
 HOME_DIR = Path.home()
 INSTALL = HOME_DIR / ".local/share/agent-resource-guard"
 CGROUP_ROOT = Path("/sys/fs/cgroup")
@@ -534,10 +583,28 @@ def guarded_pid(pid: str = "self") -> bool:
         return False
 
 
+def own_scope() -> str:
+    return Path("/proc/self/cgroup").read_text().strip().rsplit("/", 1)[-1]
+
+
+FREE_SCOPE = re.compile(r"agent-free-\d+-[0-9a-f]{6}\.scope")
+
+
+def current_lane() -> str | None:
+    """The lane this process is really in (kernel cgroup), never the environment."""
+    name = own_scope()
+    match = LANE_SCOPE.fullmatch(name)
+    return match.group(1) if match and guarded_pid() else None
+
+
+def inside_lane() -> bool:
+    """A lane ticket (or the legacy heavy-job scope) is held by this process tree."""
+    return guarded_pid() and (own_scope() == BUILD or current_lane() is not None)
+
+
 def inside_guard() -> bool:
-    return guarded_pid() and Path("/proc/self/cgroup").read_text().strip().endswith(
-        "/" + BUILD
-    )
+    """Inside any capped agent scope: a lane, the legacy heavy-job scope or a Free scope."""
+    return inside_lane() or (guarded_pid() and bool(FREE_SCOPE.fullmatch(own_scope())))
 
 
 def check_emulator() -> list[int]:
@@ -715,10 +782,16 @@ def reap_orphans() -> None:
     if group is None:
         return
     services = [p.name for p in group.glob("agent-service-*.scope")]
-    for unit in (BUILD, EMULATOR, *services):
+    lanes = [p.name for p in group.glob("agent-lane-*.scope")]
+    free = [
+        f"{FREE_SLICE}/{p.name}"
+        for p in (group / FREE_SLICE).glob("agent-free-*.scope")
+    ]
+    for unit in (BUILD, EMULATOR, *services, *lanes, *free):
         kill = group / unit / "cgroup.kill"
         if not kill.exists():
             continue
+        unit = unit.rsplit("/", 1)[-1]
         owner = runtime_dir() / f"{unit}.owner"
         try:
             record = json.loads(owner.read_text())
@@ -795,6 +868,14 @@ def install(jdk: Path, emulators: list[Path], projects: list[Path]) -> None:
     target = INSTALL / "resource_guard.py"
     if Path(__file__).resolve() != target:
         shutil.copyfile(__file__, target)
+    repo = Path(__file__).resolve().parents[2]
+    for name in ("lanes.toml", "pin.json"):
+        source = repo / "config/agentqueue" / name
+        if source.is_file() and source.resolve() != INSTALL / name:
+            shutil.copyfile(source, INSTALL / name)
+    queue_root = repo / "artifacts/platform-tools/agentqueue"
+    if (queue_root / "INSTALLED.json").is_file():
+        shutil.copytree(queue_root, INSTALL / "agentqueue", dirs_exist_ok=True)
     config_path = INSTALL / "config.json"
     prior = json.loads(config_path.read_text()) if config_path.exists() else {}
     vendors = set(prior.get("vendors", []))
@@ -900,6 +981,511 @@ def install(jdk: Path, emulators: list[Path], projects: list[Path]) -> None:
     )
 
 
+# --------------------------------------------------------------------------- lanes (SA-124)
+# `run --lane L` queues on the pinned `agentqueue` binary (FIFO tickets, one transient unit per
+# job, a ticket outlives its submitter). `run` without --lane in a registered StateAction root is
+# Free: no slot, no wait, its own capped scope in FREE_SLICE. A caller from any other root keeps
+# the legacy behavior (`run` = heavy-job slot) and `run --lane` there executes untouched.
+
+
+def test_hooks() -> bool:
+    return os.environ.get("AGENT_RESOURCE_TEST") == "1"
+
+
+def project_roots() -> list[Path]:
+    """Registered StateAction roots. Any failure means "none": foreign callers keep the
+    legacy behavior instead of crashing."""
+    try:
+        override = (
+            os.environ.get("AGENT_RESOURCE_PROJECT_ROOTS") if test_hooks() else None
+        )
+        if override is not None:
+            names = [x for x in override.split(os.pathsep) if x]
+        else:
+            names = json.loads((INSTALL / "config.json").read_text()).get(
+                "projects", []
+            )
+        return [Path(n).resolve() for n in names if Path(n).is_dir()]
+    except (OSError, ValueError, AttributeError, TypeError):
+        return []
+
+
+def registered_root(cwd: Path | None = None) -> Path | None:
+    try:
+        cwd = (cwd or Path.cwd()).resolve()
+    except OSError:
+        return None
+    inside = [r for r in project_roots() if cwd == r or r in cwd.parents]
+    return max(inside, key=lambda r: len(r.parts)) if inside else None
+
+
+def project_key(root: Path, cwd: Path | None = None) -> str:
+    """One ci/android-build lane per repository: the git common dir when there is one, so
+    the two registered roots of one repo share a lane (shared fixtures and ports)."""
+    identity = str(root)
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "rev-parse",
+                "--path-format=absolute",
+                "--show-toplevel",
+                "--git-common-dir",
+            ],
+            cwd=cwd or Path.cwd(),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        lines = out.stdout.split("\n")
+        if out.returncode == 0 and len(lines) >= 2:
+            top = Path(lines[0]).resolve()
+            # only a checkout inside the registered root counts (never an enclosing repo)
+            if top == root or root in top.parents:
+                identity = str(Path(lines[1]).resolve())
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return hashlib.sha256(identity.encode()).hexdigest()[:8]
+
+
+def resource_file(name: str, repo_path: str) -> Path:
+    """Installed copy next to this script first, then the repository checkout."""
+    here = Path(__file__).resolve().parent
+    for candidate in (here / name, here.parents[1] / repo_path):
+        if candidate.is_file():
+            return candidate
+    raise Refused(f"{name} is missing; reinstall the guard from the repository")
+
+
+def agentqueue_binary() -> Path:
+    """The pinned binary: rev from config/agentqueue/pin.json, sha256 from the INSTALLED.json
+    written by scripts/install-agentqueue.sh (self-attested: it detects drift, not tampering by
+    the same user). Never downloads or builds."""
+    env = os.environ.get("AGENTQUEUE_BIN") if test_hooks() else None
+    here = Path(__file__).resolve().parent
+    candidates = (
+        [Path(env)]
+        if env
+        else [
+            INSTALL / "agentqueue/bin/agentqueue",
+            here.parents[1] / "artifacts/platform-tools/agentqueue/bin/agentqueue",
+        ]
+    )
+    for binary in candidates:
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            continue
+        record = binary.parent.parent / "INSTALLED.json"
+        if env and not record.exists():
+            return binary  # test hook only
+        try:
+            installed = json.loads(record.read_text())
+            pin = json.loads(
+                resource_file("pin.json", "config/agentqueue/pin.json").read_text()
+            )
+            digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        except (OSError, ValueError) as error:
+            raise Refused(f"agentqueue install record unreadable: {error}") from error
+        if installed.get("rev") != pin["rev"] or installed.get("sha256") != digest:
+            raise Refused(
+                "agentqueue binary does not match config/agentqueue/pin.json and its install "
+                "record; run scripts/install-agentqueue.sh"
+            )
+        return binary
+    raise Refused(
+        "agentqueue is not installed; run scripts/install-agentqueue.sh (no network is used here)"
+    )
+
+
+def lane_budget(cap: int | None) -> int:
+    """Machine-wide reservation of lane caps: the live aggregate cap minus the protected Free
+    share and the warm emulator scope, clamped to [one job, three jobs]. PROVISIONAL."""
+    cap = BOOT_CAP if cap is None else cap
+    return max(JOB_MAX, min(3 * JOB_MAX, cap - FREE_LOW - EMULATOR_SHARE))
+
+
+def aq_lane(lane: str, key: str) -> str:
+    """The agentqueue lane name: ci and android-build per repository, emulator machine-wide."""
+    return lane if lane in MACHINE_LANES else f"{lane}-{key}"
+
+
+def lane_files(root: Path, lane: str, key: str | None = None) -> tuple[Path, Path, str]:
+    """Machine-wide state dir (one memory reservation for all projects) and the effective
+    manifest: the committed lanes.toml with this repository's lanes, the registered roots and
+    the state dir prepended."""
+    import tomllib  # noqa: PLC0415
+
+    key = key or project_key(root)
+    base = runtime_dir() / "agentqueue"
+    base.mkdir(mode=0o700, exist_ok=True)
+    template = tomllib.loads(
+        resource_file("lanes.toml", "config/agentqueue/lanes.toml").read_text()
+    )
+    lines = [
+        f"state_dir = {json.dumps(str(os.environ['AGENT_RESOURCE_STATE_DIR'] if test_hooks() and os.environ.get('AGENT_RESOURCE_STATE_DIR') else base / 'machine'))}",
+        f"roots = {json.dumps([str(r) for r in project_roots()])}",
+        f"memory_budget = {json.dumps(template.get('memory_budget', '12G'))}",
+    ]
+    for name in LANES:
+        spec = template["lanes"][name]
+        lines.append(f"\n[lanes.{aq_lane(name, key)}]")
+        for field, value in spec.items():
+            lines.append(f"{field} = {json.dumps(value)}")
+    text = "\n".join(lines) + "\n"
+    manifest = base / f"{key}.lanes.toml"
+    if not manifest.exists() or manifest.read_text() != text:
+        temporary = manifest.with_suffix(f".{os.getpid()}.tmp")
+        temporary.write_text(text)
+        os.replace(temporary, manifest)
+    state = base / "machine"
+    if test_hooks() and os.environ.get("AGENT_RESOURCE_STATE_DIR"):
+        state = Path(os.environ["AGENT_RESOURCE_STATE_DIR"])  # e2e isolation only
+    return state, manifest, key
+
+
+def aggregate_cap() -> int | None:
+    if test_hooks() and os.environ.get("AGENT_RESOURCE_TEST_CAP_GIB"):
+        return (
+            int(os.environ["AGENT_RESOURCE_TEST_CAP_GIB"]) * GIB
+        )  # reservation arithmetic only
+    group = work_group()
+    try:
+        return None if group is None else read_cap_text(group, "memory.max")
+    except (OSError, ValueError):
+        return None
+
+
+def lane_environment() -> list[str]:
+    names = [
+        n for n in os.environ if n in LANE_ENV_PASS or n.startswith(LANE_ENV_PREFIXES)
+    ]
+    return [x for n in sorted(names) for x in ("--pass-env", n)]
+
+
+LANE_LOG_ENV = "STATEACTION_LANE_LOG"
+# Threads count as tasks. The gate pinned its 256-task scope for minutes in web-auth-e2e (measured
+# 256 of 256, Chrome could not start threads); the shared slice allows 512.
+LANE_TASKS = 512
+
+
+def lane_log_path(key: str | None = None) -> Path:
+    """Per-ticket output file (agentqueue's journal output is unreadable for this user). With a
+    key the path is deterministic, so a resubmit that attaches to the existing job streams the
+    same log from the start."""
+    directory = runtime_dir() / "agentqueue" / "logs"
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for old in directory.glob("*.log"):  # logs of killed or cancelled submitters
+        try:
+            if time.time() - old.stat().st_mtime > 86400:
+                old.unlink()
+        except OSError:
+            pass
+    name = (
+        f"k-{hashlib.sha256(key.encode()).hexdigest()[:16]}.log"
+        if key
+        else f"{os.getpid()}-{secrets.token_hex(4)}.log"
+    )
+    path = directory / name
+    os.close(os.open(path, os.O_WRONLY | os.O_CREAT, 0o600))
+    return path
+
+
+def run_and_stream(
+    argv: list[str], env: dict[str, str], log: Path, remove: bool = True
+) -> int:
+    """Run `agentqueue run` and copy the job log to stdout. Ctrl-C/SIGTERM only end this
+    client: the ticket and its job keep going (detach, not cancel; use `agent-resource cancel`)."""
+    child = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL)
+
+    def forward(signum, _frame):
+        child.send_signal(signum)
+
+    for name in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
+        signal.signal(name, forward)
+    position = 0
+
+    def drain() -> None:
+        nonlocal position
+        try:
+            with log.open("rb") as handle:
+                handle.seek(position)
+                data = handle.read()
+                position += len(data)
+        except FileNotFoundError:  # another client of the same keyed ticket removed it
+            data = b""
+        if data:
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+
+    try:
+        while child.poll() is None:
+            drain()
+            time.sleep(0.2)
+        drain()
+        code = child.returncode
+        return 128 - code if code < 0 else code
+    finally:
+        if remove:  # a keyed log is shared by every client of the ticket; age cleanup removes it
+            log.unlink(missing_ok=True)
+
+
+def queue_arguments(root: Path) -> list[str]:
+    binary = agentqueue_binary()
+    state, manifest, _ = lane_files(root, "ci")
+    return [str(binary), "--manifest", str(manifest), "--state-dir", str(state)]
+
+
+def queue_command(action: str, rest: list[str]) -> int:
+    """`agent-resource queue|cancel|find`: thin wrappers over agentqueue status/cancel/find."""
+    root = registered_root()
+    if root is None:
+        raise Refused("queue commands work only inside a registered StateAction root")
+    verb = {"queue": "status", "cancel": "cancel", "find": "find"}[action]
+    return subprocess.run(
+        [*queue_arguments(root), verb, *rest], env=user_environment()
+    ).returncode
+
+
+def lane_run(lane: str, command: list[str], options: argparse.Namespace) -> int:
+    if lane not in LANES:
+        raise Refused(f"Unknown lane {lane!r}; lanes: {', '.join(LANES)}")
+    if not command:
+        raise Refused("A command is required")
+    held = (
+        current_lane()
+    )  # verified from the cgroup; STATEACTION_LANE_HELD is not trusted
+    if held == lane or (held and lane == "android-build"):
+        # Flatten: the held ticket already bounds this work; an android-build request inside
+        # any lane runs under that one ticket instead of taking a second lane.
+        os.execvpe(command[0], command, os.environ)
+    if held:
+        print(
+            f"RESOURCE GUARD REFUSED: lane {lane} requested inside lane {held}; run the work "
+            "under the one ticket (lanes never nest)",
+            file=sys.stderr,
+        )
+        return 64
+    root = registered_root()
+    if root is None:  # another project: untouched and never queued
+        os.execvpe(command[0], command, os.environ)
+    binary = agentqueue_binary()
+    key = project_key(root)
+    state, manifest, key = lane_files(root, lane, key)
+    log = lane_log_path(options.key)
+    env = user_environment()
+    env[LANE_LOG_ENV] = str(log)
+    argv = [
+        str(binary),
+        "--manifest",
+        str(manifest),
+        "--state-dir",
+        str(state),
+        "--budget",
+        str(lane_budget(aggregate_cap())),
+        "run",
+        "--lane",
+        aq_lane(lane, key),
+        # a finished ticket with the same key is replaced; an unfinished one is attached to
+        *(["--key", options.key, "--retry"] if options.key else []),
+        *(["--mem", options.mem] if options.mem else []),
+        *(["--runtime", options.runtime] if options.runtime else []),
+        *(["--timeout", options.timeout] if options.timeout else []),
+        *lane_environment(),
+        "--pass-env",
+        LANE_LOG_ENV,
+        "--",
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "lane-job",
+        "--lane",
+        lane,
+        "--project-key",
+        key,
+        "--",
+        *command,
+    ]
+    return run_and_stream(argv, env, log, remove=not options.key)
+
+
+def slot_fds() -> list[int]:
+    """Descriptors of agentqueue slot files (flock); passed on so the slot is held until the
+    job's scope exits, not only while this wrapper lives."""
+    found = []
+    for entry in Path("/proc/self/fd").iterdir():
+        try:
+            target = os.readlink(entry)
+        except OSError:
+            continue
+        if (
+            "/lanes/" in target
+            and "/slot-" in target
+            and not target.endswith(".holder")
+        ):
+            found.append(int(entry.name))
+    return found
+
+
+def run_bounded(
+    unit: str,
+    command: list[str],
+    *,
+    slice_name: str,
+    job_max: int,
+    env: dict[str, str],
+    tasks: int = 256,
+    oom_adjust: int = 0,
+) -> int:
+    """One capped scope; the owner record lets the watchdog reap it if its parent dies."""
+    argv = [
+        "systemd-run",
+        "--user",
+        "--scope",
+        "--quiet",
+        f"--slice={slice_name}",
+        f"--unit={unit.removesuffix('.scope')}",
+        "--property=MemoryAccounting=yes",
+        f"--property=MemoryMax={job_max}",
+        "--property=MemorySwapMax=0",
+        f"--property=TasksMax={tasks}",
+        "--",
+        *command,
+    ]
+    owner = runtime_dir() / f"{unit}.owner"
+    owner.write_text(
+        json.dumps({"pid": os.getpid(), "identity": process_identity(os.getpid())})
+    )
+    log = os.environ.get(LANE_LOG_ENV) if unit.startswith("agent-lane-") else None
+    keep = slot_fds() if unit.startswith("agent-lane-") else []
+
+    def prepare_child() -> None:
+        # An agentqueue unit starts with systemd's 1024 soft nofile; Chrome, Next and Nx need the
+        # hard limit that Free and plain shells already get (SA-124: web-auth-e2e failed on it).
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if hard != resource.RLIM_INFINITY and soft < hard:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+        if oom_adjust:  # raising oom_score_adj needs no privilege
+            with open("/proc/self/oom_score_adj", "w") as handle:
+                handle.write(str(oom_adjust))
+
+    try:
+        if log:
+            with open(log, "ab") as sink:
+                return subprocess.run(
+                    argv,
+                    env=env,
+                    stdout=sink,
+                    stderr=subprocess.STDOUT,
+                    pass_fds=keep,
+                    preexec_fn=prepare_child,
+                ).returncode
+        return subprocess.run(
+            argv, env=env, pass_fds=keep, preexec_fn=prepare_child
+        ).returncode
+    finally:
+        call("systemctl", "--user", "stop", unit, check=False)
+        call("systemctl", "--user", "reset-failed", unit, check=False)
+        owner.unlink(missing_ok=True)
+
+
+def lane_job(lane: str, key: str, command: list[str]) -> int:
+    """Runs inside the agentqueue unit once the ticket holds its slot."""
+    if lane not in LANES or not re.fullmatch(r"[0-9a-f]{8}", key) or not command:
+        raise Refused("lane-job is started by agentqueue only")
+    try:
+        admit()
+        enforce_slice()
+    except (
+        Refused
+    ) as error:  # the journal may be unreadable; the submitter streams this log
+        log = os.environ.get(LANE_LOG_ENV)
+        if log:
+            with open(log, "a") as sink:
+                sink.write(f"RESOURCE GUARD REFUSED (at job start): {error}\n")
+        raise
+    env = bounded_environment()
+    env["STATEACTION_LANE_HELD"] = (
+        lane  # informational; trust is the cgroup (current_lane)
+    )
+    return run_bounded(
+        f"agent-lane-{lane}-{key}.scope",
+        command,
+        slice_name=SLICE,
+        job_max=JOB_MAX,
+        env=env,
+        tasks=LANE_TASKS,
+    )
+
+
+def free_slice_max(cap: int | None = None) -> int:
+    """What the lane budget leaves of the aggregate cap after the warm emulator, never below
+    the protected Free share. PROVISIONAL (owner approval pending on SA-124)."""
+    cap = aggregate_cap() if cap is None else cap
+    cap = BOOT_CAP if cap is None else cap
+    return max(FREE_LOW, cap - lane_budget(cap) - EMULATOR_SHARE)
+
+
+def ensure_free_slice() -> None:
+    props = properties(FREE_SLICE)
+    limit = free_slice_max()
+    if props.get("MemoryMax") != str(limit) or props.get("MemorySwapMax") != "0":
+        call(
+            "systemctl",
+            "--user",
+            "set-property",
+            "--runtime",
+            FREE_SLICE,
+            f"MemoryMax={limit}",
+            f"MemoryLow={FREE_LOW}",
+            "MemorySwapMax=0",
+            "TasksMax=2048",
+        )
+
+
+def free_run(command: list[str], mem: int = FREE_JOB_MAX) -> int:
+    """Free class: no slot, no wait, no queue. Own capped scope in the Free slice. Host memory
+    pressure is the watchdog's job, not a per-command refusal."""
+    if os.path.basename(command[0]) in FREE_DENY:
+        raise Refused(
+            f"{os.path.basename(command[0])} is heavy: use `agent-resource run --lane "
+            f"{'emulator' if 'emulator' in command[0] else 'android-build'} -- ...`"
+        )
+    if guarded_pid():
+        os.execvpe(command[0], command, os.environ)  # already inside a capped scope
+    enforce_slice()
+    ensure_free_slice()
+    unit = f"agent-free-{os.getpid()}-{secrets.token_hex(3)}.scope"
+    return run_bounded(
+        unit,
+        command,
+        slice_name=FREE_SLICE,
+        job_max=min(mem, JOB_MAX),
+        env=bounded_environment(),
+        tasks=512,
+        oom_adjust=FREE_OOM_ADJUST,
+    )
+
+
+def parse_mem(text: str | None) -> int:
+    if not text:
+        return FREE_JOB_MAX
+    match = re.fullmatch(r"(\d+)([MG])", text.upper())
+    if not match or int(match.group(1)) == 0:
+        raise Refused("--mem takes a size like 512M or 4G")
+    return int(match.group(1)) * (MIB if match.group(2) == "M" else GIB)
+
+
+def run_command(command: list[str], options: argparse.Namespace) -> int:
+    if not command:
+        raise Refused("A command is required")
+    if options.lane:
+        return lane_run(options.lane, command, options)
+    if registered_root() is None:
+        # Not a StateAction root: legacy behavior, never reclassified.
+        if inside_lane():
+            os.execvpe(command[0], command, os.environ)
+        return run_scope(BUILD, command, emulator=False)
+    return free_run(command, parse_mem(options.mem))
+
+
 def main() -> int:
     def terminate(signum, _frame):
         raise SystemExit(128 + signum)
@@ -921,8 +1507,18 @@ def main() -> int:
             "verify-binary",
             "policy",
             "retune",
+            "lane-job",
+            "queue",
+            "cancel",
+            "find",
         ],
     )
+    parser.add_argument("--lane", choices=LANES)
+    parser.add_argument("--project-key")
+    parser.add_argument("--key")
+    parser.add_argument("--runtime")
+    parser.add_argument("--timeout")
+    parser.add_argument("--mem")
     parser.add_argument(
         "--name", choices=["web", "worker", "postgres", "storage", "emulator-control"]
     )
@@ -939,11 +1535,14 @@ def main() -> int:
                 raise Refused("--jdk is required")
             install(args.jdk, args.wrap_emulator, args.project_root)
         elif args.action == "run":
-            if not command:
-                raise Refused("A command is required")
-            if inside_guard():
-                os.execvpe(command[0], command, os.environ)
-            return run_scope(BUILD, command, emulator=False)
+            return run_command(command, args)
+        elif args.action in ("queue", "cancel", "find"):
+            extra = (["--key", args.key] if args.key else []) + command
+            return queue_command(args.action, extra)
+        elif args.action == "lane-job":
+            if not args.lane or not args.project_key:
+                raise Refused("lane-job needs --lane and --project-key")
+            return lane_job(args.lane, args.project_key, command)
         elif args.action == "emulator":
             return emulator_command(command)
         elif args.action == "serve":

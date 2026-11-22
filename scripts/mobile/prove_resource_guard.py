@@ -19,8 +19,15 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNNER = Path.home() / ".local/bin/agent-resource"
 
 
+# The legacy heavy-job slot applies outside registered roots (SA-124 made `run` in a
+# registered root a Free command), so this proof runs from a neutral directory.
+NEUTRAL = Path(tempfile.gettempdir())
+
+
 def run(*args: str, timeout: int = 120):
-    return subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(
+        args, capture_output=True, text=True, timeout=timeout, cwd=NEUTRAL
+    )
 
 
 def wait_file(path: Path):
@@ -44,6 +51,7 @@ def sentinel(path: Path):
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        cwd=NEUTRAL,
     )
 
 

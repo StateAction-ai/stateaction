@@ -121,9 +121,11 @@ def main() -> None:
         and str(ROOT).startswith("/home/runner/work/")
     )
     if not hosted:
-        from resource_guard import inside_guard
+        from resource_guard import inside_lane
 
-        if not inside_guard():
+        # Inside any lane ticket (the ci gate or an android-build job) the work is flattened
+        # under that one ticket; otherwise take the android-build lane, never a second lane.
+        if not inside_lane():
             guard = Path.home() / ".local/bin/agent-resource"
             if not guard.is_file():
                 raise RuntimeError(
@@ -131,7 +133,16 @@ def main() -> None:
                 )
             os.execv(
                 str(guard),
-                [str(guard), "run", "--", sys.executable, str(__file__), *sys.argv[1:]],
+                [
+                    str(guard),
+                    "run",
+                    "--lane",
+                    "android-build",
+                    "--",
+                    sys.executable,
+                    str(__file__),
+                    *sys.argv[1:],
+                ],
             )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", choices=PROJECTS)
