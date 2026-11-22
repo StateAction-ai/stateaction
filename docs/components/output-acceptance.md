@@ -93,3 +93,7 @@ per-object, aggregate byte, verification wall and worker scratch limits.
 If measured output exceeds the default 4 GiB verification budget, configure
 `ACCEPTANCE_VERIFY_MAX_BYTES` within its existing 64 GiB ceiling. Keep these
 overrides on the isolated qualification runtime.
+
+## Annotation outputs (SA-88, migration 011)
+
+Recipe jobs add fixed slots `segments.json` (`segments_json`), `captions.json` (`captions_json`), `hand-presence.json` (`hand_presence_json`), `recording.mp4` (`recording_mp4`) and `diagnostics/(segment|caption|hand_pose)/<name>` (`diagnostic_blob`, at most 64 MiB, staff-only and never a clip file, so the customer broker cannot serve it). A job without a recipe cannot close with these roles. Closure counts clip files under `clips/` only, and the six-roles-per-clip rule still holds there. A recipe job's sealing stage posts `processing-result.v3`: acceptance checks the recipe identity, that each GPU node states its recorded terminal stage run and lists only files its run receipt named, then reads each annotation document bounded (32 MiB, `annotation_too_large`), checks its bytes, contract and job/recording/source identity, requires captions to pin the exact segments bytes and caption only accepted segments (`caption_unknown_segment`), and stores `segment_count`, `failed_window_count`, `caption_count`, `caption_failed_count` on the job (null when a document was not produced). A succeeded recipe job needs `hand-presence.json`, so a 0-clip result is accepted.

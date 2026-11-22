@@ -7,10 +7,45 @@ import {
   type ServiceKind,
   type ServiceScope,
 } from "../auth/service.js";
+import type { Stage } from "@stateaction/contracts";
 import { WORKER_AUDIENCE } from "../transport/runtime.js";
+import { stageCredentialId } from "./stages.js";
 
 type Db = Pick<pg.Pool, "query">;
 const NEVER = new Date(0);
+
+/**
+ * SA-88 stage bootstrap (recipe jobs): good only for `job:claim` of its one
+ * stage, while that stage is unclaimed, inside its start deadline and the
+ * job can still be claimed. The principal names the stage.
+ */
+export class StageBootstrapLookup {
+  constructor(protected readonly pool: Db) {}
+  async stage(sha256: string): Promise<ServiceCredentialRecord | null> {
+    const { rows } = await this.pool.query<{
+      job_id: string;
+      stage: Stage;
+      start_deadline: Date;
+    }>(
+      `SELECT c.job_id, c.stage, c.start_deadline FROM job_stage_claims c JOIN jobs j ON j.id = c.job_id
+       WHERE c.bootstrap_token_sha256 = $1 AND c.claimed_at IS NULL
+         AND j.state IN ('submitting', 'submit_unknown', 'running')`,
+      [sha256],
+    );
+    const claim = rows[0];
+    if (!claim) return null;
+    return {
+      credentialId: stageCredentialId(claim.job_id, claim.stage),
+      kind: "worker",
+      audience: WORKER_AUDIENCE,
+      scopes: ["job:claim"],
+      jobId: claim.job_id,
+      expiresAt: claim.start_deadline,
+      revokedAt: null,
+      tokenSha256: sha256,
+    };
+  }
+}
 
 /**
  * Private bootstrap capability: handed once to the submitted physical worker
@@ -19,8 +54,10 @@ const NEVER = new Date(0);
  * ends it: the state leaves submitting/submit_unknown, so replays resolve to
  * nothing and cannot read data.
  */
-export class BootstrapCapabilityStore implements ServiceCredentialStore {
-  constructor(private readonly pool: Db) {}
+export class BootstrapCapabilityStore
+  extends StageBootstrapLookup
+  implements ServiceCredentialStore
+{
   async findByTokenSha256(
     sha256: string,
   ): Promise<ServiceCredentialRecord | null> {
@@ -30,11 +67,11 @@ export class BootstrapCapabilityStore implements ServiceCredentialStore {
     }>(
       `SELECT id, start_deadline FROM jobs
        WHERE bootstrap_token_sha256 = $1 AND state IN ('submitting', 'submit_unknown')
-         AND claimed_at IS NULL`,
+         AND claimed_at IS NULL AND recipe IS NULL`,
       [sha256],
     );
     const job = rows[0];
-    if (!job) return null;
+    if (!job) return this.stage(sha256);
     return {
       credentialId: job.id,
       kind: "worker",

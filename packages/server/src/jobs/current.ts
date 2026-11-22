@@ -23,7 +23,8 @@ type Db = Pick<pg.Pool, "query">;
  *   row FOR UPDATE first and run this check inside the same transaction, so a
  *   transition that already committed is always observed. URLs signed before a
  *   later transition remain valid only for their short lifetime;
- * - when a nonce is supplied it is exactly the claiming physical invocation.
+ * - when a nonce is supplied it is exactly the claiming physical invocation
+ *   (for a recipe job, the claimed hand_pose stage: the seal; SA-88).
  *
  * Callers authenticate the capability scope first; this adds the state checks
  * a capability alone cannot prove.
@@ -33,7 +34,7 @@ export const JOB_CURRENT_SQL = `
   FROM jobs j JOIN recordings r ON r.id = j.recording_id
   WHERE j.id = $1 AND j.state = 'running' AND j.claimed_at IS NOT NULL
     AND j.execution_deadline > now()
-    AND ($2::text IS NULL OR j.invocation_nonce = $2)
+    AND ($2::text IS NULL OR public.job_seal_nonce(j.id) = $2)
     AND r.current_job_id = j.id AND r.deleted_at IS NULL AND r.status = 'processing'
     AND EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id)
     AND catalog_has_role(r.owner_user_id, 'collector')

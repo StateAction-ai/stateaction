@@ -63,11 +63,12 @@ export class JobCapabilityStore implements ServiceCredentialStore {
       execution_deadline: Date | null;
     }>(
       `SELECT id, execution_deadline FROM jobs
-       WHERE capability_token_sha256 = $1 AND state = 'running' AND claimed_at IS NOT NULL`,
+       WHERE capability_token_sha256 = $1 AND state = 'running' AND claimed_at IS NOT NULL
+         AND recipe IS NULL`,
       [sha256],
     );
     const job = rows[0];
-    if (!job) return null;
+    if (!job) return this.stage(sha256);
     return {
       credentialId: job.id,
       kind: "worker",
@@ -76,6 +77,42 @@ export class JobCapabilityStore implements ServiceCredentialStore {
       jobId: job.id,
       // No deadline recorded means no authority: fail closed.
       expiresAt: job.execution_deadline ?? new Date(0),
+      revokedAt: null,
+      tokenSha256: sha256,
+    };
+  }
+
+  /**
+   * SA-88 stage capability (recipe jobs): valid while the job is running and
+   * that stage is claimed and has no terminal run, so it ends when the
+   * controller records the stage finished. Only the sealing hand_pose stage
+   * may report the result (`job:result`).
+   */
+  private async stage(sha256: string): Promise<ServiceCredentialRecord | null> {
+    const { rows } = await this.pool.query<{
+      job_id: string;
+      stage: string;
+      execution_deadline: Date | null;
+    }>(
+      `SELECT c.job_id, c.stage, j.execution_deadline FROM job_stage_claims c JOIN jobs j ON j.id = c.job_id
+       WHERE c.capability_token_sha256 = $1 AND c.claimed_at IS NOT NULL
+         AND j.state = 'running' AND j.claimed_at IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM job_stage_runs r WHERE r.job_id = c.job_id AND r.stage = c.stage
+                         AND job_stage_terminal(r.state))`,
+      [sha256],
+    );
+    const claim = rows[0];
+    if (!claim) return null;
+    return {
+      credentialId: `stage:${claim.stage}:${claim.job_id}`,
+      kind: "worker",
+      audience: this.audience,
+      scopes:
+        claim.stage === "hand_pose"
+          ? this.scopes
+          : this.scopes.filter((s) => s !== "job:result"),
+      jobId: claim.job_id,
+      expiresAt: claim.execution_deadline ?? new Date(0),
       revokedAt: null,
       tokenSha256: sha256,
     };
