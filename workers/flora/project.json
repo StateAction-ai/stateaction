@@ -1,0 +1,24 @@
+{
+  "name": "flora",
+  "root": "workers/flora",
+  "projectType": "application",
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "python3 -m unittest discover -s tests -v",
+        "cwd": "workers/flora"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml workers/flora",
+          "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml workers/flora"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}
