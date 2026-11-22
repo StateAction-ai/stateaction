@@ -99,6 +99,9 @@
     "jobs/module-manifest.v1.schema.json": "dbe6e57c4bceffeb307ed7d00f62d2e33658cda4cb8bc14f7f41d73df7a1c834",
     "jobs/recipe.v1.schema.json": "f1ba8086b8d1a6a091cc79d8b2fb0d2d3d18ea70a8cd66a5e8445b7e9d187a0f",
     "jobs/stage-receipt.v1.schema.json": "46291c2747e40c7f7ffc5c4dc84dee081d5691f0f3bab6ff2a1fc4a0dec56bc8",
-    "jobs/task-input.v3.schema.json": "968cf5ac089992d6c3ec5760a56737488ceb54f1fd61d6e2f093eda999892dda"
+    "jobs/task-input.v3.schema.json": "968cf5ac089992d6c3ec5760a56737488ceb54f1fd61d6e2f093eda999892dda",
+    "catalog.v15.json": "dc6f4e1ffa88b777c86060bf5e6fbc5f5d98ab97a4f68640630a4cbec69d7253",
+    "http/output-create.v2.schema.json": "90a4fb790e00bc09ca1d34999227dd6f8d39cc5a02504121d42fed18d6875863",
+    "http/output-plan.v2.schema.json": "a47b80ef4752669d10591d2038b908a539b28669f7ffac4d71a48902a3d74422"
   }
 }

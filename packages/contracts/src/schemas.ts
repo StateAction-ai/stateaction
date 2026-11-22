@@ -1,5 +1,6 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v14.json (checked by tests).
-// catalog.v14.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v15.json (checked by tests).
+// catalog.v15.json is the current registry: an exact superset of the immutable
+// catalog.v14.json (adds only http.output-create.v2 and http.output-plan.v2, SA-103), itself a superset of the immutable
 // catalog.v13.json (adds only the SA-87 segment, caption, recipe and stage-run contracts and the
 // shared common.v2.schema.json), itself a superset of the immutable
 // catalog.v12.json (adds only the SA-73 source-copy confirmation and cleanup-proof contracts), itself a superset of the immutable
@@ -7,7 +8,7 @@
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v14.json" with { type: "json" };
+import catalog from "../api/catalog.v15.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -91,6 +92,8 @@ import s77 from "../api/jobs/controller-action.v2.schema.json" with { type: "jso
 import s78 from "../api/jobs/heartbeat.v2.schema.json" with { type: "json" };
 import s79 from "../api/jobs/stage-receipt.v1.schema.json" with { type: "json" };
 import s80 from "../api/http/dag-run.v1.schema.json" with { type: "json" };
+import s81 from "../api/http/output-create.v2.schema.json" with { type: "json" };
+import s82 from "../api/http/output-plan.v2.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 /** Shared definition documents listed in the catalog `shared` key (common.v2). */
@@ -128,6 +131,8 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.me.v1": s27,
   "http.output-create.v1": s31,
   "http.output-plan.v1": s32,
+  "http.output-create.v2": s81,
+  "http.output-plan.v2": s82,
   "http.parts-receipts.v1": s5,
   "http.parts-sign.v1": s6,
   "http.parts-signed.v1": s7,

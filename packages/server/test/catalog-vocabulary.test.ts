@@ -120,3 +120,24 @@ test("011 heartbeat phases, stages, stage states and GPU types match the contrac
     sorted(common2.$defs.gpuType.enum),
   );
 });
+
+/**
+ * SA-103: the service-level worker output role allow-list is the common.v2
+ * outputFileRole enum read from the published schema (no second list), and the
+ * http.output-*.v2 contracts reference that same definition.
+ */
+test("the service output role allow-list equals common.v2 outputFileRole", async () => {
+  const { OUTPUT_ROLES } = await import("../src/transport/service.ts");
+  assert.deepEqual(
+    [...OUTPUT_ROLES],
+    common2.$defs.outputFileRole.enum,
+    "service OUTPUT_ROLES drifted from common.v2",
+  );
+  for (const name of ["create", "plan"]) {
+    const doc = await schema(`http/output-${name}.v2.schema.json`);
+    assert.equal(
+      doc.properties.role.$ref,
+      "https://stateaction.ai/schemas/common.v2.json#/$defs/outputFileRole",
+    );
+  }
+});

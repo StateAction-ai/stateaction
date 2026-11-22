@@ -52,3 +52,33 @@ test("output and source roles are disjoint across the two plan contracts", () =>
   assert.equal(validateValue("http.upload-plan.v1", source).valid, true);
   assert.equal(validateValue("http.output-plan.v1", source).valid, false);
 });
+
+// catalog.v15 (SA-103): v2 request and plan reference the common.v2 role set.
+test("v2 accepts every annotation output role, v1 still refuses them, and v1 clients are accepted by v2", () => {
+  const hash =
+    "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc";
+  const create = { slot: "segments.json", sizeBytes: "10", sha256: hash };
+  for (const role of [
+    "segments_json",
+    "captions_json",
+    "hand_presence_json",
+    "recording_mp4",
+    "diagnostic_blob",
+  ]) {
+    const req = { ...create, role };
+    assert.equal(validateValue("http.output-create.v2", req).valid, true, role);
+    assert.equal(
+      validateValue("http.output-create.v1", req).valid,
+      false,
+      role,
+    );
+  }
+  const clip = { ...create, slot: "clips/0001/rgb.mp4", role: "clip_mp4" };
+  assert.equal(validateValue("http.output-create.v1", clip).valid, true);
+  assert.equal(validateValue("http.output-create.v2", clip).valid, true);
+  assert.equal(
+    validateValue("http.output-create.v2", { ...create, role: "source_mcap" })
+      .valid,
+    false,
+  );
+});

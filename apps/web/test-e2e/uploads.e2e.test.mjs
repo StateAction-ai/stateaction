@@ -875,12 +875,12 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     assert.equal(created.status, 200, created.text);
     assertNoStore(created, "output create");
     const plan = created.json.data;
-    // The published (catalog.v5) contracts, not a private validator.
+    // The published (catalog.v15) contracts, not a private validator.
     const { validateValue } = await import(
       new URL("../../../packages/contracts/dist/index.js", import.meta.url).href
     );
-    assert.equal(validateValue("http.output-create.v1", out).valid, true);
-    assert.equal(validateValue("http.output-plan.v1", plan).valid, true);
+    assert.equal(validateValue("http.output-create.v2", out).valid, true);
+    assert.equal(validateValue("http.output-plan.v2", plan).valid, true);
     assert.equal(
       validateValue("http.upload-plan.v1", plan).valid,
       false,
@@ -913,6 +913,7 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
       { ...out, objectKey: "x" },
       { ...out, slot: "../x" },
       { ...out, role: "source_mcap" },
+      { ...out, role: "dag_run_json" },
     ])
       assert.equal(
         (await call(base, workerPost(job.token, bad))).status,
@@ -942,7 +943,7 @@ describe("multipart upload routes on Next.js with Better Auth, admission, Postgr
     });
     assert.equal(fetched.status, 200);
     assert.equal(
-      validateValue("http.output-plan.v1", fetched.json.data).valid,
+      validateValue("http.output-plan.v2", fetched.json.data).valid,
       true,
     );
     assert.equal(

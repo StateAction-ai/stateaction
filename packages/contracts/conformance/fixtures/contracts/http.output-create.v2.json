@@ -1,0 +1,292 @@
+{
+  "contract": "http.output-create.v2",
+  "cases": [
+    {
+      "name": "v1 clip request is still accepted",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "largest output file",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "107374182400",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role result_manifest",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "result_manifest",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role clip_mp4",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role hand_arrays_npz",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "hand_arrays_npz",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role hand_observations_json",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "hand_observations_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role frame_map_json",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "frame_map_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role thumbnail_jpeg",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "thumbnail_jpeg",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "v1 role viewer_rrd",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "viewer_rrd",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "annotation role segments_json",
+      "input": {
+        "document": {
+          "slot": "segments.json",
+          "role": "segments_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "annotation role captions_json",
+      "input": {
+        "document": {
+          "slot": "captions.json",
+          "role": "captions_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "annotation role hand_presence_json",
+      "input": {
+        "document": {
+          "slot": "hand-presence.json",
+          "role": "hand_presence_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "annotation role recording_mp4",
+      "input": {
+        "document": {
+          "slot": "recording.mp4",
+          "role": "recording_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "annotation role diagnostic_blob",
+      "input": {
+        "document": {
+          "slot": "diagnostics/segment/windows.jsonl",
+          "role": "diagnostic_blob",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "over the file cap",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "107374182401",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/sizeBytes"
+        ]
+      }
+    },
+    {
+      "name": "source role is not an output role",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "source_mcap",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "dag run is server rendered, not an output role",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "dag_run_json",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "unknown role",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "other",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/role"
+        ]
+      }
+    },
+    {
+      "name": "client supplies object key",
+      "input": {
+        "document": {
+          "slot": "clips/0001/rgb.mp4",
+          "role": "clip_mp4",
+          "sizeBytes": "134217729",
+          "sha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "objectKey": "jobs/x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    }
+  ]
+}
