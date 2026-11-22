@@ -3356,6 +3356,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa103_fixtures import render_sa103
 
     files.update(render_sa103())
+    # SA-91 adds only a new fixture file for the catalog.v16 prior-stages contract.
+    from generate_sa91_fixtures import render_sa91
+
+    files.update(render_sa91())
     return files
 
 

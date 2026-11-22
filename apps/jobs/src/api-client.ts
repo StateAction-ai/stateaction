@@ -1,9 +1,11 @@
 import {
   contractMaxBytes,
   parseContract,
-  type ControllerAction,
+  type ControllerActionV2,
   type ControllerResult,
+  type DagRunV1,
   type ReconcileResult,
+  type RecipeV1,
 } from "@stateaction/contracts";
 
 /** The request reached (or may have reached) the server but no usable answer came back. */
@@ -30,6 +32,26 @@ export type JobStatus = {
   startDeadline: string | null;
   /** Immutable absolute execution deadline; null before admission. */
   executionDeadline: string | null;
+};
+
+/** SA-91 jobs.prior-stages.v1: segment and caption runs with every file their slots attribute to them. */
+export type PriorStage = {
+  stage: "segment" | "caption";
+  state: string;
+  errorCode: string | null;
+  counts: Record<string, number>;
+  outputs: {
+    fileId: string;
+    role: string;
+    slot: string;
+    sizeBytes: string;
+    sha256: string;
+  }[];
+};
+export type PriorStages = {
+  schemaVersion: 1;
+  jobId: string;
+  stages: PriorStage[];
 };
 
 /** Machine-credential HTTP client over SA-25's /internal/v1/jobs (never SQL, never S3). */
@@ -110,11 +132,51 @@ export class JobsApi {
     return this.checked<JobStatus>("jobs.job-status.v2", data);
   }
 
+  /**
+   * SA-91: the admitted recipe of a recipe job, or null for a job without one (the server
+   * answers 404). Identity and budgets only; never spawn authority.
+   */
+  async recipe(jobId: string): Promise<RecipeV1 | null> {
+    let data: unknown;
+    try {
+      data = await this.call(
+        `/internal/v1/jobs/${jobId}/recipe`,
+        "GET",
+        "jobs.recipe.v1",
+      );
+    } catch (error) {
+      if (error instanceof ApiRejection && error.status === 404) return null;
+      throw error;
+    }
+    return this.checked<RecipeV1>("jobs.recipe.v1", data);
+  }
+
+  /** SA-91: the server's recorded stage runs (http.dag-run.v1), including each stage's call ID. */
+  async dagRun(jobId: string): Promise<DagRunV1> {
+    const data = await this.call(
+      `/internal/v1/jobs/${jobId}/dag-run`,
+      "GET",
+      "http.dag-run.v1",
+    );
+    return this.checked<DagRunV1>("http.dag-run.v1", data);
+  }
+
+  /** SA-91: the earlier stages' recorded runs and their files (the hand_pose `priorStages`). */
+  async priorStages(jobId: string): Promise<PriorStages> {
+    const data = await this.call(
+      `/internal/v1/jobs/${jobId}/prior-stages`,
+      "GET",
+      "jobs.prior-stages.v1",
+    );
+    return this.checked<PriorStages>("jobs.prior-stages.v1", data);
+  }
+
   async act(
     jobId: string,
-    action: ControllerAction,
+    action: ControllerActionV2,
   ): Promise<ControllerResult> {
-    parseContract("jobs.controller-action.v1", action);
+    // v2 is an exact superset of v1 (SA-87): v1 actions validate unchanged.
+    parseContract("jobs.controller-action.v2", action);
     const data = await this.call(
       `/internal/v1/jobs/${jobId}/controller`,
       "POST",

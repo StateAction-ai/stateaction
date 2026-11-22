@@ -8,6 +8,7 @@ export {
   captionSteps,
   checkSealedInventory,
   HAND_ARRAY_SHAPES,
+  moduleManifestEntry,
   SEGMENT_ID_NAMESPACE,
   segmentId,
   STAGE_ROLES,

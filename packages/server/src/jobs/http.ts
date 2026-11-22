@@ -44,6 +44,9 @@ import {
 } from "./service.js";
 import {
   claimStage,
+  getDagRun,
+  getJobRecipe,
+  getPriorStages,
   issueStageClaim,
   readStageOutput,
   recordStageHeartbeat,
@@ -182,6 +185,32 @@ export function jobHandlers(deps: () => JobsDeps) {
 
     status: (_request: Request, jobId: string) =>
       respond(() => getJobStatus(deps(), jobId)),
+
+    /**
+     * SA-91 controller reads (jobs:status): the admitted recipe (404 for a job without one) and
+     * the recorded stage runs. Identity and budgets only; never spawn authority.
+     */
+    recipe: (_request: Request, jobId: string) =>
+      respond(async () =>
+        checked<Record<string, unknown>>(
+          "jobs.recipe.v1",
+          await getJobRecipe(deps(), jobId),
+        ),
+      ),
+    priorStages: (_request: Request, jobId: string) =>
+      respond(async () =>
+        checked<Record<string, unknown>>(
+          "jobs.prior-stages.v1",
+          await getPriorStages(deps(), jobId),
+        ),
+      ),
+    dagRun: (_request: Request, jobId: string) =>
+      respond(async () =>
+        checked<Record<string, unknown>>(
+          "http.dag-run.v1",
+          await getDagRun(deps(), jobId),
+        ),
+      ),
 
     controller: (request: Request, jobId: string, principalId: string) =>
       respond(async () => {

@@ -1,9 +1,18 @@
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, openSync, readFileSync, readlinkSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+  readlinkSync,
+  readSync,
+} from "node:fs";
 import type { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { LocalControllerSettings } from "./config.js";
 import type { Journal, JournalStore } from "./journal.js";
+import type { HandPoseBootstrap, StageBootstrap } from "./modal-executor.js";
 import {
   bootId,
   cmdlineHas,
@@ -169,7 +178,10 @@ export async function awaitWorkerExit(
 export type Spawned = {
   journal: Journal;
   exited: Promise<Exit>;
-  provideBootstrap: (bootstrap?: Bootstrap) => void;
+  /** A recipe stage child gets the v2 stage bootstrap (SA-91). */
+  provideBootstrap: (
+    bootstrap?: Bootstrap | StageBootstrap | HandPoseBootstrap,
+  ) => void;
 };
 
 function awaitIsolation(proof: Readable, marker: string): Promise<boolean> {
@@ -186,10 +198,16 @@ function awaitIsolation(proof: Readable, marker: string): Promise<boolean> {
   });
 }
 
+/**
+ * `threaded` (default for the production pipeline) needs the qualified host: Linux x86-64, a
+ * loopback API and the agent-resource cgroup. SA-91 recipe stages always run threaded (their
+ * worker heartbeats from a thread), whatever the fixture pipeline setting.
+ */
 export function supportsLocalPipeline(
   settings: LocalControllerSettings,
+  threaded = settings.pipeline !== "local_fixture_noop",
 ): boolean {
-  if (settings.pipeline === "local_fixture_noop") return true;
+  if (!threaded) return true;
   if (process.platform !== "linux" || process.arch !== "x64") return false;
   try {
     return (
@@ -217,18 +235,26 @@ export async function spawnChild(
   store: JournalStore,
   journal: Journal,
 ): Promise<Spawned> {
-  const fixture = settings.pipeline === "local_fixture_noop";
+  // SA-91: a recipe stage runs the stage entrypoint, always with thread-group isolation.
+  const stage = journal.stage;
+  const fixture =
+    stage === undefined && settings.pipeline === "local_fixture_noop";
   const pidNamespace = fixture ? undefined : readlinkSync("/proc/self/ns/pid");
-  const log = openSync(store.logPath(journal.jobId), "a", 0o600);
+  const log = openSync(store.logPath(journal.jobId, stage), "a", 0o600);
+  const replayDir = process.env.STATEACTION_REPLAY_DIR;
   const child = spawn(
     settings.python,
-    [
-      "-m",
-      "stateaction_processing",
-      "run-job",
-      "--execution-ref",
-      journal.executionRef,
-    ],
+    // The sealing hand_pose stage is the `run-job` worker (SA-92) under its stage claim;
+    // segment and caption run the stage entrypoint.
+    stage === undefined || stage === "hand_pose"
+      ? [
+          "-m",
+          "stateaction_processing",
+          "run-job",
+          "--execution-ref",
+          journal.executionRef,
+        ]
+      : ["-m", "stateaction_processing", "run-stage", journal.executionRef],
     {
       shell: false,
       detached: true,
@@ -239,7 +265,12 @@ export async function spawnChild(
         PYTHONNOUSERSITE: "1",
         PYTHONUNBUFFERED: "1",
         APP_ENV: process.env.APP_ENV ?? "",
-        WORKER_PIPELINE: settings.pipeline,
+        WORKER_PIPELINE:
+          stage === "hand_pose" ? "hand_pose_cpu_v1" : settings.pipeline,
+        // Replay modules read cached results from this directory (local only, no credential).
+        ...(stage !== undefined && replayDir
+          ? { STATEACTION_REPLAY_DIR: replayDir }
+          : {}),
         ...(fixture
           ? { STATEACTION_FIXTURE_ISOLATION_FD: "3" }
           : { STATEACTION_THREADED_ISOLATION_FD: "3" }),
@@ -301,4 +332,51 @@ export async function spawnChild(
     provideBootstrap: (bootstrap) =>
       stdin.end(stat && bootstrap ? JSON.stringify(bootstrap) : undefined),
   };
+}
+
+/** The stage entrypoint prints its receipt as the last stdout line; bounded tail read. */
+const RECEIPT_TAIL_BYTES = 128 * 1024;
+
+/**
+ * SA-91: the last receipt-shaped JSON line a stage child wrote to its 0600 log (an object with
+ * `schemaVersion`, `jobId`, `stage` and `status`), or undefined. Later non-receipt lines (the run-job `sa_metrics` probe,
+ * stderr) are skipped. The caller validates it as a stage receipt; none is "no receipt".
+ */
+export function lastLogLine(path: string): unknown {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    return undefined;
+  }
+  try {
+    const size = fstatSync(fd).size;
+    const length = Math.min(size, RECEIPT_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    readSync(fd, buffer, 0, length, size - length);
+    const lines = buffer.toString("utf8").trimEnd().split("\n");
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let value: unknown;
+      try {
+        value = JSON.parse(lines[i]!);
+      } catch {
+        continue;
+      }
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        "schemaVersion" in value &&
+        "jobId" in value &&
+        "stage" in value &&
+        "status" in value
+      )
+        return value;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
 }

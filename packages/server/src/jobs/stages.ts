@@ -413,7 +413,96 @@ export async function readStageOutput(
   return { fileId, readUrl: signed!.readUrl, expiresAt: signed!.expiresAt };
 }
 
+// ------------------------------------------------------- SA-91 stage files
+
+/**
+ * The recipe stage a job output slot belongs to (011 slot policy): segments.json
+ * and diagnostics/segment/* to segment, captions.json and diagnostics/caption/*
+ * to caption, everything else (clips, recording.mp4, hand-presence.json, the
+ * manifest, diagnostics/hand_pose/*) to the sealing hand_pose stage. SQL over
+ * the aliases `s` (job_output_slots) and `r` (job_stage_runs).
+ */
+export const STAGE_SLOT_SQL = `(CASE WHEN s.slot = 'segments.json' THEN 'segment'
+  WHEN s.slot = 'captions.json' THEN 'caption'
+  WHEN s.slot LIKE 'diagnostics/%' THEN split_part(s.slot, '/', 2)
+  ELSE 'hand_pose' END) = r.stage`;
+
+export type PriorStageRow = {
+  stage: "segment" | "caption";
+  state: StageRunState;
+  errorCode: string | null;
+  counts: Record<string, number>;
+  outputs: {
+    fileId: string;
+    role: string;
+    slot: string;
+    sizeBytes: string;
+    sha256: string;
+  }[];
+};
+
+/**
+ * SA-91 controller read (jobs.prior-stages.v1): the recorded runs of segment and
+ * caption, each with every completed output file its slot attributes to it.
+ * The controller hands these rows to the sealing hand_pose stage (priorStages)
+ * and the caption stage its segments input. A stage with no recorded run is
+ * absent. not_found for a job without a recipe.
+ */
+export async function getPriorStages(
+  deps: Pick<JobsDeps, "pool">,
+  jobId: string,
+): Promise<{ schemaVersion: 1; jobId: string; stages: PriorStageRow[] }> {
+  uuid(jobId, "jobId");
+  await getJobRecipe(deps, jobId);
+  const { rows } = await deps.pool.query<{
+    stage: "segment" | "caption";
+    state: StageRunState;
+    error_code: string | null;
+    counts: Record<string, number>;
+    outputs: PriorStageRow["outputs"];
+  }>(
+    `SELECT r.stage, r.state, r.error_code, r.counts,
+            coalesce(jsonb_agg(jsonb_build_object('fileId', f.id::text, 'role', f.role,
+                       'slot', s.slot, 'sizeBytes', f.size_bytes::text, 'sha256', f.sha256)
+                     ORDER BY s.slot) FILTER (WHERE f.id IS NOT NULL), '[]'::jsonb) AS outputs
+     FROM job_stage_runs r
+     LEFT JOIN (files f JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id)
+       ON f.job_id = r.job_id AND f.purpose = 'output'
+       AND f.state IN ('completed', 'verified') AND ${STAGE_SLOT_SQL}
+     WHERE r.job_id = $1 AND r.stage IN ('segment', 'caption')
+     GROUP BY r.stage, r.state, r.error_code, r.counts
+     ORDER BY job_stage_ord(r.stage)`,
+    [jobId],
+  );
+  return {
+    schemaVersion: 1,
+    jobId,
+    stages: rows.map((r) => ({
+      stage: r.stage,
+      state: r.state,
+      errorCode: r.error_code,
+      counts: r.counts ?? {},
+      outputs: r.outputs,
+    })),
+  };
+}
+
 // ------------------------------------------------------------------ dag-run
+
+/** SA-91: the admitted recipe of a job (controller read); not_found for a job without one. */
+export async function getJobRecipe(
+  deps: Pick<JobsDeps, "pool">,
+  jobId: string,
+): Promise<RecipeV1> {
+  uuid(jobId, "jobId");
+  const { rows } = await deps.pool.query<{ recipe: RecipeV1 | null }>(
+    "SELECT recipe FROM jobs WHERE id = $1",
+    [jobId],
+  );
+  if (!rows[0]?.recipe)
+    throw new TransportError("not_found", "Job has no recipe");
+  return rows[0].recipe;
+}
 
 type RunRow = {
   stage: Stage;
@@ -465,9 +554,14 @@ export async function getDagRun(
   const runs = new Map(
     (
       await deps.pool.query<RunRow>(
-        `SELECT stage, state, module, call_id, requested_gpu, observed_gpu, error_code, counts,
-                receipt_sha256, cost_estimate_usd::text, started_at, finished_at, running_at, terminal_at
-         FROM job_stage_runs WHERE job_id = $1`,
+        // The stage call is the claiming worker's, else the spawn's (as job_stage_call): a
+        // controller on another host adopts it and never spawns again (SA-91).
+        `SELECT r.stage, r.state, r.module,
+                coalesce((SELECT c.call_id FROM job_stage_claims c
+                          WHERE c.job_id = r.job_id AND c.stage = r.stage), r.call_id) AS call_id,
+                r.requested_gpu, r.observed_gpu, r.error_code, r.counts, r.receipt_sha256,
+                r.cost_estimate_usd::text, r.started_at, r.finished_at, r.running_at, r.terminal_at
+         FROM job_stage_runs r WHERE r.job_id = $1`,
         [jobId],
       )
     ).rows.map((r) => [r.stage, r]),

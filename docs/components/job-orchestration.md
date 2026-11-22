@@ -109,3 +109,82 @@ A job admitted with `jobs.task-input.v3` stores its inline `jobs.recipe.v1` on `
 - **Seal**: `hand_pose` closes the inventory and posts `processing-result.v3`; closure, candidate and attestation bind to the hand_pose stage nonce. A recipe job enters `running` only with the nonce and capability of a claimed stage.
 - **Reads**: `POST /internal/v1/jobs/{jobId}/outputs/{fileId}/read` signs a read of a completed `segments_json` output of the same current job, only for the claimed, unfinished caption stage. `GET /api/v1/jobs/{jobId}/dag-run` (staff) renders `http.dag-run.v1` from `job_stage_runs` plus the recipe; a stage with no run is `not_run` (`stage_disabled`, or `not_spawned` once the job ended) or `pending` while it can still run.
 - The web role reads both tables and writes them only through the SECURITY DEFINER functions `job_stage_issue_claim`, `job_stage_take_claim`, `job_stage_heartbeat`, `job_stage_record_run` and `job_stage_record_evidence`; triggers hold the invariants for every writer. Tests: `packages/server/test-integration/stage-runs.test.ts`.
+
+## Recipe stage runner (SA-91, `apps/jobs`)
+
+The ONE `process-recording` task runs a recipe job's stages as plain sequential code (`apps/jobs/src/recipe.ts`): `segment`, then `caption`, then `hand_pose`. After the lease, the controller reads three routes with the workflow credential (`jobs:status`):
+
+- `GET /internal/v1/jobs/{jobId}/recipe` (`jobs.recipe.v1`). A 404 means no recipe, and the job runs exactly as before (`hand_pose_cpu_v1`, one claim).
+- `GET /internal/v1/jobs/{jobId}/dag-run` (`http.dag-run.v1`). A recorded stage's `callId` is the claiming worker's call, else the spawn's, as `job_stage_call`.
+- `GET /internal/v1/jobs/{jobId}/prior-stages` (`jobs.prior-stages.v1`, catalog.v16). This returns the segment and caption runs, each with every completed output file of the job that the 011 slot policy attributes to that stage, with its slot: `segments.json`/`captions.json` and `diagnostics/<stage>/...`; everything else belongs to hand_pose. The controller reads it on every entry, so a controller on a fresh host loses nothing.
+
+**Deploy order:** deploy the server (these three routes) before the workflow service. A controller against an older server gets a 404 on `/prior-stages`, and the task throws.
+
+Per stage, in order:
+
+- **Already settled on the server** (a terminal row): taken as is, never run again.
+- **Not yet claimed** (no stage journal, no row): recorded before any claim as one of these:
+  - `not_run (stage_disabled)` when the stage is disabled.
+  - For caption: `not_run (upstream_failed)` when the segment did not succeed, `not_run (no_segments)` when it found zero segments, or `not_run (segments_unavailable)` when the server holds no `segments.json` for a succeeded segment.
+  - For segment and caption only: `not_run (budget)` when the remaining execution deadline is shorter than the stage `budgetSeconds` **plus the hand_pose `budgetSeconds`**. This reserves the seal's time. Every later GPU stage is then `not_run (budget)` too.
+  - `not_run (module_unknown | module_local_only | module_needs_gpu | module_unbound)` when the module policy refuses it (see below).
+  - `failed (bootstrap_too_large)` when the serialized bootstrap with the largest token and ref exceeds the worker's 8 KiB stdin bound. It is never truncated. A `priorStages` entry is about 230 B, so roughly 30 earlier-stage files fit. Beyond that the hand_pose stage, and so the job, ends without a result; SA-94 modules must keep their diagnostic files few.
+  - `hand_pose` always runs otherwise, and is bounded by its own budget. It seals the job, which succeeds when it seals (H3); failed GPU nodes are shown as failed.
+- **Run**:
+  1. `issue_stage_claim` returns that stage's single-use token, saved in the stage directory.
+  2. Journal `intent`.
+  3. `record_stage_run submitting`.
+  4. Journal `spawning`.
+  5. ONE spawn.
+  6. Journal `submitted` (call ID, write-once).
+  7. `record_stage_run running` with the call ID.
+  8. Poll or supervise until a terminal result.
+  9. `record_execution_evidence` for that exact call.
+  10. `record_stage_run` terminal with the stage receipt.
+
+  The server row (step 3) is written before the local `spawning` mark (step 4), so a lost answer re-enters at `intent` (provably unspawned).
+
+- **Workers per stage:**
+  - Segment and caption: `python -m stateaction_processing run-stage <ref>` with the stage bootstrap v2 (`stage`, `module`, `recipeSha256`, and for caption `segmentsFileId`/`segmentsSha256` from prior-stages).
+  - hand_pose: the SA-92 `run-job --execution-ref <ref>` worker with the v1 bootstrap plus `stage`, `module`, `recipeSha256` and `priorStages`, the prior-stages rows. On Modal this is `MODAL_FUNCTION_NAME`.
+  - Locally, both use the thread-group isolation handshake.
+- **Re-entry** (a Render retry of the same run, or a controller on another host):
+  - The stage journal or, without one, the server row's call is adopted and never respawned.
+  - A `spawning` journal without an ID, a claim without a token, or a recorded stage without a known call ends `submit_unknown` (stage row and job); the claim holds the slot for the operator path.
+  - A journal call that differs from the server's is `needs_operator`.
+  - A local child adopted after a controller restart has no observed exit code. Its thread group is proven gone, and the receipt it logged (valid for exactly this job, stage and module) is its result.
+- **Budget**: the stage wall budget starts when the spawn is journaled. On overrun the call is cancelled with `terminateContainers` (Modal requeues a crashed container under the same call ID), or the local child is killed through its verified identity. A proven end is `failed (budget_exceeded)`. A cancel without a provably terminal result is `needs_operator`.
+- **Outcome mapping**:
+  - A cancel, deadline or budget ending is never a success.
+  - Otherwise the receipt decides: `succeeded`, or `failed` with its code.
+  - No receipt is `failed (receipt_missing)`.
+  - A receipt the server refuses is `failed (receipt_rejected)`, recorded without it.
+  - The local receipt is the last receipt-shaped JSON line (`schemaVersion`, `jobId`, `stage`, `status`) in the last 128 KiB of the stage's 0600 child log. Later log lines (the `sa_metrics` probe, stderr) are skipped. More than 128 KiB of output after the receipt reads as `receipt_missing`, which is truthful but lossy.
+- A stage that cannot finish (unknown call, operator path, lost lease, unconfirmed evidence) stops the recipe. The task returns `{outcome: "recipe_run", stages, stopped}`.
+
+**Journals** are keyed by (job, stage): `<stateDir>/<jobId>/<stage>/modal-journal.json`, or `.../journal.json` for the local executor. Each stage directory has its own token file, spawn reservation and child log.
+
+**Run results:** a stage's run result is `{schemaVersion: 2, functionCallId, exitCode, receipt}`. The `receipt` must be valid against `jobs.stage-receipt.v1` for exactly that job, stage and module, and exit code 0 must go exactly with success; it may be `null`. v1 is accepted for `hand_pose_cpu_v1` and jobs without a recipe.
+
+**Acceptance (SA-91):**
+
+- A recipe job's succeeded result is `processing-result.v3`. Each segment or caption node must list exactly the files the slot policy attributes to its stage: none from elsewhere, none left out. A stage that lost its receipt still owns its uploads. The hand_pose node may list no earlier-stage file.
+- A recipe job's failed result is the diagnostics-only v2 failure report (no clips, no outputs, no node check).
+
+**Module policy** (`stageModuleRefusal`, `apps/jobs/src/config.ts`):
+
+- A `localOnly` module (stub or replay) runs only with `APP_ENV=local` on the local executor, the `local_fixture_noop` pattern.
+- The local executor runs CPU modules only.
+- The Modal executor runs a module only with a deployed function binding, set in `MODAL_STAGE_FUNCTIONS="module@version=function,..."`. `hand_pose_cpu_v1@1` always uses `MODAL_FUNCTION_NAME`.
+
+**Limits:**
+
+- The workflow credential is not job-scoped, so it reads every job's prior stages, as with its controller actions.
+- Real GPU modules and their Modal wrappers are SA-94 (T09).
+- A real stub seal end to end is SA-100 (T15).
+
+**Tests:**
+
+- `apps/jobs/test/recipe.test.ts`: fake Modal and a contract-shaped stub API.
+- `packages/server/test-integration/stage-runs.test.ts`, SA-91 cases: prior-stages attribution, orphan ownership, exact node attribution, the v2 recipe failure report.
+- The SA-91 cases in `apps/jobs/test-integration/controller.e2e.test.mjs`: the official local runner, the real API and real stage children, controller loss during hand_pose, and route authorization.

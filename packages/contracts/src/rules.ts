@@ -10,6 +10,7 @@ type Rule = (doc: Json) => RuleViolation | null;
 import { createHash } from "node:crypto";
 import { requestSha256 } from "./canonical.js";
 import modulesManifest from "../api/modules.json" with { type: "json" };
+import type { ModuleManifestEntry } from "./types.js";
 
 const PART_SIZE = 67108864n;
 const obj = (value: unknown) => value as Json;
@@ -169,6 +170,16 @@ const MODULES = new Map(
     m,
   ]),
 );
+
+/**
+ * One published module manifest entry by `module_id@version` (api/modules.json), or undefined.
+ * SA-91: the jobs controller checks a recipe stage module against it before any claim.
+ */
+export function moduleManifestEntry(
+  ref: string,
+): ModuleManifestEntry | undefined {
+  return MODULES.get(ref) as ModuleManifestEntry | undefined;
+}
 
 /** Output roles each stage may produce. */
 export const STAGE_ROLES: Readonly<Record<string, readonly string[]>> = {

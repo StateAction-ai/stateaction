@@ -152,6 +152,31 @@ export function jobRouteHandlers(
         { kinds: ["workflow", "cron"], scope: "jobs:status" },
         (h) => h.status(request, jobId),
       ),
+    /** SA-91: the workflow controller reads a job's recipe and its recorded stage runs. */
+    recipe: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:status" },
+        (h) => h.recipe(request, jobId),
+      ),
+    priorStages: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:status" },
+        (h) => h.priorStages(request, jobId),
+      ),
+    dagRun: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:status" },
+        (h) => h.dagRun(request, jobId),
+      ),
     controller: (request: Request, jobId: string) =>
       guarded(
         request,

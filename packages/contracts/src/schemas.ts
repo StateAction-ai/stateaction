@@ -1,5 +1,6 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v15.json (checked by tests).
-// catalog.v15.json is the current registry: an exact superset of the immutable
+// Generated listing of the published schema files; keep in sync with api/catalog.v16.json (checked by tests).
+// catalog.v16.json is the current registry: an exact superset of the immutable
+// catalog.v15.json (adds only jobs.prior-stages.v1, SA-91), itself a superset of the immutable
 // catalog.v14.json (adds only http.output-create.v2 and http.output-plan.v2, SA-103), itself a superset of the immutable
 // catalog.v13.json (adds only the SA-87 segment, caption, recipe and stage-run contracts and the
 // shared common.v2.schema.json), itself a superset of the immutable
@@ -8,7 +9,7 @@
 // catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
 // itself an exact superset of the immutable catalog.v5.json,
 // catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v15.json" with { type: "json" };
+import catalog from "../api/catalog.v16.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -94,6 +95,7 @@ import s79 from "../api/jobs/stage-receipt.v1.schema.json" with { type: "json" }
 import s80 from "../api/http/dag-run.v1.schema.json" with { type: "json" };
 import s81 from "../api/http/output-create.v2.schema.json" with { type: "json" };
 import s82 from "../api/http/output-plan.v2.schema.json" with { type: "json" };
+import s83 from "../api/jobs/prior-stages.v1.schema.json" with { type: "json" };
 export { catalog };
 export const commonSchema: object = common;
 /** Shared definition documents listed in the catalog `shared` key (common.v2). */
@@ -182,4 +184,5 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.heartbeat.v2": s78,
   "jobs.stage-receipt.v1": s79,
   "http.dag-run.v1": s80,
+  "jobs.prior-stages.v1": s83,
 };

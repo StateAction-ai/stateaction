@@ -1,0 +1,1121 @@
+{
+  "contract": "jobs.prior-stages.v1",
+  "cases": [
+    {
+      "name": "succeeded segment with segments.json and a diagnostic",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "failed segment keeps only its diagnostic",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "failed",
+              "errorCode": "model_window_failed",
+              "counts": {
+                "failed_windows": 2
+              },
+              "outputs": [
+                {
+                  "fileId": "4c5d6e7f-8091-4cad-9e2f-3a4b5c6d7e8f",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "128",
+                  "sha256": "beb2d51ec19fbb9c2d04d4503f38f294f7fa6fe014e01ef99c7698727d3ef3a3"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "not_run caption has no outputs and an error code",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "no stage runs recorded yet",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "both stages with the largest output inventory",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "0000d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-0.txt",
+                  "sizeBytes": "1",
+                  "sha256": "32d204c4e204f9492eb852a1b6639c368afacd9bb2f3320a6c4215eb905dce36"
+                },
+                {
+                  "fileId": "0001d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-1.txt",
+                  "sizeBytes": "1",
+                  "sha256": "8959839f586a5e0630156b25c0704ff84eb89f812ee8bf849b0f0f1d459aea93"
+                },
+                {
+                  "fileId": "0002d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-2.txt",
+                  "sizeBytes": "1",
+                  "sha256": "dd4ee6e3d40af20f114b94180b75bb48a67d49f803c7bcb55695016c6c5ba499"
+                },
+                {
+                  "fileId": "0003d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-3.txt",
+                  "sizeBytes": "1",
+                  "sha256": "f587d594e333ddbba38e4ab42f212ece9a02677f34bb864aaa319a7f9e6bfcc4"
+                },
+                {
+                  "fileId": "0004d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-4.txt",
+                  "sizeBytes": "1",
+                  "sha256": "17db8df9f3165c6c71a767b83f32e175fcad80995b49c4b60b7c7a02cdb65b87"
+                },
+                {
+                  "fileId": "0005d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-5.txt",
+                  "sizeBytes": "1",
+                  "sha256": "27f39a74669c1c5ecc53682d0844feb58a2efc3043a14b55cd5a07c06ec7a9bb"
+                },
+                {
+                  "fileId": "0006d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-6.txt",
+                  "sizeBytes": "1",
+                  "sha256": "134e15a9c3cda4cf86e3962109869892ab11af46de5a8209d8be764d07ab792d"
+                },
+                {
+                  "fileId": "0007d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-7.txt",
+                  "sizeBytes": "1",
+                  "sha256": "17b3b799911c3ebf4f519a6d5f31aeec6f7df7635b45a3c8e3138886c31ba932"
+                },
+                {
+                  "fileId": "0008d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-8.txt",
+                  "sizeBytes": "1",
+                  "sha256": "6b1d6ad72249e9fde242cd3c176cd0ea23a17bf66d5425d19b16c482a2c1de06"
+                },
+                {
+                  "fileId": "0009d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-9.txt",
+                  "sizeBytes": "1",
+                  "sha256": "60ca79138601b8be80f7831f47d598d0585ce7a92563d91b71b7200196c9e2a4"
+                },
+                {
+                  "fileId": "000ad4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-10.txt",
+                  "sizeBytes": "1",
+                  "sha256": "6e8dc966a4c426d690650851a9cc273f2858e44e2e8c25c4c1565ebab8aa8a8e"
+                },
+                {
+                  "fileId": "000bd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-11.txt",
+                  "sizeBytes": "1",
+                  "sha256": "d7d160f73e156ce34cc5295509d0b5ac1dc11f7a2190efed51414c5a75ddc6ff"
+                },
+                {
+                  "fileId": "000cd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-12.txt",
+                  "sizeBytes": "1",
+                  "sha256": "37517feb3c1b3d97d420ba522b69ce6618b3670d8f2f20ef59f0ab088d36fc5b"
+                },
+                {
+                  "fileId": "000dd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-13.txt",
+                  "sizeBytes": "1",
+                  "sha256": "c09289a4c83fe7f12f7421f39ee08f88acfa583d967aabcf2cc1086b0a66601a"
+                },
+                {
+                  "fileId": "000ed4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-14.txt",
+                  "sizeBytes": "1",
+                  "sha256": "e93e9421885ab889d25773199e55e86a6eb818da049def4e15369fa13878d61c"
+                },
+                {
+                  "fileId": "000fd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-15.txt",
+                  "sizeBytes": "1",
+                  "sha256": "9723d07e3354457f5f762b15cf46facb8444773a7982c880d50c0ae7ec4fcf5c"
+                },
+                {
+                  "fileId": "0010d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-16.txt",
+                  "sizeBytes": "1",
+                  "sha256": "94a3750b30b92f516365d4926be60346fe02ecaf8d2353269026697dbf69043b"
+                },
+                {
+                  "fileId": "0011d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-17.txt",
+                  "sizeBytes": "1",
+                  "sha256": "ce9d76e5d5f2d1ef2d42844c7e7593c842ab26268596370070abbaa503bdcc1c"
+                },
+                {
+                  "fileId": "0012d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-18.txt",
+                  "sizeBytes": "1",
+                  "sha256": "2ebd050f5efcb90eb6b5e9b4f26a90e8a3a6c6f0f7d973faba9a4dc80a0cd3e1"
+                },
+                {
+                  "fileId": "0013d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-19.txt",
+                  "sizeBytes": "1",
+                  "sha256": "20a9d30a8dfff087737e3ed148decdbb670da1ba4ab281acf3cb515c19323f94"
+                },
+                {
+                  "fileId": "0014d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-20.txt",
+                  "sizeBytes": "1",
+                  "sha256": "11525ca5cb72958401f43059668b70f19751d0b25350f5bcc05be95ca2615672"
+                },
+                {
+                  "fileId": "0015d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-21.txt",
+                  "sizeBytes": "1",
+                  "sha256": "546642998367955db29969ac0674f45db1984cdb6e3593ff2e91b6bfc7487cee"
+                },
+                {
+                  "fileId": "0016d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-22.txt",
+                  "sizeBytes": "1",
+                  "sha256": "87f3b4c1a853699a8a54c9d3564a84243061abd19772d827c62c6b4f4493f21e"
+                },
+                {
+                  "fileId": "0017d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-23.txt",
+                  "sizeBytes": "1",
+                  "sha256": "52a4b34aa8d42cc95694731e7026bc06c0a590b067fc6e6ca6f7a5a83b9424d1"
+                },
+                {
+                  "fileId": "0018d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-24.txt",
+                  "sizeBytes": "1",
+                  "sha256": "8d9d35429404a53ed031965e7d079f9fa8060d0bad488fe92d194eb70e97d2c2"
+                },
+                {
+                  "fileId": "0019d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-25.txt",
+                  "sizeBytes": "1",
+                  "sha256": "4b9a9c8238a3df80a7ee2d3c703b7ae5327305df8765dce0efbd5a8885f37971"
+                },
+                {
+                  "fileId": "001ad4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-26.txt",
+                  "sizeBytes": "1",
+                  "sha256": "b4a9283416de497d5f8c97d9fdb90559109213b9a48545cfca8989f9065cd9f1"
+                },
+                {
+                  "fileId": "001bd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-27.txt",
+                  "sizeBytes": "1",
+                  "sha256": "36cec26b9c6697000f5cce0442e225a6a58c21e7aeec7aafbd0dd0174a6402b9"
+                },
+                {
+                  "fileId": "001cd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-28.txt",
+                  "sizeBytes": "1",
+                  "sha256": "8d16dcc492bf489f74391cec2050ac20235bddc87c0bd332fc4285d453bb41d7"
+                },
+                {
+                  "fileId": "001dd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-29.txt",
+                  "sizeBytes": "1",
+                  "sha256": "b71579dcd1bb1aada62a1ac79b4d14b54e5eeec5e46ebfe6e682f991ce801183"
+                },
+                {
+                  "fileId": "001ed4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-30.txt",
+                  "sizeBytes": "1",
+                  "sha256": "772384979389d1825a596185b83b777f79928a5ae31d253d33a3196e6d39a00c"
+                },
+                {
+                  "fileId": "001fd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-31.txt",
+                  "sizeBytes": "1",
+                  "sha256": "9cdaa1d6b77e5a1993785ef41126b398df414def4e83cac41d2b74e810bb434b"
+                },
+                {
+                  "fileId": "0020d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-32.txt",
+                  "sizeBytes": "1",
+                  "sha256": "0818804cedc765bfbcb47395cdef79403a9f4add1c107ca83ad4876697aac629"
+                },
+                {
+                  "fileId": "0021d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-33.txt",
+                  "sizeBytes": "1",
+                  "sha256": "1b5433f2d70d36c17488853e07b86ed51668271e649b0b3f7458ba7554c3e42c"
+                },
+                {
+                  "fileId": "0022d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-34.txt",
+                  "sizeBytes": "1",
+                  "sha256": "ed8175dbf43b368115eb5b116fa57d9b8f1b9300b576d60c65c0acc67bc645ef"
+                },
+                {
+                  "fileId": "0023d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-35.txt",
+                  "sizeBytes": "1",
+                  "sha256": "7a90ee684e17ef77570898e64bb9238cfca3184dd23bec8dc3072273479b8a75"
+                },
+                {
+                  "fileId": "0024d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-36.txt",
+                  "sizeBytes": "1",
+                  "sha256": "65fb0f9002942354a700bc7b7f6d82335fe8acbcd44bf52ce9a509b848bd0567"
+                },
+                {
+                  "fileId": "0025d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-37.txt",
+                  "sizeBytes": "1",
+                  "sha256": "a5cce2a544e11684f25122187ca737695f23e3a15961c30c4d8353173887e720"
+                },
+                {
+                  "fileId": "0026d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-38.txt",
+                  "sizeBytes": "1",
+                  "sha256": "6638157511f2014fdb82abefed9667916ccdb291579392b2d23f1e54e708eebf"
+                },
+                {
+                  "fileId": "0027d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-39.txt",
+                  "sizeBytes": "1",
+                  "sha256": "edd68b600a16bfc323b44443c9e680dc96325df2bf43a9452299b83e33c2add9"
+                },
+                {
+                  "fileId": "0028d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-40.txt",
+                  "sizeBytes": "1",
+                  "sha256": "d54c55e5b89bb7b06e74262afe51cce41122b450add343c5b5e143fd6c38ad67"
+                },
+                {
+                  "fileId": "0029d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-41.txt",
+                  "sizeBytes": "1",
+                  "sha256": "dafd055b5d71ae85e364e2c55900a9909aee23bf1db9fadc9a83d8d99943d89d"
+                },
+                {
+                  "fileId": "002ad4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-42.txt",
+                  "sizeBytes": "1",
+                  "sha256": "5223728e897fc450e65fd336f8bc61cb45c6a2dc688b7540f411e53170a893b8"
+                },
+                {
+                  "fileId": "002bd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-43.txt",
+                  "sizeBytes": "1",
+                  "sha256": "597474c4d3a15c01456094ae9a11b37b62d3e402f3d0ca29fb62b683558bd88e"
+                },
+                {
+                  "fileId": "002cd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-44.txt",
+                  "sizeBytes": "1",
+                  "sha256": "aa40e1d0ba9df61abffda8ec1787e68413df846919d78b9314bd3c46867ff67d"
+                },
+                {
+                  "fileId": "002dd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-45.txt",
+                  "sizeBytes": "1",
+                  "sha256": "4b1ddfe19ebca11e7521639a41ff6bd3e17108d0869b1eb56699d6e4b62d3f4a"
+                },
+                {
+                  "fileId": "002ed4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-46.txt",
+                  "sizeBytes": "1",
+                  "sha256": "7e3c8464f3795540b74696ce7ad1e2407eff950e881b74fc3feaa0344485672c"
+                },
+                {
+                  "fileId": "002fd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-47.txt",
+                  "sizeBytes": "1",
+                  "sha256": "5ff8606b2f8d4ffc3e32a40ae6bed7156348a3bf2d688931fc424725f6786e6f"
+                },
+                {
+                  "fileId": "0030d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-48.txt",
+                  "sizeBytes": "1",
+                  "sha256": "54b4278497887a2282c89519519af914659df59b8d484f22bc3cee9169959dcb"
+                },
+                {
+                  "fileId": "0031d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-49.txt",
+                  "sizeBytes": "1",
+                  "sha256": "9da476f978e17c9598b30f998bd51f25ea83cfbb552a78d644e73e346070d039"
+                },
+                {
+                  "fileId": "0032d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-50.txt",
+                  "sizeBytes": "1",
+                  "sha256": "d5c7514dc0e3c78798460f2dde8d36123c28307217f46c4a28eefe57fe84087a"
+                },
+                {
+                  "fileId": "0033d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-51.txt",
+                  "sizeBytes": "1",
+                  "sha256": "f51b6f537077da33e8cf205ad7eb8eedf53b464967e9aef37f5490bf6cb6ab67"
+                },
+                {
+                  "fileId": "0034d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-52.txt",
+                  "sizeBytes": "1",
+                  "sha256": "588c826197f3476b98811f8f429f156ba15b6c4fc5e782baa81e1f8e7debc7f9"
+                },
+                {
+                  "fileId": "0035d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-53.txt",
+                  "sizeBytes": "1",
+                  "sha256": "53e91e1afb0219961a37f9270e7ebb403015f83f84cb4bc4ff2e0d1619cc3d56"
+                },
+                {
+                  "fileId": "0036d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-54.txt",
+                  "sizeBytes": "1",
+                  "sha256": "a9fac1474411a3bb6f48bf57061841a4556d18497e5679ae82774d01a7e3fa8d"
+                },
+                {
+                  "fileId": "0037d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-55.txt",
+                  "sizeBytes": "1",
+                  "sha256": "976823669b62b9ef1383846a516a563418fe8c22c6b5032b4d1952f79c4f23ef"
+                },
+                {
+                  "fileId": "0038d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-56.txt",
+                  "sizeBytes": "1",
+                  "sha256": "ab906849a01dbb191637568430f1b688948e5fae35b97ee34a0081de655c83a6"
+                },
+                {
+                  "fileId": "0039d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-57.txt",
+                  "sizeBytes": "1",
+                  "sha256": "6399a72cf265b9437b52064a057a7a64ac5dd6701c329464ddde0242f5f2ebf6"
+                },
+                {
+                  "fileId": "003ad4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-58.txt",
+                  "sizeBytes": "1",
+                  "sha256": "136c4627712be6269348287f2fd930f33b1fa7db7a9d77ba45938ae55d50933f"
+                },
+                {
+                  "fileId": "003bd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-59.txt",
+                  "sizeBytes": "1",
+                  "sha256": "a740a77d419fe35229218ddfe7cae1b4e1161869d69d9d2ddb47c2536d30caac"
+                },
+                {
+                  "fileId": "003cd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-60.txt",
+                  "sizeBytes": "1",
+                  "sha256": "4f89df99c6a44c9567732589cdc2cc5429f4b1a695b92acd99a51af1fb67c034"
+                },
+                {
+                  "fileId": "003dd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-61.txt",
+                  "sizeBytes": "1",
+                  "sha256": "5f51f7037d6748db5455a7d832082ded282af5ef323588b5045797dc7624fc72"
+                },
+                {
+                  "fileId": "003ed4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-62.txt",
+                  "sizeBytes": "1",
+                  "sha256": "73446c6af7b1278d80f3b020c4160be1aafeb4728f516d453def5f8c6b3ac0cc"
+                },
+                {
+                  "fileId": "003fd4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/part-63.txt",
+                  "sizeBytes": "1",
+                  "sha256": "6a7756869eae1a832d3b2b36e423dd593078252fc28ab20ee451bb81ce31e3f1"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "slot outside the attributed set",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "clips/0001/rgb.mp4",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/outputs/0/slot"
+        ]
+      }
+    },
+    {
+      "name": "slot for the sealing stage is not attributed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/hand_pose/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/outputs/1/slot"
+        ]
+      }
+    },
+    {
+      "name": "slot path traversal",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/../x",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/outputs/1/slot"
+        ]
+      }
+    },
+    {
+      "name": "extra top-level key",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ],
+          "objectKey": "jobs/x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          ""
+        ]
+      }
+    },
+    {
+      "name": "extra output key",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211",
+                  "objectKey": "jobs/x"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/outputs/0"
+        ]
+      }
+    },
+    {
+      "name": "three stages",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            },
+            {
+              "stage": "segment",
+              "state": "failed",
+              "errorCode": "model_window_failed",
+              "counts": {
+                "failed_windows": 2
+              },
+              "outputs": [
+                {
+                  "fileId": "4c5d6e7f-8091-4cad-9e2f-3a4b5c6d7e8f",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "128",
+                  "sha256": "beb2d51ec19fbb9c2d04d4503f38f294f7fa6fe014e01ef99c7698727d3ef3a3"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages"
+        ]
+      }
+    },
+    {
+      "name": "stage outputs missing",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {}
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/1"
+        ]
+      }
+    },
+    {
+      "name": "hand_pose is the sealing stage, not a prior stage",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "hand_pose",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/1/stage"
+        ]
+      }
+    },
+    {
+      "name": "unknown stage state",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "done",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/stages/0/state"
+        ]
+      }
+    },
+    {
+      "name": "unsupported schema version",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "errorCode": null,
+              "counts": {
+                "segments": 3,
+                "failed_windows": 0
+              },
+              "outputs": [
+                {
+                  "fileId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+                  "role": "segments_json",
+                  "slot": "segments.json",
+                  "sizeBytes": "2048",
+                  "sha256": "66f3482adbca6605da53c68b0b7cb512828de93edf479f5758db1a6aab54b211"
+                },
+                {
+                  "fileId": "3b4c5d6e-7f80-4b9c-8d1e-2f3a4b5c6d7e",
+                  "role": "diagnostic_blob",
+                  "slot": "diagnostics/segment/log.txt",
+                  "sizeBytes": "512",
+                  "sha256": "6d58d17d5d7912a127e0347c58baba246d975f11fb690efde9ce3bf58559431b"
+                }
+              ]
+            },
+            {
+              "stage": "caption",
+              "state": "not_run",
+              "errorCode": "upstream_failed",
+              "counts": {},
+              "outputs": []
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "unsupported_version",
+        "paths": [
+          "/schemaVersion"
+        ]
+      }
+    }
+  ]
+}

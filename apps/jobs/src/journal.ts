@@ -13,6 +13,7 @@ import {
   writeSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { Stage, StageReceiptV1 } from "@stateaction/contracts";
 
 /**
  * Local execution journal: the controller's durable memory of what it intended
@@ -32,6 +33,8 @@ export type Phase =
 export type Journal = {
   version: 1;
   jobId: string;
+  /** SA-91: the recipe stage this journal belongs to (absent for a job without a recipe). */
+  stage?: Stage;
   runRef: string;
   executionRef: string;
   phase: Phase;
@@ -47,6 +50,10 @@ export type Journal = {
   pidNamespace?: string;
   exit?: { code: number | null; signal: string | null };
   evidenceRecorded?: boolean;
+  /** SA-91 stage only: the stage wall budget ends here (fixed when the spawn is journaled). */
+  budgetDeadline?: string;
+  /** SA-91 stage only: why the child ended (natural_exit, budget_exceeded, ...), once exited. */
+  termination?: string;
 };
 
 /**
@@ -66,6 +73,8 @@ export type ModalJournal = {
   version: 1;
   executor: "modal";
   jobId: string;
+  /** SA-91: the recipe stage this journal belongs to (absent for a job without a recipe). */
+  stage?: Stage;
   runRef: string;
   phase: ModalPhase;
   startDeadline: string;
@@ -78,6 +87,10 @@ export type ModalJournal = {
   termination?: string;
   exitCode?: number;
   evidenceRecorded?: boolean;
+  /** SA-91 stage only: the stage wall budget ends here (fixed when the spawn is journaled). */
+  budgetDeadline?: string;
+  /** SA-91 stage only: the validated stage receipt of the terminal result, if it carried one. */
+  receipt?: StageReceiptV1;
 };
 
 export class JournalCorrupt extends Error {}
@@ -107,7 +120,11 @@ const KEYS = new Set([
   "pidNamespace",
   "exit",
   "evidenceRecorded",
+  "stage",
+  "budgetDeadline",
+  "termination",
 ]);
+const STAGES: readonly Stage[] = ["segment", "caption", "hand_pose"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const RUN = /^[A-Za-z0-9._:-]{1,200}$/;
 const REF = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -116,6 +133,15 @@ const MAX_ID = 4_194_304; // Linux pid_max upper bound
 
 function bad(): never {
   throw new JournalCorrupt("Journal corrupt");
+}
+/** A stage journal names exactly the stage it is stored under; a job journal names none. */
+function checkStage(j: Record<string, unknown>, stage: Stage | undefined) {
+  if (j.stage !== stage) return bad();
+  if (stage !== undefined && !STAGES.includes(stage)) return bad();
+  if (j.budgetDeadline !== undefined) {
+    if (stage === undefined) return bad();
+    instant(j.budgetDeadline);
+  }
 }
 const isId = (v: unknown): v is number =>
   typeof v === "number" && Number.isSafeInteger(v) && v > 0 && v <= MAX_ID;
@@ -130,11 +156,16 @@ const instant = (v: unknown): number => {
  * original file is preserved untouched and the controller treats the physical
  * state as unknown (never as "gone").
  */
-export function validateJournal(value: unknown, jobId: string): Journal {
+export function validateJournal(
+  value: unknown,
+  jobId: string,
+  stage?: Stage,
+): Journal {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return bad();
   const j = value as Record<string, unknown>;
   for (const key of Object.keys(j)) if (!KEYS.has(key)) return bad();
+  checkStage(j, stage);
   if (j.version !== 1 || j.jobId !== jobId || !UUID.test(jobId)) return bad();
   if (typeof j.runRef !== "string" || !RUN.test(j.runRef)) return bad();
   if (typeof j.executionRef !== "string" || !REF.test(j.executionRef))
@@ -199,6 +230,14 @@ export function validateJournal(value: unknown, jobId: string): Journal {
     (j.evidenceRecorded !== true || phase !== "exited")
   )
     return bad();
+  if (
+    j.termination !== undefined &&
+    (stage === undefined ||
+      phase !== "exited" ||
+      typeof j.termination !== "string" ||
+      !/^[a-z_]{1,40}$/.test(j.termination))
+  )
+    return bad();
   return j as unknown as Journal;
 }
 
@@ -216,6 +255,9 @@ const MODAL_KEYS = new Set([
   "termination",
   "exitCode",
   "evidenceRecorded",
+  "stage",
+  "budgetDeadline",
+  "receipt",
 ]);
 const MODAL_PHASES: readonly ModalPhase[] = [
   "intent",
@@ -229,11 +271,23 @@ export const CALL_ID = /^fc-[A-Za-z0-9]{1,77}$/;
 export function validateModalJournal(
   value: unknown,
   jobId: string,
+  stage?: Stage,
 ): ModalJournal {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return bad();
   const j = value as Record<string, unknown>;
   for (const key of Object.keys(j)) if (!MODAL_KEYS.has(key)) return bad();
+  checkStage(j, stage);
+  // The receipt of a terminal stage result (validated against its contract when it was observed).
+  if (
+    j.receipt !== undefined &&
+    (stage === undefined ||
+      j.phase !== "terminal" ||
+      typeof j.receipt !== "object" ||
+      j.receipt === null ||
+      Array.isArray(j.receipt))
+  )
+    return bad();
   if (j.version !== 1 || j.executor !== "modal") return bad();
   if (j.jobId !== jobId || !UUID.test(jobId)) return bad();
   if (typeof j.runRef !== "string" || !RUN.test(j.runRef)) return bad();
@@ -274,26 +328,31 @@ export function validateModalJournal(
 export class JournalStore {
   constructor(private readonly root: string) {}
 
-  dir(jobId: string): string {
-    return join(this.root, jobId);
+  /** `<stateDir>/<jobId>`, or `<stateDir>/<jobId>/<stage>` for one recipe stage (SA-91). */
+  dir(jobId: string, stage?: Stage): string {
+    return stage === undefined
+      ? join(this.root, jobId)
+      : join(this.root, jobId, stage);
   }
-  logPath(jobId: string): string {
-    return join(this.dir(jobId), "child.log");
+  logPath(jobId: string, stage?: Stage): string {
+    return join(this.dir(jobId, stage), "child.log");
   }
-  private tokenPath(jobId: string): string {
-    return join(this.dir(jobId), "bootstrap.token");
+  private tokenPath(jobId: string, stage?: Stage): string {
+    return join(this.dir(jobId, stage), "bootstrap.token");
   }
 
-  ensure(jobId: string): void {
-    mkdirSync(this.dir(jobId), { recursive: true, mode: 0o700 });
+  ensure(jobId: string, stage?: Stage): void {
+    mkdirSync(this.dir(jobId, stage), { recursive: true, mode: 0o700 });
     requirePrivateDirectory(lstatSync(this.dir(jobId)));
+    if (stage !== undefined)
+      requirePrivateDirectory(lstatSync(this.dir(jobId, stage)));
   }
 
-  private readJournal(jobId: string, filename: string): unknown {
+  private readJournal(jobId: string, filename: string, stage?: Stage): unknown {
     let raw: string;
     try {
       const dir = openSync(
-        this.dir(jobId),
+        this.dir(jobId, stage),
         constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
       );
       try {
@@ -329,40 +388,42 @@ export class JournalStore {
     }
   }
 
-  read(jobId: string): Journal | undefined {
-    const parsed = this.readJournal(jobId, "journal.json");
-    return parsed === undefined ? undefined : validateJournal(parsed, jobId);
-  }
-
-  readModal(jobId: string): ModalJournal | undefined {
-    const parsed = this.readJournal(jobId, "modal-journal.json");
+  read(jobId: string, stage?: Stage): Journal | undefined {
+    const parsed = this.readJournal(jobId, "journal.json", stage);
     return parsed === undefined
       ? undefined
-      : validateModalJournal(parsed, jobId);
+      : validateJournal(parsed, jobId, stage);
+  }
+
+  readModal(jobId: string, stage?: Stage): ModalJournal | undefined {
+    const parsed = this.readJournal(jobId, "modal-journal.json", stage);
+    return parsed === undefined
+      ? undefined
+      : validateModalJournal(parsed, jobId, stage);
   }
 
   writeModal(journal: ModalJournal): void {
-    validateModalJournal(journal, journal.jobId);
-    this.ensure(journal.jobId);
+    validateModalJournal(journal, journal.jobId, journal.stage);
+    this.ensure(journal.jobId, journal.stage);
     atomicWrite(
-      join(this.dir(journal.jobId), "modal-journal.json"),
+      join(this.dir(journal.jobId, journal.stage), "modal-journal.json"),
       JSON.stringify(journal),
     );
   }
 
-  /** True when a MODAL journal exists for this job (a local controller must not guess around it). */
-  hasModalJournal(jobId: string): boolean {
-    return this.hasJournal(jobId, "modal-journal.json");
+  /** True when a MODAL journal exists for this job or stage (a local controller must not guess around it). */
+  hasModalJournal(jobId: string, stage?: Stage): boolean {
+    return this.hasJournal(jobId, "modal-journal.json", stage);
   }
 
-  /** True when a LOCAL journal exists for this job (a Modal controller must not guess around it). */
-  hasLocalJournal(jobId: string): boolean {
-    return this.hasJournal(jobId, "journal.json");
+  /** True when a LOCAL journal exists for this job or stage (a Modal controller must not guess around it). */
+  hasLocalJournal(jobId: string, stage?: Stage): boolean {
+    return this.hasJournal(jobId, "journal.json", stage);
   }
 
-  private hasJournal(jobId: string, filename: string): boolean {
+  private hasJournal(jobId: string, filename: string, stage?: Stage): boolean {
     try {
-      lstatSync(join(this.dir(jobId), filename));
+      lstatSync(join(this.dir(jobId, stage), filename));
       return true;
     } catch (error) {
       // An unreadable entry cannot prove that the other executor left no journal.
@@ -371,18 +432,19 @@ export class JournalStore {
   }
 
   write(journal: Journal): void {
-    validateJournal(journal, journal.jobId); // never persist a record we would later reject
-    this.ensure(journal.jobId);
+    // never persist a record we would later reject
+    validateJournal(journal, journal.jobId, journal.stage);
+    this.ensure(journal.jobId, journal.stage);
     atomicWrite(
-      join(this.dir(journal.jobId), "journal.json"),
+      join(this.dir(journal.jobId, journal.stage), "journal.json"),
       JSON.stringify(journal),
     );
   }
 
-  /** A marker's presence means the one local spawn opportunity was consumed. */
-  reserveSpawn(jobId: string): boolean {
-    this.ensure(jobId);
-    const dir = this.dir(jobId);
+  /** A marker's presence means the one spawn opportunity (of the job or stage) was consumed. */
+  reserveSpawn(jobId: string, stage?: Stage): boolean {
+    this.ensure(jobId, stage);
+    const dir = this.dir(jobId, stage);
     let fd: number;
     try {
       fd = openSync(join(dir, "spawn.reserved"), "wx", 0o600);
@@ -399,19 +461,19 @@ export class JournalStore {
     return true;
   }
 
-  saveToken(jobId: string, token: string): void {
-    this.ensure(jobId);
-    atomicWrite(this.tokenPath(jobId), token);
+  saveToken(jobId: string, token: string, stage?: Stage): void {
+    this.ensure(jobId, stage);
+    atomicWrite(this.tokenPath(jobId, stage), token);
   }
-  loadToken(jobId: string): string | undefined {
+  loadToken(jobId: string, stage?: Stage): string | undefined {
     try {
-      return readFileSync(this.tokenPath(jobId), "utf8");
+      return readFileSync(this.tokenPath(jobId, stage), "utf8");
     } catch {
       return undefined;
     }
   }
-  discardToken(jobId: string): void {
-    rmSync(this.tokenPath(jobId), { force: true });
+  discardToken(jobId: string, stage?: Stage): void {
+    rmSync(this.tokenPath(jobId, stage), { force: true });
   }
 }
 

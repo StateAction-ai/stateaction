@@ -1,4 +1,8 @@
-import { modalCredentials, type ModalControllerSettings } from "./config.js";
+import {
+  modalCredentials,
+  modalFunctionFor,
+  type ModalControllerSettings,
+} from "./config.js";
 import {
   ModalSpawnNotSent,
   type CallObservation,
@@ -126,6 +130,13 @@ export function createModalSdkClient(
       canSubmit: () => boolean,
     ): Promise<string> {
       const deadline = performance.now() + settings.apiTimeoutMs;
+      // SA-91: a stage bootstrap names its module; each module has its own deployed function.
+      // The sealing hand_pose stage keeps the v1 `run-job` shape (and the hand-pose function).
+      const functionName =
+        bootstrap.schemaVersion === 2
+          ? modalFunctionFor(settings, bootstrap.module)
+          : settings.functionName;
+      if (functionName === undefined) throw new ModalSpawnNotSent();
       let issued = false;
       let expired = false;
       try {
@@ -136,7 +147,7 @@ export function createModalSdkClient(
             const { client } = await sdk();
             const fn = await client.functions.fromName(
               settings.appName,
-              settings.functionName,
+              functionName,
               settings.environmentName === undefined
                 ? undefined
                 : { environment: settings.environmentName },

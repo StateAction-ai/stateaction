@@ -26,6 +26,7 @@ import {
 import {
   claimStage,
   getDagRun,
+  getPriorStages,
   issueStageClaim,
   readStageOutput,
   recordStageHeartbeat,
@@ -379,6 +380,14 @@ const json = (doc: unknown) => Buffer.from(JSON.stringify(doc));
 async function runRecipe(
   s: Scenario,
   mutateCaptions: (doc: Record<string, any>) => void = () => {},
+  opts: {
+    /** SA-91: a segment diagnostic its receipt does not name (a stage that lost its receipt). */
+    orphan?: boolean;
+    /** SA-91: edit the v3 manifest before it is uploaded. */
+    mutateDoc?: (doc: Record<string, any>, ids: Record<string, string>) => void;
+    /** SA-91: stop before the v3 manifest (the caller uploads its own result). */
+    noManifest?: boolean;
+  } = {},
 ) {
   const seg = await claimed(s, "segment");
   // job-level claim follows the first claimed stage (SA-25 invariants hold)
@@ -410,6 +419,16 @@ async function runRecipe(
     Buffer.from('{"window":0}\n'),
     { http: true },
   );
+  const orphan = opts.orphan
+    ? await uploadOutput(
+        s.transport,
+        seg.job,
+        "diagnostics/segment/log.txt",
+        "diagnostic_blob",
+        Buffer.from("orphan log\n"),
+        { http: true },
+      )
+    : undefined;
   await finish(s, seg, [segFile, diag], { segments: 3, failed_windows: 1 });
 
   const cap = await claimed(s, "caption");
@@ -448,7 +467,9 @@ async function runRecipe(
     Buffer.from(`mp4:${randomUUID()}`),
     { http: true },
   );
-  const files = [segFile, diag, capFile, hp, mp4];
+  const files = [segFile, diag, ...(orphan ? [orphan] : []), capFile, hp, mp4];
+  if (opts.noManifest)
+    return { seg, cap, hand, files, hp, mp4, orphan, segFile, diag, capFile };
   const bytes = await manifestFor(s.db, hand.job, [], (doc) => {
     const v3 = fixture(
       "artifacts.processing-result.v3",
@@ -472,7 +493,11 @@ async function runRecipe(
         status: "succeeded",
         module: MODULES.segment,
         error_code: null,
-        outputs: [segFile.fileId, diag.fileId],
+        outputs: [
+          segFile.fileId,
+          diag.fileId,
+          ...(orphan ? [orphan.fileId] : []),
+        ],
         counts: { segments: 3 },
       },
       {
@@ -492,6 +517,13 @@ async function runRecipe(
         counts: { clips: 0 },
       },
     ];
+    opts.mutateDoc?.(doc, {
+      segments: segFile.fileId,
+      diag: diag.fileId,
+      captions: capFile.fileId,
+      hp: hp.fileId,
+      mp4: mp4.fileId,
+    });
   });
   const manifest = await uploadOutput(
     s.transport,
@@ -506,7 +538,20 @@ async function runRecipe(
     true,
     "the test manifest is a valid processing-result.v3",
   );
-  return { seg, cap, hand, files, hp, mp4, manifest, doc };
+  return {
+    seg,
+    cap,
+    hand,
+    files,
+    hp,
+    mp4,
+    manifest,
+    doc,
+    orphan,
+    segFile,
+    diag,
+    capFile,
+  };
 }
 
 async function seal(
@@ -520,7 +565,7 @@ async function seal(
   });
   // Annotation files are not clip files (009 counted every non-manifest file).
   assert.equal(closure.clipCount, 0);
-  assert.equal(closure.fileCount, 6);
+  assert.equal(closure.fileCount, r.files.length + 1);
   await submitCandidate(s.accept, {
     ...candidateBody(r.hand.job, r.manifest, r.doc),
     summary: {
@@ -1395,4 +1440,159 @@ test("an issued claim whose call was never learned cannot be failed, not_run or 
     )
   ).rows[0].job_id;
   assert.equal(held, s.jobId);
+});
+
+// ------------------------------------------------------- SA-91 stage files
+
+test("SA-91 prior-stages: every completed file of segment and caption by slot, never a seal file, contract-valid", async () => {
+  const s = await recipeJob();
+  const r = await runRecipe(s, () => {}, { orphan: true });
+  const prior = await getPriorStages(s.deps, s.jobId);
+  assert.equal(validateValue("jobs.prior-stages.v1", prior).valid, true);
+  const slots = Object.fromEntries(
+    prior.stages.map((p) => [
+      p.stage,
+      p.outputs.map((o) => [o.slot, o.fileId]),
+    ]),
+  );
+  // The orphan diagnostic (no receipt names it) still belongs to segment; hand_pose files,
+  // recording.mp4, hand-presence.json and the manifest belong to no earlier stage.
+  assert.deepEqual(slots, {
+    segment: [
+      ["diagnostics/segment/log.txt", r.orphan!.fileId],
+      ["diagnostics/segment/windows.jsonl", r.diag.fileId],
+      ["segments.json", r.segFile.fileId],
+    ],
+    caption: [["captions.json", r.capFile.fileId]],
+  });
+  const seg = prior.stages[0]!;
+  assert.deepEqual(
+    [seg.state, seg.errorCode, seg.counts.segments],
+    ["succeeded", null, 3],
+  );
+  assert.deepEqual(
+    seg.outputs.find((o) => o.slot === "segments.json"),
+    {
+      fileId: r.segFile.fileId,
+      role: "segments_json",
+      slot: "segments.json",
+      sizeBytes: String(r.segFile.size),
+      sha256: r.segFile.sha,
+    },
+  );
+  evidence.priorStages = prior;
+});
+
+test("SA-91 acceptance: a stage owns its orphan file by slot, so the seal is accepted", async () => {
+  const s = await recipeJob();
+  const r = await runRecipe(s, () => {}, { orphan: true });
+  await seal(s, r as never);
+  const ack = await advanceResult(s.accept, s.jobId);
+  assert.equal(ack?.candidateStatus, "accepted");
+  assert.equal((await jobFacts(s)).state, "succeeded");
+});
+
+for (const [name, mutate] of [
+  [
+    "a segment file listed by the caption node",
+    (d: Record<string, any>, ids: Record<string, string>) => {
+      d.nodes[0].outputs = d.nodes[0].outputs.filter(
+        (f: string) => f !== ids.diag,
+      );
+      d.nodes[1].outputs.push(ids.diag);
+    },
+  ],
+  [
+    "a segment file left out of the segment node and claimed by hand_pose",
+    (d: Record<string, any>, ids: Record<string, string>) => {
+      d.nodes[0].outputs = d.nodes[0].outputs.filter(
+        (f: string) => f !== ids.diag,
+      );
+      d.nodes[2].outputs.push(ids.diag);
+    },
+  ],
+] as const)
+  test(`SA-91 acceptance rejects ${name} (exact slot attribution)`, async () => {
+    const s = await recipeJob();
+    const r = await runRecipe(s, () => {}, { mutateDoc: mutate });
+    await seal(s, r as never);
+    const ack = await advanceResult(s.accept, s.jobId);
+    assert.equal(ack?.candidateStatus, "rejected");
+    assert.equal(ack?.reasonCode, "manifest_node_mismatch");
+    assert.equal((await jobFacts(s)).state, "failed");
+  });
+
+test("SA-91 acceptance: a recipe job's v2 failure report is accepted and the job fails truthfully", async () => {
+  const s = await recipeJob();
+  const r = await runRecipe(s, () => {}, { noManifest: true });
+  const bytes = await manifestFor(s.db, r.hand.job, [], (d) => {
+    d.verified_sources = [];
+    d.attestation.source_eof_verified = false;
+    d.outputs = [];
+    d.clips = [];
+    d.checks = [
+      {
+        code: "worker_failed",
+        status: "fail",
+        message: "boom",
+        rule_revision: "sa31-export-2",
+        measurements: {},
+      },
+    ];
+  });
+  const failure = await uploadOutput(
+    s.transport,
+    r.hand.job,
+    "result-manifest.json",
+    "result_manifest",
+    bytes,
+  );
+  await closeOutputs(s.accept, {
+    jobId: s.jobId,
+    invocationNonce: r.hand.nonce,
+    outcome: "failed",
+  });
+  await submitCandidate(s.accept, {
+    schemaVersion: 1,
+    jobId: s.jobId,
+    invocationNonce: r.hand.nonce,
+    manifestFileId: failure.fileId,
+    manifestSha256: failure.sha,
+    summary: {
+      outcome: "failed",
+      clipCount: 0,
+      checks: { pass: 0, warn: 0, fail: 1, measured: 0, notEvaluated: 0 },
+      errorCode: "worker_failed",
+    },
+  } as never);
+  // The seal stage itself failed: proof for its call, then its failed row.
+  await recordStageRun(s.deps, {
+    jobId: s.jobId,
+    owner: s.ctl,
+    stage: "hand_pose",
+    state: "running",
+    module: MODULES.hand_pose,
+    callId: r.hand.callId,
+  });
+  await recordExecutionEvidence(s.deps, {
+    jobId: s.jobId,
+    recordedBy: "controller-test",
+    evidence: { kind: "local_child_reaped", executionRef: r.hand.callId },
+  });
+  await recordStageRun(s.deps, {
+    jobId: s.jobId,
+    owner: s.ctl,
+    stage: "hand_pose",
+    state: "failed",
+    module: MODULES.hand_pose,
+    callId: r.hand.callId,
+    errorCode: "worker_failed",
+  });
+  await advanceResult(s.accept, s.jobId);
+  const ack = await advanceResult(s.accept, s.jobId);
+  assert.equal(ack?.candidateStatus, "accepted");
+  const facts = await jobFacts(s);
+  assert.equal(facts.state, "failed");
+  assert.equal(facts.error_code, "worker_failed");
+  assert.equal(facts.holder, null);
 });

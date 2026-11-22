@@ -30,6 +30,10 @@ const dist = (p) => import(new URL(`dist/${p}`, `file://${serverDir}`).href);
 const cat = await dist("catalog/catalog.js");
 const { establishFixtureAdmission } = await dist("admission/fixtures.js");
 const { admitNextJob } = await dist("jobs/service.js");
+const { processRecordingTaskInputV2 } = await dist("admission/job-input.js");
+const { requestSha256 } = await import(
+  new URL(`file://${serverRequire.resolve("@stateaction/contracts")}`).href
+);
 const { jobsConfigFromEnv } = await dist("jobs/config.js");
 const { issueControllerCapability } = await dist("jobs/credentials.js");
 const { storageClient } = await dist("storage.js");
@@ -311,6 +315,37 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     };
     return admitNextJob({ pool: app, config: cfg, presignRead: undefined });
   }
+  /**
+   * SA-91: admission of a recipe job through the real library seam (v3 task input with the
+   * inline recipe), as the restricted-PG stage-run tests do. The recipe is written once here.
+   */
+  async function admitWithRecipe(recipe) {
+    return admitNextJob({
+      pool: app,
+      config: jobsConfigFromEnv(env),
+      presignRead: undefined,
+      taskInput: async (q, job) => ({
+        ...(await processRecordingTaskInputV2(q, job.jobId)),
+        schemaVersion: 3,
+        recipe,
+        recipeSha256: requestSha256(recipe),
+      }),
+    });
+  }
+  /** SA-91: the recorded stage runs, claims and stage proofs of one job. */
+  const stageRows = async (jobId) =>
+    (
+      await owner.query(
+        `SELECT r.stage, r.state, r.module, r.call_id, r.error_code,
+                c.call_id AS claimed_call, c.claimed_at,
+                (SELECT e.execution_ref FROM job_stage_evidence e
+                 WHERE e.job_id = r.job_id AND e.stage = r.stage) AS proof
+         FROM job_stage_runs r
+         LEFT JOIN job_stage_claims c ON c.job_id = r.job_id AND c.stage = r.stage
+         WHERE r.job_id = $1 ORDER BY job_stage_ord(r.stage)`,
+        [jobId],
+      )
+    ).rows;
   const row = async (jobId) =>
     (
       await owner.query(
@@ -332,6 +367,8 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     queuedJob,
     admit,
     admitWithDeadline,
+    admitWithRecipe,
+    stageRows,
     row,
     workflow,
     cron,

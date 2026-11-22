@@ -1252,3 +1252,22 @@ export type DagRunV1 = {
   stages: DagRunNode[];
   renderedAt: Rfc3339Utc;
 };
+
+/** GET /internal/v1/jobs/{jobId}/prior-stages: recorded stage runs with their attributed output files. Never spawn authority. */
+export type PriorStagesV1 = {
+  schemaVersion: 1;
+  jobId: Uuid;
+  stages: {
+    stage: "segment" | "caption";
+    state: StageRunState;
+    errorCode: string | null;
+    counts: Record<string, number>;
+    outputs: {
+      fileId: Uuid;
+      role: OutputFileRoleV2;
+      slot: string;
+      sizeBytes: DecimalBytes;
+      sha256: Sha256Hex;
+    }[];
+  }[];
+};

@@ -6,6 +6,7 @@ import {
   openSync,
   readFileSync,
 } from "node:fs";
+import { moduleManifestEntry } from "@stateaction/contracts";
 
 /** Finite, explicit controller limits. Everything here is bounded; nothing waits forever. */
 type BaseSettings = {
@@ -44,6 +45,12 @@ export type ModalControllerSettings = BaseSettings & {
   functionName: string;
   environmentName?: string;
   pipeline: "hand_pose_cpu_v1";
+  /**
+   * SA-91: deployed function per recipe stage module (`module@version` to function name), from
+   * `MODAL_STAGE_FUNCTIONS`. `hand_pose_cpu_v1@1` is always `functionName`. A module without a
+   * binding is never spawned.
+   */
+  stageFunctions?: Readonly<Record<string, string>>;
 };
 
 export type ControllerSettings =
@@ -206,6 +213,9 @@ function modalSettings(): ModalControllerSettings {
   const environmentName = process.env.MODAL_ENVIRONMENT;
   if (environmentName !== undefined && !NAME.test(environmentName))
     throw new Error("MODAL_ENVIRONMENT is invalid");
+  const stageFunctions = stageFunctionBindings(
+    process.env.MODAL_STAGE_FUNCTIONS,
+  );
   return {
     executor: "modal",
     apiUrl: api,
@@ -214,7 +224,70 @@ function modalSettings(): ModalControllerSettings {
     ...(environmentName === undefined ? {} : { environmentName }),
     ...common(),
     pipeline: "hand_pose_cpu_v1",
+    ...(stageFunctions ? { stageFunctions } : {}),
   };
+}
+
+const MODULE_REF = /^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$/;
+const HAND_POSE_MODULE = "hand_pose_cpu_v1@1";
+
+/** `module@version=function,...`: strict, unique, never the hand-pose module (it is fixed). */
+function stageFunctionBindings(
+  raw: string | undefined,
+): Record<string, string> | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const out: Record<string, string> = {};
+  for (const pair of raw.split(",")) {
+    const [ref, fn, extra] = pair.trim().split("=");
+    if (
+      extra !== undefined ||
+      !ref ||
+      !fn ||
+      !MODULE_REF.test(ref) ||
+      !NAME.test(fn) ||
+      ref === HAND_POSE_MODULE ||
+      ref in out ||
+      !moduleManifestEntry(ref) ||
+      moduleManifestEntry(ref)!.localOnly
+    )
+      throw new Error("MODAL_STAGE_FUNCTIONS is invalid");
+    out[ref] = fn;
+  }
+  return out;
+}
+
+/** The deployed Modal function of one stage module, or undefined when none is bound. */
+export function modalFunctionFor(
+  settings: ModalControllerSettings,
+  module: string,
+): string | undefined {
+  if (module === HAND_POSE_MODULE) return settings.functionName;
+  return Object.hasOwn(settings.stageFunctions ?? {}, module)
+    ? settings.stageFunctions![module]
+    : undefined;
+}
+
+/**
+ * SA-91 module policy, checked before a stage claim is issued (nothing is spawned for a refused
+ * module). Same pattern as `local_fixture_noop`: a `localOnly` module (the stub and replay
+ * modules) runs only in APP_ENV=local, on the local executor. The local executor runs only
+ * CPU modules; the Modal executor runs only modules with a deployed function binding.
+ */
+export function stageModuleRefusal(
+  settings: ControllerSettings,
+  stage: string,
+  module: string,
+  appEnv = process.env.APP_ENV,
+): string | undefined {
+  const entry = moduleManifestEntry(module);
+  if (!entry || entry.stage !== stage) return "module_unknown";
+  if (entry.localOnly && (appEnv !== "local" || settings.executor === "modal"))
+    return "module_local_only";
+  if (settings.executor === "modal")
+    return modalFunctionFor(settings, module) === undefined
+      ? "module_unbound"
+      : undefined;
+  return entry.gpu.minimum === "none" ? undefined : "module_needs_gpu";
 }
 
 /** Modal API credentials: controller-side only, never forwarded to the processing container. */
