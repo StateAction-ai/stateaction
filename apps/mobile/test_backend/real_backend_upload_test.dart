@@ -36,6 +36,7 @@ import "package:stera/src/services/recordings_service/data/models/recording_sess
 import "package:uuid/uuid.dart";
 
 import "../test/src/modules/owner_upload/fake_native_upload_port.dart";
+import "client_address.dart";
 import "../test/src/modules/source_integrity/native_closed_source_ack_test.dart"
     as native;
 
@@ -58,6 +59,7 @@ class _Install {
   final BackendOrigin origin;
   final Directory root;
   final MemorySecretStore secrets = MemorySecretStore();
+  final ClientAddressHttpClient addresses = ClientAddressHttpClient();
   late final AuthHttpClient client;
   late final AuthSessionController auth;
   late final FakeNativeUploadPort port;
@@ -72,6 +74,7 @@ class _Install {
       origin: origin,
       jar: SessionCookieJar(origin: origin, store: secrets),
       clientKind: "test",
+      client: addresses,
     );
     auth = AuthSessionController(
       client: client,
@@ -101,22 +104,16 @@ class _Install {
     );
   }
 
+  /// Real sign-in from its own client address (see client_address.dart), so
+  /// the per-address rate limit never needs waiting out.
   Future<ServerIdentity> signIn(String email, String password) async {
-    for (var attempt = 0; ; attempt++) {
-      final outcome = await auth.signInWithEmail(
-        email: email,
-        password: password,
-      );
-      if (outcome is AuthRejected<ServerIdentity> &&
-          outcome.reason == AuthRejection.rateLimited &&
-          attempt < 4) {
-        await Future<void>.delayed(const Duration(seconds: 11));
-        continue;
-      }
-      expect(outcome, isA<AuthOk<ServerIdentity>>());
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      return (outcome as AuthOk<ServerIdentity>).value;
-    }
+    addresses.rotate();
+    final outcome = await auth.signInWithEmail(
+      email: email,
+      password: password,
+    );
+    expect(outcome, isA<AuthOk<ServerIdentity>>());
+    return (outcome as AuthOk<ServerIdentity>).value;
   }
 
   /// Genuinely closed hardware-profile take: real files, real sidecar, real
