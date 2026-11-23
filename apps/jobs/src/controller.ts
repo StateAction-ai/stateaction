@@ -15,6 +15,7 @@ import { driveModal } from "./modal-controller.js";
 import type { ModalClient } from "./modal-executor.js";
 import { markUnknown, type Evidence, type Outcome } from "./outcomes.js";
 import { bootId } from "./proc.js";
+import { runRecipe } from "./recipe.js";
 
 /**
  * Shared controller: the SAME function runs under the official Render local
@@ -108,6 +109,16 @@ export async function runController(
     }
   })();
   try {
+    // SA-91: a job admitted with a recipe runs its stages; a job without one runs as before.
+    const recipe = await api.recipe(jobId);
+    if (recipe)
+      return await runRecipe(
+        deps,
+        { jobId, runRef, owner },
+        recipe,
+        leaseDeadline,
+        emit,
+      );
     return await drive(
       deps,
       { jobId, runRef, owner },
@@ -311,7 +322,7 @@ async function drive(
   );
 }
 
-async function supervise(
+export async function supervise(
   deps: ControllerDeps & { settings: LocalControllerSettings },
   id: { jobId: string; owner: string; runRef: string },
   start: Journal,
@@ -330,6 +341,11 @@ async function supervise(
   let journal = start;
   let exit: Exit | undefined = journal.exit;
   const deadline = Date.parse(journal.executionDeadline);
+  // SA-91 stage only: the stage wall budget (absent for a job without a recipe).
+  const budget =
+    journal.budgetDeadline === undefined
+      ? undefined
+      : Date.parse(journal.budgetDeadline);
   const ref = journal.executionRef;
   const lost = () => leaseDeadline() === undefined;
   const leaseLost = (): Outcome => {
@@ -370,6 +386,12 @@ async function supervise(
         }
         if (lost()) return leaseLost();
       }
+      if (
+        termination === "natural_exit" &&
+        budget !== undefined &&
+        Date.now() >= budget
+      )
+        termination = "budget_exceeded";
       if (Date.now() >= deadline || termination !== "natural_exit") {
         if (Date.now() >= deadline) termination = "execution_deadline";
         // Kill only the verified identity, then require proof while the lease is held.
@@ -399,6 +421,7 @@ async function supervise(
       ...journal,
       phase: "exited",
       exit: exit ?? journal.exit ?? { code: null, signal: "not_observed" },
+      ...(journal.stage ? { termination } : {}),
     };
     store.write(journal);
     emit("child_exited", { exit: journal.exit });

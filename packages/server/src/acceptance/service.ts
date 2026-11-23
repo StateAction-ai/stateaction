@@ -11,6 +11,7 @@ import {
 import { inTransaction } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { JOB_CURRENT_SQL, JOB_OUTPUT_OPEN_SQL } from "../jobs/current.js";
+import { STAGE_SLOT_SQL } from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
 import {
   jobOutputByteLimit,
@@ -479,8 +480,12 @@ async function verifyCandidate(
   )
     return reject("manifest_hash_mismatch");
   const recipe = await recipeFacts(pool, st.job.id);
+  // SA-91: a recipe job seals with processing-result.v3; its FAILURE report is the
+  // diagnostics-only v2 failure manifest (no clips, no outputs, no nodes to check):
+  // a v3 document cannot list the earlier stages' files without listing outputs.
+  const sealing = recipe !== null && cand.outcome === "succeeded";
   const verdict = validateBytes(
-    recipe ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
+    sealing ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
     bytes,
   );
   if (!verdict.valid) return reject("manifest_contract_invalid", verdict.code);
@@ -532,7 +537,7 @@ async function verifyCandidate(
     },
     outputs,
     sources,
-    ...(recipe ? { recipe } : {}),
+    ...(sealing ? { recipe: recipe! } : {}),
   });
   if (!checked.ok) return reject(checked.code, checked.detail);
   let counts: AnnotationCounts | null = null;
@@ -635,14 +640,26 @@ async function recipeFacts(
     }>("SELECT recipe, recipe_sha256 FROM jobs WHERE id = $1", [jobId])
   ).rows[0];
   if (!job?.recipe || !job.recipe_sha256) return null;
+  // SA-91: a stage's files are every completed output of the job its slot
+  // attributes to it (stageOfSlot), not only those its receipt names: a stage
+  // that ended without a receipt (crash, budget) still owns what it uploaded,
+  // so its node can list them and the closed inventory stays fully claimed.
   const runs = (
     await pool.query<{
       stage: string;
       state: string;
-      receipt: { outputs?: { fileId: string }[] } | null;
-    }>("SELECT stage, state, receipt FROM job_stage_runs WHERE job_id = $1", [
-      jobId,
-    ])
+      file_ids: string[];
+    }>(
+      `SELECT r.stage, r.state,
+              coalesce(array_agg(f.id::text ORDER BY f.id) FILTER (WHERE f.id IS NOT NULL),
+                       '{}') AS file_ids
+       FROM job_stage_runs r
+       LEFT JOIN (files f JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id)
+         ON f.job_id = r.job_id AND f.purpose = 'output'
+         AND f.state IN ('completed', 'verified') AND ${STAGE_SLOT_SQL}
+       WHERE r.job_id = $1 GROUP BY r.stage, r.state`,
+      [jobId],
+    )
   ).rows;
   return {
     recipeId: job.recipe.recipeId,
@@ -658,7 +675,7 @@ async function recipeFacts(
         r.stage,
         {
           state: r.state,
-          receiptFileIds: (r.receipt?.outputs ?? []).map((o) => o.fileId),
+          stageFileIds: r.file_ids,
         },
       ]),
     ),

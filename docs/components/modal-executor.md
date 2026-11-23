@@ -46,6 +46,21 @@ Image pins: locked wheels from `uv export --locked` of `workers/processing/uv.lo
 
 **Provenance.** `PROCESSING_IMAGE_SPEC_SHA256` stays the operator-supplied, admitted build-spec digest delivered to the worker through the claim grant; it is **not** a Modal image ID and the controller/wrapper neither compute nor compare it (the CLI `artifact_cli` fallback hashes `uv.lock` only, which is a different definition). The real Modal image ID is not recorded anywhere yet. Modal accepts `python_version="3.12"` only, so the patch level (3.12.13 in `config/platform-toolchain.json`) is not pinned on Modal.
 
+## Recipe stages (SA-91)
+
+The same driver runs one recipe stage at a time (`driveModal` with a stage):
+
+- It uses the stage journal (`<stateDir>/<jobId>/<stage>/modal-journal.json`) and the stage claim token (`issue_stage_claim`).
+- It writes the stage run row (`record_stage_run`) in place of `record_execution`, and adopts the server's stage call.
+- It expects a v2 run result with the stage receipt, and cancels on stage wall budget overrun.
+
+Function and bootstrap per stage:
+
+- **Segment and caption:** the function per module comes from `MODAL_STAGE_FUNCTIONS`, and the spawn argument is the stage bootstrap v2.
+- **hand_pose:** stays `MODAL_FUNCTION_NAME` with the `run-job` v1 bootstrap plus `stage`, `module`, `recipeSha256` and `priorStages`. The SA-92 wrapper returns v2 with the receipt; a v1 return is still accepted and recorded `failed (receipt_missing)`.
+
+The Modal wrappers for the GPU modules are SA-94. See [Job orchestration](job-orchestration.md#recipe-stage-runner-sa-91-appsjobs).
+
 ## Credential placement
 
 Web: no Modal setting. Repair cron: only `STATEACTION_API_URL` and `REPAIR_CAPABILITY_TOKEN`. Workflow controller: `CONTROLLER_CAPABILITY_TOKEN`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` (`sync: false`), plus non-secret `MODAL_APP_NAME`, `MODAL_FUNCTION_NAME`, `JOBS_STATE_DIR`. The processing container: nothing but the call's bootstrap. `infra/test/blueprint.test.mjs`, `apps/jobs/test/modal-config.test.ts` and `workers/processing/tests/test_modal_app.py` assert this.

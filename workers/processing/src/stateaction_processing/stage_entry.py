@@ -38,6 +38,7 @@ from typing import Any, BinaryIO
 
 from .run_job import (
     _CALL_ID,
+    _ISOLATION_FD,
     _OPENER,
     _REF,
     _TOKEN,
@@ -47,6 +48,7 @@ from .run_job import (
     WorkerExit,
     _post,
     _strict_origin,
+    enforce_single_process,
 )
 
 EXIT_OK = 0
@@ -515,6 +517,7 @@ def execute(
 
 def run(execution_ref: str | None, io_dir: Path | None) -> int:
     file_mode = io_dir is not None
+    threaded = False
     if file_mode:
         assert io_dir is not None
         if (
@@ -530,6 +533,15 @@ def run(execution_ref: str | None, io_dir: Path | None) -> int:
             raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap") from error
     else:
         assert execution_ref is not None
+        if os.environ.get("STATEACTION_THREADED_ISOLATION_FD") == "3":
+            threaded = True
+            # SA-91 local stage path: the controller supervises this one thread group (no fork or
+            # exec) and withholds the bootstrap until this acknowledgement arrives.
+            enforce_single_process(allow_threads=True)
+            try:
+                os.write(_ISOLATION_FD, b"2")
+            finally:
+                os.close(_ISOLATION_FD)
         data = sys.stdin.buffer.read(MAX_BOOTSTRAP_BYTES + 1)
         if len(data) > MAX_BOOTSTRAP_BYTES:
             raise WorkerExit(EXIT_INTERNAL, "BootstrapTooLarge")
@@ -538,6 +550,11 @@ def run(execution_ref: str | None, io_dir: Path | None) -> int:
         except ValueError as error:
             raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap") from error
     boot = parse_bootstrap(raw, file_mode=file_mode, execution_ref=execution_ref or "")
+    if threaded and (
+        boot["executorKind"] != "local" or os.environ.get("APP_ENV") != "local"
+    ):
+        # The isolated local path exists only for the local executor in APP_ENV=local.
+        raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap")
     from . import modules
 
     try:

@@ -66,7 +66,8 @@ export type ManifestFacts = {
     enabled: Record<string, boolean>;
     runs: Record<
       string,
-      { state: string; receiptFileIds: string[] } | undefined
+      /** Completed output files the slot policy attributes to the stage (SA-91). */
+      { state: string; stageFileIds: string[] } | undefined
     >;
   };
 };
@@ -291,7 +292,8 @@ const STAGE_FOR_NODE = ["segment", "caption", "hand_pose"] as const;
  * v3 nodes against the admitted recipe and the recorded stage runs: the same
  * recipe, each node's module is the recipe module, a GPU stage node states
  * what its recorded terminal run states (succeeded, failed or cancelled as
- * failed, not_run) and lists only files its run receipt named, and a
+ * failed, not_run) and lists only files attributed to that stage by their
+ * slot (segments.json / captions.json / diagnostics/<stage>/...), and a
  * succeeded result has a succeeded hand_pose (seal) node.
  */
 function checkRecipeNodes(
@@ -312,6 +314,13 @@ function checkRecipeNodes(
     if (stage === "hand_pose") {
       if (facts.outcome === "succeeded" && node.status !== "succeeded")
         return bad("manifest_node_mismatch", "hand_pose status");
+      // The seal lists only its own files: never a file the slot policy gives an earlier stage.
+      const earlier = new Set([
+        ...(recipe.runs.segment?.stageFileIds ?? []),
+        ...(recipe.runs.caption?.stageFileIds ?? []),
+      ]);
+      if (arr(node.outputs).some((f) => earlier.has(String(f))))
+        return bad("manifest_node_mismatch", "hand_pose output");
       continue;
     }
     const run = recipe.runs[stage];
@@ -332,9 +341,14 @@ function checkRecipeNodes(
           : run.state;
     if (node.status !== recorded)
       return bad("manifest_node_mismatch", `${stage} status`);
-    for (const fileId of arr(node.outputs))
-      if (!run?.receiptFileIds.includes(String(fileId)))
-        return bad("manifest_node_mismatch", `${stage} output`);
+    // Exactly the stage's files by slot: none from elsewhere, none left out (SA-91).
+    const listed = new Set(arr(node.outputs).map(String));
+    const owned = new Set(run?.stageFileIds ?? []);
+    if (
+      listed.size !== owned.size ||
+      [...listed].some((fileId) => !owned.has(fileId))
+    )
+      return bad("manifest_node_mismatch", `${stage} output`);
   }
   return null;
 }

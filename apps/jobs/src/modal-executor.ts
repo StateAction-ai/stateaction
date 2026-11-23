@@ -1,3 +1,8 @@
+import {
+  validateValue,
+  type Stage,
+  type StageReceiptV1,
+} from "@stateaction/contracts";
 import { CALL_ID } from "./journal.js";
 
 /**
@@ -8,7 +13,11 @@ import { CALL_ID } from "./journal.js";
  */
 
 /** Scoped bootstrap handed to the Modal function as its single spawn argument (JSON string). */
-export type ModalBootstrap = {
+export type ModalBootstrap =
+  | ModalJobBootstrap
+  | StageBootstrap
+  | HandPoseBootstrap;
+export type ModalJobBootstrap = {
   schemaVersion: 1;
   apiUrl: string;
   jobId: string;
@@ -18,14 +27,74 @@ export type ModalBootstrap = {
 };
 
 /**
+ * SA-91 stage bootstrap v2 (the shape `stage_entry.py` parses). It names one recipe stage, its
+ * module and the recipe digest; the caption stage also pins the segments output it captions by
+ * file ID and sha256. The token is that stage's own single-use claim token. The Modal wrapper adds
+ * `executionRef` (its call ID) and `executorKind`; the local executor sets both itself.
+ */
+export type StageBootstrap = {
+  schemaVersion: 2;
+  apiUrl: string;
+  jobId: string;
+  bootstrapToken: string;
+  stage: Stage;
+  module: string;
+  recipeSha256: string;
+  segmentsFileId?: string;
+  segmentsSha256?: string;
+  executionRef?: string;
+  executorKind?: "local";
+};
+
+/**
+ * SA-91/SA-92 sealing stage bootstrap: the v1 `run-job` shape plus the four recipe keys (all or
+ * none). `priorStages` are the server's segment and caption rows with every file their slots
+ * attribute to them (`jobs.prior-stages.v1`), which the worker closes into processing-result.v3.
+ * The Modal wrapper sets `executionRef`/`executorKind`; the local executor sets them itself.
+ */
+export type HandPoseBootstrap = {
+  schemaVersion: 1;
+  apiUrl: string;
+  jobId: string;
+  bootstrapToken: string;
+  pipeline: "hand_pose_cpu_v1";
+  stage: "hand_pose";
+  module: string;
+  recipeSha256: string;
+  priorStages: {
+    stage: "segment" | "caption";
+    state: string;
+    errorCode: string | null;
+    counts: Record<string, number>;
+    outputs: {
+      fileId: string;
+      role: string;
+      slot: string;
+      sizeBytes: string;
+      sha256: string;
+    }[];
+  }[];
+  executionRef?: string;
+  executorKind?: "local";
+};
+
+/** Worker stdin bound for every bootstrap (`run_job` and `stage_entry`, 8 KiB). */
+export const MAX_BOOTSTRAP_BYTES = 8192;
+
+/**
  * What the thin wrapper returns after the shared CLI has exited and been reaped
  * inside the container. It is the ONLY value that can prove a terminal call.
  */
 export type ModalRunResult = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   functionCallId: string;
   exitCode: number;
+  /** v2 (SA-91 stage): the stage receipt, or null when the stage produced none (crash). */
+  receipt?: StageReceiptV1 | null;
 };
+
+/** What a stage result must describe: exactly this job, stage and module. */
+export type StageExpectation = { jobId: string; stage: Stage; module: string };
 
 /**
  * One bounded observation of a call. Only `returned` can ever lead to
@@ -60,38 +129,80 @@ export interface ModalClient {
   close?(): void;
 }
 
-/** Strict: exact keys, the exact call this controller recorded, a small integer exit code. */
+/**
+ * Strict: exact keys, the exact call this controller recorded, a small integer exit code.
+ * Without `stage` only the SA-42 v1 shape is accepted (a job without a recipe). For a stage, v2
+ * `{schemaVersion: 2, functionCallId, exitCode, receipt}` is required, with a receipt valid
+ * against `jobs.stage-receipt.v1` for exactly this job, stage and module (or `null` when the
+ * stage produced none); `hand_pose_cpu_v1` may still return v1.
+ */
 export function parseRunResult(
   value: unknown,
   callId: string,
+  stage?: StageExpectation,
 ): ModalRunResult | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return undefined;
   const v = value as Record<string, unknown>;
   const keys = Object.keys(v);
-  if (
-    keys.length !== 3 ||
-    !keys.every((k) =>
-      ["schemaVersion", "functionCallId", "exitCode"].includes(k),
-    )
-  )
+  const v2 = v.schemaVersion === 2 && stage !== undefined;
+  const v1 =
+    v.schemaVersion === 1 &&
+    (stage === undefined || stage.module === "hand_pose_cpu_v1@1");
+  if (!v1 && !v2) return undefined;
+  const allowed = v2
+    ? ["schemaVersion", "functionCallId", "exitCode", "receipt"]
+    : ["schemaVersion", "functionCallId", "exitCode"];
+  if (keys.length !== allowed.length || !keys.every((k) => allowed.includes(k)))
     return undefined;
-  if (v.schemaVersion !== 1) return undefined;
   if (
     typeof v.functionCallId !== "string" ||
     !CALL_ID.test(v.functionCallId) ||
     v.functionCallId !== callId
   )
     return undefined;
+  const exitCode = exitCodeOf(v.exitCode);
+  if (exitCode === undefined) return undefined;
+  if (!v2) return { schemaVersion: 1, functionCallId: callId, exitCode };
+  const receipt =
+    v.receipt === null ? null : parseStageReceipt(v.receipt, stage!, exitCode);
+  if (receipt === undefined) return undefined;
+  return { schemaVersion: 2, functionCallId: callId, exitCode, receipt };
+}
+
+export function exitCodeOf(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    Math.abs(value) <= 255
+    ? value
+    : undefined;
+}
+
+/**
+ * A stage receipt is accepted only when it is contract-valid (schema and rules), describes this
+ * job, stage and module, and agrees with the exit code when one was observed (0 exactly when it
+ * reports success).
+ */
+export function parseStageReceipt(
+  value: unknown,
+  stage: StageExpectation,
+  /** null: the exit was not observed (adopted, proven-gone local child); no agreement check. */
+  exitCode: number | null,
+): StageReceiptV1 | undefined {
   if (
-    typeof v.exitCode !== "number" ||
-    !Number.isSafeInteger(v.exitCode) ||
-    Math.abs(v.exitCode) > 255
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !validateValue("jobs.stage-receipt.v1", value).valid
   )
     return undefined;
-  return {
-    schemaVersion: 1,
-    functionCallId: v.functionCallId,
-    exitCode: v.exitCode,
-  };
+  const r = value as StageReceiptV1;
+  if (
+    r.jobId !== stage.jobId ||
+    r.stage !== stage.stage ||
+    r.module !== stage.module ||
+    (exitCode !== null && (r.status === "succeeded") !== (exitCode === 0))
+  )
+    return undefined;
+  return r;
 }

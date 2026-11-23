@@ -6,9 +6,10 @@ import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v15.json is the current registry; catalog.v1.json through
-// catalog.v14.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v15.json"));
+// catalog.v16.json is the current registry; catalog.v1.json through
+// catalog.v15.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v16.json"));
+const catalogV15 = JSON.parse(text("catalog.v15.json"));
 const catalogV14 = JSON.parse(text("catalog.v14.json"));
 const catalogV13 = JSON.parse(text("catalog.v13.json"));
 const catalogV12 = JSON.parse(text("catalog.v12.json"));
@@ -924,17 +925,17 @@ test("v14 lock entries are present and match the published bytes", () => {
 const V15_ADDED = ["http.output-create.v2", "http.output-plan.v2"];
 
 test("catalog v15 (SA-103) is an exact superset of catalog v14 adding only the v2 worker output contracts", () => {
-  assertExactSuperset(catalog, catalogV14, ["v14", "v15"], V15_ADDED);
-  assert.deepEqual(catalog.shared, catalogV14.shared);
-  assert.equal(Object.keys(catalog.contracts).length, 83);
+  assertExactSuperset(catalogV15, catalogV14, ["v14", "v15"], V15_ADDED);
+  assert.deepEqual(catalogV15.shared, catalogV14.shared);
+  assert.equal(Object.keys(catalogV15.contracts).length, 83);
   for (const [v1, v2] of [
     ["http.output-create.v1", "http.output-create.v2"],
     ["http.output-plan.v1", "http.output-plan.v2"],
   ]) {
     // v1 stays published and unchanged; v2 differs only in its schema identity.
-    assert.deepEqual(catalog.contracts[v1], catalogV14.contracts[v1], v1);
-    const { schema: _s1, id: _i1, ...a } = catalog.contracts[v1];
-    const { schema: _s2, id: _i2, ...b } = catalog.contracts[v2];
+    assert.deepEqual(catalogV15.contracts[v1], catalogV14.contracts[v1], v1);
+    const { schema: _s1, id: _i1, ...a } = catalogV15.contracts[v1];
+    const { schema: _s2, id: _i2, ...b } = catalogV15.contracts[v2];
     assert.deepEqual(b, a, `${v2}: same bound, path and rules as ${v1}`);
   }
 });
@@ -958,7 +959,7 @@ test("output v2 schemas equal v1 except that role references common.v2", () => {
 test("v15 lock entries are present and match the published bytes", () => {
   const files = [
     "catalog.v15.json",
-    ...V15_ADDED.map((id) => catalog.contracts[id].schema),
+    ...V15_ADDED.map((id) => catalogV15.contracts[id].schema),
   ];
   for (const file of files)
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
@@ -999,4 +1000,25 @@ test("published module manifest entries are append-only", () => {
     assert.ok(entries.has(ref), `${ref}: published module removed`);
     assert.equal(requestSha256(entries.get(ref)), digest, `${ref} changed`);
   }
+});
+
+const V16_ADDED = ["jobs.prior-stages.v1"];
+
+test("catalog v16 (SA-91) is an exact superset of catalog v15 adding only jobs.prior-stages.v1", () => {
+  assertExactSuperset(catalog, catalogV15, ["v15", "v16"], V16_ADDED);
+  assert.deepEqual(catalog.shared, catalogV15.shared);
+  assert.equal(Object.keys(catalog.contracts).length, 84);
+  const entry = catalog.contracts["jobs.prior-stages.v1"];
+  assert.equal(entry.casing, "camelCase");
+  assert.equal(entry.maxBytes, 65536);
+  assert.deepEqual(entry.rules, []);
+});
+
+test("v16 lock entries are present and match the published bytes", () => {
+  const files = [
+    "catalog.v16.json",
+    ...V16_ADDED.map((id) => catalog.contracts[id].schema),
+  ];
+  for (const file of files)
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
 });
