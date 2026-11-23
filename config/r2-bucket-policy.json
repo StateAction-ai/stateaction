@@ -1,0 +1,15 @@
+{
+  "schema": "stateaction.r2-bucket-policy.v1",
+  "buckets": {
+    "stateaction-prod": { "origins": ["https://stateaction-web.onrender.com"] },
+    "stateaction-stage": { "origins": [] }
+  },
+  "cors": {
+    "methods": ["GET", "HEAD", "PUT"],
+    "headers": ["content-type", "range", "x-amz-*"],
+    "expose": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+    "maxAgeSeconds": 600
+  },
+  "lifecycle": { "abortIncompleteMultipartDays": 7 },
+  "public": "never: managed r2.dev domain disabled and no custom domain on every bucket"
+}
