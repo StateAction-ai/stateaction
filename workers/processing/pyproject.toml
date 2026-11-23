@@ -65,6 +65,7 @@ files = [
   "src/stateaction_processing/modules/__init__.py",
   "src/stateaction_processing/modules/stub.py",
   "src/stateaction_processing/modules/replay.py",
+  "src/stateaction_processing/modules/flora.py",
 ]
 strict = true
 follow_imports = "skip"

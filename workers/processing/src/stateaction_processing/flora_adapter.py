@@ -42,10 +42,33 @@ def flat_params(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     return {k: v for k, v in out.items() if _KEY.match(k)}
 
 
+COVERED_REASON = "dropped_covered_by_predecessor"
+
+
+def _mark_dropped(span: Span, item: dict[str, Any]) -> None:
+    """Record a dropped covered segment in the covering row's `ext.flora_dropped` (scalars only)."""
+    mark = span.ext.setdefault(
+        "flora_dropped", {"reason": COVERED_REASON, "count": 0, "ids": "", "spans": ""}
+    )
+    mark["count"] += 1
+    here = f"{item['native_start_frame']}-{item['native_end_frame_exclusive']}"
+    mark["ids"] = ",".join(x for x in (mark["ids"], str(item["id"])) if x)[:256]
+    mark["spans"] = ";".join(x for x in (mark["spans"], here) if x)[:256]
+
+
 def segments_from_flora(
-    ctx: StageContext, native: dict[str, Any], replayed_from: dict[str, Any]
+    ctx: StageContext,
+    native: dict[str, Any],
+    replayed_from: dict[str, Any] | None,
+    covered: list[dict[str, Any]] | None = None,
 ) -> tuple[list[Span], int, list[FailedWindow]]:
-    """Spans, window total and failed windows of a FLORA `segments.json` document."""
+    """Spans, window total and failed windows of a FLORA `segments.json` document.
+
+    `replayed_from` is the original-run record of a replay (`ext.replayed_from`); a live module passes None.
+    A segment fully inside its predecessor cannot be a non-overlapping row. Replay refuses it
+    (`replay_segment_overlap_unresolvable`); a live module passes a `covered` list and the segment is
+    not stored as a row but appended there (id and native span), so the loss is recorded, never silent.
+    """
     frames = ctx.frames
     total = len(frames)
     spans: list[Span] = []
@@ -64,29 +87,45 @@ def segments_from_flora(
         # dropping it would silently lose a model result.
         first = max(start, cursor)
         if first >= end:
-            raise StageError("replay_segment_overlap_unresolvable")
-        cursor = end
-        spans.append(
-            Span(
-                first,
-                end,
-                "ok",
+            if covered is None:
+                raise StageError("replay_segment_overlap_unresolvable")
+            covered.append(
                 {
-                    "flora": {
-                        "id": seg["id"],
-                        "provenance": str(seg.get("provenance", "")),
-                        "stitched": bool(seg.get("stitched", False)),
-                        "crosses_core_boundary": bool(
-                            seg.get("crosses_core_boundary", False)
-                        ),
-                        "native_start_frame": start,
-                        "native_end_frame_exclusive": end,
-                        "trimmed_start": first != start,
-                    },
-                    "replayed_from": replayed_from,
-                },
+                    "id": seg["id"],
+                    "reason": COVERED_REASON,
+                    "native_start_frame": start,
+                    "native_end_frame_exclusive": end,
+                    "start_s": repr(float(seg["start_s"]))
+                    if "start_s" in seg
+                    else None,
+                    "end_s": repr(float(seg["end_s"])) if "end_s" in seg else None,
+                }
             )
-        )
+            # segments.v1 rows are `ok` or `failed_window` and may not overlap, so there is no row for it:
+            # the loss is recorded on the covering row, `ext.flora_dropped` of the predecessor.
+            _mark_dropped(spans[-1], covered[-1])
+            continue
+        cursor = end
+        flora: dict[str, Any] = {
+            "id": seg["id"],
+            "provenance": str(seg.get("provenance", "")),
+            "stitched": bool(seg.get("stitched", False)),
+            "crosses_core_boundary": bool(seg.get("crosses_core_boundary", False)),
+            "native_start_frame": start,
+            "native_end_frame_exclusive": end,
+            "trimmed_start": first != start,
+        }
+        # The seconds FLORA reported, exactly (repr round-trips a float). The Captioner captions this
+        # native span, not the trimmed row span, so it must be recoverable from the stored document.
+        if isinstance(seg.get("start_s"), (int, float)) and isinstance(
+            seg.get("end_s"), (int, float)
+        ):
+            flora["native_start_s"] = repr(float(seg["start_s"]))
+            flora["native_end_s"] = repr(float(seg["end_s"]))
+        ext: dict[str, dict[str, Any]] = {"flora": flora}
+        if replayed_from is not None:
+            ext["replayed_from"] = replayed_from
+        spans.append(Span(first, end, "ok", ext))
     windows = native["windows"]
     failed: list[FailedWindow] = []
     for item in windows.get("failed", []):

@@ -72,9 +72,21 @@ def fix_path(root: str) -> None:
 
 
 def run_tempseg(
-    llm: Any, model_dir: str, videos: dict[str, str], work: str
+    llm: Any,
+    model_dir: str,
+    videos: dict[str, str],
+    work: str,
+    *,
+    keep_native: bool = False,
+    isolate_batch_errors: bool = False,
+    retry_budget: int = 64,
 ) -> dict[str, Any]:
-    """T3 config of the measured reference: grid windows batched (max_num_seqs 16), repair windows batch 1, greedy."""
+    """T3 config of the measured reference: grid windows batched (max_num_seqs 16), repair windows batch 1, greedy.
+
+    Stage use (SA-94): `keep_native` adds each episode's full `run_long` result under `native` (what the contract
+    adapter consumes), and `isolate_batch_errors` turns an exception of the one batched `generate` call into
+    `batch_error` plus batch-1 live inference of every window, never a crash or an empty result.
+    """
     import numpy as np
     from vllm import SamplingParams
 
@@ -134,11 +146,20 @@ def run_tempseg(
     mode, tried = vlib.pick_mode(llm, items[0][3], items[0][4], SamplingParams)
     if mode is None:
         raise RuntimeError(f"E_INPUT_MAPPING {tried}")
-    outs = llm.generate(
-        [vlib.make_req(mode, it[3], it[4]) for it in items], sp, use_tqdm=False
-    )
+    batch_error: str | None = None
+    try:
+        outs = llm.generate(
+            [vlib.make_req(mode, it[3], it[4]) for it in items], sp, use_tqdm=False
+        )
+    except Exception as exc:  # noqa: BLE001 - recorded; windows then run live at batch 1
+        if not isolate_batch_errors:
+            raise
+        outs, batch_error = [], f"{type(exc).__name__}: {str(exc)[:300]}"
+        items_done: list = []
+    else:
+        items_done = items
     pre: dict = {}
-    for it, o in zip(items, outs, strict=True):
+    for it, o in zip(items_done, outs, strict=True):
         c = o.outputs[0]
         txt = c.text.strip()
         pre[(it[0], it[1])] = dict(
@@ -185,7 +206,7 @@ def run_tempseg(
             Path(work) / "out" / ep,
             make_infer(ep),
             limits=Limits.from_env(),
-            retry_budget=64,
+            retry_budget=retry_budget,
             retry_failed=True,
             cache_dir=fc / ep,
         )
@@ -198,7 +219,12 @@ def run_tempseg(
             engine_error=r["engine_error"],
             assembly=r["assembly"],
         )
-    return dict(input_mode=mode, episodes=eps, windows=recs)
+        if keep_native:
+            eps[ep]["native"] = r
+    out: dict[str, Any] = dict(input_mode=mode, episodes=eps, windows=recs)
+    if batch_error is not None:
+        out["batch_error"] = batch_error
+    return out
 
 
 def run_captioner(llm: Any, inputs_dir: str) -> dict[str, Any]:

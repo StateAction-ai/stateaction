@@ -229,13 +229,20 @@ class FileModeTests(unittest.TestCase):
             child(["run-stage", "--io-dir", str(self.dir)], env).stderr,
         )
 
-    def test_unregistered_real_module_is_unavailable(self):
+    def test_flora_module_without_the_gpu_image_fails_the_stage_loudly(self):
+        # SA-94: the FLORA modules are registered; an image without flora_ext must not substitute
+        # another engine or an empty document.
         rec = recipe(segment_module="flora_tempseg_vllm_fp8@1")
         rec["stages"][0]["resources"]["gpu"] = "H100"
         write_io_dir(self.dir, "segment", rec)
         result = child(["run-stage", "--io-dir", str(self.dir)], {"APP_ENV": "local"})
-        self.assertEqual(result.returncode, 78)
-        self.assertIn(b"module_unavailable", result.stderr)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        receipt = json.loads((self.dir / "receipt.json").read_text())
+        self.assertEqual(
+            (receipt["status"], receipt["errorCode"]),
+            ("failed", "flora_runtime_unavailable"),
+        )
+        self.assertFalse((self.dir / "segments.json").exists())
 
     def test_replay_of_an_unknown_recording_is_a_failed_receipt(self):
         write_io_dir(self.dir, "segment", recipe(segment_module="replay_segmenter@1"))
