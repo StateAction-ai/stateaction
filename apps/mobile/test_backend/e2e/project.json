@@ -18,10 +18,6 @@
       "parallelism": false,
       "dependsOn": [
         {
-          "projects": ["mobile"],
-          "target": "prepare"
-        },
-        {
           "projects": ["web"],
           "target": "build"
         }
@@ -36,7 +32,11 @@
         "flutterToolchain"
       ],
       "options": {
-        "command": "node apps/mobile/test_backend/run_real_backend.mjs"
+        "commands": [
+          "python3 scripts/mobile/run.py mobile prepare",
+          "node apps/mobile/test_backend/run_real_backend.mjs"
+        ],
+        "parallel": false
       }
     }
   }

@@ -7,15 +7,20 @@
   "targets": {
     "build": {
       "executor": "nx:run-commands",
-      "cache": false,
+      "cache": true,
       "dependsOn": [],
       "inputs": [
-        "default",
+        "{workspaceRoot}/spikes/android/upload/app/**/*",
         "{workspaceRoot}/spikes/android/upload/*.gradle",
         "{workspaceRoot}/spikes/android/upload/gradle.properties",
         "{workspaceRoot}/spikes/android/upload/build.sh",
-        "{workspaceRoot}/apps/mobile/android/gradle/wrapper/gradle-wrapper.properties",
-        "{workspaceRoot}/config/mobile-toolchain.json"
+        "{workspaceRoot}/apps/mobile/android/gradlew",
+        "{workspaceRoot}/apps/mobile/android/gradle/wrapper/**/*",
+        "!{workspaceRoot}/spikes/android/upload/app/build/**/*",
+        "!{workspaceRoot}/spikes/android/upload/app/.gradle/**/*",
+        "sharedGlobals",
+        "androidToolchain",
+        "externalDeps"
       ],
       "outputs": [],
       "options": {

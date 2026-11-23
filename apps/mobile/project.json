@@ -4,43 +4,35 @@
   "projectType": "application",
   "implicitDependencies": ["stera-recorder", "contracts-dart", "contracts"],
   "targets": {
-    "prepare": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": ["^prepare"],
-      "options": {
-        "command": "python3 scripts/mobile/run.py mobile prepare"
-      }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources", "^flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py mobile typecheck"
-      }
+      },
+      "dependsOn": []
     },
     "test": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources", "^flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py mobile test"
-      }
+      },
+      "dependsOn": []
     },
     "format": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py mobile format"
-      }
+      },
+      "dependsOn": []
     },
     "build": {
       "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": ["prepare", "^build"],
-      "inputs": ["flutterSources", "^flutterSources"],
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["flutterSources", "^flutterSources", "androidToolchain"],
       "outputs": [],
       "options": {
         "command": "python3 scripts/mobile/run.py mobile build"

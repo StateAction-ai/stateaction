@@ -38,15 +38,14 @@
       "options": {
         "commands": [
           "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml spikes/android/capture/harness",
-          "pnpm exec prettier --check spikes/android/capture/project.json spikes/android/capture/app/project.json spikes/android/capture/README.md spikes/android/capture/QUALIFICATION.md docs/validation/sa-60-emulator-qualification.json"
+          "pnpm exec prettier --check spikes/android/capture/project.json spikes/android/capture/README.md spikes/android/capture/QUALIFICATION.md docs/validation/sa-60-emulator-qualification.json"
         ],
         "parallel": false
       }
     },
-    "android-build": {
+    "build": {
       "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": [],
+      "cache": true,
       "options": {
         "commands": [
           "spikes/android/capture/gradlew -p spikes/android/capture :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon --console=plain",
@@ -54,7 +53,26 @@
           "cd spikes/android/capture/harness && PYTHONPATH=.:tests:../../../../scripts python3 -m unittest discover -s tests -v"
         ],
         "parallel": false
-      }
+      },
+      "inputs": [
+        "{projectRoot}/**/*",
+        "!{projectRoot}/**/build/**/*",
+        "!{projectRoot}/**/.gradle/**/*",
+        "!{projectRoot}/**/.gradle-user/**/*",
+        "!{projectRoot}/**/.kotlin/**/*",
+        "!{projectRoot}/**/.cxx/**/*",
+        "!{projectRoot}/**/local.properties",
+        "!{projectRoot}/**/__pycache__/**/*",
+        "{workspaceRoot}/scripts/android_personal_device.py",
+        "pythonToolchain",
+        "sharedGlobals",
+        "androidToolchain",
+        "externalDeps"
+      ],
+      "outputs": [
+        "{projectRoot}/app/build/spike-fixtures",
+        "{workspaceRoot}/artifacts/android-capture-spike/jvm-native-writer-verification.json"
+      ]
     }
   },
   "tags": ["mobile-toolchain"]

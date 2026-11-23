@@ -1851,9 +1851,12 @@ class CacheTests(RepoCase):
             "pnpm --version",
             "python3 --version",
             "uv --version",
-            "flutter --version --machine",
         ):
             self.assertIn(command, runtime)
+        # The Flutter version is read from the SDK file: `flutter --version` waits for the
+        # startup lock a running flutter task holds and made the task hashes flaky (SA-113).
+        self.assertTrue(any("flutter.version.json" in c for c in runtime))
+        self.assertFalse(any("flutter --version" in c for c in runtime))
         self.assertTrue(nx["neverConnectToCloud"])
         self.assertFalse(nx["targetDefaults"]["integration"]["cache"])
         js = nx["pluginsConfig"]["@nx/js"]

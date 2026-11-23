@@ -115,7 +115,7 @@
         "runtime": "java -version 2>&1"
       },
       {
-        "runtime": "flutter --version --machine"
+        "runtime": "cat \"$(dirname \"$(readlink -f \"$(command -v flutter)\")\")/cache/flutter.version.json\" 2>&1"
       }
     ],
     "repositoryConfig": [
@@ -137,6 +137,13 @@
       {
         "externalDependencies": ["npm:prettier"]
       }
+    ],
+    "androidToolchain": [
+      "{workspaceRoot}/config/mobile-toolchain.json",
+      {
+        "runtime": "for p in build-tools platforms ndk cmake; do cat \"${ANDROID_HOME:-$ANDROID_SDK_ROOT}\"/$p/*/source.properties; done 2>&1; cat \"${ANDROID_HOME:-$ANDROID_SDK_ROOT}\"/platform-tools/source.properties 2>&1"
+      },
+      "flutterToolchain"
     ]
   },
   "targetDefaults": {

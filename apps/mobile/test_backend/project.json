@@ -7,17 +7,20 @@
   "targets": {
     "typecheck": {
       "executor": "nx:run-commands",
-      "dependsOn": [
-        {
-          "projects": ["mobile"],
-          "target": "prepare"
-        }
-      ],
       "options": {
-        "command": "flutter analyze --no-pub test_backend",
-        "cwd": "apps/mobile"
+        "commands": [
+          "python3 scripts/mobile/run.py mobile prepare",
+          "cd apps/mobile && flutter analyze --no-pub test_backend"
+        ],
+        "parallel": false
       },
-      "inputs": ["default", "^production", "flutterToolchain"]
+      "inputs": [
+        "default",
+        "^production",
+        "flutterToolchain",
+        "{workspaceRoot}/scripts/mobile/**/*"
+      ],
+      "dependsOn": []
     },
     "format": {
       "executor": "nx:run-commands",
