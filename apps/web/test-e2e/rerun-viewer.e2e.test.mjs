@@ -63,7 +63,10 @@ async function until(pred, what, ms = 90_000) {
   for (;;) {
     const v = await pred();
     if (v) return v;
-    assert.ok(Date.now() < end, `timeout: ${what}`);
+    assert.ok(
+      Date.now() < end,
+      `timeout: ${typeof what === "function" ? what() : what}`,
+    );
     await sleep(150);
   }
 }
@@ -211,7 +214,13 @@ test("self-hosts the viewer with immutable assets", async () => {
 test("the production build denies the harness in a hosted environment", async () => {
   // Bind Next directly to loopback so this negative route check never opens a
   // listener on the workstation network.
-  const port = 40000 + Math.floor(Math.random() * 20000);
+  // An OS-assigned port: a random one in 40000-59999 can sit inside the kernel's
+  // ephemeral range and collide with a live connection, and then `next start` exits.
+  const probe = createServer();
+  await new Promise((resolve) => probe.listen(0, "127.0.0.1", resolve));
+  const port = probe.address().port;
+  await new Promise((resolve) => probe.close(resolve));
+  let logs = "";
   const denied = spawn(
     process.execPath,
     [
@@ -229,19 +238,27 @@ test("the production build denies the harness in a hosted environment", async ()
         APP_ENV: "production",
         STATEACTION_VIEWER_HARNESS_ORIGIN: storageOrigin,
       },
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
     },
   );
+  denied.stdout.on("data", (c) => (logs += c));
+  denied.stderr.on("data", (c) => (logs += c));
   try {
     const response = await until(
       async () => {
+        assert.ok(
+          denied.exitCode === null && denied.signalCode === null,
+          `next start exited on port ${port}:\n${logs}`,
+        );
         try {
-          return await fetch(`http://127.0.0.1:${port}${viewerPath}`);
+          return await fetch(`http://127.0.0.1:${port}${viewerPath}`, {
+            signal: AbortSignal.timeout(5_000),
+          });
         } catch {
           return false;
         }
       },
-      "hosted harness denial",
+      () => `hosted harness denial (port ${port}):\n${logs}`,
       60_000,
     );
     assert.equal(response.status, 404);

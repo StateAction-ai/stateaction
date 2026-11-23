@@ -164,6 +164,18 @@ class NxGraphTests(unittest.TestCase):
             self.assertIs(config.get("parallelism"), False, f"{project}:{target}")
             self.assertTrue(config.get("inputs"), f"{project}:{target} has no inputs")
 
+    def test_the_memory_heavy_next_build_is_excluded_from_task_parallelism(self):
+        """The static stage runs --parallel=3 (SA-118); `next build` must still run alone."""
+        web = self.graph["nodes"]["web"]["data"]["targets"]
+        self.assertIs(web["build"].get("parallelism"), False)
+
+    def test_web_typecheck_consumes_the_build_route_types_and_runs_tsc(self):
+        """`next build` already generates .next/types, so typecheck must not regenerate them."""
+        web = self.graph["nodes"]["web"]["data"]["targets"]["typecheck"]
+        self.assertIn("build", web["dependsOn"])
+        self.assertIn("tsc --noEmit", web["options"]["command"])
+        self.assertNotIn("typegen", web["options"]["command"])
+
     def test_every_fixture_stage_runs_a_target_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
             "stages"

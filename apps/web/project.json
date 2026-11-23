@@ -12,6 +12,7 @@
         "command": "pnpm --filter @stateaction/web build"
       },
       "outputs": ["{projectRoot}/.next", "{projectRoot}/public/rerun"],
+      "parallelism": false,
       "inputs": [
         "production",
         "^production",
@@ -21,7 +22,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm --filter @stateaction/web typecheck"
+        "command": "pnpm --filter @stateaction/web exec tsc --noEmit"
       },
       "dependsOn": ["build"]
     },
@@ -52,7 +53,8 @@
         "default",
         "^production",
         "{workspaceRoot}/packages/server/test-auth/**/*",
-        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/scripts/platform/process-wait.mjs"
       ]
     }
   },

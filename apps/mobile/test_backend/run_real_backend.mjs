@@ -27,6 +27,10 @@ import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { externalSession } from "../../../scripts/platform/local-fixtures.mjs";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
+import {
+  waitForGroupExit,
+  leaked,
+} from "../../../scripts/platform/process-wait.mjs";
 
 const mobileDir = fileURLToPath(new URL("..", import.meta.url));
 const webDir = fileURLToPath(new URL("../../web/", import.meta.url));
@@ -164,9 +168,9 @@ try {
       const res = await fetch(`${origin}/api/v1/me`);
       if (res.status === 401) break;
     } catch {}
-    if (i > 120 || next.exitCode !== null)
+    if (i > 600 || next.exitCode !== null)
       throw new Error(`next start failed:\n${logs}`);
-    await sleep(500);
+    await sleep(100);
   }
 
   const userId = (label) => {
@@ -262,7 +266,7 @@ try {
     try {
       process.kill(-next.pid, "SIGTERM");
     } catch {}
-    await sleep(500);
+    await waitForGroupExit(next.pid).catch(leaked);
   }
   await db?.stop();
 }

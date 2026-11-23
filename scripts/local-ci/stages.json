@@ -78,7 +78,7 @@
         "-t",
         "build,typecheck,syntax,test,format",
         "--exclude=tag:mobile-toolchain",
-        "--parallel=1",
+        "--parallel=3",
         "--outputStyle=static",
         "--nxBail"
       ],
@@ -118,16 +118,7 @@
       "id": "local-ci-self-test",
       "title": "Local CI runner tests",
       "timeoutSec": 600,
-      "argv": [
-        "python3",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "scripts/local-ci",
-        "-p",
-        "test_*.py"
-      ]
+      "argv": ["python3", "scripts/local-ci/run_self_tests.py"]
     },
     {
       "id": "catalog-integration",

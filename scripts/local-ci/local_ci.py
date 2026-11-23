@@ -649,9 +649,25 @@ def kill_group(process: subprocess.Popen, grace: float = 8.0) -> None:
             os.killpg(process.pid, sig)
         deadline = time.monotonic() + wait
         while time.monotonic() < deadline:
+            # As a subreaper we inherit orphaned grandchildren; a killed one stays a zombie, and
+            # a zombie keeps the group "alive", until someone waits for it. Reap them here
+            # instead of waiting out both grace periods (13 s per timeout).
+            # The group leader is left to `process`, whose exit code must stay intact.
+            for pid, state in descendants(os.getpid()):
+                if state == "Z" and pid != process.pid and _pgrp(pid) == process.pid:
+                    with contextlib.suppress(ChildProcessError, OSError):
+                        os.waitpid(pid, os.WNOHANG)
             if process.poll() is not None and not _group_alive(process.pid):
                 return
             time.sleep(0.05)
+
+
+def _pgrp(pid: int) -> int | None:
+    try:
+        stat = (Path("/proc") / str(pid) / "stat").read_text()
+        return int(stat.rsplit(")", 1)[1].split()[2])
+    except (OSError, IndexError, ValueError):
+        return None
 
 
 def _group_alive(pgid: int) -> bool:

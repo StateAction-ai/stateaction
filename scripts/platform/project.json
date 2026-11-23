@@ -9,6 +9,7 @@
         "commands": [
           "node --test --test-concurrency=2 scripts/platform/check-staged.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/local-fixtures.test.mjs",
+          "node --test --test-concurrency=1 scripts/platform/process-wait.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/r2-qualification.test.mjs scripts/platform/r2-qualification-run.test.mjs",
           "python3 -m unittest discover -s scripts/platform -p 'test_mobile*.py' -v",
           "node --test --test-concurrency=1 scripts/platform/check-staged-dart.test.mjs"
@@ -45,6 +46,8 @@
           "node --check scripts/platform/install-hooks.mjs",
           "node --check scripts/platform/local-fixtures.mjs",
           "node --check scripts/platform/local-fixtures.test.mjs",
+          "node --check scripts/platform/process-wait.mjs",
+          "node --check scripts/platform/process-wait.test.mjs",
           "node --check scripts/platform/hook-fixtures.mjs",
           "node --check scripts/platform/qualify-r2-transfers.mjs",
           "node --check scripts/platform/r2-qualification-lib.mjs",
@@ -74,7 +77,7 @@
         "externalDeps"
       ],
       "options": {
-        "command": "python3 -m unittest discover -s scripts/local-ci -p 'test_*.py'"
+        "command": "python3 scripts/local-ci/run_self_tests.py"
       }
     }
   }

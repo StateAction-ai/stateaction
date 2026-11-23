@@ -106,12 +106,12 @@ setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!
 setsid artifacts/platform-tools/render/render workflows dev --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev > artifacts/platform-ci/workflows.log 2>&1 &
 workflow_pid=$!
-for attempt in {1..60}; do
+for ((end = SECONDS + 60; SECONDS < end;)); do
   if curl --silent --fail http://127.0.0.1:3000/api/v1/health >/dev/null && artifacts/platform-tools/render/render workflows tasks list --local -o json >/dev/null 2>&1; then
     pnpm --filter @stateaction/jobs smoke
     exit 0
   fi
-  sleep 1
+  sleep 0.2
 done
 cat artifacts/platform-ci/web.log artifacts/platform-ci/workflows.log >&2
 exit 1

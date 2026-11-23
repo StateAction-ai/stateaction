@@ -414,6 +414,30 @@ class PipelineTests(RepoCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
 
+    def test_timeout_does_not_wait_out_the_grace_periods_for_killed_grandchildren(
+        self,
+    ):
+        # A killed grandchild is a zombie until reaped and keeps its group "alive"; the
+        # timeout path must reap it instead of waiting the 8 s + 5 s kill grace periods.
+        local_ci.set_subreaper()
+        started = time.monotonic()
+        result = local_ci.run_child(
+            [
+                sys.executable,
+                "-c",
+                "import subprocess, time; subprocess.Popen(['sleep', '60']); time.sleep(60)",
+            ],
+            cwd=self.tmp,
+            env=os.environ.copy(),
+            log=self.tmp / "timeout.log",
+            timeout=1,
+            output_cap=10000,
+            secrets_=[],
+            stop={},
+        )
+        self.assertEqual(result["status"], "timeout")
+        self.assertLess(time.monotonic() - started, 6)
+
     def test_output_is_bounded(self):
         self.set_stages(
             [
@@ -582,6 +606,9 @@ class PipelineTests(RepoCase):
         self.assertDead(pidfile)
 
     def test_leak_evidence_is_redacted_and_survives_unreaped(self):
+        # run_child relies on the runner being a child subreaper (local_ci.run sets it);
+        # state it here so the test does not depend on an earlier test having done so.
+        local_ci.set_subreaper()
         result = local_ci.run_child(
             [
                 sys.executable,
@@ -761,13 +788,18 @@ class PipelineTests(RepoCase):
         self.set_stages([stage("fx", "print(1)", fixtures=True)])
         self.commit_pending()
         tree = sh(self.repo, "git", "rev-parse", "HEAD^{tree}")
-        started = local_ci.run_pipeline(
-            self.repo,
-            home=self.home,
-            guard=FAKE_GUARD,
-            probe_fixtures=False,
-            log=lambda _m: None,
-        )
+        # The stage fails for want of a fixture environment; a developer shell that has
+        # one exported must not change that.
+        with mock.patch.dict(os.environ):
+            os.environ.pop("STATEACTION_LOCAL_FIXTURES", None)
+            os.environ.pop("E2E_EXTERNAL_FIXTURES", None)
+            started = local_ci.run_pipeline(
+                self.repo,
+                home=self.home,
+                guard=FAKE_GUARD,
+                probe_fixtures=False,
+                log=lambda _m: None,
+            )
         self.assertEqual(started["verdict"], "FAIL")
         self.assertFalse((self.home / "receipts" / f"{tree}.json").exists())
 
@@ -2006,7 +2038,15 @@ class StageFileTests(unittest.TestCase):
             if item["argv"][:3] == ["pnpm", "exec", "nx"]:
                 self.assertNotIn("--skip-nx-cache", joined, item["id"])
                 if "run-many" in joined:
-                    self.assertIn("--parallel=1", joined, item["id"])
+                    # Only the light static stage parallelises (3 x ~0.6 GB: tsc, prettier,
+                    # unit, syntax); web:build is parallelism:false and the native
+                    # toolchains stay serial.
+                    want = (
+                        "--parallel=3"
+                        if item["id"] == "server-tooling"
+                        else "--parallel=1"
+                    )
+                    self.assertIn(want, joined, item["id"])
             self.assertNotIn("docker", joined)
         controller = next(
             s for s in spec["stages"] if s["id"] == "jobs-controller-integration"

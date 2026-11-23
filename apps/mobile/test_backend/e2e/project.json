@@ -32,6 +32,7 @@
         "flutterSources",
         "{workspaceRoot}/packages/server/test-auth/**/*",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/scripts/platform/process-wait.mjs",
         "flutterToolchain"
       ],
       "options": {
