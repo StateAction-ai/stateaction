@@ -204,7 +204,11 @@ when the same owner is verified again.
   migrator, serves the production `next build` with `next start` (Next
   connects only as `stateaction_app`), puts a loopback TCP relay in front for
   offline simulation and exposes token-protected operator SQL actions. Then
-  `real_backend_auth_test.dart` runs the app's own client code over real HTTP:
+  `real_backend_auth_test.dart` runs the app's own client code over real HTTP
+  (each sign-in sends its own test-only `x-forwarded-for` from
+  `client_address.dart`, so the real per-address sign-in limit is never waited
+  out; one dedicated test fixes one address and proves the limit rejects and
+  recovers after the server's own window):
   wrong/correct password, `/me` roles and expiry equal to the session row,
   staff/customer/pending/disabled refused before native Start, real
   `Set-Cookie` refresh-window re-issue (Max-Age/Expires), server-side expiry

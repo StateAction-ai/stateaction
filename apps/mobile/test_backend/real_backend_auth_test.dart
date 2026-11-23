@@ -20,6 +20,8 @@ import "package:stera/src/modules/capture_ownership/capture_owner_gate.dart";
 import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
 import "package:stera_recorder/stera_recorder.dart";
 
+import "client_address.dart";
+
 final _env = Platform.environment;
 final String? _origin = _env["SA17_BACKEND_ORIGIN"];
 final String _mode = _env["SA17_BACKEND_MODE"] ?? "";
@@ -50,10 +52,11 @@ class _Control {
 }
 
 /// One simulated install: its own secure store, jar, controller and ledger.
-int rateLimitedSignIns = 0;
-
 class _Device {
-  _Device(this.origin, this.secrets, this.ledger);
+  /// [addresses] (local throwaway backend only) gives each sign-in its own
+  /// client address; null sends no forwarded address (remote mode).
+  _Device(this.origin, this.secrets, this.ledger, {this.addresses});
+  final ClientAddressHttpClient? addresses;
   final BackendOrigin origin;
   final MemorySecretStore secrets;
   final CaptureOwnerLedger ledger;
@@ -65,6 +68,7 @@ class _Device {
       origin: origin,
       jar: SessionCookieJar(origin: origin, store: secrets),
       clientKind: "test",
+      client: addresses,
     );
     return controller = AuthSessionController(
       client: client,
@@ -95,26 +99,12 @@ class _Device {
     return (clearance, dir);
   }
 
-  /// Real sign-in. Better Auth rate-limits sign-in per client address; this
-  /// harness never spoofs addresses, so it waits out the window and retries.
-  Future<AuthOutcome<ServerIdentity>> signIn(
-    String email,
-    String password,
-  ) async {
-    for (var attempt = 0; ; attempt++) {
-      final outcome = await controller.signInWithEmail(
-        email: email,
-        password: password,
-      );
-      if (outcome is AuthRejected<ServerIdentity> &&
-          outcome.reason == AuthRejection.rateLimited &&
-          attempt < 4) {
-        rateLimitedSignIns++;
-        await Future<void>.delayed(const Duration(seconds: 11));
-        continue;
-      }
-      return outcome;
-    }
+  /// Real sign-in. Better Auth rate-limits sign-in per client address, so
+  /// each call comes from its own address (see client_address.dart) and the
+  /// real limit is exercised only by the dedicated rate-limit test.
+  Future<AuthOutcome<ServerIdentity>> signIn(String email, String password) {
+    addresses?.rotate();
+    return controller.signInWithEmail(email: email, password: password);
   }
 
   Future<String?> cookieHeader() =>
@@ -167,7 +157,12 @@ void main() {
   late CaptureOwnerLedger ledger;
 
   Future<_Device> device() async {
-    final d = _Device(origin, MemorySecretStore(), ledger);
+    final d = _Device(
+      origin,
+      MemorySecretStore(),
+      ledger,
+      addresses: _mode == "remote" ? null : ClientAddressHttpClient(),
+    );
     d.boot();
     return d;
   }
@@ -178,10 +173,6 @@ void main() {
     await ledger.load();
   });
   tearDown(() => tmp.delete(recursive: true));
-  tearDownAll(() {
-    // ignore: avoid_print
-    print("real sign-in rate-limit waits: $rateLimitedSignIns");
-  });
 
   if (_mode == "remote") {
     // Existing backend (e.g. root QA HTTPS). One seeded collector, few
@@ -257,6 +248,39 @@ void main() {
       "role": "collector",
       "enabled": true,
     });
+  });
+
+  test("real sign-in rate limit rejects repeated attempts from one address and "
+      "allows again after the window", () async {
+    // One fixed address: the only test that shares a limiter bucket. It
+    // waits once, only until the server's own window has passed.
+    final d = _Device(
+      origin,
+      MemorySecretStore(),
+      ledger,
+      addresses: ClientAddressHttpClient(null, "203.0.113.200"),
+    )..boot();
+    var rejectedAt = 0;
+    for (var i = 1; i <= 10 && rejectedAt == 0; i++) {
+      final out = await d.signIn(users["collector"]!, "$password-wrong");
+      if (out is AuthRejected<ServerIdentity> &&
+          out.reason == AuthRejection.rateLimited) {
+        rejectedAt = i;
+      }
+    }
+    expect(rejectedAt, greaterThan(1), reason: "limit never triggered");
+    expect(rejectedAt, lessThanOrEqualTo(5), reason: "configured attempts");
+    expect(await d.client.jar.hasCredentials, isFalse);
+
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    AuthOutcome<ServerIdentity> after;
+    do {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      after = await d.signIn(users["collector"]!, password);
+    } while (after is AuthRejected<ServerIdentity> &&
+        after.reason == AuthRejection.rateLimited &&
+        DateTime.now().isBefore(deadline));
+    expect(after, isA<AuthOk<ServerIdentity>>(), reason: "$after");
   });
 
   test(
