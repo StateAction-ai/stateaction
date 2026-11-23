@@ -1,44 +1,70 @@
 # StateAction.ai
 
-Private monorepo: [StateAction-ai/stateaction](https://github.com/StateAction-ai/stateaction). Work is tracked in [Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
+Open source pipeline for robotics researchers. A person records first-person
+video on an Android phone, the backend turns the recording into temporal action
+segments, a caption per segment and hand pose, and a researcher reviews all
+three in a web console with a Rerun preview for hand pose.
 
-Nx coordinates native pnpm, uv and Flutter/pub/Gradle commands. Lefthook checks staged content; the full local CI (`pnpm ci:local`) and `pnpm ci:merge` deliver one PR per ticket. Use Linear's exact provided branch name. [Repository workflow](docs/repository-workflow.md) · [Agent instructions](AGENTS.md)
+License: [Apache-2.0](LICENSE). Third-party terms: [NOTICE](NOTICE).
 
-| Source                                  | Purpose                                                        |
-| --------------------------------------- | -------------------------------------------------------------- |
-| `apps/mobile`                           | Existing Flutter collector                                     |
-| `packages/stera_recorder`               | Android/iOS recorder and native tests                          |
-| `apps/web`                              | Next.js console/API foundation                                 |
-| `apps/jobs`                             | Official Render workflow/local executor foundation             |
-| `packages/server`, `packages/contracts` | Server-only helpers and versioned platform contracts           |
-| `workers/processing`                    | Python worker foundation                                       |
-| `scripts`, `infra`                      | Reproducible tooling and local Postgres/S3-compatible services |
+## Status
 
-## Setup
+Early and under active development. The mobile recorder, upload path, Postgres
+and S3-compatible storage, web console, job orchestration and the Python
+processing worker are in the repository and tested on a local stack and an
+Android emulator. Production processing of two-hour recordings, iOS, and
+geometry/depth/mesh processing are not finished or are deferred. Host tests and
+emulator runs do not qualify physical sensors, iOS signing or long recordings.
+
+Segmentation and captioning currently use NVIDIA FLORA (TempSeg and Captioner)
+behind a replaceable interface. FLORA is under a non-commercial research
+license and is not included here; you obtain it from NVIDIA under its own terms.
+See [docs/delivery-scope.md](docs/delivery-scope.md) for the full scope.
+
+## Architecture
+
+| Source                                  | Purpose                                                       |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `apps/mobile`                           | Flutter collector for Android                                 |
+| `packages/stera_recorder`               | Android/iOS recorder plugin and native tests                  |
+| `apps/web`                              | Next.js console and API                                       |
+| `apps/jobs`                             | Render workflow and local job executor                        |
+| `packages/server`, `packages/contracts` | Server-only helpers and versioned platform contracts          |
+| `workers/processing`                    | Python processing worker                                      |
+| `workers/flora`                         | Optional tooling to run FLORA on Modal (you supply the model) |
+| `scripts`, `infra`                      | Tooling and local Postgres/S3-compatible services             |
+
+Flow: Android capture, upload, Postgres plus object storage, job orchestration,
+processing (decode, hand pose, segmentation, captioning), review in the web UI.
+The reference deployment targets Render with Cloudflare R2 storage.
+
+## Quick start
+
+Requirements: Node 24.22.2, pnpm 10.33.0, uv 0.13.6; Flutter, JDK 21 and the
+Android SDK for mobile work. See [platform setup](scripts/platform/README.md)
+and [mobile setup](scripts/mobile/README.md).
 
 ```sh
 git clone https://github.com/StateAction-ai/stateaction.git
 cd stateaction
-```
-
-Follow the [platform setup](scripts/platform/README.md) for pinned Node/pnpm/uv and the [mobile setup](scripts/mobile/README.md) for Flutter/JDK/Android. Then run:
-
-```sh
 make install
 make check
-pnpm affected --base=origin/main --head=HEAD
 ```
 
-`make check` covers all projects. CI selects affected work and requires Android checks when mobile/toolchain/hook inputs change. The [local runtime smoke](scripts/platform/README.md#real-local-runtime) exercises real Postgres/S3, Next API, the official Render local runner and Python without a cloud deployment.
+The [local runtime smoke](scripts/platform/README.md#real-local-runtime) runs
+real Postgres, S3-compatible storage, the Next API, the job runner and the
+Python worker without any cloud account.
 
-Mobile and recorder source are ordinary repository files; no app submodule is needed. The optional `stera-sdk` submodule supports historical diagnostics only. [Source history and licenses](third_party/stera-app/IMPORT.md) · [Current import evidence](docs/validation/sa-10-import.json)
+## Non-goals
 
-## Scope and data
+- Not a hosted service; you run and pay for your own deployment and GPU.
+- Not a bundle of model weights. No FLORA source, weights or recordings ship here.
+- No geometry, depth or mesh reconstruction and no iOS release yet.
+- Raw recordings and captured images never belong in Git.
 
-This published baseline contains the existing JPEG-in-MCAP recorder and a tested platform skeleton. H.264 capture, replacement auth/uploads, production processing and review features remain separate tickets. The earlier combined implementation branch is preserved while those changes enter through their own PRs. Host tests and Android builds do not qualify physical sensors, iOS signing or long recordings.
+## Contributing and security
 
-Keep recordings, images, credentials, private `.env`, APKs and generated state out of Git and caches. The checked-in MCAP fixture is synthetic. APK builds are uncached because Flutter bundles local configuration.
-
-Run simulations before involving the user's phone. Physical operations require the [verified personal-profile helper](scripts/ANDROID_PERSONAL_DEVICE.md); work-profile operations are forbidden. Capture requires the user's intentional Start.
-
-Earlier experiments remain in [capture validation](docs/pixel-v3-physical-validation.md), [geometry regressions](docs/geometry-v3-capture-regression.md), [hand-pose auditing](docs/hand-geometry-audit-2026-10-21.md) and [WiLoR comparison](docs/wilor-full-hand-benchmark.md). These are historical evidence, not the current setup or proof of training-quality labels.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Maintainer and agent workflow notes live in [AGENTS.md](AGENTS.md) and
+[docs/repository-workflow.md](docs/repository-workflow.md).

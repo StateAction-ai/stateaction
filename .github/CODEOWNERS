@@ -1,0 +1,9 @@
+# Every change needs a maintainer review. Narrow rules go below as teams grow.
+*                      @timothywangdev
+/.github/              @timothywangdev
+/scripts/local-ci/     @timothywangdev
+/scripts/automation/   @timothywangdev
+/scripts/deploy/       @timothywangdev
+/LICENSE               @timothywangdev
+/NOTICE                @timothywangdev
+/SECURITY.md           @timothywangdev

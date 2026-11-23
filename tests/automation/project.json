@@ -5,7 +5,11 @@
   "targets": {
     "test": {
       "executor": "nx:run-commands",
-      "inputs": ["default", "automationSources"],
+      "inputs": [
+        "default",
+        "automationSources",
+        "{workspaceRoot}/.github/workflows/*.yml"
+      ],
       "options": {
         "command": "python3 -m unittest discover -s tests/automation -p 'test_*.py' -v"
       }

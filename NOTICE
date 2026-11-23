@@ -1,0 +1,43 @@
+StateAction.ai
+Copyright 2026 StateAction.ai
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This product includes third-party software. Each component stays under its own
+license; the license texts travel with the files named below.
+
+Included in this repository
+---------------------------
+- Stera App (mobile collector and recorder plugin): Copyright 2026 FPV Labs,
+  Apache-2.0. Imported source lives in apps/mobile and packages/stera_recorder;
+  see third_party/stera-app/{LICENSE,NOTICE,IMPORT.md} and
+  packages/stera_recorder/LICENSE.
+- Bundled mobile fonts (Geist, EB Garamond and others): SIL Open Font License
+  1.1, not Apache-2.0; see apps/mobile/assets/fonts/OFL.txt.
+- Foxglove schemas and Protocol Buffers: see
+  packages/contracts/capture/LICENSE-FOXGLOVE-SCHEMAS and
+  packages/contracts/capture/LICENSE-PROTOBUF (copies also under
+  packages/stera_recorder/android and spikes/android/capture).
+- Optional git submodule stera-sdk (https://github.com/fpv-labs/stera-sdk,
+  Apache-2.0), used for historical diagnostics only.
+
+Dependencies (not redistributed in this repository)
+---------------------------------------------------
+Installed from npm, PyPI, pub.dev and Maven under their own licenses
+(predominantly MIT, Apache-2.0, BSD and ISC). Notable terms:
+- MPL-2.0: lightningcss (npm); certifi, pathspec, tqdm (PyPI); dbus, nm, upower
+  (pub). File-level copyleft; unmodified use.
+- LGPL-3.0-or-later: @img/sharp-libvips-linux-x64 (npm, dynamically linked by
+  sharp through Next.js image handling).
+- ARCore (com.google.ar:core): governed by Google's ARCore terms and requires
+  Google Play Services for AR at runtime.
+- org.json (JSON license): test-only dependency.
+
+NVIDIA FLORA is NOT part of this repository
+-------------------------------------------
+No FLORA source, weights or derived checkpoints are included. The processing
+pipeline reaches segmentation and captioning models only through a replaceable
+interface. NVIDIA FLORA (TempSeg and Captioner) is available under NVIDIA's
+non-commercial research license; you must obtain it yourself and accept that
+license before use. Nothing in this repository's Apache-2.0 license grants
+rights to FLORA or its weights.
