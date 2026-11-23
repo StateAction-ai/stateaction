@@ -1,0 +1,199 @@
+{
+  "contract": "http.segment-marks.v1",
+  "cases": [
+    {
+      "name": "listing",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 2,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "no accepted result",
+      "input": {
+        "document": {
+          "jobId": null,
+          "segmentsSha256": null,
+          "segmentCount": 0,
+          "checkedCount": 0,
+          "issueCount": 0,
+          "marks": []
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "good row has a null type",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 2,
+              "verdict": "good",
+              "issueType": null,
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "counts are integers",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": "1",
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 2,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/checkedCount"
+        ]
+      }
+    },
+    {
+      "name": "row revision starts at 1",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 0,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/marks/0/revision"
+        ]
+      }
+    },
+    {
+      "name": "row has no extra field",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 2,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z",
+              "reviewerUserId": "u"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "missing marks",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown field",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 2,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z"
+            }
+          ],
+          "extra": 1
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

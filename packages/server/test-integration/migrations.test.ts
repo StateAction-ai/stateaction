@@ -41,6 +41,7 @@ const TABLES = [
   "recording_seals",
   "recordings",
   "reviews",
+  "segment_marks",
   "service_capabilities",
   "session",
   "source_cleanup_proofs",
@@ -64,7 +65,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-011 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-012 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -76,7 +77,8 @@ test("published migrations 001-005 are byte-identical; 006-011 follow", async ()
   assert.equal(files[8]?.name, "009_output_acceptance.sql");
   assert.equal(files[9]?.name, "010_source_cleanup_proof.sql");
   assert.equal(files[10]?.name, "011_stage_runs.sql");
-  assert.equal(files.length, 11);
+  assert.equal(files[11]?.name, "012_segment_marks.sql");
+  assert.equal(files.length, 12);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -91,7 +93,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -104,7 +106,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       adopted: [],
       appRoleGranted: true,
     });
@@ -149,8 +151,8 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const broken = [
       ...files,
       {
-        version: 12,
-        name: "012_broken.sql",
+        version: 13,
+        name: "013_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -162,7 +164,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const left = await db.owner.query(
       "SELECT to_regclass('releases') AS t, max(version) AS v FROM platform_schema_migrations",
     );
-    assert.deepEqual(left.rows[0], { t: null, v: 11 });
+    assert.deepEqual(left.rows[0], { t: null, v: 12 });
   } finally {
     await db.close();
   }
@@ -178,7 +180,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -196,9 +198,9 @@ test("concurrent migrators serialize and apply each version once", async () => {
         migrateDatabase({ ownerUrl: db.ownerUrl }),
       ),
     );
-    assert.equal(reports.filter((r) => r.applied.length === 11).length, 1);
+    assert.equal(reports.filter((r) => r.applied.length === 12).length, 1);
     assert.equal(
-      reports.filter((r) => r.alreadyApplied.length === 11).length,
+      reports.filter((r) => r.alreadyApplied.length === 12).length,
       3,
     );
   } finally {
@@ -260,6 +262,10 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
       "INSERT INTO job_stage_evidence (job_id, stage, kind, execution_ref, recorded_by) VALUES (gen_random_uuid(), 'segment', 'local_child_reaped', 'x', 'x')",
       "DELETE FROM job_stage_evidence",
       "SELECT stateaction_grant_stage_runs('stateaction_app')",
+      // SA-99: marks are append-only; the web role can only SELECT and INSERT.
+      "UPDATE segment_marks SET note = 'x'",
+      "DELETE FROM segment_marks",
+      "SELECT stateaction_grant_segment_marks('stateaction_app')",
     ];
     const results: Record<string, string> = {};
     for (const sql of denied) {
@@ -373,16 +379,68 @@ test("hosted path: migrateDatabase creates the restricted role, grants via the h
   }
 });
 
-const roleSnapshot = async (pool: pg.Pool) =>
+type RoleRow = {
+  oid: number;
+  rolname: string;
+  rolsuper: boolean;
+  rolcreatedb: boolean;
+  rolcreaterole: boolean;
+  rolreplication: boolean;
+  rolbypassrls: boolean;
+  rolcanlogin: boolean;
+};
+
+/**
+ * Roles are cluster-wide and the fixture PostgreSQL is shared: other suites and other
+ * agents' runs create and drop roles with their own per-run prefixes at any time.
+ */
+const roleSnapshot = async (pool: pg.Pool): Promise<RoleRow[]> =>
   (
     await pool.query(
-      `SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolcanlogin
-       FROM pg_roles ORDER BY rolname`,
+      `SELECT oid::int AS oid, rolname, rolsuper, rolcreatedb, rolcreaterole, rolreplication,
+              rolbypassrls, rolcanlogin
+       FROM pg_roles ORDER BY oid`,
     )
   ).rows;
 
+/** Per-run role names of the other suites that share the cluster (never ours). */
+const OTHER_RUN_ROLE = /^sa_(auth|fresh|hosted)_[0-9a-f_]+$/;
+
+/**
+ * What this test must not cause. By role OID: a role that existed before and still exists
+ * keeps its flags; a role that vanished or appeared is tolerated only when its name is
+ * another run's known per-run name, does not carry this database's tag and is not one of
+ * the names this test feeds in. Anything else (a new `sa_evil`, a dropped
+ * migration_owner, a changed flag) is returned as a problem.
+ */
+function roleChanges(
+  before: RoleRow[],
+  after: RoleRow[],
+  own: { tag: string; inputs: string[] },
+): string[] {
+  const ours = (name: string) =>
+    name.includes(own.tag) ||
+    own.inputs.some((i) => i.toLowerCase() === name.toLowerCase());
+  const foreign = (name: string) => OTHER_RUN_ROLE.test(name) && !ours(name);
+  const problems: string[] = [];
+  const now = new Map(after.map((r) => [r.oid, r]));
+  const was = new Map(before.map((r) => [r.oid, r]));
+  for (const r of before) {
+    const k = now.get(r.oid);
+    if (!k) {
+      if (!foreign(r.rolname)) problems.push(`dropped ${r.rolname}`);
+    } else if (JSON.stringify(k) !== JSON.stringify(r))
+      problems.push(`changed ${r.rolname}`);
+  }
+  for (const r of after)
+    if (!was.has(r.oid) && !foreign(r.rolname))
+      problems.push(`created ${r.rolname}`);
+  return problems;
+}
+
 test("hostile app role names are rejected before any SQL reaches the database", async () => {
   const db = await freshDatabase({ migrate: false });
+  const tag = db.name.slice(-12);
   try {
     const before = await roleSnapshot(db.owner);
     const hostile = [
@@ -426,7 +484,14 @@ test("hostile app role names are rejected before any SQL reaches the database", 
         }),
         /plain unquoted identifier/,
       );
-    assert.deepEqual(await roleSnapshot(db.owner), before, "no role changes");
+    assert.deepEqual(
+      roleChanges(before, await roleSnapshot(db.owner), {
+        tag,
+        inputs: hostile,
+      }),
+      [],
+      "no role changes",
+    );
     const table = await db.owner.query(
       "SELECT to_regclass('public.platform_schema_migrations') AS t",
     );
@@ -474,8 +539,11 @@ test("pre-existing privileged or member app roles fail closed without rotation o
       );
     }
     assert.deepEqual(
-      await roleSnapshot(db.owner),
-      before,
+      roleChanges(before, await roleSnapshot(db.owner), {
+        tag,
+        inputs: cases.map(([role]) => role),
+      }),
+      [],
       "role flags unchanged",
     );
     const members = await admin.query(
@@ -542,6 +610,68 @@ test("pre-existing privileged or member app roles fail closed without rotation o
     for (const [role] of cases)
       await admin.query(`DROP ROLE IF EXISTS ${role}`).catch(() => undefined);
     await admin.end();
+    await db.close();
+  }
+});
+
+test("the role comparison fails on a created hostile sa_ role and ignores only other runs' roles", async () => {
+  const db = await freshDatabase({ migrate: false });
+  const tag = db.name.slice(-12);
+  const hostileRole = `sa_evil_${tag.slice(0, 6)}`;
+  try {
+    const before = await roleSnapshot(db.owner);
+    // Another run's role appears and vanishes: tolerated.
+    const other = `sa_auth_${"0".repeat(12)}_${"a".repeat(12)}`;
+    await db.owner.query(`CREATE ROLE ${other} NOLOGIN`);
+    assert.deepEqual(
+      roleChanges(before, await roleSnapshot(db.owner), { tag, inputs: [] }),
+      [],
+    );
+    await db.owner.query(`DROP ROLE ${other}`);
+    // A hostile role that starts with sa_ is a problem, even among other runs' roles.
+    await db.owner.query(`CREATE ROLE ${hostileRole} NOLOGIN`);
+    try {
+      assert.deepEqual(
+        roleChanges(before, await roleSnapshot(db.owner), {
+          tag,
+          inputs: [],
+        }),
+        [`created ${hostileRole}`],
+      );
+    } finally {
+      await db.owner.query(`DROP ROLE ${hostileRole}`);
+    }
+    // A role whose name this test fed in is never tolerated, even if it looks foreign.
+    const fed = `sa_auth_${"1".repeat(12)}`;
+    await db.owner.query(`CREATE ROLE ${fed} NOLOGIN`);
+    try {
+      assert.deepEqual(
+        roleChanges(before, await roleSnapshot(db.owner), {
+          tag,
+          inputs: [fed],
+        }),
+        [`created ${fed}`],
+      );
+    } finally {
+      await db.owner.query(`DROP ROLE ${fed}`);
+    }
+    // A flag change or a dropped non-foreign role is a problem.
+    const flagged = (await roleSnapshot(db.owner)).map((r) =>
+      r.rolname === "migration_owner" ? { ...r, rolsuper: !r.rolsuper } : r,
+    );
+    assert.deepEqual(
+      roleChanges(await roleSnapshot(db.owner), flagged, { tag, inputs: [] }),
+      ["changed migration_owner"],
+    );
+    assert.deepEqual(
+      roleChanges(
+        await roleSnapshot(db.owner),
+        (await roleSnapshot(db.owner)).filter((r) => r.rolname !== "bootstrap"),
+        { tag, inputs: [] },
+      ),
+      ["dropped bootstrap"],
+    );
+  } finally {
     await db.close();
   }
 });

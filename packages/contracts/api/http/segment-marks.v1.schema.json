@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/segment-marks.v1.json",
+  "title": "Segment marks v1",
+  "description": "GET /api/v1/recordings/{id}/segment-marks (staff only): the newest mark of every marked segment of the recording's current accepted result. jobId and segmentsSha256 pin that result (both null when the recording has no accepted segments). segmentCount is the accepted segment count; checkedCount counts segments with a mark and issueCount those whose newest mark is an issue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "segmentsSha256",
+    "segmentCount",
+    "checkedCount",
+    "issueCount",
+    "marks"
+  ],
+  "properties": {
+    "jobId": {
+      "oneOf": [
+        { "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid" },
+        { "type": "null" }
+      ]
+    },
+    "segmentsSha256": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        { "type": "null" }
+      ]
+    },
+    "segmentCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "checkedCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "issueCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "marks": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segmentId",
+          "revision",
+          "verdict",
+          "issueType",
+          "note",
+          "createdAt"
+        ],
+        "properties": {
+          "segmentId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "verdict": { "enum": ["good", "issue"] },
+          "issueType": {
+            "oneOf": [
+              { "enum": ["boundary", "caption", "hand_pose"] },
+              { "type": "null" }
+            ]
+          },
+          "note": {
+            "oneOf": [
+              { "type": "string", "maxLength": 2000 },
+              { "type": "null" }
+            ]
+          },
+          "createdAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          }
+        }
+      }
+    }
+  }
+}

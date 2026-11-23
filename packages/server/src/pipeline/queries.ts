@@ -28,6 +28,11 @@ import {
  */
 
 // The one place a recording is classified (list filter and detail share it).
+/** The digest of the job's newest completed segments.json (the one marks are pinned to). */
+const LATEST_SEGMENTS_SHA = `(SELECT x.sha256 FROM files x
+  WHERE x.job_id = j.id AND x.role = 'segments_json' AND x.purpose = 'output'
+    AND x.state IN ('completed', 'verified')
+  ORDER BY x.created_at DESC, x.id DESC LIMIT 1)`;
 const STATUS_SQL = `CASE
   WHEN b.rec_status = 'cancelled' OR b.job_state = 'cancelled' THEN 'cancelled'
   WHEN b.job_state IN ('submit_unknown', 'needs_attention') THEN 'needs_attention'
@@ -53,7 +58,14 @@ const BASE_SQL = `WITH staff AS (
       OR j.workflow_run_ref IS NOT NULL) AS job_submitted,
     a.outcome AS admission_outcome, a.rejection_code,
     (j.recipe IS NOT NULL) AS has_recipe,
-    j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count
+    j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count,
+    (SELECT count(DISTINCT m.segment_id)::int FROM segment_marks m
+      WHERE m.job_id = j.id AND m.segments_sha256 = ${LATEST_SEGMENTS_SHA}) AS checked_count,
+    (SELECT count(*)::int FROM (
+       SELECT DISTINCT ON (m.segment_id) m.verdict FROM segment_marks m
+       WHERE m.job_id = j.id AND m.segments_sha256 = ${LATEST_SEGMENTS_SHA}
+       ORDER BY m.segment_id, m.revision DESC) latest
+      WHERE latest.verdict = 'issue') AS issue_count
   FROM recordings r
   JOIN "user" u ON u.id = r.owner_user_id
   LEFT JOIN jobs j ON j.id = r.current_job_id AND j.recording_id = r.id
@@ -99,6 +111,8 @@ type Row = {
   failed_window_count: number | null;
   caption_count: number | null;
   caption_failed_count: number | null;
+  checked_count: number | null;
+  issue_count: number | null;
   file_count: number | null;
   total_bytes: string | null;
   confirmed_bytes: string | null;
@@ -205,8 +219,9 @@ function toListItem(row: Row): PipelineListItem {
       failedWindows: row.failed_window_count,
       captions: row.caption_count,
       captionsFailed: row.caption_failed_count,
-      // Team checks arrive with SA-99 (T14); zero until then, labelled in the UI.
-      teamChecks: 0,
+      // Segments with a team mark, and those whose newest mark is an issue.
+      teamChecks: row.checked_count ?? 0,
+      teamIssues: row.issue_count ?? 0,
     },
     reviewable: row.job_state === "succeeded" && row.segment_count !== null,
   };

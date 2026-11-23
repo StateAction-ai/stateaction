@@ -261,10 +261,14 @@ export default async function PipelinePage({
                     data-testid="count-checks"
                     className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
                   >
-                    —
+                    {item.counts.teamChecks === 0
+                      ? "—"
+                      : item.counts.teamChecks}
                     <span className="block font-sans text-[11px] text-muted max-md:inline">
                       {" "}
-                      none recorded yet
+                      {item.counts.teamChecks === 0
+                        ? "none recorded yet"
+                        : `checked${item.counts.teamIssues ? `, ${item.counts.teamIssues} issue` : ""}`}
                     </span>
                   </td>
                   <td className="relative z-10 px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">

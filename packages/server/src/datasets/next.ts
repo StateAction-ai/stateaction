@@ -3,9 +3,11 @@ import { authenticateHuman } from "../auth/guard.js";
 import { errorResponse, newRequestId } from "../auth/http.js";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
 import { serverConfig } from "../config.js";
+import { s3ObjectReader } from "../admission/object-reader.js";
 import { storageClient } from "../storage.js";
 import { S3ReadSigner } from "./broker.js";
 import { datasetRoutes, type DatasetAuthenticate } from "./http.js";
+import { storedSegmentIds } from "./marks.js";
 
 /**
  * The Better Auth boundary for dataset routes. Every request re-reads the
@@ -76,6 +78,10 @@ export function datasetRouteHandlers(get: () => AuthRuntime = authRuntime) {
         config.bucket,
       ),
       authenticate: datasetAuthenticator(get),
+      segmentIds: storedSegmentIds(
+        runtime.pool,
+        s3ObjectReader(config, { timeoutMs: 15_000 }),
+      ),
     }));
   };
   const guarded =
@@ -110,5 +116,7 @@ export function datasetRouteHandlers(get: () => AuthRuntime = authRuntime) {
     getClipReview: guarded((r) => r.getClipReview),
     commitClipReview: guarded((r) => r.commitClipReview),
     readClip: guarded((r) => r.readClip),
+    getSegmentMarks: guarded((r) => r.getSegmentMarks),
+    postSegmentMark: guarded((r) => r.postSegmentMark),
   };
 }

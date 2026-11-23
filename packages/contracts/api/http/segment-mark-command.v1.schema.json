@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/segment-mark-command.v1.json",
+  "title": "Segment mark command v1",
+  "description": "POST /api/v1/recordings/{id}/segments/{segmentId}/marks body (staff only). Appends one Good or Issue mark revision for one segment of the exact accepted result named by jobId and segmentsSha256. markId is the idempotency key (identical replay returns the stored mark, a changed body with the same markId conflicts). expectedRevision is the latest revision the reviewer saw for that segment (0 when none): a stale value conflicts. verdict 'issue' requires issueType and 'good' forbids it. A mark never edits model output.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "markId",
+    "jobId",
+    "segmentsSha256",
+    "expectedRevision",
+    "verdict"
+  ],
+  "properties": {
+    "markId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "segmentsSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "expectedRevision": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483646
+    },
+    "verdict": { "enum": ["good", "issue"] },
+    "issueType": { "enum": ["boundary", "caption", "hand_pose"] },
+    "note": { "type": "string", "maxLength": 2000 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "verdict": { "const": "issue" } },
+        "required": ["verdict"]
+      },
+      "then": {
+        "properties": { "issueType": true },
+        "required": ["issueType"]
+      },
+      "else": {
+        "properties": { "issueType": true },
+        "not": { "required": ["issueType"] }
+      }
+    }
+  ]
+}

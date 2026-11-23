@@ -7,9 +7,11 @@
 // on the first recording. The review video and the clip RRD are then replaced by a
 // synthetic 24 s testsrc mp4 and the golden worker RRD, so the browser plays and
 // the viewer loads real bytes. The SA-96 dev seed (real worker, ~2 min per
-// scenario) is exercised separately by review-seeded-browser.mjs.
+// scenario) is exercised separately by review-seeded-browser.mjs. SA-99 adds the
+// Good, Issue and Next unchecked flow (G, B, N) and its persistence on the second recording.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { createServer, request } from "node:http";
 import { createRequire } from "node:module";
@@ -19,7 +21,13 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { findChrome, launchChrome } from "./chrome.mjs";
-import { SESSION, call, signIn, startStack } from "./harness.mjs";
+import {
+  SESSION,
+  browserHeaders,
+  call,
+  signIn,
+  startStack,
+} from "./harness.mjs";
 
 const web = new URL("../", import.meta.url);
 const serverDir = fileURLToPath(
@@ -510,4 +518,153 @@ test("staff only: customer, collector and anonymous are denied", async () => {
   }
   const anon = await call(stack.origin, `/api/v1/recordings/${id}/annotations`);
   assert.equal(anon.status, 401);
+});
+
+test("G, B and N mark segments, survive a reload and feed the counts; customers cannot mark", async () => {
+  const rec = seeded.withoutClip;
+  const press = async (key) => {
+    const base = { key, code: `Key${key.toUpperCase()}`, text: key };
+    await chrome.send("Input.dispatchKeyEvent", { type: "keyDown", ...base });
+    await chrome.send("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+  };
+  const summary = () =>
+    ev(`document.querySelector('[data-testid=mark-summary]').innerText`);
+  const badge = (i) =>
+    ev(
+      `(() => { const b = document.querySelectorAll('[data-testid=rail-card]')[${i}]?.querySelector('[data-testid=mark-badge]'); return b ? { mark: b.dataset.mark, text: b.innerText.trim() } : null })()`,
+    );
+  const chip = (f) =>
+    ev(`document.querySelector('[data-filter=${f}]').innerText`);
+  const doc = await apiDoc(await signIn(stack, "staff"), rec.recordingId);
+  await open(`/review/${rec.recordingId}`);
+  const total = (await cards()).length;
+  assert.equal(total, doc.segments.rows.length);
+  assert.ok(total >= 3, "the seed has at least three segments");
+  // Marks are append-only and this test runs on a fresh stack: nothing is marked yet.
+  await until(
+    () =>
+      ev(
+        `document.querySelector('[data-marks-loaded]')?.dataset.marksLoaded === 'true'`,
+      ),
+    "the marks listing loaded",
+  );
+  assert.equal(await summary(), "0 checked, 0 issue");
+  assert.equal(await chip("unchecked"), `Unchecked ${total}`);
+  // G marks the selected segment Good.
+  await clickUntil(
+    `document.querySelectorAll('[data-testid=rail-card]')[0].click()`,
+    `document.querySelectorAll('[data-testid=rail-card]')[0].dataset.selected === 'true'`,
+    "card 0 selected",
+  );
+  await press("g");
+  await until(async () => (await badge(0))?.mark === "good", "card 0 is Good");
+  assert.equal(await summary(), "1 checked, 0 issue");
+  // N moves to the next unchecked segment, B marks it Issue (boundary by default).
+  await press("n");
+  await until(async () => (await selectedIndex()) === 1, "N selected card 1");
+  await press("b");
+  await until(async () => (await badge(1))?.mark === "issue", "card 1 Issue");
+  assert.deepEqual(await badge(1), { mark: "issue", text: "Boundary" });
+  assert.equal(await summary(), "2 checked, 1 issue");
+  // The issue-type picker appends a new revision with the chosen type.
+  // Keys keep working after a real click focused a mark button (no stopPropagation).
+  await ev(
+    `(() => { const b = document.querySelector('[data-issue-type=caption]'); b.focus(); b.click(); })()`,
+  );
+  await until(
+    async () => (await badge(1))?.text === "Caption",
+    "issue type is Caption",
+  );
+  assert.equal(await summary(), "2 checked, 1 issue");
+  // N skips the checked segments: the next unchecked one is card 2.
+  await press("n");
+  await until(async () => (await selectedIndex()) === 2, "N selected card 2");
+  assert.equal(await chip("issue"), "Issue 1");
+  assert.equal(await chip("unchecked"), `Unchecked ${total - 2}`);
+  // The server holds the newest revision per segment, pinned to the accepted result.
+  const jar = await signIn(stack, "staff");
+  const listed = await call(
+    stack.origin,
+    `/api/v1/recordings/${rec.recordingId}/segment-marks`,
+    { jar },
+  );
+  assert.equal(listed.status, 200, listed.text);
+  const data = JSON.parse(listed.text).data;
+  assert.equal(validateValue("http.segment-marks.v1", data).valid, true);
+  assert.equal(data.jobId, rec.jobId);
+  assert.deepEqual(
+    [data.segmentCount, data.checkedCount, data.issueCount],
+    // segmentCount counts the accepted segments; the rail also lists failed windows.
+    [doc.segments.rows.filter((r) => r.status === "ok").length, 2, 1],
+  );
+  assert.deepEqual(
+    data.marks.map((m) => [m.verdict, m.issueType, m.revision]).sort(),
+    [
+      ["good", null, 1],
+      ["issue", "caption", 2],
+    ].sort(),
+  );
+  // A reload shows the same marks and the Issue and Unchecked chips filter by them.
+  await open(`/review/${rec.recordingId}`);
+  await until(
+    () =>
+      ev(
+        `document.querySelector('[data-marks-loaded]')?.dataset.marksLoaded === 'true'`,
+      ),
+    "the marks listing reloaded",
+  );
+  await until(async () => (await summary()) === "2 checked, 1 issue", "reload");
+  assert.equal((await badge(0))?.mark, "good");
+  assert.equal((await badge(1))?.text, "Caption");
+  assert.equal((await badge(2))?.mark, "none");
+  await clickUntil(
+    `document.querySelector('[data-filter=issue]').click()`,
+    `document.querySelectorAll('[data-testid=rail-card]').length === 1`,
+    "Issue chip applied",
+  );
+  assert.equal((await badge(0))?.text, "Caption");
+  await clickUntil(
+    `document.querySelector('[data-filter=unchecked]').click()`,
+    `document.querySelectorAll('[data-testid=rail-card]').length === ${total - 2}`,
+    "Unchecked chip applied",
+  );
+  // The Pipeline list team-check column shows the same counts.
+  const pipeline = await call(stack.origin, "/pipeline", {
+    jar,
+    headers: {
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+    },
+  });
+  assert.equal(pipeline.status, 200);
+  assert.match(pipeline.text, />\s*2<[^>]*>[^<]*<\/?[^>]*>\s*checked, 1 issue/);
+  // Customers and collectors can neither read nor append marks.
+  const first = data.marks[0].segmentId;
+  for (const label of ["customer", "collector"]) {
+    const other = await signIn(stack, label);
+    const read = await call(
+      stack.origin,
+      `/api/v1/recordings/${rec.recordingId}/segment-marks`,
+      { jar: other },
+    );
+    assert.equal(read.status, 403, label);
+    const write = await call(
+      stack.origin,
+      `/api/v1/recordings/${rec.recordingId}/segments/${first}/marks`,
+      {
+        method: "POST",
+        jar: other,
+        headers: browserHeaders(stack.origin),
+        body: JSON.stringify({
+          markId: randomUUID(),
+          jobId: rec.jobId,
+          segmentsSha256: data.segmentsSha256,
+          expectedRevision: 2,
+          verdict: "good",
+        }),
+      },
+    );
+    assert.equal(write.status, 403, label);
+  }
 });

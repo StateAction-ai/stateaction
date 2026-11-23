@@ -5,7 +5,18 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { buildReviewModel } from "../../lib/review/model";
+import {
+  isTextEntryTarget,
+  markCounts,
+  markKey,
+  markSummary,
+  nextUnchecked,
+  type MarkChoice,
+} from "../../lib/review/marks";
+import { apiMarksStore, memoryMarksStore } from "../../lib/review/marks-store";
+import { useMarks } from "../../lib/review/use-marks";
 import type {
+  Card,
   ReviewBundle,
   ReviewRecordingSummary,
 } from "../../lib/review/types";
@@ -49,6 +60,26 @@ export function ReviewPage({
     bundle.video,
     setMediaDurationS,
   );
+  // Team marks: the API for real results, memory for labelled fixture data.
+  const store = useMemo(
+    () =>
+      bundle.origin === "api"
+        ? apiMarksStore(recording.recordingId)
+        : memoryMarksStore(
+            annotations.job_id,
+            annotations.captions?.segments_sha256 ?? "0".repeat(64),
+          ),
+    [bundle.origin, recording.recordingId, annotations],
+  );
+  const marks = useMarks(store, annotations.job_id);
+  const segmentIds = useMemo(
+    () => model.cards.map((c) => c.segmentId),
+    [model.cards],
+  );
+  const counts = useMemo(
+    () => markCounts(segmentIds, marks.marks),
+    [segmentIds, marks.marks],
+  );
   const { t } = playback;
   const [selected, setSelected] = useState<number | null>(null);
   const [view, setView] = useState<View>(() => fitView(model.durationS));
@@ -60,8 +91,8 @@ export function ReviewPage({
   const activeIndex = activeCardIndex(model.cards, t);
   const active = activeIndex >= 0 ? (model.cards[activeIndex] ?? null) : null;
   const shown = useMemo(
-    () => filterCards(model.cards, query, filter),
-    [model.cards, query, filter],
+    () => filterCards(model.cards, query, filter, marks.marks),
+    [model.cards, query, filter, marks.marks],
   );
   const dimmed = useMemo(() => {
     const keep = new Set(shown.map((c) => c.index));
@@ -109,10 +140,50 @@ export function ReviewPage({
     [model.cards, playback],
   );
 
-  // Keyboard: Space play/pause, arrows previous/next segment, "/" focuses the filter.
+  const choose = useCallback(
+    (card: Card, choice: MarkChoice) => {
+      void marks.choose(card.segmentId, choice);
+    },
+    [marks],
+  );
+  const gotoNextUnchecked = useCallback(() => {
+    const from =
+      selected ?? Math.max(0, activeCardIndex(model.cards, playback.t));
+    const shownSet = new Set(shown.map((c) => c.index));
+    const to = nextUnchecked(segmentIds, marks.marks, from, (i) =>
+      shownSet.has(i),
+    );
+    if (to !== null) selectCard(to);
+  }, [
+    selected,
+    model.cards,
+    playback.t,
+    shown,
+    segmentIds,
+    marks.marks,
+    selectCard,
+  ]);
+
+  // Keyboard: Space play/pause, arrows previous/next segment, "/" focuses the filter,
+  // G Good, B Issue and N next unchecked (SA-99).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
+      const action = markKey(e);
+      if (action) {
+        if (e.repeat) return;
+        if (isTextEntryTarget(target)) return;
+        if (action === "next") {
+          e.preventDefault();
+          gotoNextUnchecked();
+        } else {
+          const card = selected === null ? null : model.cards[selected];
+          if (!card) return;
+          e.preventDefault();
+          choose(card, { verdict: action });
+        }
+        return;
+      }
       if (
         e.metaKey ||
         e.ctrlKey ||
@@ -135,7 +206,7 @@ export function ReviewPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, step]);
+  }, [playback, step, selected, model.cards, choose, gotoNextUnchecked]);
 
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const download = async () => {
@@ -218,6 +289,14 @@ export function ReviewPage({
           {summary.failedCaptions} captions failed
           {model.presence === "absent" ? " · hand pose unavailable" : ""}
         </span>
+        <span
+          data-testid="mark-summary"
+          data-marks-loaded={marks.loaded ? "true" : "false"}
+          className="rounded-md bg-[#eef0ec] px-2 py-0.5 text-xs font-semibold text-[#4d5a54]"
+        >
+          {markSummary(counts)}
+          {bundle.origin === "fixture" ? " · not saved" : ""}
+        </span>
         {bundle.origin === "fixture" ? (
           <span className="inline-flex items-center rounded-md bg-[#fff4de] px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-[#8a5a00]">
             Fixture data
@@ -292,6 +371,11 @@ export function ReviewPage({
           onSelect={selectCard}
           mediaOrigin={mediaOrigin}
           queryRef={queryRef}
+          marks={marks}
+          checkedCount={counts.checked}
+          issueCount={counts.issue}
+          onChoose={choose}
+          onNextUnchecked={gotoNextUnchecked}
         />
       </div>
     </div>

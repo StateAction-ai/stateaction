@@ -11,6 +11,9 @@ import type {
 } from "../../lib/review/types";
 import { clipAt, fmtClock, type CardFilter } from "../../lib/review/timeline";
 import { cn } from "../../lib/utils";
+import type { MarksState } from "../../lib/review/use-marks";
+import type { MarkChoice, SegmentMarkRow } from "../../lib/review/marks";
+import { MarkBadge, MarkBar } from "./mark-bar";
 import { HAND_COLORS } from "./palette";
 
 export type SideTab = "segs" | "hand" | "json";
@@ -41,6 +44,11 @@ export function SidePanel({
   onSelect,
   mediaOrigin,
   queryRef,
+  marks,
+  checkedCount,
+  issueCount,
+  onChoose,
+  onNextUnchecked,
 }: {
   model: ReviewModel;
   annotations: RecordingAnnotations;
@@ -59,6 +67,12 @@ export function SidePanel({
   onSelect: (index: number) => void;
   mediaOrigin: string | null;
   queryRef: React.RefObject<HTMLInputElement | null>;
+  /** SA-99 team check. */
+  marks: MarksState;
+  checkedCount: number;
+  issueCount: number;
+  onChoose: (card: Card, choice: MarkChoice) => void;
+  onNextUnchecked: () => void;
 }) {
   const failedTotal = model.cards.filter(
     (c) => c.caption.state === "failed",
@@ -120,7 +134,7 @@ export function SidePanel({
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-3">
-            {(["all", "failed"] as const).map((f) => (
+            {(["all", "failed", "issue", "unchecked"] as const).map((f) => (
               <button
                 key={f}
                 type="button"
@@ -133,7 +147,13 @@ export function SidePanel({
                     "border-transparent bg-brand-soft text-brand-ink",
                 )}
               >
-                {f === "all" ? "All" : `Failed ${failedTotal}`}
+                {f === "all"
+                  ? "All"
+                  : f === "failed"
+                    ? `Failed ${failedTotal}`
+                    : f === "issue"
+                      ? `Issue ${issueCount}`
+                      : `Unchecked ${Math.max(0, total - checkedCount)}`}
               </button>
             ))}
             <span
@@ -149,6 +169,9 @@ export function SidePanel({
             selected={selected}
             activeIndex={activeIndex}
             onSelect={onSelect}
+            marks={marks}
+            onChoose={onChoose}
+            onNextUnchecked={onNextUnchecked}
           />
         </div>
       ) : null}
@@ -216,12 +239,18 @@ function Rail({
   selected,
   activeIndex,
   onSelect,
+  marks,
+  onChoose,
+  onNextUnchecked,
 }: {
   cards: Card[];
   total: number;
   selected: number | null;
   activeIndex: number;
   onSelect: (index: number) => void;
+  marks: MarksState;
+  onChoose: (card: Card, choice: MarkChoice) => void;
+  onNextUnchecked: () => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
   // The active card follows the playhead.
@@ -256,6 +285,10 @@ function Rail({
             selected={selected === c.index}
             active={activeIndex === c.index}
             onSelect={onSelect}
+            mark={marks.marks.get(c.segmentId)}
+            marks={marks}
+            onChoose={onChoose}
+            onNextUnchecked={onNextUnchecked}
           />
         ))
       )}
@@ -269,12 +302,20 @@ function RailCard({
   selected,
   active,
   onSelect,
+  mark,
+  marks,
+  onChoose,
+  onNextUnchecked,
 }: {
   card: Card;
   total: number;
   selected: boolean;
   active: boolean;
   onSelect: (index: number) => void;
+  mark: SegmentMarkRow | undefined;
+  marks: MarksState;
+  onChoose: (card: Card, choice: MarkChoice) => void;
+  onNextUnchecked: () => void;
 }) {
   const failed = c.caption.state === "failed";
   return (
@@ -308,6 +349,9 @@ function RailCard({
         <small className="block text-[10.5px] font-medium text-muted">
           #{c.index + 1}/{total.toLocaleString()}
         </small>
+        <div className="mt-1">
+          <MarkBadge mark={mark} />
+        </div>
       </div>
       <div className="min-w-0">
         {c.caption.state === "complete" ? (
@@ -362,6 +406,16 @@ function RailCard({
             {pctText(c.handsLR.right, c.handsLR.partial)}
           </dd>
         </dl>
+      ) : null}
+      {selected ? (
+        <MarkBar
+          mark={mark}
+          busy={marks.busy}
+          loaded={marks.loaded}
+          error={marks.error}
+          onChoose={(choice) => onChoose(c, choice)}
+          onNext={onNextUnchecked}
+        />
       ) : null}
     </div>
   );

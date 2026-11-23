@@ -457,6 +457,46 @@ export type JobControlResult = {
     instruction: string;
   };
 };
+// SA-99 staff segment marks (catalog.v16, /api/v1). Staff only; append-only.
+export type SegmentMarkVerdict = "good" | "issue";
+export type SegmentIssueType = "boundary" | "caption" | "hand_pose";
+export type SegmentMarkCommand = {
+  markId: Uuid;
+  jobId: Uuid;
+  segmentsSha256: string;
+  expectedRevision: number;
+  verdict: SegmentMarkVerdict;
+  issueType?: SegmentIssueType;
+  note?: string;
+};
+export type SegmentMark = {
+  markId: Uuid;
+  jobId: Uuid;
+  segmentsSha256: string;
+  segmentId: Uuid;
+  revision: number;
+  verdict: SegmentMarkVerdict;
+  issueType: SegmentIssueType | null;
+  note: string | null;
+  createdAt: string;
+  replayed: boolean;
+};
+export type SegmentMarkRow = {
+  segmentId: Uuid;
+  revision: number;
+  verdict: SegmentMarkVerdict;
+  issueType: SegmentIssueType | null;
+  note: string | null;
+  createdAt: string;
+};
+export type SegmentMarks = {
+  jobId: Uuid | null;
+  segmentsSha256: string | null;
+  segmentCount: number;
+  checkedCount: number;
+  issueCount: number;
+  marks: SegmentMarkRow[];
+};
 export type DatasetChange = {
   revision: number;
   datasetId?: Uuid;

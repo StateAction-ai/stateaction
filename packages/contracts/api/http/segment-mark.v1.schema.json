@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/segment-mark.v1.json",
+  "title": "Segment mark v1",
+  "description": "One stored mark revision. issueType is null for 'good'. note is null when none was given. replayed is true only on the POST response when an identical command had already been stored.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "markId",
+    "jobId",
+    "segmentsSha256",
+    "segmentId",
+    "revision",
+    "verdict",
+    "issueType",
+    "note",
+    "createdAt",
+    "replayed"
+  ],
+  "properties": {
+    "markId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "segmentsSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "segmentId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "verdict": { "enum": ["good", "issue"] },
+    "issueType": {
+      "oneOf": [
+        { "enum": ["boundary", "caption", "hand_pose"] },
+        { "type": "null" }
+      ]
+    },
+    "note": {
+      "oneOf": [{ "type": "string", "maxLength": 2000 }, { "type": "null" }]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "replayed": { "type": "boolean" }
+  }
+}

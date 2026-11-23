@@ -258,6 +258,7 @@ export type ListCounts = {
   failedWindows: number | null;
   captions: number | null;
   captionsFailed: number | null;
-  /** Team checks arrive with SA-99; zero until then, labelled. */
+  /** Segments with a team mark (SA-99), and those whose newest mark is an issue. */
   teamChecks: number;
+  teamIssues: number;
 };
