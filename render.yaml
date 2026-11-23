@@ -103,7 +103,7 @@ services:
     name: stateaction-workflow
     runtime: node
     region: ohio
-    repo: https://github.com/timothywangdev/stateaction
+    repo: https://github.com/StateAction-ai/stateaction
     branch: main
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter "@stateaction/jobs..." build
     startCommand: pnpm --filter @stateaction/jobs start

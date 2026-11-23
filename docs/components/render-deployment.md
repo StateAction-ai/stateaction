@@ -71,12 +71,16 @@ SA-15 is **not merged**; this branch contains no auth code and does not show tha
 ```sh
 render whoami && render workspace current         # tea-dbfshol9fdbs73c5408g (stateaction)
 render blueprints validate render.yaml
-# Dashboard: New → Blueprint → timothywangdev/stateaction → render.yaml (fill the sync:false prompts)
+# Dashboard: New → Blueprint → StateAction-ai/stateaction → render.yaml (fill the sync:false prompts)
 render workflows versions list <workflow-id> -o text
 render workflows tasks list <ready-workflow-version-id> -o text
 ```
 
 The Blueprint validates against the workspace (`render blueprints validate render.yaml`: database `stateaction-db`, services `stateaction-web` and `stateaction-repair`, workflow `stateaction-workflow`). Auto deploy is `off`, so a merge never ships by itself; deployment is `scripts/deploy/render-deploy.sh`, run by `.github/workflows/deploy.yml` or an operator.
+
+## Repository location (SA-137)
+
+The repository moved to the `StateAction-ai` GitHub organization. `render.yaml` and `config/render-deploy.json` name `https://github.com/StateAction-ai/stateaction`; the single slug read by the local tooling is `config/repository.json`. The live services (`srv-dc2bfl6c6qcc73df90e0`, `crn-dc2bflrrjlhs73ae9jt0`, `wfl-dc2bermc6qcc73df6890`) were created from the old URL and still point at it until an operator with a write-scoped Render key and the Render GitHub app installed on the organization PATCHes `repo` on each service and triggers a manual deploy of the live commit (`render.env` in `~/.config/stateaction/` holds a read-only key: `PATCH /v1/services/{id}` returns `insufficient_token_scope`, `services.read_write` required). Until then the services keep the old URL; whether Render can still pull through GitHub's redirect is unverified.
 
 ## Hosted production stack (SA-41)
 
