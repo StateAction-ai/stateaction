@@ -8,3 +8,4 @@ workers/processing/tests/fixtures/flora_native/
 
 # Binary recording fixtures for the Rerun browser test.
 apps/web/test-e2e/fixtures/*.rrd
+apps/web/test-e2e/fixtures/*.mp4

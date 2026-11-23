@@ -38,6 +38,42 @@ const SLOT: Record<ReadRole, string> = {
   viewer_rrd: "viewer_rrd_file_id",
 };
 
+/**
+ * SA-98: the staff-only review video. `recording_mp4` is the full-recording
+ * `recording.mp4` of the recording's ACCEPTED job (a recording-level output,
+ * not a clip file), served as video/mp4 with the same 60 s TTL. Its size
+ * limit is configurable (STATEACTION_RECORDING_MP4_MAX_BYTES, default 8 GiB);
+ * a file above it is refused, never truncated.
+ */
+export type RecordingReadRole = "recording_mp4";
+export const RECORDING_READ_ROLES: readonly RecordingReadRole[] = [
+  "recording_mp4",
+];
+export const RECORDING_MP4_DEFAULT_MAX_BYTES = 8 * 1024 * 1024 * 1024;
+export const RECORDING_MP4_CONTENT_TYPE = "video/mp4";
+
+/** The configured recording_mp4 limit; an invalid setting fails closed (throws). */
+export function recordingMp4MaxBytes(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): number {
+  const raw = env.STATEACTION_RECORDING_MP4_MAX_BYTES;
+  if (raw === undefined || raw === "") return RECORDING_MP4_DEFAULT_MAX_BYTES;
+  if (!/^[1-9][0-9]{0,15}$/.test(raw) || !Number.isSafeInteger(Number(raw)))
+    throw new RangeError(
+      "STATEACTION_RECORDING_MP4_MAX_BYTES must be a positive integer byte count",
+    );
+  return Number(raw);
+}
+
+export type RecordingReadView = {
+  url: string;
+  role: RecordingReadRole;
+  contentType: typeof RECORDING_MP4_CONTENT_TYPE;
+  sizeBytes: string;
+  expiresAt: string;
+  ttlSeconds: number;
+};
+
 /** Injected storage presigner; credentials stay inside the server process. */
 export interface ReadSigner {
   presignRead(request: {
@@ -153,6 +189,70 @@ export async function issueRead(
     url,
     role: input.role,
     contentType,
+    sizeBytes: row.size_bytes,
+    expiresAt: new Date(issuedAt.getTime() + ttl * 1000).toISOString(),
+    ttlSeconds: ttl,
+  };
+}
+
+/**
+ * Authorizes and signs one `recording_mp4` read. Staff only; the object key is
+ * the `recording.mp4` slot of the recording's CURRENT accepted job (state
+ * succeeded), restricted to a completed or verified output with that role, so
+ * a superseded, failed or unaccepted job's file, a source file and any other
+ * output have no path through here. Every failure to authorize, including a
+ * missing file, is the same "not found".
+ */
+export async function issueRecordingRead(
+  deps: BrokerDeps & { maxBytes?: number | undefined },
+  input: {
+    viewerUserId: string;
+    recordingId: string;
+    role: RecordingReadRole;
+  },
+): Promise<RecordingReadView> {
+  if (input.role !== "recording_mp4")
+    throw new CatalogError("invalid_request", "role must be recording_mp4");
+  const ttl = deps.ttlSeconds ?? READ_TTL_SECONDS;
+  if (!Number.isInteger(ttl) || ttl < 1 || ttl > MAX_READ_TTL_SECONDS)
+    throw new CatalogError(
+      "invalid_request",
+      `Read TTL must be an integer 1..${MAX_READ_TTL_SECONDS} seconds`,
+    );
+  const limit = deps.maxBytes ?? recordingMp4MaxBytes();
+  const recordingId = uuid(input.recordingId, "recordingId");
+  let row: { object_key: string; size_bytes: string } | undefined;
+  try {
+    ({
+      rows: [row],
+    } = await deps.pool.query<{ object_key: string; size_bytes: string }>(
+      `SELECT f.object_key, f.size_bytes::text
+       FROM recordings rec
+       JOIN jobs j ON j.id = rec.current_job_id AND j.state = 'succeeded'
+       JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
+       JOIN files f ON f.id = s.file_id AND f.job_id = j.id
+         AND f.purpose = 'output' AND f.role = 'recording_mp4'
+         AND f.state IN ('completed', 'verified')
+       WHERE rec.id = $2 AND rec.deleted_at IS NULL
+         AND catalog_has_role($1, 'staff')`,
+      [input.viewerUserId, recordingId],
+    ));
+  } catch (error) {
+    throw toCatalogError(error);
+  }
+  if (!row) throw new CatalogError("not_found", "Recording video not found");
+  if (BigInt(row.size_bytes) > BigInt(limit))
+    throw new CatalogError("conflict", "File exceeds the read limit");
+  const url = await deps.signer.presignRead({
+    key: row.object_key,
+    expiresInSeconds: ttl,
+    contentType: RECORDING_MP4_CONTENT_TYPE,
+  });
+  const issuedAt = (deps.now ?? (() => new Date()))();
+  return {
+    url,
+    role: input.role,
+    contentType: RECORDING_MP4_CONTENT_TYPE,
     sizeBytes: row.size_bytes,
     expiresAt: new Date(issuedAt.getTime() + ttl * 1000).toISOString(),
     ttlSeconds: ttl,

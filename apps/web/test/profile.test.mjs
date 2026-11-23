@@ -49,10 +49,10 @@ test("clearPrivateState aborts in-flight private fetches and re-arms the signal"
   assert.equal(privateSignal().aborted, false);
 });
 
-test("navigation is role specific with no Review/Releases/project entries", () => {
+test("navigation is role specific; Review is staff only, no Releases/project entries", () => {
   assert.deepEqual(
     navigationFor("staff").map((n) => n.label),
-    ["Pipeline", "Data browser"],
+    ["Pipeline", "Review", "Data browser"],
   );
   assert.deepEqual(
     navigationFor("customer").map((n) => n.label),

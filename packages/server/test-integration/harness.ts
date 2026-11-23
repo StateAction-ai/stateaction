@@ -292,6 +292,8 @@ export type Processed = {
   manifestSha256: string;
   clips: ClipInput[];
   outputFiles: string[];
+  /** SA-98 recording-level outputs attached through `annotationOutputs`. */
+  annotationFiles: { fileId: string; slot: string }[];
 };
 
 /**
@@ -304,6 +306,8 @@ export async function processedRecording(
   clipCount = 2,
   options: {
     open?: boolean;
+    /** SA-98: recording-level outputs (role + fixed slot) attached before the inventory closes. */
+    annotationOutputs?: { role: string; slot: string }[];
     /**
      * Real source bytes: size and SHA-256 come from the body, and `stored` is
      * called with the catalog object key so a test can PUT the bytes.
@@ -431,6 +435,9 @@ export async function processedRecording(
         viewerRrd: await output("viewer_rrd"),
       },
     });
+  const annotationFiles: { fileId: string; slot: string }[] = [];
+  for (const a of options.annotationOutputs ?? [])
+    annotationFiles.push({ fileId: await output(a.role), slot: a.slot });
   const resultId = await output("result_manifest");
   if (options.open)
     // Bulk fixtures extend the inventory themselves, then close it (running)
@@ -442,12 +449,14 @@ export async function processedRecording(
       manifestSha256: seedSha(resultId),
       clips,
       outputFiles,
+      annotationFiles,
     };
   // Production order: the inventory is closed while the job is still running.
   await fixtureCloseOutputs(ownerPoolFor(app), {
     jobId,
     manifestFileId: resultId,
     clips,
+    extraSlots: annotationFiles.map((f) => [f.fileId, f.slot] as const),
   });
   await app.query("UPDATE jobs SET state = 'result_pending' WHERE id = $1", [
     jobId,
@@ -459,6 +468,7 @@ export async function processedRecording(
     manifestSha256: seedSha(resultId),
     clips,
     outputFiles,
+    annotationFiles,
   };
 }
 

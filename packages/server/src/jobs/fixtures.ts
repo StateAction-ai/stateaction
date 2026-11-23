@@ -192,7 +192,10 @@ async function assertFixtureOwner(owner: Db, jobId: string) {
 /** Step 1 (job still `running`): intended slots + the closed output inventory. */
 export async function fixtureCloseOutputs(
   owner: Db,
-  input: Pick<FixtureResult, "jobId" | "manifestFileId" | "clips">,
+  input: Pick<FixtureResult, "jobId" | "manifestFileId" | "clips"> & {
+    /** Recording-level outputs (SA-98: segments.json, recording.mp4, ...) as [fileId, slot]. */
+    extraSlots?: readonly (readonly [string, string])[];
+  },
 ) {
   const job = await assertFixtureOwner(owner, input.jobId);
   const slots: Array<[string, string]> = [
@@ -204,6 +207,9 @@ export async function fixtureCloseOutputs(
         clip.files[key as keyof ClipInput["files"]],
         `clips/${String(clip.ordinal).padStart(3, "0")}/${name}`,
       ]);
+  slots.push(
+    ...(input.extraSlots ?? []).map(([f, s]) => [f, s] as [string, string]),
+  );
   for (const [fileId, slot] of slots)
     await owner.query(
       `INSERT INTO job_output_slots (job_id, slot, file_id, request_digest)

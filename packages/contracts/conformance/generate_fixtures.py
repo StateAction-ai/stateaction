@@ -3360,6 +3360,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa91_fixtures import render_sa91
 
     files.update(render_sa91())
+    # SA-98 adds only a new fixture file for the catalog.v17 recording-annotations contract.
+    from generate_sa98_fixtures import render_sa98
+
+    files.update(render_sa98())
     return files
 
 
