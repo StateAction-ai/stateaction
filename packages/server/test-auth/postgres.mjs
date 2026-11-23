@@ -9,6 +9,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { migratedSpec } from "./migrated-template.mjs";
 import {
   assertDockerAllowed,
   externalSession,
@@ -49,10 +50,17 @@ async function startExternalPostgres() {
   };
 }
 
+// The database is cloned from the sealed, content-keyed migrated template
+// (SA-115): already migrated, owned by migration_owner, ledgered and reaped
+// like any run database. Callers still run their own seed/bootstrap on it.
 async function startExternalCatalogPostgres() {
   const session = externalSession();
-  const db = await session.createDatabase({ purpose: "cat" });
+  const db = await session.createClonedDatabase({
+    purpose: "cat",
+    spec: migratedSpec({ log: (m) => console.error(`[db-template] ${m}`) }),
+  });
   return {
+    migratedTemplate: db.template,
     name: db.name,
     ownerUrl: db.ownerUrl,
     appUrl: db.appUrl,

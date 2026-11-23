@@ -33,6 +33,12 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
+import {
+  cloneFromTemplate,
+  migrationKey,
+  pruneTemplates,
+  templateName,
+} from "./db-template.mjs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -400,6 +406,48 @@ export class FixtureSession {
     };
   }
 
+  /**
+   * Create a run-owned database cloned from a verified, content-keyed, sealed
+   * template (see db-template.mjs). Ledgered, marked and reaped exactly like
+   * createDatabase; the template itself is shared and never reaped. The ledger
+   * also gets a non-reapable `template` event naming the key.
+   */
+  async createClonedDatabase({ purpose, spec, log }) {
+    this.assertBudget("database", this.limits.maxDatabases);
+    const name = this.nameFor(purpose, "database");
+    this.record("created", "database", name, { owner: OWNER_ROLE });
+    const env = {
+      connect: (url) => this.drivers.connect(url),
+      adminUrl: this.values.CATALOG_TEST_ADMIN_URL,
+      ownerUrl: this.values.CATALOG_TEST_OWNER_URL,
+      appUrl: this.values.CATALOG_TEST_APP_URL,
+      note: (e) =>
+        this.record("template", "template", e.template, {
+          key: e.key,
+          reused: e.reused,
+          built: e.built,
+        }),
+    };
+    const out = await cloneFromTemplate(
+      env,
+      { ...spec, log: log ?? spec.log },
+      {
+        name,
+        owner: OWNER_ROLE,
+        comment: marker(this.runId),
+        connectionLimit: this.limits.databaseConnectionLimit,
+      },
+    );
+    return {
+      name,
+      reused: out.reused,
+      template: out.template,
+      meta: out.meta,
+      ownerUrl: withDatabase(this.values.CATALOG_TEST_OWNER_URL, name),
+      appUrl: withDatabase(this.values.CATALOG_TEST_APP_URL, name),
+    };
+  }
+
   /** Create a run-owned login role with a random password. */
   async createRole({ purpose }) {
     this.assertBudget("role", this.limits.maxRoles);
@@ -733,6 +781,31 @@ export async function main(argv, env = process.env) {
     }
     if (ok) rmSync(dir, { recursive: true, force: true });
     return ok ? 0 : 1;
+  }
+  if (command === "templates") {
+    // `templates prune [--keep name,...]`: retention (older than the TTL).
+    const values = resolveFixtures(env);
+    if (!values) refuse("templates requires STATEACTION_LOCAL_FIXTURES");
+    if (rest[0] !== "prune") refuse("usage: templates prune [--keep a,b]");
+    const keep = (rest[rest.indexOf("--keep") + 1] ?? "")
+      .split(",")
+      .filter(Boolean);
+    const drivers = defaultDrivers(values, defaultRoot);
+    const dropped = await pruneTemplates(
+      {
+        connect: (u) => drivers.connect(u),
+        adminUrl: values.CATALOG_TEST_ADMIN_URL,
+      },
+      {
+        // The migrated template of this tree is always kept; --keep adds more.
+        keep: [
+          templateName("mig", migrationKey(fileURLToPath(defaultRoot))),
+          ...(rest.includes("--keep") ? keep : []),
+        ],
+      },
+    );
+    for (const d of dropped) console.log(`template ${d} dropped`);
+    return 0;
   }
   if (command === "sql") {
     await sqlMain(rest, env);

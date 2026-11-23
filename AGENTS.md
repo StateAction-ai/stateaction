@@ -46,7 +46,7 @@ Read the linked doc before working in its area.
 - Never push to, force-push or rewrite `main` or merged history, or touch another worker's branch.
 - Never use `--no-verify` or an admin merge. Never merge without a valid local receipt.
 - Pin repository mutations to the `timothywangdev` GitHub account. Do not change billing or account privileges.
-- Cache only deterministic builds and isolated checks. Uploads, DB/workflow integration, device simulations and provider mutations run uncached.
+- Cache only deterministic builds and isolated checks. Uploads, DB/workflow integration, device simulations and provider mutations run uncached. A per-run or per-worker database cloned from a verified, content-keyed, sealed template is a fresh fixture (user-approved 2026-11-22).
 
 ## Workflow
 

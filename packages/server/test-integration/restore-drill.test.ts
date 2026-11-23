@@ -345,11 +345,16 @@ test(
           "SELECT datname FROM pg_database ORDER BY 1",
         )
       ).rows.map((r) => r.datname);
-    const dbsBefore = await databases();
 
     // ---------------------------------------------------------------- SOURCE
     const db = await acceptanceDatabase();
     sourceDb = db;
+    // The cluster is shared: concurrent runs create and reap their own
+    // databases, so only this run's databases are asserted untouched.
+    const runPrefix = db.name.replace(/[0-9a-f]+$/, "");
+    const ownDatabases = async () =>
+      (await databases()).filter((n) => n.startsWith(runPrefix));
+    const dbsBefore = await ownDatabases();
     created.databases.push(db.name);
     const jobsDb = Object.assign(db, { signed: [] as string[] });
     const deps = depsFor(jobsDb);
@@ -873,7 +878,7 @@ test(
 
     // ---------------------------------------- SOURCE NEVER MUTATED BY RESTORE
     assert.deepEqual(await fingerprint(db.owner), sourceAfterChange);
-    const dbsAfter = await databases();
+    const dbsAfter = await ownDatabases();
     for (const name of dbsBefore)
       assert.ok(dbsAfter.includes(name), `${name} still exists`);
     await restored.end();
