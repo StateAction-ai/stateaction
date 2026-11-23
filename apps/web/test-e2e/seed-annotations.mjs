@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { call, browserHeaders, Jar, webDir } from "./harness.mjs";
 import {
+  CANARY_SCENARIOS,
   REPLAY_SCENARIOS,
   SYNTHETIC_SCENARIOS,
   scenarioMismatch,
@@ -116,12 +117,40 @@ export function homerStore(
 }
 
 /**
+ * The SA-101 canary store counts when its recording is the HomER MCAP the canary ran on: the
+ * conversion record must name that MCAP's sha256 and the FLORA files must exist.
+ */
+export function canaryStore(
+  homer,
+  store = process.env.STATEACTION_CANARY_STORE ??
+    join(repoRoot, "artifacts/fixtures/flora-canary"),
+) {
+  if (!homer.ok) return { ok: false, reason: homer.reason };
+  const flora = join(store, "homer_33", "flora");
+  const names = ["segments.json", "windows.jsonl", "captions.json", "env.json"];
+  if (!names.every((n) => existsSync(join(flora, n))))
+    return { ok: false, reason: "artifacts/fixtures/flora-canary not present" };
+  const conversionPath = join(store, "homer_33", "source.conversion.json");
+  if (!existsSync(conversionPath))
+    return { ok: false, reason: "flora-canary has no source.conversion.json" };
+  const conversion = JSON.parse(readFileSync(conversionPath, "utf8"));
+  const mcap = sha(readFileSync(join(homer.store, "homer_33", "source.mcap")));
+  return conversion.mcap_sha256 === mcap
+    ? { ok: true, store, mcapDir: homer.store }
+    : { ok: false, reason: "flora-canary was made from another MCAP" };
+}
+
+/**
  * STATEACTION_SEED_ONLY: comma list of scenario names to seed (default all). Unknown names throw,
  * so a typo never silently seeds nothing.
  */
 export function seedOnly(value) {
   if (value === undefined || value.trim() === "") return null;
-  const known = Object.keys({ ...SYNTHETIC_SCENARIOS, ...REPLAY_SCENARIOS });
+  const known = Object.keys({
+    ...SYNTHETIC_SCENARIOS,
+    ...REPLAY_SCENARIOS,
+    ...CANARY_SCENARIOS,
+  });
   const names = value
     .split(",")
     .map((n) => n.trim())
@@ -241,9 +270,20 @@ export async function seedAnnotations(
     const wanted = (scenario) => !only || only.has(scenario);
     const table = scenarios ?? SYNTHETIC_SCENARIOS;
     const replay = scenarios ? {} : REPLAY_SCENARIOS;
-    const store = Object.keys(replay).some(wanted)
-      ? homerStore(python)
-      : { ok: false, reason: "not requested" };
+    // SA-101: opt-in canary scenarios (STATEACTION_SEED_ONLY names them); the controller has one
+    // replay directory, so they cannot be mixed with the HomER store scenarios.
+    const canaryNames = scenarios
+      ? []
+      : Object.keys(CANARY_SCENARIOS).filter((n) => only?.has(n));
+    if (canaryNames.length && Object.keys(replay).some(wanted))
+      throw new Error(
+        `${canaryNames.join(",")} cannot be seeded together with the HomER replay scenarios`,
+      );
+    const homer =
+      Object.keys(replay).some(wanted) || canaryNames.length
+        ? homerStore(python)
+        : { ok: false, reason: "not requested" };
+    const store = canaryNames.length ? canaryStore(homer) : homer;
     const plan = Object.entries(table)
       .filter(([scenario]) => wanted(scenario))
       .map(([scenario, s]) => ({
@@ -253,13 +293,16 @@ export async function seedAnnotations(
         drive: s.drive,
       }));
     const skipped = [];
-    for (const [scenario, s] of Object.entries(replay)) {
+    for (const [scenario, s] of Object.entries({
+      ...replay,
+      ...Object.fromEntries(canaryNames.map((n) => [n, CANARY_SCENARIOS[n]])),
+    })) {
       if (!wanted(scenario)) continue;
       if (store.ok)
         plan.push({
           scenario,
           recipe: s.recipe,
-          source: join(store.store, s.episode, "source.mcap"),
+          source: join(store.mcapDir ?? store.store, s.episode, "source.mcap"),
         });
       else skipped.push({ scenario, reason: store.reason });
     }

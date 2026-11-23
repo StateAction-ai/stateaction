@@ -85,6 +85,26 @@ uv run --project workers/processing modal run workers/flora/modal_flora.py::smok
 uv run --project workers/processing modal run workers/flora/modal_flora.py::smoke --fixture homer_33 --only hf --hf-fixture homer_37
 ```
 
+### Canary (SA-101): one real run, then the review page
+
+```sh
+modal volume create --version 2 stateaction-flora-smoke
+modal volume put stateaction-flora-smoke artifacts/fixtures/flora-homer/homer_33/source.mcap /homer_33/source.mcap
+modal run workers/flora/modal_flora.py::canary --fixture homer_33     # TempSeg, then the Captioner on THOSE segments; about 0.8 USD
+modal volume delete stateaction-flora-smoke --yes; modal app list     # nothing may be running
+```
+
+It writes `artifacts/flora-stage/canary/canary_receipt.json` (per stage: status, cold-load and GPU seconds, observed GPU, container
+seconds, list-price cost; counts of failed windows and captions as found; F1 and equality against the SA-93 restored outputs) and a
+FLORA-native replay store `artifacts/fixtures/flora-canary/homer_33/` (`flora_ext/canary.py`). Review it locally with zero spend:
+
+```sh
+STATEACTION_SEED_ONLY=replay_canary_homer_33 node apps/web/test-e2e/serve-console.mjs --seed annotations     # keep it running
+REVIEW_STACK_JSON='<its output line>' node apps/web/test-e2e/review-canary-browser.mjs                       # screenshots, 16 checks
+```
+
+The canary scenario is opt-in and cannot be seeded together with the HomER store scenarios (one replay directory).
+
 `--only` takes `tempseg`, `tempseg_cli`, `captioner`, `captioner_direct`, `hf` (comma list). Keep the local command alive until it
 prints the summary: a killed client leaves results lost and the container running (`modal app stop --yes <id>`).
 

@@ -121,7 +121,9 @@ def run_cli_job(
     job: dict[str, Any], fixtures: Path, previous: list[dict[str, Any]]
 ) -> dict[str, Any]:
     fixture = fixtures / job["fixture"]
-    segments = None
+    segments = job.get(
+        "segments_bytes"
+    )  # SA-101: the real segment stage's own document
     if job.get("segments_from") is not None:
         segments = previous[job["segments_from"]]["files"]["segments.json"]
         if job.get("segments_limit") is not None:
