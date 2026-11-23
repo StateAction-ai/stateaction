@@ -740,6 +740,13 @@ def _fail(
 
     code = _error_code(error)
     print(f"Worker failed: {code}")
+    from .libav_retry import LibavTransientError
+
+    if isinstance(error, LibavTransientError):
+        # Allowlisted libav diagnostic for the worker log; the curated manifest copies no text.
+        print(
+            f"Worker libav detail: {error.what}, {error.attempts} attempts, {error.message}"
+        )
     try:
         data = _failure_manifest(
             grant, task, api.nonce, code, error, len(sink.receipts)

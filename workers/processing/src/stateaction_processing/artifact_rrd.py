@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 
+from . import libav_retry
 from .artifact_types import ExportError, ExportLimits, require
 
 TIME_BASE = Fraction(1, 1_000_000)
@@ -84,8 +85,12 @@ class ProxyEncoder:
 
     def encode(self, rgb: Any, clip_pts: int) -> list[tuple[bytes, bool, int]]:
         av = self._av
-        frame = av.VideoFrame.from_ndarray(rgb, format="rgb24").reformat(
-            width=self.width, height=self.height, format="yuv420p"
+        frame = libav_retry.reformat(
+            av.VideoFrame.from_ndarray(rgb, format="rgb24"),
+            "proxy yuv420p conversion",
+            width=self.width,
+            height=self.height,
+            format="yuv420p",
         )
         frame.pts = clip_pts
         frame.time_base = TIME_BASE
