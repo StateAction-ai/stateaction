@@ -42,6 +42,7 @@ files = [
   "src/stateaction_processing/fixture_noop.py",
   "src/stateaction_processing/mcap_stream.py",
   "src/stateaction_processing/capture_stream.py",
+  "src/stateaction_processing/capture_v12_sensors.py",
   "src/stateaction_processing/contract.py",
   "src/stateaction_processing/h264_decode.py",
   "src/stateaction_processing/jpeg_decode.py",

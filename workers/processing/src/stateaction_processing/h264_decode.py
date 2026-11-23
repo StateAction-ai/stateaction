@@ -241,6 +241,11 @@ class H264Decoder:
                 "E_RASTER_MISMATCH",
                 {"decoded": [w, h], "declared": self.expected_raster},
             )
+            _req(
+                au.calibration_raster in (None, (w, h)),
+                "E_RASTER_MISMATCH",
+                {"decoded": [w, h], "calibration": au.calibration_raster},
+            )
             if (w, h) not in self._rasters:
                 self._rasters.append((w, h))
                 self.stats.rasters = tuple(self._rasters)

@@ -7,7 +7,7 @@ frames + join window), all bounded by `StreamLimits`.
 PROVISIONAL RULE: access units are yielded as soon as their identity is joined, but the capture is
 accepted only after the iterator is exhausted without error (footer, data CRC, summary, full
 SHA-256 and the contract Close counts verified). A consumer may process provisionally with bounded
-temporary artifacts; it must not publish or report success before `CaptureStream.accepted`.
+temporary artifacts. Publication also requires `report.auto_admissible`.
 
 Unsupported on purpose (explicit error, nothing is repaired or re-timed):
 legacy `jpeg_mcap_v1`, compressed MCAP chunks, flat/unchunked layouts, non-increasing source frame
@@ -25,6 +25,12 @@ from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
 from . import contract
+from .capture_v12_sensors import (
+    CAMERA_METADATA,
+    DEPTH_EVENTS,
+    SensorEvidenceError,
+    V12Sensors,
+)
 from .mcap_stream import (
     ChannelDef,
     Limits,
@@ -44,6 +50,7 @@ T_INVENTORY = "/stateaction/inventory"
 T_FRAMES = "/stateaction/frame_events"
 T_SENSOR = "/stateaction/sensor_events"
 T_CLOSE = "/stateaction/close"
+T_CALIBRATIONS = "/stateaction/calibrations"
 T_ACCEL, T_GYRO, T_POSE = (
     "/stateaction/imu/accel",
     "/stateaction/imu/gyro",
@@ -52,7 +59,10 @@ T_ACCEL, T_GYRO, T_POSE = (
 # The native recorder writes Profile and Clocks first and Inventory/Close at stop; the golden
 # fixtures put Inventory first. Both orders are accepted; Inventory-dependent checks run at the end.
 PRE_FRAME = (T_PROFILE, T_CLOCKS)
-INT64_MAX = 2**63 - 1
+SHARED_DECLARATIONS = (T_CLOCKS, T_INVENTORY)
+WIRE_V11 = "stateaction.capture.v1.1"
+WIRE_V12 = "stateaction.capture.v1.2"
+MAX_CALIBRATIONS = 64
 
 
 class CaptureStreamError(ValueError):
@@ -70,7 +80,9 @@ def _req(ok: bool, code: str, detail: object = None) -> None:
 @dataclass(frozen=True)
 class StreamLimits:
     mcap: Limits = field(default_factory=Limits)
-    max_pending_video: int = 8  # video messages waiting for their `written` FrameEvent
+    max_pending_video: int = (
+        8  # video messages waiting for `written` events or earlier joins
+    )
     max_join_window_ns: int = 5_000_000_000  # log-time distance video <-> written event
     max_inflight_frames: int = 256  # acquired frames without a terminal event
     sensor_hold_videos: int = (
@@ -106,6 +118,7 @@ class AccessUnit:
     sha256: str
     data: bytes
     sensor_events: tuple[dict[str, Any], ...] = ()
+    calibration_raster: tuple[int, int] | None = None
 
 
 @dataclass
@@ -114,6 +127,8 @@ class CaptureReport:
     recording_id: str | None = None
     profile: dict[str, Any] | None = None
     close: dict[str, Any] | None = None
+    wire_contract_revision: str | None = None
+    native_evidence_counts: dict[str, int] = field(default_factory=dict)
     rgb_only: bool = False
     excluded_messages_by_domain: dict[str, int] = field(default_factory=dict)
     frame_counts: dict[str, int] = field(
@@ -140,6 +155,21 @@ class CaptureReport:
     peak_inflight_frames: int = 0
     peak_held_access_units: int = 0
     accepted: bool = False
+
+    @property
+    def auto_admissible(self) -> bool:
+        return self.accepted and (
+            self.rgb_only
+            or (self.close is not None and self.close["outcome"] == "completed")
+        )
+
+    def require_auto_admissible(self) -> None:
+        _req(self.accepted, "E_NOT_ACCEPTED")
+        _req(
+            self.auto_admissible,
+            "E_OUTCOME_NOT_ADMISSIBLE",
+            (self.close or {}).get("outcome"),
+        )
 
 
 class _Joined:
@@ -169,7 +199,6 @@ class CaptureStream:
         self.report = CaptureReport(self._mcap.report)
         self._ref = contract.reference()
         self._schema_mod = contract.strict_schema()
-        self._manifest = contract.manifest()
 
     @property
     def accepted(self) -> bool:
@@ -178,20 +207,24 @@ class CaptureStream:
     def __iter__(self) -> Iterator[AccessUnit]:
         try:
             yield from self._run()
-        except McapStreamError as e:
+        except (McapStreamError, SensorEvidenceError) as e:
             raise CaptureStreamError(e.code, e.detail) from None
 
     # ------------------------------------------------------------------------------------
     def _run(self) -> Iterator[AccessUnit]:
         ref, lim, rep = self._ref, self.limits, self.report
         schemas: dict[int, SchemaDef] = {}
-        topics: dict[int, str] = {}
+        channels: dict[int, ChannelDef] = {}
+        topics: dict[str, tuple[str, str, str]] = {}
+        schema_hashes: dict[str, Any] = {}
+        optional: V12Sensors | None = None
         seen_pre: set[str] = set()
-        clocks: dict[str, str] = {}
-        calibrations: set[str] = set()
-        used_calibrations: set[str] = set()
+        early_declarations: dict[str, bytes] = {}
+        clocks: dict[str, Any] = {}
+        inventory: dict[str, Any] = {}
+        last_id_by_cal: dict[str, int] = {}
+        calibration_revisions: dict[str, dict[str, Any]] = {}
         profile_limits: dict[str, Any] = {}
-        profile_raster: tuple[int, int] | None = None
         closed = False
         # frame lifecycle (bounded): in-flight frames only, plus a short terminal memory
         inflight: dict[str, dict[str, Any]] = {}
@@ -199,7 +232,6 @@ class CaptureStream:
         submitted: set[str] = set()
         recent_terminal: OrderedDict[str, str] = OrderedDict()
         last_acquired_id = -1
-        last_id_by_cal: dict[str, int] = {}
         reset_at: dict[str, int] = {}
         last_pts = -1
         drop_reasons: dict[str, int] = {}
@@ -220,14 +252,21 @@ class CaptureStream:
         video_index = 0
         released_ids: OrderedDict[str, None] = OrderedDict()
         recording_ids: set[str] = set()
-        counts: dict[str, int] = {k: 0 for k in (T_FRAMES, T_SENSOR, T_ACCEL, T_GYRO)}
-        legacy = False
         profile_seen_header = False
 
         def add_recording(v: dict[str, Any]) -> None:
             recording_ids.add(v["recording_id"])
             _req(len(recording_ids) == 1, "E_RECORDING_ID", sorted(recording_ids))
             rep.recording_id = v["recording_id"]
+
+        def add_declaration(topic: str, value: dict[str, Any]) -> None:
+            nonlocal clocks, inventory
+            _req(topic not in seen_pre, "E_CHANNEL_CARDINALITY", topic)
+            if topic == T_CLOCKS:
+                clocks = value
+            else:
+                inventory = value
+            seen_pre.add(topic)
 
         def release_ready(final: bool) -> Iterator[AccessUnit]:
             # Release in video order once joined and the sensor-hold window elapsed.
@@ -260,6 +299,7 @@ class CaptureStream:
                 "E_VIDEO_TIMESTAMP_MISMATCH",
                 video.sequence,
             )
+            calibration = calibration_revisions.get(ev["calibration_id"])
             joined = AccessUnit(
                 **{
                     **video.__dict__,
@@ -269,18 +309,24 @@ class CaptureStream:
                     "native_timestamp_ns": ev["native_timestamp_ns"],
                     "native_timestamps": ev["native_timestamps"],
                     "calibration_id": ev["calibration_id"],
+                    "calibration_raster": (
+                        calibration["saved_width"],
+                        calibration["saved_height"],
+                    )
+                    if calibration is not None
+                    else None,
                     "clock_mapping_revision": ev["clock_mapping_revision"],
                     "stream_id": ev["stream_id"],
                 }
             )
             j.au = joined
             j.released_after = n_video
-            pending_video.remove(j)
             pending_by_seq.pop(video.sequence, None)
-            held.append(j)
             held_by_id[joined.source_frame_id] = j
             sensors = pending_sensor.pop(joined.source_frame_id, [])
             j.sensors.extend(sensors)
+            while pending_video and pending_video[0].au.source_frame_id:
+                held.append(pending_video.popleft())
             rep.peak_held_access_units = max(rep.peak_held_access_units, len(held))
 
         for item in self._mcap:
@@ -289,20 +335,57 @@ class CaptureStream:
                 profile_seen_header = True
             elif isinstance(item, SchemaDef):
                 schemas[item.id] = item
-                self._check_schema(item)
+                if item.name == "sensor_msgs/msg/CompressedImage":
+                    raise CaptureStreamError("E_LEGACY_JPEG_UNSUPPORTED", item.name)
+                if topics:
+                    self._check_schema(item, schema_hashes)
             elif isinstance(item, ChannelDef):
-                topics[item.id] = item.topic
+                channels[item.id] = item
                 if item.topic == LEGACY_JPEG_TOPIC:
-                    legacy = True
                     raise CaptureStreamError(
                         "E_LEGACY_JPEG_UNSUPPORTED",
                         "jpeg_mcap_v1 is an explicit legacy profile; this reader is h264_mcap_v1 only",
                     )
-                self._check_channel(item, schemas)
+                if topics:
+                    self._check_channel(item, schemas, topics)
+                elif item.topic == T_PROFILE:
+                    schema = schemas.get(item.schema_id)
+                    name = schema.name if schema is not None else None
+                    _req(
+                        name in (ref.CHANNELS[T_PROFILE][0], ref.PROFILE_V2),
+                        "E_CHANNEL_ENCODING",
+                        T_PROFILE,
+                    )
+                    v12 = name == ref.PROFILE_V2
+                    rep.wire_contract_revision = WIRE_V12 if v12 else WIRE_V11
+                    topics = ref.CHANNELS12 if v12 else ref.CHANNELS
+                    schema_hashes = contract.manifest(v12=v12)
+                    for schema in schemas.values():
+                        self._check_schema(schema, schema_hashes)
+                    for channel in channels.values():
+                        self._check_channel(channel, schemas, topics)
+                    if v12:
+                        optional = V12Sensors(ref, lim.max_pending_sensor_events)
+                    for topic, payload in early_declarations.items():
+                        value = self._json(topic, topics[topic][0], payload, v12)
+                        add_recording(value)
+                        add_declaration(topic, value)
+                    early_declarations.clear()
             elif isinstance(item, Message):
-                topic = topics[item.channel_id]
+                topic = channels[item.channel_id].topic
                 _req(not closed, "E_ORDER", "message after Close")
                 _req(profile_seen_header, "E_ORDER")
+                if not topics:
+                    _req(
+                        topic in SHARED_DECLARATIONS,
+                        "E_ORDER",
+                        "message before Profile channel",
+                    )
+                    _req(
+                        topic not in early_declarations, "E_CHANNEL_CARDINALITY", topic
+                    )
+                    early_declarations[topic] = item.data
+                    continue
                 _req(
                     topic in PRE_FRAME
                     or topic == T_INVENTORY
@@ -327,7 +410,7 @@ class CaptureStream:
                     last_video_seq, last_video_log = item.sequence, item.log_time
                     try:
                         v = ref.decode_video(item.data)
-                    except (ValueError, IndexError, UnicodeDecodeError):
+                    except (ValueError, IndexError, struct.error, UnicodeDecodeError):
                         raise CaptureStreamError(
                             "E_MALFORMED_MESSAGE", VIDEO_TOPIC
                         ) from None
@@ -387,17 +470,10 @@ class CaptureStream:
                     if early is not None:
                         try_join(j, early[0], early[1])
                     yield from release_ready(False)
-                elif topic in (
-                    T_ACCEL,
-                    T_GYRO,
-                    T_FRAMES,
-                    T_SENSOR,
-                    T_PROFILE,
-                    T_CLOCKS,
-                    T_INVENTORY,
-                    T_CLOSE,
-                ):
-                    value = self._json(topic, item.data)
+                elif topics[topic][2] == "json":
+                    value = self._json(
+                        topic, topics[topic][0], item.data, optional is not None
+                    )
                     add_recording(value)
                     if topic == T_PROFILE:
                         _req(T_PROFILE not in seen_pre, "E_CHANNEL_CARDINALITY", topic)
@@ -409,32 +485,41 @@ class CaptureStream:
                         )
                         rep.profile = value
                         profile_limits = value.get("limits", {})
-                        enc = value.get("encoder", {})
-                        if "width" in enc and "height" in enc:
-                            profile_raster = (enc["width"], enc["height"])
                         seen_pre.add(topic)
-                    elif topic == T_CLOCKS:
-                        _req(T_CLOCKS not in seen_pre, "E_CHANNEL_CARDINALITY", topic)
-                        clocks = value["stream_clocks"]
-                        seen_pre.add(topic)
-                    elif topic == T_INVENTORY:
+                    elif topic in SHARED_DECLARATIONS:
+                        add_declaration(topic, value)
+                    elif topic == T_CALIBRATIONS:
+                        cid = value["calibration_id"]
                         _req(
-                            T_INVENTORY not in seen_pre, "E_CHANNEL_CARDINALITY", topic
+                            cid not in last_id_by_cal, "E_CALIBRATION_ASSOCIATION", cid
                         )
-                        calibrations = {
-                            c["calibration_id"] for c in value.get("calibrations", [])
-                        }
-                        seen_pre.add(topic)
+                        _req(
+                            cid not in calibration_revisions
+                            and len(calibration_revisions) < MAX_CALIBRATIONS,
+                            "E_CALIBRATION_VALUES",
+                            cid,
+                        )
+                        _req(
+                            ref.calibration_values_ok(
+                                value, (rep.profile or {}).get("encoder", {})
+                            ),
+                            "E_CALIBRATION_VALUES",
+                            cid,
+                        )
+                        calibration_revisions[cid] = value
+                    elif topic == CAMERA_METADATA and optional is not None:
+                        optional.metadata(value)
+                    elif topic == DEPTH_EVENTS and optional is not None:
+                        optional.depth(value, clocks)
                     elif topic in (T_ACCEL, T_GYRO):
                         _req(
-                            clocks.get(topic.rsplit("/", 1)[1])
+                            clocks["stream_clocks"].get(topic.rsplit("/", 1)[1])
                             == value["native_clock_id"],
                             "E_CLOCK_MISMATCH",
                             topic,
                         )
                         rep.motion_events[topic.rsplit("/", 1)[1]] += 1
                     elif topic == T_FRAMES:
-                        counts[T_FRAMES] += 1
                         e = value
                         sid, st = e["source_frame_id"], e["state"]
                         if st == "acquired":
@@ -453,9 +538,39 @@ class CaptureStream:
                                 "E_ORDER_UNSUPPORTED",
                                 {"encoder_pts_us": e["encoder_pts_us"]},
                             )
-                            used_calibrations.add(e["calibration_id"])
+                            cid = e["calibration_id"]
+                            if optional is not None:
+                                _req(
+                                    e["clock_mapping_revision"]
+                                    == clocks["recorder_transport"]["revision"],
+                                    "E_CLOCK_MISMATCH",
+                                    sid,
+                                )
+                                calibration = calibration_revisions.get(cid)
+                                if (
+                                    calibration is not None
+                                    and cid not in last_id_by_cal
+                                ):
+                                    _req(
+                                        (
+                                            sid,
+                                            e["native_timestamp_ns"],
+                                            e["native_clock_id"],
+                                            e["stream_id"],
+                                        )
+                                        == (
+                                            calibration["first_source_frame_id"],
+                                            calibration["first_native_timestamp_ns"],
+                                            calibration["native_clock_id"],
+                                            calibration["stream_id"],
+                                        ),
+                                        "E_CALIBRATION_ASSOCIATION",
+                                        cid,
+                                    )
+                                optional.acquired(e)
                             _req(
-                                len(used_calibrations) <= 64,
+                                cid in last_id_by_cal
+                                or len(last_id_by_cal) < MAX_CALIBRATIONS,
                                 "E_SENSOR_BOUND",
                                 "calibrations",
                             )
@@ -497,7 +612,8 @@ class CaptureStream:
                             )
                         if st in ("acquired", "written"):
                             _req(
-                                clocks.get(e["stream_id"]) == e.get("native_clock_id"),
+                                clocks["stream_clocks"].get(e["stream_id"])
+                                == e.get("native_clock_id"),
                                 "E_CLOCK_MISMATCH",
                                 sid,
                             )
@@ -539,6 +655,7 @@ class CaptureStream:
                                 yield from release_ready(False)
                             else:
                                 _req(seq > last_video_seq, "E_SEQUENCE", seq)
+                                _req(seq not in early_written, "E_SEQUENCE", seq)
                                 _req(
                                     len(early_written) < lim.max_pending_video,
                                     "E_JOIN_WINDOW",
@@ -547,7 +664,6 @@ class CaptureStream:
                                 early_written[seq] = (ev, item.log_time)
                     elif topic == T_SENSOR:
                         rep.sensor_events += 1
-                        counts[T_SENSOR] += 1
                         _req(
                             value["source_kind"] != "arcore_pose"
                             or value.get("tracking_state") == "tracking"
@@ -564,7 +680,7 @@ class CaptureStream:
                                     sup,
                                 )
                                 _req(
-                                    len(reset_at) < 64,
+                                    len(reset_at) < MAX_CALIBRATIONS,
                                     "E_SENSOR_BOUND",
                                     "calibration resets",
                                 )
@@ -586,7 +702,10 @@ class CaptureStream:
                         elif (
                             assoc in inflight
                             or int(assoc) > last_acquired_id
-                            or any(p.au.source_frame_id == assoc for p in pending_video)
+                            or any(
+                                ev["source_frame_id"] == assoc
+                                for ev, _ in early_written.values()
+                            )
                         ):
                             _req(
                                 sum(map(len, pending_sensor.values()))
@@ -594,7 +713,13 @@ class CaptureStream:
                                 "E_SENSOR_BOUND",
                                 lim.max_pending_sensor_events,
                             )
-                            pending_sensor.setdefault(assoc, []).append(value)
+                            waiting_sensors = pending_sensor.setdefault(assoc, [])
+                            _req(
+                                len(waiting_sensors) < lim.max_sensor_events_per_frame,
+                                "E_SENSOR_BOUND",
+                                assoc,
+                            )
+                            waiting_sensors.append(value)
                         else:
                             raise CaptureStreamError("E_SENSOR_ASSOCIATION_LATE", assoc)
                     elif topic == T_CLOSE:
@@ -606,21 +731,22 @@ class CaptureStream:
                     except (ValueError, IndexError, struct.error, UnicodeDecodeError):
                         raise CaptureStreamError("E_MALFORMED_MESSAGE", topic) from None
                     rep.pose_messages += 1
+                elif optional is not None and topic in ref.DEPTH_IMAGE_TOPICS:
+                    optional.image(topic, item.sequence, item.data)
                 else:
                     raise CaptureStreamError("E_CHANNEL_ENCODING", topic)
-        _ = legacy
-        _req(
-            used_calibrations <= calibrations,
-            "E_CALIBRATION_UNKNOWN",
-            sorted(used_calibrations - calibrations),
-        )
-        # ---- container fully verified (iterator ended); now end-of-capture contract rules
         _req(
             all(t in seen_pre for t in (*PRE_FRAME, T_INVENTORY))
             and rep.close is not None,
             "E_CHANNEL_CARDINALITY",
             "Profile, Clocks, Inventory and Close are required exactly once",
         )
+        calibration_inventory = inventory.get("calibrations", [])
+        calibrations = {
+            entry["calibration_id"]: entry for entry in calibration_inventory
+        }
+        unknown = last_id_by_cal.keys() - calibrations.keys()
+        _req(not unknown, "E_CALIBRATION_UNKNOWN", sorted(unknown))
         _req(
             not pending_video and not early_written,
             "E_SEQUENCE",
@@ -652,7 +778,37 @@ class CaptureStream:
         elif close["outcome"] == "failed":
             _req(close.get("failure_reason") is not None, "E_OUTCOME_MISMATCH")
         _req(rep.frame_counts["written"] == rep.video_messages, "E_SEQUENCE")
-        _ = profile_raster
+        if optional is not None:
+            _req(
+                len(calibrations) == len(calibration_inventory),
+                "E_CALIBRATION_VALUES",
+                "duplicate inventory calibration",
+            )
+            unknown = calibration_revisions.keys() - calibrations.keys()
+            _req(not unknown, "E_CALIBRATION_UNKNOWN", sorted(unknown))
+            present = {
+                cid for cid, entry in calibrations.items() if entry["state"] == "yes"
+            }
+            _req(
+                present == calibration_revisions.keys(),
+                "E_CALIBRATION_VALUES",
+                "inventory disagrees with calibration records",
+            )
+            for cid in present:
+                _req(
+                    calibrations[cid]["stream_id"] == "rgb", "E_CALIBRATION_VALUES", cid
+                )
+                _req(cid in last_id_by_cal, "E_CALIBRATION_ASSOCIATION", cid)
+            _req(
+                close["calibrations"] == str(len(present)),
+                "E_COUNT_MISMATCH",
+                T_CALIBRATIONS,
+            )
+            self._check_v12_outcome(close)
+            rep.native_evidence_counts = {
+                "calibrations": len(present),
+                **optional.finish(inventory, close),
+            }
         rep.accepted = True
 
     # ------------------------------------------------------------------------------------
@@ -674,31 +830,78 @@ class CaptureStream:
         if len(recent) > 256:
             recent.popitem(last=False)
 
-    def _check_schema(self, s: SchemaDef) -> None:
+    @staticmethod
+    def _check_v12_outcome(close: dict[str, Any]) -> None:
+        outcome, reason, drain = (
+            close["outcome"],
+            close["stop_reason"],
+            close["encoder_drain"],
+        )
+        _req(
+            outcome != "completed"
+            or (
+                drain == "eos_reached"
+                and reason in ("user_requested", "duration_limit")
+            ),
+            "E_OUTCOME_MISMATCH",
+        )
+        _req(
+            outcome == "failed"
+            or (
+                reason not in ("writer_error", "encoder_error")
+                and drain != "encoder_failed"
+            ),
+            "E_OUTCOME_MISMATCH",
+        )
+        _req(
+            outcome in ("aborted", "failed")
+            or reason
+            not in (
+                "low_storage_reserve",
+                "thermal_critical",
+                "session_interrupted",
+                "camera_lost",
+                "app_terminating",
+            ),
+            "E_OUTCOME_MISMATCH",
+        )
+        _req(
+            drain != "not_started" or close["video_messages"] == "0",
+            "E_OUTCOME_MISMATCH",
+        )
+        _req(outcome != "unknown" or reason == "unknown", "E_OUTCOME_MISMATCH")
+
+    def _check_schema(self, s: SchemaDef, hashes: dict[str, Any]) -> None:
         ref = self._ref
         digest = hashlib.sha256(s.data).hexdigest()
         if s.name == ref.VIDEO_SCHEMA:
             _req(
-                digest == self._manifest["foxglove-compressed-video.desc"],
+                digest == hashes["foxglove-compressed-video.desc"],
                 "E_DESCRIPTOR_HASH",
             )
-        elif s.name in ref.CUSTOM:
+        elif s.name == ref.RAW_IMAGE_SCHEMA and ref.RAW_IMAGE_DESC in hashes:
+            _req(digest == hashes[ref.RAW_IMAGE_DESC], "E_DESCRIPTOR_HASH", s.name)
+        elif s.name in ref.CUSTOM or s.name in ref.CUSTOM12:
+            filename = ref.CUSTOM.get(s.name) or ref.CUSTOM12[s.name]
             _req(
-                digest == self._manifest[ref.CUSTOM[s.name]],
+                digest == hashes.get(filename),
                 "E_SCHEMA_MISMATCH",
                 s.name,
             )
         elif s.name == ref.POSE_SCHEMA:
             _req(
-                digest == self._manifest[ref.POSE_SCHEMA_FILE],
+                digest == hashes[ref.POSE_SCHEMA_FILE],
                 "E_CHANNEL_ENCODING",
                 s.name,
             )
-        elif s.name == "sensor_msgs/msg/CompressedImage":
-            raise CaptureStreamError("E_LEGACY_JPEG_UNSUPPORTED", s.name)
 
-    def _check_channel(self, c: ChannelDef, schemas: dict[int, SchemaDef]) -> None:
-        want = self._ref.CHANNELS.get(c.topic)
+    @staticmethod
+    def _check_channel(
+        c: ChannelDef,
+        schemas: dict[int, SchemaDef],
+        topics: dict[str, tuple[str, str, str]],
+    ) -> None:
+        want = topics.get(c.topic)
         s = schemas.get(c.schema_id)
         _req(
             s is not None
@@ -708,13 +911,19 @@ class CaptureStream:
             c.topic,
         )
 
-    def _json(self, topic: str, data: bytes) -> dict[str, Any]:
+    def _json(
+        self, topic: str, schema_name: str, data: bytes, v12: bool
+    ) -> dict[str, Any]:
         ss = self._schema_mod
+        _req(
+            not v12 or len(data) <= self._ref.JSON_MESSAGE_MAX,
+            "E_MALFORMED_MESSAGE",
+            topic,
+        )
         try:
             value = ss.parse_json(data)
         except (ss.MalformedJson, ValueError, UnicodeDecodeError):
             raise CaptureStreamError("E_MALFORMED_MESSAGE", topic) from None
-        schema_name = self._ref.CHANNELS[topic][0]
         violations = self._ref.contract_schema(schema_name).validate(value)
         _req(
             not violations,
