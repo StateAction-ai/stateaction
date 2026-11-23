@@ -14,8 +14,10 @@ import {
 } from "../jobs/recovery.js";
 import type { JobControlCapabilities, PipelineQuery } from "./model.js";
 import { readFileSync } from "node:fs";
-import type { DagRunV1 } from "@stateaction/contracts";
+import type { DagRunV1, Stage } from "@stateaction/contracts";
+import type { DiagnosticLink } from "./run-view.js";
 import { getDagRun } from "../jobs/stages.js";
+import { listJobDiagnostics } from "../jobs/diagnostics.js";
 import { readRateCard, type RateCard } from "../ops/cost.js";
 import { TransportError } from "../transport/errors.js";
 
@@ -82,6 +84,27 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
           return null;
         throw error;
       }
+    },
+    /**
+     * Completed diagnostic_blob files per stage, as links to the staff read
+     * route (no URL is signed here). Empty when the job has none.
+     */
+    diagnostics: async (
+      staffUserId: string,
+      detail: PipelineDetail,
+    ): Promise<Partial<Record<Stage, DiagnosticLink[]>>> => {
+      if (!detail.jobId) return {};
+      const out: Partial<Record<Stage, DiagnosticLink[]>> = {};
+      for (const d of await listJobDiagnostics(
+        get().pool,
+        staffUserId,
+        detail.jobId,
+      ))
+        (out[d.stage] ??= []).push({
+          name: d.name,
+          href: `/api/v1/jobs/${detail.jobId}/diagnostics/${d.fileId}/read`,
+        });
+      return out;
     },
     rates: () => operatorRates(),
     /** State-derived operator instruction for the current attempt (null when none). */

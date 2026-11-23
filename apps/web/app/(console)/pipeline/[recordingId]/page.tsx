@@ -70,7 +70,16 @@ export default async function PipelineRecordingPage({
       error instanceof Error ? error.message : error,
     );
   }
-  const stages = run ? buildRunStages(run, reads.rates()) : [];
+  const diagnostics = run
+    ? await reads.diagnostics(session.userId, detail).catch((error) => {
+        console.error(
+          "[pipeline] diagnostics unavailable:",
+          error instanceof Error ? error.message : error,
+        );
+        return {};
+      })
+    : {};
+  const stages = run ? buildRunStages(run, reads.rates(), diagnostics) : [];
   const summary = run ? buildRunSummary(run, detail.annotations) : null;
   const failedStages = stages.filter((s) => s.state === "failed");
   const count = (n: number | null) => (n === null ? "—" : String(n));

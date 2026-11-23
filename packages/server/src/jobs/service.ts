@@ -19,6 +19,7 @@ import {
   TASK_INPUT_INVALID_ERROR_CODE,
   type JobsConfig,
 } from "./config.js";
+import { withLocalRecipes } from "./local-recipe.js";
 import { assertJobCurrent, JOB_CURRENT_SQL } from "./current.js";
 
 type Tx = pg.PoolClient;
@@ -251,7 +252,11 @@ function isBuilderRejection(error: unknown): boolean {
  * the rest observe `slot_busy`. Queued jobs hold nothing.
  */
 export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
-  const build = deps.taskInput ?? defaultTaskInput;
+  const build =
+    deps.taskInput ??
+    (deps.config.localRecipeDir
+      ? withLocalRecipes(defaultTaskInput, deps.config.localRecipeDir)
+      : defaultTaskInput);
   return run(deps.pool, async (tx): Promise<AdmitResult> => {
     // Serialize every admission on the singleton slot row FIRST; the winner
     // then chooses an eligible job while concurrent callers wait here and see

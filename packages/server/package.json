@@ -40,6 +40,10 @@
     "./jobs": {
       "types": "./dist/jobs/next.d.ts",
       "default": "./dist/jobs/next.js"
+    },
+    "./ops": {
+      "types": "./dist/ops/index.d.ts",
+      "default": "./dist/ops/index.js"
     }
   },
   "types": "./dist/index.d.ts",

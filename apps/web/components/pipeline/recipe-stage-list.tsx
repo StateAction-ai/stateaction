@@ -13,6 +13,7 @@ import {
   type RunStageView,
 } from "@stateaction/server/pipeline";
 import { cn } from "../../lib/utils";
+import { DiagnosticLink } from "./diagnostic-link";
 
 type State = RunStageView["state"];
 const ICON: Record<State, typeof CheckCircle2> = {
@@ -185,14 +186,7 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
                   <span className="text-muted">No stage receipt recorded</span>
                 )}
                 {s.diagnostics.map((d) => (
-                  <a
-                    key={d.name}
-                    href={d.href}
-                    className="text-brand"
-                    rel="noreferrer"
-                  >
-                    {d.name}
-                  </a>
+                  <DiagnosticLink key={d.href} name={d.name} href={d.href} />
                 ))}
               </p>
             </div>

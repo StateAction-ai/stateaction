@@ -11,7 +11,8 @@ import { serverConfig } from "../config.js";
 import { acceptanceConfigFromEnv } from "../acceptance/config.js";
 import { s3ObjectHasher } from "../acceptance/storage.js";
 import { s3ObjectReader } from "../admission/object-reader.js";
-import { presignObject } from "../storage.js";
+import { presignObject, storageClient } from "../storage.js";
+import { S3ReadSigner } from "../datasets/broker.js";
 import { JobCapabilityStore, WORKER_AUDIENCE } from "../transport/runtime.js";
 import {
   BootstrapCapabilityStore,
@@ -22,6 +23,7 @@ import { jobsConfigFromEnv } from "./config.js";
 import { renderTaskStarterFromEnv } from "./dispatch.js";
 import { datasetAuthenticator } from "../datasets/next.js";
 import { jobControlRoutes, jobDagRunRoutes } from "./control.js";
+import { jobDiagnosticRoutes } from "./diagnostics.js";
 import { jobHandlers, type JobHandlers } from "./http.js";
 import type { JobsDeps } from "./service.js";
 
@@ -319,6 +321,55 @@ export function jobDagRunRouteHandlers(get: () => AuthRuntime = authRuntime) {
         }
       }
       return routes.dagRun(request, jobId);
+    },
+  };
+}
+
+const DIAGNOSTIC_KEY = Symbol.for("stateaction.jobs.diagnostics");
+/**
+ * Staff diagnostic read binding (/api/v1/jobs/{jobId}/diagnostics/{fileId}/read):
+ * staff session guard, restricted pool, and the same S3/R2 read signer family
+ * as the dataset read routes (credentials stay in this process).
+ */
+export function jobDiagnosticRouteHandlers(
+  get: () => AuthRuntime = authRuntime,
+) {
+  return {
+    read: (
+      request: Request,
+      jobId: string,
+      fileId: string,
+    ): Promise<Response> => {
+      const holder = globalThis as {
+        [DIAGNOSTIC_KEY]?: ReturnType<typeof jobDiagnosticRoutes>;
+      };
+      let routes = holder[DIAGNOSTIC_KEY];
+      if (!routes) {
+        try {
+          const config = serverConfig();
+          routes = holder[DIAGNOSTIC_KEY] = jobDiagnosticRoutes({
+            pool: get().pool,
+            signer: new S3ReadSigner(
+              storageClient(config, 15_000, config.publicEndpoint),
+              config.bucket,
+            ),
+            authenticate: datasetAuthenticator(get),
+          });
+        } catch (error) {
+          console.error(
+            "[jobs] diagnostics unavailable:",
+            error instanceof Error ? error.message : "error",
+          );
+          return Promise.resolve(
+            authError(
+              "provider_unavailable",
+              "Job service is temporarily unavailable",
+              newRequestId(),
+            ),
+          );
+        }
+      }
+      return routes.read(request, jobId, fileId);
     },
   };
 }

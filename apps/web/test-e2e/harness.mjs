@@ -56,6 +56,8 @@ export async function startStack({
   // TEST-ONLY. Default trusts the loopback harness peer so tests can simulate
   // client addresses; pass "" to run exactly like the production default.
   trustedProxies = "127.0.0.1,::1",
+  // TEST/DEV-ONLY extra Next environment (SA-96 seed: jobs identity, simulated inputs, recipe dir).
+  extraEnv = {},
 } = {}) {
   const password = "e2e-only " + randomBytes(9).toString("base64url");
   const db = await startCatalogPostgres();
@@ -103,6 +105,7 @@ export async function startStack({
       PROCESSING_PROFILE_REVISION: "sa21-e2e-1",
       SUPPORTED_RGB_PROFILES: "h264_mcap_v1",
     }),
+    ...extraEnv,
   };
   let logs = "";
   let next;

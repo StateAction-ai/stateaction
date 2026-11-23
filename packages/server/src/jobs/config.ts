@@ -1,5 +1,6 @@
 import type { RecipeV1 } from "@stateaction/contracts";
 import { clipsForSeconds, jobOutputFileLimit } from "../acceptance/config.js";
+import { localRecipeDir } from "./local-recipe.js";
 
 /**
  * Explicit, fail-closed job orchestration settings. Identical locally,
@@ -31,6 +32,8 @@ export type JobsConfig = {
   readUrlSeconds: number;
   /** Repair pass bounds; every field has an explicit finite default. */
   repair?: Partial<RepairLimits>;
+  /** SA-96 local-only recipe override directory; only ever set with APP_ENV=local. */
+  localRecipeDir?: string;
 };
 
 /** Hard bounds for one minute repair pass (SA-27). Nothing waits or retries unboundedly. */
@@ -136,7 +139,9 @@ export function jobsConfigFromEnv(
     ceiling,
     clipsForSeconds(MAX_RECORDING_SECONDS),
   );
+  const recipeDir = localRecipeDir(env);
   return {
+    ...(recipeDir !== undefined && { localRecipeDir: recipeDir }),
     executionBackend: backend,
     codeRevision: setting(env, "PROCESSING_CODE_REVISION", REVISION),
     imageSpecSha256: setting(env, "PROCESSING_IMAGE_SPEC_SHA256", SHA),
