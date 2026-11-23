@@ -19,7 +19,7 @@ Read the linked doc before working in its area.
 
 - Setup: `pnpm install --frozen-lockfile` and the documented uv sync. Hook and gate details: see [local-ci.md](docs/local-ci.md).
 - Check: `pnpm check`. Affected only: `pnpm affected --base=<base> --head=<head>`.
-- Full gate: `pnpm ci:local`. Receipt: `pnpm ci:verify`. Merge: `pnpm ci:merge --pr <n> --execute`.
+- Full gate: `pnpm ci:local`. Receipt: `pnpm ci:verify`. Land (rebase, gate, merge in one ticket): `pnpm ci:land --pr <n>`; manual merge: `pnpm ci:merge --pr <n> --execute`.
 - Every local command goes through `agent-resource run [--lane ci|android-build|emulator] -- <command>`. Edits, git, lint, typecheck, targeted tests, servers and reviews are Free (no `--lane`): no slot, no wait, a capped scope each (`--mem` lowers it).
 - Gates, Flutter/Gradle builds and emulator sessions take their lane: `ci` and `android-build` one ticket per repository, `emulator` one machine-wide. FIFO via the pinned `agentqueue`; a ticket outlives a killed agent and Ctrl-C only detaches. Lanes never nest; work inside a ticket runs under it. Other projects' roots are never queued. Details: [workstation-resource-guard.md](docs/components/workstation-resource-guard.md).
 - Emulator: `bash scripts/supervise_capture_emulator.sh` in a persistent terminal, not under `agent-resource run`.
@@ -53,14 +53,14 @@ Read the linked doc before working in its area.
 - One ticket, one PR, one primary Linear ticket. Search all PRs (including closed/merged) first and update the original. Follow-up work gets a new ticket and PR.
 - Branch name is the exact `gitBranchName` fetched from Linear. Never invent or shorten it.
 - PR title `SA-n: <Linear title>`. Body has one `Refs SA-n`; use `Fixes` only when all acceptance criteria are demonstrated.
-- Rebase onto the latest `origin/main`, squash to one commit, no merge commits.
+- Rebase onto the latest `origin/main`, squash to one commit, no merge commits. A rebase that changes no patch (same patch-id, no conflict) keeps the earlier review valid (the gate still reruns on the new head); any other rebase needs a fresh review (`ci:land` refuses with `needs_review`).
 - Rewriting an owned PR branch: keep the old head, push with `--force-with-lease=<branch>:<exact remote head>`.
 - Local CI ([local-ci.md](docs/local-ci.md)): rebase onto the latest origin/main first (single commit directly above it); each PR must then pass the full local CI (`pnpm ci:local` on that final head) before merge; if origin/main moves, rebase and rerun.
 - Install the hook per worktree with `pnpm hooks:install-local`; a normal commit runs only the fast staged-content checks, not the whole suite. Never use `--no-verify`.
-- `pnpm ci:local` is the single required full-suite pass per ticket. `pnpm ci:local` and `pnpm ci:merge` enter the `ci` lane themselves, so do not wrap them; they queue FIFO behind other gates (no polling, no second gate). `ci:merge` also takes the merge lock and checks the merged tree.
+- `pnpm ci:local` is the single required full-suite pass per ticket. `pnpm ci:local`, `ci:merge --execute` and `ci:land` enter the `ci` lane themselves (or run inside the lane ticket you wrapped them in, e.g. the `ci:land` form below); they queue FIFO behind other gates (no polling, no second gate). `ci:merge` also takes the merge lock and checks the merged tree.
 - Only a full PASS on an unchanged tree counts. Never start a second run on the same tree.
 - The gate fails closed without the verified cgroup (6 GiB per job, no swap, one ticket per lane) and never starts Docker, an emulator or a paid service.
-- Merge ready PRs with `pnpm ci:merge`. Keep unfinished or failing work in draft.
+- Each implementer lands its own ready PR with one ticket: `agent-resource run --lane ci --key land-<pr>-<head> -- pnpm ci:land --pr N` (own `wanghujie/sa-<n>-*` branch only; rebases if main moved, gates, merges; result JSON via `agent-resource find --key K`). After any non-zero exit read `reason` and fix; resubmit with a new key suffix (`-r2`); codes 3 and 11: stop and report. Exit codes and rules: [local-ci.md](docs/local-ci.md). No separate CI runner. Keep unfinished or failing work in draft.
 - Do not hold reviewed, tested work in draft for device/provider/deploy qualification. Record criteria, evidence, remaining gates and the PR URL on the ticket.
 - Report local results and hosted CI separately. Physical-device, company-profile, iOS-hardware and hosted-provider qualification are never reported as passed.
 - A scaffold pass is not feature completion.

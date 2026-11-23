@@ -16,7 +16,7 @@ Agents verify the exact branch value in Linear. Hosted GitHub Actions are manual
 
 ## Merge and plan limit
 
-The current GitHub plan rejects protected branches and native auto-merge for private repositories (verified HTTP 403). Keep the repository private. Merge a ready PR with `pnpm ci:merge --pr <n> --execute`: it verifies the local receipt and ticket policy, then uses GitHub's squash merge with `--match-head-commit`. It never pushes `main` and never fakes a hosted status. Details: [local-ci.md](local-ci.md); the hosted merger in [automation](../scripts/automation/README.md) is optional and manual.
+The current GitHub plan rejects protected branches and native auto-merge for private repositories (verified HTTP 403). Keep the repository private. The PR owner lands a ready PR with one `ci` ticket, `agent-resource run --lane ci --key land-<pr>-<head> -- pnpm ci:land --pr <n>` (rebase if main moved, gate, merge; see [local-ci.md](local-ci.md)); `pnpm ci:merge --pr <n> --execute` is the manual path: it verifies the local receipt and ticket policy, then uses GitHub's squash merge with `--match-head-commit`. It never pushes `main` and never fakes a hosted status. Details: [local-ci.md](local-ci.md); the hosted merger in [automation](../scripts/automation/README.md) is optional and manual.
 
 Each PR is rebased by its owner onto current `main` and lands as one squash commit with no merge commits; the merge path never refreshes a stale branch itself. After a rebase, the owner pushes with an exact `--force-with-lease` and the new head needs a fresh local receipt and review.
 
