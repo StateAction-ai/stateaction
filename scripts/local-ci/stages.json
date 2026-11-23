@@ -123,10 +123,6 @@
       "title": "Affected integration, auth E2E and runtime smoke on bounded external fixtures (never cached)",
       "fixtures": true,
       "timeoutSec": 3600,
-      "env": {
-        "HOSTED_SMOKE_WEB_PORT": "10050",
-        "HOSTED_SMOKE_RUNNER_PORT": "8150"
-      },
       "affected": {
         "targets": [
           "catalog-integration",
@@ -136,7 +132,8 @@
           "e2e"
         ],
         "args": ["--parallel=1", "--nxBail", "--outputStyle=static"]
-      }
+      },
+      "dbConnections": 19
     }
   ],
   "unautomated": [

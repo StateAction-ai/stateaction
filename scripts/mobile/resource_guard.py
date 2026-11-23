@@ -41,7 +41,24 @@ AGG_MAX = 24 * GIB  # absolute upper bound for the aggregate kernel cap
 BOOT_CAP = 12 * GIB  # unit-file default before the first dynamic readback
 TOTAL_MAX = BOOT_CAP  # legacy alias
 JOB_MAX = 6 * GIB  # emulator and heavy job, unchanged
-SERVICE_MAX = 1 * GIB
+SERVICE_MAX = 1 * GIB  # default service cap (postgres: measured need under the gate)
+# Per-service (MemoryHigh, MemoryMax). SeaweedFS keeps volume files in the page cache that its
+# cgroup is charged for: at 1 GiB / 768 MiB it was throttled (17M memory.high events, S3
+# requests stalling past 30 s) and every gate failed on ETIMEDOUT (SA-108). Measured
+# memory.peak under the gate was 1.02 GiB; the cap keeps >= 1.5x headroom over it.
+SERVICE_CAPS = {
+    "storage": (1800 * 1024**2, 2 * GIB),
+}
+SERVICE_CAP_DEFAULT = (768 * 1024**2, SERVICE_MAX)
+STORAGE_PEAK_MEASURED = 1018462208
+
+
+def service_caps(unit: str) -> tuple[int, int]:
+    """(MemoryHigh, MemoryMax) of `agent-service-<name>.scope`."""
+    name = unit.removesuffix(".scope").removeprefix("agent-service-")
+    return SERVICE_CAPS.get(name, SERVICE_CAP_DEFAULT)
+
+
 ADMISSION_MARGIN = 8 * GIB  # JOB_MAX + 2 GiB above the host reserve
 SHRINK_MARGIN = 1 * GIB  # never set a cap closer than this to memory.current
 STOP_MARGIN = 1 * GIB  # watchdog stops this far above the 20% reserve
@@ -71,7 +88,11 @@ FREE_CPU_WEIGHT = 100  # the systemd default weight; Free cannot starve a gate
 FREE_DENY = ("gradle", "gradlew", "emulator", "emulator.agent-vendor")
 LANES = ("ci", "android-build", "emulator")
 MACHINE_LANES = ("emulator",)  # one state dir for all registered roots
-LANE_SCOPE = re.compile(r"agent-lane-(ci|android-build|emulator)-[0-9a-f]{8}\.scope")
+# Slot 0 keeps the historical name; slot n >= 1 of a multi-slot lane (SA-108) is `-s<n>`, so
+# two concurrent jobs of one lane never collide on the transient unit name.
+LANE_SCOPE = re.compile(
+    r"agent-lane-(ci|android-build|emulator)-[0-9a-f]{8}(?:-s[1-9])?\.scope"
+)
 LANE_ENV_PASS = (
     "GH_TOKEN",
     "GITHUB_TOKEN",
@@ -637,6 +658,7 @@ def policy() -> dict:
         "aggregateMaxBytes": AGG_MAX,
         "jobMaxBytes": JOB_MAX,
         "serviceMaxBytes": SERVICE_MAX,
+        "serviceCapsBytes": {k: v[1] for k, v in SERVICE_CAPS.items()},
         "memTotalBytes": total,
         "reserveBytes": host_reserve(total),
         "ceilingBytes": host_ceiling(total),
@@ -827,8 +849,8 @@ def run_scope(
             f"--slice={SLICE}",
             f"--unit={unit.removesuffix('.scope')}",
             "--property=MemoryAccounting=yes",
-            "--property=MemoryHigh=768M" if service else "--property=MemoryHigh=5G",
-            "--property=MemoryMax=1G" if service else "--property=MemoryMax=6G",
+            f"--property=MemoryHigh={service_caps(unit)[0] if service else 5 * GIB}",
+            f"--property=MemoryMax={service_caps(unit)[1] if service else 6 * GIB}",
             "--property=MemorySwapMax=0",
             "--property=TasksMax=256",
             "--",
@@ -1286,7 +1308,9 @@ def lane_environment() -> list[str]:
 LANE_LOG_ENV = "STATEACTION_LANE_LOG"
 # Threads count as tasks. The gate pinned its 256-task scope for minutes in web-auth-e2e (measured
 # 256 of 256, Chrome could not start threads). Per-scope cap; the shared slice allows SLICE_TASKS_MAX.
-LANE_TASKS = 512
+LANE_TASKS = (
+    1536  # nested nx graph workers; 3 gates x 1536 stay under the 8192 slice cap
+)
 
 
 def lane_log_path(key: str | None = None) -> Path:
@@ -1537,6 +1561,24 @@ def slot_fds() -> list[int]:
     return found
 
 
+def slot_index() -> int:
+    """Index of the agentqueue slot this job holds (`.../lanes/<lane>/slot-<n>`), 0 if none."""
+    found = []
+    for entry in Path("/proc/self/fd").iterdir():
+        try:
+            target = os.readlink(entry)
+        except OSError:
+            continue
+        match = re.search(r"/lanes/[^/]+/slot-(\d+)$", target)
+        if match:
+            found.append(int(match.group(1)))
+    return min(found) if found else 0
+
+
+def lane_unit(lane: str, key: str, slot: int) -> str:
+    return f"agent-lane-{lane}-{key}" + (f"-s{slot}" if slot else "") + ".scope"
+
+
 def run_bounded(
     unit: str,
     command: list[str],
@@ -1621,7 +1663,7 @@ def lane_job(lane: str, key: str, command: list[str]) -> int:
         lane  # informational; trust is the cgroup (current_lane)
     )
     return run_bounded(
-        f"agent-lane-{lane}-{key}.scope",
+        lane_unit(lane, key, min(slot_index(), 9)),
         command,
         slice_name=SLICE,
         job_max=JOB_MAX,

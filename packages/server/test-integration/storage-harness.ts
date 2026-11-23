@@ -163,11 +163,28 @@ export async function faultProxy(upstream: string) {
         "/",
       );
       const key = rest.map(decodeURIComponent).join("/");
+      // SeaweedFS answers an occasional GET of a just-written multi-chunk object with a 500
+      // InternalError (seen ~1 in 100 runs, SA-108); the stand-in "non-compliant store" must
+      // not inherit that, so retry the upstream fetch a few times before giving up.
+      const fetchUpstream = (url: string, attempt: number) =>
+        http
+          .get(url, (up) => {
+            if ((up.statusCode ?? 502) >= 500 && attempt < 5) {
+              up.resume();
+              setTimeout(
+                () => !res.destroyed && fetchUpstream(url, attempt + 1),
+                50 * (attempt + 1),
+              );
+              return;
+            }
+            onUpstream(up);
+          })
+          .on("error", () => res.destroy());
       presignObject(storageConfig(decodeURIComponent(bucket!), upstream), {
         method: "GET",
         key,
       }).then(
-        (url) => http.get(url, onUpstream).on("error", () => res.destroy()),
+        (url) => fetchUpstream(url, 0),
         () => res.destroy(),
       );
       return;

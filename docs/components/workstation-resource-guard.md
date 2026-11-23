@@ -12,7 +12,7 @@ work slice. There is no unbounded fallback and no automatic retry after a refusa
 | Class                | Entry                                                       | Slot             | Waits       | Scope                                                          |
 | -------------------- | ----------------------------------------------------------- | ---------------- | ----------- | -------------------------------------------------------------- |
 | Free                 | `agent-resource run [--mem 4G] -- cmd` in a registered root | none             | never       | own scope in `agent-work-free.slice`: 6 GiB default, 512 tasks |
-| `ci` lane            | `agent-resource run --lane ci -- cmd`                       | 1 per repository | FIFO ticket | `agent-lane-ci-<repo>.scope`, 6 GiB                            |
+| `ci` lane            | `agent-resource run --lane ci -- cmd`                       | 1 per repository (2 supported) | FIFO ticket | `agent-lane-ci-<repo>[-s1].scope`, 6 GiB each                  |
 | `android-build` lane | `... --lane android-build -- cmd`                           | 1 per repository | FIFO ticket | `agent-lane-android-build-<repo>.scope`, 6 GiB                 |
 | `emulator` lane      | `... --lane emulator -- cmd`                                | 1 machine-wide   | FIFO ticket | `agent-lane-emulator-<repo>.scope`, 6 GiB                      |
 
@@ -35,9 +35,9 @@ of one repo share one `ci` lane (shared fixtures and ports); a different repo ha
   recomputed at each submit: 6 GiB at the 12 GiB boot cap (one lane job at a time), 14 GiB at 24 GiB
   (two). The Free slice is capped at `max(4 GiB, cap - 6 GiB - 2 GiB)` (4 GiB at the
   12 GiB boot cap, 16 GiB at 24 GiB; it overlaps the lane budget and the warm emulator, so Free 16 +
-  emulator 6 + one gate 6 can exceed the cap: the protection is the aggregate `MemoryMax`/`High`
+  emulator 6 + one gate 6 can exceed the cap (with the `ci` lane's second slot, SA-108, two gates 12 can too; Free commands carry a raised `oom_score_adj` and are the preferred OOM victims): the protection is the aggregate `MemoryMax`/`High`
   and the `oom_score_adj` of Free scopes, not a sum) with `MemoryLow=4 GiB`, `CPUWeight=100` (lane scopes 400) and `TasksMax=2048`; the shared
-  `agent-work.slice` allows 8192 tasks (per-scope caps stay 512 lane/Free, 256 default) and the
+  `agent-work.slice` allows 8192 tasks (per-scope caps stay 1536 lane, 512 Free, 256 default) and the
   watchdog re-asserts its limits every 30 s after a daemon-reload, and Free processes get `oom_score_adj=500`, so under
   pressure the kernel kills Free work before a gate; this is a preference, not a guarantee, and at the
   12 GiB boot cap a ci job plus the warm emulator already equal the cap. The aggregate kernel cap is
@@ -65,7 +65,7 @@ of one repo share one `ci` lane (shared fixtures and ports); a different repo ha
 - **Job log and flow report (SA-126).** When the pinned agentqueue has `--log` (SA-125) every lane
   submit passes `--log ~/.local/state/agent-resource-guard/lane-log.jsonl` (outside tmpfs, so gc and
   reboot keep one JSONL line per finished job); an older binary runs unlogged. `agent-resource stats
-  [--lane L] [--since T]` wraps `agentqueue stats` over that log, and without `stats` falls back to
+[--lane L] [--since T]` wraps `agentqueue stats` over that log, and without `stats` falls back to
   `scripts/flow-report.py --lanes-only`. `python3 scripts/flow-report.py [--since 24h]` (stdlib,
   read-only) joins lane records (the log, else the live state dir records, and says which), local-ci
   `run.json` and stage logs, `gh pr` data, git commit times and the handoff ready markers into a

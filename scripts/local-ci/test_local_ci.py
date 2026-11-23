@@ -10,6 +10,7 @@ import os
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -108,7 +109,12 @@ class RepoCase(unittest.TestCase):
         """Commit whatever the test staged, then gate the clean HEAD (tree mode)."""
         self.commit_pending()
         kwargs.setdefault("probe_fixtures", False)
+        kwargs.setdefault(
+            "probe_ports", False
+        )  # never depend on real ports in unit tests
         kwargs.setdefault("log", lambda _m: None)
+        # never share port-block locks with a real gate on this machine
+        kwargs.setdefault("port_locks", self.tmp / "port-locks")
         return local_ci.run_pipeline(
             self.repo,
             home=self.home,
@@ -126,6 +132,354 @@ class RepoCase(unittest.TestCase):
             if (self.home / "receipts").exists()
             else []
         )
+
+
+class ParallelSlotTests(RepoCase):
+    """SA-108: concurrent gates on different trees share no mutable state."""
+
+    def test_slots_are_exclusive_numbered_and_released(self):
+        home = local_ci.private_dir(self.home)
+        first = local_ci.acquire_slot(home)
+        second = local_ci.acquire_slot(home)
+        third = local_ci.acquire_slot(home)
+        self.assertEqual([first[1], second[1], third[1]], [0, 1, 2])
+        with self.assertRaisesRegex(local_ci.Refused, "owns this CI home"):
+            local_ci.acquire_slot(home)
+        os.close(second[0])  # a finished run frees exactly its own slot
+        again = local_ci.acquire_slot(home)
+        self.assertEqual(again[1], 1)
+        for fd, _ in (first, third, again):
+            os.close(fd)
+        self.assertEqual(local_ci.acquire_slot(home, parallel=1)[1], 0)
+
+    def test_slot_state_is_disjoint_and_slot_zero_keeps_the_historical_names(self):
+        dirs = [local_ci.slot_dirs(self.home, n) for n in range(local_ci.MAX_PARALLEL)]
+        self.assertEqual(dirs[0][0].name, "current")
+        self.assertEqual(dirs[0][1].name, "nx-cache")
+        self.assertEqual(dirs[0][2].name, "nx-workspace-data")
+        flat = [str(path) for group in dirs for path in group]
+        self.assertEqual(len(flat), len(set(flat)), "every slot owns its own dirs")
+        for group in dirs:  # a slot's export and Nx state never nest inside another's
+            for other in dirs:
+                if group is not other:
+                    for a in group:
+                        for b in other:
+                            self.assertNotIn(a, b.parents)
+
+    def test_slot_ports_are_disjoint_below_the_ephemeral_range_and_avoid_dev_ports(
+        self,
+    ):
+        seen: dict[str, int] = {}
+        for slot in range(local_ci.MAX_PORT_BLOCKS):
+            ports = local_ci.slot_ports(slot)
+            self.assertEqual(ports["STATEACTION_CI_PORT_BLOCK"], str(slot))
+            for key, value in ports.items():
+                if not key.endswith("_PORT"):
+                    continue
+                number = int(value)
+                self.assertLess(number, 32768, key)
+                self.assertNotIn(number, (3000, 8120, 8150, 10050, 19000, 54340))
+                self.assertNotIn(number, seen, f"{key} of slot {slot} collides")
+                seen[number] = slot
+        self.assertEqual(len(seen), 4 * local_ci.MAX_PORT_BLOCKS)
+
+    def test_an_occupied_port_fails_the_run_before_any_stage(self):
+        with socket.socket() as busy:
+            busy.bind(("0.0.0.0", 0))
+            busy.listen()
+            port = busy.getsockname()[1]
+            ports = {
+                "STATEACTION_CI_PORT_BLOCK": "1",
+                "STATEACTION_CI_PORT_BASE": str(port),
+                "CI_SMOKE_WEB_PORT": str(port),
+            }
+            with self.assertRaisesRegex(local_ci.Refused, f"Port {port}.*port block 1"):
+                local_ci.check_ports_free(ports)
+        local_ci.check_ports_free(ports)  # free again once the foreign listener is gone
+
+    def test_a_run_beside_another_gets_its_own_slot_export_tmp_cache_and_ports(self):
+        seen = self.tmp / "env.json"
+        code = f"""
+            import json, os
+            keys = ('TMPDIR', 'NX_CACHE_DIRECTORY', 'NX_WORKSPACE_DATA_DIRECTORY',
+                    'STATEACTION_CI_PORT_BLOCK', 'HOSTED_SMOKE_WEB_PORT',
+                    'HOSTED_SMOKE_RUNNER_PORT', 'CI_SMOKE_WEB_PORT', 'CI_SMOKE_RUNNER_PORT')
+            data = {{k: os.environ[k] for k in keys}}
+            data['cwd'] = os.getcwd()
+            open({str(seen)!r}, 'a').write(json.dumps(data) + chr(10))
+        """
+        self.set_stages([stage("show", code)])
+        alone = self.run_tree()
+        beside_fd, beside_slot = local_ci.acquire_slot(local_ci.private_dir(self.home))
+        beside_ports, beside_block = local_ci.acquire_port_block(
+            self.tmp / "port-locks"
+        )
+        try:
+            self.assertEqual((beside_slot, beside_block), (0, 0))
+            second = (
+                self.run_tree()
+            )  # a gate holds slot 0 and block 0: this takes 1 and 1
+        finally:
+            os.close(beside_fd)
+            os.close(beside_ports)
+        self.assertEqual(alone["verdict"], "PASS")
+        self.assertEqual(second["verdict"], "PASS")
+        self.assertEqual(alone["isolation"]["slot"], 0)
+        self.assertEqual(second["isolation"]["slot"], 1)
+        one, two = (json.loads(line) for line in seen.read_text().splitlines())
+        for key in one:
+            self.assertNotEqual(one[key], two[key], f"{key} shared by both slots")
+        self.assertEqual(two["STATEACTION_CI_PORT_BLOCK"], "1")
+        self.assertEqual(second["isolation"]["portBlock"], 1)
+        a, b = alone["isolation"], second["isolation"]
+        for key in ("export", "tmp", "nxCache", "nxWorkspaceData"):
+            self.assertNotEqual(a[key], b[key], key)
+        self.assertFalse(set(a["ports"].values()) & set(b["ports"].values()))
+        self.assertNotEqual(alone["runId"], second["runId"])
+        self.assertNotEqual(alone["logDir"], second["logDir"])
+        self.assertEqual(one["TMPDIR"], a["tmp"])
+        self.assertEqual(two["TMPDIR"], b["tmp"])
+
+    def test_port_blocks_are_machine_wide_and_exclusive_across_ci_homes(self):
+        locks = self.tmp / "port-locks"
+        held = [
+            local_ci.acquire_port_block(locks) for _ in range(local_ci.MAX_PORT_BLOCKS)
+        ]
+        self.assertEqual(
+            [block for _, block in held], list(range(local_ci.MAX_PORT_BLOCKS))
+        )
+        with self.assertRaisesRegex(local_ci.Refused, "port block"):
+            local_ci.acquire_port_block(locks)
+        os.close(held[2][0])
+        fd, block = local_ci.acquire_port_block(locks)
+        self.assertEqual(block, 2)
+        for other in (fd, *(f for f, b in held if b != 2)):
+            os.close(other)
+
+    def test_the_same_tree_is_never_gated_twice_at_once_and_keeps_its_receipt(self):
+        self.commit_pending()
+        tree = local_ci.current_tree(self.repo, "HEAD")
+        first = self.run_tree()
+        self.assertEqual(first["verdict"], "PASS")
+        receipt = self.home / "receipts" / f"{tree}.json"
+        before = receipt.read_bytes()
+        fd = local_ci.acquire_tree_lock(local_ci.private_dir(self.home), tree)
+        try:
+            with self.assertRaisesRegex(local_ci.Refused, "already being gated"):
+                self.run_tree()
+            # the refused run did not invalidate the receipt or touch the attempt record
+            self.assertEqual(receipt.read_bytes(), before)
+            attempt = json.loads((self.home / "attempts" / f"{tree}.json").read_text())
+            self.assertEqual(attempt["runId"], first["runId"])
+            self.assertEqual(
+                local_ci.acquire_slot(local_ci.private_dir(self.home))[1], 0
+            )  # and it gave its slot back
+        finally:
+            os.close(fd)
+        self.assertEqual(self.run_tree()["verdict"], "PASS")  # free again
+
+    def test_a_run_called_from_an_except_block_does_not_double_close_the_tree_lock(
+        self,
+    ):
+        try:
+            raise ValueError("an unrelated exception is being handled")
+        except ValueError:
+            record = (
+                self.run_tree()
+            )  # sys.exc_info() is set here, but nothing propagates
+        self.assertEqual(record["verdict"], "PASS")
+        probe = os.open(
+            os.devnull, os.O_RDONLY
+        )  # a double close could have freed/reused fds
+        os.close(probe)
+        tree = local_ci.current_tree(self.repo, "HEAD")
+        os.close(local_ci.acquire_tree_lock(local_ci.private_dir(self.home), tree))
+
+    def test_a_run_that_dies_while_preparing_releases_every_lock(self):
+        with mock.patch.object(local_ci, "make_shims", side_effect=OSError("disk")):
+            with self.assertRaisesRegex(OSError, "disk"):
+                self.run_tree()
+        tree = local_ci.current_tree(self.repo, "HEAD")
+        home = local_ci.private_dir(self.home)
+        for fd in (
+            local_ci.acquire_slot(home)[0],
+            local_ci.acquire_tree_lock(home, tree),
+            local_ci.acquire_port_block(self.tmp / "port-locks")[0],
+        ):
+            os.close(fd)
+
+    def test_db_connection_budget_is_shared_all_or_nothing_and_released(self):
+        locks = self.tmp / "db-locks"
+        cap = local_ci.DB_BUDGET
+        first = local_ci.acquire_db_budget(cap // 2, locks)
+        second = local_ci.acquire_db_budget(cap - cap // 2, locks)  # exactly the rest
+        self.assertEqual(len(first) + len(second), cap)
+        ticks = []
+        with self.assertRaisesRegex(local_ci.Refused, "Timed out"):
+            local_ci.acquire_db_budget(
+                1,
+                locks,
+                timeout=1.0,
+                clock=lambda: float(len(ticks)),
+                pause=lambda _s: ticks.append(1),
+            )
+        for fd in first:
+            os.close(fd)
+        # a gate asking for more than is free holds NOTHING while it waits
+        part = local_ci.acquire_db_budget(
+            cap // 2, locks, timeout=0
+        )  # takes the freed half
+        for fd in part:
+            os.close(fd)
+        self.assertEqual(len(first), len(part))
+        with self.assertRaisesRegex(local_ci.Refused, "budget is"):
+            local_ci.acquire_db_budget(cap + 1, locks)
+        for fd in second:
+            os.close(fd)
+        again = local_ci.acquire_db_budget(cap, locks)  # everything free again
+        for fd in again:
+            os.close(fd)
+
+    def test_waiting_for_the_budget_can_be_cancelled(self):
+        locks = self.tmp / "db-locks"
+        held = local_ci.acquire_db_budget(local_ci.DB_BUDGET, locks)
+        try:
+            with self.assertRaises(local_ci.Interrupted):
+                local_ci.acquire_db_budget(
+                    1, locks, cancelled=lambda: True, pause=lambda _s: None
+                )
+        finally:
+            for fd in held:
+                os.close(fd)
+
+    def test_every_fixture_stage_declares_a_connection_peak_within_the_budget(self):
+        spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
+        total = 0
+        for item in spec["stages"]:
+            if item.get("fixtures"):
+                units = item.get("dbConnections")
+                self.assertIsInstance(units, int, item["id"])
+                self.assertTrue(0 < units <= local_ci.DB_BUDGET, item["id"])
+                total = max(total, units)
+        # the shared fixture allows 30 connections, 3 reserved for superusers
+        self.assertLessEqual(local_ci.DB_BUDGET, 27)
+
+    def test_two_real_gate_processes_at_once_share_nothing_and_both_pass(self):
+        """The two-slot dry run: two runner processes on two different trees overlap (each
+        waits, bounded, until the other is inside its stage) and own disjoint resources."""
+        marks = self.tmp / "marks"
+        marks.mkdir()
+        code = f"""
+            import json, os, pathlib, time
+            slot = os.environ['STATEACTION_CI_PORT_BLOCK']
+            marks = pathlib.Path({str(marks)!r})
+            (marks / ('in-' + slot)).write_text('1')
+            end = time.monotonic() + 30
+            while len(list(marks.glob('in-*'))) < 2:
+                assert time.monotonic() < end, 'the other gate never overlapped'
+                time.sleep(0.05)
+            keys = ('TMPDIR', 'NX_CACHE_DIRECTORY', 'HOSTED_SMOKE_WEB_PORT', 'CI_SMOKE_WEB_PORT')
+            (marks / ('env-' + slot)).write_text(json.dumps({{k: os.environ[k] for k in keys}}))
+        """
+        self.set_stages([stage("overlap", code)])
+        self.commit_pending()
+        other = self.tmp / "repo2"
+        shutil.copytree(self.repo, other)
+        (other / "app.txt").write_text("a different tree\n")
+        sh(other, "git", "add", "-A")
+        sh(other, "git", "commit", "-qm", "second tree")
+        results = self.tmp / "results"
+        results.mkdir()
+        procs = []
+        for n, repo in enumerate((self.repo, other)):
+            script = (
+                "import json, sys; sys.path.insert(0, %r); import local_ci; "
+                "r = local_ci.run_pipeline(%r, home=%r, guard=%r, probe_ports=False, "
+                "port_locks=%r, log=lambda m: None); "
+                "open(%r, 'w').write(json.dumps({'v': r['verdict'], 'iso': r['isolation'], "
+                "'run': r['runId'], 'tree': r['tree']}))"
+            ) % (
+                str(HERE),
+                str(repo),
+                str(self.home),
+                FAKE_GUARD,
+                str(self.tmp / "port-locks"),
+                str(results / f"{n}.json"),
+            )
+            proc = subprocess.Popen([sys.executable, "-c", script])
+            self.addCleanup(lambda p=proc: p.poll() is None and p.kill())
+            procs.append(proc)
+        self.assertEqual([p.wait(timeout=120) for p in procs], [0, 0])
+        one, two = (json.loads((results / f"{n}.json").read_text()) for n in (0, 1))
+        self.assertEqual((one["v"], two["v"]), ("PASS", "PASS"))
+        self.assertEqual({one["iso"]["slot"], two["iso"]["slot"]}, {0, 1})
+        self.assertEqual({one["iso"]["portBlock"], two["iso"]["portBlock"]}, {0, 1})
+        for key in ("export", "tmp", "nxCache", "nxWorkspaceData"):
+            self.assertNotEqual(one["iso"][key], two["iso"][key], key)
+        self.assertFalse(
+            set(one["iso"]["ports"].values()) & set(two["iso"]["ports"].values())
+        )
+        self.assertNotEqual((one["run"], one["tree"]), (two["run"], two["tree"]))
+        env = [json.loads(p.read_text()) for p in sorted(marks.glob("env-*"))]
+        for key in env[0]:
+            self.assertNotEqual(env[0][key], env[1][key], key)
+
+    def test_ci_smoke_uses_the_per_run_ports_not_3000_and_8120(self):
+        source = (HERE.parents[1] / "scripts/platform/ci-smoke.sh").read_text()
+        for needle in (
+            'WEB_PORT="${CI_SMOKE_WEB_PORT:-3000}"',
+            'RUNNER_PORT="${CI_SMOKE_RUNNER_PORT:-8120}"',
+            'PORT="$WEB_PORT" setsid pnpm dev',
+            'workflows dev --port "$RUNNER_PORT"',
+            'tasks list --local --port "$RUNNER_PORT"',
+        ):
+            self.assertIn(needle, source)
+        self.assertNotIn("127.0.0.1:3000/api", source)
+        self.assertNotIn("for port in (3000, 8120)", source)
+
+    def smoke_copy(self):
+        """The script in a scratch tree whose `.env` already exists: it gets past the port
+        probe and then refuses at the `.env` guard, touching nothing."""
+        root = self.tmp / "smoke"
+        script = root / "scripts/platform/ci-smoke.sh"
+        script.parent.mkdir(parents=True)
+        shutil.copy(HERE.parents[1] / "scripts/platform/ci-smoke.sh", script)
+        (root / ".env").write_text("keep\n")
+        return root, script
+
+    def test_ci_smoke_probes_exactly_its_own_ports(self):
+        root, script = self.smoke_copy()
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("STATEACTION_", "E2E_"))
+        }
+
+        def smoke(web, runner):
+            env.update(CI_SMOKE_WEB_PORT=str(web), CI_SMOKE_RUNNER_PORT=str(runner))
+            return subprocess.run(
+                ["bash", str(script)], env=env, capture_output=True, text=True
+            )
+
+        with (
+            socket.socket() as web,
+            socket.socket() as runner,
+            socket.socket() as spare,
+        ):
+            for sock in (web, runner, spare):
+                sock.bind(("127.0.0.1", 0))
+            wp, rp, sp = (s_.getsockname()[1] for s_ in (web, runner, spare))
+            spare.close()  # sp is a free port now
+            busy = smoke(wp, sp)
+            self.assertNotEqual(busy.returncode, 0)
+            self.assertIn(f"port {wp}", busy.stderr)
+            busy = smoke(sp, rp)
+            self.assertNotEqual(busy.returncode, 0)
+            self.assertIn(f"port {rp}", busy.stderr)
+        # Both ports free (the default 3000/8120 may be taken by anyone: not our business).
+        free = smoke(wp, rp)
+        self.assertIn("Refusing to replace an existing .env", free.stderr)
+        self.assertEqual((root / ".env").read_text(), "keep\n")
 
 
 class GuardTests(RepoCase):
@@ -156,12 +510,27 @@ class GuardTests(RepoCase):
         self.assertEqual(proof["memoryMaxBytes"], 6 * GIB)
         self.assertEqual(proof["swapMaxBytes"], 0)
 
+    def test_every_slot_scope_of_the_ci_lane_is_accepted(self):
+        for scope in (
+            "agent-lane-ci-0123abcd.scope",
+            "agent-lane-ci-0123abcd-s1.scope",
+            "agent-lane-ci-0123abcd-s2.scope",
+        ):
+            proc, sys_root = self.fake_cgroup(scope=scope)
+            self.assertEqual(local_ci.guard_proof(proc, sys_root)["scope"], scope)
+        for scope in (
+            "agent-lane-ci-0123abcd-s0.scope",
+            "agent-lane-ci-0123abcd-x.scope",
+        ):
+            proc, sys_root = self.fake_cgroup(scope=scope)
+            with self.assertRaises(local_ci.GuardError, msg=scope):
+                local_ci.guard_proof(proc, sys_root)
+
     def test_unenforced_limits_are_refused(self):
         for kwargs in (
             {"memory": "max"},
             {"memory": str(7 * GIB)},
             {"swap": "max"},
-            {"slice_memory": str(13 * GIB)},
             {"scope": "other.scope"},
         ):
             proc, sys_root = self.fake_cgroup(**kwargs)
@@ -179,6 +548,34 @@ class GuardTests(RepoCase):
         }
         return {**report, **changes}
 
+    def test_a_cap_that_moved_between_the_kernel_read_and_the_policy_report_is_accepted(
+        self,
+    ):
+        # The watchdog re-sizes the aggregate cap every few seconds (SA-130): a gate read 24.25
+        # GiB from the cgroup and the report one second later said 24.40 GiB.
+        proc, sys_root = self.fake_cgroup(slice_memory=str(24 * GIB))
+        moved = self.policy_report(
+            kernelMemoryMaxBytes=22 * GIB, recordedCapBytes=22 * GIB
+        )
+        proof = local_ci.guard_proof(proc, sys_root, policy_fetch=lambda: moved)
+        self.assertEqual(proof["sliceMemoryMaxBytes"], 24 * GIB)
+        self.assertEqual(
+            proof["aggregatePolicy"]["capBytes"], 22 * GIB
+        )  # the proven cap
+        self.assertEqual(proof["aggregatePolicy"]["observedSliceMaxBytes"], 24 * GIB)
+        for bad in (
+            {"kernelMemoryMaxBytes": 25 * GIB, "recordedCapBytes": 25 * GIB},
+            {"kernelMemoryMaxBytes": 5 * GIB, "recordedCapBytes": 5 * GIB},
+            {"kernelMemoryMaxBytes": True, "recordedCapBytes": True},
+            {"kernelMemoryMaxBytes": 22 * GIB, "recordedCapBytes": 23 * GIB},
+        ):
+            with self.assertRaisesRegex(local_ci.GuardError, "policy-2"):
+                local_ci.guard_proof(
+                    proc,
+                    sys_root,
+                    policy_fetch=lambda bad=bad: self.policy_report(**bad),
+                )
+
     def test_cap_above_12_gib_needs_a_positive_policy_proof(self):
         proc, sys_root = self.fake_cgroup(slice_memory=str(24 * GIB))
         proof = local_ci.guard_proof(
@@ -186,6 +583,7 @@ class GuardTests(RepoCase):
         )
         self.assertEqual(proof["sliceMemoryMaxBytes"], 24 * GIB)
         self.assertEqual(proof["aggregatePolicy"]["stopThresholdBytes"], 5 * GIB)
+        self.assertEqual(proof["aggregatePolicy"]["capBytes"], 24 * GIB)
         for bad in (
             {"ok": False},
             {"watchdogPolicyActive": False},  # stale or old watchdog
@@ -337,6 +735,8 @@ class PipelineTests(RepoCase):
                 guard=FAKE_GUARD,
                 log=lambda _m: None,
                 probe_fixtures=False,
+                probe_ports=False,
+                port_locks=self.tmp / "port-locks",
             )
         self.assertEqual((self.repo / "app.txt").read_text(), "three\n")
         self.assertEqual(sh(self.repo, "git", "stash", "list"), "")
@@ -469,9 +869,15 @@ class PipelineTests(RepoCase):
         self.commit_pending()
         script = (
             "import sys; sys.path.insert(0, %r); import local_ci; "
-            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: None); "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, probe_ports=False, port_locks=%r, log=lambda m: None); "
             "sys.exit(0 if r['verdict'] == 'PASS' else 130 if r['verdict'] == 'INTERRUPTED' else 1)"
-        ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
+        ) % (
+            str(HERE),
+            str(self.repo),
+            str(self.home),
+            FAKE_GUARD,
+            str(self.tmp / "port-locks"),
+        )
         runner = subprocess.Popen([sys.executable, "-c", script])
         for _ in range(100):
             if pidfile.exists() and pidfile.read_text():
@@ -671,9 +1077,15 @@ class PipelineTests(RepoCase):
         self.commit_pending()
         script = (
             "import sys; sys.path.insert(0, %r); import local_ci; "
-            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: None); "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, probe_ports=False, port_locks=%r, log=lambda m: None); "
             "sys.exit(130 if r['verdict'] == 'INTERRUPTED' else 1)"
-        ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
+        ) % (
+            str(HERE),
+            str(self.repo),
+            str(self.home),
+            FAKE_GUARD,
+            str(self.tmp / "port-locks"),
+        )
         runner = subprocess.Popen([sys.executable, "-c", script])
         for _ in range(100):
             if pidfile.exists() and pidfile.read_text():
@@ -751,9 +1163,15 @@ class PipelineTests(RepoCase):
         self.commit_pending()
         script = (
             "import sys; sys.path.insert(0, %r); import local_ci; "
-            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, log=lambda m: print(m, flush=True)); "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, probe_ports=False, port_locks=%r, log=lambda m: print(m, flush=True)); "
             "sys.exit(130 if r['verdict'] == 'INTERRUPTED' else 1)"
-        ) % (str(HERE), str(self.repo), str(self.home), FAKE_GUARD)
+        ) % (
+            str(HERE),
+            str(self.repo),
+            str(self.home),
+            FAKE_GUARD,
+            str(self.tmp / "port-locks"),
+        )
         out = self.tmp / "out.txt"
         with open(out, "w") as sink:
             runner = subprocess.Popen([sys.executable, "-c", script], stdout=sink)
@@ -800,6 +1218,8 @@ class PipelineTests(RepoCase):
                 home=self.home,
                 guard=FAKE_GUARD,
                 probe_fixtures=False,
+                probe_ports=False,
+                port_locks=self.tmp / "port-locks",
                 log=lambda _m: None,
             )
         self.assertEqual(started["verdict"], "FAIL")
@@ -985,6 +1405,27 @@ class FixtureTests(RepoCase):
             fixtures=True,
         )
 
+    def test_a_fixture_stage_holds_the_budget_while_it_runs_and_records_the_wait(self):
+        code = f"""
+            import os
+            held = [n for n in os.listdir({str(self.tmp / "port-locks")!r}) if n.startswith('db-')]
+            print(len(held))
+        """
+        self.set_stages(
+            [stage("db", code, fixtures=True, dbConnections=3)],
+        )
+        record = self.run_tree(
+            fixtures_path=self.fixture_file(), service_check=FAKE_SERVICE
+        )
+        entry = record["stages"][0]
+        self.assertIn("dbBudgetWaitSec", entry)
+        self.assertEqual(entry["status"], "passed", record.get("detail"))
+        # released afterwards: the whole budget is free again
+        for fd in local_ci.acquire_db_budget(
+            local_ci.DB_BUDGET, self.tmp / "port-locks", timeout=0
+        ):
+            os.close(fd)
+
     def test_missing_fixture_file_fails_closed_without_docker(self):
         self.set_stages([self.fixture_stage()])
         self.commit_pending()
@@ -1049,6 +1490,28 @@ class FixtureTests(RepoCase):
             (proof["scope"], proof["memoryMaxBytes"], proof["swapMaxBytes"]),
             ("agent-service-postgres.scope", GIB, 0),
         )
+
+    def test_storage_may_use_two_gib_but_never_more_and_postgres_stays_at_one(self):
+        # SeaweedFS was throttled at 1 GiB (memory.peak 1.02 GiB under the gate): SA-108.
+        proc, sys_root = self.service_tree(
+            scope="agent-service-storage.scope", memory=str(2 * GIB)
+        )
+        proof = local_ci.service_proof(
+            "storage", 19000, listeners=lambda _p: [4242], proc=proc, cgroup=sys_root
+        )
+        self.assertEqual(proof["memoryMaxBytes"], 2 * GIB)
+        proc, sys_root = self.service_tree(
+            scope="agent-service-storage.scope", memory=str(3 * GIB)
+        )
+        with self.assertRaisesRegex(local_ci.Refused, "2 GiB service cap"):
+            local_ci.service_proof(
+                "storage",
+                19000,
+                listeners=lambda _p: [4242],
+                proc=proc,
+                cgroup=sys_root,
+            )
+        self.assertGreaterEqual(local_ci.SERVICE_CAPS["storage"], int(1.5 * 1018462208))
 
     def test_unbounded_or_wrong_fixture_server_is_refused_with_instructions(self):
         for kwargs, role in (
@@ -2295,13 +2758,17 @@ class CacheTests(RepoCase):
             )
         )
 
-    def test_one_run_at_a_time_per_ci_home_and_fixed_export_path(self):
-        fd = local_ci.acquire_lock(local_ci.private_dir(self.home))
+    def test_one_run_per_slot_of_the_ci_home_and_fixed_export_path(self):
+        held = [
+            local_ci.acquire_slot(local_ci.private_dir(self.home))[0]
+            for _ in range(local_ci.MAX_PARALLEL)
+        ]
         try:
             with self.assertRaisesRegex(local_ci.Refused, "owns this CI home"):
                 self.run_tree()
         finally:
-            os.close(fd)
+            for fd in held:
+                os.close(fd)
         paths = self.tmp / "paths.txt"
         code = f"import os; open({str(paths)!r}, 'a').write(os.getcwd() + chr(10))"
         self.set_stages([stage("where", code)])

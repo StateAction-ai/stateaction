@@ -18,7 +18,7 @@ if (
   target.protocol !== "http:"
 )
   throw new Error("Refusing a cloud workflow endpoint");
-const base = "http://127.0.0.1:3000";
+const base = process.env.STATEACTION_SMOKE_API_URL ?? "http://127.0.0.1:3000";
 const health = await fetch(`${base}/api/v1/health`, {
   signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 });

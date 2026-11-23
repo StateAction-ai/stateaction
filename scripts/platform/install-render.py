@@ -34,7 +34,10 @@ if hashlib.sha256(archive).hexdigest() != SHA256:
     if len(archive) > 64 * 1024 * 1024 or hashlib.sha256(archive).hexdigest() != SHA256:
         raise SystemExit("Render release checksum mismatch")
     cached.parent.mkdir(parents=True, exist_ok=True)
-    cached.write_bytes(archive)
+    # Atomic: a concurrent gate (SA-108) never reads a half-written archive.
+    partial = cached.with_name(f".{cached.name}.{os.getpid()}.tmp")
+    partial.write_bytes(archive)
+    os.replace(partial, cached)
 destination = root / "artifacts/platform-tools/render/render"
 destination.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(io.BytesIO(archive)) as release:

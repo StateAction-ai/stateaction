@@ -24,6 +24,7 @@ import fcntl
 import hashlib
 import json
 import os
+import random
 import re
 import resource
 import secrets
@@ -42,11 +43,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import flow_hook  # noqa: E402
 
 GIB = 1024**3
+# Finite service caps; SeaweedFS needs 2 GiB (SA-108: throttled at 1 GiB, measured peak 1.02 GiB).
+SERVICE_CAPS = {"storage": 2 * GIB}
 JOB_MAX = 6 * GIB
 TOTAL_MAX = 12 * GIB  # legacy installed guard
 AGG_MAX = 24 * GIB  # only with a positive policy proof
 CI_LANE = "ci"
-CI_SCOPE = re.compile(r"agent-lane-ci-[0-9a-f]{8}\.scope")
+# Slot 0 of the lane keeps the historical scope name; slot n >= 1 (SA-108) is `-s<n>`.
+CI_SCOPE = re.compile(r"agent-lane-ci-[0-9a-f]{8}(?:-s[1-9])?\.scope")
+# At most this many gates share one CI home at once (the lane's slot count is the real limit;
+# this is the number of isolated private slots: export and Nx state each).
+MAX_PARALLEL = 3
+# Port blocks are claimed machine-wide (any CI home, the stress harness included), so two
+# gates never get the same block even from different homes; more blocks than slots on purpose.
+MAX_PORT_BLOCKS = 6
+# The shared bounded PostgreSQL fixture has max_connections=30 (3 reserved for superusers) and
+# is also used by every agent's Free runs. Gates draw their own connections from one
+# machine-wide budget of this many units (flock files), so concurrent gates never exceed it;
+# each fixture stage declares its measured peak in stages.json (`dbConnections`).
+DB_BUDGET = 20  # measured own peaks 5-16 (+3 admin) per stage; 7 left for other agents
+DB_WAIT_SEC = 3600
+# Below the kernel's ephemeral range (32768+), above well-known dev ports.
+PORT_BASE = 10100
+PORT_STRIDE = 10
 SLICE = "agent-work.slice"
 RECEIPT_SCHEMA = "stateaction.local-ci.receipt/1"
 STAGES_SCHEMA = "stateaction.local-ci.stages/1"
@@ -173,19 +192,29 @@ def check_aggregate(slice_max: int, fetch=None) -> dict | None:
     if slice_max > AGG_MAX:
         raise GuardError("aggregate cap exceeds the 24 GiB policy maximum")
     report = (fetch or fetch_policy)()
+    # The watchdog moves the aggregate cap every few seconds with the host's free memory
+    # (SA-130), so the cap this process read from the kernel a moment ago and the one the
+    # policy report read a moment later differ by design (the gate's own `fixture port 54340`
+    # proof failed on that equality, SA-108). The proof is the report's own consistent
+    # instant: kernel cap equals the recorded cap, inside the policy bounds, zero swap, and a
+    # current-policy watchdog.
+    kernel = report.get("kernelMemoryMaxBytes")
     if not (
         report.get("ok") is True
         and report.get("watchdogPolicyActive") is True
         and report.get("kernelSwapMax") == "0"
-        and report.get("kernelMemoryMaxBytes") == slice_max
-        and report.get("recordedCapBytes") == slice_max
+        and isinstance(kernel, int)
+        and not isinstance(kernel, bool)
+        and kernel == report.get("recordedCapBytes")
+        and JOB_MAX <= kernel <= AGG_MAX
     ):
         raise GuardError(
             "aggregate cap above 12 GiB is not proved by a current policy-2 watchdog "
             "and a recorded cap equal to the kernel cap with zero swap"
         )
     return {
-        "capBytes": slice_max,
+        "capBytes": kernel,  # the value the report proved, not the earlier read
+        "observedSliceMaxBytes": slice_max,
         "watchdogPolicyActive": True,
         "stopThresholdBytes": report.get("stopThresholdBytes"),
     }
@@ -1024,6 +1053,7 @@ def stage_env(
     workspace_data_dir: Path | None = None,
     skip_nx_cache: bool = True,
     gradle_cache: bool = False,
+    ports: dict[str, str] | None = None,
 ) -> dict[str, str]:
     env = {
         k: v
@@ -1094,6 +1124,9 @@ def stage_env(
         # bounded-fixture adapter creates and reaps run-owned databases/buckets.
         env["STATEACTION_LOCAL_FIXTURES"] = str(fixture_file)
         env["E2E_EXTERNAL_FIXTURES"] = str(fixture_file)
+    env.update(
+        ports or {}
+    )  # per-run ports; a stage's own env may still pin one explicitly
     env.update({str(k): str(v) for k, v in (stage.get("env") or {}).items()})
     return env
 
@@ -1713,8 +1746,10 @@ def service_proof(
             group = cgroup / relative.lstrip("/")
             limit = _limit(_read(group / "memory.max"))
             slice_limit = _limit(_read(group.parent / "memory.max"))
-            if limit > GIB:
-                raise Refused(f"{scope} exceeds its 1 GiB service cap")
+            if limit > SERVICE_CAPS.get(role, GIB):
+                raise Refused(
+                    f"{scope} exceeds its {SERVICE_CAPS.get(role, GIB) // GIB} GiB service cap"
+                )
             check_aggregate(slice_limit, policy_fetch)
             if (
                 _read(group / "memory.swap.max") != "0"
@@ -1781,15 +1816,172 @@ def modified_since(
     return changed
 
 
+def acquire_slot(home: Path, parallel: int = MAX_PARALLEL) -> tuple[int, int]:
+    """Own one private slot of the CI home: `(fd, index)`.
+
+    Each slot owns its fixed export path, Nx cache and workspace data and a disjoint port
+    block, so up to `parallel` gates on different trees never share mutable state. Receipts,
+    attempts and logs are keyed by tree or run id and stay shared. Slot 0 keeps the historical
+    `run.lock`, so a pre-SA-108 runner still excludes it."""
+    for index in range(parallel):
+        name = "run.lock" if index == 0 else f"run.{index}.lock"
+        fd = os.open(home / name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            continue
+        return fd, index
+    raise Refused("Another local CI run owns this CI home.")
+
+
 def acquire_lock(home: Path) -> int:
-    """One run per CI home: it owns the fixed export path and the shared caches."""
-    fd = os.open(home / "run.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    """First free slot's lock (see `acquire_slot`)."""
+    return acquire_slot(home)[0]
+
+
+def slot_dirs(home: Path, slot: int) -> tuple[Path, Path, Path]:
+    """(work, nx cache, nx workspace data) of a slot; slot 0 keeps the historical names."""
+    suffix = "" if slot == 0 else f"-s{slot}"
+    work = private_dir(home / "work") / ("current" if slot == 0 else f"slot-{slot}")
+    return (
+        work,
+        private_dir(home / f"nx-cache{suffix}"),
+        private_dir(home / f"nx-workspace-data{suffix}"),
+    )
+
+
+def port_lock_dir() -> Path:
+    """Machine-wide (per user) directory of the port-block locks."""
+    explicit = os.environ.get("STATEACTION_CI_PORT_LOCKS")
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return Path(explicit) if explicit else Path(runtime) / "stateaction-ci-ports"
+
+
+def acquire_port_block(directory: Path | None = None) -> tuple[int, int]:
+    """Claim the first free port block machine-wide: `(fd, block)` (flock, released on exit)."""
+    directory = private_dir(Path(directory) if directory else port_lock_dir())
+    for block in range(MAX_PORT_BLOCKS):
+        fd = os.open(
+            directory / f"block-{block}.lock",
+            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+            0o600,
+        )
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            continue
+        return fd, block
+    raise Refused("Every local CI port block on this machine is in use.")
+
+
+def slot_ports(block: int, port_base: int = PORT_BASE) -> dict[str, str]:
+    """A block of fixed loopback ports for the smoke stages (disjoint across blocks, below the
+    ephemeral range so `bind(0)` never takes one). Exported to every stage."""
+    base = port_base + PORT_STRIDE * block
+    return {
+        "STATEACTION_CI_PORT_BLOCK": str(block),
+        "STATEACTION_CI_PORT_BASE": str(base),
+        "HOSTED_SMOKE_WEB_PORT": str(base),
+        "HOSTED_SMOKE_RUNNER_PORT": str(base + 1),
+        "CI_SMOKE_WEB_PORT": str(base + 2),
+        "CI_SMOKE_RUNNER_PORT": str(base + 3),
+    }
+
+
+def acquire_db_budget(
+    units: int,
+    directory: Path | None = None,
+    *,
+    timeout: float = DB_WAIT_SEC,
+    capacity: int = DB_BUDGET,
+    clock=time.monotonic,
+    pause=time.sleep,
+    cancelled=lambda: False,
+) -> list[int]:
+    """Take `units` of the machine-wide fixture-connection budget (one flock file per unit);
+    returns the descriptors. All-or-nothing: a partial grant is released before waiting, so
+    two gates can never hold half a budget each and starve one another."""
+    if units > capacity:
+        raise Refused(
+            f"A stage needs {units} database connections; the budget is {capacity}."
+        )
+    directory = private_dir(Path(directory) if directory else port_lock_dir())
+    deadline = clock() + timeout
+    while True:
+        held: list[int] = []
+        # One scanner at a time (a short flock): two gates can never each grab part of the
+        # budget and release it in lockstep.
+        gate = os.open(
+            directory / "db-gate.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
+        )
+        try:
+            fcntl.flock(gate, fcntl.LOCK_EX)
+            for unit in range(capacity):
+                if len(held) == units:
+                    break
+                fd = os.open(
+                    directory / f"db-{unit}.lock",
+                    os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+                    0o600,
+                )
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    os.close(fd)
+                    continue
+                held.append(fd)
+        except BaseException:
+            for fd in held:
+                os.close(fd)
+            raise
+        finally:
+            os.close(gate)
+        if len(held) == units:
+            return held
+        for fd in held:
+            os.close(fd)
+        if cancelled():
+            raise Interrupted(
+                "Cancelled while waiting for the database connection budget"
+            )
+        if clock() >= deadline:
+            raise Refused(
+                "Timed out waiting for the shared database connection budget."
+            )
+        pause(0.5 + random.random() * 0.5)
+
+
+def acquire_tree_lock(home: Path, tree: str) -> int:
+    """One gate per tree at a time: a second run of the same tree would invalidate the
+    receipt and attempt record of the first (receipts and attempts are keyed by tree)."""
+    directory = private_dir(home / "locks")
+    fd = os.open(
+        directory / f"{tree}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
+    )
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as error:
         os.close(fd)
-        raise Refused("Another local CI run owns this CI home.") from error
+        raise Refused(f"Tree {tree} is already being gated by another run.") from error
     return fd
+
+
+def check_ports_free(ports: dict[str, str]) -> None:
+    """Fail in seconds, before the export, when a foreign process holds one of the slot's ports."""
+    for key, value in ports.items():
+        if not key.endswith("_PORT"):
+            continue
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("0.0.0.0", int(value)))
+            except OSError as error:
+                raise Refused(
+                    f"Port {value} ({key}) of CI port block {ports['STATEACTION_CI_PORT_BLOCK']} is in use "
+                    f"by another process: {error.strerror}"
+                ) from error
 
 
 def write_json_private(path: Path, data: dict) -> None:
@@ -2013,6 +2205,9 @@ def run_pipeline(
     log=lambda message: print(message, file=sys.stderr, flush=True),
     install_signals: bool = True,
     ci_mode: str = "ci:local",
+    port_base: int = PORT_BASE,
+    probe_ports: bool = True,
+    port_locks: Path | None = None,
 ) -> dict:
     """Run the declared stages. Returns the run record; receipt only when all passed."""
     repo = Path(repo).resolve()
@@ -2060,28 +2255,37 @@ def run_pipeline(
             stages = docs_run_stages(spec)
         else:
             log(f"[local-ci] full suite: {docs['reason']}")
-    lock_fd = acquire_lock(home)
-    run_id = time.strftime("%Y%m%dT%H%M%S") + "-" + secrets.token_hex(3)
-    invalidate(home, tree)
-    record_attempt(home, tree, run_id, "running")
-    # A fixed export path (we hold the CI-home lock) keeps path-sensitive build caches
-    # such as Gradle's valid between runs; its content is always a fresh export.
-    work = private_dir(home / "work") / "current"
-    if work.exists():
-        shutil.rmtree(work)
-    nx_cache = private_dir(home / "nx-cache")
-    nx_data = private_dir(home / "nx-workspace-data")
-    logs = private_dir(home / "logs" / run_id)
-    work.mkdir(mode=0o700)
-    export = work / "tree"
-    tmp = work / "tmp"
-    tmp.mkdir(mode=0o700)
-    shim_dir = work / "shims"
-    shim_dir.mkdir(mode=0o700)
-    pins = spec["pins"]
-    nx_cmd = nx_command(spec)
+    lock_fd, slot = acquire_slot(home)
+    held = [lock_fd]
+    try:
+        held.append(acquire_tree_lock(home, tree))
+        port_fd, block = acquire_port_block(port_locks)
+        held.append(port_fd)
+        run_id = time.strftime("%Y%m%dT%H%M%S") + "-" + secrets.token_hex(3)
+        invalidate(home, tree)
+        record_attempt(home, tree, run_id, "running")
+        # A fixed export path (we hold the slot lock) keeps path-sensitive build caches
+        # such as Gradle's valid between runs; its content is always a fresh export.
+        work, nx_cache, nx_data = slot_dirs(home, slot)
+        ports = slot_ports(block, port_base)
+        if work.exists():
+            shutil.rmtree(work)
+        logs = private_dir(home / "logs" / run_id)
+        work.mkdir(mode=0o700)
+        export = work / "tree"
+        tmp = work / "tmp"
+        tmp.mkdir(mode=0o700)
+        shim_dir = work / "shims"
+        shim_dir.mkdir(mode=0o700)
+        pins = spec["pins"]
+        nx_cmd = nx_command(spec)
+        make_shims(shim_dir, pins["uv"])
+    except BaseException:
+        for fd in held:
+            os.close(fd)
+        raise
+    tree_fd, port_fd = held[1], held[2]
     plan: dict | None = None
-    make_shims(shim_dir, pins["uv"])
     fixtures = None
     services: list[dict] = []
     fixture_file = None
@@ -2094,8 +2298,21 @@ def run_pipeline(
         "stages": [],
         "verdict": "FAIL",
         "logDir": str(logs),
+        # Everything this run owns exclusively (SA-108): two concurrent runs must list
+        # disjoint values for every key but `home`, `fixtureRunDirs` and `pid`-independent ones.
+        "isolation": {
+            "slot": slot,
+            "portBlock": block,
+            "pid": os.getpid(),
+            "export": str(export),
+            "tmp": str(tmp),
+            "nxCache": str(nx_cache),
+            "nxWorkspaceData": str(nx_data),
+            "ports": {k: v for k, v in ports.items() if k.endswith("_PORT")},
+        },
     }
     stop = {"process": None, "requested": False}
+    crashed = False  # an unexpected exception propagates: no receipt follows
     previous: dict = {}
     if install_signals:
 
@@ -2110,6 +2327,8 @@ def run_pipeline(
     toolchain: dict[str, str] = {}
     try:
         set_subreaper()
+        if probe_ports:
+            check_ports_free(ports)
         # Fixture health first: a dead PostgreSQL/S3 fixture or a missing service
         # cgroup proof fails in seconds, before the export and any stage.
         if any(s.get("fixtures") for s in stages):
@@ -2185,6 +2404,7 @@ def run_pipeline(
                 workspace_data_dir=nx_data,
                 skip_nx_cache=skip_nx,
                 gradle_cache=gradle_cache,
+                ports=ports,
             )
             if stage.get("docsChanged"):
                 changed = [p for e in docs["entries"] for p in e["paths"][-1:] if p]
@@ -2211,20 +2431,39 @@ def run_pipeline(
                     )
                     argv = [*argv, "--files=" + ",".join(docs["paths"])]
             log(f"[local-ci] stage {stage['id']}: {stage['title']}")
-            result = run_child(
-                argv,
-                cwd=cwd,
-                env=env,
-                log=logs / f"{stage['id']}.log",
-                timeout=float(stage.get("timeoutSec", 1800)),
-                output_cap=int(stage.get("maxOutputBytes", DEFAULT_OUTPUT_CAP)),
-                secrets_=secrets_,
-                stop=stop,
-                capture=bool(stage.get("capture")),
-                scan=CacheScan() if is_nx(argv, nx_cmd) else None,
-                wait_for_gradle=stage["id"] == "mobile",
-                cgroup=Path(guard["cgroup"]) if guard.get("cgroup") else None,
-            )
+            budget: list[int] = []
+            waited = 0.0
+            if stage.get("fixtures") and stage.get("dbConnections"):
+                began_wait = time.monotonic()
+                budget = acquire_db_budget(
+                    int(stage["dbConnections"]),
+                    port_locks,
+                    cancelled=lambda: stop["requested"],
+                )
+                waited = time.monotonic() - began_wait
+                if waited > 1:
+                    log(
+                        f"[local-ci] stage {stage['id']} waited {waited:.0f}s for the shared "
+                        f"database connection budget ({stage['dbConnections']} of {DB_BUDGET})"
+                    )
+            try:
+                result = run_child(
+                    argv,
+                    cwd=cwd,
+                    env=env,
+                    log=logs / f"{stage['id']}.log",
+                    timeout=float(stage.get("timeoutSec", 1800)),
+                    output_cap=int(stage.get("maxOutputBytes", DEFAULT_OUTPUT_CAP)),
+                    secrets_=secrets_,
+                    stop=stop,
+                    capture=bool(stage.get("capture")),
+                    scan=CacheScan() if is_nx(argv, nx_cmd) else None,
+                    wait_for_gradle=stage["id"] == "mobile",
+                    cgroup=Path(guard["cgroup"]) if guard.get("cgroup") else None,
+                )
+            finally:
+                for fd in budget:
+                    os.close(fd)
             entry = {
                 "id": stage["id"],
                 "argvSha256": argv_hash(stage),
@@ -2243,6 +2482,7 @@ def run_pipeline(
                 "gradleBuildCache": gradle_cache,
                 "cache": result.get("cache"),
                 "metrics": result.get("metrics"),
+                "dbBudgetWaitSec": round(waited, 1),
             }
             if stage.get("capture") == "toolchain" and "captured" in result:
                 toolchain = {
@@ -2321,6 +2561,7 @@ def run_pipeline(
         record["verdict"] = "FAIL"
         record["detail"] = str(error)
     except BaseException as error:  # never leave a half-trusted result
+        crashed = True
         record["verdict"] = "FAIL"
         record["detail"] = f"{type(error).__name__}: {error}"
         raise
@@ -2348,10 +2589,14 @@ def run_pipeline(
         if not keep_work and work.resolve().parent == (home / "work").resolve():
             shutil.rmtree(work, ignore_errors=True)
         os.close(lock_fd)
+        os.close(port_fd)
+        if crashed:
+            os.close(tree_fd)
         write_json_private(logs / "run.json", record)
         log(format_timing(record))
     if record.get("fallbackFull"):
         record_attempt(home, tree, run_id, "finished", "FAIL")
+        os.close(tree_fd)  # the full-suite run below takes the tree lock itself
         log(f"[local-ci] {record['detail']}; running the full suite instead")
         return run_pipeline(
             repo,
@@ -2363,6 +2608,9 @@ def run_pipeline(
             fresh=fresh,
             only=only,
             docs_only=False,
+            port_base=port_base,
+            probe_ports=probe_ports,
+            port_locks=port_locks,
             ci_mode=ci_mode,
             fixtures_path=fixtures_path,
             probe_fixtures=probe_fixtures,
@@ -2448,6 +2696,7 @@ def run_pipeline(
         write_json_private(receipts / f"{tree}.json", receipt)
         record["receipt"] = str(receipts / f"{tree}.json")
     record_attempt(home, tree, run_id, "finished", record["verdict"])
+    os.close(tree_fd)  # the tree stays locked until its receipt and attempt are written
     flow_hook.report_ci_run(record, repo=repo, mode=ci_mode)
     return record
 

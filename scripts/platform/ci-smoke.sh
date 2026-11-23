@@ -13,11 +13,15 @@ if [[ -n "${STATEACTION_LOCAL_FIXTURES:-}${E2E_EXTERNAL_FIXTURES:-}" || -n "${ST
   node "$fixtures" check # refuses unsafe/missing fixtures
   external=true
 fi
+# Per-run ports (SA-108): the local CI runner gives every concurrent gate its own block via
+# CI_SMOKE_WEB_PORT / CI_SMOKE_RUNNER_PORT; a manual run keeps 3000 / 8120.
+WEB_PORT="${CI_SMOKE_WEB_PORT:-3000}"
+RUNNER_PORT="${CI_SMOKE_RUNNER_PORT:-8120}"
 export COMPOSE_PROJECT_NAME="${STATEACTION_SMOKE_COMPOSE_PROJECT:-stateaction-sa11-smoke}"
 mkdir -p artifacts/platform-ci
-python3 - <<'PY'
-import socket
-for port in (3000, 8120):
+python3 - "$WEB_PORT" "$RUNNER_PORT" <<'PY'
+import socket, sys
+for port in (int(sys.argv[1]), int(sys.argv[2])):
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -33,13 +37,29 @@ for target in .env .env.workflows.local; do
 done
 cp .env.example .env
 cp .env.workflows.example .env.workflows.local
-python3 - <<'PY'
+python3 - "$WEB_PORT" "$RUNNER_PORT" <<'PY'
 from pathlib import Path
-import secrets
+import re, secrets, sys
+web, runner = sys.argv[1:3]
 p = Path('.env')
-p.write_text(p.read_text().replace('replace-with-a-local-random-token', secrets.token_hex(32)))
+text = p.read_text().replace('replace-with-a-local-random-token', secrets.token_hex(32))
+for key, value in (
+    ('RENDER_LOCAL_DEV_URL', f'http://127.0.0.1:{runner}'),
+    ('BETTER_AUTH_URL', f'http://127.0.0.1:{web}'),
+):
+    text = re.sub(rf'^{key}=.*$', lambda _: f'{key}={value}', text, flags=re.M)
+text += f'STATEACTION_SMOKE_API_URL=http://127.0.0.1:{web}\n'
+p.write_text(text)
 p.chmod(0o600)
-Path('.env.workflows.local').chmod(0o600)
+w = Path('.env.workflows.local')
+text = w.read_text()
+for key, value in (
+    ('RENDER_LOCAL_DEV_URL', f'http://127.0.0.1:{runner}'),
+    ('STATEACTION_API_URL', f'http://127.0.0.1:{web}'),
+):
+    text = re.sub(rf'^{key}=.*$', lambda _: f'{key}={value}', text, flags=re.M)
+w.write_text(text)
+w.chmod(0o600)
 PY
 web_pid=''
 workflow_pid=''
@@ -102,12 +122,12 @@ printf 'S3_PUBLIC_ENDPOINT=%s\n' "$public_endpoint" >> .env # differs from S3_EN
   printf 'PROCESSING_CONFIG_SHA256=%s\n' "$(printf config | sha256sum | cut -d' ' -f1)"
 } >> .env
 pnpm storage:presign
-setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
+PORT="$WEB_PORT" setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!
-setsid artifacts/platform-tools/render/render workflows dev --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev > artifacts/platform-ci/workflows.log 2>&1 &
+setsid artifacts/platform-tools/render/render workflows dev --port "$RUNNER_PORT" --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev > artifacts/platform-ci/workflows.log 2>&1 &
 workflow_pid=$!
 for ((end = SECONDS + 60; SECONDS < end;)); do
-  if curl --silent --fail http://127.0.0.1:3000/api/v1/health >/dev/null && artifacts/platform-tools/render/render workflows tasks list --local -o json >/dev/null 2>&1; then
+  if curl --silent --fail "http://127.0.0.1:$WEB_PORT/api/v1/health" >/dev/null && artifacts/platform-tools/render/render workflows tasks list --local --port "$RUNNER_PORT" -o json >/dev/null 2>&1; then
     pnpm --filter @stateaction/jobs smoke
     exit 0
   fi
