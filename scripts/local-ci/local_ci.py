@@ -224,6 +224,25 @@ def peak_memory(proof: dict) -> int | None:
         return None
 
 
+def cpu_seconds(group: Path | None) -> float | None:
+    """Cumulative CPU seconds (user+system) of a cgroup, from cpu.stat usage_usec."""
+    try:
+        for line in _read(group / "cpu.stat").splitlines():
+            key, _, value = line.partition(" ")
+            if key == "usage_usec":
+                return int(value) / 1e6
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
+def memory_current(group: Path | None) -> int | None:
+    try:
+        return int(_read(group / "memory.current"))
+    except (OSError, ValueError, TypeError):
+        return None
+
+
 def guard_binary() -> Path | None:
     candidate = Path(
         os.environ.get("AGENT_RESOURCE_BIN")
@@ -338,6 +357,8 @@ class CacheScan:
         self.partial = b""
         self.hit: list[str] = []
         self.executed: list[str] = []
+        self.began = time.monotonic()
+        self.starts: list[tuple[str, float, bool]] = []
 
     def feed(self, chunk: bytes) -> None:
         *lines, self.partial = (self.partial + chunk).split(b"\n")
@@ -354,6 +375,24 @@ class CacheScan:
                 or "existing outputs match the cache" in rest
             )
             (self.hit if hit else self.executed).append(match[1])
+            self.starts.append((match[1], time.monotonic() - self.began, hit))
+
+    def timings(self) -> list[dict]:
+        """Per Nx task: start offset in the stage and the span to the next task line (or to
+        the end of the stage). With parallel Nx tasks the span is an upper bound."""
+        end = time.monotonic() - self.began
+        out = []
+        for i, (task, start, hit) in enumerate(self.starts[:200]):
+            nxt = self.starts[i + 1][1] if i + 1 < len(self.starts) else end
+            out.append(
+                {
+                    "task": task,
+                    "startSec": round(start, 2),
+                    "spanSec": round(max(0.0, nxt - start), 2),
+                    "cacheHit": hit,
+                }
+            )
+        return out
 
     def summary(self) -> dict:
         return {
@@ -361,6 +400,7 @@ class CacheScan:
             "hits": len(self.hit),
             "hitTasks": self.hit[:200],
             "executedTasks": self.executed[:200],
+            "taskTimings": self.timings(),
         }
 
 
@@ -714,8 +754,11 @@ def run_child(
     capture: bool = False,
     scan: "CacheScan | None" = None,
     wait_for_gradle: bool = False,
+    cgroup: Path | None = None,
 ) -> dict:
     started = time.monotonic()
+    cpu_before = cpu_seconds(cgroup)
+    peak_seen = memory_current(cgroup) or 0
     try:
         process = subprocess.Popen(
             argv,
@@ -754,6 +797,7 @@ def run_child(
                 status = "timeout"
                 break
             events = selector.select(timeout=0.25)
+            peak_seen = max(peak_seen, memory_current(cgroup) or 0)
             if events:
                 chunk = os.read(process.stdout.fileno(), 65536)
                 if not chunk:
@@ -812,6 +856,22 @@ def run_child(
     }
     if scan is not None:
         result["cache"] = scan.summary()
+    cpu_after = cpu_seconds(cgroup)
+    cpu_used = (
+        round(cpu_after - cpu_before, 2)
+        if cpu_before is not None and cpu_after is not None
+        else None
+    )
+    wall = round(time.monotonic() - started, 2)
+    result["metrics"] = {
+        "cpuSeconds": cpu_used,
+        "wallSeconds": wall,
+        "cpuPerWall": round(cpu_used / wall, 2)
+        if cpu_used is not None and wall > 0
+        else None,
+        "peakMemorySampledBytes": peak_seen or None,
+        "scopePeakBytesAfter": peak_memory({"cgroup": str(cgroup)}) if cgroup else None,
+    }
     if capture:
         result["captured"] = captured.decode(errors="replace")
     return result
@@ -1124,6 +1184,79 @@ def format_timing(record: dict) -> str:
     return "[local-ci] stage wall time\n" + "\n".join(lines)
 
 
+def _median(values: list[float]) -> float | None:
+    ordered = sorted(values)
+    if not ordered:
+        return None
+    mid = len(ordered) // 2
+    return ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def timing_report(home: Path, last: int = 5) -> str:
+    """Read-only per-stage table (wall, CPU, cpu/wall, peak memory) over the last N PASS runs.
+    Runs recorded before the metrics existed show "not recorded"; unreadable counters are
+    never reported as zero."""
+    runs = []
+    for path in sorted((home / "logs").glob("*/run.json"), reverse=True):
+        try:
+            record = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if record.get("verdict") == "PASS":
+            runs.append(record)
+        if len(runs) >= last:
+            break
+    if not runs:
+        return "[local-ci] no PASS runs recorded"
+    rows = [("stage", "wall s", "cpu s", "cpu/wall", "peak MiB", "runs")]
+    order: list[str] = []
+    for record in runs:
+        for stage in record["stages"]:
+            if stage["id"] not in order:
+                order.append(stage["id"])
+    for stage_id in order:
+        walls, cpus, ratios, peaks = [], [], [], []
+        seen = 0
+        for record in runs:
+            for stage in record["stages"]:
+                if stage["id"] != stage_id:
+                    continue
+                seen += 1
+                walls.append(float(stage.get("durationSec") or 0.0))
+                m = stage.get("metrics") or {}
+                if m.get("cpuSeconds") is not None:
+                    cpus.append(m["cpuSeconds"])
+                    if m.get("cpuPerWall") is not None:
+                        ratios.append(m["cpuPerWall"])
+                peak = m.get("peakMemorySampledBytes") or m.get("scopePeakBytesAfter")
+                if peak:
+                    peaks.append(peak / 1048576)
+
+        def cell(values: list[float], fmt: str) -> str:
+            med = _median(values)
+            return "not recorded" if med is None else fmt.format(med)
+
+        rows.append(
+            (
+                stage_id,
+                cell(walls, "{:.1f}"),
+                cell(cpus, "{:.1f}"),
+                cell(ratios, "{:.2f}"),
+                cell(peaks, "{:.0f}"),
+                str(seen),
+            )
+        )
+    widths = [max(len(r[i]) for r in rows) for i in range(6)]
+    body = "\n".join(
+        "  ".join(
+            c.ljust(w) if i == 0 else c.rjust(w)
+            for i, (c, w) in enumerate(zip(r, widths))
+        )
+        for r in rows
+    )
+    return f"[local-ci] median per stage over {len(runs)} PASS run(s)\n{body}"
+
+
 def run_pipeline(
     repo: Path,
     *,
@@ -1280,6 +1413,7 @@ def run_pipeline(
                 capture=bool(stage.get("capture")),
                 scan=CacheScan() if is_nx(argv) else None,
                 wait_for_gradle=stage["id"] == "mobile-android-dart",
+                cgroup=Path(guard["cgroup"]) if guard.get("cgroup") else None,
             )
             entry = {
                 "id": stage["id"],
@@ -1294,6 +1428,7 @@ def run_pipeline(
                 "cacheMode": "none" if skip_nx or not is_nx(argv) else "nx",
                 "gradleBuildCache": gradle_cache,
                 "cache": result.get("cache"),
+                "metrics": result.get("metrics"),
             }
             if stage.get("capture") == "toolchain" and "captured" in result:
                 toolchain = {
@@ -1393,6 +1528,7 @@ def run_pipeline(
                         "cache",
                     )
                 }
+                | {"metrics": s.get("metrics")}
                 for s in record["stages"]
             ],
             "toolchain": toolchain,
@@ -1727,11 +1863,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     verify = sub.add_parser("verify")
     verify.add_argument("--head", default="HEAD")
+    timing = sub.add_parser(
+        "timing", help="read-only per-stage medians of recent PASS runs"
+    )
+    timing.add_argument("--last", type=int, default=5)
     merge = sub.add_parser("merge")
     merge.add_argument("--pr", type=int, required=True)
     merge.add_argument("--repo", default="timothywangdev/stateaction")
     merge.add_argument("--execute", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "timing":
+        print(timing_report(local_ci_home(), args.last))
+        return 0
     try:
         repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel"))
         if args.command == "verify":
