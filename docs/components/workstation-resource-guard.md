@@ -3,18 +3,18 @@
 Local agent work shares one kernel-enforced budget across worktrees: zero swap,
 one Android emulator, and a dynamic aggregate RAM cap of at most 24 GiB that keeps
 **whole-workstation** usage under 80%. Capped scopes stay 6 GiB per lane job (services
-1 GiB, Gradle 2 GiB, Free commands 6 GiB by default). A separate watchdog stops our scopes when host
+1 GiB except storage 2 GiB and PostgreSQL 2.5 GiB, Gradle 2 GiB, Free commands 6 GiB by default). A separate watchdog stops our scopes when host
 available RAM falls below the 20% reserve; loss of the watchdog also stops the dependent
 work slice. There is no unbounded fallback and no automatic retry after a refusal.
 
 ## Classes and lanes (SA-124)
 
-| Class                | Entry                                                       | Slot             | Waits       | Scope                                                          |
-| -------------------- | ----------------------------------------------------------- | ---------------- | ----------- | -------------------------------------------------------------- |
-| Free                 | `agent-resource run [--mem 4G] -- cmd` in a registered root | none             | never       | own scope in `agent-work-free.slice`: 6 GiB default, 512 tasks |
-| `ci` lane            | `agent-resource run --lane ci -- cmd`                       | 1 per repository (2 supported) | FIFO ticket | `agent-lane-ci-<repo>[-s1].scope`, 6 GiB each                  |
-| `android-build` lane | `... --lane android-build -- cmd`                           | 1 per repository | FIFO ticket | `agent-lane-android-build-<repo>.scope`, 6 GiB                 |
-| `emulator` lane      | `... --lane emulator -- cmd`                                | 1 machine-wide   | FIFO ticket | `agent-lane-emulator-<repo>.scope`, 6 GiB                      |
+| Class                | Entry                                                       | Slot                              | Waits       | Scope                                                          |
+| -------------------- | ----------------------------------------------------------- | --------------------------------- | ----------- | -------------------------------------------------------------- |
+| Free                 | `agent-resource run [--mem 4G] -- cmd` in a registered root | none                              | never       | own scope in `agent-work-free.slice`: 6 GiB default, 512 tasks |
+| `ci` lane            | `agent-resource run --lane ci -- cmd`                       | up to 3 per repository, by memory | FIFO ticket | `agent-lane-ci-<repo>[-s<n>].scope`, 6 GiB each                |
+| `android-build` lane | `... --lane android-build -- cmd`                           | up to 2 per repository, by memory | FIFO ticket | `agent-lane-android-build-<repo>[-s<n>].scope`, 6 GiB          |
+| `emulator` lane      | `... --lane emulator -- cmd`                                | 1 machine-wide                    | FIFO ticket | `agent-lane-emulator-<repo>.scope`, 6 GiB                      |
 
 Edits, git, lint, typecheck, targeted tests, web servers and reviews are Free: they never take a
 slot or wait. `--mem` lowers (never raises above 6 GiB) the per-command cap. `gradle`, `gradlew` and
@@ -26,24 +26,30 @@ repository's lane names. A repository is identified by its git common dir, so bo
 of one repo share one `ci` lane (shared fixtures and ports); a different repo has its own.
 
 - **Registered roots only.** The guard activates under the `projects` in its `config.json`. A `run`
-  from any other root keeps the legacy behavior (the single heavy-job slot), a missing or corrupt
+  from any other root keeps the legacy behavior (a bounded 6 GiB scope per command, `agent-mobile-build-<pid>-<hex6>`, with no slot: several run at once, admitted by the memory check), a missing or corrupt
   config means "not registered" (legacy), and `run --lane` from another root executes untouched and
   is never queued. Mezzanine and every other project are not reclassified.
 - **Reservation model (PROVISIONAL numbers, owner approval pending on SA-124).** One machine-wide
   `agentqueue` state dir, so one FIFO reservation covers every project and lane:
-  `budget = clamp(live aggregate cap - 4 GiB protected Free share - 6 GiB warm emulator, 6, 18 GiB)`
+  `budget = max(live aggregate cap - 4 GiB protected Free share - 6 GiB warm emulator, 6 GiB)`
   recomputed at each submit: 6 GiB at the 12 GiB boot cap (one lane job at a time), 14 GiB at 24 GiB
-  (two). The Free slice is capped at `max(4 GiB, cap - 6 GiB - 2 GiB)` (4 GiB at the
+  (two; a third 6 GiB ticket waits for memory, the slot counts in `lanes.toml` are only ceilings). The Free slice is capped at `max(4 GiB, cap - 6 GiB - 2 GiB)` (4 GiB at the
   12 GiB boot cap, 16 GiB at 24 GiB; it overlaps the lane budget and the warm emulator, so Free 16 +
-  emulator 6 + one gate 6 can exceed the cap (with the `ci` lane's second slot, SA-108, two gates 12 can too; Free commands carry a raised `oom_score_adj` and are the preferred OOM victims): the protection is the aggregate `MemoryMax`/`High`
+  emulator 6 + one gate 6 can exceed the cap (with two gates running, 12 GiB, it can too; Free commands carry a raised `oom_score_adj` and are the preferred OOM victims): the protection is the aggregate `MemoryMax`/`High`
   and the `oom_score_adj` of Free scopes, not a sum) with `MemoryLow=4 GiB`, `CPUWeight=100` (lane scopes 400) and `TasksMax=2048`; the shared
   `agent-work.slice` allows 8192 tasks (per-scope caps stay 1536 lane, 512 Free, 256 default) and the
   watchdog re-asserts its limits every 30 s after a daemon-reload, and Free processes get `oom_score_adj=500`, so under
   pressure the kernel kills Free work before a gate; this is a preference, not a guarantee, and at the
   12 GiB boot cap a ci job plus the warm emulator already equal the cap. The aggregate kernel cap is
-  the hard limit. The legacy heavy-job scope of a
+  the hard limit. The legacy scope of a
   foreign project is outside this reservation and shares only the aggregate cap (UNVERIFIED under
   simultaneous load). Fixtures, watchdog thresholds and the aggregate cap are unchanged.
+- **Service caps are durable.** `agent-resource serve --name <svc>` (what the fixture supervisor runs after
+  any restart, using the INSTALLED guard) creates `agent-service-<svc>.scope` with
+  `MemoryHigh == MemoryMax == SERVICE_CAPS[svc]` (storage 2 GiB, postgres 2.5 GiB, any other service
+  1 GiB), zero swap and no early throttle band; the gate check (`local_ci.SERVICE_CAPS`) accepts nothing
+  above them. A restarted fixture therefore never comes back with the old 1 GiB / 768 MiB default,
+  provided the installed guard is current: install it before restarting a fixture.
 - **No double gate.** A ticket holder runs everything under its one scope. The guard trusts the
   kernel cgroup of the calling process, not `STATEACTION_LANE_HELD`. Inside any lane, the same lane
   or `android-build` runs directly under the held ticket (gate stages, `scripts/mobile/run.py`);
@@ -124,7 +130,7 @@ Free work never waits.
 
 - Exactly one Android emulator across all projects, AVDs, ports and agents. Use the shared guarded SDK/launcher; never invoke `emulator.agent-vendor` directly or bypass the machine-wide lock.
 - Run every local heavy build/test/probe through `agent-resource run -- <command>`. This includes newly generated Flutter projects and direct Gradle commands. `scripts/mobile/run.py` enters the guard automatically. If the guard is missing or refuses admission, stop; no unbounded retry.
-- On this workstation the shared cgroup has zero swap and a dynamic hard RAM cap of at most 24 GiB, with 6 GiB each for the sole emulator and one heavy job (1 GiB per service). Host usage must stay under 80% of MemTotal: the cap is `min(24 GiB, our anon memory + (MemAvailable - 20% reserve))`, kept at 12 GiB until the current-policy watchdog heartbeats, so other applications are accounted for and agents never take 80% on top of them. Admission requires the 20% reserve plus 8 GiB available (20 GiB at 60 GiB RAM); the watchdog stops our workloads below the 20% reserve plus 1 GiB and tightens the cap if other apps grow. Limits cover descendants and leftover daemons.
+- On this workstation the shared cgroup has zero swap and a dynamic hard RAM cap of at most 24 GiB, with 6 GiB each for the sole emulator and every heavy job (1 GiB per service, except storage 2 GiB and PostgreSQL 2.5 GiB, sized from measured peaks; several heavy jobs run at once while memory allows, SA-135). Host usage must stay under 80% of MemTotal: the cap is `min(24 GiB, our anon memory + (MemAvailable - 20% reserve))`, kept at 12 GiB until the current-policy watchdog heartbeats, so other applications are accounted for and agents never take 80% on top of them. Admission requires the 20% reserve plus 8 GiB available (20 GiB at 60 GiB RAM); the watchdog stops our workloads below the 20% reserve plus 1 GiB and tightens the cap if other apps grow. Limits cover descendants and leftover daemons.
 - Use pinned JDK21, Gradle heap at most 2 GiB, two workers, in-process Kotlin compilation and no persistent Gradle/Kotlin daemons. The guard overrides generated 8 GiB template defaults. Check and clean our leftover processes after tests.
 - Preserve KVM/x86_64/host-GPU verification and personal-profile-only physical-device rules. Installation and proof are below.
 
@@ -169,7 +175,7 @@ a 12 GiB boot default.
 recorded), 6 GiB <= cap <= 24 GiB and cap <= the 80% ceiling. CI gates use it
 (fields `kernelMemoryMaxBytes`, `recordedCapBytes`, `aggregateMaxBytes`,
 `jobMaxBytes`, `serviceMaxBytes`, `reserveBytes`, `ceilingBytes`) and should
-still read the child scope files directly: <= 6 GiB per scope, 1 GiB per service.
+still read the child scope files directly: <= 6 GiB per scope, 1 GiB per service (storage 2 GiB, PostgreSQL 2.5 GiB).
 `agent-resource retune` re-runs the live cap computation and prints the policy.
 
 Install on this Linux workstation (no root privileges):
@@ -202,7 +208,7 @@ agent-resource stop
 ```
 
 Long-lived lightweight development services use `agent-resource serve --name web`,
-`worker`, `postgres`, `storage` or `emulator-control`, followed by `-- <command>`. Each has a 1 GiB limit within the
+`worker`, `postgres`, `storage` or `emulator-control`, followed by `-- <command>`. Each has a 1 GiB limit (storage 2 GiB, postgres 2.5 GiB) within the
 same dynamic aggregate budget and take no lane slot. Run a full
 browser test driver inside one `run` scope so its browser children are also
 bounded and reaped. Docker daemon workloads do not inherit a CLI's user cgroup;
@@ -282,7 +288,7 @@ The guard uses systemd user scopes and cgroup v2. See the upstream
 and [Gradle property precedence](https://docs.gradle.org/current/userguide/build_environment.html).
 Unavailable enforcement is a failure, not permission to launch raw tools.
 
-The bounded storage fixture permits at most 256 SeaweedFS volumes (64 MiB growth target each), while its process remains limited to 1 GiB RAM and zero swap under the aggregate slice. Each test bucket owns a separate collection, so the earlier ceilings (32, then 128) were exhausted by repeated isolated runs even with little data; the 128 ceiling was reached with 112 retained buckets. Raising the finite volume count preserves existing collections and does not change the memory budget. Test runs clean up the buckets and objects they own. Fixture readiness requires the master topology to report the expected capacity after the volume heartbeat, followed by a real guarded object write/read in the consuming test.
+The bounded storage fixture permits at most 256 SeaweedFS volumes (64 MiB growth target each), while its process remains limited to 2 GiB RAM and zero swap under the aggregate slice. Each test bucket owns a separate collection, so the earlier ceilings (32, then 128) were exhausted by repeated isolated runs even with little data; the 128 ceiling was reached with 112 retained buckets. Raising the finite volume count preserves existing collections and does not change the memory budget. Test runs clean up the buckets and objects they own. Fixture readiness requires the master topology to report the expected capacity after the volume heartbeat, followed by a real guarded object write/read in the consuming test.
 
 ## Live update without tearing down running services
 

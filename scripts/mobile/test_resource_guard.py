@@ -470,15 +470,57 @@ class DynamicCapTest(unittest.TestCase):
     def test_storage_service_cap_leaves_headroom_over_the_measured_working_set(self):
         high, cap = guard.service_caps("agent-service-storage.scope")
         self.assertGreaterEqual(cap, int(1.5 * guard.STORAGE_PEAK_MEASURED))
-        self.assertLess(high, cap)
         self.assertGreaterEqual(
             high, guard.STORAGE_PEAK_MEASURED
         )  # never throttled at peak
-        self.assertEqual(
-            guard.service_caps("agent-service-postgres.scope"),
-            (768 * 1024**2, guard.SERVICE_MAX),
-        )
-        self.assertEqual(guard.service_caps("agent-service-other.scope")[1], GIB)
+        self.assertEqual(high, cap)  # no throttle band below the hard cap
+        high, cap = guard.service_caps("agent-service-postgres.scope")
+        self.assertGreaterEqual(cap, int(1.4 * guard.POSTGRES_PEAK_MEASURED))
+        self.assertGreaterEqual(high, guard.POSTGRES_PEAK_MEASURED)
+        self.assertEqual(high, cap)
+        self.assertEqual(guard.service_caps("agent-service-other.scope"), (GIB, GIB))
+
+    def test_a_recreated_service_scope_gets_the_per_service_caps(self):
+        """`agent-resource serve --name <svc>` (what the supervisor runs after any restart)
+        creates the scope with MemoryHigh == MemoryMax == SERVICE_CAPS, never the 1 GiB default."""
+        for name, want in (
+            ("storage", 2 * GIB),
+            ("postgres", 5 * GIB // 2),
+            ("web", GIB),
+        ):
+            with tempfile.TemporaryDirectory() as tmp:
+                install = Path(tmp)
+                (install / "config.json").write_text(json.dumps({"vendors": []}))
+                seen = []
+                with (
+                    mock.patch.object(guard, "INSTALL", install),
+                    mock.patch.object(guard, "runtime_dir", return_value=install),
+                    mock.patch.object(guard, "admit"),
+                    mock.patch.object(guard, "enforce_slice"),
+                    mock.patch.object(guard, "call"),
+                    mock.patch.object(guard, "bounded_environment", return_value={}),
+                    mock.patch.object(
+                        guard.subprocess,
+                        "run",
+                        side_effect=lambda argv, env=None: (
+                            seen.append(argv) or mock.Mock(returncode=0)
+                        ),
+                    ),
+                ):
+                    guard.run_scope(
+                        f"agent-service-{name}.scope",
+                        ["x"],
+                        emulator=False,
+                        service=True,
+                    )
+            props = dict(
+                a.removeprefix("--property=").split("=", 1)
+                for a in seen[0]
+                if a.startswith("--property=Memory")
+            )
+            self.assertEqual(props["MemoryHigh"], str(want), name)
+            self.assertEqual(props["MemoryMax"], str(want), name)
+            self.assertEqual(props["MemorySwapMax"], "0", name)
 
     def test_per_job_limits_are_unchanged_by_the_larger_aggregate(self):
         self.assertEqual(guard.JOB_MAX, 6 * GIB)

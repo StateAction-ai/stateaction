@@ -128,8 +128,11 @@ class Bench:
         }
         for key in ("STATEACTION_LANE_HELD", "STATEACTION_LOCAL_CI_REEXEC"):
             self.env.pop(key, None)
-        if args.cap_gib:
-            self.env["AGENT_RESOURCE_TEST_CAP_GIB"] = str(args.cap_gib)
+        # The reservation arithmetic needs 22 GiB for two 6 GiB tickets and 28 for three; on a
+        # busy host the live cap is lower and the gates would silently run one after the other.
+        cap = args.cap_gib or {2: 24, 3: 28}.get(args.width)
+        if cap:
+            self.env["AGENT_RESOURCE_TEST_CAP_GIB"] = str(cap)
 
     def tree(self, label: str) -> Path:
         """A fresh worktree of the clone whose tree differs from every other one."""
@@ -198,6 +201,10 @@ def summary(out: Path) -> dict:
             except ValueError:
                 continue
     return found or {"verdict": "NO-SUMMARY", "tail": text[-2000:]}
+
+
+def walls_sum(records: list[dict]) -> float:
+    return sum(float(r.get("wallSec") or 0) for r in records)
 
 
 def check_disjoint(records: list[dict]) -> list[str]:
@@ -279,6 +286,18 @@ def main() -> int:
             problems = [] if len(records) != args.width else check_disjoint(records)
             if len(records) != args.width:
                 problems.append("a run produced no run.json")
+            elif (
+                args.width > 1
+                and walls_sum(records) <= (time.monotonic() - began) * 1.1
+            ):
+                # The memory budget admitted one gate at a time (the live cap was below the
+                # 22 GiB two 6 GiB tickets need): the gates never overlapped, so sharing a slot
+                # or directory is correct, and this round says nothing about parallel gates.
+                problems = []
+                print(
+                    "NOTE: gates ran one after the other (memory admission); not a parallel round",
+                    flush=True,
+                )
             delta = {
                 kind: {
                     k: after[f"slice{kind}"].get(k, 0)

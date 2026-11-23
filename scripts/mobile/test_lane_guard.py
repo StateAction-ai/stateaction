@@ -6,6 +6,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -64,39 +66,46 @@ class RootsAndManifest(Env):
     def test_committed_manifest_declares_the_three_lanes_without_command_mapping(self):
         manifest = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())
         self.assertEqual(set(manifest["lanes"]), set(guard.LANES))
+        # SA-135: several gates and builds at once; the emulator stays exactly one machine-wide.
+        slots = {n: lane["slots"] for n, lane in manifest["lanes"].items()}
+        self.assertEqual(slots, {"ci": 3, "android-build": 2, "emulator": 1})
         for name, lane in manifest["lanes"].items():
-            # SA-108: the shipped value is ONE heavy job; a second ci slot is the user's call.
-            self.assertEqual(lane["slots"], 1, name)
             self.assertNotIn("commands", lane)  # no reclassification by command name
         self.assertNotIn("roots", manifest)
 
-    def test_two_ci_slots_fit_the_lane_budget_but_three_wait_for_memory(self):
+    def test_the_memory_budget_decides_how_many_ci_jobs_run(self):
         job = guard.JOB_MAX
-        ci = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())[
+        lanes = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())[
             "lanes"
-        ]["ci"]
-        self.assertEqual(ci["mem"], "6G")
-        self.assertGreaterEqual(guard.lane_budget(24 * guard.GIB), 2 * job)
-        self.assertLess(guard.lane_budget(24 * guard.GIB), 3 * job)
-        # At the 12 GiB boot cap one job at a time: the second ticket waits, never over-commits.
+        ]
+        self.assertEqual(lanes["ci"]["mem"], "6G")
+        admitted = {
+            gib: guard.lane_budget(gib * guard.GIB) // job for gib in (12, 16, 22, 24)
+        }
+        # 12 GiB boot cap admits one 6 GiB job, the rest queue; 22 GiB and above admit two.
+        self.assertEqual(admitted, {12: 1, 16: 1, 22: 2, 24: 2})
+        # The shipped slot ceiling never over-commits the budget at the maximum cap: slots=3
+        # only admits a third job when a cap of 28 GiB (above AGG_MAX) would allow it.
+        self.assertLess(guard.lane_budget(guard.AGG_MAX), 3 * job)
+        self.assertEqual(guard.lane_budget(28 * guard.GIB), 3 * job)
         self.assertEqual(guard.lane_budget(12 * guard.GIB), job)
+        self.assertEqual(guard.lane_budget(None), job)  # no live cap: the boot cap
 
-    def test_slots_two_is_honoured_by_the_effective_manifest_when_activated(self):
-        text = (REPO / "config/agentqueue/lanes.toml").read_text()
-        two = self.tmp / "lanes-two.toml"
-        two.write_text(text.replace("[lanes.ci]\nslots = 1", "[lanes.ci]\nslots = 2"))
-        real = guard.resource_file
-        with mock.patch.object(
-            guard,
-            "resource_file",
-            lambda name, repo_path: (
-                two if name == "lanes.toml" else real(name, repo_path)
-            ),
-        ):
-            _, manifest, key = self.files(self.root_a)
+    def test_the_budget_is_not_clamped_by_a_job_count(self):
+        # Pre-SA-135 the budget was clamped to three jobs; memory alone decides now.
+        self.assertGreater(guard.lane_budget(40 * guard.GIB), 3 * guard.JOB_MAX)
+
+    def test_every_manifest_slot_is_unit_unique_and_matches_the_lane_scope_name(self):
+        names = {guard.lane_unit("ci", "0123abcd", n) for n in range(3)}
+        self.assertEqual(len(names), 3)
+        for name in names:
+            self.assertEqual(guard.LANE_SCOPE.fullmatch(name).group(1), "ci")
+
+    def test_shipped_slots_are_honoured_by_the_effective_manifest(self):
+        _, manifest, key = self.files(self.root_a)
         lanes = tomllib.loads(manifest.read_text())["lanes"]
-        self.assertEqual(lanes[f"ci-{key}"]["slots"], 2)
-        self.assertEqual(lanes[f"android-build-{key}"]["slots"], 1)
+        self.assertEqual(lanes[f"ci-{key}"]["slots"], 3)
+        self.assertEqual(lanes[f"android-build-{key}"]["slots"], 2)
         self.assertEqual(lanes["emulator"]["slots"], 1)
 
     def test_effective_manifest_has_this_repo_lanes_machine_state_and_all_roots(self):
@@ -344,6 +353,143 @@ class RunRouting(Env):
         legacy.assert_not_called()
         slot.assert_not_called()
 
+    def test_legacy_heavy_jobs_run_in_parallel_with_unique_scopes_and_no_slot_lock(
+        self,
+    ):
+        install = self.tmp / "install"
+        install.mkdir()
+        (install / "config.json").write_text(json.dumps({"vendors": []}))
+        runtime = self.tmp / "run"
+        runtime.mkdir(mode=0o700)
+        started = []
+
+        def fake_run(argv, env=None):
+            started.append(next(a for a in argv if a.startswith("--unit=")))
+            return mock.Mock(returncode=0)
+
+        with (
+            mock.patch.object(guard, "INSTALL", install),
+            mock.patch.object(guard, "runtime_dir", return_value=runtime),
+            mock.patch.object(guard, "admit"),
+            mock.patch.object(guard, "admit_heavy_job"),
+            mock.patch.object(guard, "enforce_slice"),
+            mock.patch.object(guard, "call"),
+            mock.patch.object(guard, "bounded_environment", return_value={}),
+            mock.patch.object(guard, "singleton") as slot,
+            mock.patch.object(guard.subprocess, "run", side_effect=fake_run),
+        ):
+            first = "agent-mobile-build-11-a1b2c3.scope"
+            second = "agent-mobile-build-12-d4e5f6.scope"
+            self.assertEqual(guard.run_scope(first, ["x"], emulator=False), 0)
+            self.assertEqual(guard.run_scope(second, ["x"], emulator=False), 0)
+        slot.assert_not_called()  # no machine-wide heavy-job slot
+        self.assertEqual(
+            started,
+            [
+                "--unit=agent-mobile-build-11-a1b2c3",
+                "--unit=agent-mobile-build-12-d4e5f6",
+            ],
+        )
+        self.assertTrue(guard.BUILD_SCOPE.fullmatch(first))
+        self.assertTrue(guard.BUILD_SCOPE.fullmatch(guard.BUILD))
+
+    def test_legacy_heavy_job_is_still_refused_when_memory_is_low(self):
+        with (
+            mock.patch.object(guard, "admit", side_effect=guard.Refused("low")),
+            mock.patch.object(guard, "admit_heavy_job"),
+            mock.patch.object(guard, "singleton"),
+        ):
+            with self.assertRaises(guard.Refused):
+                guard.run_scope(
+                    "agent-mobile-build-1-aaaaaa.scope", ["x"], emulator=False
+                )
+
+    def test_heavy_jobs_outside_the_queue_are_admitted_by_the_job_budget(self):
+        runtime = self.tmp / "adm"
+        runtime.mkdir(mode=0o700)
+        group = self.tmp / "group"
+        group.mkdir()
+        me = {"pid": os.getpid(), "identity": guard.process_identity(os.getpid())}
+        for n in range(2):  # two live heavy jobs (this process stands in for both)
+            (runtime / f"agent-mobile-build-{n}-abcdef.scope.owner").write_text(
+                json.dumps(me)
+            )
+        dead = {"pid": 2**22 + 1, "identity": "1"}
+        (runtime / "agent-mobile-build-9-abcdef.scope.owner").write_text(
+            json.dumps(dead)
+        )  # a dead owner never counts
+        new = "agent-mobile-build-5-abcdef.scope"
+
+        def admit(cap_gib):
+            with (
+                mock.patch.object(guard, "runtime_dir", return_value=runtime),
+                mock.patch.object(guard, "work_group", return_value=group),
+                mock.patch.object(
+                    guard, "aggregate_cap", return_value=cap_gib * guard.GIB
+                ),
+            ):
+                guard.admit_heavy_job(new)
+
+        # 14 GiB budget holds two 6 GiB jobs: a third is refused, not queued
+        with self.assertRaisesRegex(guard.Refused, "2 heavy job"):
+            admit(24)
+        self.assertFalse((runtime / f"{new}.owner").exists())
+        (runtime / "agent-mobile-build-1-abcdef.scope.owner").unlink()
+        admit(24)  # one live job: the second fits and records its owner
+        self.assertTrue((runtime / f"{new}.owner").exists())
+        with self.assertRaises(guard.Refused):  # boot cap admits one 6 GiB job
+            admit(12)
+        # lane scopes count against the same budget
+        (group / "agent-lane-ci-0123abcd.scope").mkdir()
+        (runtime / f"{new}.owner").unlink()
+        with self.assertRaisesRegex(guard.Refused, "1 lane job"):
+            admit(24)
+
+    def test_android_build_tickets_never_share_a_worktree(self):
+        runtime = self.tmp / "run2"
+        runtime.mkdir(mode=0o700)
+        real_run = subprocess.run
+        probe = (
+            "import fcntl,os,sys;f=os.open(sys.argv[1],os.O_RDWR);"
+            "fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)"
+        )
+        with (
+            mock.patch.object(guard, "runtime_dir", return_value=runtime),
+            mock.patch.object(guard.os, "getcwd", return_value=str(self.root_a)),
+            mock.patch.object(
+                guard.subprocess, "run", return_value=mock.Mock(stdout="")
+            ),
+        ):
+            with guard.worktree_lock("android-build"):
+                lock = next(runtime.glob("android-build-*.lock"))
+                held = real_run([sys.executable, "-c", probe, str(lock)])
+                self.assertNotEqual(held.returncode, 0)  # a second ticket would wait
+            free = real_run([sys.executable, "-c", probe, str(lock)])
+            self.assertEqual(free.returncode, 0)
+            with guard.worktree_lock("ci"):  # other lanes take no worktree lock
+                pass
+
+    def test_the_emulator_keeps_one_machine_wide_slot(self):
+        with (
+            mock.patch.object(guard, "singleton") as slot,
+            mock.patch.object(guard, "android_processes", return_value=[123]),
+        ):
+            with self.assertRaises(guard.Refused):
+                guard.run_scope(guard.EMULATOR, ["x"], emulator=True)
+        slot.assert_called_once_with("emulator")
+
+    def test_the_legacy_path_names_a_scope_per_process(self):
+        with (
+            mock.patch.object(guard, "free_run"),
+            mock.patch.object(guard, "inside_guard", return_value=False),
+            mock.patch.object(guard, "inside_lane", return_value=False),
+            mock.patch.object(guard, "run_scope", return_value=0) as legacy,
+        ):
+            self.run_in(self.other)
+        unit = legacy.call_args.args[0]
+        self.assertTrue(guard.BUILD_SCOPE.fullmatch(unit))
+        self.assertIn(f"-{os.getpid()}-", unit)
+
     def test_other_roots_keep_the_legacy_heavy_job_behavior(self):
         with (
             mock.patch.object(guard, "free_run") as free,
@@ -351,7 +497,8 @@ class RunRouting(Env):
             mock.patch.object(guard, "run_scope", return_value=3) as legacy,
         ):
             self.assertEqual(self.run_in(self.other), 3)
-        legacy.assert_called_once_with(guard.BUILD, ["tool", "arg"], emulator=False)
+        legacy.assert_called_once()
+        self.assertEqual(legacy.call_args.args[1], ["tool", "arg"])
         free.assert_not_called()
 
     def test_lane_from_another_root_executes_untouched_and_is_never_queued(self):
