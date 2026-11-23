@@ -26,6 +26,7 @@
     "ci:local": "python3 scripts/local-ci/local_ci.py run --tree HEAD",
     "ci:verify": "python3 scripts/local-ci/local_ci.py verify --head HEAD",
     "ci:merge": "python3 scripts/local-ci/local_ci.py merge",
+    "ci:land": "python3 scripts/local-ci/land.py",
     "syntax": "nx run-many -t syntax",
     "storage:presign": "pnpm --filter @stateaction/server storage:presign",
     "qualify:r2": "node scripts/platform/qualify-r2-transfers.mjs"

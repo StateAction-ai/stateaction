@@ -52,7 +52,7 @@ of one repo share one `ci` lane (shared fixtures and ports); a different repo ha
   `agent-resource run` only detaches the client; the ticket and job continue. Cancel with
   `agent-resource cancel <id>`; list with `agent-resource queue`; look up with
   `agent-resource find --key K`. A dry-run `ci:merge` (no `--execute`) takes no ticket and no lock.
-  Gate and merge are still two tickets (a single gate-then-merge job is a follow-up).
+  `pnpm ci:land` runs rebase, gate and merge inside one ticket (see `docs/local-ci.md`).
 - **Emulator.** Still exactly one, guarded SDK launcher, warm supervisor unchanged (its service and
   `agent-android-emulator.scope` are separate from the `emulator` lane, which serializes test sessions).
 - **Credentials.** `GH_TOKEN`, `GITHUB_TOKEN`, `GH_CONFIG_DIR`, `GH_HOST`, `SSH_AUTH_SOCK` and `GIT_*`
