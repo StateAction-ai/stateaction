@@ -10,6 +10,7 @@ import {
   type StageReceiptV1,
 } from "@stateaction/contracts";
 import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
+import { CatalogError } from "../src/catalog/errors.js";
 import {
   advanceResult,
   closeOutputs,
@@ -704,6 +705,137 @@ test("an invalid task input is rejected at admission and does not block the queu
   assert.equal(slot.rows[0].job_id, good.jobId);
   // The rejected job never comes back: the next call finds the slot busy.
   assert.equal((await admitNextJob(deps)).state, "slot_busy");
+});
+
+test("a task-input builder error cancels only that job and admission continues", async () => {
+  const db = await acceptanceDatabase();
+  open.push(db);
+  const bad = await queuedJob(db);
+  const good = await queuedJob(db);
+  const deps: JobsDeps = {
+    pool: db.app,
+    config: JOBS_CONFIG,
+    presignRead: async (key, ttl) => `http://127.0.0.1:9/${key}?ttl=${ttl}`,
+    taskInput: async (q, job) => {
+      if (job.jobId === bad.jobId)
+        throw new CatalogError("not_found", "task input source is missing");
+      return (await processRecordingTaskInputV2(
+        q as never,
+        job.jobId,
+      )) as unknown as Record<string, unknown>;
+    },
+  };
+  const result = await admitNextJob(deps);
+  assert.equal(result.state, "admitted");
+  if (result.state !== "admitted") return;
+  assert.equal(result.job.jobId, good.jobId);
+  assert.deepEqual(result.rejectedJobIds, [bad.jobId]);
+  const row = (
+    await db.owner.query(
+      "SELECT state, error_code, error_message, finished_at FROM jobs WHERE id = $1",
+      [bad.jobId],
+    )
+  ).rows[0];
+  assert.equal(row.state, "cancelled");
+  assert.equal(row.error_code, "task_input_build_failed");
+  assert.match(row.error_message, /^task input build failed: /);
+  assert.ok(row.finished_at);
+  assert.equal(
+    (
+      await db.owner.query("SELECT 1 FROM job_inputs WHERE job_id = $1", [
+        bad.jobId,
+      ])
+    ).rowCount,
+    0,
+  );
+  const slot = await db.owner.query(
+    "SELECT job_id FROM dispatch_admission WHERE slot = 1",
+  );
+  assert.equal(slot.rows[0].job_id, good.jobId);
+  assert.equal((await admitNextJob(deps)).state, "slot_busy");
+});
+
+test("a database error inside the task-input builder is not turned into a cancelled job", async () => {
+  const db = await acceptanceDatabase();
+  open.push(db);
+  const bad = await queuedJob(db);
+  const deps: JobsDeps = {
+    pool: db.app,
+    config: JOBS_CONFIG,
+    presignRead: async (key, ttl) => `http://127.0.0.1:9/${key}?ttl=${ttl}`,
+    taskInput: async () => {
+      throw Object.assign(new Error("connection terminated unexpectedly"), {
+        code: "08006",
+      });
+    },
+  };
+  await assert.rejects(admitNextJob(deps), /connection terminated/);
+  const row = (
+    await db.owner.query("SELECT state, error_code FROM jobs WHERE id = $1", [
+      bad.jobId,
+    ])
+  ).rows[0];
+  assert.equal(row.state, "queued");
+  assert.equal(row.error_code, null);
+  const slot = await db.owner.query(
+    "SELECT job_id FROM dispatch_admission WHERE slot = 1",
+  );
+  assert.equal(slot.rows[0].job_id, null);
+});
+
+test("concurrent admitters with one poisoned job cancel it once and admit exactly one good job", async () => {
+  const db = await acceptanceDatabase();
+  open.push(db);
+  const bad = await queuedJob(db);
+  const good = await queuedJob(db);
+  const deps: JobsDeps = {
+    pool: db.app,
+    config: JOBS_CONFIG,
+    presignRead: async (key, ttl) => `http://127.0.0.1:9/${key}?ttl=${ttl}`,
+    taskInput: async (q, job) => {
+      if (job.jobId === bad.jobId)
+        throw new CatalogError("not_found", "task input source is missing");
+      return (await processRecordingTaskInputV2(
+        q as never,
+        job.jobId,
+      )) as unknown as Record<string, unknown>;
+    },
+  };
+  const results = await Promise.all([
+    admitNextJob(deps),
+    admitNextJob(deps),
+    admitNextJob(deps),
+    admitNextJob(deps),
+  ]);
+  const admitted = results.filter((r) => r.state === "admitted");
+  assert.equal(admitted.length, 1, "exactly one admitter wins the slot");
+  assert.equal(
+    results.filter((r) => r.state === "slot_busy").length,
+    results.length - 1,
+  );
+  const winner = admitted[0];
+  assert.equal(winner?.state, "admitted");
+  if (winner?.state !== "admitted") return;
+  assert.equal(winner.job.jobId, good.jobId);
+  const rows = (
+    await db.owner.query(
+      "SELECT id, state, error_code FROM jobs WHERE id = ANY($1)",
+      [[bad.jobId, good.jobId]],
+    )
+  ).rows;
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  assert.equal(byId.get(bad.jobId).state, "cancelled");
+  assert.equal(byId.get(bad.jobId).error_code, "task_input_build_failed");
+  assert.equal(byId.get(good.jobId).state, "submitting");
+  const inputs = await db.owner.query("SELECT job_id FROM job_inputs");
+  assert.deepEqual(
+    inputs.rows.map((r) => r.job_id),
+    [good.jobId],
+  );
+  const slot = await db.owner.query(
+    "SELECT job_id FROM dispatch_admission WHERE slot = 1",
+  );
+  assert.equal(slot.rows[0].job_id, good.jobId);
 });
 
 test("recipe admission stores the recipe once and dag-run renders every stage", async () => {

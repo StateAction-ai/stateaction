@@ -75,6 +75,8 @@ export const RECIPE_DEADLINE_MAX_SECONDS = 43200;
 export const RECIPE_DEADLINE_ERROR_CODE = "recipe_deadline_exceeded";
 /** Stable admission rejection code for a task input that fails contract validation. */
 export const TASK_INPUT_INVALID_ERROR_CODE = "task_input_invalid";
+/** Stable admission rejection code for a task-input builder that cannot build this job. */
+export const TASK_INPUT_BUILD_FAILED_ERROR_CODE = "task_input_build_failed";
 
 /**
  * Execution deadline for a recipe job: the sum of enabled stage budgets plus a
