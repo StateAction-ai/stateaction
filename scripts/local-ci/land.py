@@ -350,9 +350,17 @@ def stored_result(home: Path, number: int) -> dict | None:
 
 def gate_summary(record: dict) -> dict:
     stages = record.get("stages", [])
+    # a stage stopped because another lane failed (cancelled) or never started (not-run) is
+    # not the failure: name the first stage that actually failed, those two only as a fallback
     failed = next(
-        (s for s in stages if s.get("status") not in ("passed", "skipped")), None
-    )
+        (
+            s
+            for s in stages
+            if s.get("status")
+            not in ("passed", "skipped", "cancelled", "not-run", "interrupted")
+        ),
+        None,
+    ) or next((s for s in stages if s.get("status") not in ("passed", "skipped")), None)
     summary = {
         "verdict": record.get("verdict"),
         "wallSec": record.get("wallSec"),

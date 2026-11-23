@@ -88,23 +88,31 @@
       ]
     },
     {
-      "id": "static",
-      "title": "Affected build, typecheck, syntax, test, format and runner self-test (non-mobile, Nx-cached)",
+      "id": "build",
+      "title": "Affected non-mobile builds, every build before any test or e2e (Nx-cached barrier)",
       "timeoutSec": 3600,
       "requiresPaths": ["stera-sdk/README.md"],
       "cache": "nx",
       "affected": {
-        "targets": [
-          "build",
-          "typecheck",
-          "syntax",
-          "test",
-          "format",
-          "test-local-ci"
-        ],
+        "targets": ["build"],
         "exclude": "tag:mobile-toolchain",
         "args": ["--parallel=3", "--nxBail", "--outputStyle=static"]
       }
+    },
+    {
+      "id": "static",
+      "title": "Affected typecheck, syntax, test, format and runner self-test (non-mobile, Nx-cached; builds are done by the build stage)",
+      "timeoutSec": 3600,
+      "requiresPaths": ["stera-sdk/README.md"],
+      "cache": "nx",
+      "affected": {
+        "targets": ["typecheck", "syntax", "test", "format", "test-local-ci"],
+        "exclude": "tag:mobile-toolchain",
+        "args": ["--parallel=3", "--nxBail", "--outputStyle=static"]
+      },
+      "lane": "checks",
+      "memoryMiB": 1500,
+      "ports": []
     },
     {
       "id": "mobile",
@@ -116,7 +124,10 @@
         "targets": ["build", "typecheck", "syntax", "test", "format"],
         "exclude": "*,!tag:mobile-toolchain",
         "args": ["--parallel=1", "--nxBail", "--outputStyle=static"]
-      }
+      },
+      "lane": "checks",
+      "memoryMiB": 2600,
+      "ports": []
     },
     {
       "id": "integration",
@@ -133,7 +144,16 @@
         ],
         "args": ["--parallel=1", "--nxBail", "--outputStyle=static"]
       },
-      "dbConnections": 19
+      "dbConnections": 19,
+      "lane": "fixtures",
+      "memoryMiB": 2000,
+      "ports": [
+        "HOSTED_SMOKE_WEB_PORT",
+        "HOSTED_SMOKE_RUNNER_PORT",
+        "CI_SMOKE_WEB_PORT",
+        "CI_SMOKE_RUNNER_PORT"
+      ],
+      "nxState": "private"
     }
   ],
   "unautomated": [

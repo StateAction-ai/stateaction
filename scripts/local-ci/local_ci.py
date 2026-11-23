@@ -35,6 +35,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -67,6 +68,16 @@ DB_WAIT_SEC = 3600
 # Below the kernel's ephemeral range (32768+), above well-known dev ports.
 PORT_BASE = 10100
 PORT_STRIDE = 10
+# Independent stage lanes (SA-116) share the one gate, the one agent-resource job and its 6 GiB
+# cap (MemoryHigh 5 GiB). The memory the lanes of one group may be budgeted for together, in MiB.
+LANE_MEMORY_MIB = 4608
+LANE_NAME = re.compile(r"[a-z][a-z0-9-]{0,31}")
+PORT_VARS = (
+    "HOSTED_SMOKE_WEB_PORT",
+    "HOSTED_SMOKE_RUNNER_PORT",
+    "CI_SMOKE_WEB_PORT",
+    "CI_SMOKE_RUNNER_PORT",
+)
 SLICE = "agent-work.slice"
 RECEIPT_SCHEMA = "stateaction.local-ci.receipt/1"
 STAGES_SCHEMA = "stateaction.local-ci.stages/1"
@@ -282,6 +293,18 @@ def memory_current(group: Path | None) -> int | None:
         return int(_read(group / "memory.current"))
     except (OSError, ValueError, TypeError):
         return None
+
+
+def memory_anon(group: Path | None) -> int | None:
+    """Anonymous (non-reclaimable) memory of a cgroup: the pressure that page cache is not."""
+    try:
+        for line in _read(group / "memory.stat").splitlines():
+            key, _, value = line.partition(" ")
+            if key == "anon":
+                return int(value)
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
 
 
 def guard_binary() -> Path | None:
@@ -565,10 +588,139 @@ def load_stages(text: bytes) -> dict:
                     f"stage {stage['id']!r}: unsupported exclude pattern {item!r}"
                 )
         seen.add(stage["id"])
+    lane_plan(data["stages"])  # refuses an unsafe lane plan before anything runs
     always = data.get("alwaysRunAll", [])
     if not isinstance(always, list) or not all(isinstance(x, str) for x in always):
         raise Refused("alwaysRunAll must be a list of path patterns")
     return data
+
+
+def stage_ports(stage: dict) -> list[str]:
+    """The port variables a stage is handed: its declared `ports`, else all of the gate's block."""
+    declared = stage.get("ports")
+    return list(PORT_VARS) if declared is None else list(declared)
+
+
+def lane_groups(stages: list[dict]) -> list[list[list[dict]]]:
+    """The execution schedule: a list of steps, each a list of lanes, each an ordered stage list.
+
+    A stage without a `lane` is a barrier: it runs alone, after everything before it and before
+    anything after it (setup and every build). Consecutive stages that carry a `lane` form one
+    group; the stages of one lane run in declared order, the lanes of a group concurrently.
+    """
+    steps: list[list[list[dict]]] = []
+    group: dict[str, list[dict]] = {}
+    for item in stages:
+        lane = item.get("lane")
+        if lane is None:
+            if group:
+                steps.append(list(group.values()))
+                group = {}
+            steps.append([[item]])
+        else:
+            group.setdefault(lane, []).append(item)
+    if group:
+        steps.append(list(group.values()))
+    return steps
+
+
+def db_units(item: dict) -> int:
+    """Connection units a stage draws from the shared budget (only fixture stages acquire any)."""
+    units = item.get("dbConnections", 0)
+    if isinstance(units, bool) or not isinstance(units, int) or units < 0:
+        raise Refused(
+            f"stage {item['id']!r}: dbConnections must be a non-negative integer"
+        )
+    return units if item.get("fixtures") else 0
+
+
+def private_nx_state(work: Path, stage_id: str, nx_data: Path) -> dict[str, Path]:
+    """Nx runtime state private to one lane (SA-116): a copy of the workspace data (the project
+    graph and the SQLite task index, taken while no Nx process of this gate is running), its own
+    temporary directory and its own socket directory. Only the cache artifact directory stays
+    shared, so no two concurrent Nx processes ever share a database, a lock file or a socket."""
+    root = work / f"nx-{stage_id}"
+    shutil.rmtree(root, ignore_errors=True)
+    root.mkdir(mode=0o700)
+    shutil.copytree(nx_data, root / "data")
+    (root / "tmp").mkdir(mode=0o700)
+    # unix socket paths are short (about 100 characters): not under the work directory
+    sock = Path(tempfile.mkdtemp(prefix="ci-nx-"))
+    return {"root": root, "data": root / "data", "tmp": root / "tmp", "sock": sock}
+
+
+def in_declared_order(entries: dict[str, dict], stages: list[dict]) -> list[dict]:
+    """Entries in the declared stage order, whatever order the lanes finished in."""
+    ids = [item["id"] for item in stages]
+    return [entries[stage_id] for stage_id in sorted(entries, key=ids.index)]
+
+
+def lane_plan(stages: list[dict]) -> list[dict]:
+    """Validate the lane plan and describe each concurrent group (also stored in the receipt).
+
+    Refused: a bad lane name, a lane without a measured `memoryMiB`, lane budgets (the largest
+    stage of each lane, summed over the lanes of a group) above LANE_MEMORY_MIB, two lanes of a
+    group that share a port variable, and two lanes that both draw from the database connection
+    budget (two stages holding one unit each while waiting for the next could deadlock a gate).
+    """
+    for item in stages:
+        lane = item.get("lane")
+        if lane is not None and not (
+            isinstance(lane, str) and LANE_NAME.fullmatch(lane)
+        ):
+            raise Refused(f"stage {item['id']!r}: invalid lane name {lane!r}")
+        ports = item.get("ports")
+        if ports is not None and not (
+            isinstance(ports, list) and set(ports) <= set(PORT_VARS)
+        ):
+            raise Refused(f"stage {item['id']!r}: ports must be a list of {PORT_VARS}")
+    groups = []
+    for step in lane_groups(stages):
+        if len(step) < 2:
+            continue
+        lanes = []
+        for members in step:
+            name = members[0]["lane"]
+            for member in members:
+                budget = member.get("memoryMiB")
+                if (
+                    not isinstance(budget, int)
+                    or isinstance(budget, bool)
+                    or budget <= 0
+                ):
+                    raise Refused(
+                        f"stage {member['id']!r} runs in lane {name!r} and must declare a "
+                        "positive integer memoryMiB"
+                    )
+            lanes.append(
+                {
+                    "lane": name,
+                    "stages": [m["id"] for m in members],
+                    "memoryMiB": max(m["memoryMiB"] for m in members),
+                    "ports": sorted({p for m in members for p in stage_ports(m)}),
+                    "dbConnections": sum(db_units(m) for m in members),
+                }
+            )
+        total = sum(lane["memoryMiB"] for lane in lanes)
+        if total > LANE_MEMORY_MIB:
+            raise Refused(
+                f"lane plan {[lane['lane'] for lane in lanes]} is budgeted for {total} MiB; "
+                f"one gate admits {LANE_MEMORY_MIB} MiB (4.5 GiB of the 6 GiB job cap)"
+            )
+        seen_ports: dict[str, str] = {}
+        for lane in lanes:
+            for port in lane["ports"]:
+                if port in seen_ports:
+                    raise Refused(
+                        f"lanes {seen_ports[port]!r} and {lane['lane']!r} share port variable {port}"
+                    )
+                seen_ports[port] = lane["lane"]
+        if sum(1 for lane in lanes if lane["dbConnections"]) > 1:
+            raise Refused(
+                "at most one concurrent lane may draw from the database connection budget"
+            )
+        groups.append({"lanes": lanes, "memoryMiB": total})
+    return groups
 
 
 def argv_hash(stage: dict) -> str:
@@ -583,6 +735,10 @@ def argv_hash(stage: dict) -> str:
                 "fixtures",
                 "cache",
                 "gradleBuildCache",
+                "lane",
+                "memoryMiB",
+                "ports",
+                "nxState",
             )
         },
         sort_keys=True,
@@ -1205,6 +1361,24 @@ class Interrupted(Refused):
     pass
 
 
+class LaneStop(dict):
+    """The stop state one stage's child sees: `process` is its own, `requested` is the signal
+    flag of the whole run or the cancellation of its lane group (a sibling lane failed)."""
+
+    def __init__(self, parent: dict, cancel: threading.Event) -> None:
+        super().__init__(process=None)
+        self.parent = parent
+        self.cancel = cancel
+
+    def get(self, key, default=None):
+        if key == "requested":
+            return bool(self.parent.get("requested") or self.cancel.is_set())
+        return super().get(key, default)
+
+    def __getitem__(self, key):
+        return self.get(key) if key == "requested" else super().__getitem__(key)
+
+
 def raise_open_file_limit() -> None:
     """Stages inherit the soft nofile of their parent. An agentqueue lane unit starts at 1024,
     which broke Chrome/Next/Nx in web-auth-e2e; plain shells and Free scopes get the hard limit."""
@@ -1239,6 +1413,25 @@ def _pgrp(pid: int) -> int | None:
         return int(stat.rsplit(")", 1)[1].split()[2])
     except (OSError, IndexError, ValueError):
         return None
+
+
+def _session(pid: int) -> int | None:
+    try:
+        stat = (Path("/proc") / str(pid) / "stat").read_text()
+        return int(stat.rsplit(")", 1)[1].split()[3])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def in_stage(root: int):
+    """Scope of one stage while other stages run beside it: its own session and process group
+    (a stage runs in a session of its own). A daemon that left them is only provable at the end
+    of the whole lane group."""
+
+    def scope(pid: int) -> bool:
+        return pid != root and (_session(pid) == root or _pgrp(pid) == root)
+
+    return scope
 
 
 def _group_alive(pgid: int) -> bool:
@@ -1318,8 +1511,11 @@ def reap_subtree(
     settle: float = 0.0,
     details: list | None = None,
     transient: list | None = None,
+    scope=None,
 ) -> int:
     """Terminate and reap everything below this runner; only its own descendants.
+
+    `scope(pid)` narrows the check to one stage's processes while other stages run (SA-116).
 
     Returns how many live processes were found. Raises Refused when the subtree
     cannot be proved empty, so such a stage can neither pass nor be followed.
@@ -1338,7 +1534,7 @@ def reap_subtree(
         time.monotonic() + settle + grace
     )  # the settle window is not taken from grace
     while True:
-        procs = descendants(root)
+        procs = [p for p in descendants(root) if scope is None or scope(p[0])]
         for pid, state in procs:
             if state == "Z":
                 with contextlib.suppress(ChildProcessError, OSError):
@@ -1406,10 +1602,15 @@ def run_child(
     scan: "CacheScan | None" = None,
     wait_for_gradle: bool = False,
     cgroup: Path | None = None,
+    concurrent: bool = False,
 ) -> dict:
     started = time.monotonic()
+    # Raised in the runner itself and inherited by the child: `preexec_fn` is unsafe next to the
+    # lane threads (it runs after a fork that may hold another thread's lock).
+    raise_open_file_limit()
     cpu_before = cpu_seconds(cgroup)
     peak_seen = memory_current(cgroup) or 0
+    anon_seen = memory_anon(cgroup) or 0
     try:
         process = subprocess.Popen(
             argv,
@@ -1419,7 +1620,6 @@ def run_child(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             start_new_session=True,
-            preexec_fn=raise_open_file_limit,
         )
     except OSError as error:
         return {
@@ -1449,6 +1649,7 @@ def run_child(
                 break
             events = selector.select(timeout=0.25)
             peak_seen = max(peak_seen, memory_current(cgroup) or 0)
+            anon_seen = max(anon_seen, memory_anon(cgroup) or 0)
             if events:
                 chunk = os.read(process.stdout.fileno(), 65536)
                 if not chunk:
@@ -1489,6 +1690,7 @@ def run_child(
             settle=LEAK_SETTLE_SEC,
             details=leaked_details,
             transient=settled,
+            scope=in_stage(process.pid) if concurrent else None,
         )
     except Refused:
         status = "unreaped"
@@ -1532,6 +1734,9 @@ def run_child(
         if cpu_used is not None and wall > 0
         else None,
         "peakMemorySampledBytes": peak_seen or None,
+        "peakAnonSampledBytes": anon_seen or None,
+        # the cgroup is shared: while other lanes run, cpu and memory are those of the whole gate
+        "sharedWithLanes": concurrent,
         "scopePeakBytesAfter": peak_memory({"cgroup": str(cgroup)}) if cgroup else None,
     }
     if capture:
@@ -2031,33 +2236,41 @@ def receipt_digest(receipt: dict) -> str:
 
 
 def format_timing(record: dict) -> str:
-    """Per-stage wall time table (PASS, FAIL or INTERRUPTED), for budgeting the gate."""
-    rows = [("stage", "status", "seconds", "cache hits")]
+    """Per-stage wall time table (PASS, FAIL or INTERRUPTED), for budgeting the gate. Stages in
+    different lanes overlap: TOTAL is the gate's wall time, the stage seconds add up to more."""
+    rows = [("stage", "status", "seconds", "cache hits", "lane", "window s")]
     for item in record["stages"]:
         cache = item.get("cache") or {}
         hit_text = f"{cache.get('hits', 0)}/{cache.get('tasks', 0)}" if cache else "-"
+        start, end = item.get("startOffsetSec"), item.get("endOffsetSec")
         rows.append(
             (
                 item["id"],
                 item["status"],
                 f"{item.get('durationSec', 0.0):.1f}",
                 hit_text,
+                item.get("lane") or "-",
+                f"{start:.0f}-{end:.0f}"
+                if start is not None and end is not None
+                else "-",
             )
         )
     rows.append(
         (
             "TOTAL",
             record["verdict"],
-            f"{record.get('totalDurationSec', 0.0):.1f}",
-            f"wall {record.get('wallSec', 0.0):.1f}s",
+            f"{record.get('wallSec', 0.0):.1f}",
+            f"stage sum {record.get('totalDurationSec', 0.0):.1f}s",
+            "",
+            "",
         )
     )
-    widths = [max(len(r[i]) for r in rows) for i in range(4)]
+    widths = [max(len(r[i]) for r in rows) for i in range(6)]
     lines = [
         "  ".join(
-            c.ljust(w) if i in (0, 1) else c.rjust(w)
+            c.ljust(w) if i in (0, 1, 4) else c.rjust(w)
             for i, (c, w) in enumerate(zip(r, widths))
-        )
+        ).rstrip()
         for r in rows
     ]
     return "[local-ci] stage wall time\n" + "\n".join(lines)
@@ -2133,7 +2346,9 @@ def timing_report(home: Path, last: int = 5) -> str:
         )
         for r in rows
     )
-    return f"[local-ci] median per stage over {len(runs)} PASS run(s)\n{body}"
+    walls = [float(r["wallSec"]) for r in runs if r.get("wallSec") is not None]
+    gate = f"\ngate wall s (median): {_median(walls):.1f}" if walls else ""
+    return f"[local-ci] median per stage over {len(runs)} PASS run(s)\n{body}{gate}"
 
 
 def skipped_entry(stage: dict) -> dict:
@@ -2337,6 +2552,7 @@ def run_pipeline(
     started_at = time.time()
     counters_start = flow_hook.guard_counters(guard)
     toolchain: dict[str, str] = {}
+    live_stops_all: list[LaneStop] = []
     try:
         set_subreaper()
         if probe_ports:
@@ -2368,59 +2584,71 @@ def run_pipeline(
                         f"Stage {item['id']} needs {needed}, which is not in the exported tree. "
                         "Initialize the submodule or set STATEACTION_LOCAL_CI_SUBMODULES=<dir containing it>."
                     )
-        for stage in stages:
-            if stop["requested"]:
-                record["stages"].append({"id": stage["id"], "status": "interrupted"})
-                raise Interrupted("Cancelled before stage " + stage["id"])
-            cwd = export / stage.get("cwd", ".")
+        epoch = time.monotonic()
+        live_stops = live_stops_all
+        plan_lock = threading.Lock()
+        private_nx: dict[str, dict[str, Path]] = {}
+
+        def run_stage(item: dict, lstop: "LaneStop", concurrent: bool) -> dict:
+            """Run (or skip) one stage and return its entry; never touches `record`."""
+            nonlocal plan, toolchain
+            cwd = export / item.get("cwd", ".")
             selection = None
             built = None
-            if stage.get("affected"):
-                if plan is None:
-                    plan = compute_plan(
-                        spec,
-                        repo=repo,
-                        head=head,
-                        export=export,
-                        base_env=os.environ.copy(),
-                        shim_dir=shim_dir,
-                        node_version=pins["node"],
-                        tmp=tmp,
-                        nx_cache=nx_cache,
-                        nx_data=nx_data,
-                        log=log,
-                    )
-                selection = plan["stages"][stage["id"]]
+            if item.get("affected"):
+                with plan_lock:
+                    if plan is None:
+                        plan = compute_plan(
+                            spec,
+                            repo=repo,
+                            head=head,
+                            export=export,
+                            base_env=os.environ.copy(),
+                            shim_dir=shim_dir,
+                            node_version=pins["node"],
+                            tmp=tmp,
+                            nx_cache=nx_cache,
+                            nx_data=nx_data,
+                            log=log,
+                        )
+                selection = plan["stages"][item["id"]]
                 if not selection["run"]:
-                    log(f"[local-ci] stage {stage['id']}: {SKIP_REASON}")
-                    record["stages"].append(skipped_entry(stage))
-                    continue
+                    log(f"[local-ci] stage {item['id']}: {SKIP_REASON}")
+                    return skipped_entry(item) | {"lane": item.get("lane")}
                 built = stage_argv(
                     spec,
-                    stage,
+                    item,
                     base=plan["base"],
                     head=head,
                     run_all=plan["runAll"],
                 )
-            argv, skip_nx = effective_argv(stage, fresh, built, nx_cmd)
-            gradle_cache = bool(stage.get("gradleBuildCache")) and not fresh
+            argv, skip_nx = effective_argv(item, fresh, built, nx_cmd)
+            gradle_cache = bool(item.get("gradleBuildCache")) and not fresh
             env = stage_env(
                 os.environ.copy(),
                 shim_dir=shim_dir,
                 node_version=pins["node"],
-                stage=stage,
+                stage=item,
                 fixtures=fixtures,
                 fixture_file=fixture_file,
-                tmp=tmp,
+                tmp=private_nx[item["id"]]["tmp"] if item["id"] in private_nx else tmp,
                 cache_dir=nx_cache,
-                workspace_data_dir=nx_data,
+                workspace_data_dir=private_nx[item["id"]]["data"]
+                if item["id"] in private_nx
+                else nx_data,
                 skip_nx_cache=skip_nx,
                 gradle_cache=gradle_cache,
-                ports=ports,
+                ports={
+                    k: v
+                    for k, v in ports.items()
+                    if not k.endswith("_PORT") or k in stage_ports(item)
+                },
             )
-            if stage.get("docsChanged"):
+            if item["id"] in private_nx:
+                env["NX_SOCKET_DIR"] = str(private_nx[item["id"]]["sock"])
+            if item.get("docsChanged"):
                 changed = [p for e in docs["entries"] for p in e["paths"][-1:] if p]
-                if stage["docsChanged"] == "env":
+                if item["docsChanged"] == "env":
                     env[DOCS_ENV] = "\n".join(sorted(set(changed)))
                     env[DOCS_REMOVED_ENV] = "\n".join(
                         sorted(
@@ -2442,61 +2670,82 @@ def run_pipeline(
                         cwd, docs["paths"], env
                     )
                     argv = [*argv, "--files=" + ",".join(docs["paths"])]
-            log(f"[local-ci] stage {stage['id']}: {stage['title']}")
+            log(
+                f"[local-ci] stage {item['id']}"
+                + (f" (lane {item['lane']})" if concurrent else "")
+                + f": {item['title']}"
+            )
             budget: list[int] = []
             waited = 0.0
-            if stage.get("fixtures") and stage.get("dbConnections"):
+            if item.get("fixtures") and item.get("dbConnections"):
                 began_wait = time.monotonic()
-                budget = acquire_db_budget(
-                    int(stage["dbConnections"]),
-                    port_locks,
-                    cancelled=lambda: stop["requested"],
-                )
+                try:
+                    budget = acquire_db_budget(
+                        int(item["dbConnections"]),
+                        port_locks,
+                        cancelled=lambda: bool(lstop.get("requested")),
+                    )
+                except Interrupted:
+                    if stop["requested"]:
+                        raise
+                    # a sibling lane failed while this stage waited for its turn: it never ran
+                    return not_run(item, "stopped while waiting: another lane failed")
                 waited = time.monotonic() - began_wait
                 if waited > 1:
                     log(
-                        f"[local-ci] stage {stage['id']} waited {waited:.0f}s for the shared "
-                        f"database connection budget ({stage['dbConnections']} of {DB_BUDGET})"
+                        f"[local-ci] stage {item['id']} waited {waited:.0f}s for the shared "
+                        f"database connection budget ({item['dbConnections']} of {DB_BUDGET})"
                     )
+            began = time.time()
+            began_offset = time.monotonic() - epoch
             try:
                 result = run_child(
                     argv,
                     cwd=cwd,
                     env=env,
-                    log=logs / f"{stage['id']}.log",
-                    timeout=float(stage.get("timeoutSec", 1800)),
-                    output_cap=int(stage.get("maxOutputBytes", DEFAULT_OUTPUT_CAP)),
+                    log=logs / f"{item['id']}.log",
+                    timeout=float(item.get("timeoutSec", 1800)),
+                    output_cap=int(item.get("maxOutputBytes", DEFAULT_OUTPUT_CAP)),
                     secrets_=secrets_,
-                    stop=stop,
-                    capture=bool(stage.get("capture")),
+                    stop=lstop,
+                    capture=bool(item.get("capture")),
                     scan=CacheScan() if is_nx(argv, nx_cmd) else None,
-                    wait_for_gradle=stage["id"] == "mobile",
+                    wait_for_gradle=item["id"] == "mobile",
                     cgroup=Path(guard["cgroup"]) if guard.get("cgroup") else None,
+                    concurrent=concurrent,
                 )
             finally:
                 for fd in budget:
                     os.close(fd)
             entry = {
-                "id": stage["id"],
-                "argvSha256": argv_hash(stage),
+                "id": item["id"],
+                "lane": item.get("lane"),
+                "argvSha256": argv_hash(item),
                 "status": result["status"],
                 "exitCode": result["exitCode"],
                 "durationSec": result["durationSec"],
-                "startedAt": None,
+                "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(began)),
+                "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "startOffsetSec": round(began_offset, 2),
+                "endOffsetSec": round(time.monotonic() - epoch, 2),
                 "logBytes": result.get("logBytes", 0),
                 "logSha256": result.get("logSha256"),
-                "fixtureBacked": bool(stage.get("fixtures")),
+                "fixtureBacked": bool(item.get("fixtures")),
                 "cacheMode": "none"
                 if skip_nx or not is_nx(argv, nx_cmd)
                 else "none-by-target"
-                if fixture_task(stage, argv) or (selection and stage.get("fixtures"))
+                if fixture_task(item, argv) or (selection and item.get("fixtures"))
                 else "nx",
                 "gradleBuildCache": gradle_cache,
                 "cache": result.get("cache"),
                 "metrics": result.get("metrics"),
                 "dbBudgetWaitSec": round(waited, 1),
             }
-            if stage.get("capture") == "toolchain" and "captured" in result:
+            if entry["status"] == "interrupted" and not stop["requested"]:
+                # stopped because a sibling lane failed, not by a signal: it did not finish
+                entry["status"] = "cancelled"
+                entry["detail"] = "stopped because another lane failed"
+            if item.get("capture") == "toolchain" and "captured" in result:
                 toolchain = {
                     k.removeprefix("toolchain:"): v.strip()
                     for k, _, v in (
@@ -2513,7 +2762,7 @@ def run_pipeline(
                 )
             rewritten = modified_since(export, snapshot)
             replayed = cached_fixture_task(
-                stage,
+                item,
                 argv,
                 result.get("cache"),
                 selection["selectedTasks"] if selection else None,
@@ -2545,13 +2794,184 @@ def run_pipeline(
             if result.get("leakedProcesses"):
                 entry["leakedProcesses"] = result["leakedProcesses"]
                 entry["leakedDetails"] = result.get("leakedDetails", [])
-            if entry["status"] != "passed" and result.get("tail"):
+            if entry["status"] not in ("passed", "cancelled") and result.get("tail"):
                 log(redact(result["tail"].encode(), secrets_).decode(errors="replace"))
-            record["stages"].append(entry)
-            if entry["status"] == "interrupted":
-                raise Interrupted("Cancelled during stage " + stage["id"])
-            if entry["status"] != "passed" and not keep_going:
-                break
+            return entry
+
+        def not_run(item: dict, reason: str) -> dict:
+            """A stage that never started: recorded as such, never as passed."""
+            return {
+                "id": item["id"],
+                "lane": item.get("lane"),
+                "argvSha256": argv_hash(item),
+                "status": "not-run",
+                "reason": reason,
+                "exitCode": None,
+                "durationSec": 0.0,
+                "startedAt": None,
+                "logBytes": 0,
+                "logSha256": None,
+                "fixtureBacked": bool(item.get("fixtures")),
+                "cacheMode": "none",
+                "gradleBuildCache": False,
+                "cache": None,
+                "metrics": None,
+            }
+
+        def run_group(step: list[list[dict]]) -> dict[str, dict]:
+            """Run the lanes of one group concurrently inside this gate; stop the rest of the
+            group as soon as one stage fails (unless keep_going)."""
+            for members in step:
+                for item in members:
+                    if item.get("nxState") == "private":
+                        private_nx[item["id"]] = private_nx_state(
+                            work, item["id"], nx_data
+                        )
+            cancel = threading.Event()
+            entries: dict[str, dict] = {}
+            errors: list[BaseException] = []
+            lock = threading.Lock()
+            finished = threading.Event()
+            peak = {"current": 0, "anon": 0}
+            cgroup = Path(guard["cgroup"]) if guard.get("cgroup") else None
+            group_began = time.monotonic()
+
+            def watch() -> None:
+                while not finished.wait(0.25):
+                    peak["current"] = max(peak["current"], memory_current(cgroup) or 0)
+                    peak["anon"] = max(peak["anon"], memory_anon(cgroup) or 0)
+
+            def lane(members: list[dict]) -> None:
+                lstop = LaneStop(stop, cancel)
+                with lock:
+                    live_stops.append(lstop)
+                for item in members:
+                    if cancel.is_set() or stop["requested"]:
+                        break
+                    try:
+                        entry = run_stage(item, lstop, True)
+                    except BaseException as error:  # reported by the scheduler thread
+                        with lock:
+                            errors.append(error)
+                        cancel.set()
+                        break
+                    with lock:
+                        entries[item["id"]] = entry
+                    if entry["status"] not in ("passed", "skipped") and not keep_going:
+                        cancel.set()
+
+            watcher = threading.Thread(target=watch, daemon=True)
+            watcher.start()
+            workers = [
+                threading.Thread(target=lane, args=(members,), name=members[0]["lane"])
+                for members in step
+            ]
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join()
+            finished.set()
+            watcher.join()
+            # Orphaned daemons cannot be tied to one lane; after the group they are leaks of it.
+            leaked_details: list = []
+            gradle_ran = any(
+                e["status"] == "passed" and e["id"] == "mobile"
+                for e in entries.values()
+            )
+            try:
+                leaked = reap_subtree(
+                    settle=LEAK_SETTLE_SEC,
+                    details=leaked_details,
+                    gradle_shutdown=stop if gradle_ran else None,
+                )
+                unreaped = False
+            except Refused:
+                leaked, unreaped = len(leaked_details), True
+            for entry in entries.values():
+                if (leaked or unreaped) and entry["status"] == "passed":
+                    entry["status"] = "unreaped" if unreaped else "leaked-process"
+                    entry["leakedProcesses"] = leaked
+                    entry["leakedDetails"] = leaked_details
+                    entry["detail"] = (
+                        "a process outlived its lane group and cannot be tied to one "
+                        "stage of it; every stage that had passed is failed"
+                    )
+            for item in (i for members in step for i in members):
+                if item["id"] not in entries:
+                    entries[item["id"]] = not_run(
+                        item, "a stage in another lane failed first"
+                    )
+            record.setdefault("lanes", []).append(
+                {
+                    "lanes": [
+                        {
+                            "lane": members[0]["lane"],
+                            "stages": [i["id"] for i in members],
+                            "memoryMiB": max(i["memoryMiB"] for i in members),
+                        }
+                        for members in step
+                    ],
+                    "wallSec": round(time.monotonic() - group_began, 2),
+                    "peakMemoryBytes": peak["current"] or None,
+                    "peakAnonBytes": peak["anon"] or None,
+                    "admittedMemoryMiB": LANE_MEMORY_MIB,
+                }
+            )
+            pending.extend(errors)
+            for state in private_nx.values():
+                shutil.rmtree(state["root"], ignore_errors=True)
+                shutil.rmtree(state["sock"], ignore_errors=True)
+            private_nx.clear()
+            return entries
+
+        pending: list[BaseException] = []
+        halted = False
+        for step in lane_groups(stages):
+            if halted:
+                for members in step:
+                    for item in members:
+                        record["stages"].append(
+                            not_run(item, "an earlier stage did not pass")
+                        )
+                continue
+            if stop["requested"]:
+                record["stages"].append(
+                    {"id": step[0][0]["id"], "status": "interrupted"}
+                )
+                raise Interrupted("Cancelled before stage " + step[0][0]["id"])
+            if len(step) == 1:
+                lstop = LaneStop(stop, threading.Event())
+                live_stops.append(lstop)
+                entries = {}
+                for item in step[0]:
+                    entries[item["id"]] = run_stage(item, lstop, False)
+                    if entries[item["id"]]["status"] not in ("passed", "skipped") and (
+                        not keep_going
+                    ):
+                        break
+            else:
+                entries = run_group(step)
+            order = [i["id"] for members in step for i in members]
+            record["stages"].extend(in_declared_order(entries, stages))
+            if pending:
+                raise pending[0]  # entries of the finished stages are recorded first
+            interrupted = [e for e in entries.values() if e["status"] == "interrupted"]
+            if interrupted:
+                raise Interrupted("Cancelled during stage " + interrupted[0]["id"])
+            if len(step) > 1 and stop["requested"]:
+                raise Interrupted("Cancelled during the lane group")
+            if not keep_going and any(
+                e["status"] not in ("passed", "skipped") for e in entries.values()
+            ):
+                halted = True
+                for stage_id in order:
+                    if stage_id not in entries:
+                        record["stages"].append(
+                            not_run(
+                                next(i for i in stages if i["id"] == stage_id),
+                                "an earlier stage did not pass",
+                            )
+                        )
         passed = [s for s in record["stages"] if s["status"] in ("passed", "skipped")]
         complete = len(passed) == len(stages) == len(record["stages"])
         final = current_tree(repo, rev)
@@ -2578,8 +2998,9 @@ def run_pipeline(
         record["detail"] = f"{type(error).__name__}: {error}"
         raise
     finally:
-        if stop.get("process") is not None:
-            kill_group(stop["process"])
+        for lstop in live_stops_all:
+            if lstop.get("process") is not None:
+                kill_group(lstop["process"])
         for name, handler_ in previous.items():
             signal.signal(name, handler_)
         with contextlib.suppress(Refused):
@@ -2643,13 +3064,18 @@ def run_pipeline(
             "runnerSha256": sha256_bytes(runner_text),
             "stages": [
                 {
-                    k: s[k]
+                    k: s.get(k)
                     for k in (
                         "id",
                         "argvSha256",
                         "status",
                         "exitCode",
                         "durationSec",
+                        "lane",
+                        "startedAt",
+                        "finishedAt",
+                        "startOffsetSec",
+                        "endOffsetSec",
                         "logSha256",
                         "fixtureBacked",
                         "cacheMode",
@@ -2660,6 +3086,8 @@ def run_pipeline(
                 | {"metrics": s.get("metrics"), "reason": s.get("reason")}
                 for s in record["stages"]
             ],
+            "lanePlan": lane_plan(stages),
+            "lanes": record.get("lanes", []),
             "affected": plan,
             "toolchain": toolchain,
             "toolchainSha256": sha256_bytes(
@@ -3008,6 +3436,11 @@ def verify_receipt(
     except (Refused, ValueError, KeyError, TypeError) as error:
         return errors + [f"stage list invalid: {error}"]
     got = {s.get("id"): s for s in receipt.get("stages", [])}
+    try:
+        if receipt.get("lanePlan") != lane_plan(stage_list):
+            errors.append("receipt lane plan differs from the declared lane plan")
+    except Refused as error:
+        errors.append(f"declared lane plan refused: {error}")
     if list(got) != list(declared):
         errors.append("receipt stages do not equal the declared stages in order")
     affected_on = affected_declared(spec)
@@ -3031,6 +3464,13 @@ def verify_receipt(
         ):
             errors.append(f"stage {stage_id} did not pass with the declared command")
             continue
+        declared_lane = next((x for x in stage_list if x["id"] == stage_id), {}).get(
+            "lane"
+        )
+        if item.get("lane") != declared_lane:
+            errors.append(
+                f"stage {stage_id} ran in lane {item.get('lane')!r}, declared {declared_lane!r}"
+            )
         if skipped_ok:
             continue
         stage_spec = next((x for x in stage_list if x["id"] == stage_id), {"argv": []})

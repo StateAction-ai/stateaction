@@ -5,7 +5,10 @@ const script = new URL("../../../scripts/platform/web.mjs", import.meta.url);
 test("start refuses to run without any environment", () => {
   const child = spawnSync(process.execPath, [script.pathname, "start"], {
     encoding: "utf8",
-    env: { PATH: process.env.PATH ?? "" },
+    env: {
+      PATH: process.env.PATH ?? "",
+      STATEACTION_ENV_FILE: "/nonexistent/stateaction.env",
+    },
   });
   assert.notEqual(child.status, 0);
   assert.match(child.stderr, /APP_ENV/);
@@ -13,7 +16,12 @@ test("start refuses to run without any environment", () => {
 test("start rejects a non-numeric PORT before listening", () => {
   const child = spawnSync(process.execPath, [script.pathname, "start"], {
     encoding: "utf8",
-    env: { PATH: process.env.PATH ?? "", APP_ENV: "production", PORT: "x;y" },
+    env: {
+      PATH: process.env.PATH ?? "",
+      APP_ENV: "production",
+      PORT: "x;y",
+      STATEACTION_ENV_FILE: "/nonexistent/stateaction.env",
+    },
   });
   assert.notEqual(child.status, 0);
   assert.match(child.stderr, /PORT must be numeric/);
