@@ -51,10 +51,11 @@
       "parallelism": false,
       "inputs": [
         "default",
-        "^production",
+        "^fixtureProduction",
         "{workspaceRoot}/packages/server/test-auth/**/*",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
-        "{workspaceRoot}/scripts/platform/process-wait.mjs"
+        "{workspaceRoot}/scripts/platform/process-wait.mjs",
+        "!{projectRoot}/**/*.md"
       ]
     }
   },

@@ -42,8 +42,9 @@
       "parallelism": false,
       "inputs": [
         "default",
-        "^production",
-        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+        "^fixtureProduction",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "!{projectRoot}/**/*.md"
       ]
     },
     "catalog-integration": {
@@ -53,9 +54,10 @@
       "dependsOn": ["^build"],
       "inputs": [
         "default",
-        "^production",
+        "^fixtureProduction",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
-        "{workspaceRoot}/infra/compose.yaml"
+        "{workspaceRoot}/infra/compose.yaml",
+        "!{projectRoot}/**/*.md"
       ],
       "options": {
         "command": "bash packages/server/scripts/catalog-integration.sh",

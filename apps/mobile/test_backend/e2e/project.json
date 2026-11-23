@@ -24,12 +24,14 @@
       ],
       "inputs": [
         "{workspaceRoot}/apps/mobile/test_backend/**/*",
-        "^production",
+        "^fixtureProduction",
         "flutterSources",
         "{workspaceRoot}/packages/server/test-auth/**/*",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
         "{workspaceRoot}/scripts/platform/process-wait.mjs",
-        "flutterToolchain"
+        "flutterToolchain",
+        "!{projectRoot}/**/*.md",
+        "!{workspaceRoot}/scripts/mobile/**/*.md"
       ],
       "options": {
         "commands": [
