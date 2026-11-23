@@ -112,7 +112,7 @@ def report_ci_run(
                 (
                     s["id"]
                     for s in record.get("stages", [])
-                    if s.get("status") != "passed"
+                    if s.get("status") not in ("passed", "skipped")
                 ),
                 "",
             )

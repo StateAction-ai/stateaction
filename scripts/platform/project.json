@@ -84,6 +84,7 @@
     "test-local-ci": {
       "executor": "nx:run-commands",
       "cache": true,
+      "parallelism": false,
       "inputs": [
         "{workspaceRoot}/scripts/local-ci/**/*",
         "!{workspaceRoot}/scripts/local-ci/**/__pycache__/**/*",

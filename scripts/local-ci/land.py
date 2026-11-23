@@ -350,7 +350,9 @@ def stored_result(home: Path, number: int) -> dict | None:
 
 def gate_summary(record: dict) -> dict:
     stages = record.get("stages", [])
-    failed = next((s for s in stages if s.get("status") != "passed"), None)
+    failed = next(
+        (s for s in stages if s.get("status") not in ("passed", "skipped")), None
+    )
     summary = {
         "verdict": record.get("verdict"),
         "wallSec": record.get("wallSec"),

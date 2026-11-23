@@ -57,6 +57,19 @@ class FlowHookTest(unittest.TestCase):
         self._flowlog = os.environ.get("FLOWLOG")
         self.addCleanup(os.environ.__setitem__, "FLOWLOG", self._flowlog or "off")
 
+    def test_a_skipped_stage_is_never_reported_as_the_failing_stage(self):
+        os.environ["FLOWLOG"] = str(self.fake)
+        rec = Recorder()
+        record = {
+            **RECORD,
+            "stages": [
+                {"id": "mobile", "status": "skipped", "durationSec": 0.0},
+                *RECORD["stages"][1:],
+            ],
+        }
+        self.assertTrue(flow_hook.report_ci_run(record, repo=self.tmp, run=rec))
+        self.assertEqual(rec.argv[rec.argv.index("--failing-stage") + 1], "b")
+
     def test_report_sends_the_run_with_ticket_failing_stage_and_stages_on_stdin(self):
         os.environ["FLOWLOG"] = str(self.fake)
         rec = Recorder()

@@ -4,6 +4,7 @@ any service, and never touch the checkout they run from."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shlex
@@ -88,12 +89,13 @@ class RepoCase(unittest.TestCase):
         sh(self.repo, "git", "commit", "-qm", "base")
         sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
 
-    def set_stages(self, stages, unautomated=None):
+    def set_stages(self, stages, unautomated=None, **spec_extra):
         spec = {
             "schema": local_ci.STAGES_SCHEMA,
             "pins": {"node": "24.22.2", "pnpm": "10.33.0", "uv": ""},
             "stages": stages,
             "unautomated": unautomated or ["physical device"],
+            **spec_extra,
         }
         (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
 
@@ -637,7 +639,7 @@ class PipelineTests(RepoCase):
             "stderr=subprocess.DEVNULL, start_new_session=True); "
             f"open({str(pidfile)!r}, 'w').write(str(p.pid))"
         )
-        self.set_stages([stage("mobile-android-dart", code)])
+        self.set_stages([stage("mobile", code)])
         self.commit_pending()
         with mock.patch.object(
             local_ci, "is_gradle_daemon", return_value=True
@@ -649,7 +651,7 @@ class PipelineTests(RepoCase):
 
     def test_mobile_stage_still_reaps_unrelated_detached_grandchild(self):
         pidfile = self.tmp / "unrelated.pid"
-        self.set_stages([{**self.detached_stage(pidfile), "id": "mobile-android-dart"}])
+        self.set_stages([{**self.detached_stage(pidfile), "id": "mobile"}])
         self.commit_pending()
         record = self.run_tree()
         self.assertEqual(record["stages"][0]["status"], "leaked-process")
@@ -2319,7 +2321,7 @@ class CacheTests(RepoCase):
                 self.assertFalse(item.get("gradleBuildCache"), item["id"])
         self.assertEqual(
             [s["id"] for s in spec["stages"] if s.get("gradleBuildCache")],
-            ["mobile-android-dart"],
+            ["mobile"],
         )
         gradle = (
             HERE.parents[1] / "spikes/android/capture/app/build.gradle.kts"
@@ -2328,14 +2330,16 @@ class CacheTests(RepoCase):
             'outputs.dir(layout.buildDirectory.dir("spike-fixtures"))', gradle
         )
         for item in spec["stages"]:
-            self.assertLessEqual(item["timeoutSec"], 1800, item["id"])
+            self.assertLessEqual(item["timeoutSec"], 3600, item["id"])
             if item.get("cache") == "nx":
-                self.assertIn("--nxBail", item["argv"])
+                self.assertIn("--nxBail", item["affected"]["args"])
         cached = [s["id"] for s in spec["stages"] if s.get("cache") == "nx"]
-        self.assertEqual(cached, ["server-tooling", "mobile-android-dart"])
+        self.assertEqual(cached, ["static", "mobile"])
         for item in spec["stages"]:
-            if item.get("cache") == "nx":
-                self.assertNotIn("--skip-nx-cache", item["argv"])
+            self.assertNotIn("--skip-nx-cache", item.get("argv", []))
+            self.assertNotIn(
+                "--skip-nx-cache", item.get("affected", {}).get("args", [])
+            )
 
     def test_nx_hashes_include_toolchain_runtime_and_never_use_cloud(self):
         nx = json.loads((HERE.parents[1] / "nx.json").read_text())
@@ -2511,65 +2515,803 @@ class StageMetricsTests(unittest.TestCase):
 class StageFileTests(unittest.TestCase):
     def test_mobile_projects_are_selected_by_tag_not_by_name(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
-        stages = {item["id"]: item["argv"] for item in spec["stages"]}
-        self.assertIn("--exclude=tag:mobile-toolchain", stages["server-tooling"])
-        self.assertIn("--projects=tag:mobile-toolchain", stages["mobile-android-dart"])
+        stages = {
+            item["id"]: local_ci.stage_argv(
+                spec, item, base="b" * 40, head="h" * 40, run_all=False
+            )
+            for item in spec["stages"]
+        }
+        self.assertIn("--exclude=tag:mobile-toolchain", stages["static"])
+        self.assertIn("--exclude=*,!tag:mobile-toolchain", stages["mobile"])
+        self.assertIn("affected", stages["mobile"])
         for item in spec["stages"]:
             self.assertNotIn(
-                "android-upload-spike-native", " ".join(item["argv"]), item["id"]
+                "android-upload-spike-native", " ".join(stages[item["id"]]), item["id"]
             )
 
-    def test_shipped_stage_file_is_valid_serial_and_declares_all_suites(self):
+    def test_shipped_stage_file_has_four_stages_and_no_project_list(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
-        ids = [s["id"] for s in spec["stages"]]
-        for needed in (
-            "root-python-tests",
-            "render-cli",
-            "server-tooling",
-            "mobile-android-dart",
-            "catalog-integration",
-            "server-auth-integration",
-            "web-auth-e2e",
-            "mobile-backend-e2e",
-            "jobs-controller-integration",
-            "runtime-smoke",
-        ):
-            self.assertIn(needed, ids)
-        for item in spec["stages"]:
-            joined = " ".join(item["argv"])
-            if item["argv"][:3] == ["pnpm", "exec", "nx"]:
-                self.assertNotIn("--skip-nx-cache", joined, item["id"])
-                if "run-many" in joined:
-                    # Only the light static stage parallelises (3 x ~0.6 GB: tsc, prettier,
-                    # unit, syntax); web:build is parallelism:false and the native
-                    # toolchains stay serial.
-                    want = (
-                        "--parallel=3"
-                        if item["id"] == "server-tooling"
-                        else "--parallel=1"
-                    )
-                    self.assertIn(want, joined, item["id"])
-            self.assertNotIn("docker", joined)
-        controller = next(
-            s for s in spec["stages"] if s["id"] == "jobs-controller-integration"
-        )
-        self.assertTrue(controller["fixtures"])
-        self.assertNotIn("cache", controller)
         self.assertEqual(
-            controller["argv"],
+            [s["id"] for s in spec["stages"]],
+            ["setup", "static", "mobile", "integration"],
+        )
+        by_id = {s["id"]: s for s in spec["stages"]}
+        self.assertEqual(
+            by_id["integration"]["affected"]["targets"],
             [
-                "pnpm",
-                "exec",
-                "nx",
-                "run",
-                "jobs:integration",
-                "--outputStyle=static",
+                "catalog-integration",
+                "auth-integration",
+                "auth-e2e",
+                "integration",
+                "e2e",
             ],
         )
-        self.assertLess(ids.index("render-cli"), ids.index(controller["id"]))
-        self.assertLess(ids.index("python-sync"), ids.index(controller["id"]))
-        self.assertLess(ids.index("server-tooling"), ids.index(controller["id"]))
+        self.assertTrue(by_id["integration"]["fixtures"])
+        for stage_id in ("static", "mobile", "integration"):
+            self.assertNotIn("argv", by_id[stage_id])
+            self.assertNotIn("projects", json.dumps(by_id[stage_id]["affected"]))
+        for item in spec["stages"]:
+            argv = local_ci.stage_argv(
+                spec, item, base="b" * 40, head="h" * 40, run_all=False
+            )
+            joined = " ".join(argv)
+            self.assertNotIn("docker", joined)
+            self.assertNotIn("--skip-nx-cache", joined)
+            if item.get("affected"):
+                self.assertIn("--base=" + "b" * 40, joined, item["id"])
+                self.assertIn("--head=" + "h" * 40, joined, item["id"])
+                # Only the light static stage parallelises (3 x ~0.6 GB: tsc, prettier, unit,
+                # syntax; web:build is parallelism:false, SA-118); the native toolchains and
+                # the fixture stage stay serial.
+                want = "--parallel=3" if item["id"] == "static" else "--parallel=1"
+                self.assertIn(want, joined, item["id"])
+                self.assertNotIn("run-many", joined, item["id"])
+        self.assertNotIn("cache", by_id["integration"])
+        required = {
+            "scripts/local-ci/**",
+            "scripts/local-ci/stages.json",
+            "nx.json",
+            "pnpm-lock.yaml",
+            "uv.lock",
+            "workers/*/uv.lock",
+            "package.json",
+            "packages/server/migrations/**",
+            "AGENTS.md",
+            "docs/local-ci.md",
+        }
+        self.assertTrue(required <= set(spec["alwaysRunAll"]))
+        # root files that no Nx project owns, so no task would ever select them
+        for extra in (".gitattributes", ".gitmodules", "pnpm-workspace.yaml"):
+            self.assertIn(extra, spec["alwaysRunAll"])
         self.assertTrue(spec["unautomated"])
+
+
+FAKE_NX = r"""
+import json, os, subprocess, sys
+
+fx = json.load(open("nxfixture.json"))
+args = sys.argv[1:]
+projects = fx["projects"]
+
+
+def opt(name):
+    for a in args:
+        if a.startswith(name + "="):
+            return a.split("=", 1)[1]
+
+
+def excluded():
+    gone = set()
+    for item in (opt("--exclude") or "").split(","):
+        if not item:
+            continue
+        neg = item.startswith("!")
+        item = item.lstrip("!")
+        hit = (
+            set(projects)
+            if item == "*"
+            else {n for n, p in projects.items() if item[4:] in p.get("tags", [])}
+        )
+        gone = gone - hit if neg else gone | hit
+    return gone
+
+
+def affected():
+    if fx.get("failAffected"):
+        sys.exit(3)
+    out = subprocess.run(
+        ["git", "diff", "--name-only", "--no-renames", opt("--base"), opt("--head")],
+        capture_output=True, text=True, check=True,
+    ).stdout.split()
+    return [
+        n for n, p in projects.items()
+        if any(f.startswith(pre) for f in out for pre in p["paths"])
+    ]
+
+
+with open(fx["log"], "a") as log:
+    log.write(" ".join(args) + "\n")
+if fx.get("requireMarker") and not os.path.exists(fx["requireMarker"]):
+    sys.exit(9)  # a query before setup finished
+if os.getcwd() != fx["repo"] and not os.path.exists(".git/objects/info/alternates"):
+    sys.exit(10)  # the export cannot read the real history
+cmd = args[0]
+if cmd == "graph":
+    if fx.get("failGraph"):
+        sys.exit(4)
+    nodes = {
+        n: {"data": {"tags": p.get("tags", []), "targets": {t: {} for t in p["targets"]}}}
+        for n, p in projects.items()
+    }
+    json.dump({"graph": {"nodes": nodes}}, open(opt("--file"), "w"))
+elif cmd == "show":
+    if fx.get("failShow"):
+        sys.exit(5)
+    print(json.dumps(affected()))
+elif cmd == "affected" and opt("--explain"):
+    targets = args[args.index("-t") + 1].split(",")
+    hit = {f"{n}:{t}": [] for n in affected() for t in targets if t in projects[n]["targets"]}
+    if fx.get("extraIds"):
+        hit[fx["extraIds"]] = []
+    json.dump({} if fx.get("badExplain") else {"affected": hit}, open(opt("--explain"), "w"))
+else:
+    targets = args[args.index("-t") + 1].split(",")
+    names = affected() if cmd == "affected" else list(projects)
+    for n in names:
+        if n in excluded():
+            continue
+        for t in targets:
+            if t in projects[n]["targets"]:
+                if f"{n}:{t}" in fx.get("silent", []):
+                    continue
+                mark = " [local cache]" if f"{n}:{t}" in fx.get("cached", []) else ""
+                print(f"> nx run {n}:{t}{mark}")
+"""
+
+
+FIXTURE_STAGE_TIMEOUT_SEC = (
+    600  # fake stages do ~0.1 s of work; only a hung child should hit it
+)
+
+
+class AffectedTests(RepoCase):
+    ALWAYS = [
+        "scripts/local-ci/**",
+        "scripts/local-ci/stages.json",
+        "nx.json",
+        "pnpm-lock.yaml",
+        "uv.lock",
+        "workers/*/uv.lock",
+        "package.json",
+        "packages/server/migrations/**",
+        "AGENTS.md",
+        "docs/local-ci.md",
+        ".gitattributes",
+        ".gitmodules",
+        ".gitignore",
+        ".nxignore",
+        ".npmrc",
+        ".nvmrc",
+        "pnpm-workspace.yaml",
+        "requirements-inspection.txt",
+        "requirements-stera.txt",
+    ]
+
+    def fixture_projects(self):
+        contracts = "packages/contracts/"
+        return {
+            "server": {
+                "targets": ["build", "test", "catalog-integration"],
+                "paths": ["packages/server/", contracts],
+            },
+            "web": {
+                "targets": ["build", "test", "auth-e2e"],
+                "paths": ["apps/web/", contracts],
+            },
+            "jobs": {
+                "targets": ["build", "integration"],
+                "paths": [
+                    "apps/jobs/",
+                    "packages/server/",
+                    "workers/processing/",
+                    contracts,
+                ],
+            },
+            "processing": {
+                "targets": ["build", "test"],
+                "paths": ["workers/processing/", contracts],
+            },
+            "mobile": {
+                "tags": ["mobile-toolchain"],
+                "targets": ["build", "test"],
+                "paths": ["apps/mobile/", contracts],
+            },
+        }
+
+    def build(self, *, nxfixture=None, fixtures=False, always=None):
+        # The fake gate's descendants exit at once; on a host whose memory.high throttling
+        # stalls processes for seconds (SA-106 r2: 191 tests took 601 s instead of 130 s) the
+        # real 2 s settle window must not decide the verdict of a test about the affected set.
+        patcher = mock.patch.object(local_ci, "LEAK_SETTLE_SEC", 60.0)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.wait_for_no_strays()
+        tools = self.repo / "tools"
+        tools.mkdir(exist_ok=True)
+        (tools / "fake_nx.py").write_text(FAKE_NX)
+        self.nxlog = self.tmp / "nx-calls.log"
+        (self.repo / "nxfixture.json").write_text(
+            json.dumps(
+                {
+                    "log": str(self.nxlog),
+                    "repo": str(self.repo),
+                    "projects": self.fixture_projects(),
+                    **(nxfixture or {}),
+                }
+            )
+        )
+        flags = ["--parallel=1"]
+        self.set_stages(
+            [
+                stage("setup", "print('setup')"),
+                {
+                    "id": "static",
+                    "title": "static",
+                    "timeoutSec": FIXTURE_STAGE_TIMEOUT_SEC,
+                    "cache": "nx",
+                    "affected": {
+                        "targets": ["build", "test"],
+                        "exclude": "tag:mobile-toolchain",
+                        "args": flags,
+                    },
+                },
+                {
+                    "id": "mobile",
+                    "title": "mobile",
+                    "timeoutSec": FIXTURE_STAGE_TIMEOUT_SEC,
+                    "affected": {
+                        "targets": ["build", "test"],
+                        "exclude": "*,!tag:mobile-toolchain",
+                        "args": flags,
+                    },
+                },
+                {
+                    "id": "integration",
+                    "title": "integration",
+                    "timeoutSec": FIXTURE_STAGE_TIMEOUT_SEC,
+                    "fixtures": fixtures,
+                    "affected": {
+                        "targets": ["catalog-integration", "auth-e2e", "integration"],
+                        "args": flags,
+                    },
+                },
+            ],
+            nx=[sys.executable, "tools/fake_nx.py"],
+            alwaysRunAll=self.ALWAYS if always is None else always,
+        )
+        self.commit_pending("fake nx workspace")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    def change(self, *paths):
+        for path in paths:
+            target = self.repo / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(target.read_text() + "x\n" if target.exists() else "x\n")
+
+    def wait_for_no_strays(self, limit=60.0):
+        """The runner reaps every descendant of this process (it is its subreaper), so a process
+        an earlier test orphaned and a loaded host is still killing would fail this test's
+        stage as a leak. Wait until none is left; name the survivor instead of guessing."""
+        deadline = time.monotonic() + limit
+        while True:
+            for pid, state in local_ci.descendants(os.getpid()):
+                if state == "Z":
+                    with contextlib.suppress(ChildProcessError, OSError):
+                        os.waitpid(pid, os.WNOHANG)
+            left = [
+                local_ci.describe_process(pid)
+                for pid, state in local_ci.descendants(os.getpid())
+                if state != "Z"
+            ]
+            if not left:
+                return
+            if time.monotonic() > deadline:
+                self.fail(f"processes of earlier tests are still alive: {left}")
+            time.sleep(0.05)
+
+    def run_tree(self, **kwargs):
+        """Keep the runner's messages so a failed verdict names its cause in the assertion."""
+        self.run_log = []
+        kwargs.setdefault("log", self.run_log.append)
+        return super().run_tree(**kwargs)
+
+    def assert_passed(self, record):
+        stages = [
+            (s["id"], s["status"], s.get("durationSec")) for s in record["stages"]
+        ]
+        self.assertEqual(
+            record["verdict"],
+            "PASS",
+            f"stages={stages} detail={record.get('detail')} log={self.run_log[-8:]}",
+        )
+
+    def gate(self, *paths, **kwargs):
+        self.change(*paths)
+        return self.run_tree(**kwargs)
+
+    def statuses(self, record):
+        return {s["id"]: s["status"] for s in record["stages"]}
+
+    def affected_block(self, record):
+        return json.loads(Path(record["receipt"]).read_text())["affected"]
+
+    def nx_runs(self):
+        if not self.nxlog.exists():
+            return []
+        return [
+            line
+            for line in self.nxlog.read_text().splitlines()
+            if "--explain" not in line
+            and line.split()[0] != "show"
+            and line.split()[0] != "graph"
+        ]
+
+    def test_backend_only_change_skips_mobile_with_the_reason(self):
+        self.build()
+        record = self.gate("packages/server/src/cli.ts")
+        self.assert_passed(record)
+        self.assertEqual(
+            self.statuses(record),
+            {
+                "setup": "passed",
+                "static": "passed",
+                "mobile": "skipped",
+                "integration": "passed",
+            },
+        )
+        entry = next(s for s in record["stages"] if s["id"] == "mobile")
+        self.assertEqual(entry["reason"], "skipped: unaffected")
+        block = self.affected_block(record)
+        base = sh(self.repo, "git", "rev-parse", "origin/main")
+        self.assertEqual(block["base"], base)
+        self.assertEqual(block["head"], sh(self.repo, "git", "rev-parse", "HEAD"))
+        self.assertEqual(block["projects"], ["jobs", "server"])
+        self.assertFalse(block["runAll"])
+        self.assertEqual(block["matchedAlwaysRunPaths"], [])
+        stages = block["stages"]
+        self.assertEqual(
+            stages["integration"]["selectedTasks"],
+            ["jobs:integration", "server:catalog-integration"],
+        )
+        self.assertEqual(
+            stages["mobile"]["skippedTasks"],
+            [
+                {"task": "mobile:build", "reason": "skipped: unaffected"},
+                {"task": "mobile:test", "reason": "skipped: unaffected"},
+            ],
+        )
+        self.assertIn(
+            {"task": "web:auth-e2e", "reason": "skipped: unaffected"},
+            stages["integration"]["skippedTasks"],
+        )
+        runs = self.nx_runs()
+        self.assertEqual(len([r for r in runs if r.startswith("affected")]), 2)
+        self.assertTrue(all(f"--base={base}" in r for r in runs))
+        self.assertFalse(any("!tag:mobile-toolchain" in r for r in runs))
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_worker_only_change_runs_processing_and_jobs_not_mobile_or_web_e2e(self):
+        self.build()
+        record = self.gate("workers/processing/src/pipeline.py")
+        self.assert_passed(record)
+        block = self.affected_block(record)
+        self.assertEqual(block["projects"], ["jobs", "processing"])
+        self.assertEqual(
+            block["stages"]["integration"]["selectedTasks"], ["jobs:integration"]
+        )
+        self.assertEqual(self.statuses(record)["mobile"], "skipped")
+        self.assertNotIn(
+            "web:auth-e2e", block["stages"]["integration"]["selectedTasks"]
+        )
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_contracts_change_runs_every_stage_through_the_graph(self):
+        self.build()
+        record = self.gate("packages/contracts/src/index.ts")
+        self.assert_passed(record)
+        self.assertEqual(set(self.statuses(record).values()), {"passed"})
+        block = self.affected_block(record)
+        self.assertFalse(block["runAll"])
+        self.assertIn("mobile", block["projects"])
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_web_only_change_skips_mobile_and_its_e2e(self):
+        self.build()
+        record = self.gate("apps/web/app/page.tsx")
+        self.assert_passed(record)
+        self.assertEqual(self.statuses(record)["mobile"], "skipped")
+        selected = self.affected_block(record)["stages"]["integration"]["selectedTasks"]
+        self.assertEqual(selected, ["web:auth-e2e"])
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_every_always_run_path_runs_everything_and_is_named_in_the_receipt(self):
+        self.build()
+        paths = [
+            "scripts/local-ci/helper.py",
+            "scripts/local-ci/stages.json",
+            "nx.json",
+            "pnpm-lock.yaml",
+            "uv.lock",
+            "workers/processing/uv.lock",
+            "package.json",
+            "packages/server/migrations/009_new.sql",
+            "AGENTS.md",
+            "docs/local-ci.md",
+            ".gitattributes",
+            ".gitmodules",
+            "pnpm-workspace.yaml",
+            "requirements-stera.txt",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                sh(self.repo, "git", "reset", "-q", "--hard", "origin/main")
+                before = len(self.nx_runs())
+                if path == "scripts/local-ci/stages.json":
+                    # the stage list itself is under test, so change it harmlessly
+                    spec = json.loads((self.repo / local_ci.STAGES_PATH).read_text())
+                    spec["unautomated"] = ["physical device", "note"]
+                    (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
+                else:
+                    self.change(path)
+                record = self.run_tree()
+                self.assert_passed(record)
+                self.assertEqual(set(self.statuses(record).values()), {"passed"})
+                block = self.affected_block(record)
+                self.assertTrue(block["runAll"])
+                self.assertEqual(block["matchedAlwaysRunPaths"], [path])
+                self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+                runs = self.nx_runs()[before:]
+                self.assertEqual(len(runs), 3, runs)
+                for run in runs:
+                    self.assertTrue(run.startswith("run-many"), run)
+                    self.assertNotIn("--base", run)
+
+    def test_failed_nx_computation_runs_everything_never_narrows(self):
+        for fixture in (
+            {"failAffected": True},
+            {"failGraph": True},
+            {"failShow": True},
+            {"badExplain": True},
+            {"extraIds": "server:build:production"},
+        ):
+            with self.subTest(fixture=fixture):
+                self.build(nxfixture=fixture)
+                record = self.gate("apps/web/app/page.tsx")
+                self.assert_passed(record)
+                block = self.affected_block(record)
+                self.assertEqual(block["computation"], "failed")
+                self.assertTrue(block["runAll"])
+                self.assertEqual(set(self.statuses(record).values()), {"passed"})
+                self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_unresolvable_base_runs_everything(self):
+        self.build()
+        sh(self.repo, "git", "update-ref", "-d", "refs/remotes/origin/main")
+        record = self.gate("apps/web/app/page.tsx")
+        self.assert_passed(record)
+        block = self.affected_block(record)
+        self.assertEqual(block["computation"], "base-unresolved")
+        self.assertIsNone(block["base"])
+        self.assertEqual(set(self.statuses(record).values()), {"passed"})
+        self.assertTrue(local_ci.verify_receipt(self.repo, home=self.home))
+
+    def test_shallow_clone_is_never_trusted_for_a_base(self):
+        self.build()
+        self.change("apps/web/app/page.tsx")
+        self.commit_pending()
+        clone = self.tmp / "shallow"
+        sh(
+            self.tmp,
+            "git",
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            f"file://{self.repo}",
+            str(clone),
+        )
+        head = sh(clone, "git", "rev-parse", "HEAD")
+        self.assertEqual(local_ci.resolve_affected_base(clone, head), (None, "shallow"))
+        base = sh(self.repo, "git", "rev-parse", "origin/main")
+        self.assertEqual(
+            local_ci.resolve_affected_base(self.repo, "HEAD"), (base, "ok")
+        )
+        spec = local_ci.load_stages((self.repo / local_ci.STAGES_PATH).read_bytes())
+        nx = local_ci.make_nx(local_ci.nx_command(spec), self.repo, dict(os.environ))
+        self.addCleanup(shutil.rmtree, nx.scratch, ignore_errors=True)
+        plan = local_ci.plan_affected(
+            spec, nx=nx, repo=clone, head=head, base=None, base_problem="shallow"
+        )
+        self.assertEqual(plan["computation"], "shallow")
+        self.assertTrue(plan["runAll"])
+        self.assertTrue(all(st["run"] for st in plan["stages"].values()))
+        self.assertTrue(plan["stages"]["mobile"]["selectedTasks"])
+
+    def rewrite_affected(self, record, mutate, *, reseal=True):
+        def apply(data):
+            mutate(data)
+            if reseal:
+                data["affected"]["evidenceSha256"] = local_ci.evidence_digest(
+                    data["affected"]
+                )
+
+        VerifyTests.rewrite(self, record, apply)
+
+    def test_verify_rejects_a_tampered_affected_set(self):
+        self.build()
+        record = self.gate("apps/web/app/page.tsx")
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+        original = Path(record["receipt"]).read_text()
+
+        def restore():
+            Path(record["receipt"]).write_text(original)
+
+        for name, mutate, expect in (
+            (
+                "unsealed projects",
+                lambda d: d["affected"].__setitem__("projects", ["web", "mobile"]),
+                "evidence hash",
+            ),
+            (
+                "resealed projects",
+                lambda d: d["affected"].__setitem__("projects", ["web", "mobile"]),
+                "recomputed affected set differs",
+            ),
+            (
+                "wrong base",
+                lambda d: d["affected"].__setitem__("base", "0" * 40),
+                "latest origin/main",
+            ),
+            (
+                "skipped task the recomputed set selects",
+                lambda d: (
+                    d["affected"]["stages"]["integration"].update(
+                        run=False, selectedTasks=[]
+                    ),
+                    d["stages"][3].update(
+                        status="skipped", reason="skipped: unaffected"
+                    ),
+                ),
+                "recomputed affected set differs",
+            ),
+            (
+                "foreign skip reason",
+                lambda d: d["stages"][2].__setitem__("reason", "skipped: slow"),
+                "unaffected reason",
+            ),
+            (
+                "changed files",
+                lambda d: d["affected"].__setitem__("changedFilesSha256", "0" * 64),
+                "changed files",
+            ),
+        ):
+            with self.subTest(name):
+                self.rewrite_affected(
+                    record, mutate, reseal=name != "unsealed projects"
+                )
+                errors = local_ci.verify_receipt(self.repo, home=self.home)
+                self.assertTrue(any(expect in e for e in errors), (name, errors))
+                restore()
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+    def test_verify_rejects_contradictory_stage_records(self):
+        self.build()
+        record = self.gate("apps/web/app/page.tsx")
+        original = Path(record["receipt"]).read_text()
+        for name, mutate, expect in (
+            (
+                "skipped but the record says run",
+                lambda d: d["stages"][2].update(status="passed", reason=None),
+                "contradicts",
+            ),
+            (
+                "passed but the record says skip",
+                lambda d: d["affected"]["stages"]["static"].update(run=False),
+                "contradicts",
+            ),
+            (
+                "missing stage record",
+                lambda d: d["affected"]["stages"].pop("mobile"),
+                "differ from the declared stages",
+            ),
+            (
+                "skipped setup",
+                lambda d: d["stages"][0].update(
+                    status="skipped", reason="skipped: unaffected"
+                ),
+                "did not pass",
+            ),
+        ):
+            with self.subTest(name):
+                self.rewrite_affected(record, mutate)
+                errors = local_ci.verify_receipt(self.repo, home=self.home)
+                self.assertTrue(any(expect in e for e in errors), (name, errors))
+                Path(record["receipt"]).write_text(original)
+
+    def test_verify_needs_a_clean_copy_of_the_head(self):
+        self.build()
+        self.gate("apps/web/app/page.tsx")
+        (self.repo / "stray.txt").write_text("untracked\n")
+        errors = local_ci.verify_receipt(self.repo, home=self.home)
+        self.assertTrue(any("clean copy" in e for e in errors), errors)
+
+    def test_a_planned_task_nx_never_reported_fails_the_stage(self):
+        self.build(nxfixture={"silent": ["server:build"]})
+        record = self.gate("packages/server/src/cli.ts")
+        self.assertEqual(record["verdict"], "FAIL")
+        entry = next(s for s in record["stages"] if s["id"] == "static")
+        self.assertEqual(entry["status"], "plan-mismatch")
+        self.assertIn("server:build", entry["detail"])
+
+    def test_a_replayed_fixture_task_is_found_even_without_a_plan(self):
+        stage_ = {"fixtures": True, "affected": {"targets": ["integration"]}}
+        hit = {"hitTasks": ["jobs:integration", "web:build"], "executedTasks": []}
+        self.assertEqual(
+            local_ci.cached_fixture_task(stage_, [], hit, []), "jobs:integration"
+        )
+
+    def test_unsupported_exclude_patterns_are_rejected(self):
+        base = {
+            "schema": local_ci.STAGES_SCHEMA,
+            "pins": {},
+            "stages": [
+                {"id": "a", "affected": {"targets": ["t"], "exclude": "tag:mob*"}}
+            ],
+        }
+        with self.assertRaisesRegex(local_ci.Refused, "unsupported exclude"):
+            local_ci.load_stages(json.dumps(base).encode())
+
+    def test_verify_rejects_narrowing_after_failure_or_an_always_run_path(self):
+        self.build(nxfixture={"failAffected": True})
+        record = self.gate("apps/web/app/page.tsx")
+
+        def narrow(data):
+            data["affected"]["runAll"] = False
+            data["affected"]["stages"]["mobile"].update(run=False, selectedTasks=[])
+            data["stages"][2].update(status="skipped", reason="skipped: unaffected")
+
+        self.rewrite_affected(record, narrow)
+        errors = local_ci.verify_receipt(self.repo, home=self.home)
+        self.assertTrue(any("narrowed" in e for e in errors), errors)
+
+    def test_verify_rejects_a_skipped_stage_when_an_always_run_path_matched(self):
+        self.build()
+        record = self.gate("docs/local-ci.md")
+
+        def skip(data):
+            data["affected"]["matchedAlwaysRunPaths"] = []
+            data["affected"]["runAll"] = False
+            data["stages"][2].update(status="skipped", reason="skipped: unaffected")
+            data["affected"]["stages"]["mobile"].update(run=False)
+
+        self.rewrite_affected(record, skip)
+        errors = local_ci.verify_receipt(self.repo, home=self.home)
+        self.assertTrue(any("always-run paths differ" in e for e in errors), errors)
+
+    def test_verify_fails_closed_when_the_affected_set_cannot_be_reproduced(self):
+        self.build()
+        self.gate("apps/web/app/page.tsx")
+        broken = mock.Mock(side_effect=local_ci.Refused("nx is gone"))
+        broken.scratch = self.tmp / "nx-scratch"
+        errors = local_ci.verify_receipt(self.repo, home=self.home, nx=broken)
+        self.assertTrue(any("could not be reproduced" in e for e in errors), errors)
+
+    def test_receipt_without_the_affected_set_is_rejected(self):
+        self.build()
+        record = self.gate("apps/web/app/page.tsx")
+        VerifyTests.rewrite(self, record, lambda d: d.pop("affected"))
+        errors = local_ci.verify_receipt(self.repo, home=self.home)
+        self.assertTrue(any("lacks the affected set" in e for e in errors), errors)
+
+    def fixture_file(self):
+        path = self.tmp / "fixtures.env"
+        path.write_text(FIXTURE_ENV)
+        return str(path)
+
+    def test_fixture_stage_never_accepts_a_cached_task(self):
+        self.build(fixtures=True, nxfixture={"cached": ["server:catalog-integration"]})
+        record = self.gate(
+            "packages/server/src/cli.ts",
+            fixtures_path=self.fixture_file(),
+            service_check=FAKE_SERVICE,
+        )
+        self.assertEqual(record["verdict"], "FAIL")
+        entry = next(s for s in record["stages"] if s["id"] == "integration")
+        self.assertEqual(entry["status"], "cached-fixture")
+        self.assertIn("server:catalog-integration", entry["detail"])
+        self.assertEqual(self.receipts(), [])
+
+    def test_fixture_stage_with_no_known_task_is_never_proven_executed(self):
+        # The graph cannot be read: everything runs, but no fixture task is known to have
+        # executed, so the stage must fail instead of passing on an empty proof.
+        self.build(fixtures=True, nxfixture={"failGraph": True})
+        record = self.gate(
+            "packages/server/src/cli.ts",
+            fixtures_path=self.fixture_file(),
+            service_check=FAKE_SERVICE,
+        )
+        self.assertEqual(record["verdict"], "FAIL")
+        entry = next(s for s in record["stages"] if s["id"] == "integration")
+        self.assertEqual(entry["status"], "cached-fixture")
+        self.assertEqual(self.receipts(), [])
+        self.assertIsNotNone(
+            local_ci.receipt_fixture_problem(
+                {"fixtures": True, "affected": {"targets": ["integration"]}},
+                {"fixtureBacked": True, "cacheMode": "none-by-target", "cache": {}},
+                [],
+            )
+        )
+
+    def test_fixture_stage_receipt_proves_every_selected_task_executed(self):
+        self.build(fixtures=True)
+        record = self.gate(
+            "packages/server/src/cli.ts",
+            fixtures_path=self.fixture_file(),
+            service_check=FAKE_SERVICE,
+        )
+        self.assert_passed(record)
+        entry = next(s for s in record["stages"] if s["id"] == "integration")
+        self.assertEqual(entry["cacheMode"], "none-by-target")
+        self.assertEqual(local_ci.verify_receipt(self.repo, home=self.home), [])
+
+        def forge(data):
+            data["stages"][3]["cache"] = {"executedTasks": [], "hitTasks": ["x"]}
+
+        VerifyTests.rewrite(self, record, forge)
+        errors = local_ci.verify_receipt(self.repo, home=self.home)
+        self.assertTrue(any("executed uncached" in e for e in errors), errors)
+
+    def test_nx_queries_run_after_setup_inside_the_export_with_the_real_history(self):
+        marker = self.tmp / "setup-done"
+        self.build(nxfixture={"requireMarker": str(marker)})
+        specpath = self.repo / local_ci.STAGES_PATH
+        spec = json.loads(specpath.read_text())
+        spec["stages"][0] = stage("setup", f"open({str(marker)!r}, 'w').write('x')")
+        specpath.write_text(json.dumps(spec))
+        self.commit_pending("setup marker")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        record = self.gate("apps/web/app/page.tsx")
+        # The stub exits 9 before the marker exists and 10 without the alternates file in
+        # the export, either of which would turn the computation into `failed`.
+        self.assert_passed(record)
+        block = self.affected_block(record)
+        self.assertEqual(block["computation"], "ok", block["computationDetail"])
+        self.assertFalse(block["runAll"])
+
+    def test_stage_file_validation(self):
+        base = {
+            "schema": local_ci.STAGES_SCHEMA,
+            "pins": {},
+            "stages": [{"id": "a", "affected": {"targets": []}}],
+        }
+        with self.assertRaises(local_ci.Refused):
+            local_ci.load_stages(json.dumps(base).encode())
+        base["stages"] = [{"id": "a", "affected": {"targets": ["t"]}}]
+        base["alwaysRunAll"] = "nx.json"
+        with self.assertRaises(local_ci.Refused):
+            local_ci.load_stages(json.dumps(base).encode())
+
+    def test_always_run_globs(self):
+        match = local_ci.glob_match
+        self.assertTrue(match("scripts/local-ci/**", "scripts/local-ci/a/b.py"))
+        self.assertTrue(match("workers/*/uv.lock", "workers/processing/uv.lock"))
+        self.assertFalse(match("workers/*/uv.lock", "workers/a/b/uv.lock"))
+        self.assertTrue(match("package.json", "package.json"))
+        self.assertFalse(match("package.json", "apps/web/package.json"))
+        self.assertFalse(match("uv.lock", "workers/processing/uv.lock"))
+        self.assertTrue(
+            match("packages/server/migrations/**", "packages/server/migrations/001.sql")
+        )
 
 
 if __name__ == "__main__":

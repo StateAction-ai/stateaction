@@ -41,26 +41,11 @@ UNCACHED = [
     ("infra", "integration"),
     ("jobs", "integration"),
 ]
-# Every stage of stages.json maps to a file whose change must select its project.
+# Each affected stage of stages.json maps to a file whose change must select one of its tasks.
 STAGE_FILES = {
-    "toolchain": ("scripts/platform/install-render.py", "tooling"),
-    "node-install": ("packages/server/package.json", "server"),
-    "python-sync": ("workers/processing/uv.lock", "processing"),
-    "render-cli": ("scripts/platform/install-render.py", "tooling"),
-    "root-python-tests": ("tests/test_geometry_export.py", "root-python"),
-    "server-tooling": ("packages/server/src/cli.ts", "server"),
-    "mobile-android-dart": ("apps/mobile/lib/main.dart", "mobile"),
-    "staged-dart-hook": ("scripts/platform/check-staged-dart.test.mjs", "tooling"),
-    "local-ci-self-test": ("scripts/local-ci/local_ci.py", "tooling"),
-    "catalog-integration": ("packages/server/migrations/001.sql", "server"),
-    "server-auth-integration": ("packages/server/test-auth/postgres.mjs", "server"),
-    "web-auth-e2e": ("apps/web/test-e2e/auth.e2e.test.mjs", "web"),
-    "mobile-backend-e2e": (
-        "apps/mobile/test_backend/run_real_backend.mjs",
-        "mobile-backend-e2e",
-    ),
-    "jobs-controller-integration": ("apps/jobs/test-integration/harness.mjs", "jobs"),
-    "runtime-smoke": ("render.yaml", "infra"),
+    "static": ("packages/server/src/cli.ts", "server"),
+    "mobile": ("apps/mobile/lib/main.dart", "mobile"),
+    "integration": ("apps/jobs/test-integration/harness.mjs", "jobs"),
 }
 
 
@@ -80,6 +65,13 @@ class NxGraphTests(unittest.TestCase):
             NX_TUI="false",
             NX_WORKSPACE_DATA_DIRECTORY=str(Path(cls.tmp.name) / "data"),
             NX_CACHE_DIRECTORY=str(Path(cls.tmp.name) / "cache"),
+            # Nx's Rust runtime and each plugin worker start one thread per CPU (20 here). The
+            # gate scope allows 512 tasks and Nx's own plugin worker died of "OS can't spawn
+            # worker thread: EAGAIN" next to the format task (SA-106 r4), which exits 1 rather
+            # than by signal, so it cannot be retried. Two threads each measure 67 tasks at
+            # peak instead of 139 and change nothing in the graph.
+            TOKIO_WORKER_THREADS="2",
+            RAYON_NUM_THREADS="2",
         )
         cls.env = env
         cls.affected_cache: dict[str, set[str]] = {}
@@ -166,6 +158,11 @@ class NxGraphTests(unittest.TestCase):
             self.assertIs(config.get("cache"), False, f"{project}:{target}")
             self.assertIs(config.get("parallelism"), False, f"{project}:{target}")
             self.assertTrue(config.get("inputs"), f"{project}:{target} has no inputs")
+
+    def test_the_runner_self_test_runs_alone_because_it_starts_nx_itself(self):
+        """Its shards start the Nx CLI; next to other tasks they exhausted the 512-task scope."""
+        target = self.graph["nodes"]["tooling"]["data"]["targets"]["test-local-ci"]
+        self.assertIs(target.get("parallelism"), False)
 
     def test_the_memory_heavy_next_build_is_excluded_from_task_parallelism(self):
         """The static stage runs --parallel=3 (SA-118); `next build` must still run alone."""
@@ -321,21 +318,25 @@ class NxGraphTests(unittest.TestCase):
             out = self.run_runtime(command, PATH=f"{link}:/usr/bin:/bin")
             self.assertEqual(out, '{"flutterVersion": "9"}')
 
-    def test_every_fixture_stage_runs_a_target_declared_uncached(self):
+    def test_fixture_stage_selects_exactly_the_targets_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
             "stages"
         ]
         fixture = [s for s in stages if s.get("fixtures")]
-        self.assertTrue(fixture)
-        for stage in fixture:
-            argv = stage["argv"]
-            self.assertEqual(argv[:4], ["pnpm", "exec", "nx", "run"], stage["id"])
-            project, target = argv[4].split(":")
-            config = self.graph["nodes"][project]["data"]["targets"][target]
-            self.assertIs(config.get("cache"), False, stage["id"])
-            self.assertIs(config.get("parallelism"), False, stage["id"])
-            self.assertNotIn("cache", stage, stage["id"])
-            self.assertIn((project, target), UNCACHED, stage["id"])
+        self.assertEqual([s["id"] for s in fixture], ["integration"])
+        stage = fixture[0]
+        self.assertNotIn("cache", stage)
+        targets = set(stage["affected"]["targets"])
+        found = set()
+        for project, node in self.graph["nodes"].items():
+            for target, config in node["data"]["targets"].items():
+                if target in targets:
+                    found.add((project, target))
+                    self.assertIs(config.get("cache"), False, f"{project}:{target}")
+                    self.assertIs(
+                        config.get("parallelism"), False, f"{project}:{target}"
+                    )
+        self.assertEqual(found, set(UNCACHED))
 
     def test_every_pyproject_path_dependency_is_a_graph_dependency(self):
         import tomllib
@@ -458,7 +459,8 @@ class NxGraphTests(unittest.TestCase):
         guarded = set(spec["docsOnly"]["guardedTargets"])
         for item in spec["stages"]:
             if item.get("fixtures"):
-                self.assertIn(item["argv"][4].split(":")[-1], guarded, item["id"])
+                for target in item["affected"]["targets"]:
+                    self.assertIn(target, guarded, item["id"])
         self.assertIn("test-local-ci", guarded)
         run = {"build", "typecheck", "syntax", "test", "format"}
         known = {
@@ -585,14 +587,22 @@ class NxGraphTests(unittest.TestCase):
         )
         self.assertIn("{workspaceRoot}/stera-sdk", target["inputs"])
 
-    def test_every_stage_of_stages_json_is_reachable_from_some_change(self):
-        stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
-            "stages"
-        ]
-        ids = [stage["id"] for stage in stages]
-        self.assertEqual(sorted(ids), sorted(STAGE_FILES), "map every stage here")
-        for stage_id, (file, project) in STAGE_FILES.items():
-            self.assertIn(project, self.affected(file), f"{stage_id}: {file}")
+    def test_every_affected_stage_is_reachable_and_selects_tasks(self):
+        spec = json.loads((Path(__file__).parent / "stages.json").read_text())
+        stages = [s for s in spec["stages"] if s.get("affected")]
+        self.assertEqual(sorted(s["id"] for s in stages), sorted(STAGE_FILES))
+        for stage in stages:
+            file, project = STAGE_FILES[stage["id"]]
+            self.assertIn(project, self.affected(file), f"{stage['id']}: {file}")
+        for stage in spec["stages"]:
+            self.assertFalse(
+                stage.get("affected") and stage.get("argv"),
+                f"{stage['id']} hard-codes a command beside its affected spec",
+            )
+        migrations = ROOT / "packages/server/migrations"
+        self.assertTrue(any(migrations.glob("*.sql")))
+        self.assertIn("packages/server/migrations/**", spec["alwaysRunAll"])
+        self.assertTrue(any(ROOT.glob("workers/*/uv.lock")))
 
 
 if __name__ == "__main__":
