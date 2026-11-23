@@ -161,6 +161,19 @@ class StubSegmenterTests(unittest.TestCase):
         stub.run_segment(ctx)
         self.assertIn("segmenting", beats)
 
+    def test_hang_ends_when_the_release_file_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            release = Path(tmp) / "release"
+            params = {"hang": True, "hang_s": 600, "hang_release_file": str(release)}
+            beats: list[str] = []
+            ctx = make_ctx("segment", "stub_segmenter", params)
+            ctx = ctx.__class__(
+                **{**ctx.__dict__, "beat": lambda p, f: beats.append(p)}
+            )
+            release.write_text("")
+            stub.run_segment(ctx)  # returns at once instead of sleeping 600 s
+            self.assertIn("segmenting", beats)
+
 
 class StubCaptionerTests(unittest.TestCase):
     def setUp(self):

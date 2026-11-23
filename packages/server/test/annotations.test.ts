@@ -32,11 +32,12 @@ const doc = (name: string) =>
 type Files = Record<string, Uint8Array | Error>;
 const enc = (v: unknown) => new TextEncoder().encode(JSON.stringify(v));
 
-function fixture(files: Files, accepted = true) {
+function fixture(files: Files, accepted = true, notSucceeded: string[] = []) {
   const slots = Object.keys(files).map((slot) => ({
     slot,
     object_key: `k/${slot}`,
     size_bytes: "10",
+    stage_not_succeeded: notSucceeded.includes(slot),
   }));
   const pool = {
     async query(sql: string) {
@@ -71,6 +72,25 @@ test("a stage without a file is null, never an empty document; unaccepted is nul
   assert.equal(only.dag_run, null);
   assert.equal(only.hand_presence?.frame_count, 600);
   assert.equal(only.job_id, JOB);
+});
+
+test("a file left by a stage whose run did not succeed is not that stage's result (null, never read)", async () => {
+  const f = fixture(
+    {
+      "segments.json": enc(doc("artifacts.segments.v1")),
+      "hand-presence.json": enc(doc("artifacts.hand-presence.v1")),
+    },
+    true,
+    ["segments.json"],
+  );
+  const read: string[] = [];
+  const inner = f.reader.read.bind(f.reader);
+  f.reader.read = async (key, max) => (read.push(key), inner(key, max));
+  const out = await load(f);
+  assert.ok(out);
+  assert.equal(out.segments, null);
+  assert.ok(out.hand_presence);
+  assert.deepEqual(read, ["k/hand-presence.json"]);
 });
 
 test("a file of another job or recording is refused", async () => {
