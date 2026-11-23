@@ -31,10 +31,11 @@
       },
       "inputs": [
         "default",
-        "^production",
+        "^fixtureProduction",
         "runtimeTooling",
         "{workspaceRoot}/render.yaml",
-        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "!{projectRoot}/**/*.md"
       ],
       "parallelism": false
     },
@@ -43,7 +44,11 @@
       "options": {
         "command": "node --test --test-concurrency=2 infra/test/*.test.mjs"
       },
-      "inputs": ["default", "{workspaceRoot}/render.yaml"]
+      "inputs": [
+        "default",
+        "{workspaceRoot}/render.yaml",
+        "{workspaceRoot}/docs/components/render-deployment.md"
+      ]
     },
     "syntax": {
       "executor": "nx:run-commands",

@@ -36,6 +36,7 @@
       "!{projectRoot}/test-e2e/**/*",
       "!{projectRoot}/**/*.test.*"
     ],
+    "fixtureProduction": ["production", "!{projectRoot}/**/*.md"],
     "sharedGlobals": [
       "{workspaceRoot}/nx.json",
       "{workspaceRoot}/config/**/*",

@@ -5,6 +5,55 @@
     "pnpm": "10.33.0",
     "uv": "0.13.6"
   },
+  "docsOnly": {
+    "version": 1,
+    "docsPaths": ["**/*.md", "docs/**"],
+    "forceFullPaths": ["AGENTS.md", "docs/local-ci.md", "scripts/local-ci/**"],
+    "setupStages": ["toolchain", "node-install"],
+    "guardedTargets": [
+      "auth-integration",
+      "catalog-integration",
+      "auth-e2e",
+      "e2e",
+      "integration",
+      "test-local-ci"
+    ],
+    "checks": [
+      {
+        "id": "docs-checks",
+        "title": "Prettier format and relative link/anchor check of the changed docs (Nx-cached)",
+        "timeoutSec": 300,
+        "docsChanged": "env",
+        "argv": [
+          "pnpm",
+          "exec",
+          "nx",
+          "run",
+          "tooling:docs-check",
+          "--outputStyle=static"
+        ],
+        "cache": "nx"
+      },
+      {
+        "id": "docs-affected",
+        "title": "Nx tasks that name a changed doc as an input (task-level affected)",
+        "timeoutSec": 900,
+        "docsChanged": "files-arg",
+        "argv": [
+          "pnpm",
+          "exec",
+          "nx",
+          "affected",
+          "-t",
+          "build,typecheck,syntax,test,format",
+          "--parallel=1",
+          "--outputStyle=static",
+          "--nxBail"
+        ],
+        "cache": "nx"
+      }
+    ]
+  },
   "stages": [
     {
       "id": "toolchain",

@@ -60,6 +60,27 @@
         "parallel": false
       }
     },
+    "docs-check": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/scripts/local-ci/docs_checks.py",
+        "{workspaceRoot}/**/*.md",
+        "{workspaceRoot}/docs/**/*",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/.prettierignore",
+        "{workspaceRoot}/.gitignore",
+        "{workspaceRoot}/.gitmodules",
+        { "env": "STATEACTION_DOCS_CHANGED" },
+        { "env": "STATEACTION_DOCS_REMOVED" },
+        { "runtime": "git ls-files -z | sha256sum" },
+        "jsToolchain",
+        "prettier"
+      ],
+      "options": {
+        "command": "python3 scripts/local-ci/docs_checks.py"
+      }
+    },
     "test-local-ci": {
       "executor": "nx:run-commands",
       "cache": true,

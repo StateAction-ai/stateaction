@@ -33,6 +33,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from urllib.parse import urlparse
@@ -51,6 +52,9 @@ RECEIPT_SCHEMA = "stateaction.local-ci.receipt/1"
 STAGES_SCHEMA = "stateaction.local-ci.stages/1"
 STAGES_PATH = "scripts/local-ci/stages.json"
 RUNNER_PATH = "scripts/local-ci/local_ci.py"
+DOCS_MODE = "docs-only"
+DOCS_ENV = "STATEACTION_DOCS_CHANGED"
+DOCS_REMOVED_ENV = "STATEACTION_DOCS_REMOVED"
 DEFAULT_OUTPUT_CAP = 64 * 1024 * 1024
 FIXTURE_KEYS = (
     "CATALOG_TEST_ADMIN_URL",
@@ -86,6 +90,10 @@ class Refused(RuntimeError):
 
 class GuardError(Refused):
     pass
+
+
+class DocsOnlyUnsafe(Refused):
+    """A changed doc is an input of a task the docs-only run would skip: run everything."""
 
 
 # --------------------------------------------------------------------------- git
@@ -301,6 +309,205 @@ def ensure_guard(
             ],
         )
         return {}  # unreachable with a real exec; only a mocked execv returns
+
+
+# ------------------------------------------------------------- docs-only classifier
+
+
+def rule_sha256(rule: dict) -> str:
+    return sha256_bytes(json.dumps(rule, sort_keys=True).encode())
+
+
+def path_matches(path: str, pattern: str) -> bool:
+    """Glob match where `**/` spans any directories, `**` anything and `*` stays in a segment."""
+    regex, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            regex, i = regex + "(?:.*/)?", i + 3
+        elif pattern.startswith("**", i):
+            regex, i = regex + ".*", i + 2
+        elif pattern[i] == "*":
+            regex, i = regex + "[^/]*", i + 1
+        else:
+            regex, i = regex + re.escape(pattern[i]), i + 1
+    return re.fullmatch(regex, path) is not None
+
+
+def is_docs_path(path: str, rule: dict) -> bool:
+    return any(path_matches(path, p) for p in rule["docsPaths"]) and not any(
+        path_matches(path, p) for p in rule["forceFullPaths"]
+    )
+
+
+def classify_diff(repo: Path, base_sha: str | None, head_sha: str, rule: dict | None):
+    """Classify `git diff --name-status -M <merge-base> <head>`; fails closed to the full suite.
+
+    Returns a dict: docsOnly, reason, mergeBase, entries and paths (every path on both sides
+    of every change, sorted). Anything unresolvable, shallow, empty or unusual is not docs-only.
+    """
+
+    def full(reason: str, **extra) -> dict:
+        return {
+            "docsOnly": False,
+            "reason": reason,
+            "paths": [],
+            "entries": [],
+            **extra,
+        }
+
+    try:
+        if not rule:
+            return full("stages.json declares no docsOnly rule")
+        if not base_sha:
+            return full("origin/main is unresolvable")
+        if git(repo, "rev-parse", "--is-shallow-repository", check=False) != "false":
+            return full("shallow or unknown clone")
+        merge_base = git(repo, "merge-base", base_sha, head_sha, check=False)
+        if not merge_base:
+            return full("no merge base with origin/main")
+        # `--raw` is `--name-status` plus the file modes. Local git config (submodule
+        # ignore, external diff drivers) must not hide or reshape an entry.
+        raw = subprocess.run(
+            [
+                "git",
+                "-c",
+                "diff.ignoreSubmodules=none",
+                "diff",
+                "--raw",
+                "-M",
+                "-z",
+                "--no-abbrev",
+                "--ignore-submodules=none",
+                "--no-ext-diff",
+                "--no-textconv",
+                merge_base,
+                head_sha,
+            ],
+            cwd=repo,
+            capture_output=True,
+            timeout=120,
+        )
+        if raw.returncode:
+            return full("git diff failed", mergeBase=merge_base)
+        tokens = raw.stdout.decode(errors="surrogateescape").split("\0")
+        if tokens and tokens[-1] == "":
+            tokens.pop()
+        entries, i = [], 0
+        while i < len(tokens):
+            meta = tokens[i].split(" ")
+            if len(meta) != 5 or not meta[0].startswith(":"):
+                return full("unrecognized diff output", mergeBase=merge_base)
+            modes, status = (meta[0][1:], meta[1]), meta[4]
+            width = 2 if status[:1] in ("R", "C") else 1
+            paths = tokens[i + 1 : i + 1 + width]
+            if len(paths) != width or status[:1] not in ("A", "M", "D", "R"):
+                return full(f"unrecognized diff entry {status!r}", mergeBase=merge_base)
+            if any(mode in ("160000", "120000") for mode in modes):
+                return full(
+                    f"symlink or submodule entry {paths[-1]!r}", mergeBase=merge_base
+                )
+            entries.append({"status": status, "paths": paths})
+            i += 1 + width
+    except (Refused, OSError, subprocess.SubprocessError) as error:
+        return full(f"classification failed: {error}")
+    paths = sorted({p for e in entries for p in e["paths"]})
+    base = {"mergeBase": merge_base, "entries": entries, "paths": paths}
+    if not paths:
+        return {"docsOnly": False, "reason": "empty diff", **base}
+    if any(
+        not p or "\n" in p or "\\" in p or "," in p or p != p.strip() for p in paths
+    ):
+        return {"docsOnly": False, "reason": "unusual path name", **base}
+    code = [p for p in paths if not is_docs_path(p, rule)]
+    if code:
+        return {
+            "docsOnly": False,
+            "reason": "not docs-only: " + ", ".join(code[:5]),
+            **base,
+        }
+    return {"docsOnly": True, "reason": "every changed path is docs-only", **base}
+
+
+def docs_run_stages(spec: dict) -> list[dict]:
+    """The setup stages and the fast docs checks of a docs-only run, in order."""
+    rule = spec["docsOnly"]
+    by_id = {s["id"]: s for s in spec["stages"]}
+    missing = [i for i in rule["setupStages"] if i not in by_id]
+    checks = rule["checks"]
+    if missing or any(c["id"] in by_id for c in checks):
+        raise Refused(f"docsOnly rule names unknown or duplicate stages: {missing}")
+    return [s for s in spec["stages"] if s["id"] in rule["setupStages"]] + checks
+
+
+def guarded_tasks(
+    cwd: Path, paths: list[str], env: dict[str, str], targets: list[str]
+) -> list[str]:
+    """Task-level affected tasks among `targets` (the ones a docs-only run never executes)."""
+    out = (
+        Path(env.get("TMPDIR") or tempfile.gettempdir())
+        / f"docs-graph-{os.getpid()}.json"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "pnpm",
+                "exec",
+                "nx",
+                "affected",
+                "-t",
+                ",".join(targets),
+                f"--files={','.join(paths)}",
+                f"--graph={out}",
+            ],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        try:
+            tasks = json.loads(out.read_text())["tasks"]["tasks"]
+        except (OSError, ValueError, KeyError, TypeError):
+            tasks = None
+    finally:
+        out.unlink(missing_ok=True)
+    if result.returncode or not isinstance(tasks, dict):
+        raise Refused(
+            "cannot compute the guarded Nx tasks: "
+            + (result.stderr.strip()[-300:] or "unreadable task graph")
+        )
+    return sorted(t for t in tasks if t.split(":", 1)[-1] in targets)
+
+
+def affected_projects(cwd: Path, paths: list[str], env: dict[str, str]) -> list[str]:
+    """Nx projects affected by exactly these files (project level; sorted)."""
+    result = subprocess.run(
+        [
+            "pnpm",
+            "exec",
+            "nx",
+            "show",
+            "projects",
+            "--affected",
+            f"--files={','.join(paths)}",
+            "--json",
+        ],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    try:
+        value = json.loads(result.stdout)
+    except ValueError:
+        value = None
+    if result.returncode or not isinstance(value, list):
+        raise Refused(
+            "cannot compute the Nx affected set: "
+            + (result.stderr.strip()[-300:] or "unparsable output")
+        )
+    return sorted(value)
 
 
 # --------------------------------------------------------------------- stage file
@@ -1405,6 +1612,7 @@ def run_pipeline(
     keep_work: bool = False,
     fresh: bool = False,
     only: list[str] | None = None,
+    docs_only: bool = True,
     fixtures_path: str | None = None,
     probe_fixtures: bool = True,
     runner_text: bytes | None = None,
@@ -1442,6 +1650,23 @@ def run_pipeline(
         if unknown:
             raise Refused(f"Unknown stage ids: {sorted(unknown)}")
         stages = [s for s in stages if s["id"] in only]
+    base_sha = (
+        git(repo, "rev-parse", "--verify", "refs/remotes/origin/main", check=False)
+        or None
+    )
+    docs = None
+    if docs_only and not only:
+        commit = git(repo, "rev-parse", "--verify", f"{rev}^{{commit}}", check=False)
+        docs = classify_diff(
+            repo,
+            base_sha,
+            commit if commit and commit == head else "",
+            spec.get("docsOnly"),
+        )
+        if docs["docsOnly"]:
+            stages = docs_run_stages(spec)
+        else:
+            log(f"[local-ci] full suite: {docs['reason']}")
     lock_fd = acquire_lock(home)
     run_id = time.strftime("%Y%m%dT%H%M%S") + "-" + secrets.token_hex(3)
     invalidate(home, tree)
@@ -1462,10 +1687,6 @@ def run_pipeline(
     shim_dir.mkdir(mode=0o700)
     pins = spec["pins"]
     make_shims(shim_dir, pins["uv"])
-    base_sha = (
-        git(repo, "rev-parse", "--verify", "refs/remotes/origin/main", check=False)
-        or None
-    )
     fixtures = None
     services: list[dict] = []
     fixture_file = None
@@ -1540,6 +1761,30 @@ def run_pipeline(
                 skip_nx_cache=skip_nx,
                 gradle_cache=gradle_cache,
             )
+            if stage.get("docsChanged"):
+                changed = [p for e in docs["entries"] for p in e["paths"][-1:] if p]
+                if stage["docsChanged"] == "env":
+                    env[DOCS_ENV] = "\n".join(sorted(set(changed)))
+                    env[DOCS_REMOVED_ENV] = "\n".join(
+                        sorted(
+                            e["paths"][0]
+                            for e in docs["entries"]
+                            if e["status"][:1] in ("D", "R")
+                        )
+                    )
+                else:
+                    hit = guarded_tasks(
+                        cwd, docs["paths"], env, spec["docsOnly"]["guardedTargets"]
+                    )
+                    if hit:
+                        raise DocsOnlyUnsafe(
+                            "changed docs are inputs of tasks a docs-only run skips: "
+                            + ", ".join(hit)
+                        )
+                    docs["affectedProjects"] = affected_projects(
+                        cwd, docs["paths"], env
+                    )
+                    argv = [*argv, "--files=" + ",".join(docs["paths"])]
             log(f"[local-ci] stage {stage['id']}: {stage['title']}")
             result = run_child(
                 argv,
@@ -1627,6 +1872,10 @@ def run_pipeline(
     except Interrupted as error:
         record["verdict"] = "INTERRUPTED"
         record["detail"] = str(error)
+    except DocsOnlyUnsafe as error:
+        record["verdict"] = "FAIL"
+        record["detail"] = str(error)
+        record["fallbackFull"] = True
     except Refused as error:
         record["verdict"] = "FAIL"
         record["detail"] = str(error)
@@ -1660,6 +1909,26 @@ def run_pipeline(
         os.close(lock_fd)
         write_json_private(logs / "run.json", record)
         log(format_timing(record))
+    if record.get("fallbackFull"):
+        record_attempt(home, tree, run_id, "finished", "FAIL")
+        log(f"[local-ci] {record['detail']}; running the full suite instead")
+        return run_pipeline(
+            repo,
+            rev=rev,
+            home=home,
+            guard=guard,
+            keep_going=keep_going,
+            keep_work=keep_work,
+            fresh=fresh,
+            only=only,
+            docs_only=False,
+            fixtures_path=fixtures_path,
+            probe_fixtures=probe_fixtures,
+            runner_text=runner_text,
+            service_check=service_check,
+            log=log,
+            install_signals=install_signals,
+        )
     if record["verdict"] == "PASS":
         receipt = {
             "schema": RECEIPT_SCHEMA,
@@ -1710,6 +1979,27 @@ def run_pipeline(
             "runId": run_id,
             "logDir": str(logs),
         }
+        if docs and docs["docsOnly"]:
+            ran = [s["id"] for s in stages]
+            evidence = {
+                "changedPaths": docs["paths"],
+                "affectedProjects": docs.get("affectedProjects", []),
+            }
+            receipt["mode"] = DOCS_MODE
+            receipt["docsOnly"] = {
+                "ruleVersion": spec["docsOnly"]["version"],
+                "ruleSha256": rule_sha256(spec["docsOnly"]),
+                "mergeBase": docs["mergeBase"],
+                "changed": docs["entries"],
+                **evidence,
+                "setup": spec["docsOnly"]["setupStages"],
+                "checks": [c["id"] for c in spec["docsOnly"]["checks"]],
+            }
+            receipt["skipped"] = [
+                {"id": s["id"], "status": "skipped: unaffected", "evidence": evidence}
+                for s in spec["stages"]
+                if s["id"] not in ran
+            ]
         receipt["receiptSha256"] = receipt_digest(receipt)
         receipts = private_dir(home / "receipts")
         write_json_private(receipts / f"{tree}.json", receipt)
@@ -1734,6 +2024,95 @@ def receipt_fixture_problem(stage: dict, item: dict) -> str | None:
     return None
 
 
+def docs_receipt_problems(
+    repo: Path,
+    receipt: dict,
+    spec: dict,
+    head_sha: str,
+    base_sha: str,
+    affected,
+    guarded,
+) -> list[str]:
+    """Recompute a docs-only receipt's classification and affected set from the head."""
+    rule = spec.get("docsOnly")
+    info = receipt.get("docsOnly") or {}
+    if not rule:
+        return ["the stage list declares no docs-only rule"]
+    errors = []
+    if info.get("ruleSha256") != rule_sha256(rule):
+        errors.append("docs-only rule changed since the receipt")
+    if git(repo, "rev-parse", f"{head_sha}^", check=False) != base_sha:
+        errors.append("docs-only head's parent is not the latest origin/main")
+    if (
+        info.get("mergeBase") != base_sha
+        or (receipt.get("base") or {}).get("sha") != base_sha
+    ):
+        errors.append(
+            "docs-only receipt names a base other than the latest origin/main"
+        )
+    now = classify_diff(repo, base_sha, head_sha, rule)
+    if not now["docsOnly"]:
+        errors.append(f"recomputed classification is not docs-only: {now['reason']}")
+    elif (
+        info.get("changed") != now["entries"]
+        or info.get("changedPaths") != now["paths"]
+    ):
+        errors.append("receipt changed-path list differs from the recomputed diff")
+    ran = set(rule["setupStages"]) | {c["id"] for c in rule["checks"]}
+    expected = [s["id"] for s in spec["stages"] if s["id"] not in ran]
+    skipped = receipt.get("skipped")
+    if (
+        not isinstance(skipped, list)
+        or [s.get("id") for s in skipped if isinstance(s, dict)] != expected
+    ):
+        errors.append("receipt skipped stages are not exactly the stages not run")
+    else:
+        evidence = {
+            "changedPaths": info.get("changedPaths"),
+            "affectedProjects": info.get("affectedProjects"),
+        }
+        for item in skipped:
+            if (
+                item.get("status") != "skipped: unaffected"
+                or item.get("evidence") != evidence
+            ):
+                errors.append(
+                    f"skipped stage {item.get('id')} lacks its unaffected evidence"
+                )
+    if now["docsOnly"]:
+        try:
+            if affected is None or guarded is None:
+                if git(repo, "rev-parse", "HEAD^{tree}", check=False) != git(
+                    repo, "rev-parse", f"{head_sha}^{{tree}}"
+                ):
+                    raise Refused("the head is not checked out")
+                nx_env = {**os.environ, "NX_DAEMON": "false"}
+                affected = affected or (
+                    lambda r, paths: affected_projects(r, paths, nx_env)
+                )
+                guarded = guarded or (
+                    lambda r, paths: guarded_tasks(
+                        r, paths, nx_env, rule["guardedTargets"]
+                    )
+                )
+            recomputed = affected(repo, now["paths"])
+            selected = guarded(repo, now["paths"])
+        except (Refused, OSError, subprocess.SubprocessError) as error:
+            errors.append(f"cannot recompute the affected set: {error}")
+        else:
+            if selected:
+                errors.append(
+                    "changed docs select tasks the receipt skipped: "
+                    + ", ".join(selected)
+                )
+            if recomputed != info.get("affectedProjects"):
+                errors.append(
+                    "recomputed affected set selects tasks the receipt skipped: "
+                    f"{recomputed} != {info.get('affectedProjects')}"
+                )
+    return errors
+
+
 def verify_receipt(
     repo: Path,
     head: str = "HEAD",
@@ -1741,6 +2120,8 @@ def verify_receipt(
     home: Path | None = None,
     base_ref: str = "refs/remotes/origin/main",
     require_single_commit: bool = True,
+    affected=None,
+    guarded=None,
 ) -> list[str]:
     """Return the reasons the receipt cannot authorize merging `head` (empty = valid)."""
     repo = Path(repo).resolve()
@@ -1785,7 +2166,11 @@ def verify_receipt(
         errors.append(
             "a newer attempt on this tree superseded or invalidated the receipt"
         )
-    if receipt.get("mode") != "tree" or receipt.get("head") != head_sha:
+    docs_mode = receipt.get("mode") == DOCS_MODE
+    if (
+        receipt.get("mode") not in ("tree", DOCS_MODE)
+        or receipt.get("head") != head_sha
+    ):
         errors.append(
             "receipt was produced for a different commit context; run `pnpm ci:local` on this head"
         )
@@ -1798,9 +2183,10 @@ def verify_receipt(
     if receipt.get("runnerSha256") != sha256_bytes(runner_text):
         errors.append("runner changed since the receipt")
     try:
-        stage_list = load_stages(stages_text)["stages"]
+        spec = load_stages(stages_text)
+        stage_list = docs_run_stages(spec) if docs_mode else spec["stages"]
         declared = {s["id"]: argv_hash(s) for s in stage_list}
-    except (Refused, ValueError, KeyError) as error:
+    except (Refused, ValueError, KeyError, TypeError) as error:
         return errors + [f"stage list invalid: {error}"]
     got = {s.get("id"): s for s in receipt.get("stages", [])}
     if list(got) != list(declared):
@@ -1819,6 +2205,10 @@ def verify_receipt(
         )
         if problem:
             errors.append(f"stage {stage_id} {problem}")
+    if docs_mode:
+        errors += docs_receipt_problems(
+            repo, receipt, spec, head_sha, base_sha, affected, guarded
+        )
     guard = receipt.get("guard", {})
     if not (
         0 < guard.get("memoryMaxBytes", 0) <= JOB_MAX and guard.get("swapMaxBytes") == 0
@@ -2092,6 +2482,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     run.add_argument("--keep-work", action="store_true")
     run.add_argument(
+        "--full",
+        action="store_true",
+        help="run the full suite even when the diff is docs-only",
+    )
+    run.add_argument(
         "--only", action="append", help="debug only; never yields a receipt"
     )
     verify = sub.add_parser("verify")
@@ -2149,6 +2544,7 @@ def main(argv: list[str] | None = None) -> int:
             keep_work=args.keep_work,
             fresh=args.fresh,
             only=args.only,
+            docs_only=not args.full,
         )
     except MergedOnUntestedBase as error:
         print(f"LOCAL CI FATAL: {error}", file=sys.stderr)

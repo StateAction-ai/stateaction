@@ -157,6 +157,69 @@ const seed = (
   return j;
 };
 
+// renew_lease is an independent heartbeat on its own timer: its request may reach the stub after
+// the evidence request. The invariant is that evidence is recorded exactly once, after the
+// execution record, and that nothing but heartbeats follows it.
+function assertEvidenceIsTheLastStateChange(actions: string[]): void {
+  const evidence = actions
+    .map((a, i) => (a === "record_execution_evidence" ? i : -1))
+    .filter((i) => i >= 0);
+  assert.equal(
+    evidence.length,
+    1,
+    `evidence recorded ${evidence.length} times`,
+  );
+  const at = evidence[0]!;
+  const execution = actions.indexOf("record_execution");
+  assert.ok(
+    execution >= 0 && execution < at,
+    "evidence must follow record_execution",
+  );
+  assert.deepEqual(
+    actions.slice(at + 1).filter((a) => a !== "renew_lease"),
+    [],
+    "only lease renewals may follow the evidence",
+  );
+}
+
+describe("evidence ordering assertion (negative checks)", () => {
+  test("accepts late heartbeats after the evidence", () => {
+    assertEvidenceIsTheLastStateChange([
+      "record_worker_submission",
+      "record_execution",
+      "renew_lease",
+      "record_execution_evidence",
+      "renew_lease",
+    ]);
+  });
+  test("fails when evidence is missing, duplicated, early or followed by another action", () => {
+    for (const bad of [
+      ["record_execution"],
+      [
+        "record_execution",
+        "record_execution_evidence",
+        "record_execution_evidence",
+      ],
+      ["record_execution_evidence", "record_execution"],
+      [
+        "record_execution",
+        "record_execution_evidence",
+        "record_worker_submission",
+      ],
+      [
+        "record_execution",
+        "record_execution_evidence",
+        "renew_lease",
+        "release",
+      ],
+    ])
+      assert.throws(
+        () => assertEvidenceIsTheLastStateChange(bad),
+        bad.join(","),
+      );
+  });
+});
+
 describe("Modal executor in the shared controller (fake Modal, contract-shaped stub API)", () => {
   test("exactly one spawn: intent and journal precede it, the call ID is recorded after it, evidence is provider_call_terminal", async () => {
     const jobId = randomUUID();
@@ -206,7 +269,7 @@ describe("Modal executor in the shared controller (fake Modal, contract-shaped s
     assert.equal(e.kind, "provider_call_terminal");
     assert.equal(e.executionRef, id);
     assert.equal(e.detail.recovery, "spawned_by_this_run");
-    assert.equal(stub.actions().at(-1), "record_execution_evidence");
+    assertEvidenceIsTheLastStateChange(stub.actions());
     assert.equal(store.readModal(jobId)?.phase, "terminal");
     // The spawn argument carries only the scoped bootstrap (no executionRef: Modal supplies the call ID).
     const boot = modal.spawns[0]!;

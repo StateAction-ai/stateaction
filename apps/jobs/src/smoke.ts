@@ -7,6 +7,9 @@ if (
   process.env.RENDER_USE_LOCAL_DEV !== "true"
 )
   throw new Error("Smoke must use the local runner");
+// Above the dev dispatch's 15 s hung-runner guard (packages/server/src/dispatch.ts), which
+// the verify POST waits on, plus a cold Next route compile (SA-117 measurements).
+const FETCH_TIMEOUT_MS = 30_000;
 const target = new URL(
   process.env.RENDER_LOCAL_DEV_URL ?? "http://127.0.0.1:8120",
 );
@@ -17,7 +20,7 @@ if (
   throw new Error("Refusing a cloud workflow endpoint");
 const base = "http://127.0.0.1:3000";
 const health = await fetch(`${base}/api/v1/health`, {
-  signal: AbortSignal.timeout(10000),
+  signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 });
 assert.equal(health.status, 200);
 assert.deepEqual(await health.json(), {
@@ -29,14 +32,14 @@ const path = `${base}/api/v1/development/workflows/verify`;
 const unauthorized = await fetch(path, {
   method: "POST",
   body: JSON.stringify({ requestId }),
-  signal: AbortSignal.timeout(10000),
+  signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 });
 assert.equal(unauthorized.status, 401);
 const invalid = await fetch(path, {
   method: "POST",
   headers: { authorization: `Bearer ${process.env.LOCAL_SMOKE_TOKEN}` },
   body: "{}",
-  signal: AbortSignal.timeout(10000),
+  signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 });
 assert.equal(invalid.status, 400);
 const response = await fetch(path, {
@@ -46,7 +49,7 @@ const response = await fetch(path, {
     authorization: `Bearer ${process.env.LOCAL_SMOKE_TOKEN}`,
   },
   body: JSON.stringify({ requestId }),
-  signal: AbortSignal.timeout(10000),
+  signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 });
 assert.equal(response.status, 202);
 const accepted = (await response.json()) as {

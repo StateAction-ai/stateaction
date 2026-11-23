@@ -1258,6 +1258,505 @@ class VerifyTests(RepoCase):
         self.assertTrue(any("guard" in e for e in self.errors()))
 
 
+REAL_RULE = json.loads((HERE / "stages.json").read_text())["docsOnly"]
+
+
+class DocsClassifierTests(RepoCase):
+    """The docs-only path rule (SA-117), applied to real `git diff --name-status -M`."""
+
+    def classify(self, changes: dict[str, str | None], renames=(), **kwargs):
+        base = sh(self.repo, "git", "rev-parse", "HEAD")
+        for old, new in renames:
+            (self.repo / new).parent.mkdir(parents=True, exist_ok=True)
+            sh(self.repo, "git", "mv", old, new)
+        for path, text in changes.items():
+            target = self.repo / path
+            if text is None:
+                sh(self.repo, "git", "rm", "-q", path)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+                sh(self.repo, "git", "add", path)
+        self.commit_pending()
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        result = local_ci.classify_diff(
+            self.repo, kwargs.get("base", base), head, kwargs.get("rule", REAL_RULE)
+        )
+        sh(self.repo, "git", "reset", "-q", "--hard", base)
+        return result
+
+    def test_docs_paths_are_docs_only(self):
+        for path in (
+            "README.md",
+            "docs/foo.md",
+            "docs/sub/x.png",
+            "packages/x/README.md",
+            "a/b/c.md",
+        ):
+            result = self.classify({path: "x\n"})
+            self.assertTrue(result["docsOnly"], path)
+            self.assertEqual(result["paths"], [path])
+
+    def test_paths_that_change_ci_behaviour_or_code_force_the_full_suite(self):
+        for path in (
+            "AGENTS.md",
+            "docs/local-ci.md",
+            "scripts/local-ci/stages.json",
+            "scripts/local-ci/anything.py",
+            "scripts/local-ci/notes.md",
+            "package.json",
+            "src/code.ts",
+            "docs-not/x.txt",
+        ):
+            self.assertFalse(self.classify({path: "x\n"})["docsOnly"], path)
+
+    def test_one_non_docs_path_makes_the_whole_diff_a_code_change(self):
+        result = self.classify(
+            {"packages/x/README.md": "r\n", "packages/x/a.ts": "c\n"}
+        )
+        self.assertFalse(result["docsOnly"])
+        self.assertIn("packages/x/a.ts", result["reason"])
+
+    def test_rename_from_code_into_docs_is_not_docs_only(self):
+        (self.repo / "src").mkdir()
+        (self.repo / "src/code.ts").write_text("export const a = 1;\n" * 5)
+        self.commit_pending("code")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        result = self.classify({}, renames=[("src/code.ts", "docs/code.md")])
+        self.assertFalse(result["docsOnly"])
+        self.assertEqual(result["paths"], ["docs/code.md", "src/code.ts"])
+        self.assertEqual(result["entries"][0]["status"][0], "R")
+
+    def test_rename_and_delete_inside_docs_check_both_sides(self):
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs/a.md").write_text("alpha\n" * 5)
+        (self.repo / "docs/b.md").write_text("beta\n" * 5)
+        self.commit_pending("docs")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        result = self.classify(
+            {"docs/b.md": None}, renames=[("docs/a.md", "docs/c.md")]
+        )
+        self.assertTrue(result["docsOnly"])
+        self.assertEqual(result["paths"], ["docs/a.md", "docs/b.md", "docs/c.md"])
+
+    def test_rename_out_of_docs_into_a_forced_path_is_not_docs_only(self):
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs/a.md").write_text("alpha\n" * 5)
+        self.commit_pending("docs")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        result = self.classify({}, renames=[("docs/a.md", "docs/local-ci.md")])
+        self.assertFalse(result["docsOnly"])
+
+    def test_new_symlinks_and_submodule_pointers_are_not_docs_only(self):
+        base = sh(self.repo, "git", "rev-parse", "HEAD")
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs/link.md").symlink_to("../app.txt")
+        self.commit_pending("symlink")
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        result = local_ci.classify_diff(self.repo, base, head, REAL_RULE)
+        self.assertFalse(result["docsOnly"])
+        self.assertIn("symlink or submodule", result["reason"])
+        sh(self.repo, "git", "reset", "-q", "--hard", base)
+        sh(
+            self.repo,
+            "git",
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{base},docs/sub",
+        )
+        sh(self.repo, "git", "commit", "-qm", "gitlink")
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        # A local ignore setting must not hide the pointer from the classifier.
+        sh(self.repo, "git", "config", "diff.ignoreSubmodules", "all")
+        result = local_ci.classify_diff(self.repo, base, head, REAL_RULE)
+        self.assertFalse(result["docsOnly"])
+
+    def test_a_type_change_is_not_docs_only(self):
+        (self.repo / "docs").mkdir()
+        (self.repo / "docs/a.md").write_text("alpha\n")
+        self.commit_pending("docs")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        base = sh(self.repo, "git", "rev-parse", "HEAD")
+        (self.repo / "docs/a.md").unlink()
+        (self.repo / "docs/a.md").symlink_to("../app.txt")
+        self.commit_pending("symlink")
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        result = local_ci.classify_diff(self.repo, base, head, REAL_RULE)
+        self.assertFalse(result["docsOnly"])
+        self.assertIn("unrecognized diff entry", result["reason"])
+
+    def test_fail_closed_cases_run_the_full_suite(self):
+        (self.repo / "README.md").write_text("x\n")
+        self.commit_pending()
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        base = sh(self.repo, "git", "rev-parse", "HEAD^")
+        ok = local_ci.classify_diff(self.repo, base, head, REAL_RULE)
+        self.assertTrue(ok["docsOnly"])
+        cases = {
+            "no rule": (base, head, None),
+            "no base": (None, head, REAL_RULE),
+            "unresolvable base": ("0" * 40, head, REAL_RULE),
+            "unresolvable head": (base, "", REAL_RULE),
+            "empty diff": (head, head, REAL_RULE),
+        }
+        for name, (b, h, rule) in cases.items():
+            result = local_ci.classify_diff(self.repo, b, h, rule)
+            self.assertFalse(result["docsOnly"], name)
+            self.assertTrue(result["reason"], name)
+
+    def test_shallow_clone_runs_everything(self):
+        (self.repo / "README.md").write_text("x\n")
+        self.commit_pending()
+        shallow = self.tmp / "shallow"
+        sh(
+            self.tmp,
+            "git",
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            f"file://{self.repo}",
+            str(shallow),
+        )
+        head = sh(shallow, "git", "rev-parse", "HEAD")
+        result = local_ci.classify_diff(shallow, head, head, REAL_RULE)
+        self.assertFalse(result["docsOnly"])
+        self.assertIn("shallow", result["reason"])
+
+    def test_unusual_path_names_run_the_full_suite(self):
+        for path in ("docs/a,b.md", "docs/a\\b.md"):
+            self.assertFalse(self.classify({path: "x\n"})["docsOnly"], path)
+
+    def test_glob_semantics(self):
+        match = local_ci.path_matches
+        self.assertTrue(match("README.md", "**/*.md"))
+        self.assertTrue(match("a/b/c.md", "**/*.md"))
+        self.assertFalse(match("a/b/c.mdx", "**/*.md"))
+        self.assertTrue(match("docs/x/y.png", "docs/**"))
+        self.assertFalse(match("docs", "docs/**"))
+        self.assertFalse(match("xdocs/a", "docs/**"))
+        self.assertTrue(match("scripts/local-ci/a/b.py", "scripts/local-ci/**"))
+        self.assertFalse(match("scripts/local-cix/a.py", "scripts/local-ci/**"))
+        self.assertTrue(match("AGENTS.md", "AGENTS.md"))
+        self.assertFalse(match("sub/AGENTS.md", "AGENTS.md"))
+
+
+class DocsOnlyRunTests(RepoCase):
+    """A docs-only diff runs setup plus the fast docs checks and records the rest skipped."""
+
+    def setUp(self):
+        super().setUp()
+        rule = {
+            "version": 1,
+            "docsPaths": ["**/*.md", "docs/**"],
+            "forceFullPaths": ["AGENTS.md", "docs/local-ci.md", "scripts/local-ci/**"],
+            "setupStages": ["setup"],
+            "guardedTargets": ["integration"],
+            "checks": [
+                stage(
+                    "docs-checks",
+                    "import os; print('CHANGED=' + repr(os.environ['STATEACTION_DOCS_CHANGED']))",
+                    docsChanged="env",
+                ),
+                stage(
+                    "docs-affected",
+                    "import sys; print('ARGS=' + repr(sys.argv[1:]))",
+                    docsChanged="files-arg",
+                ),
+            ],
+        }
+        self.rule = rule
+        self.set_stages(
+            [
+                stage("setup", "print('setup')"),
+                stage("full-suite", "raise SystemExit('the full suite must not run')"),
+                stage(
+                    "fixture-suite",
+                    "raise SystemExit('the fixture suite must not run')",
+                ),
+            ],
+        )
+        spec = json.loads((self.repo / local_ci.STAGES_PATH).read_text())
+        spec["docsOnly"] = rule
+        (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
+        self.commit_pending("stages")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        self.affected = mock.patch.object(
+            local_ci, "affected_projects", return_value=["infra"]
+        )
+        self.affected_mock = self.affected.start()
+        self.addCleanup(self.affected.stop)
+        self.guarded = mock.patch.object(local_ci, "guarded_tasks", return_value=[])
+        self.guarded_mock = self.guarded.start()
+        self.addCleanup(self.guarded.stop)
+
+    def use_stages(self, stages):
+        self.set_stages(stages)
+        spec = json.loads((self.repo / local_ci.STAGES_PATH).read_text())
+        spec["docsOnly"] = self.rule
+        (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
+        self.commit_pending("stages")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    def docs_change(self, path="docs/guide.md", text="guide\n"):
+        (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.repo / path).write_text(text)
+        sh(self.repo, "git", "add", path)
+
+    def passed(self, **kwargs):
+        record = self.run_tree(**kwargs)
+        self.assertEqual(record["verdict"], "PASS", record)
+        return record
+
+    def receipt(self, record):
+        return json.loads(Path(record["receipt"]).read_text())
+
+    def errors(self, **kwargs):
+        kwargs.setdefault("affected", lambda repo, paths: ["infra"])
+        kwargs.setdefault("guarded", lambda repo, paths: [])
+        return local_ci.verify_receipt(self.repo, "HEAD", home=self.home, **kwargs)
+
+    def transplant(self, record, mutate=None):
+        """Re-bind the receipt of the current head to a new head with the same spec."""
+        data = self.receipt(record)
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        tree = sh(self.repo, "git", "rev-parse", "HEAD^{tree}")
+        data.update(tree=tree, head=head)
+        if mutate:
+            mutate(data)
+        data["receiptSha256"] = local_ci.receipt_digest(data)
+        path = self.home / "receipts" / f"{tree}.json"
+        path.write_text(json.dumps(data))
+        local_ci.record_attempt(self.home, tree, data["runId"], "finished", "PASS")
+
+    def test_docs_only_diff_runs_setup_and_docs_checks_only(self):
+        self.docs_change()
+        record = self.passed()
+        self.assertEqual(
+            [s["id"] for s in record["stages"]],
+            ["setup", "docs-checks", "docs-affected"],
+        )
+        receipt = self.receipt(record)
+        self.assertEqual(receipt["mode"], "docs-only")
+        info = receipt["docsOnly"]
+        self.assertEqual(info["changedPaths"], ["docs/guide.md"])
+        self.assertEqual(info["affectedProjects"], ["infra"])
+        self.assertEqual(info["ruleSha256"], local_ci.rule_sha256(self.rule))
+        self.assertEqual(
+            info["mergeBase"], sh(self.repo, "git", "rev-parse", "origin/main")
+        )
+        self.assertEqual(
+            [(s["id"], s["status"]) for s in receipt["skipped"]],
+            [
+                ("full-suite", "skipped: unaffected"),
+                ("fixture-suite", "skipped: unaffected"),
+            ],
+        )
+        for item in receipt["skipped"]:
+            self.assertEqual(
+                item["evidence"],
+                {"changedPaths": ["docs/guide.md"], "affectedProjects": ["infra"]},
+            )
+        self.assertEqual(
+            [s["id"] for s in receipt["stages"]],
+            ["setup", "docs-checks", "docs-affected"],
+        )
+        log = (Path(record["logDir"]) / "docs-checks.log").read_text()
+        self.assertIn("CHANGED='docs/guide.md'", log)
+        log = (Path(record["logDir"]) / "docs-affected.log").read_text()
+        self.assertIn("--files=docs/guide.md", log)
+        self.assertEqual(self.errors(), [])
+
+    def test_a_rename_checks_the_new_path_and_passes_both_sides_to_nx(self):
+        self.docs_change("docs/old.md", "old\n" * 5)
+        self.commit_pending("old")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        sh(self.repo, "git", "mv", "docs/old.md", "docs/new.md")
+        record = self.passed()
+        log = (Path(record["logDir"]) / "docs-checks.log").read_text()
+        self.assertIn("CHANGED='docs/new.md'", log)
+        self.assertIn(
+            "--files=docs/new.md,docs/old.md",
+            (Path(record["logDir"]) / "docs-affected.log").read_text(),
+        )
+
+    def test_a_diff_that_mixes_docs_and_code_runs_the_full_suite(self):
+        self.use_stages(
+            [stage("setup", "print('setup')"), stage("full-suite", "print('full')")]
+        )
+        self.docs_change()
+        (self.repo / "app.txt").write_text("code change\n")
+        record = self.passed()
+        self.assertEqual([s["id"] for s in record["stages"]], ["setup", "full-suite"])
+        receipt = self.receipt(record)
+        self.assertEqual(receipt["mode"], "tree")
+        self.assertNotIn("skipped", receipt)
+        self.assertEqual(self.errors(), [])
+
+    def test_full_flag_forces_the_full_suite_even_for_docs_only_diffs(self):
+        self.use_stages(
+            [stage("setup", "print('setup')"), stage("full-suite", "print('full')")]
+        )
+        self.docs_change()
+        record = self.passed(docs_only=False)
+        self.assertEqual([s["id"] for s in record["stages"]], ["setup", "full-suite"])
+        self.assertEqual(self.receipt(record)["mode"], "tree")
+
+    def test_a_failing_docs_check_leaves_no_receipt(self):
+        self.rule["checks"][0]["argv"][-1] = "raise SystemExit('broken link')"
+        spec = json.loads((self.repo / local_ci.STAGES_PATH).read_text())
+        spec["docsOnly"] = self.rule
+        (self.repo / local_ci.STAGES_PATH).write_text(json.dumps(spec))
+        self.commit_pending("stages")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        self.docs_change()
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "FAIL")
+        self.assertEqual(self.receipts(), [])
+
+    def test_the_affected_set_is_computed_for_the_changed_paths_only(self):
+        self.docs_change("docs/components/render-deployment.md", "doc\n")
+        self.passed()
+        args = self.affected_mock.call_args.args
+        self.assertEqual(args[1], ["docs/components/render-deployment.md"])
+
+    def test_verify_rejects_a_tampered_changed_path_list(self):
+        self.docs_change()
+        record = self.passed()
+        data = self.receipt(record)
+        for field, value in (
+            ("changedPaths", ["docs/other.md"]),
+            ("changed", [{"status": "A", "paths": ["docs/other.md"]}]),
+        ):
+            copy = json.loads(json.dumps(data))
+            copy["docsOnly"][field] = value
+            copy["receiptSha256"] = local_ci.receipt_digest(copy)
+            Path(record["receipt"]).write_text(json.dumps(copy))
+            errors = self.errors()
+            self.assertTrue(
+                any("changed-path list" in e for e in errors), (field, errors)
+            )
+        Path(record["receipt"]).write_text(json.dumps(data))
+        self.assertEqual(self.errors(), [])
+
+    def test_verify_rejects_a_docs_only_receipt_on_a_diff_that_touches_code(self):
+        self.docs_change()
+        record = self.passed()
+        (self.repo / "app.txt").write_text("code\n")
+        sh(self.repo, "git", "add", "app.txt")
+        sh(self.repo, "git", "commit", "-q", "--amend", "-m", "now with code")
+        self.transplant(record)
+        errors = self.errors()
+        self.assertTrue(any("not docs-only" in e for e in errors), errors)
+
+    def test_verify_rejects_a_skipped_stage_the_recomputed_set_selects(self):
+        self.docs_change()
+        self.passed()
+        errors = self.errors(affected=lambda repo, paths: ["infra", "web"])
+        self.assertTrue(
+            any("selects tasks the receipt skipped" in e for e in errors), errors
+        )
+
+    def test_a_changed_doc_that_a_skipped_task_reads_falls_back_to_the_full_suite(self):
+        self.use_stages(
+            [stage("setup", "print('setup')"), stage("full-suite", "print('full')")]
+        )
+        self.guarded_mock.return_value = ["web:auth-e2e"]
+        self.docs_change("packages/server/test-auth/notes.md")
+        record = self.passed()
+        self.assertEqual([s["id"] for s in record["stages"]], ["setup", "full-suite"])
+        self.assertEqual(self.receipt(record)["mode"], "tree")
+        self.assertEqual(len(self.receipts()), 1)
+
+    def test_verify_rejects_changed_docs_that_select_a_skipped_task(self):
+        self.docs_change()
+        self.passed()
+        errors = self.errors(guarded=lambda repo, paths: ["jobs:integration"])
+        self.assertTrue(
+            any(
+                "select tasks the receipt skipped: jobs:integration" in e
+                for e in errors
+            ),
+            errors,
+        )
+
+    def test_verify_fails_closed_when_the_affected_set_cannot_be_recomputed(self):
+        self.docs_change()
+        self.passed()
+
+        def broken(repo, paths):
+            raise local_ci.Refused("no node_modules")
+
+        errors = self.errors(affected=broken)
+        self.assertTrue(
+            any("cannot recompute the affected set" in e for e in errors), errors
+        )
+
+    def test_verify_rejects_a_wrong_or_stale_base(self):
+        self.docs_change()
+        record = self.passed()
+        data = self.receipt(record)
+        original = json.dumps(data)
+        data["docsOnly"]["mergeBase"] = "0" * 40
+        data["receiptSha256"] = local_ci.receipt_digest(data)
+        Path(record["receipt"]).write_text(json.dumps(data))
+        self.assertTrue(any("base other than" in e for e in self.errors()))
+        Path(record["receipt"]).write_text(original)
+        self.assertEqual(self.errors(), [])
+        # origin/main moves on after the run: the head is no longer directly above it.
+        self.commit_pending()
+        head = sh(self.repo, "git", "rev-parse", "HEAD")
+        sh(self.repo, "git", "checkout", "-q", "--detach", "HEAD^")
+        (self.repo / "later.txt").write_text("m")
+        sh(self.repo, "git", "add", "later.txt")
+        sh(self.repo, "git", "commit", "-qm", "main moved")
+        sh(self.repo, "git", "update-ref", "refs/remotes/origin/main", "HEAD")
+        sh(self.repo, "git", "checkout", "-q", head)
+        errors = self.errors()
+        self.assertTrue(
+            any("parent is not the latest origin/main" in e for e in errors), errors
+        )
+
+    def test_verify_rejects_a_changed_rule_or_skipped_list(self):
+        self.docs_change()
+        record = self.passed()
+        data = self.receipt(record)
+        for mutate, text in (
+            (lambda d: d["docsOnly"].update(ruleSha256="0" * 64), "rule changed"),
+            (lambda d: d["skipped"].pop(), "skipped stages are not exactly"),
+            (lambda d: d["skipped"][0].update(status="passed"), "unaffected evidence"),
+            (
+                lambda d: d["skipped"][0]["evidence"].update(changedPaths=[]),
+                "unaffected evidence",
+            ),
+        ):
+            copy = json.loads(json.dumps(data))
+            mutate(copy)
+            copy["receiptSha256"] = local_ci.receipt_digest(copy)
+            Path(record["receipt"]).write_text(json.dumps(copy))
+            errors = self.errors()
+            self.assertTrue(any(text in e for e in errors), (text, errors))
+
+    def test_docs_receipt_does_not_count_for_a_later_code_change_on_the_branch(self):
+        self.docs_change()
+        self.passed()
+        self.assertEqual(self.errors(), [])
+        (self.repo / "app.txt").write_text("code later\n")
+        sh(self.repo, "git", "commit", "-qam", "code", "--amend")
+        errors = self.errors()
+        self.assertTrue(any("no PASS receipt" in e for e in errors), errors)
+
+    def test_a_tree_receipt_still_verifies_for_a_docs_only_diff(self):
+        self.use_stages(
+            [stage("setup", "print('setup')"), stage("full-suite", "print('full')")]
+        )
+        self.docs_change()
+        record = self.passed(docs_only=False)
+        self.assertEqual(self.receipt(record)["mode"], "tree")
+        self.assertEqual(self.errors(), [])
+
+
 class AmendVerifyTests(RepoCase):
     """An amend changes the tree or head: the receipt never carries over."""
 

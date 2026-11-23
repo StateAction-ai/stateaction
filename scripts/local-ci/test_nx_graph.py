@@ -10,9 +10,13 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import local_ci  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 NX = ROOT / "node_modules" / ".bin" / "nx"
@@ -400,8 +404,21 @@ class NxGraphTests(unittest.TestCase):
 
     @classmethod
     def input_files(cls, target: str) -> set[str]:
-        out = cls.nx("show", "target", "inputs", target, "--json")
-        return set(json.loads(out.stdout)["files"])
+        # Nx truncates a large --json document at the 64 KiB pipe size, so read a file.
+        target_file = Path(cls.tmp.name) / f"inputs-{target.replace(':', '-')}.json"
+        with target_file.open("w") as handle:
+            result = subprocess.run(
+                [str(NX), "show", "target", "inputs", target, "--json"],
+                cwd=ROOT,
+                env=cls.env,
+                stdout=handle,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=300,
+            )
+        if result.returncode:
+            raise AssertionError(f"nx show target inputs {target}:\n{result.stderr}")
+        return set(json.loads(target_file.read_text())["files"])
 
     def test_blueprint_change_reaches_infra(self):
         self.assertIn("infra", self.affected("render.yaml"))
@@ -410,6 +427,60 @@ class NxGraphTests(unittest.TestCase):
         self.assertIn(
             "docs/components/render-deployment.md", self.input_files("infra:format")
         )
+
+    def test_a_docs_file_named_as_a_task_input_selects_exactly_those_tasks(self):
+        """SA-117: render-deployment.md is read by the blueprint checks, so a docs-only
+        change to it still runs them (and no other docs file selects anything here)."""
+        doc = "docs/components/render-deployment.md"
+        self.assertIn("infra", self.affected(doc))
+        for task in ("format", "test"):
+            self.assertIn(doc, self.input_files(f"infra:{task}"), task)
+        for task in ("syntax", "integration"):
+            self.assertNotIn(doc, self.input_files(f"infra:{task}"), task)
+        self.assertNotIn("infra", self.affected("docs/components/catalog.md"))
+
+    def test_no_fixture_or_uncached_task_reads_a_docs_only_path(self):
+        """The docs-only run executes only build/typecheck/syntax/test/format tasks, so a
+        doc that an integration or e2e task reads would be skipped unchecked."""
+        rule = json.loads((Path(__file__).parent / "stages.json").read_text())[
+            "docsOnly"
+        ]
+        for project, target in UNCACHED:
+            docs = [
+                f
+                for f in self.input_files(f"{project}:{target}")
+                if local_ci.is_docs_path(f, rule)
+            ]
+            self.assertEqual(docs, [], f"{project}:{target}")
+
+    def test_guarded_targets_cover_every_task_a_docs_only_run_skips(self):
+        spec = json.loads((Path(__file__).parent / "stages.json").read_text())
+        guarded = set(spec["docsOnly"]["guardedTargets"])
+        for item in spec["stages"]:
+            if item.get("fixtures"):
+                self.assertIn(item["argv"][4].split(":")[-1], guarded, item["id"])
+        self.assertIn("test-local-ci", guarded)
+        run = {"build", "typecheck", "syntax", "test", "format"}
+        known = {
+            target
+            for node in self.graph["nodes"].values()
+            for target in node["data"]["targets"]
+        }
+        # Every other Nx target is a service, seed or tool command no gate stage runs.
+        self.assertTrue(guarded <= known)
+        self.assertTrue(run <= known)
+
+    def test_docs_check_target_is_cached_on_the_docs_tree_and_changed_list(self):
+        target = self.graph["nodes"]["tooling"]["data"]["targets"]["docs-check"]
+        self.assertTrue(target["cache"])
+        self.assertIn({"env": "STATEACTION_DOCS_CHANGED"}, target["inputs"])
+        files = self.input_files("tooling:docs-check")
+        for file in (
+            "README.md",
+            "docs/components/render-deployment.md",
+            "scripts/local-ci/docs_checks.py",
+        ):
+            self.assertIn(file, files)
 
     def test_local_ci_files_are_inputs_of_the_cached_self_test_and_the_format_check(
         self,

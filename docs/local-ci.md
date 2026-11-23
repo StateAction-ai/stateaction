@@ -4,16 +4,16 @@ Hosted GitHub Actions are optional and manual. The required gate is a full local
 
 ## Commands
 
-| Command                                           | Purpose                                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------------------- |
-| `pnpm hooks:install-local`                        | Install the pre-commit and pre-push hooks for this worktree only.         |
-| `python3 scripts/local-ci/install.py --uninstall` | Remove this worktree's hook path.                                         |
-| `pnpm ci:local`                                   | The single required whole-suite pass, on the final head after the rebase. |
-| `pnpm ci:verify`                                  | Validate the receipt for `HEAD` against the latest `origin/main`.         |
-| `pnpm ci:merge --pr <n> [--execute]`              | Verify, apply the ticket policy, then squash merge (dry run default).     |
-| `pnpm ci:land --pr <n>`                           | Rebase own PR if main moved, gate, squash merge: one `ci` ticket.         |
+| Command                                           | Purpose                                                                |
+| ------------------------------------------------- | ---------------------------------------------------------------------- |
+| `pnpm hooks:install-local`                        | Install the pre-commit and pre-push hooks for this worktree only.      |
+| `python3 scripts/local-ci/install.py --uninstall` | Remove this worktree's hook path.                                      |
+| `pnpm ci:local`                                   | The single required pass (whole suite; fast docs checks if docs-only). |
+| `pnpm ci:verify`                                  | Validate the receipt for `HEAD` against the latest `origin/main`.      |
+| `pnpm ci:merge --pr <n> [--execute]`              | Verify, apply the ticket policy, then squash merge (dry run default).  |
+| `pnpm ci:land --pr <n>`                           | Rebase own PR if main moved, gate, squash merge: one `ci` ticket.      |
 
-Rebase onto the latest origin/main first (single commit directly above it); each PR must then pass the full local CI (`pnpm ci:local` on that final head) before merge; if origin/main moves, rebase and rerun. `ci:verify` and `ci:merge` reject a head that is not a single commit directly above the latest `origin/main`, or whose receipt names another base.
+Rebase onto the latest origin/main first (single commit directly above it); each PR must then pass the full local CI (`pnpm ci:local` on that final head) before merge; if origin/main moves, rebase and rerun. A change whose every path is docs-only (`**/*.md` or `docs/**`, but never `AGENTS.md`, `docs/local-ci.md` or `scripts/local-ci/**`) needs a PASS receipt for the fast docs checks instead of the full suite; any other path runs the full suite. `ci:verify` and `ci:merge` reject a head that is not a single commit directly above the latest `origin/main`, or whose receipt names another base.
 
 Set `STATEACTION_LOCAL_FIXTURES=<env file>` for the bounded loopback PostgreSQL and S3 fixtures. Without it the fixture-backed stages fail; Docker is never started.
 
@@ -77,6 +77,12 @@ Speed comes only from existing mechanisms; no custom task cache exists.
 - **Stage metrics.** Each stage also records informational `metrics`: CPU seconds (delta of the lane scope's `cpu.stat` `usage_usec`), sampled peak memory (`memory.current`, every 0.25 s) and the scope's cumulative `memory.peak`. Nx stages add `cache.taskTimings` (per task start offset, span to the next task line, cache hit; spans are upper bounds when Nx runs tasks in parallel). Metrics are never part of the tree binding or verification; receipts without them still verify. `pnpm ci:timing [--last N]` (read-only) prints per-stage median wall, CPU, cpu/wall, peak MiB over the last N PASS runs; runs recorded before the metrics show "not recorded". Metrics are informational and excluded from verification, so older receipts stay valid.
 - **Receipt.** Each stage records `cacheMode`, `gradleBuildCache` and, for Nx, how many tasks were cache hits versus executed (with names); the receipt records `fresh`, the toolchain and its hash, and the total duration.
 - **Forcing cold.** `python3 scripts/local-ci/local_ci.py run --tree HEAD --fresh` bypasses the Nx and Gradle caches. Compare its `totalDurationSec` with a following normal run for cold-versus-warm timing.
+
+## Docs-only changes
+
+`scripts/local-ci/stages.json` holds the rule (`docsOnly`: `docsPaths`, `forceFullPaths`, the setup stages and the checks) in one place. The runner lists `git diff --raw -M <merge-base with origin/main> <head>` (`--name-status` plus modes; submodule-ignore and diff-driver settings are overridden, and any symlink or submodule entry runs the full suite) and the diff is docs-only only when every path on both sides of every change (renames and deletions included) matches `**/*.md` or `docs/**` and none is `AGENTS.md`, `docs/local-ci.md` or under `scripts/local-ci/**`. A shallow clone, an unresolvable base, a failed or empty diff, an unusual path name or a missing rule runs the full suite (the log says why); `local_ci.py run --full` forces it.
+
+A docs-only run executes `toolchain`, `node-install`, then `docs-checks` (`nx run tooling:docs-check`: `prettier --check` and a relative link and anchor check of the changed docs, cached by Nx on the docs tree, the changed-path list and the tracked file list; the changed docs are checked, and a deleted or renamed doc is also checked for inbound links from every other Markdown file; a renamed heading is not caught) and `docs-affected` (`nx affected -t build,typecheck,syntax,test,format --files=<changed paths>`, which runs the tasks Nx selects for those files, that is the ones that name a changed doc as an input, such as `infra:format` and `infra:test` for `docs/components/render-deployment.md`). Before `docs-affected`, `nx affected -t <guardedTargets> --graph` asks which skipped targets (`guardedTargets`: the fixture, e2e and `test-local-ci` tasks) the changed files would select; if any, the run drops the docs-only attempt and runs the full suite (the six fixture targets exclude Markdown from their inputs, so an ordinary doc selects none). The receipt has `mode: docs-only`, `docsOnly` (rule version and SHA-256, merge base, changed entries and paths, affected projects, checks) and every other stage as `skipped: unaffected` with the changed paths and affected projects as evidence. `ci:verify` and `ci:merge` recompute the classification and the affected set from the head and reject the receipt when its changed-path list, rule hash or skipped list differ, when the diff touches a non-docs path, when the recomputed (project-level) affected set differs, when the changed docs select a skipped (guarded) task, when the set cannot be recomputed, or when the head is not directly above the latest `origin/main`. The receipt stays bound to the exact tree, so a later code change needs a new run. Hosted `checks.yml` stays manual and keeps the full suite.
 
 ## Receipt
 
