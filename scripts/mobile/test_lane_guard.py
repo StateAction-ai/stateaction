@@ -241,6 +241,50 @@ class BoundedChildLimits(Env):
         ):
             guard.lane_job("ci", "abcd1234", ["tool"])
         self.assertEqual(run.call_args.kwargs["tasks"], 512)
+        self.assertEqual(run.call_args.kwargs["cpu_weight"], guard.LANE_CPU_WEIGHT)
+        self.assertEqual(guard.LANE_CPU_WEIGHT, 400)
+        self.assertEqual(guard.SLICE_TASKS_MAX, 8192)
+
+    def test_run_bounded_passes_cpu_weight_only_when_given(self):
+        for weight, expected in ((400, ["--property=CPUWeight=400"]), (None, [])):
+            with (
+                mock.patch.object(guard, "runtime_dir", return_value=self.tmp),
+                mock.patch.object(guard, "call"),
+                mock.patch.object(guard.subprocess, "run") as run,
+            ):
+                run.return_value.returncode = 0
+                guard.run_bounded(
+                    "agent-lane-ci-aaaaaaaa.scope",
+                    ["x"],
+                    slice_name="s",
+                    job_max=1,
+                    env={},
+                    cpu_weight=weight,
+                )
+            argv = run.call_args[0][0]
+            self.assertEqual([a for a in argv if "CPUWeight" in a], expected)
+
+    def test_free_slice_is_reasserted_with_cpu_weight_and_tasks(self):
+        limit = guard.free_slice_max(24 * guard.GIB)
+        good = {
+            "MemoryMax": str(limit),
+            "MemorySwapMax": "0",
+            "TasksMax": "2048",
+            "CPUWeight": "100",
+        }
+        unset = ("[not set]", "18446744073709551615", "1")
+        cases = [(good, False)] + [({**good, "CPUWeight": v}, True) for v in unset]
+        for props, expect_set in cases:
+            with (
+                mock.patch.object(guard, "properties", return_value=props),
+                mock.patch.object(guard, "free_slice_max", return_value=limit),
+                mock.patch.object(guard, "call") as call,
+            ):
+                guard.ensure_free_slice()
+            self.assertEqual(call.called, expect_set)
+            if expect_set:
+                self.assertIn("CPUWeight=100", call.call_args[0])
+                self.assertIn("CPUAccounting=yes", call.call_args[0])
 
     def test_an_already_raised_limit_is_left_alone(self):
         self.assertFalse(self.run_bounded_hook((524288, 524288)).called)
@@ -571,15 +615,14 @@ class FreeAndLaneJob(Env):
         self.assertEqual(guard.FREE_SLICE, "agent-work-free.slice")
         self.assertEqual(guard.FREE_JOB_MAX, 6 * guard.GIB)
         gib = guard.GIB
-        for cap in (12, 20, 24):  # lanes + emulator + Free never exceed the cap
-            used = (
-                guard.lane_budget(cap * gib)
-                + guard.EMULATOR_SHARE
-                + guard.free_slice_max(cap * gib)
-            )
-            self.assertLessEqual(used, max(cap * gib, 16 * gib))
-        self.assertEqual(guard.free_slice_max(24 * gib), 4 * gib)
-        self.assertEqual(guard.free_slice_max(12 * gib), 4 * gib)
+        for cap, free in ((12, 4), (20, 12), (24, 16)):
+            self.assertEqual(guard.free_slice_max(cap * gib), free * gib)
+        # Free overlaps the emulator and a gate job: the sum can exceed the cap.
+        self.assertGreater(
+            guard.free_slice_max(24 * gib) + guard.EMULATOR_SHARE + guard.JOB_MAX,
+            24 * gib,
+        )
+        self.assertEqual(bounded.call_args[1]["cpu_weight"], guard.FREE_CPU_WEIGHT)
 
     def test_free_mem_override_lowers_but_never_raises_the_cap(self):
         self.assertEqual(guard.parse_mem("512m"), 512 * guard.MIB)

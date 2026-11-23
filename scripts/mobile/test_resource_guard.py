@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
@@ -322,6 +323,7 @@ class FakeSlice:
         self.write("memory.current", str(anon if current is None else current))
         self.write("memory.stat", f"anon {anon}\nkernel 0\nfile {40 * GIB}\n")
         self.commands = []
+        self.tasks_max = str(guard.SLICE_TASKS_MAX)
 
     def write(self, name, value):
         (self.group / name).write_text(value)
@@ -334,6 +336,8 @@ class FakeSlice:
                     self.write("memory.max", item.split("=")[1])
                 if item.startswith("MemoryHigh="):
                     self.write("memory.high", item.split("=")[1])
+                if item.startswith("TasksMax="):
+                    self.tasks_max = item.split("=")[1]
         if "is-active" in args:
             return "active"
         return ""
@@ -343,6 +347,7 @@ class FakeSlice:
             "ControlGroup": "/user.slice/agent-work.slice",
             "MemoryMax": (self.group / "memory.max").read_text().strip(),
             "MemorySwapMax": "0",
+            "TasksMax": self.tasks_max,
             "ActiveState": "active",
         }
 
@@ -467,6 +472,246 @@ class DynamicCapTest(unittest.TestCase):
         self.assertEqual(guard.SERVICE_MAX, GIB)
         self.assertEqual(guard.AGG_MAX, 24 * GIB)
         self.assertLessEqual(guard.BOOT_CAP, guard.AGG_MAX)
+
+
+class ReassertTest(unittest.TestCase):
+    UNIT_DEFAULT = 12 * GIB  # what a daemon-reload restores from agent-work.slice
+
+    def setup(self, stack, tmp, kernel=24 * GIB, props_max=24 * GIB, record=True):
+        """Kernel cap `kernel`, recorded cap 24 GiB; systemd reports `props_max` until a
+        set-property runs (then it follows the kernel files)."""
+        fake = FakeSlice(Path(tmp), kernel, 0)
+        for patch in fake.patches(TOTAL, 40 * GIB):
+            stack.enter_context(patch)
+        stack.enter_context(mock.patch.object(guard, "work_group", lambda: fake.group))
+        if record:
+            (fake.runtime / "aggregate-cap.json").write_text(
+                json.dumps({"capBytes": 24 * GIB})
+            )
+        fake.stale = {"MemoryMax": str(props_max)}
+        live = fake.properties
+
+        def properties(unit):
+            reported = live(unit)
+            if fake.stale and not any("set-property" in c for c in fake.commands):
+                reported.update(fake.stale)
+            return reported
+
+        stack.enter_context(mock.patch.object(guard, "properties", properties))
+        return fake
+
+    def sets(self, fake):
+        return [c for c in fake.commands if "set-property" in c]
+
+    def test_kernel_cap_drift_is_reapplied_through_apply_cap(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, kernel=self.UNIT_DEFAULT)
+            self.assertTrue(guard.reassert_slice())
+            (command,) = self.sets(fake)
+            self.assertIn(f"TasksMax={guard.SLICE_TASKS_MAX}", command)
+            self.assertEqual((fake.group / "memory.max").read_text(), str(24 * GIB))
+            self.assertNotIn("start", {c[2] for c in fake.commands})
+
+    def test_systemd_unit_default_is_reapplied_at_the_property_check(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, props_max=self.UNIT_DEFAULT)
+            self.assertTrue(guard.reassert_slice())  # cheap check: kernel matches
+            self.assertEqual(self.sets(fake), [])
+            self.assertTrue(guard.reassert_slice(check_properties=True))
+            self.assertEqual(len(self.sets(fake)), 1)
+
+    def test_wrong_tasks_max_is_reapplied_at_the_property_check(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp)
+            fake.stale = {"TasksMax": "512"}
+            guard.reassert_slice(check_properties=True)
+            self.assertEqual(len(self.sets(fake)), 1)
+
+    def test_matching_limits_leave_the_slice_alone(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp)
+            fake.stale = {}
+            self.assertTrue(guard.reassert_slice(check_properties=True))
+            self.assertEqual(fake.commands, [])
+
+    def test_no_record_or_inactive_slice_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, kernel=self.UNIT_DEFAULT, record=False)
+            self.assertTrue(guard.reassert_slice(check_properties=True))
+            self.assertEqual(fake.commands, [])
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, props_max=self.UNIT_DEFAULT)
+            fake.stale = {"ActiveState": "inactive"}
+            self.assertTrue(guard.reassert_slice(check_properties=True))
+            self.assertEqual(fake.commands, [])
+
+    def test_failures_are_reported_and_never_stop_anything(self):
+        errors = (
+            guard.Refused("busy"),
+            ValueError("bad"),
+            OSError("gone"),
+            subprocess.CalledProcessError(1, "systemctl"),
+        )
+        for error in errors:
+            with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+                fake = self.setup(stack, tmp, kernel=self.UNIT_DEFAULT)
+                stack.enter_context(
+                    mock.patch.object(guard, "apply_cap", side_effect=error)
+                )
+                self.assertFalse(guard.reassert_slice())
+                self.assertFalse([c for c in fake.commands if "stop" in c])
+
+    def test_a_busy_cap_lock_skips_the_round(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, kernel=self.UNIT_DEFAULT)
+            stack.enter_context(
+                mock.patch.object(guard, "cap_lock", side_effect=guard.Refused("busy"))
+            )
+            self.assertFalse(guard.reassert_slice())
+            self.assertEqual(fake.commands, [])
+
+    def test_unreadable_kernel_cap_does_not_raise(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp)
+            fake.write("memory.max", "garbage")
+            self.assertFalse(guard.reassert_slice())
+
+    def test_enforce_slice_reapplies_when_systemd_reports_the_unit_default(self):
+        # Kernel already at the recorded cap; only systemd's view regressed.
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, props_max=self.UNIT_DEFAULT)
+            guard.enforce_slice()
+            (command,) = self.sets(fake)
+            self.assertIn(f"TasksMax={guard.SLICE_TASKS_MAX}", command)
+
+    def test_enforce_slice_skips_set_property_when_everything_matches(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp)
+            fake.stale = {}
+            guard.enforce_slice()
+            self.assertEqual(self.sets(fake), [])
+
+    def test_tasks_max_mismatch_warns_but_never_refuses_admission(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.ExitStack() as stack:
+            fake = self.setup(stack, tmp, kernel=self.UNIT_DEFAULT)
+            live = fake.properties
+            stack.enter_context(
+                mock.patch.object(
+                    guard, "properties", lambda unit: {**live(unit), "TasksMax": "512"}
+                )
+            )
+            guard.enforce_slice()  # set-property cannot fix tasks here: no Refused
+            self.assertEqual(len(self.sets(fake)), 1)
+            report = guard.policy()
+            self.assertTrue(report["ok"], report["problems"])
+            self.assertEqual(len(report["warnings"]), 1)
+            self.assertIn("512", report["warnings"][0])
+            self.assertEqual(guard.status_record()["warnings"], report["warnings"])
+
+
+class WatchLoopTest(unittest.TestCase):
+    class Stop(Exception):
+        pass
+
+    def run_watch(self, clocks, available=40 * GIB, reassert=True):
+        clock = iter(clocks)
+        sleeps = iter([None] * (len(clocks) - 1))
+
+        def sleep(_):
+            if next(sleeps, "stop") == "stop":
+                raise self.Stop
+
+        fake_time = SimpleNamespace(monotonic=lambda: next(clock), sleep=sleep)
+        calls = []
+        with contextlib.ExitStack() as stack:
+            for name in ("reap_orphans", "write_heartbeat", "tighten_cap"):
+                stack.enter_context(mock.patch.object(guard, name, mock.Mock()))
+            self.pressure = mock.Mock()
+            stack.enter_context(
+                mock.patch.object(guard, "stop_for_pressure", self.pressure)
+            )
+            stack.enter_context(mock.patch.object(guard, "time", fake_time))
+            stack.enter_context(
+                mock.patch.object(guard, "memory_available", lambda *_: available)
+            )
+            stack.enter_context(
+                mock.patch.object(guard, "memory_total", lambda *_: TOTAL)
+            )
+            stack.enter_context(
+                mock.patch.object(guard, "call", lambda *a, **k: calls.append(a) or "")
+            )
+            mocked = stack.enter_context(
+                mock.patch.object(
+                    guard, "reassert_slice", mock.Mock(return_value=reassert)
+                )
+            )
+            with self.assertRaises(self.Stop):
+                guard.watch()
+        return mocked, calls
+
+    def test_cheap_check_every_loop_property_check_every_interval(self):
+        mocked, _ = self.run_watch([100.0, 100.5, 101.0, 131.0])
+        flags = [c.kwargs["check_properties"] for c in mocked.call_args_list]
+        self.assertEqual(flags, [True, False, False, True])
+
+    def test_a_failed_reassert_is_retried_only_after_the_interval_and_stops_nothing(
+        self,
+    ):
+        mocked, calls = self.run_watch([100.0, 100.5, 101.0, 131.5], reassert=False)
+        self.assertEqual(mocked.call_count, 2)
+        self.assertFalse([c for c in calls if "stop" in c])
+
+    def test_no_reassert_while_under_memory_pressure(self):
+        mocked, _ = self.run_watch([100.0, 101.0], available=1 * GIB)
+        mocked.assert_not_called()
+        self.pressure.assert_called()
+
+
+class PidsReportTest(unittest.TestCase):
+    def test_reads_pid_and_memory_counters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            group = Path(tmp)
+            (group / "pids.current").write_text("17\n")
+            (group / "pids.max").write_text("max\n")
+            (group / "pids.events").write_text("max 717\n")
+            (group / "memory.events").write_text("low 0\nhigh 3\nmax 1\noom 1\n")
+            report = guard.pids_report(group)
+        self.assertEqual(report["pidsCurrent"], 17)
+        self.assertEqual(report["pidsMax"], "max")
+        self.assertEqual(report["pidsEvents"], {"max": 717})
+        self.assertEqual(report["memoryEvents"]["high"], 3)
+
+    def test_missing_files_give_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = guard.pids_report(Path(tmp))
+        self.assertEqual(
+            report,
+            {
+                "pidsCurrent": None,
+                "pidsMax": None,
+                "pidsEvents": None,
+                "memoryEvents": None,
+            },
+        )
+
+    def test_status_record_and_policy_include_the_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = FakeSlice(Path(tmp), 24 * GIB, 0)
+            fake.write("pids.current", "5")
+            fake.write("pids.max", "8192")
+            fake.write("pids.events", "max 0")
+            fake.write("memory.events", "oom 0")
+            with contextlib.ExitStack() as stack:
+                for patch in fake.patches(TOTAL, 40 * GIB):
+                    stack.enter_context(patch)
+                stack.enter_context(
+                    mock.patch.object(guard, "android_processes", lambda: [])
+                )
+                record = guard.status_record()
+                report = guard.policy()
+        self.assertEqual(record["pids"]["pidsMax"], 8192)
+        self.assertEqual(record["memoryEvents"], {"oom": 0})
+        self.assertEqual(report["pids"]["pidsCurrent"], 5)
 
 
 if __name__ == "__main__":

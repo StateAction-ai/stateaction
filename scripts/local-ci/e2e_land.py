@@ -15,6 +15,7 @@ import argparse
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -111,12 +112,22 @@ def job(
             raise land.github_policy.PolicyError("bad title")
         return "SA-1"
 
+    real = (
+        scenario == "fresh"
+    )  # real identity + submodule preflight, no environment at all
+    if real:
+        for name in (
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "STATEACTION_LOCAL_CI_SUBMODULES",
+        ):
+            os.environ.pop(name, None)
     code, result = land.land(
         repo,
         pr,
         policy=policy,
         auth=contextlib.nullcontext,
-        identity=lambda: None,
+        **({} if real else {"identity": lambda: None, "submodules": lambda: []}),
         origin_check=lambda: True,
         reexec=None,
         github_repo=github_repo,
@@ -129,6 +140,17 @@ def job(
         merge=merge,
         sleep=lambda s: time.sleep(0.1),
     )
+    if real:  # what the tool itself resolved, and whether the pinned stera-sdk exports
+        result["tokenLogin"] = subprocess.run(
+            ["gh", "api", "user", "--jq", ".login"], capture_output=True, text=True
+        ).stdout.strip()
+        pin = sh(repo, "ls-tree", "HEAD", "stera-sdk").split()[2]
+        out = Path(home) / "sdk-export"
+        out.mkdir()
+        result["sdkExported"] = (
+            land.local_ci.export_submodule(repo, "stera-sdk", pin, out)
+            and (out / "stera-sdk" / "f").read_text() == "x"
+        )
     print(json.dumps(result, sort_keys=True))
     return code
 
@@ -249,7 +271,9 @@ def orchestrate() -> int:
         }
 
         # failure paths: each a real ticket in the same lane, over the same temp remote
-        def extra(n: int, scenario: str, prepare=None) -> tuple[int, dict, str]:
+        def extra(
+            n: int, scenario: str, prepare=None, committed=None
+        ) -> tuple[int, dict, str]:
             clone = root / f"w{n}"
             br = f"wanghujie/sa-{n}-feat"
             sh(root / "w0", "fetch", "origin")
@@ -261,6 +285,8 @@ def orchestrate() -> int:
             sh(clone, "add", "-A")
             sh(clone, "commit", "-m", f"SA-{n}: change")
             sh(clone, "push", "origin", br)
+            if committed:
+                committed(clone)
             if scenario == "needs_review":  # main edits line 1 after the branch was cut
                 (seed / "ctx.txt").write_text("A\nb\nc\n")
                 sh(seed, "commit", "-qam", "main edits context")
@@ -302,7 +328,11 @@ def orchestrate() -> int:
             )
             bench.procs.append(p)
             out = p.communicate(timeout=240)[0]
-            res = json.loads([x for x in out.splitlines() if x.startswith("{")][-1])
+            try:
+                res = json.loads([x for x in out.splitlines() if x.startswith("{")][-1])
+            except IndexError:
+                print("job output:", out, sep="\n")
+                raise
             after = sh(clone, "ls-remote", "origin", f"refs/heads/{br}").split()[0]
             return p.returncode, res, f"{before == after}|{out}"
 
@@ -343,6 +373,35 @@ def orchestrate() -> int:
             not in "".join(
                 line for line in events.read_text().splitlines() if "sa-5-feat" in line
             )
+        )
+        # fresh worktree, no environment: the pinned submodule exists only in the main checkout
+        sub = t / "sub"
+        sub.mkdir()
+        sh(sub, "init", "-b", "main")
+        (sub / "f").write_text("x")
+        sh(sub, "add", "f")
+        sh(sub, "commit", "-m", "s")
+        sh(t, "clone", "-q", str(sub), str(root / "w0" / "stera-sdk"))
+
+        def pinned(clone: Path) -> None:
+            sh(t, "clone", "-q", str(sub), str(clone / "stera-sdk"))
+            (clone / "f6.txt").write_text("6\n")
+
+        def unpopulate(
+            clone: Path,
+        ) -> None:  # a fresh worktree: gitlink pinned, directory empty
+            shutil.rmtree(clone / "stera-sdk")
+            (clone / "stera-sdk").mkdir()
+            assert not sh(clone, "status", "--porcelain")
+
+        code6, r6, o6 = extra(6, "fresh", pinned, unpopulate)
+        checks[
+            "fresh worktree, no GH_TOKEN/STATEACTION_LOCAL_CI_SUBMODULES: identity and stera-sdk found by the tool, merged"
+        ] = (
+            code6 == 0
+            and r6["status"] == "merged"
+            and r6.get("tokenLogin") == "timothywangdev"
+            and r6.get("sdkExported") is True
         )
         for name, passed in checks.items():
             print(f"{'PASS' if passed else 'FAIL'}  {name}")

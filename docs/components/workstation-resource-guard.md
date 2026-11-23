@@ -33,8 +33,12 @@ of one repo share one `ci` lane (shared fixtures and ports); a different repo ha
   `agentqueue` state dir, so one FIFO reservation covers every project and lane:
   `budget = clamp(live aggregate cap - 4 GiB protected Free share - 6 GiB warm emulator, 6, 18 GiB)`
   recomputed at each submit: 6 GiB at the 12 GiB boot cap (one lane job at a time), 14 GiB at 24 GiB
-  (two). The Free slice is capped at `max(4 GiB, cap - budget - 6 GiB)` (4 GiB at both
-  12 and 24 GiB caps) with `MemoryLow=4 GiB`, and Free processes get `oom_score_adj=500`, so under
+  (two). The Free slice is capped at `max(4 GiB, cap - 6 GiB - 2 GiB)` (4 GiB at the
+  12 GiB boot cap, 16 GiB at 24 GiB; it overlaps the lane budget and the warm emulator, so Free 16 +
+  emulator 6 + one gate 6 can exceed the cap: the protection is the aggregate `MemoryMax`/`High`
+  and the `oom_score_adj` of Free scopes, not a sum) with `MemoryLow=4 GiB`, `CPUWeight=100` (lane scopes 400) and `TasksMax=2048`; the shared
+  `agent-work.slice` allows 8192 tasks (per-scope caps stay 512 lane/Free, 256 default) and the
+  watchdog re-asserts its limits every 30 s after a daemon-reload, and Free processes get `oom_score_adj=500`, so under
   pressure the kernel kills Free work before a gate; this is a preference, not a guarantee, and at the
   12 GiB boot cap a ci job plus the warm emulator already equal the cap. The aggregate kernel cap is
   the hard limit. The legacy heavy-job scope of a

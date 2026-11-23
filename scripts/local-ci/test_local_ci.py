@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+os.environ["FLOWLOG"] = "off"  # never write the real flow database from a test
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import install as installer  # noqa: E402
@@ -299,6 +300,31 @@ class PipelineTests(RepoCase):
         self.assertFalse(
             list((self.home / "work").iterdir()), "private export is removed"
         )
+
+    def test_run_record_carries_guard_counters_and_reports_to_flowlog(self):
+        self.stage_change()
+        with (
+            mock.patch.object(
+                local_ci.flow_hook,
+                "guard_counters",
+                return_value={"slice": {"pidsMax": 8192}},
+            ),
+            mock.patch.object(local_ci.flow_hook, "report_ci_run") as report,
+        ):
+            record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS")
+        counters = record["guard"]["counters"]
+        self.assertEqual(counters["start"], counters["end"])
+        self.assertEqual(counters["end"]["slice"]["pidsMax"], 8192)
+        report.assert_called_once()
+        self.assertEqual(report.call_args[0][0]["runId"], record["runId"])
+
+    def test_a_crashing_flowlog_report_never_fails_the_gate(self):
+        self.stage_change()
+        with mock.patch.object(
+            local_ci.flow_hook, "flowlog_binary", side_effect=OSError("no flowlog")
+        ):
+            self.assertEqual(self.run_tree()["verdict"], "PASS")
 
     def test_dirty_worktree_is_refused_not_stashed(self):
         (self.repo / "app.txt").write_text("three\n")
@@ -869,7 +895,7 @@ class CiLaneEntryTests(RepoCase):
     def test_merge_refuses_when_main_moved_before_the_merge_call(self):
         policy = mock.Mock()
         policy.validate_pr.return_value = "SA-1"
-        policy.primary_declaration.return_value = "Refs SA-1"
+        policy.primary_declaration.return_value = "Fixes SA-1"
         pr = {"draft": False, "title": "SA-1: x", "head": {"sha": "a" * 40}}
 
         def gh(*args):
@@ -1485,7 +1511,7 @@ class MergePostconditionTests(unittest.TestCase):
     def test_merge_refuses_without_a_valid_receipt_and_never_calls_gh_merge(self):
         policy = mock.Mock()
         policy.validate_pr.return_value = "SA-1"
-        policy.primary_declaration.return_value = "Refs SA-1"
+        policy.primary_declaration.return_value = "Fixes SA-1"
         pr = {"draft": False, "title": "SA-1: x", "head": {"sha": "a" * 40}}
 
         def gh(*args):

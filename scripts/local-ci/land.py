@@ -375,7 +375,9 @@ def gate_summary(record: dict) -> dict:
 def default_gate(repo: Path, guard: dict | None, home: Path | None) -> dict:
     if not guard:
         raise Landing("no_guard", "a verified guard proof is required to run the gate")
-    return local_ci.run_pipeline(repo, rev="HEAD", guard=guard, home=home)
+    return local_ci.run_pipeline(
+        repo, rev="HEAD", guard=guard, home=home, ci_mode="ci:land"
+    )
 
 
 def default_merge(repo: Path, number: int, github_repo: str, home: Path | None) -> None:
@@ -394,9 +396,19 @@ def default_verify_merged(home: Path, github_repo: str, pr: dict) -> bool:
 
 
 def default_identity() -> str | None:
-    """The default gh account (pr_info, policy and the merge use it) must be timothywangdev."""
-    who = local_ci.gh_json("api", "user").get("login")
-    return None if who == OWNER else who or "nobody"
+    """Resolve timothywangdev's credential itself and export it as GH_TOKEN, so pr_info, policy
+    and the merge never see the workstation's default gh account. Returns the problem (naming
+    the fix) or None."""
+    try:
+        local_ci.resolve_owner_credential()
+    except Refused as error:
+        return str(error)
+    return None
+
+
+def default_submodules(repo: Path) -> list[str]:
+    """Pinned submodules no local checkout can supply (the gate would fail late on them)."""
+    return local_ci.missing_submodules(repo, git(repo, "rev-parse", "HEAD^{tree}"))
 
 
 def strict_origin(repo: Path, github_repo: str) -> bool:
@@ -430,6 +442,7 @@ def land(
     reexec=None,
     verify_merged=None,
     identity=None,
+    submodules=None,
     origin_check=None,
     expected_head: str | None = None,
     sleep=time.sleep,
@@ -453,6 +466,7 @@ def land(
     merge = merge or (lambda: default_merge(repo, number, github_repo, home))
     lock = lock or (lambda: local_ci.merge_lock(home))
     identity = identity or default_identity
+    submodules = submodules or (lambda: default_submodules(repo))
     origin_check = origin_check or (lambda: strict_origin(repo, github_repo))
     phase = "preflight"
     verify_merged = verify_merged or (
@@ -492,7 +506,7 @@ def land(
     try:
         wrong = identity()
         if wrong:
-            return refuse("identity", f"the default gh account is {wrong}, not {OWNER}")
+            return refuse("identity", wrong)
         pr = fetch_pr()
         result["branch"] = pr["branch"]
         if pr["state"] == "merged":  # idempotent resubmit; never downgrades a fatal
@@ -560,6 +574,9 @@ def land(
             )
         if git(repo, "status", "--porcelain", "--untracked-files=no"):
             return refuse("dirty_tree", "the working tree has tracked changes")
+        missing = submodules()
+        if missing:
+            return refuse("submodule", "; ".join(missing))
         result["ticket"] = policy(
             pr
         )  # PolicyError -> exit 4, before any rebase, push or gate
@@ -700,6 +717,14 @@ def land(
 # --------------------------------------------------------------------------- cli
 
 
+def reexec_clean(script: str, argv: list[str]) -> None:
+    """Replace the process image; a GH_TOKEN this tool resolved itself does not outlive it
+    (the new image resolves it again)."""
+    if local_ci.GH_TOKEN_SET_BY_TOOL["value"]:
+        os.environ.pop("GH_TOKEN", None)
+    os.execv(sys.executable, [sys.executable, script, *argv])
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(description=__doc__)
@@ -725,7 +750,7 @@ def main(argv: list[str] | None = None) -> int:
             github_repo=args.repo,
             guard=guard,
             expected_head=args.expected_head,
-            reexec=lambda: os.execv(sys.executable, [sys.executable, script, *argv]),
+            reexec=lambda: reexec_clean(script, argv),
         )
     except Refused as error:
         print(f"LAND REFUSED: {error}", file=sys.stderr)
