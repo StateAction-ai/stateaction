@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type pg from "pg";
 import {
-  contractIds,
   requestSha256,
   validateValue,
   type Sha256Hex,
@@ -15,6 +14,7 @@ import type { RecipeV1 } from "@stateaction/contracts";
 import {
   admissionDeadlineSeconds,
   RECIPE_DEADLINE_ERROR_CODE,
+  TASK_INPUT_INVALID_ERROR_CODE,
   type JobsConfig,
 } from "./config.js";
 import { assertJobCurrent, JOB_CURRENT_SQL } from "./current.js";
@@ -207,6 +207,24 @@ const defaultTaskInput: TaskInputBuilder = async (q, job) =>
   )) as unknown as Record<string, unknown>;
 
 /**
+ * Rejects one queued job at admission: queued -> cancelled (the only terminal
+ * state the job guard permits from queued) with a stable error_code and
+ * message, in the admission transaction. No slot is taken, no job_inputs.
+ */
+async function rejectQueuedJob(
+  q: Tx,
+  jobId: string,
+  code: string,
+  message: string,
+): Promise<void> {
+  await q.query(
+    `UPDATE jobs SET state = 'cancelled', error_code = $2, error_message = $3, finished_at = now()
+     WHERE id = $1 AND state = 'queued'`,
+    [jobId, code, message.slice(0, 2000)],
+  );
+}
+
+/**
  * Admits the oldest eligible queued job through the single global slot. The
  * permanent inputs, dispatch key, backend and absolute deadline are committed
  * together with the slot, before any external effect (Render dispatch, worker
@@ -261,17 +279,19 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           : task.schemaVersion === 2
             ? "jobs.task-input.v2"
             : "jobs.task-input.v1";
-      if (!contractIds.includes(contract))
-        throw new TransportError(
-          "invalid_request",
-          `${contract} is not published`,
-        );
+      // A bad task input rejects only THIS job (never a throw, which would
+      // roll back the transaction and leave it at the head of the queue).
       const valid = validateValue(contract, task);
-      if (!valid.valid)
-        throw new TransportError(
-          "invalid_request",
+      if (!valid.valid) {
+        await rejectQueuedJob(
+          tx,
+          c.id,
+          TASK_INPUT_INVALID_ERROR_CODE,
           `task input rejected: ${valid.code}`,
         );
+        rejectedJobIds.push(c.id);
+        continue;
+      }
       const cfg = deps.config;
       // Deadline from the recipe (SA-89), or the fallback without one. A
       // recipe over the 12 h bound is refused here, before any write.
@@ -285,14 +305,11 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       } catch (error) {
         // Reject THIS job (queued -> cancelled with the code) and keep going,
         // so a permanently over-limit recipe never blocks the jobs behind it.
-        await tx.query(
-          `UPDATE jobs SET state = 'cancelled', error_code = $2, error_message = $3, finished_at = now()
-           WHERE id = $1 AND state = 'queued'`,
-          [
-            c.id,
-            RECIPE_DEADLINE_ERROR_CODE,
-            (error as Error).message.slice(0, 2000),
-          ],
+        await rejectQueuedJob(
+          tx,
+          c.id,
+          RECIPE_DEADLINE_ERROR_CODE,
+          (error as Error).message,
         );
         rejectedJobIds.push(c.id);
         continue;

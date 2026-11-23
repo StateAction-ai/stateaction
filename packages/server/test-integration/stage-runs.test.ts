@@ -612,6 +612,55 @@ test("an over-12h recipe is rejected at admission and does not block the queue",
   assert.equal(dl.secs, 3 * 600 + 1800);
 });
 
+test("an invalid task input is rejected at admission and does not block the queue", async () => {
+  const db = await acceptanceDatabase();
+  open.push(db);
+  const bad = await queuedJob(db);
+  const good = await queuedJob(db);
+  const deps: JobsDeps = {
+    pool: db.app,
+    config: JOBS_CONFIG,
+    presignRead: async (key, ttl) => `http://127.0.0.1:9/${key}?ttl=${ttl}`,
+    taskInput: async (q, job) => {
+      const v2 = (await processRecordingTaskInputV2(
+        q as never,
+        job.jobId,
+      )) as unknown as Record<string, unknown>;
+      // v3 without its recipe fails contract validation.
+      return job.jobId === bad.jobId ? { ...v2, schemaVersion: 3 } : v2;
+    },
+  };
+  const result = await admitNextJob(deps);
+  assert.equal(result.state, "admitted");
+  if (result.state !== "admitted") return;
+  assert.equal(result.job.jobId, good.jobId);
+  assert.deepEqual(result.rejectedJobIds, [bad.jobId]);
+  const row = (
+    await db.owner.query(
+      "SELECT state, error_code, error_message, finished_at FROM jobs WHERE id = $1",
+      [bad.jobId],
+    )
+  ).rows[0];
+  assert.equal(row.state, "cancelled");
+  assert.equal(row.error_code, "task_input_invalid");
+  assert.match(row.error_message, /^task input rejected: /);
+  assert.ok(row.finished_at);
+  assert.equal(
+    (
+      await db.owner.query("SELECT 1 FROM job_inputs WHERE job_id = $1", [
+        bad.jobId,
+      ])
+    ).rowCount,
+    0,
+  );
+  const slot = await db.owner.query(
+    "SELECT job_id FROM dispatch_admission WHERE slot = 1",
+  );
+  assert.equal(slot.rows[0].job_id, good.jobId);
+  // The rejected job never comes back: the next call finds the slot busy.
+  assert.equal((await admitNextJob(deps)).state, "slot_busy");
+});
+
 test("recipe admission stores the recipe once and dag-run renders every stage", async () => {
   const s = await recipeJob({ captionEnabled: false });
   const row = (
