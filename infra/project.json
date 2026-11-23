@@ -7,7 +7,7 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md,mjs}\" render.yaml docs/components/render-deployment.md"
+        "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md,mjs}\" render.yaml config/render-deploy.json config/r2-bucket-policy.json .github/workflows/deploy.yml docs/components/render-deployment.md"
       },
       "inputs": [
         "default",
@@ -42,7 +42,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --test --test-concurrency=2 infra/test/*.test.mjs"
+        "command": "node --test --test-concurrency=2 infra/test/*.test.mjs scripts/platform/render-deploy.test.mjs"
       },
       "inputs": [
         "default",
@@ -53,7 +53,7 @@
     "syntax": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --check infra/test/blueprint.test.mjs && bash -n scripts/platform/hosted-smoke.sh"
+        "command": "node --check infra/test/blueprint.test.mjs && bash -n scripts/platform/hosted-smoke.sh && bash -n scripts/deploy/render-deploy.sh && bash -n scripts/deploy/google-oauth.sh"
       }
     }
   }

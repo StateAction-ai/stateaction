@@ -1,0 +1,59 @@
+{
+  "schema": "stateaction.render-deploy.v1",
+  "pricedOn": "2026-11-23",
+  "pricingSource": "https://render.com/pricing",
+  "monthlySpendCapUsd": 30,
+  "owner": { "workspace": "stateaction", "id": "tea-dbfshol9fdbs73c5408g" },
+  "repo": "https://github.com/timothywangdev/stateaction",
+  "branch": "main",
+  "region": "ohio",
+  "postgresMajor": "17",
+  "environments": {
+    "production": {
+      "appEnv": "production",
+      "r2Bucket": "stateaction-prod",
+      "stack": {
+        "db": "stateaction-db",
+        "web": "stateaction-web",
+        "cron": "stateaction-repair",
+        "workflow": "stateaction-workflow"
+      }
+    },
+    "dev": { "appEnv": "development", "hostedStack": false }
+  },
+  "pins": {
+    "processingProfileRevision": "stateaction-mvp-1",
+    "processingExecutionBackend": "modal",
+    "configSha256": "9e161fb47add405ca634833184144c4ac1b534698cd1624283083687a4da7d8f",
+    "imageSpecSource": "workers/processing/uv.lock"
+  },
+  "costModel": {
+    "postgres": {
+      "plan": "basic-256mb",
+      "monthlyUsd": 6.0,
+      "diskGb": 1,
+      "diskUsdPerGb": 0.3
+    },
+    "web": { "plan": "starter", "monthlyUsd": 7.0 },
+    "cron": {
+      "plan": "starter",
+      "usdPerMinute": 0.00016,
+      "minutesPerMonth": 43200,
+      "ceilingUsd": 7.0,
+      "minimumUsd": 1.0
+    },
+    "workflow": {
+      "usdPerCpuHour": 0.2,
+      "usdPerGbHour": 0.05,
+      "allowanceCpu": 1,
+      "allowanceGb": 1,
+      "allowanceTaskHours": 20
+    }
+  },
+  "stopConditions": [
+    "worst-case monthly estimate above the cap",
+    "any plan other than the ones in costModel, any extra service, disk, replica or paid add-on",
+    "measured month-to-date bill above 25 USD",
+    "workspace plan other than Hobby (a Pro workspace fee is not in the budget)"
+  ]
+}

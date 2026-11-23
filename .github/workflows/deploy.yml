@@ -1,0 +1,108 @@
+name: Deploy
+# The ONLY workflow that touches Render. Manual or tag-triggered; hosted CI stays optional/manual.
+# Secrets exist only in the GitHub `production` environment; no pull-request triggers and no fork access.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "dev = validate and price only (no secrets, nothing created); production = deploy"
+        type: choice
+        options: [dev, production]
+        default: dev
+      ref:
+        description: Commit SHA to deploy (default is the dispatched ref)
+        type: string
+        required: false
+  push:
+    tags:
+      - "deploy/*"
+permissions:
+  contents: read
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+jobs:
+  validate:
+    name: Validate and price (no secrets)
+    runs-on: ubuntu-24.04
+    outputs:
+      ref: ${{ steps.pin.outputs.ref }}
+      target: ${{ steps.pin.outputs.target }}
+    steps:
+      - name: Pin the exact ref
+        id: pin
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_ENV: ${{ inputs.environment }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          ref="${INPUT_REF:-$GITHUB_SHA}"
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
+          target=dev
+          if [[ "$EVENT" == push ]]; then target=production; elif [[ "$INPUT_ENV" == production ]]; then target=production; fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.pin.outputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Refuse refs off main, and production unless at the main tip
+        env:
+          REF: ${{ steps.pin.outputs.ref }}
+          TARGET: ${{ steps.pin.outputs.target }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$REF" origin/main
+          if [[ "$TARGET" == production ]]; then [[ "$REF" == "$(git rev-parse origin/main)" ]] || { echo "production deploys only the tip of main" >&2; exit 1; }; fi
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24.22.2
+      - name: Install the pinned Render CLI
+        run: python3 scripts/platform/install-render.py
+      - name: Dry run
+        env:
+          REF: ${{ steps.pin.outputs.ref }}
+        run: bash scripts/deploy/render-deploy.sh dry-run "$REF"
+  deploy:
+    name: Deploy to Render
+    needs: validate
+    if: needs.validate.outputs.target == 'production' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/deploy/'))
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.validate.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24.22.2
+      - name: Install the pinned Render CLI
+        run: python3 scripts/platform/install-render.py
+      - name: Install and build (no secrets in this step)
+        env:
+          REF: ${{ needs.validate.outputs.ref }}
+        run: bash scripts/deploy/render-deploy.sh prepare "$REF"
+      - name: Deploy, migrate, smoke (rolls back on failure)
+        env:
+          REF: ${{ needs.validate.outputs.ref }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_DISPATCH_API_KEY: ${{ secrets.RENDER_DISPATCH_API_KEY }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: bash scripts/deploy/render-deploy.sh production "$REF"
+      - name: Close the database allow list (always)
+        if: always()
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: node scripts/platform/render-deploy.mjs restore-allowlist --environment production
