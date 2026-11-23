@@ -1,0 +1,8 @@
+{
+  "name": "agentqueue",
+  "version": "0.1.0",
+  "repository": "https://github.com/timothywangdev/agentqueue",
+  "rev": "2ddd98b918a156243e4d15a310389b3b20ff0f9b",
+  "build": "cargo install --locked (Rust >= 1.89), Cargo.lock from the pinned rev",
+  "note": "scripts/install-agentqueue.sh builds this rev and records the binary sha256 in INSTALLED.json next to it; the guard verifies both at run time and never uses the network."
+}

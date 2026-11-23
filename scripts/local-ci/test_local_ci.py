@@ -4,8 +4,6 @@ any service, and never touch the checkout they run from."""
 
 from __future__ import annotations
 
-import contextlib
-import fcntl
 import json
 import os
 import shlex
@@ -27,7 +25,7 @@ import local_ci  # noqa: E402
 
 GIB = local_ci.GIB
 FAKE_GUARD = {
-    "scope": local_ci.BUILD_SCOPE,
+    "scope": "agent-lane-ci-0123abcd.scope",
     "slice": local_ci.SLICE,
     "memoryMaxBytes": 6 * GIB,
     "sliceMemoryMaxBytes": 12 * GIB,
@@ -130,7 +128,7 @@ class RepoCase(unittest.TestCase):
 class GuardTests(RepoCase):
     def fake_cgroup(
         self,
-        scope=local_ci.BUILD_SCOPE,
+        scope="agent-lane-ci-0123abcd.scope",
         memory="6442450944",
         swap="0",
         slice_memory="12884901888",
@@ -264,7 +262,7 @@ class GuardTests(RepoCase):
                     execv=execv,
                 )
         args = execv.call_args[0][1]
-        self.assertEqual(args[1:3], ["run", "--"])
+        self.assertEqual(args[1:5], ["run", "--lane", "ci", "--"])
         self.assertEqual(execv.call_count, 1)
 
     def test_pipeline_refuses_without_proof(self):
@@ -696,228 +694,170 @@ class PipelineTests(RepoCase):
         self.assertFalse((self.home / "receipts" / f"{tree}.json").exists())
 
 
-class HeavySlotWaitTests(RepoCase):
-    """ci:local waits for the machine-wide heavy-job slot instead of exiting 75.
+class CiLaneEntryTests(RepoCase):
+    """SA-124: ci:local and ci:merge enter the `ci` lane once; no heavy-slot wait path."""
 
-    The fake launcher has the real non-blocking semantics of agent-resource: it takes
-    the lock with flock(LOCK_NB) and exits 75 when it is held. ensure_guard and the
-    wait/retry logic are the real ones.
-    """
+    def test_the_heavy_slot_wait_path_and_legacy_lock_are_gone(self):
+        for name in (
+            "wait_and_spawn_guarded",
+            "heavy_slot_holder",
+            "heavy_lock_path",
+            "describe_holder",
+            "WAIT_TIMEOUT_EXIT",
+        ):
+            self.assertFalse(hasattr(local_ci, name), name)
+        text = (HERE / "local_ci.py").read_text()
+        self.assertNotIn("mobile-validation.lock", text)
+        self.assertNotIn("heavy-job", text)
 
-    LAUNCHER = """#!/usr/bin/env python3
-import fcntl, os, sys
-fd = os.open(os.environ["FAKE_HEAVY_LOCK"], os.O_RDWR | os.O_CREAT, 0o600)
-try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except BlockingIOError:
-    print("RESOURCE GUARD REFUSED: Another heavy-job already owns the machine-wide slot")
-    sys.exit(75)
-open(os.environ["FAKE_RAN"], "a").write("ran\\n")
-"""
-
-    def setUp(self):
-        super().setUp()
-        self.lock = self.tmp / "heavy-job.lock"
-        self.ran = self.tmp / "ran.txt"
-        self.launcher = self.tmp / "agent-resource"
-        self.launcher.write_text(self.LAUNCHER)
-        self.launcher.chmod(0o755)
-        # A realistic guard directory: the service scopes always have owner files too.
-        for name in ("agent-service-postgres.scope", "agent-service-storage.scope"):
-            (self.tmp / f"{name}.owner").write_text(json.dumps({"pid": 1}))
-        (self.tmp / f"{local_ci.BUILD_SCOPE}.owner").write_text(
-            json.dumps({"pid": os.getpid()})
+    def test_reexec_requests_exactly_the_ci_lane_once(self):
+        execv = mock.Mock()
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("STATEACTION_LOCAL_CI_REEXEC", None)
+            self.addCleanup(os.environ.pop, "STATEACTION_LOCAL_CI_REEXEC", None)
+            local_ci.ensure_guard(
+                ["x.py", "run"],
+                check=mock.Mock(side_effect=local_ci.GuardError("outside")),
+                binary=lambda: Path("/fake/agent-resource"),
+                execv=execv,
+            )
+        self.assertEqual(
+            execv.call_args[0][1][:5],
+            ["/fake/agent-resource", "run", "--lane", "ci", "--"],
         )
-        env = {
-            "FAKE_HEAVY_LOCK": str(self.lock),
-            "FAKE_RAN": str(self.ran),
-            "AGENT_RESOURCE_BIN": str(self.launcher),
-        }
-        patcher = mock.patch.dict(os.environ, env)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        # The gate itself runs these tests inside a re-executed guard.
-        os.environ.pop("STATEACTION_LOCAL_CI_REEXEC", None)
-        patch = mock.patch.object(local_ci, "heavy_lock_path", lambda: self.lock)
-        patch.start()
-        self.addCleanup(patch.stop)
-        self.addCleanup(os.environ.pop, "STATEACTION_LOCAL_CI_REEXEC", None)
 
-    def hold(self):
-        fd = os.open(self.lock, os.O_RDWR | os.O_CREAT, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    def test_legacy_and_other_lane_scopes_do_not_prove_the_ci_lane(self):
+        for scope in (
+            "agent-mobile-build.scope",
+            "agent-lane-android-build-0123abcd.scope",
+            "agent-lane-emulator-00000000.scope",
+            "agent-free-1-abc.scope",
+        ):
+            proc, sys_root = GuardTests.fake_cgroup(self, scope=scope)
+            with self.assertRaises(local_ci.GuardError, msg=scope):
+                local_ci.guard_proof(proc, sys_root)
 
-        def release():
-            with contextlib.suppress(OSError):
-                os.close(fd)
+    def test_merge_lock_is_exclusive_bounded_and_released(self):
+        home = Path(tempfile.mkdtemp(prefix="local-ci-lock-"))
+        self.addCleanup(shutil.rmtree, home, ignore_errors=True)
+        clock = iter(range(0, 1000))
+        with local_ci.merge_lock(home):
+            with self.assertRaisesRegex(local_ci.Refused, "merge lock"):
+                with local_ci.merge_lock(
+                    home, timeout=3, sleep=lambda _s: None, clock=lambda: next(clock)
+                ):
+                    self.fail("second holder must not enter")
+        with local_ci.merge_lock(home):  # released after the first holder left
+            pass
 
-        self.addCleanup(release)
-        return fd
+    def test_merge_runs_inside_the_lock_and_merge_cli_enters_the_ci_lane(self):
+        home = Path(tempfile.mkdtemp(prefix="local-ci-lock-"))
+        self.addCleanup(shutil.rmtree, home, ignore_errors=True)
+        seen = []
 
-    def ensure(self, sleep):
-        """The real ensure_guard (outside any cgroup) re-executes through the waiting spawn."""
+        def inner(*_a, **_k):
+            with self.assertRaises(local_ci.Refused):  # lock is held by merge_pr
+                with local_ci.merge_lock(home, timeout=0):
+                    pass
+            seen.append("locked")
+            return 0
 
-        def outside(*_args):
-            raise local_ci.GuardError("outside the guard scope")
+        with mock.patch.object(local_ci, "_merge_pr", side_effect=inner):
+            self.assertEqual(
+                local_ci.merge_pr(
+                    Path("."), 1, github_repo="o/r", execute=True, home=home
+                ),
+                0,
+            )
+        self.assertEqual(seen, ["locked"])
+        # a dry run is read-only: no lock and no ticket
+        with (
+            mock.patch.object(local_ci, "_merge_pr", return_value=0),
+            mock.patch.object(
+                local_ci, "merge_lock", side_effect=AssertionError("lock")
+            ),
+        ):
+            self.assertEqual(
+                local_ci.merge_pr(
+                    Path("."), 1, github_repo="o/r", execute=False, home=home
+                ),
+                0,
+            )
+        with (
+            mock.patch.object(local_ci, "ensure_guard") as guard,
+            mock.patch.object(local_ci, "merge_pr", return_value=0),
+            mock.patch.object(local_ci, "git", return_value="/tmp"),
+        ):
+            self.assertEqual(local_ci.main(["merge", "--pr", "1"]), 0)
+            guard.assert_not_called()
+            self.assertEqual(local_ci.main(["merge", "--pr", "1", "--execute"]), 0)
+        guard.assert_called_once()
+        self.assertTrue(guard.call_args[1]["key"].startswith("ci-merge-1-/tmp-"))
 
-        return local_ci.ensure_guard(
-            ["x"],
-            check=outside,
-            execv=lambda launcher, command: local_ci.wait_and_spawn_guarded(
-                launcher, command, sleep=sleep
+    def test_ticket_key_is_deterministic_and_separates_other_arguments(self):
+        a = local_ci.ticket_key("ci-local", "t" * 40, ["x.py", "run", "--tree", "HEAD"])
+        self.assertEqual(
+            a,
+            local_ci.ticket_key(
+                "ci-local", "t" * 40, ["x.py", "run", "--tree", "HEAD"]
+            ),
+        )
+        for other in (
+            ["x.py", "run", "--tree", "HEAD", "--fresh"],
+            ["y.py", "run", "--tree", "HEAD"],
+        ):
+            self.assertNotEqual(a, local_ci.ticket_key("ci-local", "t" * 40, other))
+        self.assertNotEqual(
+            a,
+            local_ci.ticket_key(
+                "ci-local", "u" * 40, ["x.py", "run", "--tree", "HEAD"]
             ),
         )
 
-    def test_busy_slot_is_waited_for_with_backoff_and_then_used(self):
-        holder = self.hold()
-        sleeps = []
+    def test_merge_refuses_when_main_moved_before_the_merge_call(self):
+        policy = mock.Mock()
+        policy.validate_pr.return_value = "SA-1"
+        policy.primary_declaration.return_value = "Refs SA-1"
+        pr = {"draft": False, "title": "SA-1: x", "head": {"sha": "a" * 40}}
 
-        def release_after_backoff(seconds):
-            sleeps.append(seconds)
-            if abs(sum(sleeps) - 12.5) < 1e-9:  # first wait 5 s, second 7.5 s
-                os.close(holder)
+        def gh(*args):
+            if args == ("api", "user"):
+                return {"login": "timothywangdev"}
+            return pr if "--paginate" not in args else [[pr]]
 
-        with self.assertRaises(SystemExit) as raised:
-            self.ensure(release_after_backoff)
-        self.assertEqual(raised.exception.code, 0)
-        self.assertLessEqual(max(sleeps), local_ci.HEAVY_SLICE_SEC, "short slices")
-        self.assertAlmostEqual(sum(sleeps), 12.5)
-        self.assertEqual(self.ran.read_text(), "ran\n")
+        def git(repo, *args, **_k):
+            table = {
+                ("rev-parse", "HEAD"): "a" * 40,
+                ("rev-parse", "refs/remotes/origin/main"): "b" * 40,
+                ("rev-parse", "HEAD^"): "c" * 40,  # head is above an older main
+            }
+            return table.get(args, "" if args[0] == "status" else "t" * 40)
 
-    def test_message_names_the_holder_and_no_exit_75(self):
-        holder = self.hold()
-        calls = []
-
-        def release(seconds):
-            calls.append(seconds)
-            if len(calls) == 1:
-                os.close(holder)
-
-        with mock.patch("sys.stderr") as err:
-            with self.assertRaises(SystemExit) as raised:
-                self.ensure(release)
-        self.assertNotEqual(raised.exception.code, 75)
-        written = "".join(c.args[0] for c in err.write.call_args_list)
-        self.assertIn("waiting for the heavy-job slot (held by", written)
-        self.assertIn(f"pid {os.getpid()}", written, "names the heavy-job owner")
-        self.assertIn("project ", written)
-        self.assertNotIn("pid 1,", written, "not a postgres/storage service owner")
-
-    def test_wait_has_a_deadline_that_names_the_holder(self):
-        self.hold()
-        clock = {"now": 0.0}
-
-        def sleep(seconds):
-            clock["now"] += seconds
-
-        with mock.patch("sys.stderr") as err:
-            with self.assertRaises(SystemExit) as raised:
-                local_ci.wait_and_spawn_guarded(
-                    str(self.launcher),
-                    [str(self.launcher)],
-                    sleep=sleep,
-                    clock=lambda: clock["now"],
-                    limit=60,
-                )
-        self.assertEqual(raised.exception.code, local_ci.WAIT_TIMEOUT_EXIT)
-        written = "".join(c.args[0] for c in err.write.call_args_list)
-        self.assertIn("LOCAL CI WAIT TIMEOUT", written)
-        self.assertIn(f"pid {os.getpid()}", written)
-        self.assertFalse(self.ran.exists())
-
-    def test_deadline_also_bounds_retries_after_a_lost_race(self):
-        self.hold()
-        clock = {"now": 0.0}
-
-        def sleep(seconds):
-            clock["now"] += seconds
-
-        # The probe always says free but the launcher always refuses with 75: after the
-        # first refusal the holder is seen busy, so the loop waits and then times out.
-        probes = iter([None])
-        with mock.patch.object(
-            local_ci,
-            "heavy_slot_holder",
-            side_effect=lambda: next(probes, "pid 9, project /x, running 1 min"),
+        with (
+            mock.patch.dict(sys.modules, {"github_policy": policy}),
+            mock.patch.object(local_ci, "gh_json", side_effect=gh),
+            mock.patch.object(local_ci, "git", side_effect=git),
+            mock.patch.object(local_ci, "verify_receipt", return_value=[]),
+            mock.patch.object(local_ci.subprocess, "run") as run,
         ):
-            with self.assertRaises(SystemExit) as raised:
-                local_ci.wait_and_spawn_guarded(
-                    str(self.launcher),
-                    [str(self.launcher)],
-                    sleep=sleep,
-                    clock=lambda: clock["now"],
-                    limit=20,
-                )
-        self.assertEqual(raised.exception.code, local_ci.WAIT_TIMEOUT_EXIT)
+            with self.assertRaisesRegex(local_ci.Refused, "origin/main moved"):
+                local_ci._merge_pr(Path("."), 1, github_repo="o/r", execute=True)
+            run.assert_not_called()
 
-    def test_signal_while_waiting_takes_effect_within_a_slice(self):
-        self.hold()
-        calls = []
-
-        def sleep(seconds):
-            calls.append(seconds)
-            os.kill(os.getpid(), signal.SIGTERM)
-
-        old = {
-            n: signal.getsignal(n)
-            for n in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
-        }
-        self.addCleanup(lambda: [signal.signal(n, h) for n, h in old.items()])
-        with self.assertRaises(SystemExit) as raised:
-            local_ci.wait_and_spawn_guarded(
-                str(self.launcher), [str(self.launcher)], sleep=sleep, limit=3600
+    def test_reexec_passes_the_deterministic_key(self):
+        execv = mock.Mock()
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("STATEACTION_LOCAL_CI_REEXEC", None)
+            self.addCleanup(os.environ.pop, "STATEACTION_LOCAL_CI_REEXEC", None)
+            local_ci.ensure_guard(
+                ["x.py"],
+                check=mock.Mock(side_effect=local_ci.GuardError("outside")),
+                binary=lambda: Path("/fake/ar"),
+                execv=execv,
+                key="ci-local-abc",
             )
-        self.assertEqual(raised.exception.code, 130)
-        self.assertEqual(len(calls), 1)
-
-    def test_describe_holder_reports_pid_project_and_age_and_skips_dead_owner(self):
-        proc = self.tmp / "proc"
-        (proc / "777").mkdir(parents=True)
-        os.symlink("/work/project-x", proc / "777" / "cwd")
-        owner = self.tmp / f"{local_ci.BUILD_SCOPE}.owner"
-        owner.write_text(json.dumps({"pid": 777}))
-        text = local_ci.describe_holder(
-            self.tmp, proc=proc, now=lambda: owner.stat().st_mtime + 600
-        )
-        self.assertEqual(text, "pid 777, project /work/project-x, running 10 min")
-        owner.write_text(json.dumps({"pid": 778}))
-        self.assertIn("has exited", local_ci.describe_holder(self.tmp, proc=proc))
-
-    def test_losing_the_race_after_the_probe_waits_again_instead_of_refusing(self):
-        holder = self.hold()
-        # The first probe says free although the lock is held, so the launcher refuses
-        # with 75; the holder is then found busy and the loop waits until it is free.
-        probes = iter([None, "pid 1 (job)", "pid 1 (job)", None])
-
-        released = []
-
-        def release(_seconds):
-            if not released:
-                released.append(True)
-                os.close(holder)
-
-        with mock.patch.object(
-            local_ci, "heavy_slot_holder", side_effect=lambda: next(probes)
-        ):
-            with self.assertRaises(SystemExit) as raised:
-                self.ensure(release)
-        self.assertEqual(raised.exception.code, 0)
-        self.assertEqual(self.ran.read_text(), "ran\n")
-
-    def test_ci_never_runs_two_heavy_jobs_at_once(self):
-        self.hold()
-        with self.assertRaises(SystemExit) as raised:
-            with mock.patch.object(
-                local_ci, "heavy_slot_holder", return_value=None
-            ):  # probe lies; the guard's own non-blocking slot still refuses
-                local_ci.wait_and_spawn_guarded(
-                    str(self.launcher),
-                    [str(self.launcher)],
-                    sleep=lambda _s: None,
-                )
-        # With a lying probe the child's 75 is final (not retried): fail closed.
-        self.assertEqual(raised.exception.code, 75)
-        self.assertFalse(self.ran.exists(), "nothing ran while the slot was held")
+        args = execv.call_args[0][1]
+        self.assertEqual(args[args.index("--key") + 1], "ci-local-abc")
 
 
 class FixtureTests(RepoCase):
@@ -1522,7 +1462,9 @@ class MergePostconditionTests(unittest.TestCase):
                                 )
                             run.assert_not_called()
 
-    def test_merge_is_not_blocked_by_a_running_ci_and_the_cli_reports_fatal(self):
+    def test_merge_is_not_blocked_by_a_running_ci_run_lock_and_the_cli_reports_fatal(
+        self,
+    ):
         home = Path(tempfile.mkdtemp(prefix="local-ci-merge-"))
         self.addCleanup(shutil.rmtree, home, ignore_errors=True)
         fd = local_ci.acquire_lock(local_ci.private_dir(home))  # a ci:local is running
@@ -1537,8 +1479,13 @@ class MergePostconditionTests(unittest.TestCase):
                 inner.assert_called_once()
         finally:
             os.close(fd)
-        with mock.patch.object(
-            local_ci, "merge_pr", side_effect=local_ci.MergedOnUntestedBase("FATAL x")
+        with (
+            mock.patch.object(
+                local_ci,
+                "merge_pr",
+                side_effect=local_ci.MergedOnUntestedBase("FATAL x"),
+            ),
+            mock.patch.object(local_ci, "ensure_guard"),
         ):
             with mock.patch.object(local_ci, "git", return_value="/tmp"):
                 self.assertEqual(local_ci.main(["merge", "--pr", "1"]), 3)
@@ -1756,6 +1703,39 @@ class CacheTests(RepoCase):
             self.assertIn(command, runtime)
         self.assertTrue(nx["neverConnectToCloud"])
         self.assertFalse(nx["targetDefaults"]["integration"]["cache"])
+
+
+class StageOpenFileLimitTests(unittest.TestCase):
+    def test_stage_child_gets_the_hard_open_file_limit_when_started_at_1024(self):
+        import resource
+
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if hard != resource.RLIM_INFINITY and hard <= 1024:
+            self.skipTest("hard limit is already 1024")
+        resource.setrlimit(resource.RLIMIT_NOFILE, (1024, hard))
+        self.addCleanup(resource.setrlimit, resource.RLIMIT_NOFILE, (soft, hard))
+        with tempfile.TemporaryDirectory() as raw:
+            result = local_ci.run_child(
+                [
+                    sys.executable,
+                    "-c",
+                    "import resource;print(resource.getrlimit(resource.RLIMIT_NOFILE)[0])",
+                ],
+                cwd=Path(raw),
+                env=os.environ.copy(),
+                log=Path(raw) / "log",
+                timeout=30,
+                output_cap=100000,
+                secrets_=[],
+                stop={"requested": False},
+                capture=True,
+            )
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(
+                int(result["captured"]),
+                hard if hard != resource.RLIM_INFINITY else int(result["captured"]),
+            )
+            self.assertGreater(int(result["captured"]), 1024)
 
 
 class StageFileTests(unittest.TestCase):

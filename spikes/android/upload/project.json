@@ -40,7 +40,7 @@
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
-        "command": "flock /tmp/stateaction-mobile-validation.lock python3 spikes/android/upload/emulator_harness.py --serial {args.serial} --output {args.output}"
+        "command": "agent-resource run --lane emulator -- python3 spikes/android/upload/emulator_harness.py --serial {args.serial} --output {args.output}"
       }
     }
   }

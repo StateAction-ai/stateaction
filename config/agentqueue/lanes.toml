@@ -1,0 +1,27 @@
+# StateAction lane manifest for agentqueue (see docs/components/workstation-resource-guard.md).
+# The guard prepends `state_dir` and `roots` (registered StateAction project roots) and passes a
+# per-submit `--budget`; nothing here applies outside those roots. Command-name mapping is not
+# used on purpose: a command without `--lane` runs in the Free class.
+memory_budget = "12G"
+
+# One gate per project. Includes the Android tooling the gate drives (flattened under one ticket).
+[lanes.ci]
+slots = 1
+mem = "6G"
+runtime = "90m"
+timeout = "3h"
+
+# One Android/Flutter/Gradle build or unit-test job per project.
+[lanes.android-build]
+slots = 1
+mem = "6G"
+runtime = "60m"
+timeout = "3h"
+
+# One emulator test session machine-wide (the sole emulator rule; the guarded SDK launcher and
+# the warm supervisor are unchanged).
+[lanes.emulator]
+slots = 1
+mem = "6G"
+runtime = "90m"
+timeout = "3h"

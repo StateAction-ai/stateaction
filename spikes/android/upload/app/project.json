@@ -19,7 +19,7 @@
       ],
       "outputs": [],
       "options": {
-        "command": "flock /tmp/stateaction-mobile-validation.lock bash spikes/android/upload/build.sh"
+        "command": "agent-resource run --lane android-build -- bash spikes/android/upload/build.sh"
       }
     }
   }

@@ -6,8 +6,8 @@
   local_ci.py merge --pr N          verify, then squash merge through the GitHub CLI
 
 Rules enforced here, not by convention:
-  * every stage runs inside the machine-wide agent-resource scope (6 GiB, no swap,
-    one heavy job); without verified cgroup enforcement the run is refused;
+  * every stage runs inside the agent-resource `ci` lane scope (one ticket, 6 GiB, no swap,
+    FIFO behind other gates of the project); without verified enforcement the run is refused;
   * stages run one at a time, uncached, in a private export of the exact tree;
   * the tree is re-read after every stage; a change fails the run;
   * only a run in which every declared stage passed leaves a PASS receipt;
@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import re
+import resource
 import secrets
 import selectors
 import shutil
@@ -40,7 +41,8 @@ GIB = 1024**3
 JOB_MAX = 6 * GIB
 TOTAL_MAX = 12 * GIB  # legacy installed guard
 AGG_MAX = 24 * GIB  # only with a positive policy proof
-BUILD_SCOPE = "agent-mobile-build.scope"
+CI_LANE = "ci"
+CI_SCOPE = re.compile(r"agent-lane-ci-[0-9a-f]{8}\.scope")
 SLICE = "agent-work.slice"
 RECEIPT_SCHEMA = "stateaction.local-ci.receipt/1"
 STAGES_SCHEMA = "stateaction.local-ci.stages/1"
@@ -187,8 +189,9 @@ def guard_proof(
     try:
         line = _read(proc / "self/cgroup")
         relative = line.split("::", 1)[1]
-        if f"/{SLICE}/" not in relative or not relative.endswith("/" + BUILD_SCOPE):
-            raise GuardError("not inside the agent-resource run scope")
+        scope = relative.rsplit("/", 1)[-1]
+        if f"/{SLICE}/" not in relative or not CI_SCOPE.fullmatch(scope):
+            raise GuardError("not inside the agent-resource ci lane scope")
         group = cgroup / relative.lstrip("/")
         scope_max = _limit(_read(group / "memory.max"))
         slice_max = _limit(_read(group.parent / "memory.max"))
@@ -203,7 +206,8 @@ def guard_proof(
     except (OSError, IndexError) as error:
         raise GuardError(f"cgroup enforcement cannot be verified: {error}") from error
     return {
-        "scope": BUILD_SCOPE,
+        "scope": scope,
+        "lane": CI_LANE,
         "slice": SLICE,
         "memoryMaxBytes": scope_max,
         "sliceMemoryMaxBytes": slice_max,
@@ -228,8 +232,21 @@ def guard_binary() -> Path | None:
     return candidate if candidate.is_file() and os.access(candidate, os.X_OK) else None
 
 
+def ticket_key(prefix: str, tree: str, argv: list[str]) -> str:
+    """Deterministic ticket key. agentqueue refuses a reused key whose command or cwd differs,
+    so the key carries a digest of both: a rerun with the same arguments from the same checkout
+    path attaches to or replaces the ticket; other arguments get their own ticket."""
+    digest = sha256_bytes(json.dumps([argv, os.getcwd()]).encode())[:12]
+    return f"{prefix}-{tree}-{digest}"
+
+
 def ensure_guard(
-    argv: list[str], *, check=guard_proof, binary=guard_binary, execv=os.execv
+    argv: list[str],
+    *,
+    check=guard_proof,
+    binary=guard_binary,
+    execv=os.execv,
+    key: str | None = None,
 ) -> dict:
     """Return the proof, or re-execute this command under the installed guard.
 
@@ -248,7 +265,19 @@ def ensure_guard(
                 "agent-resource is not installed; refusing to run outside the machine-wide budget"
             ) from inside
         os.environ["STATEACTION_LOCAL_CI_REEXEC"] = "1"
-        execv(str(launcher), [str(launcher), "run", "--", sys.executable, *argv])
+        execv(
+            str(launcher),
+            [
+                str(launcher),
+                "run",
+                "--lane",
+                CI_LANE,
+                *(["--key", key] if key else []),
+                "--",
+                sys.executable,
+                *argv,
+            ],
+        )
         return {}  # unreachable with a real exec; only a mocked execv returns
 
 
@@ -457,7 +486,7 @@ def stage_env(
     if skip_nx_cache:
         env["NX_SKIP_NX_CACHE"] = "true"
     # Every JVM (Gradle, test workers, Kotlin) sizes its thread pools from the CPU count;
-    # the guard scope allows only 256 tasks, so cap them like the 2-worker rule.
+    # the guard scope allows only 256 tasks (512 in a lane), so cap them like the 2-worker rule.
     jvm = "-XX:ActiveProcessorCount=2"
     if jvm not in env.get("JAVA_TOOL_OPTIONS", ""):
         env["JAVA_TOOL_OPTIONS"] = f"{env.get('JAVA_TOOL_OPTIONS', '')} {jvm}".strip()
@@ -543,6 +572,14 @@ def fixture_summary(fixtures: dict[str, str]) -> list[str]:
 
 class Interrupted(Refused):
     pass
+
+
+def raise_open_file_limit() -> None:
+    """Stages inherit the soft nofile of their parent. An agentqueue lane unit starts at 1024,
+    which broke Chrome/Next/Nx in web-auth-e2e; plain shells and Free scopes get the hard limit."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if hard != resource.RLIM_INFINITY and soft < hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
 
 def kill_group(process: subprocess.Popen, grace: float = 8.0) -> None:
@@ -688,6 +725,7 @@ def run_child(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            preexec_fn=raise_open_file_limit,
         )
     except OSError as error:
         return {
@@ -1538,13 +1576,53 @@ def merge_pr(
     execute: bool,
     home: Path | None = None,
 ) -> int:
-    """Verify the receipt for the exact head, then merge.
+    """Verify the receipt for the exact head, then merge under the merge lock.
 
-    No run lock: ci:merge never waits for, and is never blocked by, a running
-    ci:local. A run that starts later only invalidates the receipt, which makes the
-    final verification fail closed, and `--match-head-commit` pins the head.
+    The caller already holds the project's `ci` lane ticket (main enters it), so merges
+    are serialized by the lane; the merge lock is the leaf lock that also covers any other
+    lander on this machine. Verification, the merge and the tree postcondition
+    (`check_merged_commit`: squash parent is the verified base, tree equals the tested
+    head tree) all happen while it is held. `--match-head-commit` pins the head.
     """
-    return _merge_pr(repo, number, github_repo=github_repo, execute=execute, home=home)
+    if not execute:  # read-only: no lock, no ticket
+        return _merge_pr(
+            repo, number, github_repo=github_repo, execute=False, home=home
+        )
+    with merge_lock(home):
+        return _merge_pr(repo, number, github_repo=github_repo, execute=True, home=home)
+
+
+MERGE_LOCK_WAIT_SEC = 900.0
+
+
+@contextlib.contextmanager
+def merge_lock(
+    home: Path | None = None,
+    *,
+    timeout: float = MERGE_LOCK_WAIT_SEC,
+    sleep=time.sleep,
+    clock=time.monotonic,
+):
+    """Leaf lock (after the ci ticket): one landing at a time per CI home, bounded wait."""
+    directory = private_dir(home or local_ci_home())
+    fd = os.open(
+        directory / "merge.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
+    )
+    deadline = clock() + timeout
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if clock() >= deadline:
+                    raise Refused(
+                        "Another merge holds the merge lock; nothing was merged."
+                    ) from None
+                sleep(1.0)
+        yield
+    finally:
+        os.close(fd)
 
 
 def _merge_pr(
@@ -1618,133 +1696,17 @@ def _merge_pr(
         raise Refused("Local receipt rejected at merge time: " + "; ".join(errors))
     base = git(repo, "rev-parse", "refs/remotes/origin/main")
     head_tree = git(repo, "rev-parse", f"{head}^{{tree}}")
+    # Base check immediately before the merge call (the postcondition below detects, this prevents).
+    if git(repo, "rev-parse", f"{head}^") != base:
+        raise Refused(
+            "origin/main moved: the head is no longer directly above it; rebase and rerun."
+        )
     subprocess.run(command, check=True, timeout=300)
     print(json.dumps(check_merged_commit(github_repo, number, base, head_tree)))
     return 0
 
 
 # -------------------------------------------------------------------------- cli
-
-
-HEAVY_POLL_SEC = 5.0
-HEAVY_POLL_MAX_SEC = 30.0
-HEAVY_SLICE_SEC = 1.0  # signals take effect within one slice
-WAIT_MIN_ENV = "STATEACTION_LOCAL_CI_WAIT_MIN"
-WAIT_MIN_DEFAULT = 60.0
-WAIT_TIMEOUT_EXIT = 76
-
-
-def heavy_lock_path() -> Path:
-    return Path(f"/run/user/{os.getuid()}/agent-resource-guard/heavy-job.lock")
-
-
-def describe_holder(directory: Path, proc: Path = Path("/proc"), now=time.time) -> str:
-    """Name the live agent-resource heavy-job owner: pid, project root and age."""
-    owner = directory / f"{BUILD_SCOPE}.owner"
-    try:
-        pid = int(json.loads(owner.read_text())["pid"])
-        started = owner.stat().st_mtime
-        if not (proc / str(pid)).exists():
-            return "an agent-resource heavy job (its owner process has exited)"
-    except (OSError, ValueError, KeyError, TypeError):
-        return "another agent-resource heavy job (owner unknown)"
-    try:
-        project = os.readlink(proc / str(pid) / "cwd")
-    except OSError:
-        project = "unknown"
-    minutes = max(0, int((now() - started) // 60))
-    return f"pid {pid}, project {project}, running {minutes} min"
-
-
-def heavy_slot_holder() -> str | None:
-    """None when agent-resource's machine-wide heavy-job slot is free, else the holder."""
-    path = heavy_lock_path()
-    try:
-        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
-    except OSError:
-        return None  # no lock file yet: nobody holds it
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return describe_holder(path.parent)
-    finally:
-        os.close(fd)
-    return None
-
-
-def wait_limit_sec() -> float:
-    with contextlib.suppress(KeyError, ValueError):
-        return float(os.environ[WAIT_MIN_ENV]) * 60
-    return WAIT_MIN_DEFAULT * 60
-
-
-def wait_and_spawn_guarded(
-    launcher: str,
-    command: list[str],
-    *,
-    sleep=time.sleep,
-    clock=time.monotonic,
-    spawn=subprocess.Popen,
-    limit: float | None = None,
-) -> None:
-    """Run the guard launcher as a child, waiting while the heavy-job slot is busy.
-
-    The guard's own non-blocking slot is unchanged, so two heavy jobs still never run
-    at once; this only retries with backoff (5 s growing to 30 s, in 1 s slices so a
-    signal acts within about a second). One deadline (default 60 min, env
-    STATEACTION_LOCAL_CI_WAIT_MIN) covers the whole wait, including retries after a
-    lost race; on expiry it exits 76 naming the holder. Waiters poll and race, so
-    ordering between several waiting runs is not guaranteed.
-    """
-    limit = wait_limit_sec() if limit is None else limit
-    deadline = clock() + limit
-    delay = HEAVY_POLL_SEC
-    state: dict = {"signal": None, "child": None}
-
-    def forward(signum, _frame):
-        state["signal"] = signum
-        if state["child"] is not None:
-            with contextlib.suppress(ProcessLookupError):
-                state["child"].send_signal(signum)
-
-    for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-        signal.signal(name, forward)
-    announced = None
-    while True:
-        holder = heavy_slot_holder()
-        while holder is not None:
-            if holder != announced:
-                announced = holder
-                print(
-                    f"[local-ci] waiting for the heavy-job slot (held by {holder})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-            if clock() >= deadline:
-                print(
-                    f"LOCAL CI WAIT TIMEOUT: the heavy-job slot stayed busy for "
-                    f"{limit / 60:.0f} min (held by {holder}). Nothing was run and "
-                    f"no receipt was touched; raise {WAIT_MIN_ENV} or retry later.",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                raise SystemExit(WAIT_TIMEOUT_EXIT)
-            left = delay
-            while left > 0:
-                if state["signal"] is not None:
-                    raise SystemExit(130)
-                step = min(HEAVY_SLICE_SEC, left)
-                sleep(step)
-                left -= step
-            delay = min(delay * 1.5, HEAVY_POLL_MAX_SEC)
-            holder = heavy_slot_holder()
-        if state["signal"] is not None:
-            raise SystemExit(130)
-        state["child"] = spawn(command)
-        code = state["child"].wait()
-        if code == 75 and heavy_slot_holder() is not None:
-            continue  # lost the race for the slot to another job: wait again
-        raise SystemExit(code)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1784,9 +1746,24 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"valid": not errors, "errors": errors}, indent=2))
             return 0 if not errors else 1
         if args.command == "merge":
+            if args.execute:  # a dry run is read-only and never queues behind a gate
+                head_tree = git(repo, "rev-parse", "HEAD^{tree}")
+                ensure_guard(
+                    [str(Path(__file__).resolve()), *argv],
+                    key=ticket_key(
+                        f"ci-merge-{args.pr}",
+                        head_tree,
+                        [str(Path(__file__).resolve()), *argv],
+                    ),
+                )
             return merge_pr(repo, args.pr, github_repo=args.repo, execute=args.execute)
         guard = ensure_guard(
-            [str(Path(__file__).resolve()), *argv], execv=wait_and_spawn_guarded
+            [str(Path(__file__).resolve()), *argv],
+            key=ticket_key(
+                "ci-local",
+                git(repo, "rev-parse", args.tree + "^{tree}"),
+                [str(Path(__file__).resolve()), *argv],
+            ),
         )
         record = run_pipeline(
             repo,
