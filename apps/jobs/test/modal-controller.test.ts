@@ -773,6 +773,29 @@ describe("Modal executor in the shared controller (fake Modal, contract-shaped s
     await stub.stop();
   });
 
+  test("a refused renewal of an already terminal job is not a lost lease: the call is still recorded", async () => {
+    const jobId = randomUUID();
+    const id = callId();
+    const stub = await start({ jobId, state: "running", renewWins: false });
+    const cfg = settings(stub.url);
+    seed(new JournalStore(cfg.stateDir), jobId, {
+      phase: "submitted",
+      callId: id,
+    });
+    const started = Date.now();
+    const modal = new FakeModal({
+      poll: () => {
+        // The worker's accepted result makes the job terminal while the controller still waits.
+        stub.setState("succeeded");
+        return Date.now() - started < 600 ? pending : returned(done(id));
+      },
+    });
+    const out = await enter(stub, jobId, cfg, modal);
+    assert.notEqual(out.outcome, "lease_lost", JSON.stringify(out));
+    assert.equal(evidence(stub).length, 1, JSON.stringify(out));
+    await stub.stop();
+  });
+
   test("an adopted call keeps the server's ORIGINAL start deadline, never the six-hour execution deadline", async () => {
     const jobId = randomUUID();
     const id = callId();

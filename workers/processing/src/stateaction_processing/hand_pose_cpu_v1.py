@@ -255,8 +255,16 @@ def _snake_simulation(sim: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+_RUNTIME_REASONS = frozenset(
+    {"api_unavailable", "output_plan_mismatch", "output_not_completed", "short_read"}
+)
+
+
 def _error_code(error: BaseException) -> str:
     code = str(getattr(error, "code", None) or type(error).__name__)
+    # The worker's own bare RuntimeError reasons are reported by that reason, not by class name.
+    if code == "RuntimeError" and str(error) in _RUNTIME_REASONS:
+        code = str(error)
     code = code.lower().removeprefix("e_")
     out = "".join(c if c.isalnum() else "_" for c in code)[:60].strip("_")
     return out if out and out[0].isalpha() else "worker_error"

@@ -101,7 +101,18 @@ export async function runController(
         const r = await api.act(jobId, { action: "renew_lease", owner });
         if ("renewed" in r && r.renewed)
           leaseExpiresAt = Date.parse(r.expiresAt);
-        else leaseRevoked = true;
+        else {
+          const terminal = await jobIsTerminal(api, jobId);
+          if (terminal === undefined) continue; // unreadable: neither extend nor revoke
+          if (!terminal) leaseRevoked = true;
+          else {
+            // The job already ended (the sealing worker's accepted result): reaping the child and
+            // recording the stage and evidence still run under the last lease, which the server
+            // settles after the job ended. Allow a bounded local window for that, then stop renewing.
+            leaseExpiresAt = Math.max(leaseExpiresAt, Date.now() + SETTLE_MS);
+            return;
+          }
+        }
       } catch {
         // An ambiguous renewal cannot extend the last confirmed lease.
       }
@@ -131,6 +142,28 @@ export async function runController(
     await renewer.catch(() => undefined);
   }
 }
+
+/**
+ * The server refuses lease renewals for a terminal job by design. A job that is already terminal
+ * (the sealing worker's accepted result) is not a revoked lease: the controller must still reap
+ * the child and record its stage and evidence under the last confirmed lease. A job still active keeps the
+ * refusal a revocation; an unreadable status is ambiguous (retried on the next tick).
+ */
+async function jobIsTerminal(
+  api: JobsApi,
+  jobId: string,
+): Promise<boolean | undefined> {
+  try {
+    return ["succeeded", "failed", "cancelled"].includes(
+      (await api.status(jobId)).state,
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+/** Local settle window after the job ended, for reaping the child and recording stage evidence. */
+const SETTLE_MS = 5 * 60_000;
 
 async function drive(
   deps: ControllerDeps,
