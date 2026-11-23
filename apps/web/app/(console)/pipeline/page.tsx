@@ -155,6 +155,18 @@ export default async function PipelinePage({
                 <th scope="col" className="px-6 py-3 font-semibold">
                   Status
                 </th>
+                <th scope="col" className="px-3 py-3 font-semibold">
+                  Segments
+                </th>
+                <th scope="col" className="px-3 py-3 font-semibold">
+                  Captions
+                </th>
+                <th scope="col" className="px-3 py-3 font-semibold">
+                  Team checks
+                </th>
+                <th scope="col" className="px-6 py-3 font-semibold">
+                  Review state
+                </th>
               </tr>
             </thead>
             <tbody className="max-md:block">
@@ -205,6 +217,60 @@ export default async function PipelinePage({
                         />
                       </div>
                     ) : null}
+                  </td>
+                  <td
+                    data-label="Segments"
+                    data-testid="count-segments"
+                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
+                  >
+                    {item.counts.segments === null ? (
+                      "—"
+                    ) : (
+                      <>
+                        {item.counts.segments}
+                        {item.counts.failedWindows ? (
+                          <span className="block font-sans text-xs text-danger max-md:inline">
+                            {" "}
+                            {item.counts.failedWindows} failed windows
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </td>
+                  <td
+                    data-label="Captions"
+                    data-testid="count-captions"
+                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
+                  >
+                    {item.counts.captions === null ? (
+                      "—"
+                    ) : (
+                      <>
+                        {item.counts.captions} ok
+                        {item.counts.captionsFailed ? (
+                          <span className="block font-sans text-xs text-danger max-md:inline">
+                            {" "}
+                            {item.counts.captionsFailed} failed
+                          </span>
+                        ) : null}
+                      </>
+                    )}
+                  </td>
+                  <td
+                    data-label="Team checks"
+                    data-testid="count-checks"
+                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
+                  >
+                    —
+                    <span className="block font-sans text-[11px] text-muted max-md:inline">
+                      {" "}
+                      none recorded yet
+                    </span>
+                  </td>
+                  <td className="relative z-10 px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">
+                    <span className="text-muted">
+                      {item.reviewable ? "Review not available yet" : "—"}
+                    </span>
                   </td>
                 </tr>
               ))}

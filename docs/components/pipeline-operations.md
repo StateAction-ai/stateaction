@@ -86,6 +86,16 @@ compute and database charges are always `unknown` lines. The fixed platform
 floor is reported separately and never added to per-run figures. `grossKnown`
 is a lower bound while any charge is unknown.
 
+### GPU rate items (SA-97)
+
+`RATE_ITEMS` also holds one `gpu_second:<type>` item per accelerator type
+(for example `gpu_second:RTX-PRO-6000`), unit `GPU-second`. The rate comes only
+from the operator card; no rate is defined in code, and without one the line
+is `unknown`. `estimateRun(receipt, card, gpuStages)` prices the recorded
+container seconds of each GPU stage run; CPU-only runs add no GPU line. The
+Pipeline detail page shows the rate per hour (card rate x 3600) from the file
+named by `STATEACTION_OPS_RATE_CARD`, or "Rate unknown".
+
 ## Alerts
 
 `evaluateAlerts` is pure and finite (≤ 200 jobs, injected clock, no I/O):

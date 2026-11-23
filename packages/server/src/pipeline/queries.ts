@@ -1,4 +1,5 @@
 import type { Queryable } from "../catalog/catalog.js";
+import type { AnnotationCounts, ListCounts } from "./run-view.js";
 import {
   PIPELINE_PAGE_SIZE,
   PIPELINE_STATUSES,
@@ -50,7 +51,9 @@ const BASE_SQL = `WITH staff AS (
     j.id AS job_id, j.state AS job_state, j.error_code,
     (j.submission_intent_at IS NOT NULL OR j.execution_call_id IS NOT NULL
       OR j.workflow_run_ref IS NOT NULL) AS job_submitted,
-    a.outcome AS admission_outcome, a.rejection_code
+    a.outcome AS admission_outcome, a.rejection_code,
+    (j.recipe IS NOT NULL) AS has_recipe,
+    j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count
   FROM recordings r
   JOIN "user" u ON u.id = r.owner_user_id
   LEFT JOIN jobs j ON j.id = r.current_job_id AND j.recording_id = r.id
@@ -91,6 +94,11 @@ type Row = {
   job_submitted: boolean | null;
   admission_outcome: string | null;
   rejection_code: string | null;
+  has_recipe: boolean | null;
+  segment_count: number | null;
+  failed_window_count: number | null;
+  caption_count: number | null;
+  caption_failed_count: number | null;
   file_count: number | null;
   total_bytes: string | null;
   confirmed_bytes: string | null;
@@ -109,6 +117,13 @@ export type PipelineListItem = {
   note: string | null;
   /** Upload percentage only while uploading and only from confirmed bytes. */
   uploadPercent: number | null;
+  /** Accepted annotation counts; null fields = not accepted (unknown). */
+  counts: ListCounts;
+  /**
+   * Annotations accepted, so a review is possible. No link is built: the
+   * review route (SA-98) does not exist on main yet.
+   */
+  reviewable: boolean;
 };
 export type PipelineList = {
   items: PipelineListItem[];
@@ -136,6 +151,17 @@ function failureNote(row: Row): string | null {
   if (row.status === "failed")
     return summary ?? "Failure details are unavailable";
   return null;
+}
+
+function annotationCounts(row: Row): AnnotationCounts {
+  return row.segment_count === null
+    ? null
+    : {
+        segments: row.segment_count,
+        failedWindows: row.failed_window_count ?? 0,
+        captions: row.caption_count,
+        captionsFailed: row.caption_failed_count,
+      };
 }
 
 function toListItem(row: Row): PipelineListItem {
@@ -174,6 +200,15 @@ function toListItem(row: Row): PipelineListItem {
     status: row.status,
     note,
     uploadPercent,
+    counts: {
+      segments: row.segment_count,
+      failedWindows: row.failed_window_count,
+      captions: row.caption_count,
+      captionsFailed: row.caption_failed_count,
+      // Team checks arrive with SA-99 (T14); zero until then, labelled in the UI.
+      teamChecks: 0,
+    },
+    reviewable: row.job_state === "succeeded" && row.segment_count !== null,
   };
 }
 
@@ -240,6 +275,10 @@ export type PipelineDetail = {
   jobId: string | null;
   jobState: JobState | null;
   clipCount: number | null;
+  /** True when the job was admitted with a recipe (stage runs apply). */
+  hasRecipe: boolean;
+  /** Accepted annotation counts, or null when not accepted. */
+  annotations: AnnotationCounts;
 };
 
 export async function getPipelineDetail(
@@ -286,6 +325,8 @@ export async function getPipelineDetail(
     jobId: row.job_id,
     jobState: row.job_state,
     clipCount: row.clip_count,
+    hasRecipe: row.has_recipe === true,
+    annotations: annotationCounts(row),
   };
 }
 

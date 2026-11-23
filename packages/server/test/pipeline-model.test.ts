@@ -179,6 +179,8 @@ const detail = (over: Partial<PipelineDetail>): PipelineDetail => ({
   jobId: "job",
   jobState: "succeeded",
   clipCount: 2,
+  hasRecipe: false,
+  annotations: null,
   ...over,
 });
 

@@ -357,3 +357,66 @@ test("rate card and threshold readers fail closed without echoing input", () => 
   );
   assert.deepEqual(readThresholds(T), T);
 });
+
+const GPU_CARD = (unit = "GPU-second") => ({
+  currency: "USD",
+  assumptions: ["Illustrative test rate, not a provider price"],
+  rates: {
+    "gpu_second:RTX-PRO-6000": {
+      amount: 0.0008,
+      unit,
+      source: {
+        kind: "operator",
+        ref: "https://example.com/rates",
+        retrievedAt: "2026-11-02",
+      },
+    },
+  },
+});
+
+test("cost: GPU stage seconds are priced only from the operator gpu_second rate", () => {
+  const r = buildReceipt(
+    facts({ state: "succeeded" }),
+    parseMetricsLine(line()),
+  );
+  const stages = [
+    { stage: "segment", gpuType: "RTX-PRO-6000", seconds: 100 },
+    { stage: "caption", gpuType: "RTX-PRO-6000", seconds: null },
+  ] as const;
+  const priced = estimateRun(r, readRateCard(GPU_CARD()), stages);
+  const seg = priced.lines.find(
+    (l) => l.item === "gpu_second:RTX-PRO-6000" && l.basis.includes("segment"),
+  )!;
+  assert.equal(seg.unit, "GPU-second");
+  assert.ok(Math.abs((seg.amount as { value: number }).value - 0.08) < 1e-9);
+  const cap = priced.lines.find((l) => l.basis.includes("caption"))!;
+  assert.deepEqual(cap.amount, { status: "unknown" });
+  // Without a card the GPU line is unknown; nothing is hard-coded.
+  const none = estimateRun(r, undefined, stages);
+  assert.ok(
+    none.lines
+      .filter((l) => l.item.startsWith("gpu_second:"))
+      .every((l) => l.amount.status === "unknown"),
+  );
+  // CPU-only runs add no GPU lines.
+  assert.equal(
+    estimateRun(r, readRateCard(GPU_CARD())).lines.some((l) =>
+      l.item.startsWith("gpu_second:"),
+    ),
+    false,
+  );
+});
+
+test("cost: a gpu_second rate must be stated per GPU-second", () => {
+  assert.throws(() => readRateCard(GPU_CARD("GPU-hour")), RateCardError);
+  assert.throws(
+    () =>
+      readRateCard({
+        ...GPU_CARD(),
+        rates: {
+          "gpu_second:NOPE": GPU_CARD().rates["gpu_second:RTX-PRO-6000"],
+        },
+      }),
+    RateCardError,
+  );
+});
