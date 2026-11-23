@@ -19,6 +19,11 @@ import type { AddressInfo } from "node:net";
 import pg from "pg";
 import { authConfig } from "../src/auth/config.js";
 import {
+  NO_TRUSTED_PROXIES,
+  applyClientAddress,
+  parseTrustedProxies,
+} from "../src/auth/client-address.js";
+import {
   authRouteHandlers,
   createAuthRuntime,
   meRoute,
@@ -90,6 +95,8 @@ function route(request: Request): Promise<Response> {
     );
   return Promise.resolve(new Response("not found", { status: 404 }));
 }
+
+const TRUSTED = parseTrustedProxies({ AUTH_TRUSTED_PROXIES: "127.0.0.1,::1" });
 
 // Each simulated client gets its own address; Better Auth rate-limits per IP
 // (x-forwarded-for, as set by the hosting proxy).
@@ -227,6 +234,8 @@ before(async () => {
   await writeFile(fixture, "{}");
   server = createServer(async (req, res) => {
     try {
+      // TEST-ONLY: trust the loopback peer so simulated x-forwarded-for works.
+      applyClientAddress(req, TRUSTED);
       const response = await route(await toRequest(req));
       const headers: Record<string, string | string[]> = {};
       response.headers.forEach((value, key) => {
@@ -751,6 +760,54 @@ describe("Better Auth local email/password runtime", () => {
       statuses.push(response.status);
     }
     assert.ok(statuses.includes(429), statuses.join(","));
+  });
+
+  test("SA-120: with no trusted proxy a rotating forged X-Forwarded-For cannot dodge the limiter", async () => {
+    // Same routes behind a server that trusts nobody (the production default).
+    const untrusted = createServer(async (req, res) => {
+      applyClientAddress(req, NO_TRUSTED_PROXIES);
+      const response = await route(await toRequest(req));
+      res.writeHead(response.status).end(await response.text());
+    });
+    await new Promise<void>((resolve) =>
+      untrusted.listen(0, "127.0.0.1", resolve),
+    );
+    const port = (untrusted.address() as AddressInfo).port;
+    const body = JSON.stringify({
+      email: users.staff.email,
+      password: "wrong password value",
+    });
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        statuses.push(
+          await new Promise<number>((resolve, reject) => {
+            const req = request(
+              {
+                host: "127.0.0.1",
+                port,
+                path: "/api/auth/sign-in/email",
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  origin,
+                  // A different forged client address on every attempt.
+                  "x-forwarded-for": `203.0.113.${100 + i}`,
+                },
+              },
+              (res) => {
+                res.resume();
+                res.on("end", () => resolve(res.statusCode ?? 0));
+              },
+            );
+            req.on("error", reject).end(body);
+          }),
+        );
+      }
+      assert.ok(statuses.includes(429), statuses.join(","));
+    } finally {
+      await new Promise((resolve) => untrusted.close(resolve));
+    }
   });
 
   test("operator configuration is never echoed to users", async () => {

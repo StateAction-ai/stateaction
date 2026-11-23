@@ -1,3 +1,5 @@
+import { parseTrustedProxies } from "./client-address.js";
+
 /**
  * Authentication settings. Every value comes from the environment so the same
  * code runs on loopback, behind Tailscale Serve and on Render. Missing or
@@ -124,6 +126,8 @@ export function authConfig(
   const hosted = HOSTED.has(appEnv) || onRender;
 
   assertNoUnsupportedAmbientSettings(env);
+  // Validate AUTH_TRUSTED_PROXIES (SA-120) so a bad value is a config error.
+  parseTrustedProxies(env);
 
   const secret = env.BETTER_AUTH_SECRET ?? "";
   if (secret.length < 32 || PLACEHOLDER.test(secret))

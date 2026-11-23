@@ -24,6 +24,15 @@ export {
   type AppEnvironment,
 } from "./config.js";
 export {
+  NO_TRUSTED_PROXIES,
+  TRUSTED_PROXIES_SETTING,
+  applyClientAddress,
+  installClientAddressPolicy,
+  parseTrustedProxies,
+  resolveClientAddress,
+  type TrustedProxies,
+} from "./client-address.js";
+export {
   CLIENT_HEADER,
   authenticateHuman,
   betterAuthSessionLookup,

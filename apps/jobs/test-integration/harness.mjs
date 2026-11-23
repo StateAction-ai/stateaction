@@ -115,6 +115,8 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     APP_ENV: "local",
+    // TEST-ONLY: trust the loopback harness peer for simulated client addresses (rejected on hosted).
+    AUTH_TRUSTED_PROXIES: "127.0.0.1,::1",
     DATABASE_HOST: new URL(appUrl).hostname,
     DATABASE_PORT: new URL(appUrl).port,
     DATABASE_NAME: dbName,
