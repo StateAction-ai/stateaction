@@ -10,7 +10,9 @@ caption params   fail_captions ("0,2": row ordinals), crash_after_n, hang / hang
 * fail_windows / fail_captions: failed rows with `error_code` (never empty text).
 * zero_segments: a valid document with no rows and every window ok.
 * crash_after_n: `os._exit(CRASH_EXIT)` after n windows/captions, so no receipt exists.
-* hang: sleeps (heartbeating) for `hang_s` seconds so budget and deadline tests can fire.
+* hang: sleeps (heartbeating) for `hang_s` seconds so budget and deadline tests can fire. With
+  `hang_release_file` (a path) it also ends as soon as that file exists, so a test can hold a stage
+  open until it has observed a controller re-entry and release it deterministically.
 * digest_mismatch (segment): the receipt reports a different sha256 for segments.json than the file
   uploaded, so the caption stage, which pins the digest it was given, must reject it.
 """
@@ -63,7 +65,10 @@ def _maybe_hang(ctx: StageContext, phase: str) -> None:
         return
     hang_s = min(int(ctx.params.get("hang_s", 3600)), _MAX_HANG_S)
     end = time.monotonic() + hang_s
+    release = ctx.params.get("hang_release_file")
     while time.monotonic() < end:
+        if isinstance(release, str) and os.path.exists(release):
+            return
         ctx.beat(phase, 0)
         time.sleep(min(1.0, max(0.0, end - time.monotonic())))
 

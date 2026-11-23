@@ -11,6 +11,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -135,7 +136,15 @@ export function seedOnly(value) {
 
 export async function seedAnnotations(
   stack,
-  { dirs, python, renderCli, log = () => {} },
+  {
+    dirs,
+    python,
+    renderCli,
+    log = () => {},
+    source,
+    scenarios,
+    rgbProfile = SIM,
+  },
 ) {
   const pg = serverRequire("pg");
   const { PutObjectCommand, GetObjectCommand } =
@@ -169,6 +178,20 @@ export async function seedAnnotations(
     },
   };
   const procs = [];
+  const childRefs = new Set();
+  const workerPids = (ref) =>
+    readdirSync("/proc")
+      .filter((n) => /^\d+$/.test(n))
+      .filter((n) => {
+        try {
+          return readFileSync(`/proc/${n}/cmdline`, "utf8")
+            .split("\0")
+            .includes(ref);
+        } catch {
+          return false;
+        }
+      })
+      .map(Number);
   try {
     const collector = stack.users.collector;
     const have = await owner.query(
@@ -210,22 +233,27 @@ export async function seedAnnotations(
           : browserHeaders(stack.origin),
       });
 
-    const synthetic = join(dirs.cache, "synthetic-source.mcap");
-    syntheticSource(python, synthetic);
-    const only = seedOnly(process.env.STATEACTION_SEED_ONLY);
+    // `source` (a committed MCAP) and `scenarios` (an explicit table) let a test pin both; the dev
+    // seed passes neither and generates a test pattern for the built-in synthetic scenarios.
+    const synthetic = source ?? join(dirs.cache, "synthetic-source.mcap");
+    if (!source) syntheticSource(python, synthetic);
+    const only = scenarios ? null : seedOnly(process.env.STATEACTION_SEED_ONLY);
     const wanted = (scenario) => !only || only.has(scenario);
-    const store = Object.keys(REPLAY_SCENARIOS).some(wanted)
+    const table = scenarios ?? SYNTHETIC_SCENARIOS;
+    const replay = scenarios ? {} : REPLAY_SCENARIOS;
+    const store = Object.keys(replay).some(wanted)
       ? homerStore(python)
       : { ok: false, reason: "not requested" };
-    const plan = Object.entries(SYNTHETIC_SCENARIOS)
+    const plan = Object.entries(table)
       .filter(([scenario]) => wanted(scenario))
       .map(([scenario, s]) => ({
         scenario,
         recipe: s.recipe,
-        source: synthetic,
+        source: s.source ?? synthetic,
+        drive: s.drive,
       }));
     const skipped = [];
-    for (const [scenario, s] of Object.entries(REPLAY_SCENARIOS)) {
+    for (const [scenario, s] of Object.entries(replay)) {
       if (!wanted(scenario)) continue;
       if (store.ok)
         plan.push({
@@ -246,8 +274,8 @@ export async function seedAnnotations(
           schema: "stateaction.recording_create.v2",
           clientRecordingId,
           captureFormat: "stateaction.capture.v1",
-          rgbProfile: SIM,
-          simulation,
+          rgbProfile,
+          ...(rgbProfile === SIM && { simulation }),
           startedAt: "2026-11-02T08:00:00.000000Z",
           device: {
             model: "sdk_gphone64_x86_64",
@@ -265,9 +293,26 @@ export async function seedAnnotations(
         created.text,
       ).data;
       const recordingId = recording.recordingId;
+      // A re-entry scenario holds its stage open until the driver releases it (no timing).
+      const releaseFile = p.drive
+        ? join(dirs.root, `release-${recordingId}`)
+        : undefined;
+      const recipe = p.drive
+        ? {
+            ...p.recipe,
+            stages: p.recipe.stages.map((st) =>
+              st.stage === p.drive.stage
+                ? {
+                    ...st,
+                    params: { ...st.params, hang_release_file: releaseFile },
+                  }
+                : st,
+            ),
+          }
+        : p.recipe;
       writeFileSync(
         join(dirs.recipes, `${recordingId}.json`),
-        JSON.stringify(p.recipe),
+        JSON.stringify(recipe),
         { mode: 0o600 },
       );
       const files = [
@@ -285,8 +330,8 @@ export async function seedAnnotations(
           client_recording_id: clientRecordingId,
           owner_user_id: collector.id,
           capture_format: "stateaction.capture.v1",
-          rgb_profile: SIM,
-          simulation: artifactSimulation,
+          rgb_profile: rgbProfile,
+          ...(rgbProfile === SIM && { simulation: artifactSimulation }),
           capture_config_sha256: sha("capture-config"),
           close_status: "closed_clean",
           files: files.map((f) => ({
@@ -377,6 +422,8 @@ export async function seedAnnotations(
         recordingId,
         jobId: job.id,
         source: p.source,
+        drive: p.drive,
+        releaseFile,
       };
     };
     const recordings = [];
@@ -469,6 +516,119 @@ export async function seedAnnotations(
       if (i > 120) throw new Error("the local task runner did not start");
       await sleep(500);
     }
+    // Render retry re-entry: the controller dies (SIGKILL) while `drive.stage` runs, the stage child
+    // (its own session) survives, and the same run ref re-enters after the lease lapsed. The child
+    // must be adopted, never respawned: the caller asserts that from journals, claims and rows.
+    const controllerOnce = (rec, runRef) => {
+      const child = spawn(
+        process.execPath,
+        [join(repoRoot, "apps/jobs/test-integration/controller-process.mjs")],
+        {
+          cwd: join(repoRoot, "apps/jobs"),
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            ...ctl,
+            TEST_JOB_ID: rec.jobId,
+            TEST_RUN_REF: runRef,
+          },
+          detached: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      procs.push(child);
+      let out = "";
+      child.stdout.on("data", (c) => (out += c));
+      child.stderr.on("data", (c) => (out += c));
+      const done = new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {}
+          resolve({ crashed: out.slice(-2000), timedOut: true });
+        }, 240_000);
+        child.on("close", (code, signal) => {
+          clearTimeout(timer);
+          try {
+            resolve(JSON.parse(out.trim().split("\n").at(-1)));
+          } catch {
+            resolve({ crashed: out.slice(-2000), code, signal });
+          }
+        });
+      });
+      return { child, done };
+    };
+    const driveControllerLoss = async (rec) => {
+      const runRef = `retry-${rec.jobId}`;
+      const journal = join(
+        dirs.state,
+        rec.jobId,
+        rec.drive.stage,
+        "journal.json",
+      );
+      const first = controllerOnce(rec, runRef);
+      let seen;
+      for (let i = 0; !seen; i++) {
+        try {
+          const j = JSON.parse(readFileSync(journal, "utf8"));
+          if (j.phase === "running" && j.executionRef) seen = j;
+        } catch {}
+        if (!seen) {
+          if (i > 480) throw new Error(`${rec.scenario}: stage never ran`);
+          await sleep(250);
+        }
+      }
+      const pidsBefore = workerPids(seen.executionRef);
+      childRefs.add(seen.executionRef);
+      process.kill(-first.child.pid, "SIGKILL");
+      await first.done;
+      await owner.query(
+        "UPDATE jobs SET controller_lease_expires_at = now() - interval '1 second' WHERE id = $1",
+        [rec.jobId],
+      );
+      const second = controllerOnce(rec, runRef);
+      // The re-entered controller holds the lease again while the stage child is still held open.
+      let holds = false;
+      for (let i = 0; !holds; i++) {
+        holds = (
+          await owner.query(
+            "SELECT controller_lease_expires_at > now() AS held FROM jobs WHERE id = $1",
+            [rec.jobId],
+          )
+        ).rows[0].held;
+        if (!holds) {
+          if (i > 600) throw new Error(`${rec.scenario}: no re-entry`);
+          await sleep(100);
+        }
+      }
+      const aliveAtReentry =
+        pidsBefore.length > 0 &&
+        pidsBefore.every((pid) => {
+          try {
+            process.kill(pid, 0);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+      writeFileSync(rec.releaseFile, "");
+      const outcome = await second.done;
+      if (outcome.outcome !== "recipe_run")
+        throw new Error(
+          `${rec.scenario}: re-entry ${JSON.stringify(outcome).slice(0, 600)}`,
+        );
+      return {
+        task: { status: "completed", results: [outcome] },
+        retry: {
+          stage: rec.drive.stage,
+          runRef,
+          executionRef: seen.executionRef,
+          pidsBefore,
+          aliveAtReentry,
+          journalFile: journal,
+        },
+      };
+    };
     const runOne = async (rec) => {
       let dispatched;
       for (let i = 0; !dispatched && i < 600; i++) {
@@ -487,23 +647,28 @@ export async function seedAnnotations(
         if (!dispatched) await sleep(500);
       }
       if (!dispatched) throw new Error(`${rec.scenario}: never admitted`);
-      const run = await render.workflows.startTask(
-        "process-recording",
-        [{ jobId: rec.jobId }],
-        {
-          idempotencyKey: dispatched.dispatchKey,
-          signal: AbortSignal.timeout(10_000),
-        },
-      );
       let task;
-      for (let i = 0; ; i++) {
-        const t = await render.workflows.getTaskRun(run.taskRunId);
-        task = t;
-        if (["failed", "canceled"].includes(t.status))
-          throw new Error(`${rec.scenario}: task ${t.status}`);
-        if (t.status === "completed") break;
-        if (i > 1200) throw new Error(`${rec.scenario}: controller timeout`);
-        await sleep(500);
+      let retry;
+      if (rec.drive) {
+        ({ task, retry } = await driveControllerLoss(rec));
+      } else {
+        const run = await render.workflows.startTask(
+          "process-recording",
+          [{ jobId: rec.jobId }],
+          {
+            idempotencyKey: dispatched.dispatchKey,
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
+        for (let i = 0; ; i++) {
+          const t = await render.workflows.getTaskRun(run.taskRunId);
+          task = t;
+          if (["failed", "canceled"].includes(t.status))
+            throw new Error(`${rec.scenario}: task ${t.status}`);
+          if (t.status === "completed") break;
+          if (i > 1200) throw new Error(`${rec.scenario}: controller timeout`);
+          await sleep(500);
+        }
       }
       // Read the job and its stage rows together. A row still `running` after the task run
       // completed is recorded (settleMs, taskResult) and waited out for at most 30 s; a row that
@@ -574,6 +739,7 @@ export async function seedAnnotations(
         jobId: rec.jobId,
         jobState: state,
         stages,
+        ...(retry && { retry }),
         ...(taskResult && { settleMs, taskResult }),
       };
     };
@@ -581,7 +747,7 @@ export async function seedAnnotations(
     const results = [];
     for (const rec of recordings) {
       const result = await runOne(rec);
-      const mismatch = scenarioMismatch(result);
+      const mismatch = scenarioMismatch(result, scenarios);
       if (mismatch)
         throw new Error(
           `${rec.scenario}: unexpected outcome: ${mismatch} ${JSON.stringify({ settleMs: result.settleMs, taskResult: result.taskResult, serverLog: stack.logs().slice(-1500) })}`,
@@ -593,6 +759,12 @@ export async function seedAnnotations(
         try {
           process.kill(-p.pid, "SIGTERM");
         } catch {}
+      // Stage children run in their own sessions: stop any a re-entry scenario left (exact PIDs).
+      for (const ref of childRefs)
+        for (const pid of workerPids(ref))
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {}
     };
     return {
       summary: {
@@ -609,6 +781,11 @@ export async function seedAnnotations(
       try {
         process.kill(-p.pid, "SIGTERM");
       } catch {}
+    for (const ref of childRefs)
+      for (const pid of workerPids(ref))
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {}
     throw error;
   } finally {
     await Promise.allSettled([owner.end(), app.end()]);

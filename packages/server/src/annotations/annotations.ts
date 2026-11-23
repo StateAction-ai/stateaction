@@ -25,7 +25,8 @@ import { recordingTitle } from "../pipeline/model.js";
  * (never more than its published contract byte bound), validated against its
  * own contract and checked against the job and recording it was read for. A
  * stage that wrote no file contributes `null`; the recipe run (`dag_run`)
- * says why. A file that exists but cannot be read or validated is an error,
+ * says why, and so does a stage whose run did not succeed even if it left a
+ * file. A file that exists but cannot be read or validated is an error,
  * never an empty result.
  */
 
@@ -162,9 +163,15 @@ export async function loadRecordingAnnotations(
     slot: string;
     object_key: string | null;
     size_bytes: string | null;
+    stage_not_succeeded: boolean;
   }>(
-    `SELECT s.slot, f.object_key, f.size_bytes::text
+    `SELECT s.slot, f.object_key, f.size_bytes::text,
+            (r.state IS NOT NULL AND r.state <> 'succeeded') AS stage_not_succeeded
      FROM job_output_slots s
+     LEFT JOIN job_stage_runs r ON r.job_id = s.job_id AND r.stage = CASE s.slot
+       WHEN 'segments.json' THEN 'segment'
+       WHEN 'captions.json' THEN 'caption'
+       ELSE 'hand_pose' END
      LEFT JOIN files f ON f.id = s.file_id AND f.job_id = s.job_id
        AND f.purpose = 'output' AND f.state IN ('completed', 'verified')
        AND f.role = CASE s.slot
@@ -178,6 +185,12 @@ export async function loadRecordingAnnotations(
   const parts: Record<string, unknown> = {};
   for (const part of PARTS) {
     const file = bySlot.get(part.slot);
+    // A file left by a stage whose run did not succeed (for example a receipt the server rejected)
+    // is not that stage's result: it contributes null and `dag_run` says why (SA-100).
+    if (file?.stage_not_succeeded) {
+      parts[part.key] = null;
+      continue;
+    }
     if (file && (file.object_key === null || file.size_bytes === null))
       // The slot exists but its file is not a usable output: that is a failure, not "no result".
       throw new TransportError(

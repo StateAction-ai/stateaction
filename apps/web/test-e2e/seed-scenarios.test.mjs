@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { validateValue } from "@stateaction/contracts";
 import {
+  RECIPE_E2E_SCENARIOS,
   REPLAY_SCENARIOS,
   SYNTHETIC_SCENARIOS,
   refuseNonLocalEnv,
@@ -27,6 +28,42 @@ test("every seed scenario recipe is a valid jobs.recipe.v1 and uses only local s
         `${name}: ${s.stage} is never a live model`,
       );
   }
+});
+
+test("every SA-100 gate scenario is a valid stub recipe that spends nothing and has an expectation", () => {
+  assert.deepEqual(Object.keys(RECIPE_E2E_SCENARIOS), [
+    "ok",
+    "caption_failed",
+    "window_failed",
+    "segment_failed",
+    "digest_mismatch",
+    "zero_segments",
+    "source_unreadable",
+    "retry_mid_caption",
+  ]);
+  for (const [name, s] of Object.entries(RECIPE_E2E_SCENARIOS)) {
+    const verdict = validateValue("jobs.recipe.v1", s.recipe);
+    assert.equal(verdict.valid, true, `${name}: ${verdict.code}`);
+    refuseSpend(s.recipe);
+    for (const st of s.recipe.stages.slice(0, 2))
+      assert.match(st.module, /^stub_/, `${name}: ${st.stage} is a stub`);
+    assert.ok(s.expect.job && s.expect.segment, name);
+  }
+  assert.equal(
+    scenarioMismatch(
+      {
+        scenario: "source_unreadable",
+        jobState: "failed",
+        stages: [
+          { stage: "segment", state: "failed", error_code: "x" },
+          { stage: "caption", state: "not_run", error_code: "upstream_failed" },
+          { stage: "hand_pose", state: "failed", error_code: "x" },
+        ],
+      },
+      RECIPE_E2E_SCENARIOS,
+    ),
+    "",
+  );
 });
 
 test("a scenario whose job or stages end differently from its expectation is a mismatch", () => {

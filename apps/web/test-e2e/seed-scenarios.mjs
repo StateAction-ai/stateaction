@@ -108,6 +108,78 @@ export const SYNTHETIC_SCENARIOS = {
   },
 };
 
+const ALL_OK = {
+  job: "succeeded",
+  segment: "succeeded",
+  caption: "succeeded",
+  hand_pose: "succeeded",
+};
+/**
+ * SA-100 gate scenarios (recipe.e2e.test.mjs): run on the committed SA-50 golden MCAP, stub modules
+ * only. `drive` re-enters a stage after controller loss instead of using the Render runner.
+ */
+export const RECIPE_E2E_SCENARIOS = {
+  // The golden holds 5 frames: 0.05 s windows give several segments to caption and to fail.
+  ok: {
+    recipe: recipe("e2e_ok@1", STUB, { segment: { segment_s: "0.05" } }),
+    expect: ALL_OK,
+  },
+  caption_failed: {
+    recipe: recipe("e2e_caption_failed@1", STUB, {
+      segment: { segment_s: "0.05" },
+      caption: { fail_captions: "0,1" },
+    }),
+    expect: ALL_OK,
+  },
+  window_failed: {
+    recipe: recipe("e2e_window_failed@1", STUB, {
+      segment: { segment_s: "0.05", fail_windows: "1" },
+    }),
+    expect: ALL_OK,
+  },
+  segment_failed: {
+    recipe: recipe("e2e_segment_failed@1", STUB, {
+      segment: { segment_s: "0.05", crash_after_n: 1 },
+    }),
+    expect: { ...ALL_OK, segment: "failed", caption: "not_run" },
+  },
+  // segments.json and diagnostics are uploaded but the receipt names another digest: the files are
+  // unreceipted and must still be accounted for in the sealed inventory.
+  digest_mismatch: {
+    recipe: recipe("e2e_digest_mismatch@1", STUB, {
+      segment: { segment_s: "0.05", digest_mismatch: true },
+    }),
+    expect: { ...ALL_OK, segment: "failed", caption: "not_run" },
+  },
+  zero_segments: {
+    recipe: recipe("e2e_zero_segments@1", STUB, {
+      segment: { segment_s: "0.05", zero_segments: true },
+    }),
+    // A valid segments document with no rows: caption has nothing to caption (not_run, no_segments).
+    expect: { ...ALL_OK, caption: "not_run" },
+  },
+  // The committed FLAT golden is not an indexed MCAP: every stage fails with its own code, the
+  // job ends failed and the v2 failure manifest is accepted for the recipe job (SA-128 fold-in).
+  source_unreadable: {
+    recipe: recipe("e2e_source_unreadable@1", STUB),
+    source: "flat-golden",
+    expect: {
+      job: "failed",
+      segment: "failed",
+      caption: "not_run",
+      hand_pose: "failed",
+    },
+  },
+  retry_mid_caption: {
+    recipe: recipe("e2e_retry_caption@1", STUB, {
+      segment: { segment_s: "0.05" },
+      caption: { hang: true, hang_s: 120 },
+    }),
+    expect: ALL_OK,
+    drive: { stage: "caption" },
+  },
+};
+
 const REPLAY_EXPECT = {
   job: "succeeded",
   segment: "succeeded",
@@ -135,8 +207,8 @@ export const REPLAY_SCENARIOS = {
 
 const ALL = { ...SYNTHETIC_SCENARIOS, ...REPLAY_SCENARIOS };
 /** Empty string when `result` (job state and stage rows) matches the scenario, else what differed. */
-export function scenarioMismatch({ scenario, jobState, stages }) {
-  const expect = ALL[scenario]?.expect;
+export function scenarioMismatch({ scenario, jobState, stages }, table = ALL) {
+  const expect = table[scenario]?.expect;
   if (!expect) return `unknown scenario ${scenario}`;
   const diffs = [];
   if (jobState !== expect.job) diffs.push(`job ${jobState}`);
