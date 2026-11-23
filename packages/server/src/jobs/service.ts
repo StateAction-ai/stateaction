@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type pg from "pg";
 import {
+  ContractViolation,
   requestSha256,
   validateValue,
   type Sha256Hex,
@@ -14,6 +15,7 @@ import type { RecipeV1 } from "@stateaction/contracts";
 import {
   admissionDeadlineSeconds,
   RECIPE_DEADLINE_ERROR_CODE,
+  TASK_INPUT_BUILD_FAILED_ERROR_CODE,
   TASK_INPUT_INVALID_ERROR_CODE,
   type JobsConfig,
 } from "./config.js";
@@ -225,6 +227,23 @@ async function rejectQueuedJob(
 }
 
 /**
+ * True only for a builder refusal about this one job: the job or its admission
+ * evidence is missing (CatalogError not_found without a SQLSTATE), or its task
+ * input fails the contract. Every other error, including a database failure
+ * (raw driver error or a SQLSTATE-mapped CatalogError), propagates and rolls the
+ * admission back. A refusal happens after a successful read, so the transaction
+ * is still usable for rejectQueuedJob.
+ */
+function isBuilderRejection(error: unknown): boolean {
+  if (error instanceof ContractViolation) return true;
+  return (
+    error instanceof CatalogError &&
+    error.code === "not_found" &&
+    error.sqlstate === undefined
+  );
+}
+
+/**
  * Admits the oldest eligible queued job through the single global slot. The
  * permanent inputs, dispatch key, backend and absolute deadline are committed
  * together with the slot, before any external effect (Render dispatch, worker
@@ -266,12 +285,26 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         [c.recording_id, c.owner_user_id],
       );
       if (!ok.rows[0]?.ok) continue;
-      const task = await build(tx, {
-        jobId: c.id,
-        recordingId: c.recording_id,
-        profileRevision: c.profile_revision,
-        sourceManifestSha256: c.source_manifest_sha256,
-      });
+      let task: Record<string, unknown>;
+      try {
+        task = await build(tx, {
+          jobId: c.id,
+          recordingId: c.recording_id,
+          profileRevision: c.profile_revision,
+          sourceManifestSha256: c.source_manifest_sha256,
+        });
+      } catch (error) {
+        if (!isBuilderRejection(error)) throw error;
+        // Cancel THIS job only (SA-121): the same no-block rule as SA-109.
+        await rejectQueuedJob(
+          tx,
+          c.id,
+          TASK_INPUT_BUILD_FAILED_ERROR_CODE,
+          `task input build failed: ${(error as Error).message}`,
+        );
+        rejectedJobIds.push(c.id);
+        continue;
+      }
       // v3 (SA-88) carries the inline recipe; v1/v2 keep the single-claim path.
       const contract =
         task.schemaVersion === 3
