@@ -7,12 +7,13 @@
 //   - default:     APP_ENV=local, no flag (production-like default)
 //   - hosted-spoof: APP_ENV=local + the flag + Render service markers
 // Emulator/simulation evidence only; never hardware or provider qualification.
+import { freePort } from "../../../scripts/platform/free-port.mjs";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createServer, request } from "node:http";
+import { request } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -70,14 +71,6 @@ const artifactSimulation = {
 let db, s3, users, baseEnv, owner, app, storage, deps;
 const servers = {};
 const evidence = {};
-
-async function freePort() {
-  const server = createServer();
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const { port } = server.address();
-  await new Promise((r) => server.close(r));
-  return port;
-}
 
 let ipCounter = 0;
 class Jar {

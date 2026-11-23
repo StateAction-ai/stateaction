@@ -45,7 +45,7 @@
       "cache": false,
       "dependsOn": ["build"],
       "options": {
-        "command": "node --test --test-concurrency=1 test-e2e/*.test.mjs",
+        "command": "node --test --test-concurrency=$(node ../../scripts/platform/test-workers.mjs web-auth-e2e) test-e2e/*.test.mjs",
         "cwd": "apps/web"
       },
       "parallelism": false,
@@ -55,6 +55,9 @@
         "{workspaceRoot}/packages/server/test-auth/**/*",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
         "{workspaceRoot}/scripts/platform/process-wait.mjs",
+        "{workspaceRoot}/scripts/platform/free-port.mjs",
+        "{workspaceRoot}/scripts/platform/test-workers.json",
+        "{workspaceRoot}/scripts/platform/test-workers.mjs",
         "!{projectRoot}/**/*.md"
       ]
     }

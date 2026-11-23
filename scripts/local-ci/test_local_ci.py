@@ -3094,6 +3094,91 @@ class StageFileTests(unittest.TestCase):
             self.assertIn(extra, spec["alwaysRunAll"])
         self.assertTrue(spec["unautomated"])
 
+    def test_parallel_worker_counts_are_declared_once_and_fit_the_connection_budget(
+        self,
+    ):
+        """SA-114: each fixture suite's worker count lives only in
+        scripts/platform/test-workers.json; every consumer reads it from there; the
+        counts fit the shared fixture PostgreSQL connection budget now and the
+        target counts fit the budget of the max_connections the fixture definition
+        will use after its next restart; fixture suites are never cacheable."""
+        root = HERE.parents[1]
+        config = json.loads((root / "scripts/platform/test-workers.json").read_text())
+        fixture = config["fixture"]
+        spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
+        suites = set(config["suites"])
+        for item in spec["stages"]:
+            if item["id"] in suites:
+                self.assertFalse(
+                    [a for a in item["argv"] if "concurrency" in a or "workers" in a],
+                    f"{item['id']}: worker counts live in test-workers.json",
+                )
+        for name, suite in config["suites"].items():
+            self.assertGreaterEqual(suite["targetWorkers"], suite["workers"], name)
+            for key, limit in (
+                ("workers", fixture["liveMaxConnections"]),
+                ("targetWorkers", fixture["definitionMaxConnections"]),
+            ):
+                budget = (
+                    limit - fixture["superuserReserved"] - fixture["otherUsersReserve"]
+                )
+                used = suite[key] * suite["peakConnectionsPerWorker"]
+                self.assertLessEqual(
+                    used, budget, f"{name}: {key} x peak connections exceeds {budget}"
+                )
+        definition = (root / "scripts/platform/bounded-fixtures.py").read_text()
+        self.assertIn(
+            f"POSTGRES_MAX_CONNECTIONS = {fixture['definitionMaxConnections']}\n",
+            definition,
+        )
+        self.assertEqual(definition.count("max_connections="), 1)
+
+        consumers = {
+            "web-auth-e2e": ("apps/web/project.json", "test-e2e/*.test.mjs"),
+            "jobs-controller-integration": (
+                "apps/jobs/package.json",
+                "test-integration",
+            ),
+            "server-auth-integration": ("packages/server/package.json", "test-auth/"),
+            "catalog-integration": (
+                "packages/server/scripts/catalog-integration.sh",
+                "default_concurrency=$(node",
+            ),
+        }
+        for suite, (file, marker) in consumers.items():
+            text = (root / file).read_text()
+            self.assertRegex(text, rf"test-workers\.mjs\"? {suite}", suite)
+            self.assertIn(marker, text, suite)
+            for line in (x for x in text.splitlines() if marker in x):
+                self.assertIsNone(re.search(r"test-concurrency=\d", line), suite)
+        launcher = (root / consumers["catalog-integration"][0]).read_text()
+        self.assertEqual(launcher.count("default_concurrency="), 1)
+        self.assertNotIn(
+            "test:catalog", (root / "packages/server/package.json").read_text()
+        )
+        self.assertEqual(
+            sorted(
+                p.name
+                for p in (root / "apps/jobs/test-integration").glob("controller*")
+            ),
+            [
+                "controller-dispatch.e2e.test.mjs",
+                "controller-loss.e2e.test.mjs",
+                "controller-process.mjs",
+                "controller-recipe.e2e.test.mjs",
+                "controller-support.mjs",
+            ],
+        )
+        for project_file, name in (
+            ("apps/web/project.json", "auth-e2e"),
+            ("apps/jobs/project.json", "integration"),
+            ("packages/server/project.json", "auth-integration"),
+            ("packages/server/project.json", "catalog-integration"),
+        ):
+            target = json.loads((root / project_file).read_text())["targets"][name]
+            self.assertIs(target["cache"], False, name)
+            self.assertIs(target["parallelism"], False, name)
+
 
 FAKE_NX = r"""
 import json, os, subprocess, sys

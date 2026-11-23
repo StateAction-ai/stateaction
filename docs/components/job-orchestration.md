@@ -97,7 +97,7 @@ The [Modal executor](modal-executor.md) is selected explicitly. A different cont
 
 **Unknown local spawn / escaped child** stays fail-closed: the controller never respawns or records evidence it cannot prove; the instruction is to let the controller recover from its local journal on the controller host or inspect the host, never to clear the slot by hand.
 
-Not implemented (honest limits): no persisted re-upload request (guidance only), no export or iOS (the Modal executor is source-complete but not qualified, see [Modal executor](modal-executor.md)). Tests: `packages/server/test-integration/recovery.test.ts` (real restricted Postgres), `apps/web/test-e2e/job-control.e2e.test.mjs` (production Next, real sessions), `apps/web/test-e2e/job-control-browser.mjs` (real browser click path, run inside one guarded job), the SA-27 case in `apps/jobs/test-integration/controller.e2e.test.mjs` (repair pass -> API starts the official local runner task), `test/recovery-unit.test.ts`, `apps/jobs/test/repair.test.ts`, `infra/test/blueprint.test.mjs`, contract conformance for catalog v11.
+Not implemented (honest limits): no persisted re-upload request (guidance only), no export or iOS (the Modal executor is source-complete but not qualified, see [Modal executor](modal-executor.md)). Tests: `packages/server/test-integration/recovery.test.ts` (real restricted Postgres), `apps/web/test-e2e/job-control.e2e.test.mjs` (production Next, real sessions), `apps/web/test-e2e/job-control-browser.mjs` (real browser click path, run inside one guarded job), the SA-27 case in `apps/jobs/test-integration/controller-loss.e2e.test.mjs` (repair pass -> API starts the official local runner task), `test/recovery-unit.test.ts`, `apps/jobs/test/repair.test.ts`, `infra/test/blueprint.test.mjs`, contract conformance for catalog v11.
 
 ## Recipe stage runs and stage claims (SA-88, migration 011)
 
@@ -187,4 +187,4 @@ Per stage, in order:
 
 - `apps/jobs/test/recipe.test.ts`: fake Modal and a contract-shaped stub API.
 - `packages/server/test-integration/stage-runs.test.ts`, SA-91 cases: prior-stages attribution, orphan ownership, exact node attribution, the v2 recipe failure report.
-- The SA-91 cases in `apps/jobs/test-integration/controller.e2e.test.mjs`: the official local runner, the real API and real stage children, controller loss during hand_pose, and route authorization.
+- The SA-91 cases in `apps/jobs/test-integration/controller-recipe.e2e.test.mjs`: the official local runner, the real API and real stage children, controller loss during hand_pose, and route authorization.

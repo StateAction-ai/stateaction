@@ -10,6 +10,7 @@
           "node --test --test-concurrency=2 scripts/platform/check-staged.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/local-fixtures.test.mjs",
           "node --test --test-concurrency=1 scripts/platform/process-wait.test.mjs",
+          "node --test --test-concurrency=1 scripts/platform/free-port.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/r2-qualification.test.mjs scripts/platform/r2-qualification-run.test.mjs",
           "python3 -m unittest discover -s scripts/platform -p 'test_mobile*.py' -v",
           "node --test --test-concurrency=1 scripts/platform/check-staged-dart.test.mjs"

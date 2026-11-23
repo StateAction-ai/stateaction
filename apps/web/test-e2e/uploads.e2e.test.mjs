@@ -9,12 +9,13 @@
 // owner credential. Complete/reconcile/cancel are SA-21: the test completes
 // the provider upload directly with the SDK only to prove receipts are usable.
 // Not Google, native app, R2, Tailscale or hosted qualification.
+import { freePort } from "../../../scripts/platform/free-port.mjs";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createServer, request } from "node:http";
+import { request } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -58,14 +59,6 @@ const sha = (b) => createHash("sha256").update(b).digest("hex");
 let outage, db, s3, next, origin, users, env, owner, app, storage;
 let logs = "";
 const evidence = {};
-
-async function freePort() {
-  const server = createServer();
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const { port } = server.address();
-  await new Promise((r) => server.close(r));
-  return port;
-}
 
 let ipCounter = 0;
 class Jar {

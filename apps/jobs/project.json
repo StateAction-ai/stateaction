@@ -37,6 +37,7 @@
       "cache": false,
       "parallelism": false,
       "dependsOn": [
+        "build",
         "^build",
         {
           "projects": ["server", "web"],
@@ -49,6 +50,9 @@
         "{workspaceRoot}/packages/server/test-auth/**/*",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
         "{workspaceRoot}/scripts/platform/process-wait.mjs",
+        "{workspaceRoot}/scripts/platform/free-port.mjs",
+        "{workspaceRoot}/scripts/platform/test-workers.json",
+        "{workspaceRoot}/scripts/platform/test-workers.mjs",
         "!{projectRoot}/**/*.md"
       ],
       "options": {

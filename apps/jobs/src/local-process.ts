@@ -40,9 +40,34 @@ export type Inspection =
   | { kind: "gone" }
   | { kind: "unknown"; reason: string };
 
-export function inspect(journal: Journal, python?: string): Inspection {
+/** The /proc reads an inspection makes; injectable so the exit race can be reproduced deterministically. */
+export type ProcProbe = {
+  readStat: typeof readStat;
+  cmdlineHas: typeof cmdlineHas;
+  pause: (ms: number) => void;
+};
+const realProbe: ProcProbe = {
+  readStat,
+  cmdlineHas,
+  pause: (ms) =>
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
+};
+/**
+ * A child that is exiting loses its command line (its address space is released) a moment
+ * BEFORE the kernel marks it a zombie, so a single read can see a live process whose
+ * identity cannot be read. Such a miss is re-checked a fixed number of times over a short,
+ * constant window (RECHECKS x RECHECK_MS = 500 ms, ample for a small fixture child; the cost is paid only on the ambiguous path) before it is treated as ambiguous.
+ */
+export const RECHECKS = 10;
+export const RECHECK_MS = 50;
+
+export function inspect(
+  journal: Journal,
+  python?: string,
+  probe: ProcProbe = realProbe,
+): Inspection {
   try {
-    return inspectUnchecked(journal, python);
+    return inspectUnchecked(journal, python, probe);
   } catch (error) {
     if (error instanceof ProcUnavailable)
       // Unavailable facts are never interpreted as "gone".
@@ -51,7 +76,11 @@ export function inspect(journal: Journal, python?: string): Inspection {
   }
 }
 
-function inspectUnchecked(journal: Journal, python?: string): Inspection {
+function inspectUnchecked(
+  journal: Journal,
+  python: string | undefined,
+  probe: ProcProbe,
+): Inspection {
   if (journal.bootId !== bootId())
     return { kind: "unknown", reason: "boot_changed" };
   if (
@@ -62,14 +91,14 @@ function inspectUnchecked(journal: Journal, python?: string): Inspection {
     return { kind: "unknown", reason: "no_identity" };
   if (journal.startTicks === undefined)
     return { kind: "unknown", reason: "leader_identity_unconfirmed" };
-  const leader = readStat(journal.pid);
+  const leader = probe.readStat(journal.pid);
   if (leader && !matchesJournal(leader, journal))
     return { kind: "unknown", reason: "leader_identity_changed" };
   if (journal.pidNamespace) {
     if (
       leader &&
       isLive(leader) &&
-      cmdlineHas(leader.pid, journal.executionRef)
+      probe.cmdlineHas(leader.pid, journal.executionRef)
     )
       return { kind: "alive", leader };
     if (!python) return { kind: "unknown", reason: "worker_exit_unproven" };
@@ -98,11 +127,21 @@ function inspectUnchecked(journal: Journal, python?: string): Inspection {
     return { kind: "unknown", reason: "worker_exit_unproven" };
   }
   if (isLive(leader)) {
-    if (cmdlineHas(leader.pid, journal.executionRef))
+    if (probe.cmdlineHas(leader.pid, journal.executionRef))
       return { kind: "alive", leader };
-    const after = readStat(journal.pid);
-    if (after && !matchesJournal(after, journal))
-      return { kind: "unknown", reason: "leader_identity_changed" };
+    // Live but its identity is unreadable: re-check a bounded number of times. A process
+    // that is now gone or a zombie has exited (fall through); one whose identity is read
+    // again is alive; one that is still live and unreadable stays ambiguous (safe-fail).
+    let after: ProcStat | undefined;
+    for (let i = 0; i <= RECHECKS; i++) {
+      if (i > 0) probe.pause(RECHECK_MS);
+      after = probe.readStat(journal.pid);
+      if (after && !matchesJournal(after, journal))
+        return { kind: "unknown", reason: "leader_identity_changed" };
+      if (!isLive(after)) break;
+      if (probe.cmdlineHas(after.pid, journal.executionRef))
+        return { kind: "alive", leader: after };
+    }
     if (isLive(after))
       return { kind: "unknown", reason: "leader_identity_unconfirmed" };
   }
