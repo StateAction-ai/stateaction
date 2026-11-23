@@ -57,8 +57,12 @@ def strict_schema() -> ModuleType:
     return importlib.import_module("strict_schema")
 
 
-@lru_cache(maxsize=1)
-def manifest() -> dict[str, Any]:
-    data = json.loads((contract_dir() / "manifest.json").read_text())
+@lru_cache(maxsize=2)
+def manifest(*, v12: bool = False) -> dict[str, Any]:
+    name = "manifest.v1.2.json" if v12 else "manifest.json"
+    path = contract_dir() / name
+    if not path.is_file():
+        raise ContractUnavailable(f"capture manifest not found at {path}")
+    data = json.loads(path.read_text())
     files: dict[str, Any] = data["files"]
     return files

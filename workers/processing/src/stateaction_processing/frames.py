@@ -3,7 +3,7 @@
     stream = FrameStream(open(path, "rb"))
     for frame in stream:            # DecodedFrame: rgb ndarray + original AccessUnit identity
         process(frame)              # provisional: temporary, bounded artifacts only
-    stream.require_accepted()       # raises unless footer/CRC/SHA/Close checks all passed
+    stream.require_accepted()       # requires a verified, decoded, publishable source
     stream.report                   # CaptureReport (source hash/bytes/reads, counts, peaks)
 
 Each access unit is decoded once by one persistent decoder. The consumer receives the single RGB
@@ -60,22 +60,24 @@ class FrameStream:
 
     @property
     def accepted(self) -> bool:
-        """True only after capture verification AND the decoder flushed with matching counts."""
+        """True after a publishable capture has been verified and fully decoded."""
         st, rep = self.decode_stats, self.capture.report
         return (
             self._decoded_ok
-            and self.capture.accepted
+            and rep.auto_admissible
             and st is not None
             and st.packets_sent == st.frames_out == rep.video_messages
         )
 
     def require_accepted(self) -> CaptureReport:
+        if self.capture.accepted:
+            self.report.require_auto_admissible()
         if not self.accepted:
             raise CaptureStreamError(
                 "E_NOT_ACCEPTED",
                 "source not fully consumed, verified through the footer and decoded",
             )
-        return self.capture.report
+        return self.report
 
     def _declared_raster(self) -> tuple[int, int] | None:
         enc = (self.capture.report.profile or {}).get("encoder", {})

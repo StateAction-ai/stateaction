@@ -6,8 +6,8 @@ map keeps, per MP4 index, the native `source_frame_id`, the integer `timestamp_n
 clock domain and the PTS (microseconds from the first frame), so a module that reports MP4 frame
 indices or seconds can be mapped back to the frame identities the contracts use.
 
-The AU count must equal the MCAP's video message count and the demuxed MP4 packet count. Nothing is
-complete before `require_accepted` proved the whole source (footer, CRC, SHA-256, Close).
+The AU count must equal the MCAP's video message count and the demuxed MP4 packet count. Success
+requires whole-source verification (footer, CRC, SHA-256 and Close) and a completed capture.
 """
 
 from __future__ import annotations
@@ -111,6 +111,10 @@ def remux_source(
                 video.time_base = TIME_BASE
                 origin = au.encoder_pts_us
                 frames.clock_domain = au.native_clock_id
+            _require(
+                au.calibration_raster in (None, (video.width, video.height)),
+                "calibration_raster_mismatch",
+            )
             _require(au.native_clock_id == frames.clock_domain, "clock_changed")
             pts = au.encoder_pts_us - origin
             _require(pts > last_pts, "pts_not_increasing")
@@ -129,9 +133,9 @@ def remux_source(
                 on_frame(len(frames))
     finally:
         container.close()
-    _require(len(frames) > 0, "no_video_frames")
     stream_report = stream.report
-    _require(stream.accepted, "source_not_accepted")
+    stream_report.require_auto_admissible()
+    _require(len(frames) > 0, "no_video_frames")
     frames.source_sha256 = stream_report.source.sha256
     _require(len(frames) == stream_report.video_messages, "au_count_mismatch")
     with av.open(str(out_path)) as src:

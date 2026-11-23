@@ -47,7 +47,7 @@ from .artifact_types import (
     require,
     simulation_note,
 )
-from .capture_stream import StreamLimits
+from .capture_stream import WIRE_V12, CaptureReport, StreamLimits
 from .frames import FrameStream
 from .h264_decode import DecodedFrame
 from .hand_stream import Missingness
@@ -401,7 +401,7 @@ def _check_actual_profile(profile: dict[str, Any] | None, att: Attestation) -> N
 
 def build_manifest(
     ctx: ExportContext,
-    report: Any,
+    report: CaptureReport,
     sha: str,
     nbytes: int,
     clips_meta: list[dict[str, Any]],
@@ -491,6 +491,23 @@ def build_manifest(
         _check("hand_detection_summary", "measured", "Detection counts only; not an accuracy claim.",
                d(**dataclasses.asdict(miss), inference_us_mean=round(total_ms * 1000 / frames))),
     ]  # fmt: skip
+    v12 = report.wire_contract_revision == WIRE_V12
+    if v12:
+        counts = report.native_evidence_counts
+        checks.append(
+            _check(
+                "capture_native_evidence_counts",
+                "measured",
+                "Verified v1.2 capture evidence counts. Native payloads stay in the source MCAP.",
+                d(
+                    calibrations=counts["calibrations"],
+                    camera_metadata=counts["camera_metadata"],
+                    depth_raw=counts["depth_raw"],
+                    depth_raw_confidence=counts["depth_raw_confidence"],
+                    depth_dense=counts["depth_dense"],
+                ),
+            )
+        )
     doc: dict[str, Any] = {
         "schema": "stateaction.processing_result.v1",
         "job_id": ctx.job_id,
@@ -531,7 +548,11 @@ def build_manifest(
         "metric_accuracy_validated": False,
         "limitations": [
             "3D hand points are MediaPipe model-relative estimates; metric accuracy is not validated.",
-            "Capture crop, rotation and mirror are unknown in contract v1; frame-map transforms describe only this export (identity).",
+            (
+                "Frame-map transforms describe this export (identity). Native calibration evidence stays in the source MCAP."
+                if v12
+                else "Capture crop, rotation and mirror are unknown in wire v1.1; frame-map transforms describe only this export (identity)."
+            ),
             "frame-map timing_verified is false: native clock quality is not qualified by this export.",
             "Handedness labels assume mirrored input; capture mirror state is unknown.",
             "No hand is a valid result; absent hands are masked, never fabricated or threshold-lowered.",
