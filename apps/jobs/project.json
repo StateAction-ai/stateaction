@@ -47,7 +47,8 @@
         "default",
         "^production",
         "{workspaceRoot}/packages/server/test-auth/**/*",
-        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/scripts/platform/process-wait.mjs"
       ],
       "options": {
         "command": "pnpm --filter @stateaction/jobs test:integration"

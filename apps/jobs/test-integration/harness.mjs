@@ -17,6 +17,10 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
 import { startSeaweedfs } from "../../web/test-e2e/seaweedfs.mjs";
+import {
+  waitForGroupExit,
+  leaked,
+} from "../../../scripts/platform/process-wait.mjs";
 
 export const jobsDir = fileURLToPath(new URL("..", import.meta.url));
 const webDir = fileURLToPath(new URL("../../web/", import.meta.url));
@@ -91,7 +95,7 @@ export async function startWorld(extraEnv = {}) {
       try {
         process.kill(-world.next.pid, "SIGTERM");
       } catch {}
-      await sleep(500);
+      await waitForGroupExit(world.next.pid).catch(leaked);
     }
     world.storage?.destroy();
     await Promise.allSettled(world.pools.map((p) => p.end()));
@@ -208,9 +212,9 @@ async function buildWorld(db, s3, world, teardown, extraEnv) {
     try {
       if ((await call(origin, "/login")).status === 200) break;
     } catch {}
-    if (i > 120 || next.exitCode !== null)
+    if (i > 600 || next.exitCode !== null)
       throw new Error(`next start failed:\n${logs.slice(-2000)}`);
-    await sleep(500);
+    await sleep(100);
   }
   const secrets = mkdtempSync(join(tmpdir(), "sa26-cap-"));
   chmodSync(secrets, 0o700);

@@ -76,10 +76,10 @@ else
   # CREATEROLE and the owner of its database (the catalog grant helper requires ownership).
   docker run -d --name "$NAME" -e POSTGRES_USER=bootstrap -e POSTGRES_PASSWORD="$BOOT_PW" -e POSTGRES_DB=postgres \
     "$(grep -oE 'postgres:[^ ]+@sha256:[0-9a-f]+' infra/compose.yaml | head -1)" >/dev/null
-  for _ in {1..60}; do docker exec "$NAME" pg_isready -U bootstrap -d postgres >/dev/null 2>&1 && break; sleep 1; done
+  for ((end = SECONDS + 60; SECONDS < end;)); do docker exec "$NAME" pg_isready -U bootstrap -d postgres >/dev/null 2>&1 && break; sleep 0.2; done
   DB_HOST="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$NAME")"
   # Non-loopback address, like Render's private network, so production isolation applies.
-  for _ in {1..30}; do python3 -c "import socket;socket.create_connection(('$DB_HOST',5432),1)" 2>/dev/null && break; sleep 1; done
+  for ((end = SECONDS + 30; SECONDS < end;)); do python3 -c "import socket;socket.create_connection(('$DB_HOST',5432),1)" 2>/dev/null && break; sleep 0.2; done
   psql_as() { local user=$1 pw=$2 db=$3; shift 3; docker exec -i -e PGPASSWORD="$pw" "$NAME" psql -v ON_ERROR_STOP=1 -qAt -h "$DB_HOST" -U "$user" -d "$db" "$@"; }
   psql_as bootstrap "$BOOT_PW" postgres -c "CREATE ROLE migration_owner LOGIN CREATEROLE NOSUPERUSER NOCREATEDB PASSWORD '$OWNER_PW'"
   psql_as bootstrap "$BOOT_PW" postgres -c "CREATE DATABASE stateaction OWNER migration_owner"
@@ -168,7 +168,7 @@ echo "hosted preflight refuses ALLOW_SIMULATED_CAPTURE_INPUTS"
 setsid "${HOSTED_ENV[@]}" pnpm --filter @stateaction/web start > artifacts/hosted-smoke/web.log 2>&1 &
 web_pid=$!
 LAN_IP="$(python3 -c "import socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.connect(('192.0.2.1',9));print(s.getsockname()[0])")"
-for _ in {1..60}; do curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live" >/dev/null && break; sleep 1; done
+for ((end = SECONDS + 60; SECONDS < end;)); do curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live" >/dev/null && break; sleep 0.2; done
 curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live"; echo " <- /live via non-loopback $LAN_IP:$WEB_PORT (0.0.0.0 bind)"
 code="$(curl -s -o artifacts/hosted-smoke/health.json -w '%{http_code}' "http://127.0.0.1:$WEB_PORT/api/v1/health")"
 cat artifacts/hosted-smoke/health.json; echo
@@ -180,18 +180,18 @@ echo "development dispatch disabled: 404"
 
 echo "== Render-hosted APP_ENV=development: RENDER=true injected env binds 0.0.0.0:\$PORT, no .env"
 kill -- "-$web_pid" 2>/dev/null || true; web_pid=''
-for _ in {1..30}; do python3 -c "import socket,sys;s=socket.socket();s.bind(('0.0.0.0',$WEB_PORT))" 2>/dev/null && break; sleep 1; done
+for ((end = SECONDS + 30; SECONDS < end;)); do python3 -c "import socket,sys;s=socket.socket();s.bind(('0.0.0.0',$WEB_PORT))" 2>/dev/null && break; sleep 0.2; done
 DEV_ENV=(env -i PATH="$PATH" HOME="$HOME" RENDER=true APP_ENV=development PORT="$WEB_PORT")
 setsid "${DEV_ENV[@]}" pnpm --filter @stateaction/web start > artifacts/hosted-smoke/web-dev.log 2>&1 &
 web_pid=$!
-for _ in {1..60}; do curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live" >/dev/null && break; sleep 1; done
+for ((end = SECONDS + 60; SECONDS < end;)); do curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live" >/dev/null && break; sleep 0.2; done
 curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live"; echo " <- development service reachable via non-loopback (RENDER=true)"
 
 echo "== hosted-style workflow env: tasks register, no database/storage credentials"
 printf 'APP_ENV=production\n' > artifacts/hosted-smoke/workflow.env
 setsid env -i PATH="$PATH" HOME="$HOME" "$RENDER" workflows dev --port "$RUNNER_PORT" --env-file artifacts/hosted-smoke/workflow.env -- pnpm --filter @stateaction/jobs start > artifacts/hosted-smoke/workflow.log 2>&1 &
 runner_pid=$!
-for _ in {1..60}; do "$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text 2>/dev/null | grep -q verify-platform && break; sleep 1; done
+for ((end = SECONDS + 60; SECONDS < end;)); do "$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text 2>/dev/null | grep -q verify-platform && break; sleep 0.2; done
 "$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text | grep verify-platform
 for pid in $(pgrep -g "$runner_pid"); do
   if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -E '^(DATABASE_|MIGRATION_|APP_DB_|S3_)'; then
@@ -201,10 +201,10 @@ done
 echo "workflow process tree has no database/storage/API credentials"
 out="$("$RENDER" workflows start verify-platform --local --port "$RUNNER_PORT" --input='[{"requestId":"11111111-1111-4111-8111-111111111111"}]' -o json)"
 run="$(printf '%s' "$out" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("taskRunId") or d.get("id"))')"
-for _ in {1..30}; do
+for ((end = SECONDS + 30; SECONDS < end;)); do
   state="$("$RENDER" workflows tasks runs show "$run" --local --port "$RUNNER_PORT" -o json)"
   status="$(printf '%s' "$state" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("status"))')"
-  [[ "$status" == failed || "$status" == completed ]] && break; sleep 1
+  [[ "$status" == failed || "$status" == completed ]] && break; sleep 0.2
 done
 # Production processing is deferred: the health fixture must NOT succeed outside local.
 [[ "$status" == failed ]] && printf '%s' "$state" | grep -q 'explicit local configuration' \

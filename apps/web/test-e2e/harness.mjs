@@ -13,6 +13,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
 import { startSeaweedfs } from "./seaweedfs.mjs";
 import { startOutageProxy } from "./outage-proxy.mjs";
+import {
+  waitForGroupExit,
+  leaked,
+} from "../../../scripts/platform/process-wait.mjs";
 
 export const webDir = fileURLToPath(new URL("..", import.meta.url));
 const serverDir = fileURLToPath(
@@ -114,7 +118,7 @@ export async function startStack({
       try {
         process.kill(-next.pid, "SIGTERM");
       } catch {}
-      await sleep(500);
+      await waitForGroupExit(next.pid).catch(leaked);
     }
     await db.stop();
     outage?.stop();
@@ -167,9 +171,9 @@ export async function startStack({
       try {
         if ((await probe("/login")) === 200) break;
       } catch {}
-      if (i > 120 || next.exitCode !== null)
+      if (i > 600 || next.exitCode !== null)
         throw new Error(`next start failed:\n${logs}`);
-      await sleep(500);
+      await sleep(100);
     }
     return {
       db,

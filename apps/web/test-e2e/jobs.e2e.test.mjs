@@ -20,6 +20,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { validateValue } from "@stateaction/contracts";
+import {
+  waitForGroupExit,
+  leaked,
+} from "../../../scripts/platform/process-wait.mjs";
 
 const webDir = fileURLToPath(new URL("..", import.meta.url));
 const serverDir = fileURLToPath(
@@ -232,9 +236,9 @@ before(async () => {
     try {
       if ((await call("/login")).status === 200) break;
     } catch {}
-    if (i > 120 || next.exitCode !== null)
+    if (i > 600 || next.exitCode !== null)
       throw new Error(`next start failed:\n${logs}`);
-    await sleep(500);
+    await sleep(100);
   }
 });
 
@@ -243,7 +247,7 @@ after(async () => {
     try {
       process.kill(-next.pid, "SIGTERM");
     } catch {}
-    await sleep(500);
+    await waitForGroupExit(next.pid).catch(leaked);
   }
   storage?.destroy();
   await Promise.all([owner?.end(), app?.end()]);

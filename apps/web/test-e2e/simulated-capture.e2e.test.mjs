@@ -19,6 +19,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { validateValue } from "@stateaction/contracts";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
 import { startSeaweedfs } from "./seaweedfs.mjs";
+import {
+  waitForGroupExit,
+  leaked,
+} from "../../../scripts/platform/process-wait.mjs";
 
 const webDir = fileURLToPath(new URL("..", import.meta.url));
 const serverDir = fileURLToPath(
@@ -176,9 +180,9 @@ async function startNext(name, extraEnv) {
     try {
       if ((await call(server, "/login")).status === 200) break;
     } catch {}
-    if (i > 120 || server.child.exitCode !== null)
+    if (i > 600 || server.child.exitCode !== null)
       throw new Error(`next start ${name} failed:\n${server.logs}`);
-    await sleep(500);
+    await sleep(100);
   }
   servers[name] = server;
   return server;
@@ -189,7 +193,7 @@ async function stopNext(name) {
     try {
       process.kill(-server.child.pid, "SIGTERM");
     } catch {}
-    await sleep(500);
+    await waitForGroupExit(server.child.pid).catch(leaked);
   }
   delete servers[name];
 }
