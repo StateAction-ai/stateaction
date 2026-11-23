@@ -23,6 +23,7 @@ from typing import Any
 
 import numpy as np
 
+from . import libav_retry
 from .artifact_rrd import RrdWriter
 from .artifact_types import (
     FILE_NAMES,
@@ -241,11 +242,16 @@ class ClipWriter:
         h, w = frame.rgb.shape[:2]
         scale = min(1.0, self.limits.thumbnail_max_side / max(w, h))
         tw, th = max(2, int(w * scale) & ~1), max(2, int(h * scale) & ~1)
-        vf = av.VideoFrame.from_ndarray(frame.rgb, format="rgb24").reformat(
-            width=tw, height=th, format="yuvj420p"
+        vf = libav_retry.reformat(
+            av.VideoFrame.from_ndarray(frame.rgb, format="rgb24"),
+            "thumbnail yuvj420p conversion",
+            width=tw,
+            height=th,
+            format="yuvj420p",
         )
         enc = av.CodecContext.create("mjpeg", "w")
         enc.width, enc.height, enc.pix_fmt = tw, th, "yuvj420p"
+        enc.thread_count = 1
         enc.time_base = Fraction(1, 25)
         enc.options = {"q:v": "3"}
         enc.open()

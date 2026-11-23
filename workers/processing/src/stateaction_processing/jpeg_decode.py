@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
+from . import libav_retry
 from .h264_decode import DecodedFrame, DecodeError, DecodeStats, FrameTransform
 from .jpeg_stream import JpegImage
 
@@ -40,7 +41,7 @@ class JpegDecoder:
                 self.stats.rasters = (raster,)
                 self.stats.frames_out += 1
                 yield DecodedFrame(
-                    frame.to_ndarray(format="rgb24"),
+                    libav_retry.to_rgb24(frame, "decoded jpeg rgb24 conversion"),
                     image,
                     FrameTransform(
                         raster,

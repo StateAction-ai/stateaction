@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from fractions import Fraction  # noqa: E402
 from typing import TYPE_CHECKING, Any
 
+from . import libav_retry
 from .capture_stream import AccessUnit
 
 if TYPE_CHECKING:
@@ -243,6 +244,6 @@ class H264Decoder:
             if (w, h) not in self._rasters:
                 self._rasters.append((w, h))
                 self.stats.rasters = tuple(self._rasters)
-            rgb = fr.to_ndarray(format="rgb24")
+            rgb = libav_retry.to_rgb24(fr, "decoded frame rgb24 conversion")
             self.stats.frames_out += 1
             yield DecodedFrame(rgb, au, FrameTransform((w, h)))
