@@ -31,8 +31,10 @@ def main() -> None:
     if target == "prepare":
         run("dart", "pub", "get", "--enforce-lockfile")
     elif target == "typecheck":
+        run("dart", "pub", "get", "--enforce-lockfile")
         run("dart", "analyze", "--fatal-infos")
     elif target == "test":
+        run("dart", "pub", "get", "--enforce-lockfile")
         report = PACKAGE / "build" / "conformance-report.json"
         report.parent.mkdir(exist_ok=True)
         run("dart", "run", "tool/conformance.dart", str(report))

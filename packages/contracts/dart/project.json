@@ -17,36 +17,29 @@
     ]
   },
   "targets": {
-    "prepare": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "python3 packages/contracts/dart/tool/nx.py prepare"
-      }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["dartSources", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py typecheck"
-      }
+      },
+      "dependsOn": []
     },
     "test": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["dartSources", "contractData", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py test"
-      }
+      },
+      "dependsOn": []
     },
     "format": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["dartSources", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py format"
-      }
+      },
+      "dependsOn": []
     }
   },
   "tags": ["mobile-toolchain"]

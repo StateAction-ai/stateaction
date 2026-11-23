@@ -7,7 +7,7 @@ Evidence types stay separate: **JVM** (host unit tests), **emulator** (software 
 ```sh
 source scripts/env.sh                       # host-specific SDK/JDK; CI uses scripts/platform instead
 pnpm exec nx run android-capture-spike:test # 32 Python tests: verifier, synthetic MCAP builder, driver safety
-pnpm exec nx run android-capture-spike:android-build   # Gradle: 17 JVM tests, APK, androidTest APK, verify Kotlin MCAP fixture
+pnpm exec nx run android-capture-spike:build   # Gradle: 17 JVM tests, APK, androidTest APK, verify Kotlin MCAP fixture
 scripts/start_capture_emulator.sh --ar -no-window      # own terminal, emulator-5582
 python3 spikes/android/capture/harness/run_emulator_qualification.py --serial emulator-5582 --user 0
 ```

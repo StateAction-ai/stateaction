@@ -23,7 +23,6 @@ MOBILE_PROJECTS = {
     "contracts-dart",
     "capture-conformance-mobile",
     "android-capture-spike",
-    "android-capture-spike-native",
     "android-upload-spike",
     "android-upload-spike-native",
     "mobile-auth-backend-e2e",
@@ -175,6 +174,148 @@ class NxGraphTests(unittest.TestCase):
         self.assertIn("build", web["dependsOn"])
         self.assertIn("tsc --noEmit", web["options"]["command"])
         self.assertNotIn("typegen", web["options"]["command"])
+
+    # SA-113: the three mobile build targets are cached verification tasks.
+    CACHED_MOBILE_BUILDS = [
+        ("mobile", "build"),
+        ("android-capture-spike", "build"),
+        ("android-upload-spike-native", "build"),
+    ]
+
+    def test_mobile_build_targets_are_cached_and_never_device_or_fixture_targets(self):
+        uncached = {tuple(pair) for pair in UNCACHED}
+        for project, target in self.CACHED_MOBILE_BUILDS:
+            config = self.graph["nodes"][project]["data"]["targets"][target]
+            self.assertIsNot(config.get("cache"), False, f"{project}:{target}")
+            self.assertNotIn((project, target), uncached)
+            leaves = self.resolved_inputs(project, config["inputs"])
+            self.assertTrue(
+                any(
+                    isinstance(leaf, dict)
+                    and "source.properties" in leaf.get("runtime", "")
+                    for leaf in leaves
+                ),
+                f"{project}:{target} does not hash the installed Android SDK packages",
+            )
+            command = json.dumps(config["options"])
+            for word in ("emulator", "adb", "--serial", "connectedAndroidTest"):
+                self.assertNotIn(word, command, f"{project}:{target}")
+            self.assertFalse(config.get("continuous"))
+
+    def test_no_runtime_input_runs_flutter_whose_startup_lock_makes_hashes_flaky(self):
+        # `flutter --version` waits for the startup lock a running flutter command holds
+        # and prints a notice, so a hash computed meanwhile differs from an idle one.
+        nx_json = json.loads((ROOT / "nx.json").read_text())
+        commands = [
+            leaf["runtime"]
+            for leaves in nx_json["namedInputs"].values()
+            for leaf in leaves
+            if isinstance(leaf, dict) and "runtime" in leaf
+        ]
+        self.assertTrue(commands)
+        for command in commands:
+            self.assertNotRegex(command, r"(^|[\s;|&(])flutter\s", command)
+
+    def test_prepare_is_not_a_standalone_always_run_task(self):
+        for project, node in self.graph["nodes"].items():
+            targets = node["data"]["targets"]
+            self.assertNotIn("prepare", targets, project)
+            for target, config in targets.items():
+                for dep in config.get("dependsOn") or []:
+                    name = dep if isinstance(dep, str) else dep.get("target")
+                    self.assertNotEqual(name, "prepare", f"{project}:{target}")
+
+    def test_no_gradle_dependency_is_dynamic_so_a_hit_cannot_hide_drift(self):
+        # No Gradle dependency lockfile exists; exact direct versions are the lock.
+        dynamic = re.compile(
+            r"\+$|\.\+|latest\.|SNAPSHOT|^[\[(].*,.*[\])]$|:[\[(]|\+['\"]", re.I
+        )
+        roots = [
+            ROOT / "apps/mobile/android",
+            ROOT / "packages/stera_recorder/android",
+            ROOT / "spikes/android/capture",
+            ROOT / "spikes/android/upload",
+        ]
+        checked = 0
+        for root in roots:
+            for file in [*root.rglob("*.gradle"), *root.rglob("*.gradle.kts")]:
+                if any(
+                    part in {"build", ".gradle", ".gradle-user"} for part in file.parts
+                ):
+                    continue
+                checked += 1
+                for line in file.read_text().splitlines():
+                    if line.strip().startswith("//"):
+                        continue
+                    for literal in re.findall(r"['\"]([^'\"]*)['\"]", line):
+                        self.assertIsNone(
+                            dynamic.search(literal), f"{file}: {line.strip()}"
+                        )
+        self.assertGreater(checked, 5)
+
+    def named_runtime(self, name: str) -> list[str]:
+        nx_json = json.loads((ROOT / "nx.json").read_text())
+        return [
+            leaf["runtime"]
+            for leaf in nx_json["namedInputs"][name]
+            if isinstance(leaf, dict) and "runtime" in leaf
+        ]
+
+    def run_runtime(self, command: str, **env: str) -> str:
+        result = subprocess.run(
+            ["sh", "-c", command],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={"PATH": "/usr/bin:/bin", **env},
+        )
+        return result.stdout + result.stderr
+
+    def test_the_sdk_runtime_input_changes_with_an_installed_package_revision(self):
+        (command,) = self.named_runtime("androidToolchain")
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk = Path(tmp)
+            for package in (
+                "build-tools/36.0.0",
+                "platforms/android-36",
+                "ndk/28.2.13676358",
+                "platform-tools",
+            ):
+                (sdk / package).mkdir(parents=True)
+                (sdk / package / "source.properties").write_text(
+                    f"Pkg.Revision={package}\n"
+                )
+            first = self.run_runtime(command, ANDROID_HOME=str(sdk))
+            self.assertEqual(first, self.run_runtime(command, ANDROID_HOME=str(sdk)))
+            self.assertIn("build-tools/36.0.0", first)
+            (sdk / "ndk/28.2.13676358/source.properties").write_text(
+                "Pkg.Revision=29\n"
+            )
+            self.assertNotEqual(first, self.run_runtime(command, ANDROID_HOME=str(sdk)))
+            (sdk / "ndk/28.2.13676358/source.properties").write_text(
+                "Pkg.Revision=ndk/28.2.13676358\n"
+            )
+            self.assertEqual(first, self.run_runtime(command, ANDROID_HOME=str(sdk)))
+            # ANDROID_SDK_ROOT is honoured when ANDROID_HOME is unset.
+            self.assertEqual(
+                first, self.run_runtime(command, ANDROID_SDK_ROOT=str(sdk))
+            )
+
+    def test_the_flutter_version_runtime_input_follows_a_symlinked_flutter(self):
+        command = next(
+            c for c in self.named_runtime("flutterToolchain") if "flutter" in c
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk = Path(tmp) / "sdk/bin"
+            (sdk / "cache").mkdir(parents=True)
+            (sdk / "flutter").write_text("#!/bin/sh\nexit 99\n")
+            (sdk / "flutter").chmod(0o755)
+            (sdk / "cache/flutter.version.json").write_text('{"flutterVersion": "9"}')
+            link = Path(tmp) / "link"
+            link.mkdir()
+            (link / "flutter").symlink_to(sdk / "flutter")
+            out = self.run_runtime(command, PATH=f"{link}:/usr/bin:/bin")
+            self.assertEqual(out, '{"flutterVersion": "9"}')
 
     def test_every_fixture_stage_runs_a_target_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[

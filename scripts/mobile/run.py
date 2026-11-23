@@ -159,15 +159,21 @@ def main() -> None:
         raise RuntimeError(
             f"Use pinned Flutter {toolchain['flutter']}; found {version['frameworkVersion']}"
         )
+    # `pub get` runs inline in the target that executes (SA-113), never as a separate
+    # always-run Nx task, so a cache hit of typecheck/test/build never triggers it.
+    # `format` reads Git-visible sources only and needs no resolved packages.
     if args.target == "prepare":
         prepare(args.project)
     elif args.target == "typecheck":
+        prepare(args.project)
         run("flutter", "analyze", "--no-pub", cwd=directory)
     elif args.target == "test":
+        prepare(args.project)
         run("flutter", "test", "--no-pub", "--concurrency=2", cwd=directory)
     elif args.target == "format":
         format_sources(directory, toolchain["dartFormatLanguageVersion"])
     elif args.project == "mobile":
+        prepare("mobile")
         run(
             "flutter",
             "build",
@@ -179,6 +185,9 @@ def main() -> None:
             cwd=directory,
         )
     else:
+        # The recorder's Gradle build runs inside the mobile app's Android project.
+        prepare(args.project)
+        prepare("mobile")
         run(
             "./gradlew",
             ":stera_recorder:testDebugUnitTest",

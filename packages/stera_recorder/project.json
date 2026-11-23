@@ -3,46 +3,32 @@
   "root": "packages/stera_recorder",
   "projectType": "library",
   "targets": {
-    "prepare": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "python3 scripts/mobile/run.py stera-recorder prepare"
-      }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py stera-recorder typecheck"
-      }
+      },
+      "dependsOn": []
     },
     "test": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py stera-recorder test"
-      }
+      },
+      "dependsOn": []
     },
     "format": {
       "executor": "nx:run-commands",
-      "dependsOn": ["prepare"],
       "inputs": ["flutterSources"],
       "options": {
         "command": "python3 scripts/mobile/run.py stera-recorder format"
-      }
+      },
+      "dependsOn": []
     },
     "build": {
       "executor": "nx:run-commands",
-      "dependsOn": [
-        "prepare",
-        {
-          "target": "prepare",
-          "projects": ["mobile"]
-        }
-      ],
       "inputs": [
         "flutterSources",
         "{workspaceRoot}/apps/mobile/android/**/*",
@@ -50,12 +36,17 @@
         "!{workspaceRoot}/apps/mobile/android/local.properties",
         "{workspaceRoot}/apps/mobile/pubspec.lock",
         "!{workspaceRoot}/apps/mobile/android/.kotlin/**/*",
-        "!{workspaceRoot}/apps/mobile/android/**/.cxx/**/*"
+        "!{workspaceRoot}/apps/mobile/android/**/.cxx/**/*",
+        "androidToolchain",
+        "{workspaceRoot}/apps/mobile/pubspec.yaml",
+        "{workspaceRoot}/packages/contracts/dart/pubspec.yaml",
+        "{workspaceRoot}/packages/contracts/dart/pubspec.lock"
       ],
       "outputs": ["{workspaceRoot}/apps/mobile/build/stera_recorder"],
       "options": {
         "command": "python3 scripts/mobile/run.py stera-recorder build"
-      }
+      },
+      "cache": true
     }
   },
   "tags": ["mobile-toolchain"]
