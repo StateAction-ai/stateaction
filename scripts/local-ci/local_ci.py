@@ -513,15 +513,31 @@ def affected_projects(cwd: Path, paths: list[str], env: dict[str, str]) -> list[
 # --------------------------------------------------------------------- stage file
 
 
+EXCLUDE_ITEM = re.compile(r"!?(\*|tag:[A-Za-z0-9_.-]+|[A-Za-z0-9_.@/-]+)")
+
+
 def load_stages(text: bytes) -> dict:
     data = json.loads(text)
     if data.get("schema") != STAGES_SCHEMA or not data.get("stages"):
         raise Refused("stages.json has an unknown schema or no stages")
     seen = set()
     for stage in data["stages"]:
-        if stage["id"] in seen or not stage.get("argv"):
+        affected = stage.get("affected")
+        if stage["id"] in seen or not (stage.get("argv") or affected):
             raise Refused(f"invalid or duplicate stage {stage.get('id')!r}")
+        if affected is not None and not (
+            isinstance(affected.get("targets"), list) and affected["targets"]
+        ):
+            raise Refused(f"stage {stage['id']!r} declares affected without targets")
+        for item in ((affected or {}).get("exclude") or "").split(","):
+            if item and not EXCLUDE_ITEM.fullmatch(item):
+                raise Refused(
+                    f"stage {stage['id']!r}: unsupported exclude pattern {item!r}"
+                )
         seen.add(stage["id"])
+    always = data.get("alwaysRunAll", [])
+    if not isinstance(always, list) or not all(isinstance(x, str) for x in always):
+        raise Refused("alwaysRunAll must be a list of path patterns")
     return data
 
 
@@ -529,25 +545,39 @@ def argv_hash(stage: dict) -> str:
     canonical = json.dumps(
         {
             k: stage.get(k)
-            for k in ("argv", "cwd", "env", "fixtures", "cache", "gradleBuildCache")
+            for k in (
+                "argv",
+                "affected",
+                "cwd",
+                "env",
+                "fixtures",
+                "cache",
+                "gradleBuildCache",
+            )
         },
         sort_keys=True,
     )
     return sha256_bytes(canonical.encode())
 
 
-def is_nx(argv: list[str]) -> bool:
-    return argv[:3] == ["pnpm", "exec", "nx"]
+NX_DEFAULT = ["pnpm", "exec", "nx"]
 
 
-def effective_argv(stage: dict, fresh: bool) -> tuple[list[str], bool]:
+def is_nx(argv: list[str], nx: list[str] | None = None) -> bool:
+    nx = nx or NX_DEFAULT
+    return argv[: len(nx)] == nx
+
+
+def effective_argv(
+    stage: dict, fresh: bool, argv: list[str] | None = None, nx: list[str] | None = None
+) -> tuple[list[str], bool]:
     """Nx caching is decided by each target's own `cache` flag; only --fresh bypasses it.
 
     Integration and E2E targets declare `cache: false` in their project, so the runner
     no longer forces a cold dependency chain. Returns the argv and whether the cache is skipped.
     """
-    argv = list(stage["argv"])
-    if not is_nx(argv):
+    argv = list(argv if argv is not None else stage["argv"])
+    if not is_nx(argv, nx):
         return argv, False
     if fresh and "--skip-nx-cache" not in argv:
         argv.append("--skip-nx-cache")
@@ -561,11 +591,28 @@ def fixture_task(stage: dict, argv: list[str]) -> str | None:
     return argv[4] if len(argv) > 4 else None
 
 
-def cached_fixture_task(stage: dict, argv: list[str], cache: dict | None) -> str | None:
+def cached_fixture_task(
+    stage: dict, argv: list[str], cache: dict | None, selected: list[str] | None = None
+) -> str | None:
     """The fixture task that did not provably execute: replayed from cache or never reported.
 
     Fails closed: when the Nx output carries no record of the task, it is reported too.
+    An `affected` fixture stage must execute every task selected for it.
     """
+    if selected is not None and stage.get("fixtures"):
+        done = (cache or {}).get("executedTasks", [])
+        targets = set((stage.get("affected") or {}).get("targets", []))
+        replayed = [
+            t
+            for t in (cache or {}).get("hitTasks", [])
+            if t.rpartition(":")[2] in targets
+        ]
+        if not selected and not replayed:
+            # A running fixture stage with nothing selected means the affected computation
+            # failed (graph unreadable): no task is known, so none is proven to have executed.
+            return "no fixture task is selected, so none is proven to have executed"
+        missing = [t for t in selected if t not in done]
+        return ", ".join(missing + replayed) or None
     task = fixture_task(stage, argv)
     if task is None or task in (cache or {}).get("executedTasks", []):
         return None
@@ -625,10 +672,293 @@ class CacheScan:
         return {
             "tasks": len(self.hit) + len(self.executed),
             "hits": len(self.hit),
-            "hitTasks": self.hit[:200],
-            "executedTasks": self.executed[:200],
+            "hitTasks": self.hit[:2000],
+            "executedTasks": self.executed[:2000],
             "taskTimings": self.timings(),
         }
+
+
+# ------------------------------------------------------------------ affected set
+
+SKIP_REASON = "skipped: unaffected"
+AFFECTED_SCHEMA = "stateaction.local-ci.affected/1"
+
+
+def glob_match(pattern: str, path: str) -> bool:
+    """`**` crosses directories, `*` stays inside one path segment."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+        elif pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+        elif pattern[i] == "*":
+            out += "[^/]*"
+            i += 1
+        else:
+            out += re.escape(pattern[i])
+            i += 1
+    return re.fullmatch(out, path) is not None
+
+
+def matched_always_run(patterns: list[str], files: list[str]) -> list[str]:
+    return sorted({f for f in files if any(glob_match(p, f) for p in patterns)})
+
+
+def changed_files(repo: Path, base: str, head: str) -> list[str]:
+    out = git(repo, "diff", "--name-only", "--no-renames", "-z", base, head)
+    return sorted(f for f in out.split("\0") if f)
+
+
+def resolve_affected_base(
+    repo: Path, head: str, base_ref: str = "refs/remotes/origin/main"
+) -> tuple[str | None, str]:
+    """The commit `nx affected` compares against, or why none can be trusted.
+
+    The runner never guesses: a shallow clone or an unresolvable merge base means the whole
+    suite runs. Because PRs are squashed, the base is origin/main (the head's direct parent).
+    """
+    if git(repo, "rev-parse", "--is-shallow-repository", check=False) == "true":
+        return None, "shallow"
+    base = git(repo, "merge-base", base_ref, head, check=False)
+    return (base, "ok") if base else (None, "base-unresolved")
+
+
+def nx_command(spec: dict) -> list[str]:
+    return list(spec.get("nx") or NX_DEFAULT)
+
+
+def stage_argv(
+    spec: dict, stage: dict, *, base: str | None, head: str, run_all: bool
+) -> list[str]:
+    """The Nx command of an `affected` stage; stages without the key keep their own argv."""
+    declared = stage.get("affected")
+    if not declared:
+        return list(stage["argv"])
+    narrow = bool(base) and not run_all
+    argv = [
+        *nx_command(spec),
+        "affected" if narrow else "run-many",
+        "-t",
+        ",".join(declared["targets"]),
+    ]
+    if declared.get("exclude"):
+        argv.append(f"--exclude={declared['exclude']}")
+    if narrow:
+        argv += [f"--base={base}", f"--head={head}"]
+    return argv + list(declared.get("args", []))
+
+
+def make_nx(cmd: list[str], cwd: Path, env: dict[str, str], timeout: float = 600.0):
+    """A callable running one Nx query; any failure is a Refused (the caller runs everything).
+
+    `{out}` in an argument becomes a scratch file; with `output=` that JSON file is returned."""
+    scratch = Path(tempfile.mkdtemp(prefix="nx-plan-", dir=env.get("TMPDIR")))
+
+    def run(args: list[str], *, output: str | None = None):
+        argv = [
+            *cmd,
+            *[a.replace("{out}", str(scratch / (output or ""))) for a in args],
+        ]
+        try:
+            proc = subprocess.run(
+                argv,
+                cwd=cwd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise Refused(f"nx query failed to run: {error}") from error
+        if proc.returncode:
+            raise Refused(
+                f"nx {' '.join(args[:2])} failed: {proc.stderr.strip()[-300:]}"
+            )
+        if output:
+            try:
+                return json.loads((scratch / output).read_text())
+            except (OSError, ValueError) as error:
+                raise Refused(f"nx wrote no readable {output}: {error}") from error
+        return proc.stdout
+
+    run.scratch = scratch  # type: ignore[attr-defined]
+    return run
+
+
+def graph_projects(nx) -> dict[str, dict]:
+    data = nx(["graph", "--file={out}"], output="graph.json")
+    nodes = (data.get("graph") or {}).get("nodes")
+    if not isinstance(nodes, dict) or not nodes:
+        raise Refused("nx graph returned no projects")
+    return {
+        name: {
+            "tags": sorted(node["data"].get("tags") or []),
+            "targets": sorted((node["data"].get("targets") or {}).keys()),
+        }
+        for name, node in nodes.items()
+    }
+
+
+def excluded_projects(pattern: str | None, projects: dict[str, dict]) -> set[str]:
+    """Nx `--exclude` semantics for the forms the stage file uses: names, `*`, `tag:x`, `!`."""
+    excluded: set[str] = set()
+    for raw in (pattern or "").split(","):
+        item = raw.strip()
+        if not item:
+            continue
+        negate = item.startswith("!")
+        item = item.lstrip("!")
+        if item == "*":
+            hit = set(projects)
+        elif item.startswith("tag:"):
+            hit = {n for n, p in projects.items() if item[4:] in p["tags"]}
+        else:
+            hit = {item} & set(projects)
+        excluded = excluded - hit if negate else excluded | hit
+    return excluded
+
+
+def candidate_tasks(declared: dict, projects: dict[str, dict]) -> list[str]:
+    gone = excluded_projects(declared.get("exclude"), projects)
+    return sorted(
+        f"{name}:{target}"
+        for name, info in projects.items()
+        if name not in gone
+        for target in declared["targets"]
+        if target in info["targets"]
+    )
+
+
+def evidence_digest(block: dict) -> str:
+    body = {k: v for k, v in block.items() if k != "evidenceSha256"}
+    return sha256_bytes(json.dumps(body, sort_keys=True).encode())
+
+
+def plan_affected(
+    spec: dict,
+    *,
+    nx,
+    repo: Path,
+    head: str,
+    base: str | None,
+    base_problem: str = "base-unresolved",
+) -> dict:
+    """What the gate runs: the affected set, selected and skipped tasks per stage, the matched
+    always-run-everything paths and an evidence hash. Fails wide, never narrow: an unresolved
+    base, a failed Nx query or a matched path runs every stage."""
+    patterns = spec.get("alwaysRunAll", [])
+    computation, detail = ("ok", "") if base else (base_problem, "no usable base")
+    changed: list[str] = []
+    if base:
+        try:
+            changed = changed_files(repo, base, head)
+        except Refused as error:
+            computation, detail = "failed", str(error)
+    matched = matched_always_run(patterns, changed)
+    declared = [s for s in spec["stages"] if s.get("affected")]
+    projects: dict[str, dict] = {}
+    affected_projects: list[str] = []
+    selection: dict[str, set[str]] = {}
+    try:
+        if declared:
+            projects = graph_projects(nx)
+        if computation == "ok" and not matched and declared:
+            affected_projects = sorted(
+                json.loads(
+                    nx(
+                        [
+                            "show",
+                            "projects",
+                            "--affected",
+                            f"--base={base}",
+                            f"--head={head}",
+                            "--json",
+                        ]
+                    )
+                )
+            )
+            for stage in declared:
+                data = nx(
+                    [
+                        "affected",
+                        "-t",
+                        ",".join(stage["affected"]["targets"]),
+                        f"--base={base}",
+                        f"--head={head}",
+                        "--explain={out}",
+                    ],
+                    output=f"explain-{stage['id']}.json",
+                )
+                chosen_ids = set(data["affected"])
+                unknown = chosen_ids - set(
+                    candidate_tasks({**stage["affected"], "exclude": None}, projects)
+                )
+                if unknown:
+                    raise Refused(
+                        f"nx selected task ids the stage cannot map: {sorted(unknown)[:5]}"
+                    )
+                selection[stage["id"]] = chosen_ids
+    except (Refused, ValueError, KeyError, TypeError) as error:
+        computation, detail = "failed", f"{type(error).__name__}: {error}"
+    run_all = bool(matched) or computation != "ok"
+    if run_all:
+        affected_projects = sorted(projects)
+    stages: dict[str, dict] = {}
+    for stage in spec["stages"]:
+        declared_a = stage.get("affected")
+        if not declared_a:
+            stages[stage["id"]] = {"run": True, "selectedTasks": [], "skippedTasks": []}
+            continue
+        candidates = candidate_tasks(declared_a, projects) if projects else []
+        if run_all:
+            chosen, skipped = candidates, []
+        else:
+            chosen = [t for t in candidates if t in selection[stage["id"]]]
+            skipped = [
+                {"task": t, "reason": SKIP_REASON}
+                for t in candidates
+                if t not in selection[stage["id"]]
+            ]
+        stages[stage["id"]] = {
+            "run": run_all or bool(chosen),
+            "selectedTasks": chosen,
+            "skippedTasks": skipped,
+        }
+    block = {
+        "schema": AFFECTED_SCHEMA,
+        "base": base,
+        "head": head,
+        "computation": computation,
+        "computationDetail": detail[:400],
+        "runAll": run_all,
+        "matchedAlwaysRunPaths": matched,
+        "changedFileCount": len(changed),
+        "changedFilesSha256": sha256_bytes("\0".join(changed).encode()),
+        "projects": affected_projects,
+        "stages": stages,
+    }
+    block["evidenceSha256"] = evidence_digest(block)
+    return block
+
+
+def affected_declared(spec: dict) -> bool:
+    return bool(spec.get("alwaysRunAll")) or any(
+        s.get("affected") for s in spec["stages"]
+    )
+
+
+def link_history(repo: Path, export: Path) -> None:
+    """Let the export's private git repository read the real repository's objects (an
+    `objects/info/alternates` file, read-only), so Nx can diff base against head inside the
+    export, which carries no history. Only this one repository sees them: the tasks' own
+    throwaway repositories do not."""
+    objects = git(repo, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+    info = export / ".git" / "objects" / "info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "alternates").write_text(objects + "\n")
 
 
 # -------------------------------------------------------------------- environment
@@ -1602,6 +1932,69 @@ def timing_report(home: Path, last: int = 5) -> str:
     return f"[local-ci] median per stage over {len(runs)} PASS run(s)\n{body}"
 
 
+def skipped_entry(stage: dict) -> dict:
+    """A stage Nx proved unaffected: recorded, never confused with a stage that failed to run."""
+    return {
+        "id": stage["id"],
+        "argvSha256": argv_hash(stage),
+        "status": "skipped",
+        "reason": SKIP_REASON,
+        "exitCode": None,
+        "durationSec": 0.0,
+        "startedAt": None,
+        "logBytes": 0,
+        "logSha256": None,
+        "fixtureBacked": bool(stage.get("fixtures")),
+        "cacheMode": "none",
+        "gradleBuildCache": False,
+        "cache": None,
+        "metrics": None,
+    }
+
+
+def compute_plan(
+    spec: dict,
+    *,
+    repo: Path,
+    head: str | None,
+    export: Path,
+    base_env: dict[str, str],
+    shim_dir: Path,
+    node_version: str,
+    tmp: Path,
+    nx_cache: Path,
+    nx_data: Path,
+    log=lambda message: None,
+) -> dict:
+    """Compute the affected plan inside the export, after setup installed Nx."""
+    base, problem = (
+        resolve_affected_base(repo, head) if head else (None, "base-unresolved")
+    )
+    env = stage_env(
+        base_env,
+        shim_dir=shim_dir,
+        node_version=node_version,
+        stage={},
+        tmp=tmp,
+        cache_dir=nx_cache,
+        workspace_data_dir=nx_data,
+        skip_nx_cache=False,
+    )
+    nx = make_nx(nx_command(spec), export, env)
+    try:
+        plan = plan_affected(
+            spec, nx=nx, repo=repo, head=head or "", base=base, base_problem=problem
+        )
+    finally:
+        shutil.rmtree(nx.scratch, ignore_errors=True)
+    log(
+        f"[local-ci] affected: base={plan['base']} computation={plan['computation']} "
+        f"runAll={plan['runAll']} matched={plan['matchedAlwaysRunPaths']} "
+        f"projects={len(plan['projects'])}"
+    )
+    return plan
+
+
 def run_pipeline(
     repo: Path,
     *,
@@ -1686,6 +2079,8 @@ def run_pipeline(
     shim_dir = work / "shims"
     shim_dir.mkdir(mode=0o700)
     pins = spec["pins"]
+    nx_cmd = nx_command(spec)
+    plan: dict | None = None
     make_shims(shim_dir, pins["uv"])
     fixtures = None
     services: list[dict] = []
@@ -1733,6 +2128,7 @@ def run_pipeline(
                 file.write("".join(f"{k}={v}\n" for k, v in sorted(fixtures.items())))
         export_tree(repo, tree, export)
         init_export_repo(export)
+        link_history(repo, export)
         snapshot = take_snapshot(repo, tree, export)
         for item in stages:
             for needed in item.get("requiresPaths", []):
@@ -1746,7 +2142,36 @@ def run_pipeline(
                 record["stages"].append({"id": stage["id"], "status": "interrupted"})
                 raise Interrupted("Cancelled before stage " + stage["id"])
             cwd = export / stage.get("cwd", ".")
-            argv, skip_nx = effective_argv(stage, fresh)
+            selection = None
+            built = None
+            if stage.get("affected"):
+                if plan is None:
+                    plan = compute_plan(
+                        spec,
+                        repo=repo,
+                        head=head,
+                        export=export,
+                        base_env=os.environ.copy(),
+                        shim_dir=shim_dir,
+                        node_version=pins["node"],
+                        tmp=tmp,
+                        nx_cache=nx_cache,
+                        nx_data=nx_data,
+                        log=log,
+                    )
+                selection = plan["stages"][stage["id"]]
+                if not selection["run"]:
+                    log(f"[local-ci] stage {stage['id']}: {SKIP_REASON}")
+                    record["stages"].append(skipped_entry(stage))
+                    continue
+                built = stage_argv(
+                    spec,
+                    stage,
+                    base=plan["base"],
+                    head=head,
+                    run_all=plan["runAll"],
+                )
+            argv, skip_nx = effective_argv(stage, fresh, built, nx_cmd)
             gradle_cache = bool(stage.get("gradleBuildCache")) and not fresh
             env = stage_env(
                 os.environ.copy(),
@@ -1796,8 +2221,8 @@ def run_pipeline(
                 secrets_=secrets_,
                 stop=stop,
                 capture=bool(stage.get("capture")),
-                scan=CacheScan() if is_nx(argv) else None,
-                wait_for_gradle=stage["id"] == "mobile-android-dart",
+                scan=CacheScan() if is_nx(argv, nx_cmd) else None,
+                wait_for_gradle=stage["id"] == "mobile",
                 cgroup=Path(guard["cgroup"]) if guard.get("cgroup") else None,
             )
             entry = {
@@ -1811,9 +2236,9 @@ def run_pipeline(
                 "logSha256": result.get("logSha256"),
                 "fixtureBacked": bool(stage.get("fixtures")),
                 "cacheMode": "none"
-                if skip_nx or not is_nx(argv)
+                if skip_nx or not is_nx(argv, nx_cmd)
                 else "none-by-target"
-                if fixture_task(stage, argv)
+                if fixture_task(stage, argv) or (selection and stage.get("fixtures"))
                 else "nx",
                 "gradleBuildCache": gradle_cache,
                 "cache": result.get("cache"),
@@ -1821,11 +2246,11 @@ def run_pipeline(
             }
             if stage.get("capture") == "toolchain" and "captured" in result:
                 toolchain = {
-                    k: v.strip()
+                    k.removeprefix("toolchain:"): v.strip()
                     for k, _, v in (
                         line.partition("=") for line in result["captured"].splitlines()
                     )
-                    if k and v
+                    if k.startswith("toolchain:") and v
                 }
             # The tree under test must be exactly what is being committed.
             observed = current_tree(repo, rev)
@@ -1835,13 +2260,29 @@ def run_pipeline(
                     f"tree changed from {tree} to {observed} during the run"
                 )
             rewritten = modified_since(export, snapshot)
-            replayed = cached_fixture_task(stage, argv, result.get("cache"))
+            replayed = cached_fixture_task(
+                stage,
+                argv,
+                result.get("cache"),
+                selection["selectedTasks"] if selection else None,
+            )
             if replayed and entry["status"] == "passed":
                 entry["status"] = "cached-fixture"
                 entry["detail"] = (
                     f"fixture-backed task {replayed} was replayed from cache "
                     "or missing from the Nx run output"
                 )
+            if selection is not None and entry["status"] == "passed":
+                ran = set((result.get("cache") or {}).get("executedTasks", [])) | set(
+                    (result.get("cache") or {}).get("hitTasks", [])
+                )
+                absent = [t for t in selection["selectedTasks"] if t not in ran]
+                if absent:
+                    entry["status"] = "plan-mismatch"
+                    entry["detail"] = (
+                        "Nx did not report these planned tasks: "
+                        + ", ".join(absent[:10])
+                    )
             if rewritten and entry["status"] == "passed":
                 entry["status"] = "source-modified"
                 entry["detail"] = "stage rewrote tracked source: " + ", ".join(
@@ -1859,7 +2300,7 @@ def run_pipeline(
                 raise Interrupted("Cancelled during stage " + stage["id"])
             if entry["status"] != "passed" and not keep_going:
                 break
-        passed = [s for s in record["stages"] if s["status"] == "passed"]
+        passed = [s for s in record["stages"] if s["status"] in ("passed", "skipped")]
         complete = len(passed) == len(stages) == len(record["stages"])
         final = current_tree(repo, rev)
         if final != tree:
@@ -1922,6 +2363,7 @@ def run_pipeline(
             fresh=fresh,
             only=only,
             docs_only=False,
+            ci_mode=ci_mode,
             fixtures_path=fixtures_path,
             probe_fixtures=probe_fixtures,
             runner_text=runner_text,
@@ -1955,9 +2397,10 @@ def run_pipeline(
                         "cache",
                     )
                 }
-                | {"metrics": s.get("metrics")}
+                | {"metrics": s.get("metrics"), "reason": s.get("reason")}
                 for s in record["stages"]
             ],
+            "affected": plan,
             "toolchain": toolchain,
             "toolchainSha256": sha256_bytes(
                 json.dumps(toolchain, sort_keys=True).encode()
@@ -2012,9 +2455,21 @@ def run_pipeline(
 # ------------------------------------------------------------------- verification
 
 
-def receipt_fixture_problem(stage: dict, item: dict) -> str | None:
-    """Why a receipt entry does not prove its fixture `nx run` task executed uncached."""
-    task = fixture_task(stage, stage["argv"])
+def receipt_fixture_problem(
+    stage: dict, item: dict, selected: list[str] | None = None
+) -> str | None:
+    """Why a receipt entry does not prove its fixture task(s) executed uncached."""
+    if selected is not None and stage.get("fixtures"):
+        ran = (item.get("cache") or {}).get("executedTasks") or []
+        if not (
+            selected
+            and item.get("fixtureBacked")
+            and item.get("cacheMode") in ("none", "none-by-target")
+            and all(t in ran for t in selected)
+        ):
+            return f"lacks proof that {', '.join(selected)} executed uncached"
+        return None
+    task = fixture_task(stage, stage.get("argv") or [])
     if task and not (
         item.get("fixtureBacked")
         and item.get("cacheMode") in ("none", "none-by-target")
@@ -2113,6 +2568,108 @@ def docs_receipt_problems(
     return errors
 
 
+def default_verify_nx(repo: Path, spec: dict):
+    if (
+        nx_command(spec) == NX_DEFAULT
+        and not (repo / "node_modules" / ".bin" / "nx").exists()
+    ):
+        raise Refused(
+            "node_modules is missing: run `pnpm install --frozen-lockfile` so the "
+            "affected set can be reproduced"
+        )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(NX_DAEMON="false", NX_NO_CLOUD="true", NX_TUI="false", CI="true")
+    return make_nx(nx_command(spec), repo, env)
+
+
+def affected_problems(
+    repo: Path,
+    spec: dict,
+    receipt: dict,
+    head_sha: str,
+    base_sha: str,
+    items: dict[str, dict],
+    nx=None,
+) -> list[str]:
+    """Reproduce the receipt's affected set from the head versus the base; fail closed."""
+    block = receipt.get("affected")
+    if not isinstance(block, dict):
+        return ["receipt lacks the affected set the stage list requires"]
+    errors: list[str] = []
+    if block.get("evidenceSha256") != evidence_digest(block):
+        errors.append("affected evidence hash does not match the recorded affected set")
+    if block.get("base") != base_sha:
+        errors.append(
+            "affected base is not the latest origin/main (the head's direct parent)"
+        )
+    if block.get("head") != head_sha:
+        errors.append("affected head differs from the head under verification")
+    try:
+        changed = changed_files(repo, base_sha, head_sha)
+    except Refused as error:
+        return errors + [f"cannot recompute the changed files: {error}"]
+    matched = matched_always_run(spec.get("alwaysRunAll", []), changed)
+    if block.get("changedFilesSha256") != sha256_bytes("\0".join(changed).encode()):
+        errors.append("recorded changed files differ from the head versus its base")
+    if block.get("matchedAlwaysRunPaths") != matched:
+        errors.append(
+            f"always-run paths differ: recomputed {matched}, receipt "
+            f"{block.get('matchedAlwaysRunPaths')}"
+        )
+    stages = block.get("stages") or {}
+    if set(stages) != {s["id"] for s in spec["stages"]}:
+        errors.append("affected stage records differ from the declared stages")
+    ran_all = bool(matched) or block.get("computation") != "ok"
+    if ran_all and not block.get("runAll"):
+        errors.append(
+            "affected set was narrowed despite an always-run path or a failed computation"
+        )
+    if block.get("runAll") and not ran_all:
+        errors.append("run-everything recorded without an always-run path or a failure")
+    for stage in spec["stages"]:
+        record = stages.get(stage["id"]) or {}
+        item = items.get(stage["id"]) or {}
+        ran = item.get("status") == "passed"
+        skipped = item.get("status") == "skipped"
+        if block.get("runAll") and not ran:
+            errors.append(
+                f"stage {stage['id']} was skipped although everything must run"
+            )
+        if bool(record.get("run")) != ran or (not ran and not skipped):
+            errors.append(f"stage {stage['id']} status contradicts the affected record")
+        if skipped and item.get("reason") != SKIP_REASON:
+            errors.append(f"stage {stage['id']} skipped without the unaffected reason")
+    if errors or block.get("runAll"):
+        return errors
+    if nx is None:
+        if git(repo, "rev-parse", "HEAD", check=False) != head_sha or git(
+            repo, "status", "--porcelain", check=False
+        ):
+            return [
+                "affected set could not be reproduced: the checkout is not a clean "
+                "copy of the head under verification"
+            ]
+        try:
+            nx = default_verify_nx(repo, spec)
+        except Refused as error:
+            return [f"affected set could not be reproduced: {error}"]
+    try:
+        again = plan_affected(spec, nx=nx, repo=repo, head=head_sha, base=base_sha)
+    except Refused as error:
+        return [f"affected set could not be reproduced: {error}"]
+    finally:
+        shutil.rmtree(getattr(nx, "scratch", "/nonexistent"), ignore_errors=True)
+    if again["computation"] != "ok" or again["runAll"]:
+        return [
+            "affected set could not be reproduced "
+            f"({again['computation']}: {again['computationDetail']})"
+        ]
+    if again != block:
+        diff = [k for k in again if again.get(k) != block.get(k)]
+        return [f"recomputed affected set differs from the receipt ({', '.join(diff)})"]
+    return []
+
+
 def verify_receipt(
     repo: Path,
     head: str = "HEAD",
@@ -2122,6 +2679,7 @@ def verify_receipt(
     require_single_commit: bool = True,
     affected=None,
     guarded=None,
+    nx=None,
 ) -> list[str]:
     """Return the reasons the receipt cannot authorize merging `head` (empty = valid)."""
     repo = Path(repo).resolve()
@@ -2191,17 +2749,34 @@ def verify_receipt(
     got = {s.get("id"): s for s in receipt.get("stages", [])}
     if list(got) != list(declared):
         errors.append("receipt stages do not equal the declared stages in order")
+    affected_on = affected_declared(spec)
+    selected_by_stage = {
+        k: v.get("selectedTasks")
+        for k, v in ((receipt.get("affected") or {}).get("stages") or {}).items()
+    }
     for stage_id, digest in declared.items():
         item = got.get(stage_id)
+        skipped_ok = bool(
+            affected_on
+            and next((x for x in stage_list if x["id"] == stage_id), {}).get("affected")
+            and item
+            and item.get("status") == "skipped"
+            and item.get("reason") == SKIP_REASON
+        )
         if (
             not item
-            or item.get("status") != "passed"
+            or (item.get("status") != "passed" and not skipped_ok)
             or item.get("argvSha256") != digest
         ):
             errors.append(f"stage {stage_id} did not pass with the declared command")
             continue
+        if skipped_ok:
+            continue
+        stage_spec = next((x for x in stage_list if x["id"] == stage_id), {"argv": []})
         problem = receipt_fixture_problem(
-            next((x for x in stage_list if x["id"] == stage_id), {"argv": []}), item
+            stage_spec,
+            item,
+            selected_by_stage.get(stage_id) if stage_spec.get("affected") else None,
         )
         if problem:
             errors.append(f"stage {stage_id} {problem}")
@@ -2209,18 +2784,20 @@ def verify_receipt(
         errors += docs_receipt_problems(
             repo, receipt, spec, head_sha, base_sha, affected, guarded
         )
-    guard = receipt.get("guard", {})
-    if not (
-        0 < guard.get("memoryMaxBytes", 0) <= JOB_MAX and guard.get("swapMaxBytes") == 0
-    ):
-        errors.append("receipt lacks verified guard limits")
-    ancestor = (
+    ancestor_ok = (
         subprocess.run(
             ["git", "merge-base", "--is-ancestor", base_sha, head_sha], cwd=repo
         ).returncode
         == 0
     )
-    if not ancestor:
+    if affected_on and ancestor_ok and not docs_mode:
+        errors += affected_problems(repo, spec, receipt, head_sha, base_sha, got, nx)
+    guard = receipt.get("guard", {})
+    if not (
+        0 < guard.get("memoryMaxBytes", 0) <= JOB_MAX and guard.get("swapMaxBytes") == 0
+    ):
+        errors.append("receipt lacks verified guard limits")
+    if not ancestor_ok:
         errors.append(
             "head does not contain the latest origin/main (rebase and re-run)"
         )

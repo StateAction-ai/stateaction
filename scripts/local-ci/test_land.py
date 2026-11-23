@@ -257,6 +257,20 @@ class LandTests(unittest.TestCase):
         self.assertEqual(b.events, ["policy", "fetch", "gate"])
         self.assertEqual(res["attempts"], 1)
 
+    def test_a_skipped_stage_is_never_the_reported_failed_stage(self):
+        summary = land.gate_summary(
+            {
+                "verdict": "FAIL",
+                "stages": [
+                    {"id": "setup", "status": "passed", "durationSec": 1},
+                    {"id": "mobile", "status": "skipped", "durationSec": 0},
+                    {"id": "static", "status": "failed", "durationSec": 2},
+                ],
+                "logDir": "/logs/run",
+            }
+        )
+        self.assertEqual(summary["failedStage"], "static")
+
     def test_main_moving_during_gate_regates_after_rebase_inside_ticket(self):
         b = Bench(self)
         moved = []
