@@ -12,6 +12,11 @@
 # re-verifying ownership. STATEACTION_REQUIRE_EXTERNAL_FIXTURES=1 refuses any
 # Docker fallback. See scripts/platform/local-fixtures.mjs.
 set -euo pipefail
+# Worker count: scripts/platform/test-workers.json (the one declared place, with its
+# connection budget against the shared fixture PostgreSQL max_connections). Each test
+# file is its own process with its own cloned database and bucket. Override only to
+# measure, with CATALOG_TEST_CONCURRENCY.
+default_concurrency=$(node "$(dirname "$0")/../../../scripts/platform/test-workers.mjs" catalog-integration)
 # Optional arguments select test files; default is the whole suite.
 (( $# )) || set -- test-integration/*.test.ts
 cd "$(dirname "$0")/.."
@@ -32,7 +37,6 @@ if [[ -n "${STATEACTION_LOCAL_FIXTURES:-}${E2E_EXTERNAL_FIXTURES:-}" || -n "${ST
   trap cleanup EXIT
   set -a; source "$run_dir/run.env"; set +a
   node "$fixtures" sql --url-env CATALOG_TEST_ADMIN_URL -c 'show server_version' > "$out/server-version.txt"
-  default_concurrency=2
 else
   name="stateaction-catalog-it-$(python3 -c 'import secrets; print(secrets.token_hex(6))')"
   secret() { python3 -c 'import secrets; print(secrets.token_hex(24))'; }
@@ -79,7 +83,6 @@ else
   export STORAGE_TEST_ENDPOINT="http://127.0.0.1:$s3_port"
   export STORAGE_TEST_ACCESS_KEY_ID="$s3_key" STORAGE_TEST_SECRET_ACCESS_KEY="$s3_secret"
   docker exec "$name" postgres --version > "$out/server-version.txt"
-  default_concurrency=4
 fi
 export TRANSPORT_TEST_S3_ENDPOINT="$STORAGE_TEST_ENDPOINT" TRANSPORT_TEST_S3_ACCESS_KEY="$STORAGE_TEST_ACCESS_KEY_ID" TRANSPORT_TEST_S3_SECRET_KEY="$STORAGE_TEST_SECRET_ACCESS_KEY"
 timeout --kill-after=30 "${CATALOG_INTEGRATION_TIMEOUT:-1800}" \

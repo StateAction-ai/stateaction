@@ -1,0 +1,34 @@
+{
+  "schema": "stateaction.test-workers/1",
+  "note": "Worker count per fixture suite: the ONE declared place (SA-114). workers is what runs now; targetWorkers activates only after the shared fixture PostgreSQL is restarted with the max_connections in scripts/platform/bounded-fixtures.py (daytime step, see docs/local-ci.md). peakConnectionsPerWorker is the measured peak of one worker (its databases' client backends). test_local_ci.py fails if workers x peak exceeds the budget.",
+  "fixture": {
+    "liveMaxConnections": 100,
+    "definitionMaxConnections": 100,
+    "superuserReserved": 3,
+    "otherUsersReserve": 13,
+    "otherUsersReserveNote": "median connections held by other agents' runs on the shared fixture during SA-114 sampling (range 5-15)"
+  },
+  "suites": {
+    "web-auth-e2e": {
+      "workers": 1,
+      "targetWorkers": 3,
+      "peakConnectionsPerWorker": 13
+    },
+    "catalog-integration": {
+      "workers": 2,
+      "targetWorkers": 4,
+      "peakConnectionsPerWorker": 6
+    },
+    "jobs-controller-integration": {
+      "workers": 1,
+      "targetWorkers": 2,
+      "peakConnectionsPerWorker": 7
+    },
+    "server-auth-integration": {
+      "workers": 2,
+      "targetWorkers": 2,
+      "peakConnectionsPerWorker": 7
+    }
+  },
+  "measuredOn": "2026-11-23 on the shared fixture: pg_stat_activity sampled every 0.3 s during guarded runs; peak per worker = peak own client backends divided by workers (catalog: 18 at 3 workers, 24 at 4 -> 6; web: largest single Next world 13; jobs and auth: largest single world 7). Re-measure after any pool or suite change."
+}

@@ -59,8 +59,20 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 function openTestDb(name: string): TestDb {
   const ownerUrl = withDb(env("CATALOG_TEST_OWNER_URL"), name);
   const appUrl = withDb(env("CATALOG_TEST_APP_URL"), name);
-  const owner = new pg.Pool({ connectionString: ownerUrl, max: 12 });
-  const app = new pg.Pool({ connectionString: appUrl, max: 12 });
+  // Bounded per database: the shared fixture PostgreSQL has max_connections=30 and
+  // several test files run at once (SA-114). Owner SQL is sequential; the app pool
+  // keeps the widest real concurrency case (10 simultaneous receipt journals) and idle
+  // connections are released quickly instead of lingering for pg's 10 s default.
+  const owner = new pg.Pool({
+    connectionString: ownerUrl,
+    max: 4,
+    idleTimeoutMillis: 1000,
+  });
+  const app = new pg.Pool({
+    connectionString: appUrl,
+    max: 10,
+    idleTimeoutMillis: 1000,
+  });
   return {
     name,
     ownerUrl,
@@ -213,6 +225,7 @@ export function ownerPoolFor(app: pg.Pool): pg.Pool {
     pool = new pg.Pool({
       connectionString: withDb(env("CATALOG_TEST_OWNER_URL"), db),
       max: 4,
+      idleTimeoutMillis: 1000,
     });
     ownerPools.set(db, pool);
   }

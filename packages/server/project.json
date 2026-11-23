@@ -44,6 +44,8 @@
         "default",
         "^fixtureProduction",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/scripts/platform/test-workers.json",
+        "{workspaceRoot}/scripts/platform/test-workers.mjs",
         "!{projectRoot}/**/*.md"
       ]
     },
@@ -57,6 +59,8 @@
         "^fixtureProduction",
         "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
         "{workspaceRoot}/infra/compose.yaml",
+        "{workspaceRoot}/scripts/platform/test-workers.json",
+        "{workspaceRoot}/scripts/platform/test-workers.mjs",
         "!{projectRoot}/**/*.md"
       ],
       "options": {

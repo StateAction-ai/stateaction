@@ -6,9 +6,10 @@
 // shared run-ledger fixture helpers (startCatalogPostgres / startSeaweedfs);
 // everything is torn down in stop(). Bounded fixtures only: no Docker, no new
 // services, no unledgered CREATE DATABASE or bucket, no broad cleanup.
+import { freePort } from "../../../scripts/platform/free-port.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createServer, request } from "node:http";
+import { request } from "node:http";
 import { createRequire } from "node:module";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -44,14 +45,8 @@ const { storageClient } = await dist("storage.js");
 const nextBin = createRequire(join(webDir, "package.json")).resolve(
   "next/dist/bin/next",
 );
+export { freePort };
 export const sha = (b) => createHash("sha256").update(b).digest("hex");
-export async function freePort() {
-  const server = createServer();
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const { port } = server.address();
-  await new Promise((r) => server.close(r));
-  return port;
-}
 let ip = 0;
 export function call(origin, path, { method = "GET", body, token } = {}) {
   const headers = { "x-forwarded-for": `198.51.100.${++ip % 250}` };

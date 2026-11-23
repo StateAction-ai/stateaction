@@ -3,10 +3,11 @@
 // `next build` output served by `next start`, real Better Auth, and Next
 // connected ONLY as the restricted `stateaction_app` role. Same code and
 // environment contract as Render; nothing here touches R2 or hosted resources.
+import { freePort } from "../../../scripts/platform/free-port.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
-import { createServer, request } from "node:http";
+import { request } from "node:http";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -26,14 +27,6 @@ const nextBin = createRequire(join(webDir, "package.json")).resolve(
   "next/dist/bin/next",
 );
 export const SESSION = "better-auth.session_token";
-
-async function freePort() {
-  const server = createServer();
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  const { port } = server.address();
-  await new Promise((r) => server.close(r));
-  return port;
-}
 
 let ipCounter = 0;
 export class Jar {

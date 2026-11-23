@@ -318,6 +318,15 @@ class NxGraphTests(unittest.TestCase):
             out = self.run_runtime(command, PATH=f"{link}:/usr/bin:/bin")
             self.assertEqual(out, '{"flutterVersion": "9"}')
 
+    def test_integration_targets_that_run_compiled_output_build_their_own_project_first(
+        self,
+    ):
+        """SA-114: jobs:integration imports apps/jobs/dist, so a run (or `nx affected`)
+        that did not build jobs first tested stale compiled code."""
+        for project, target in (("jobs", "integration"), ("web", "auth-e2e")):
+            config = self.graph["nodes"][project]["data"]["targets"][target]
+            self.assertIn("build", config["dependsOn"], f"{project}:{target}")
+
     def test_fixture_stage_selects_exactly_the_targets_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
             "stages"
