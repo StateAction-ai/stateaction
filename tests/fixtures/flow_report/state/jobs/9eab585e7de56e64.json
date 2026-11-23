@@ -1,0 +1,36 @@
+{
+  "id": "9eab585e7de56e64",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 11,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "/tmp/claude-1000/-home-wearaway-orca-workspaces-robotics-data-collection-rasbora/c34ef904-88d0-401d-8990-ef84e734e1ea/scratchpad/props.sh"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/rasbora",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 15032385536,
+  "submitted": 1795392978.8792484,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

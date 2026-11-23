@@ -1,0 +1,43 @@
+{
+  "id": "315ee66487513d32",
+  "lane": "ci-43779948",
+  "key": "ci-merge-67-7260f8ee2f16d0a0193f4c9010a3a6b4ac4f0559-d78deb6d0e4b",
+  "seq": 23,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "/home/linuxbrew/.linuxbrew/opt/python@3.14/bin/python3.14",
+    "/home/wearaway/orca/workspaces/robotics-data-collection/sa-124-adopt-agentqueue/scripts/local-ci/local_ci.py",
+    "merge",
+    "--pr",
+    "67",
+    "--execute"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa-124-adopt-agentqueue",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795396099.7084637,
+  "pass_env": [
+    "DISPLAY",
+    "GH_TOKEN",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "STATEACTION_LOCAL_CI_REEXEC",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

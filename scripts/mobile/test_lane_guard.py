@@ -320,6 +320,131 @@ class RunRouting(Env):
         self.assertEqual(tail[2], "lane-job")
         self.assertEqual(tail[-2:], ["tool", "arg"])
 
+    def submit_argv(self, help_text):
+        aq = self.tmp / "aq"
+        log = self.tmp / "state" / "lane-log.jsonl"
+        with (
+            mock.patch.dict(os.environ, {"AGENT_RESOURCE_LANE_LOG": str(log)}),
+            mock.patch.object(guard, "agentqueue_binary", return_value=aq),
+            mock.patch.object(guard, "agentqueue_help", return_value=help_text),
+            mock.patch.object(guard, "user_environment", return_value={}),
+            mock.patch.object(guard, "aggregate_cap", return_value=24 * guard.GIB),
+            mock.patch.object(guard, "run_and_stream", return_value=0) as ex,
+        ):
+            self.run_in(self.root_a / "wt", lane="ci")
+        return ex.call_args[0][0], log
+
+    def test_lane_submit_passes_the_durable_log_when_agentqueue_supports_it(self):
+        argv, log = self.submit_argv("options: --manifest FILE --log FILE")
+        self.assertEqual(argv[argv.index("--log") + 1], str(log))
+        self.assertLess(argv.index("--log"), argv.index("run"))
+        self.assertTrue(
+            log.parent.is_dir()
+        )  # created private for agentqueue to append to
+
+    def test_lane_submit_omits_log_for_an_agentqueue_without_it(self):
+        argv, _ = self.submit_argv("options: --manifest FILE --state-dir DIR")
+        self.assertNotIn("--log", argv)
+        self.assertIn("run", argv)
+
+    def test_log_flag_is_matched_as_an_exact_token(self):
+        for text, expected in (
+            ("options: --manifest FILE --log-level N", False),
+            ("options: --logs-dir D", False),
+            ("options: --state-dir DIR  --log FILE (durable)", True),
+            ("stats  --log FILE [--since T]", True),
+        ):
+            self.assertEqual(guard.has_flag(text, "--log"), expected, text)
+        argv, _ = self.submit_argv("options: --log-level N")
+        self.assertNotIn("--log", argv)
+
+    def test_unwritable_log_directory_runs_unlogged_with_a_warning(self):
+        blocker = self.tmp / "file"
+        blocker.write_text("x")
+        with mock.patch.dict(
+            os.environ, {"AGENT_RESOURCE_LANE_LOG": str(blocker / "sub" / "log.jsonl")}
+        ):
+            with (
+                mock.patch.object(
+                    guard, "agentqueue_help", return_value="options: --log FILE"
+                ),
+                mock.patch.object(guard.sys, "stderr") as err,
+            ):
+                self.assertEqual(guard.log_arguments(self.tmp / "aq"), [])
+        self.assertIn(
+            "runs unlogged", "".join(c.args[0] for c in err.write.call_args_list)
+        )
+
+    def test_unreadable_help_runs_unlogged_with_a_warning(self):
+        with (
+            mock.patch.object(guard, "agentqueue_help", return_value=""),
+            mock.patch.object(guard.sys, "stderr") as err,
+        ):
+            self.assertEqual(guard.log_arguments(self.tmp / "aq"), [])
+        self.assertIn("unlogged", "".join(c.args[0] for c in err.write.call_args_list))
+
+    def test_stats_fallback_accepts_lane_and_since(self):
+        import subprocess as sp
+
+        out = sp.run(
+            [
+                guard.sys.executable,
+                str(REPO / "scripts/flow-report.py"),
+                "--lanes-only",
+                "--lane",
+                "ci",
+                "--since",
+                "24h",
+                "--lane-log",
+                str(self.tmp / "none"),
+                "--state-dir",
+                str(self.tmp / "none"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+
+    def test_stats_wraps_agentqueue_stats_with_the_log(self):
+        aq = self.tmp / "aq"
+        log = self.tmp / "lane-log.jsonl"
+        with (
+            mock.patch.dict(os.environ, {"AGENT_RESOURCE_LANE_LOG": str(log)}),
+            mock.patch.object(Path, "cwd", return_value=self.root_a),
+            mock.patch.object(guard, "agentqueue_binary", return_value=aq),
+            mock.patch.object(
+                guard, "agentqueue_help", return_value="usage:\n  stats  [--lane L]\n"
+            ),
+            mock.patch.object(guard, "user_environment", return_value={}),
+            mock.patch.object(guard.subprocess, "run") as run,
+        ):
+            run.return_value.returncode = 0
+            self.assertEqual(guard.stats_command(["--lane", "ci"]), 0)
+        self.assertEqual(
+            run.call_args[0][0], [str(aq), "stats", "--log", str(log), "--lane", "ci"]
+        )
+
+    def test_stats_falls_back_to_the_flow_report_without_agentqueue_stats(self):
+        (self.root_a / "scripts").mkdir()
+        (self.root_a / "scripts/flow-report.py").write_text("")
+        log = self.tmp / "lane-log.jsonl"
+        with (
+            mock.patch.dict(os.environ, {"AGENT_RESOURCE_LANE_LOG": str(log)}),
+            mock.patch.object(Path, "cwd", return_value=self.root_a),
+            mock.patch.object(guard, "agentqueue_binary", return_value=self.tmp / "aq"),
+            mock.patch.object(
+                guard, "agentqueue_help", return_value="usage:\n  run [opts]\n"
+            ),
+            mock.patch.object(guard, "user_environment", return_value={}),
+            mock.patch.object(guard.subprocess, "run") as run,
+        ):
+            run.return_value.returncode = 0
+            guard.stats_command([])
+        argv = run.call_args[0][0]
+        self.assertTrue(argv[1].endswith("scripts/flow-report.py"))
+        self.assertIn("--lanes-only", argv)
+        self.assertEqual(argv[argv.index("--lane-log") + 1], str(log))
+
     def test_nesting_flattens_android_build_and_refuses_other_lanes(self):
         cases = [
             ("ci", "ci", True),
