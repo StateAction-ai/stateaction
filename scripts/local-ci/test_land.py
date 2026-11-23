@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE))
 import land  # noqa: E402
 import local_ci  # noqa: E402
 
-GITHUB_REPO = "timothywangdev/stateaction"
+GITHUB_REPO = local_ci.GITHUB_REPO
 BR = "wanghujie/sa-1-feat"
 os.environ.update(
     GIT_AUTHOR_NAME="t",
@@ -484,20 +484,20 @@ class LandTests(unittest.TestCase):
 
     def test_origin_fails_closed_on_lookalikes_ssh_and_other_repos(self):
         ok = (
-            "https://github.com/timothywangdev/stateaction",
-            "https://github.com/timothywangdev/stateaction.git",
+            f"https://github.com/{GITHUB_REPO}",
+            f"https://github.com/{GITHUB_REPO}.git",
         )
         for url in ok:
             self.assertTrue(land.origin_allowed(url, GITHUB_REPO))
         for url in (
-            "git@github.com:timothywangdev/stateaction.git",
-            "ssh://git@github.com/timothywangdev/stateaction",
-            "https://github.com.evil.example/timothywangdev/stateaction",
-            "https://evil.example/github.com/timothywangdev/stateaction",
-            "https://github.com/timothywangdev/stateaction-fork",
+            f"git@github.com:{GITHUB_REPO}.git",
+            f"ssh://git@github.com/{GITHUB_REPO}",
+            f"https://github.com.evil.example/{GITHUB_REPO}",
+            f"https://evil.example/github.com/{GITHUB_REPO}",
+            f"https://github.com/{GITHUB_REPO}-fork",
             "https://github.com/other/stateaction",
-            "/tmp/x/timothywangdev/stateaction",
-            "https://user:pw@github.com/timothywangdev/stateaction",
+            f"/tmp/x/{GITHUB_REPO}",
+            f"https://user:pw@github.com/{GITHUB_REPO}",
             "",
         ):
             self.assertFalse(land.origin_allowed(url, GITHUB_REPO), url)
@@ -508,7 +508,7 @@ class LandTests(unittest.TestCase):
             "remote",
             "set-url",
             "origin",
-            "https://github.com/timothywangdev/stateaction.git",
+            f"https://github.com/{GITHUB_REPO}.git",
         )
         self.assertTrue(land.strict_origin(b.work, GITHUB_REPO))
         sh(
@@ -653,6 +653,19 @@ class LandTests(unittest.TestCase):
         code, res = b.run(identity=lambda: "timothy-web3-dev")
         self.assertEqual((code, res["reason"]), (2, "identity"))
         self.assertEqual(b.events, [])
+
+
+class RepositorySlugTest(unittest.TestCase):
+    def test_one_slug_serves_config_and_cli_defaults(self):
+        root = HERE.parents[1]
+        slug = json.loads((root / "config/repository.json").read_text())["slug"]
+        self.assertEqual(local_ci.GITHUB_REPO, slug)
+        self.assertEqual(slug, "StateAction-ai/stateaction")
+        self.assertIn(
+            f"repo: https://github.com/{slug}\n", (root / "render.yaml").read_text()
+        )
+        deploy = json.loads((root / "config/render-deploy.json").read_text())
+        self.assertEqual(deploy["repo"], f"https://github.com/{slug}")
 
 
 class FakeGh:

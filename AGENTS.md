@@ -1,7 +1,7 @@
 # StateAction.ai agent instructions
 
 Android capture/upload, backend processing and web review of robot recordings for researchers.
-Private repo `timothywangdev/stateaction`. Nx monorepo: pnpm (TypeScript), uv (Python), Flutter/pub/Gradle (mobile).
+Private repo `StateAction-ai/stateaction`. Nx monorepo: pnpm (TypeScript), uv (Python), Flutter/pub/Gradle (mobile).
 Read the linked doc before working in its area.
 
 ## Current scope ([full text](docs/delivery-scope.md))

@@ -18,7 +18,7 @@ from auto_merge import (  # noqa: E402
 )
 from github_policy import ApiError, GitHub, PolicyError, validate_pr  # noqa: E402
 
-REPO = "timothywangdev/stateaction"
+REPO = "StateAction-ai/stateaction"
 HEAD = "a" * 40
 BASE = "b" * 40
 NEW = "c" * 40

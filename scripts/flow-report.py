@@ -28,7 +28,9 @@ EVENT_NAMES = (
     "start code_ready review_start review_done fix_done land_submitted "
     "land_started land_done merged blocked"
 ).split()
-GH_REPO = "timothywangdev/stateaction"
+GH_REPO = json.loads(
+    (Path(__file__).resolve().parents[1] / "config" / "repository.json").read_text()
+)["slug"]
 GH_USER = "timothywangdev"
 IDLE_GAP_MIN_S = (
     300  # an idle lane gap shorter than this is not reported as a candidate

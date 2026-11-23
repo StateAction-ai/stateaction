@@ -1,6 +1,6 @@
 # StateAction.ai
 
-Private monorepo: [timothywangdev/stateaction](https://github.com/timothywangdev/stateaction). Work is tracked in [Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
+Private monorepo: [StateAction-ai/stateaction](https://github.com/StateAction-ai/stateaction). Work is tracked in [Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
 
 Nx coordinates native pnpm, uv and Flutter/pub/Gradle commands. Lefthook checks staged content; the full local CI (`pnpm ci:local`) and `pnpm ci:merge` deliver one PR per ticket. Use Linear's exact provided branch name. [Repository workflow](docs/repository-workflow.md) · [Agent instructions](AGENTS.md)
 
@@ -17,7 +17,7 @@ Nx coordinates native pnpm, uv and Flutter/pub/Gradle commands. Lefthook checks 
 ## Setup
 
 ```sh
-git clone https://github.com/timothywangdev/stateaction.git
+git clone https://github.com/StateAction-ai/stateaction.git
 cd stateaction
 ```
 

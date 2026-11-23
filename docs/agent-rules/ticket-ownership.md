@@ -14,7 +14,7 @@ One agent owns a ticket end to end: plan, implement, test, independent review by
 
 ## Phase log
 
-Log each phase with `flowlog event --ticket SA-n --event <event> --note "..."` (`ticketlog SA-n <event> "note"` is a shim for the same call). Events: `start`, `code_ready`, `review_start`, `review_done`, `fix_done`, `land_submitted`, `land_done`, `merged`, `blocked`. `ci:local` and `ci:land` also call `flowlog ci-run` at the end of a run (best effort: a missing flowlog never fails the gate). Read the flow with `flowlog report --project timothywangdev/stateaction`.
+Log each phase with `flowlog event --ticket SA-n --event <event> --note "..."` (`ticketlog SA-n <event> "note"` is a shim for the same call). Events: `start`, `code_ready`, `review_start`, `review_done`, `fix_done`, `land_submitted`, `land_done`, `merged`, `blocked`. `ci:local` and `ci:land` also call `flowlog ci-run` at the end of a run (best effort: a missing flowlog never fails the gate). Read the flow with `flowlog report --project StateAction-ai/stateaction`.
 
 ## Zero flaky tests
 

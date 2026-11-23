@@ -48,6 +48,7 @@ RUNNER_FILES = (
     "scripts/local-ci/local_ci.py",
     "scripts/local-ci/land.py",
     "scripts/local-ci/stages.json",
+    "config/repository.json",
     "scripts/automation/github_policy.py",
 )
 # Distinct exit codes by reason; anything else Landing-shaped is 2.
@@ -739,7 +740,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pr", type=int, required=True)
-    parser.add_argument("--repo", default="timothywangdev/stateaction")
+    parser.add_argument("--repo", default=local_ci.GITHUB_REPO)
     parser.add_argument(
         "--expected-head", help="refuse unless the PR head is exactly this sha"
     )

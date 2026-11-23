@@ -32,10 +32,10 @@ This uses the default `GITHUB_TOKEN`; no paid app or personal access token secre
 python3 -m unittest discover -s tests/automation -p 'test_*.py' -v
 ```
 
-A PR that introduces or changes the merger cannot be merged by the old default-branch copy (for example, the squash policy replacing the earlier merge-commit merger). After that PR's hosted CI and policy checks succeed and it is reviewed, a maintainer runs the **PR's reviewed guard** locally, using the `timothywangdev` GitHub CLI credential. Other accounts may be active in this workspace, so pin every `gh` command to that user and `--repo timothywangdev/stateaction`. This is a bootstrap of the same guard, not a check bypass; the workflow itself contains no bootstrap path:
+A PR that introduces or changes the merger cannot be merged by the old default-branch copy (for example, the squash policy replacing the earlier merge-commit merger). After that PR's hosted CI and policy checks succeed and it is reviewed, a maintainer runs the **PR's reviewed guard** locally, using the `timothywangdev` GitHub CLI credential. Other accounts may be active in this workspace, so pin every `gh` command to that user and `--repo StateAction-ai/stateaction`. This is a bootstrap of the same guard, not a check bypass; the workflow itself contains no bootstrap path:
 
 ```sh
-export GITHUB_REPOSITORY=timothywangdev/stateaction
+export GITHUB_REPOSITORY=StateAction-ai/stateaction
 GH_TOKEN="$(gh auth token --user timothywangdev)" python3 scripts/automation/auto_merge.py --pr 1
 ```
 
@@ -46,12 +46,12 @@ If a rebased head has no workflow runs (for example, after a missed push event),
 ```sh
 export GH_TOKEN="$(gh auth token --user timothywangdev)"   # in memory only; unset afterwards
 PR_NUMBER=1
-PR_BRANCH="$(gh pr view "$PR_NUMBER" --repo timothywangdev/stateaction --json headRefName --jq .headRefName)"
-gh workflow run checks.yml --repo timothywangdev/stateaction --ref "$PR_BRANCH" -f "pr_number=$PR_NUMBER"
-gh workflow run pr-policy.yml --repo timothywangdev/stateaction --ref "$PR_BRANCH" -f "pr_number=$PR_NUMBER"
+PR_BRANCH="$(gh pr view "$PR_NUMBER" --repo StateAction-ai/stateaction --json headRefName --jq .headRefName)"
+gh workflow run checks.yml --repo StateAction-ai/stateaction --ref "$PR_BRANCH" -f "pr_number=$PR_NUMBER"
+gh workflow run pr-policy.yml --repo StateAction-ai/stateaction --ref "$PR_BRANCH" -f "pr_number=$PR_NUMBER"
 ```
 
-After both succeed, `gh workflow run auto-merge.yml --repo timothywangdev/stateaction --ref main -f "pr_number=$PR_NUMBER"` rechecks the guard. API failures and external base changes also fail closed; investigate before retrying.
+After both succeed, `gh workflow run auto-merge.yml --repo StateAction-ai/stateaction --ref main -f "pr_number=$PR_NUMBER"` rechecks the guard. API failures and external base changes also fail closed; investigate before retrying.
 
 ## Primary references
 

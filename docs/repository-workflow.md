@@ -1,6 +1,6 @@
 # Repository workflow
 
-Repository: [timothywangdev/stateaction](https://github.com/timothywangdev/stateaction), private. Tracker: [StateAction.ai in Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
+Repository: [StateAction-ai/stateaction](https://github.com/StateAction-ai/stateaction), private. Tracker: [StateAction.ai in Linear](https://linear.app/hw-personal-projects/project/stateactionai-collection-and-review-mvp-392311683a3e).
 
 ## Tooling decision
 

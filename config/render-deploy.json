@@ -4,7 +4,7 @@
   "pricingSource": "https://render.com/pricing",
   "monthlySpendCapUsd": 30,
   "owner": { "workspace": "stateaction", "id": "tea-dbfshol9fdbs73c5408g" },
-  "repo": "https://github.com/timothywangdev/stateaction",
+  "repo": "https://github.com/StateAction-ai/stateaction",
   "branch": "main",
   "region": "ohio",
   "postgresMajor": "17",

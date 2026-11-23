@@ -3518,6 +3518,15 @@ def verify_receipt(
 
 
 OWNER_LOGIN = "timothywangdev"
+
+
+def _repository_slug() -> str:
+    """The one place code reads the GitHub repository slug (config/repository.json)."""
+    path = Path(__file__).resolve().parents[2] / "config" / "repository.json"
+    return json.loads(path.read_text())["slug"]
+
+
+GITHUB_REPO = _repository_slug()
 GH_TOKEN_SET_BY_TOOL = {"value": False}
 
 
@@ -3775,7 +3784,7 @@ def main(argv: list[str] | None = None) -> int:
     timing.add_argument("--last", type=int, default=5)
     merge = sub.add_parser("merge")
     merge.add_argument("--pr", type=int, required=True)
-    merge.add_argument("--repo", default="timothywangdev/stateaction")
+    merge.add_argument("--repo", default=GITHUB_REPO)
     merge.add_argument("--execute", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "timing":
