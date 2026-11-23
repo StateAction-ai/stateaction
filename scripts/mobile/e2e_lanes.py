@@ -194,11 +194,41 @@ def run(bench: Bench) -> None:
     starts = [started(m) for m in markers]
     ends = [ended(m) for m in markers]
     in_order = starts == sorted(starts)
-    serial = all(starts[i + 1] >= ends[i] - 0.05 for i in range(4))
+    sys.path.insert(0, str(HERE))
+    # At the 12 GiB boot cap (or with other apps using memory) the reservation budget admits one.
+    import tomllib  # noqa: PLC0415
+
+    import resource_guard as guard  # noqa: PLC0415
+
+    slots = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())["lanes"][
+        "ci"
+    ]["slots"]
+    can_overlap = (
+        slots >= 2 and guard.lane_budget(guard.aggregate_cap()) >= 2 * guard.JOB_MAX
+    )
+    # SA-108: never more tickets at once than the lane has slots; with two slots the first two
+    # overlap (the reservation budget admits two 6 GiB jobs at a cap of 22 GiB or more).
+    peak = max(
+        sum(1 for j in range(5) if starts[j] <= starts[i] < ends[j] - 0.05)
+        for i in range(5)
+    )
+    serial = peak <= slots
+    scopes = {m: m.read_text().split()[1].rsplit("/", 1)[-1] for m in markers}
+    clash = any(
+        scopes[markers[i]] == scopes[markers[j]]
+        and starts[j] < ends[i] - 0.05
+        and starts[i] < ends[j] - 0.05
+        for i in range(5)
+        for j in range(i + 1, 5)
+    )
     record(
-        "3 five queued ci tickets run FIFO, one at a time, despite Free traffic",
-        in_order and serial and all(p.returncode == 0 for p in tickets),
-        f"order ok={in_order} serial={serial}, {stream} Free commands meanwhile",
+        "3 five queued ci tickets run FIFO, at most two at once with distinct scopes, despite Free traffic",
+        in_order
+        and serial
+        and (peak == 2 or not can_overlap)
+        and not clash
+        and all(p.returncode == 0 for p in tickets),
+        f"order ok={in_order} peak concurrency={peak} scope clash={clash}, {stream} Free commands meanwhile",
     )
 
     # 4. kill -9 of the submitter keeps both the running and the queued ticket
@@ -232,25 +262,28 @@ def run(bench: Bench) -> None:
         f"client rc={cc.returncode}, job finished={done}",
     )
 
-    # 6. kill -9 of the lane wrapper: the slot stays held while the job's scope lives
-    w1, w2 = t / "s6-first", t / "s6-second"
-    p1 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w1, 8))
+    # 6. kill -9 of the lane wrapper: its slot stays held while the job's scope lives. With two
+    # ci slots the next ticket may run beside the orphan, but a third must not.
+    w1, w2, w3 = t / "s6-first", t / "s6-second", t / "s6-third"
+    p1 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w1, 9))
     assert bench.wait_file(w1, 30)
     wrapper = lane_pid(w1)
     if wrapper:
         os.kill(wrapper, signal.SIGKILL)  # exactly this wrapper pid
-    p2 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w2, 0.2))
+    p2 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w2, 4))
+    assert bench.wait_file(w2, 30)
+    p3 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w3, 0.2))
+    p3.wait(timeout=90)
     p2.wait(timeout=90)
     p1.wait(timeout=90)
     orphan_ended = w1.with_suffix(".end").exists()
-    gap = started(w2) - (ended(w1) if orphan_ended else time.time())
+    gap = started(w3) - ended(w2)
+    both_held = (not orphan_ended) or ended(w1) > started(w3)
     record(
-        "6 kill -9 of the wrapper: the next ticket does not run beside the orphan scope",
-        wrapper is not None
-        and p2.returncode == 0
-        and (not orphan_ended or gap >= -0.2),
-        f"wrapper pid {wrapper}; orphan finished={orphan_ended}; next started {gap:+.1f}s after it "
-        "(if the orphan was reaped, the new watchdog killed it)",
+        "6 kill -9 of the wrapper: a third ticket does not run beside the orphan and a running job",
+        wrapper is not None and p3.returncode == 0 and (gap >= -0.2 or not both_held),
+        f"wrapper pid {wrapper}; orphan finished={orphan_ended}; third started {gap:+.1f}s after "
+        "the second ended (if the orphan was reaped, the new watchdog killed it)",
     )
 
     # 7 and 7b deliberately OOM-kill a process, which raises a desktop "Application Stopped"
@@ -330,6 +363,26 @@ def run(bench: Bench) -> None:
     )
     cb.wait(timeout=60)
 
+    # 9/10 use this repository's real project key, whose transient unit names equal the real
+    # lane's: they must not run while a real ci job holds `agent-lane-ci-<key>*.scope`.
+    live = subprocess.run(
+        [
+            "systemctl",
+            "--user",
+            "list-units",
+            "--plain",
+            "--no-legend",
+            "agent-lane-ci-*",
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if live:
+        print(
+            "SKIP  9/10 a real agent-lane-ci scope is running (same transient unit names)",
+            flush=True,
+        )
+        return
     # 9. ci:merge --execute enters the ci lane with the pinned gh identity and reaches the PR lookup
     shim = t / "agent-resource"
     shim.write_text(f'#!/bin/sh\nexec {sys.executable} {GUARD} "$@"\n')

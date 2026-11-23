@@ -467,6 +467,19 @@ class DynamicCapTest(unittest.TestCase):
                 fake.write("memory.max", "max")
                 self.assertFalse(guard.policy()["ok"])
 
+    def test_storage_service_cap_leaves_headroom_over_the_measured_working_set(self):
+        high, cap = guard.service_caps("agent-service-storage.scope")
+        self.assertGreaterEqual(cap, int(1.5 * guard.STORAGE_PEAK_MEASURED))
+        self.assertLess(high, cap)
+        self.assertGreaterEqual(
+            high, guard.STORAGE_PEAK_MEASURED
+        )  # never throttled at peak
+        self.assertEqual(
+            guard.service_caps("agent-service-postgres.scope"),
+            (768 * 1024**2, guard.SERVICE_MAX),
+        )
+        self.assertEqual(guard.service_caps("agent-service-other.scope")[1], GIB)
+
     def test_per_job_limits_are_unchanged_by_the_larger_aggregate(self):
         self.assertEqual(guard.JOB_MAX, 6 * GIB)
         self.assertEqual(guard.SERVICE_MAX, GIB)

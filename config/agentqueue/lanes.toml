@@ -4,7 +4,14 @@
 # used on purpose: a command without `--lane` runs in the Free class.
 memory_budget = "12G"
 
-# One gate per project. Includes the Android tooling the gate drives (flattened under one ticket).
+# One gate per project is the shipped value: the user's standing rule is one heavy job at a time
+# (6 GiB each under the dynamic cap, host below 80%), and activating a second slot is their
+# decision (SA-108). `slots = 1` is fully supported and tested (slot-unique scope names
+# `agent-lane-ci-<repo>[-s1].scope`, per-slot export/Nx state, port blocks, per-tree lock,
+# shared-Postgres connection budget): change it here and install the guard to activate. Two 6 GiB
+# reservations fit the lane budget only at a cap of at least 22 GiB (otherwise the second ticket
+# waits for memory); three never fit (18 GiB against at most 14 GiB). Includes the Android
+# tooling the gate drives (flattened under one ticket).
 [lanes.ci]
 slots = 1
 mem = "6G"

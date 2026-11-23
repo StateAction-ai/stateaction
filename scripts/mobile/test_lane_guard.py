@@ -64,10 +64,40 @@ class RootsAndManifest(Env):
     def test_committed_manifest_declares_the_three_lanes_without_command_mapping(self):
         manifest = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())
         self.assertEqual(set(manifest["lanes"]), set(guard.LANES))
-        for lane in manifest["lanes"].values():
-            self.assertEqual(lane["slots"], 1)
+        for name, lane in manifest["lanes"].items():
+            # SA-108: the shipped value is ONE heavy job; a second ci slot is the user's call.
+            self.assertEqual(lane["slots"], 1, name)
             self.assertNotIn("commands", lane)  # no reclassification by command name
         self.assertNotIn("roots", manifest)
+
+    def test_two_ci_slots_fit_the_lane_budget_but_three_wait_for_memory(self):
+        job = guard.JOB_MAX
+        ci = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())[
+            "lanes"
+        ]["ci"]
+        self.assertEqual(ci["mem"], "6G")
+        self.assertGreaterEqual(guard.lane_budget(24 * guard.GIB), 2 * job)
+        self.assertLess(guard.lane_budget(24 * guard.GIB), 3 * job)
+        # At the 12 GiB boot cap one job at a time: the second ticket waits, never over-commits.
+        self.assertEqual(guard.lane_budget(12 * guard.GIB), job)
+
+    def test_slots_two_is_honoured_by_the_effective_manifest_when_activated(self):
+        text = (REPO / "config/agentqueue/lanes.toml").read_text()
+        two = self.tmp / "lanes-two.toml"
+        two.write_text(text.replace("[lanes.ci]\nslots = 1", "[lanes.ci]\nslots = 2"))
+        real = guard.resource_file
+        with mock.patch.object(
+            guard,
+            "resource_file",
+            lambda name, repo_path: (
+                two if name == "lanes.toml" else real(name, repo_path)
+            ),
+        ):
+            _, manifest, key = self.files(self.root_a)
+        lanes = tomllib.loads(manifest.read_text())["lanes"]
+        self.assertEqual(lanes[f"ci-{key}"]["slots"], 2)
+        self.assertEqual(lanes[f"android-build-{key}"]["slots"], 1)
+        self.assertEqual(lanes["emulator"]["slots"], 1)
 
     def test_effective_manifest_has_this_repo_lanes_machine_state_and_all_roots(self):
         state, manifest, key = self.files(self.root_a)
@@ -232,7 +262,7 @@ class BoundedChildLimits(Env):
         setter = self.run_bounded_hook((1024, 524288))
         setter.assert_called_once_with(guard.resource.RLIMIT_NOFILE, (524288, 524288))
 
-    def test_lane_job_gets_512_tasks(self):
+    def test_lane_job_gets_1536_tasks(self):
         with (
             mock.patch.object(guard, "admit"),
             mock.patch.object(guard, "enforce_slice"),
@@ -240,7 +270,7 @@ class BoundedChildLimits(Env):
             mock.patch.object(guard, "run_bounded", return_value=0) as run,
         ):
             guard.lane_job("ci", "abcd1234", ["tool"])
-        self.assertEqual(run.call_args.kwargs["tasks"], 512)
+        self.assertEqual(run.call_args.kwargs["tasks"], 1536)
         self.assertEqual(run.call_args.kwargs["cpu_weight"], guard.LANE_CPU_WEIGHT)
         self.assertEqual(guard.LANE_CPU_WEIGHT, 400)
         self.assertEqual(guard.SLICE_TASKS_MAX, 8192)
@@ -729,6 +759,43 @@ class FreeAndLaneJob(Env):
             mock.patch.object(guard, "guarded_pid", return_value=False),
         ):
             self.assertIsNone(guard.current_lane())
+
+    def test_slot_one_scope_name_is_a_lane_scope_and_distinct_from_slot_zero(self):
+        # SA-108: a second ci slot must not collide with slot 0's transient unit name.
+        self.assertEqual(
+            guard.lane_unit("ci", "0123abcd", 0), "agent-lane-ci-0123abcd.scope"
+        )
+        self.assertEqual(
+            guard.lane_unit("ci", "0123abcd", 1), "agent-lane-ci-0123abcd-s1.scope"
+        )
+        self.assertEqual(
+            guard.lane_unit("ci", "0123abcd", 2), "agent-lane-ci-0123abcd-s2.scope"
+        )
+        for slot in (0, 1, 2):
+            name = guard.lane_unit("ci", "0123abcd", slot)
+            with (
+                mock.patch.object(guard, "own_scope", return_value=name),
+                mock.patch.object(guard, "guarded_pid", return_value=True),
+            ):
+                self.assertEqual(guard.current_lane(), "ci", name)
+                self.assertTrue(guard.inside_lane(), name)
+        for bad in (
+            "agent-lane-ci-0123abcd-s0.scope",
+            "agent-lane-ci-0123abcd-sx.scope",
+        ):
+            self.assertIsNone(guard.LANE_SCOPE.fullmatch(bad), bad)
+
+    def test_lane_task_cap_fits_three_parallel_gates_under_the_slice_cap(self):
+        self.assertEqual(guard.LANE_TASKS, 1536)  # 512 killed nested nx graph workers
+        self.assertLessEqual(3 * guard.LANE_TASKS, guard.SLICE_TASKS_MAX)
+
+    def test_slot_index_comes_from_the_held_slot_descriptor(self):
+        self.assertEqual(guard.slot_index(), 0)  # no slot descriptor: slot 0 name
+        sink = self.tmp / "lanes/ci-0123abcd/slot-1"
+        sink.parent.mkdir(parents=True)
+        fd = os.open(sink, os.O_RDWR | os.O_CREAT)
+        self.addCleanup(os.close, fd)
+        self.assertEqual(guard.slot_index(), 1)
 
     def test_lane_job_passes_slot_descriptors_to_the_scope(self):
         sink = self.tmp / "lanes/ci/slot-0"
