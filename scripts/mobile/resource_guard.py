@@ -62,6 +62,12 @@ FREE_JOB_MAX = 6 * GIB  # per-command default, the old per-job cap; `--mem` lowe
 FREE_OOM_ADJUST = 500  # Free processes are the kernel OOM killer's first victims
 FREE_LOW = 4 * GIB  # MemoryLow of the Free slice, reserved out of the lane budget
 EMULATOR_SHARE = 6 * GIB  # the warm emulator scope is outside the lane queue
+# Pids were exhausted 717 times (EAGAIN on thread spawn) while the shared slice allowed 512 tasks;
+# per-scope caps (lane 512, Free scope 512, default 256, Free slice 2048) still bound each job.
+SLICE_TASKS_MAX = 8192
+REASSERT_INTERVAL = 30  # seconds between watchdog checks of the slice limits
+LANE_CPU_WEIGHT = 400  # a gate outweighs Free work under CPU contention
+FREE_CPU_WEIGHT = 100  # the systemd default weight; Free cannot starve a gate
 FREE_DENY = ("gradle", "gradlew", "emulator", "emulator.agent-vendor")
 LANES = ("ci", "android-build", "emulator")
 MACHINE_LANES = ("emulator",)  # one state dir for all registered roots
@@ -333,7 +339,7 @@ def properties(unit: str) -> dict[str, str]:
         "--user",
         "show",
         unit,
-        "--property=ControlGroup,MemoryMax,MemorySwapMax,ActiveState",
+        "--property=ControlGroup,MemoryMax,MemorySwapMax,TasksMax,CPUWeight,ActiveState",
     )
     return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
 
@@ -365,7 +371,8 @@ def read_cap_text(group: Path, name: str) -> int | None:
 
 def apply_cap(group: Path, plan: dict[str, int | bool]) -> None:
     """Live-update the slice limits (no stop/restart of the slice or its scopes)
-    and verify the kernel files; any mismatch fails closed."""
+    and verify the kernel files; any memory/swap mismatch fails closed. TasksMax is set best
+    effort: a pids limit is not a memory-safety property and is only reported as a warning."""
     cap, high = int(plan["cap"]), int(plan["high"])
     call(
         "systemctl",
@@ -376,6 +383,7 @@ def apply_cap(group: Path, plan: dict[str, int | bool]) -> None:
         f"MemoryMax={cap}",
         f"MemoryHigh={high}",
         "MemorySwapMax=0",
+        f"TasksMax={SLICE_TASKS_MAX}",
     )
     props = properties(SLICE)
     if (
@@ -439,8 +447,10 @@ def enforce_slice() -> dict[str, int | bool]:
         if current != plan["cap"]:
             apply_cap(group, plan)
         elif (
+            # A systemd daemon-reload drops the runtime properties to the unit-file default.
             props.get("MemoryMax") != str(current)
-            or not (runtime_dir() / "aggregate-cap.json").exists()
+            or props.get("TasksMax") != str(SLICE_TASKS_MAX)
+            or (read_record() or {}).get("capBytes") != current
         ):
             apply_cap(group, plan)
     (runtime_dir() / "cgroup-path").write_text(str(group))
@@ -451,6 +461,55 @@ def enforce_slice() -> dict[str, int | bool]:
     ):
         raise Refused("Memory reserve watchdog is not active")
     return plan
+
+
+def reassert_slice(check_properties: bool = False) -> bool:
+    """Watchdog re-assertion after a systemd daemon-reload dropped the runtime properties to the
+    unit-file default. Cheap form: the kernel memory.max differs from the recorded cap. With
+    `check_properties`, systemd's MemoryMax/TasksMax are compared too. Does nothing without a
+    record or an active slice, never starts a slice, and never stops workloads. Returns False
+    when a needed re-assertion failed or was skipped as busy."""
+    try:
+        record = read_record()
+        group = work_group()
+        if record is None or group is None or not (group / "memory.max").exists():
+            return True
+        recorded = record.get("capBytes")
+        stale = read_cap_text(group, "memory.max") != recorded
+        if check_properties and not stale:
+            props = properties(SLICE)
+            if props.get("ActiveState") != "active":
+                return True
+            stale = props.get("MemoryMax") != str(recorded) or props.get(
+                "TasksMax"
+            ) != str(SLICE_TASKS_MAX)
+        if not stale:
+            return True
+        with cap_lock(timeout=2):
+            current = read_cap_text(group, "memory.max")
+            plan = plan_cap(
+                memory_total(),
+                memory_available(),
+                agent_hard_charge(read_memory_stat(group)),
+                current,
+                AGG_MAX if new_watchdog_active() else BOOT_CAP,
+                read_cap_text(group, "memory.current"),
+            )
+            if plan["deferred"]:
+                raise Refused("external memory use defers the cap re-assertion")
+            apply_cap(group, plan)
+        return True
+    except (OSError, ValueError, Refused, subprocess.SubprocessError) as error:
+        print(f"Slice limit re-assertion skipped: {error}", flush=True)
+        return False
+
+
+def tasks_warnings(props: dict[str, str]) -> list[str]:
+    if props.get("TasksMax") == str(SLICE_TASKS_MAX):
+        return []
+    return [
+        f"agent-work.slice TasksMax is {props.get('TasksMax')}, not {SLICE_TASKS_MAX}"
+    ]
 
 
 def write_heartbeat() -> None:
@@ -482,12 +541,63 @@ def read_record() -> dict | None:
         return None
 
 
+def read_counters(path: Path) -> dict[str, int] | None:
+    try:
+        return {
+            key: int(value)
+            for key, value in (line.split() for line in path.read_text().splitlines())
+        }
+    except (OSError, ValueError):
+        return None
+
+
+def pids_report(group: Path) -> dict:
+    """Pid and memory-event counters of the aggregate slice; None for an unreadable file."""
+
+    def number(name: str) -> int | str | None:
+        try:
+            text = (group / name).read_text().strip()
+            return text if text == "max" else int(text)
+        except (OSError, ValueError):
+            return None
+
+    events = read_counters(group / "pids.events")
+    return {
+        "pidsCurrent": number("pids.current"),
+        "pidsMax": number("pids.max"),
+        "pidsEvents": None if events is None else {"max": events.get("max", 0)},
+        "memoryEvents": read_counters(group / "memory.events"),
+    }
+
+
+def status_record() -> dict:
+    """What `agent-resource status` prints; importable by the local CI run record."""
+    props = properties(SLICE)
+    control = props.get("ControlGroup")
+    report = pids_report(CGROUP_ROOT / control.lstrip("/")) if control else None
+    return {
+        "availableGiB": round(memory_available() / GIB, 1),
+        "androidPids": android_processes(),
+        "slice": props,
+        "watchdog": call(
+            "systemctl",
+            "--user",
+            "is-active",
+            "agent-resource-watch.service",
+            check=False,
+        ),
+        "pids": report,
+        "memoryEvents": report and report["memoryEvents"],
+        "warnings": tasks_warnings(props),
+    }
+
+
 def policy() -> dict:
     """Machine-readable proof that the live kernel cap matches the allowed policy."""
     total = memory_total()
     props = properties(SLICE)
     problems = []
-    kernel_max = kernel_swap = None
+    kernel_max = kernel_swap = pids = None
     if props.get("ActiveState") != "active" or not props.get("ControlGroup"):
         problems.append("agent-work.slice is not active")
     else:
@@ -495,6 +605,7 @@ def policy() -> dict:
         try:
             kernel_max = read_cap_text(group, "memory.max")
             kernel_swap = (group / "memory.swap.max").read_text().strip()
+            pids = pids_report(group)
         except (OSError, ValueError):
             problems.append("cannot read kernel limits")
     record = read_record()
@@ -517,6 +628,8 @@ def policy() -> dict:
         "problems": problems,
         "kernelMemoryMaxBytes": kernel_max,
         "kernelSwapMax": kernel_swap,
+        "pids": pids,
+        "warnings": tasks_warnings(props),
         "recordedCapBytes": record.get("capBytes") if record else None,
         "bootCapBytes": BOOT_CAP,
         "watchdogPolicyActive": new_watchdog_active(),
@@ -822,6 +935,7 @@ def stop_for_pressure(available: int, total: int | None = None) -> bool:
 
 def watch() -> None:
     reported = False
+    checked = retry = 0.0
     while True:
         try:
             reap_orphans()
@@ -840,6 +954,13 @@ def watch() -> None:
             else:
                 reported = False
                 tighten_cap()
+                now = time.monotonic()
+                if now >= retry:
+                    due = now - checked >= REASSERT_INTERVAL
+                    if due:
+                        checked = now
+                    if not reassert_slice(check_properties=due):
+                        retry = now + REASSERT_INTERVAL  # no per-second retry storm
         except (OSError, Refused, subprocess.SubprocessError) as error:
             # Losing the monitor must stop its workloads, not leave them unguarded.
             print(f"Resource monitor failed: {error}", flush=True)
@@ -950,7 +1071,8 @@ def install(jdk: Path, emulators: list[Path], projects: list[Path]) -> None:
     (units / SLICE).write_text(
         "[Unit]\nDescription=Shared bounded agent work\n"
         "BindsTo=agent-resource-watch.service\nAfter=agent-resource-watch.service\n[Slice]\n"
-        "MemoryAccounting=yes\nMemoryHigh=10G\nMemoryMax=12G\nMemorySwapMax=0\nTasksMax=512\n"
+        "MemoryAccounting=yes\nMemoryHigh=10G\nMemoryMax=12G\nMemorySwapMax=0\n"
+        f"TasksMax={SLICE_TASKS_MAX}\n"
     )
     (units / "agent-resource-watch.service").write_text(
         "[Unit]\nDescription=Stop agent workloads before host memory reserve is exhausted\n"
@@ -1163,7 +1285,7 @@ def lane_environment() -> list[str]:
 
 LANE_LOG_ENV = "STATEACTION_LANE_LOG"
 # Threads count as tasks. The gate pinned its 256-task scope for minutes in web-auth-e2e (measured
-# 256 of 256, Chrome could not start threads); the shared slice allows 512.
+# 256 of 256, Chrome could not start threads). Per-scope cap; the shared slice allows SLICE_TASKS_MAX.
 LANE_TASKS = 512
 
 
@@ -1424,6 +1546,7 @@ def run_bounded(
     env: dict[str, str],
     tasks: int = 256,
     oom_adjust: int = 0,
+    cpu_weight: int | None = None,
 ) -> int:
     """One capped scope; the owner record lets the watchdog reap it if its parent dies."""
     argv = [
@@ -1437,6 +1560,7 @@ def run_bounded(
         f"--property=MemoryMax={job_max}",
         "--property=MemorySwapMax=0",
         f"--property=TasksMax={tasks}",
+        *([f"--property=CPUWeight={cpu_weight}"] if cpu_weight else []),
         "--",
         *command,
     ]
@@ -1503,21 +1627,33 @@ def lane_job(lane: str, key: str, command: list[str]) -> int:
         job_max=JOB_MAX,
         env=env,
         tasks=LANE_TASKS,
+        cpu_weight=LANE_CPU_WEIGHT,
     )
 
 
 def free_slice_max(cap: int | None = None) -> int:
-    """What the lane budget leaves of the aggregate cap after the warm emulator, never below
-    the protected Free share. PROVISIONAL (owner approval pending on SA-124)."""
+    """The aggregate cap minus one gate job and 2 GiB of services, never below the protected
+    Free share. Free overlaps the lane budget and the warm emulator on purpose, so at a 24 GiB
+    cap Free 16 + emulator 6 + one gate 6 can exceed the cap: the protection is the aggregate
+    MemoryMax/High plus the oom_score_adj of Free scopes, not a sum.
+    PROVISIONAL (owner approval pending on SA-124)."""
     cap = aggregate_cap() if cap is None else cap
     cap = BOOT_CAP if cap is None else cap
-    return max(FREE_LOW, cap - lane_budget(cap) - EMULATOR_SHARE)
+    # 2026-11-23: the old sizing (cap - lane budget - emulator share = 4-5 GiB) made agents' Free /
+    # commands (next build, cargo, browsers) hit the Free slice cap: kernel OOM kills and desktop /
+    # 'device memory full' warnings. Free is capped at the aggregate minus one gate job and the services.
+    return max(FREE_LOW, cap - JOB_MAX - 2 * GIB)
 
 
 def ensure_free_slice() -> None:
     props = properties(FREE_SLICE)
     limit = free_slice_max()
-    if props.get("MemoryMax") != str(limit) or props.get("MemorySwapMax") != "0":
+    if (
+        props.get("MemoryMax") != str(limit)
+        or props.get("MemorySwapMax") != "0"
+        or props.get("TasksMax") != "2048"
+        or props.get("CPUWeight") != str(FREE_CPU_WEIGHT)
+    ):  # "[not set]" / 2^64-1 (unset) differ from "100" and are re-applied
         call(
             "systemctl",
             "--user",
@@ -1528,6 +1664,8 @@ def ensure_free_slice() -> None:
             f"MemoryLow={FREE_LOW}",
             "MemorySwapMax=0",
             "TasksMax=2048",
+            f"CPUWeight={FREE_CPU_WEIGHT}",
+            "CPUAccounting=yes",
         )
 
 
@@ -1552,6 +1690,7 @@ def free_run(command: list[str], mem: int = FREE_JOB_MAX) -> int:
         env=bounded_environment(),
         tasks=512,
         oom_adjust=FREE_OOM_ADJUST,
+        cpu_weight=FREE_CPU_WEIGHT,
     )
 
 
@@ -1676,23 +1815,7 @@ def main() -> int:
                 raise Refused("--binary is required")
             verify_binary(args.binary)
         else:
-            print(
-                json.dumps(
-                    {
-                        "availableGiB": round(memory_available() / GIB, 1),
-                        "androidPids": android_processes(),
-                        "slice": properties(SLICE),
-                        "watchdog": call(
-                            "systemctl",
-                            "--user",
-                            "is-active",
-                            "agent-resource-watch.service",
-                            check=False,
-                        ),
-                    },
-                    indent=2,
-                )
-            )
+            print(json.dumps(status_record(), indent=2))
     except (OSError, Refused, subprocess.SubprocessError) as error:
         print(f"RESOURCE GUARD REFUSED: {error}", file=sys.stderr)
         return 75

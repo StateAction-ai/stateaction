@@ -37,6 +37,9 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flow_hook  # noqa: E402
+
 GIB = 1024**3
 JOB_MAX = 6 * GIB
 TOTAL_MAX = 12 * GIB  # legacy installed guard
@@ -1021,8 +1024,10 @@ def untar(
         raise Refused("Could not export the tree under test.")
 
 
-def export_submodule(repo: Path, path: str, sha: str, destination: Path) -> bool:
-    """Export the pinned gitlink commit when any local repository has it (optional)."""
+def submodule_candidates(repo: Path, path: str) -> list[Path]:
+    """Every place a pinned submodule's objects may live: this checkout, the shared git dir's
+    modules, STATEACTION_LOCAL_CI_SUBMODULES, and every checkout of the same repository (git
+    worktree list), so a fresh worktree needs no environment."""
     common = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     candidates = [repo / path, common / "modules" / path]
     candidates += [
@@ -1030,7 +1035,23 @@ def export_submodule(repo: Path, path: str, sha: str, destination: Path) -> bool
         for base in os.environ.get("STATEACTION_LOCAL_CI_SUBMODULES", "").split(":")
         if base
     ]
-    for candidate in candidates:
+    listing = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        env=foreign_repo_env(),
+    ).stdout
+    candidates += [
+        Path(line.split(" ", 1)[1]) / path
+        for line in listing.splitlines()
+        if line.startswith("worktree ")
+    ]
+    candidates.append(common.parent / path)
+    return list(dict.fromkeys(candidates))
+
+
+def find_submodule_source(repo: Path, path: str, sha: str) -> Path | None:
+    for candidate in submodule_candidates(repo, path):
         if not candidate.is_dir():
             continue
         has = subprocess.run(
@@ -1049,16 +1070,45 @@ def export_submodule(repo: Path, path: str, sha: str, destination: Path) -> bool
             and top.returncode == 0
             and Path(top.stdout.strip()).resolve() == candidate.resolve()
         ):
-            target = destination / path
-            target.mkdir(parents=True, exist_ok=True)
-            untar(
-                ["git", "-C", str(candidate), "archive", "--format=tar", sha],
-                repo,
-                target,
-                env=foreign_repo_env(),
-            )
-            return True
-    return False
+            return candidate
+    return None
+
+
+def missing_submodules(repo: Path, tree: str) -> list[str]:
+    """Fast preflight: pinned submodules no local repository can supply, each with its fix."""
+    return [
+        f"submodule {path} commit {sha[:12]} is in no local checkout: run "
+        f"`git submodule update --init {path}` in the main checkout (or any worktree), "
+        f"or set STATEACTION_LOCAL_CI_SUBMODULES=<directory containing {path}>"
+        for path, sha in submodule_pins(repo, tree).items()
+        if find_submodule_source(repo, path, sha) is None
+    ]
+
+
+def export_submodule(repo: Path, path: str, sha: str, destination: Path) -> bool:
+    """Export the pinned gitlink commit when any local repository has it (optional)."""
+    candidate = find_submodule_source(repo, path, sha)
+    if candidate is None:
+        return False
+    target = destination / path
+    target.mkdir(parents=True, exist_ok=True)
+    untar(
+        [
+            "git",
+            "--no-replace-objects",
+            "-c",
+            "core.attributesFile=/dev/null",
+            "-C",
+            str(candidate),
+            "archive",
+            "--format=tar",
+            sha,
+        ],
+        repo,
+        target,
+        env=foreign_repo_env(),
+    )
+    return True
 
 
 def fixture_services(fixtures: dict[str, str]) -> list[tuple[str, int]]:
@@ -1345,6 +1395,7 @@ def run_pipeline(
     service_check=None,
     log=lambda message: print(message, file=sys.stderr, flush=True),
     install_signals: bool = True,
+    ci_mode: str = "ci:local",
 ) -> dict:
     """Run the declared stages. Returns the run record; receipt only when all passed."""
     repo = Path(repo).resolve()
@@ -1423,6 +1474,7 @@ def run_pipeline(
         for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             previous[name] = signal.signal(name, handler)
     started_at = time.time()
+    counters_start = flow_hook.guard_counters(guard)
     toolchain: dict[str, str] = {}
     try:
         set_subreaper()
@@ -1582,6 +1634,10 @@ def run_pipeline(
         record["guard"] = {
             **{k: v for k, v in guard.items() if k != "cgroup"},
             "peakMemoryBytes": peak,
+            "counters": {
+                "start": counters_start,
+                "end": flow_hook.guard_counters(guard),
+            },
         }
         if not keep_work and work.resolve().parent == (home / "work").resolve():
             shutil.rmtree(work, ignore_errors=True)
@@ -1643,6 +1699,7 @@ def run_pipeline(
         write_json_private(receipts / f"{tree}.json", receipt)
         record["receipt"] = str(receipts / f"{tree}.json")
     record_attempt(home, tree, run_id, "finished", record["verdict"])
+    flow_hook.report_ci_run(record, repo=repo, mode=ci_mode)
     return record
 
 
@@ -1776,6 +1833,60 @@ def verify_receipt(
 # ---------------------------------------------------------------------- merge
 
 
+OWNER_LOGIN = "timothywangdev"
+GH_TOKEN_SET_BY_TOOL = {"value": False}
+
+
+def resolve_owner_credential(run=subprocess.run, environ=None, say=None) -> str:
+    """Pin every later `gh` call of this process to timothywangdev (the default gh account on
+    this workstation is another one). Order: GH_TOKEN if it belongs to the owner, else the
+    owner's keyring token (`gh auth token --user`); it is exported as GH_TOKEN (and
+    `GH_TOKEN_SET_BY_TOOL` records that, so a re-exec can drop it again). Errors name the
+    exact fix and fail fast, before any rebase, push or gate."""
+    environ = os.environ if environ is None else environ
+    say = say or (lambda message: print(message, file=sys.stderr, flush=True))
+
+    def gh(argv, **kw):
+        try:
+            return run(["gh", *argv], capture_output=True, text=True, timeout=60, **kw)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise Refused(
+                f"`gh` is unusable ({type(error).__name__}): install the GitHub CLI and run "
+                f"`gh auth login` as {OWNER_LOGIN}"
+            ) from error
+
+    def login(token: str) -> str:
+        out = gh(["api", "user", "--jq", ".login"], env={**environ, "GH_TOKEN": token})
+        return out.stdout.strip() if out.returncode == 0 else ""
+
+    given = environ.get("GH_TOKEN", "")
+    given_login = login(given) if given else ""
+    if given_login == OWNER_LOGIN:
+        return given
+    keyring = gh(["auth", "token", "--user", OWNER_LOGIN])
+    token = keyring.stdout.strip() if keyring.returncode == 0 else ""
+    if not token:
+        raise Refused(
+            f"no GitHub credential for {OWNER_LOGIN}: run `gh auth login` as {OWNER_LOGIN} "
+            f"(check `gh auth status`), or export GH_TOKEN=<a {OWNER_LOGIN} token>"
+        )
+    who = login(token)
+    if who != OWNER_LOGIN:
+        raise Refused(
+            f"the stored gh credential for {OWNER_LOGIN} is rejected or belongs to "
+            f"{who or 'nobody'}: run `gh auth login` again as {OWNER_LOGIN}"
+        )
+    if given:
+        say(
+            f"[local-ci] GH_TOKEN belongs to {given_login or 'no valid account'}, not "
+            f"{OWNER_LOGIN}: using the {OWNER_LOGIN} keyring credential instead"
+        )
+    environ["GH_TOKEN"] = token
+    if environ is os.environ:
+        GH_TOKEN_SET_BY_TOOL["value"] = True
+    return token
+
+
 def gh_json(*args: str) -> object:
     result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=120)
     if result.returncode:
@@ -1878,6 +1989,7 @@ def _merge_pr(
     sys.path.insert(0, str(Path(repo) / "scripts/automation"))
     import github_policy  # noqa: PLC0415  (repository module, stdlib only)
 
+    resolve_owner_credential()
     owner = gh_json("api", "user")["login"]
     if owner != "timothywangdev":
         raise Refused(

@@ -14,6 +14,14 @@ BRANCH = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*/(sa-[1-9][0-9]*)-[a-z0-9]+(?:-[a-z0-9]+)*$"
 )
 DECLARATION = re.compile(r"^\s*(Refs|Fixes)\s+(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+# GitHub task items: -, *, + or `1.` bullets, optionally nested in a quote, `[ ]`/`[]` open.
+_ITEM = r"^[ \t]*(?:>[ \t]*)*(?:[-*+]|\d+[.)])[ \t]+"
+CHECKED = re.compile(_ITEM + r"\[[xX]\][ \t]+\S", re.MULTILINE)
+UNCHECKED = re.compile(_ITEM + r"\[[ \t]?\]", re.MULTILINE)
+FENCE = re.compile(
+    r"^[ \t]*(`{3,}|~{3,}).*?(?:^[ \t]*\1[`~]*[ \t]*$|\Z)", re.MULTILINE | re.DOTALL
+)
+INLINE_CODE = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)", re.DOTALL)
 TICKET = re.compile(r"\bSA-[1-9][0-9]*\b", re.IGNORECASE)
 SHA = re.compile(r"^[0-9a-f]{40}$")
 TRUSTED_AUTHORS = {"OWNER", "MEMBER", "COLLABORATOR"}
@@ -87,6 +95,14 @@ def visible_body(pr: dict) -> str:
     return re.sub(r"<!--.*?(?:-->|\Z)", "", pr.get("body") or "", flags=re.DOTALL)
 
 
+def checklist_body(pr: dict) -> str:
+    """The text GitHub renders as task items: code fences and inline code are not checklists
+    (and a literal `<!--` inside code must not hide later items), hidden comments are gone."""
+    text = (pr.get("body") or "").replace("\r\n", "\n").replace("\r", "\n")
+    body = INLINE_CODE.sub("", FENCE.sub("", text))
+    return re.sub(r"<!--.*?(?:-->|\Z)", "", body, flags=re.DOTALL)
+
+
 def claimed_tickets(pr: dict) -> set[str]:
     """Recognize a prior PR even if one of its three identifiers was mistyped."""
     tickets = set()
@@ -134,8 +150,18 @@ def validate_pr(pr: dict, repo: str, all_prs: list[dict]) -> str:
         )
     declarations = list(DECLARATION.finditer(visible_body(pr)))
     if len(declarations) != 1 or declarations[0][2] != ticket:
+        raise PolicyError(f"Include exactly one primary line: Fixes {ticket}.")
+    if declarations[0][1].lower() != "fixes":
         raise PolicyError(
-            f"Include exactly one primary line: Refs {ticket} or Fixes {ticket}."
+            f"`Refs` is not allowed: a ticket is open or closed. Use `Fixes {ticket}` and "
+            "merge only when every acceptance criterion is demonstrated."
+        )
+    body = checklist_body(pr)
+    if UNCHECKED.search(body) or not CHECKED.search(body):
+        raise PolicyError(
+            "The PR body must carry the acceptance-criteria checklist with every item met: "
+            "at least one `- [x] criterion: evidence` line and no unchecked `- [ ]` item. "
+            "An unmet criterion blocks the merge (keep working or wait for the blocking ticket)."
         )
     earlier = [
         other["number"]
@@ -150,7 +176,7 @@ def validate_pr(pr: dict, repo: str, all_prs: list[dict]) -> str:
 
 
 def primary_declaration(pr: dict) -> str:
-    """The single validated Refs/Fixes line, normalized for the squash commit."""
+    """The single validated `Fixes` line, normalized for the squash commit."""
     declarations = list(DECLARATION.finditer(visible_body(pr)))
     if len(declarations) != 1:
         raise PolicyError("PR must have exactly one primary ticket declaration.")

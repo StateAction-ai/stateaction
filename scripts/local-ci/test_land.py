@@ -11,12 +11,15 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from contextlib import contextmanager
 from pathlib import Path
 
+os.environ["FLOWLOG"] = "off"  # never write the real flow database from a test
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import land  # noqa: E402
+import local_ci  # noqa: E402
 
 GITHUB_REPO = "timothywangdev/stateaction"
 BR = "wanghujie/sa-1-feat"
@@ -157,6 +160,7 @@ class Bench:
             policy=lambda pr: self.policy(pr),
             auth=self.auth,
             identity=lambda: None,
+            submodules=lambda: [],
             origin_check=lambda: True,
             fetch=fetch,
             rebase=rebase,
@@ -610,6 +614,143 @@ class LandTests(unittest.TestCase):
         b = Bench(self)
         code, res = b.run(identity=lambda: "timothy-web3-dev")
         self.assertEqual((code, res["reason"]), (2, "identity"))
+        self.assertEqual(b.events, [])
+
+
+class FakeGh:
+    """Stands in for subprocess.run: `gh api user` answers by token, `gh auth token` from a map."""
+
+    def __init__(self, keyring: str | None, logins: dict[str, str]):
+        self.keyring, self.logins, self.calls = keyring, logins, []
+
+    def __call__(self, argv, **kw):
+        self.calls.append(argv)
+        if argv[:3] == ["gh", "auth", "token"]:
+            out = (self.keyring or "") + "\n"
+            return subprocess.CompletedProcess(argv, 0 if self.keyring else 1, out, "")
+        who = self.logins.get(kw["env"].get("GH_TOKEN", ""), "")
+        return subprocess.CompletedProcess(argv, 0 if who else 1, who + "\n", "")
+
+
+class IdentityTest(unittest.TestCase):
+    def test_resolves_owner_token_with_no_env_and_exports_it(self):
+        env: dict = {}
+        gh = FakeGh("owner-tok", {"owner-tok": "timothywangdev"})
+        token = local_ci.resolve_owner_credential(run=gh, environ=env)
+        self.assertEqual((token, env["GH_TOKEN"]), ("owner-tok", "owner-tok"))
+
+    def test_wrong_account_in_env_falls_back_to_the_owner_keyring_token(self):
+        env = {"GH_TOKEN": "other-tok"}
+        gh = FakeGh(
+            "owner-tok",
+            {"owner-tok": "timothywangdev", "other-tok": "timothy-web3-dev"},
+        )
+        local_ci.resolve_owner_credential(run=gh, environ=env)
+        self.assertEqual(env["GH_TOKEN"], "owner-tok")
+
+    def test_correct_env_token_is_kept_without_touching_the_keyring(self):
+        env = {"GH_TOKEN": "owner-tok"}
+        gh = FakeGh(None, {"owner-tok": "timothywangdev"})
+        local_ci.resolve_owner_credential(run=gh, environ=env)
+        self.assertFalse(any(c[:3] == ["gh", "auth", "token"] for c in gh.calls))
+
+    def test_missing_credential_names_the_fix(self):
+        with self.assertRaises(local_ci.Refused) as ctx:
+            local_ci.resolve_owner_credential(run=FakeGh(None, {}), environ={})
+        self.assertIn("gh auth login", str(ctx.exception))
+
+    def test_keyring_token_of_another_account_is_refused(self):
+        gh = FakeGh("tok", {"tok": "someone-else"})
+        with self.assertRaises(local_ci.Refused) as ctx:
+            local_ci.resolve_owner_credential(run=gh, environ={})
+        self.assertIn("someone-else", str(ctx.exception))
+
+    def test_unusable_gh_binary_names_the_fix(self):
+        def missing(*_a, **_k):
+            raise FileNotFoundError("gh")
+
+        with self.assertRaises(local_ci.Refused) as ctx:
+            local_ci.resolve_owner_credential(run=missing, environ={})
+        self.assertIn("gh auth login", str(ctx.exception))
+
+    def test_replacing_a_wrong_env_token_is_announced(self):
+        said = []
+        gh = FakeGh(
+            "owner-tok", {"owner-tok": "timothywangdev", "o": "timothy-web3-dev"}
+        )
+        local_ci.resolve_owner_credential(
+            run=gh, environ={"GH_TOKEN": "o"}, say=said.append
+        )
+        self.assertEqual(len(said), 1)
+        self.assertIn("timothy-web3-dev", said[0])
+
+    def test_default_identity_returns_the_problem_text(self):
+        with unittest.mock.patch.object(
+            local_ci, "resolve_owner_credential", side_effect=local_ci.Refused("fix it")
+        ):
+            self.assertEqual(land.default_identity(), "fix it")
+        with unittest.mock.patch.object(local_ci, "resolve_owner_credential"):
+            self.assertIsNone(land.default_identity())
+
+
+class SubmoduleSourceTest(unittest.TestCase):
+    """A fresh worktree with no environment finds the pinned stera-sdk in another checkout."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="sa130-sub-"))
+        self.addCleanup(subprocess.run, ["rm", "-rf", str(self.tmp)])
+        self._env = {
+            k: os.environ.pop(k)
+            for k in ("STATEACTION_LOCAL_CI_SUBMODULES",)
+            if k in os.environ
+        }
+        self.addCleanup(os.environ.update, self._env)
+        sub = self.tmp / "sub"
+        sub.mkdir()
+        sh(sub, "init", "-b", "main")
+        (sub / "f").write_text("x")
+        sh(sub, "add", "f")
+        sh(sub, "commit", "-m", "s")
+        self.sha = sh(sub, "rev-parse", "HEAD")
+        self.main = self.tmp / "main"
+        self.main.mkdir()
+        sh(self.main, "init", "-b", "main")
+        sh(self.main, "commit", "--allow-empty", "-m", "root")
+        sh(
+            self.main,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"160000,{self.sha},stera-sdk",
+        )
+        sh(self.main, "commit", "-m", "pin")
+        self.sub = sub
+        self.worktree = self.tmp / "wt"
+        sh(self.main, "worktree", "add", "-b", "feat", str(self.worktree))
+
+    def test_missing_everywhere_names_both_fixes(self):
+        problems = local_ci.missing_submodules(self.worktree, "HEAD^{tree}")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("git submodule update --init stera-sdk", problems[0])
+        self.assertIn("STATEACTION_LOCAL_CI_SUBMODULES", problems[0])
+
+    def test_found_in_the_main_checkout_without_any_env(self):
+        subprocess.run(
+            ["git", "clone", "-q", str(self.sub), str(self.main / "stera-sdk")],
+            check=True,
+        )
+        self.assertEqual(local_ci.missing_submodules(self.worktree, "HEAD^{tree}"), [])
+        out = self.tmp / "export"
+        out.mkdir()
+        self.assertTrue(
+            local_ci.export_submodule(self.worktree, "stera-sdk", self.sha, out)
+        )
+        self.assertEqual((out / "stera-sdk" / "f").read_text(), "x")
+
+    def test_land_refuses_with_reason_submodule_before_anything(self):
+        b = Bench(self)
+        code, res = b.run(submodules=lambda: ["submodule stera-sdk missing"])
+        self.assertEqual((code, res["reason"]), (2, "submodule"))
         self.assertEqual(b.events, [])
 
 

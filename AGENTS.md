@@ -50,9 +50,12 @@ Read the linked doc before working in its area.
 
 ## Workflow
 
-- One ticket, one PR, one primary Linear ticket. Search all PRs (including closed/merged) first and update the original. Follow-up work gets a new ticket and PR.
+- One ticket, one PR, one primary Linear ticket. Search all PRs (including closed/merged) first and update the original. Never create a ticket without the user's say-so.
+- A ticket is open or closed. Every PR body and commit has exactly one `Fixes SA-n`, never `Refs`. Merge only when EVERY acceptance criterion is demonstrated on the final head (checklist in the PR body); an unmet criterion blocks the merge, no merge-then-follow-up. Scope changes only for new information, edited on the ticket first ([details](docs/agent-rules/pr-and-linear.md)).
+- One agent owns a ticket from plan to merge (plan, implement, test, independent review, fix, own `ci:land` ticket, Linear Done): no runner/lander hand-offs. Log phases with `flowlog event` (`ticketlog` is a shim). Targets: plan 5 min, implement 30 min ([details](docs/agent-rules/ticket-ownership.md)).
+- Zero flaky tests: a test or stage that passes and fails on the same tree is a P0 bug. No skip/retry/loosen/quarantine; root cause before any resubmit; run new or changed tests 20 times in a row before landing ([details](docs/agent-rules/ticket-ownership.md)).
 - Branch name is the exact `gitBranchName` fetched from Linear. Never invent or shorten it.
-- PR title `SA-n: <Linear title>`. Body has one `Refs SA-n`; use `Fixes` only when all acceptance criteria are demonstrated.
+- PR title `SA-n: <Linear title>`. Body has one `Fixes SA-n` and the all-met criteria checklist.
 - Rebase onto the latest `origin/main`, squash to one commit, no merge commits. A rebase that changes no patch (same patch-id, no conflict) keeps the earlier review valid (the gate still reruns on the new head); any other rebase needs a fresh review (`ci:land` refuses with `needs_review`).
 - Rewriting an owned PR branch: keep the old head, push with `--force-with-lease=<branch>:<exact remote head>`.
 - Local CI ([local-ci.md](docs/local-ci.md)): rebase onto the latest origin/main first (single commit directly above it); each PR must then pass the full local CI (`pnpm ci:local` on that final head) before merge; if origin/main moves, rebase and rerun.
@@ -71,6 +74,7 @@ Read the linked doc before working in its area.
 - Scope: [delivery-scope.md](docs/delivery-scope.md).
 - Local gate and receipts: [local-ci.md](docs/local-ci.md).
 - PR, merge and Linear rules: [pr-and-linear.md](docs/agent-rules/pr-and-linear.md).
+- Ownership, phase log (flowlog), flaky tests: [ticket-ownership.md](docs/agent-rules/ticket-ownership.md).
 - Commands and caching: [monorepo-commands.md](docs/agent-rules/monorepo-commands.md).
 - Android profile: [android-device-profile.md](docs/agent-rules/android-device-profile.md); helper: [ANDROID_PERSONAL_DEVICE.md](scripts/ANDROID_PERSONAL_DEVICE.md).
 - Emulator and simulation: [emulator-and-simulation.md](docs/agent-rules/emulator-and-simulation.md), [linux-recording-test-loop.md](docs/linux-recording-test-loop.md).

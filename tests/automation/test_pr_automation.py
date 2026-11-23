@@ -31,7 +31,7 @@ def pull(number=11, ticket="SA-11"):
     return {
         "number": number,
         "title": f"{ticket}: Set up the monorepo",
-        "body": f"Refs {ticket}\n\nDepends on SA-12 for the next increment.",
+        "body": f"Fixes {ticket}\n\n- [x] criterion one: evidence\n\nDepends on SA-12 for the next increment.",
         "state": "open",
         "draft": False,
         "author_association": "OWNER",
@@ -181,9 +181,9 @@ class IdentityTests(unittest.TestCase):
             ("title", "SA-11: Description "),
             ("title", "SA-11: \t"),
             ("title", "SA-11: Depends on SA-12"),
-            ("body", "Refs SA-11\nFixes SA-12"),
-            ("body", "Refs SA-11 and SA-12"),
-            ("body", "Refs SA-011"),
+            ("body", "Fixes SA-11\nFixes SA-12\n- [x] a"),
+            ("body", "Fixes SA-11 and SA-12\n- [x] a"),
+            ("body", "Fixes SA-011\n- [x] a"),
             ("body", "No reference"),
         ]
         for field, value in variants:
@@ -217,17 +217,50 @@ class IdentityTests(unittest.TestCase):
                 with self.assertRaisesRegex(PolicyError, "exact gitBranchName"):
                     validate_pr(pr, REPO, [])
 
-    def test_refs_and_fixes_are_supported(self):
-        for verb in ("Refs", "Fixes"):
-            pr = pull()
-            pr["body"] = f"{verb} SA-11"
-            self.assertEqual(validate_pr(pr, REPO, []), "SA-11")
+    def test_only_fixes_is_supported_and_refs_is_rejected(self):
+        pr = pull()
+        pr["body"] = "Fixes SA-11\n- [x] criterion: evidence"
+        self.assertEqual(validate_pr(pr, REPO, []), "SA-11")
+        for verb in ("Refs", "refs"):
+            pr["body"] = f"{verb} SA-11\n- [x] criterion: evidence"
+            with self.assertRaisesRegex(PolicyError, "Refs. is not allowed"):
+                validate_pr(pr, REPO, [])
+
+    def test_criteria_checklist_must_exist_and_be_fully_met(self):
+        bodies = {
+            "none": "Fixes SA-11",
+            "unchecked": "Fixes SA-11\n- [x] a: ev\n- [ ] b: pending",
+            "only unchecked": "Fixes SA-11\n* [ ] b",
+            "empty box": "Fixes SA-11\n- [x] a: ev\n-   []  b",
+            "empty item": "Fixes SA-11\n- [x]",
+            "plus bullet": "Fixes SA-11\n- [x] a: ev\n+ [ ] b",
+            "numbered": "Fixes SA-11\n- [x] a: ev\n1. [ ] b",
+            "quoted": "Fixes SA-11\n- [x] a: ev\n> - [ ] b",
+            "literal comment opener in code": "Fixes SA-11\n- [x] a: ev\nuse `<!--` here\n- [ ] b",
+            "checked only in a fence": "Fixes SA-11\n```\n- [x] a: ev\n```",
+            "unedited template": (ROOT / ".github/pull_request_template.md")
+            .read_text()
+            .replace("SA-<ticket number>", "SA-11"),
+        }
+        for name, body in bodies.items():
+            with self.subTest(name):
+                pr = pull()
+                pr["body"] = body
+                with self.assertRaisesRegex(PolicyError, "checklist"):
+                    validate_pr(pr, REPO, [])
+        pr = pull()
+        pr["body"] = "Fixes SA-11\n* [X] a: ev\n  - [x] nested: ev\n2) [x] n: ev"
+        self.assertEqual(validate_pr(pr, REPO, []), "SA-11")
+        pr["body"] = (
+            "Fixes SA-11\r\n- [x] a: ev\r\n```\r\n- [ ] sample in a fence\r\n```\r\nsee `- [ ]` syntax"
+        )
+        self.assertEqual(validate_pr(pr, REPO, []), "SA-11")
 
     def test_hidden_comments_do_not_satisfy_primary_reference(self):
         for body in (
-            "<!--\nRefs SA-11\n-->",
-            "<!-- Refs SA-11 -->",
-            "<!--\nRefs SA-11",
+            "<!--\nFixes SA-11\n-->\n- [x] a",
+            "<!-- Fixes SA-11 -->\n- [x] a",
+            "<!--\nFixes SA-11\n- [x] a",
         ):
             pr = pull()
             pr["body"] = body
@@ -236,7 +269,7 @@ class IdentityTests(unittest.TestCase):
 
     def test_hidden_template_reference_does_not_add_an_extra_ticket(self):
         pr = pull()
-        pr["body"] = "Refs SA-11\n<!--\nRefs SA-123\n-->"
+        pr["body"] = "Fixes SA-11\n- [x] a\n<!--\nFixes SA-123\n- [ ] hidden\n-->"
         self.assertEqual(validate_pr(pr, REPO, []), "SA-11")
 
     def test_forks_untrusted_authors_and_wrong_base_are_refused(self):
@@ -271,7 +304,7 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(body["sha"], HEAD)
         self.assertEqual(body["merge_method"], "squash")
         self.assertEqual(body["commit_title"], "SA-11: Set up the monorepo (#11)")
-        self.assertEqual(body["commit_message"], f"Refs SA-11\n\nTested head: {HEAD}")
+        self.assertEqual(body["commit_message"], f"Fixes SA-11\n\nTested head: {HEAD}")
         # The base is the last read before the merge; the squash parent is checked after.
         self.assertEqual(
             api.calls[-3:-1], [("GET", "git/ref/heads/main"), ("PUT", "pulls/11/merge")]
@@ -292,7 +325,7 @@ class MergeTests(unittest.TestCase):
 
     def test_fixes_declaration_is_normalized_into_squash_message(self):
         api = FakeGitHub()
-        api.pr["body"] = "fixes SA-11\n\nDepends on SA-12."
+        api.pr["body"] = "fixes SA-11\n\n- [x] a: ev\n\nDepends on SA-12."
         merge_one(api, 11)
         self.assertEqual(
             api.writes[-1][2]["commit_message"], f"Fixes SA-11\n\nTested head: {HEAD}"
