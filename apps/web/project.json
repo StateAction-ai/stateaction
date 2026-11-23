@@ -43,7 +43,13 @@
     "auth-e2e": {
       "executor": "nx:run-commands",
       "cache": false,
-      "dependsOn": ["build"],
+      "dependsOn": [
+        "build",
+        {
+          "projects": ["jobs"],
+          "target": "build"
+        }
+      ],
       "options": {
         "command": "node --test --test-concurrency=$(node ../../scripts/platform/test-workers.mjs web-auth-e2e) test-e2e/*.test.mjs",
         "cwd": "apps/web"

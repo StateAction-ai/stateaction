@@ -205,7 +205,24 @@ export const REPLAY_SCENARIOS = {
   },
 };
 
-const ALL = { ...SYNTHETIC_SCENARIOS, ...REPLAY_SCENARIOS };
+/**
+ * SA-101: the REAL FLORA stage outputs of one Modal canary, written by `modal_flora.py::canary` as a
+ * FLORA-native store (`artifacts/fixtures/flora-canary`). Opt-in only (STATEACTION_SEED_ONLY): the
+ * controller has one replay directory, so it cannot be mixed with the HomER store scenarios.
+ */
+export const CANARY_SCENARIOS = {
+  replay_canary_homer_33: {
+    episode: "homer_33",
+    recipe: recipe("seed_replay_canary_homer_33@1", REPLAY),
+    expect: REPLAY_EXPECT,
+  },
+};
+
+const ALL = {
+  ...SYNTHETIC_SCENARIOS,
+  ...REPLAY_SCENARIOS,
+  ...CANARY_SCENARIOS,
+};
 /** Empty string when `result` (job state and stage rows) matches the scenario, else what differed. */
 export function scenarioMismatch({ scenario, jobState, stages }, table = ALL) {
   const expect = table[scenario]?.expect;

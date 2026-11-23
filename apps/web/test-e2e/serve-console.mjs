@@ -28,6 +28,7 @@ if (seed) {
     for (const sc of Object.values({
       ...guards.SYNTHETIC_SCENARIOS,
       ...guards.REPLAY_SCENARIOS,
+      ...guards.CANARY_SCENARIOS,
     }))
       guards.refuseSpend(sc.recipe);
   } catch (error) {

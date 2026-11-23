@@ -327,6 +327,12 @@ class NxGraphTests(unittest.TestCase):
             config = self.graph["nodes"][project]["data"]["targets"][target]
             self.assertIn("build", config["dependsOn"], f"{project}:{target}")
 
+    def test_web_auth_e2e_builds_jobs_because_recipe_e2e_runs_its_compiled_runner(self):
+        """SA-101: recipe.e2e.test.mjs starts `node apps/jobs/dist/index.js`. A web-only change
+        does not affect jobs, so nothing built it and the runner never started (gate land-95)."""
+        config = self.graph["nodes"]["web"]["data"]["targets"]["auth-e2e"]
+        self.assertIn({"projects": ["jobs"], "target": "build"}, config["dependsOn"])
+
     def test_fixture_stage_selects_exactly_the_targets_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
             "stages"

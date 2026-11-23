@@ -990,3 +990,21 @@ def smoke(
         modal_stage_smoke.run_smoke(
             fixture, only, t08, out, hf_fixture, hf_segments, hf_deadline_s
         )
+
+
+@app.local_entrypoint()
+def canary(
+    fixture: str = "homer_33",
+    t08: str = os.environ.get("FLORA_T08_DIR", "/home/wearaway/flora-work/sa93-art"),
+    out: str = "artifacts/flora-stage/canary",
+    store: str = "artifacts/fixtures/flora-canary",
+    mcap: str = "artifacts/fixtures/flora-homer/homer_33/source.mcap",
+):
+    """SA-101 canary (billable, operator-run): real TempSeg then Captioner on its segments, restore only.
+
+    Upload the fixture first (see README). Writes the receipt and a FLORA-native replay store.
+    """
+    import modal_stage_smoke
+
+    with modal_stage_smoke.app.run():
+        modal_stage_smoke.run_canary(fixture, t08, out, store, mcap)

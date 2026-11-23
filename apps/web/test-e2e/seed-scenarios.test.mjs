@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { validateValue } from "@stateaction/contracts";
 import {
+  CANARY_SCENARIOS,
   RECIPE_E2E_SCENARIOS,
   REPLAY_SCENARIOS,
   SYNTHETIC_SCENARIOS,
@@ -11,7 +12,14 @@ import {
 } from "./seed-scenarios.mjs";
 
 test("every seed scenario recipe is a valid jobs.recipe.v1 and uses only local stub or replay modules", () => {
-  const all = { ...SYNTHETIC_SCENARIOS, ...REPLAY_SCENARIOS };
+  const all = {
+    ...SYNTHETIC_SCENARIOS,
+    ...REPLAY_SCENARIOS,
+    ...CANARY_SCENARIOS,
+  };
+  // the SA-101 canary is opt-in: the default seed never includes it
+  assert.deepEqual(Object.keys(CANARY_SCENARIOS), ["replay_canary_homer_33"]);
+  assert.ok(!("replay_canary_homer_33" in REPLAY_SCENARIOS));
   assert.deepEqual(Object.keys(SYNTHETIC_SCENARIOS), [
     "ok",
     "caption_failed",

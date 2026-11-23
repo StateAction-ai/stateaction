@@ -360,6 +360,194 @@ def run_smoke(
     return summary
 
 
+def run_canary(
+    fixture: str,
+    t08_dir: str,
+    out_dir: str,
+    store_dir: str,
+    mcap_path: str,
+) -> dict[str, Any]:
+    """SA-101: ONE real TempSeg run, then the Captioner on THAT run's segments (restore only, contract path).
+
+    Billable, operator-run, inside an active app. A failed segment stage stops the run (no caption GPU
+    is bought for nothing); a stage that fails is reported as found. Writes `canary_receipt.json`, the
+    returned files per stage and a FLORA-native replay store (`flora_ext.canary`).
+    """
+    import datetime as dt
+    import hashlib
+
+    from flora_ext import canary
+    from flora_ext import stage_smoke as S
+
+    t08 = Path(t08_dir)
+    t08_ts = json.loads((t08 / "tempseg_restore.json").read_text())
+    t08_cap = json.loads((t08 / "captioner_restore.json").read_text())
+    out = Path(out_dir)
+    gpu = stage_settings.GPU
+    run_utc = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stages: dict[str, Any] = {}
+    cost = 0.0
+
+    def stage_report(name: str, res: dict[str, Any], seconds: float) -> dict[str, Any]:
+        nonlocal cost
+        usd = ledger_line(
+            f"canary_{name} {fixture}", seconds, gpu=True, cpu=8, mem_gib=64
+        )
+        cost += usd
+        (item,) = res["results"]
+        receipt = item.get("receipt") or {}
+        counts = receipt.get("counts") or {}
+        return {
+            "function": f"flora_{'tempseg' if name == 'segment' else 'captioner'} (smoke twin, same options)",
+            "exit": item.get("exitCode"),
+            "status": receipt.get("status"),
+            "errorCode": receipt.get("errorCode"),
+            "counts": counts,
+            "cold_load_s": (counts.get("cold_load_ms") or 0) / 1000,
+            "gpu_s": (counts.get("gpu_ms") or 0) / 1000,
+            "observed_gpu": (receipt.get("gpu") or {}).get("observedType"),
+            "requested_gpu": (receipt.get("gpu") or {}).get("requestedType"),
+            "stage_seconds": item.get("seconds"),
+            "container_s": res["container_s"],
+            "wall_s": round(seconds, 1),
+            "est_usd": round(usd, 3),
+        }
+
+    def partial(error: BaseException) -> None:
+        """A failed call still leaves the stages and the spend so far (the cap is not lost with the exception)."""
+        _write(
+            out,
+            "canary_receipt.json",
+            json.dumps(
+                {
+                    "ticket": "SA-101",
+                    "fixture": fixture,
+                    "run_utc": run_utc,
+                    "stages": stages,
+                    "est_usd_total": round(cost, 3),
+                    "error": type(error).__name__,
+                },
+                indent=1,
+                default=str,
+            ),
+        )
+
+    try:
+        t = time.time()
+        seg_res = smoke_tempseg.remote(
+            [
+                {
+                    "kind": "cli",
+                    "stage": "segment",
+                    "module": "flora_tempseg_vllm_fp8@1",
+                    "gpu": gpu,
+                    "fixture": fixture,
+                }
+            ]
+        )
+        _save_results(out, f"canary_segment_{fixture}", seg_res)
+        stages["segment"] = stage_report("segment", seg_res, time.time() - t)
+        seg_item = seg_res["results"][0]
+        cap_item = None
+        if stages["segment"]["status"] == "succeeded":
+            t = time.time()
+            cap_res = smoke_captioner.remote(
+                [
+                    {
+                        "kind": "cli",
+                        "stage": "caption",
+                        "module": "flora_captioner_vllm_fp8@1",
+                        "gpu": gpu,
+                        "fixture": fixture,
+                        "segments_bytes": seg_item["files"]["segments.json"],
+                        "budget_s": 3600,
+                        "deadline_s": 3000,
+                    }
+                ]
+            )
+            _save_results(out, f"canary_caption_{fixture}", cap_res)
+            stages["caption"] = stage_report("caption", cap_res, time.time() - t)
+            cap_item = cap_res["results"][0]
+    except BaseException as error:
+        partial(error)
+        raise
+    receipt: dict[str, Any] = {
+        "ticket": "SA-101",
+        "fixture": fixture,
+        "run_utc": run_utc,
+        "function_options": {
+            n: {
+                k: v
+                for k, v in modal_stage._options(n).items()
+                if k
+                in ("gpu", "retries", "max_containers", "min_containers", "timeout")
+            }
+            for n in ("flora_tempseg", "flora_captioner")
+        },
+        "stages": stages,
+        "est_usd_total": round(cost, 3),
+        "price_basis": "list price: RTX PRO 6000 3.03 USD/h + 8 CPU + 64 GiB, container seconds + 15 s start; not billing data",
+    }
+    native_bytes = seg_item["files"].get("diagnostics/segment/native_segments.json")
+    if native_bytes:
+        native = json.loads(native_bytes)
+        ref_segments = t08_ts["result"]["episodes"][fixture]["segments"]
+        seg_prov = json.loads(
+            seg_item["files"].get("diagnostics/segment/provenance.json", b"{}")
+        )
+        dropped = {d["id"] for d in seg_prov.get("covered_segments_dropped") or []}
+        receipt["vs_t08_segments"] = {
+            **S.compare_segments(native, t08_ts, fixture),
+            # native = every FLORA segment; kept = the rows the review page shows (covered ones dropped)
+            "f1_iou075": S.segment_f1(native["segments"], ref_segments),
+            "f1_iou075_kept_rows": S.segment_f1(
+                [s for s in native["segments"] if s["id"] not in dropped],
+                ref_segments,
+            ),
+        }
+    if cap_item and cap_item["files"].get("captions.json"):
+        cdoc = json.loads(cap_item["files"]["captions.json"])
+        receipt["vs_t08_captions"] = S.compare_captions(cdoc, t08_cap, fixture)
+        receipt["segments_equal_to_t08_so_captions_comparable"] = bool(
+            receipt.get("vs_t08_segments", {}).get("byte_equal_segments")
+        )
+        receipt["caption_rows"] = {
+            s: sum(r["status"] == s for r in cdoc["rows"])
+            for s in ("complete", "failed", "not_captioned")
+        }
+        sdoc = json.loads(seg_item["files"]["segments.json"])
+        receipt["segment_rows"] = {
+            s: sum(r["status"] == s for r in sdoc["rows"])
+            for s in ("ok", "failed_window")
+        }
+        mcap = Path(mcap_path).read_bytes()
+        receipt["store"] = canary.build_store(
+            Path(store_dir),
+            fixture,
+            hashlib.sha256(mcap).hexdigest(),
+            {k: v for k, v in seg_item["files"].items()},
+            {k: v for k, v in cap_item["files"].items()},
+            {
+                "run_utc": run_utc,
+                **{n: {"est_usd": s["est_usd"]} for n, s in stages.items()},
+            },
+        )
+    _write(out, "canary_receipt.json", json.dumps(receipt, indent=1, default=str))
+    print(json.dumps(receipt, indent=1, default=str))
+    return receipt
+
+
+@app.local_entrypoint()
+def canary(
+    fixture: str = "homer_33",
+    t08: str = os.environ.get("FLORA_T08_DIR", "/home/wearaway/flora-work/sa93-art"),
+    out: str = "artifacts/flora-stage/canary",
+    store: str = "artifacts/fixtures/flora-canary",
+    mcap: str = "artifacts/fixtures/flora-homer/homer_33/source.mcap",
+):
+    run_canary(fixture, t08, out, store, mcap)
+
+
 @app.local_entrypoint()
 def smoke(
     fixture: str = "homer_33",
