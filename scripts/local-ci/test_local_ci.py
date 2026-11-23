@@ -1612,6 +1612,12 @@ class CacheTests(RepoCase):
         receipt = json.loads(Path(record["receipt"]).read_text())
         self.assertTrue(receipt["fresh"])
         self.assertEqual(receipt["stages"][0]["status"], "passed")
+        # Informational metrics are present, and dropping them leaves the receipt verifiable.
+        self.assertIn("metrics", receipt["stages"][0])
+        for stage in receipt["stages"]:
+            stage.pop("metrics", None)
+        receipt["receiptSha256"] = local_ci.receipt_digest(receipt)
+        self.assertEqual(local_ci.receipt_digest(receipt), receipt["receiptSha256"])
         self.assertGreaterEqual(receipt["totalDurationSec"], 0)
         self.assertEqual(
             receipt["toolchainSha256"],
@@ -1736,6 +1742,118 @@ class StageOpenFileLimitTests(unittest.TestCase):
                 hard if hard != resource.RLIM_INFINITY else int(result["captured"]),
             )
             self.assertGreater(int(result["captured"]), 1024)
+
+
+class StageMetricsTests(unittest.TestCase):
+    def test_nx_task_timings_follow_task_lines(self):
+        scan = local_ci.CacheScan()
+        scan.feed(b"> nx run a:build  [local cache]\n> nx run b:test\n")
+        timings = scan.summary()["taskTimings"]
+        self.assertEqual([t["task"] for t in timings], ["a:build", "b:test"])
+        self.assertEqual([t["cacheHit"] for t in timings], [True, False])
+        self.assertTrue(all(t["spanSec"] >= 0 for t in timings))
+
+    def test_cpu_and_memory_read_from_cgroup_files(self):
+        with tempfile.TemporaryDirectory() as raw:
+            group = Path(raw)
+            (group / "cpu.stat").write_text("usage_usec 2500000\nuser_usec 1\n")
+            (group / "memory.current").write_text("12345\n")
+            self.assertEqual(local_ci.cpu_seconds(group), 2.5)
+            self.assertEqual(local_ci.memory_current(group), 12345)
+        self.assertIsNone(local_ci.cpu_seconds(Path("/nonexistent-cgroup")))
+        self.assertIsNone(local_ci.memory_current(None))
+
+    def test_run_child_reports_cpu_delta_and_sampled_peak(self):
+        with tempfile.TemporaryDirectory() as raw:
+            group = Path(raw) / "cg"
+            group.mkdir()
+            (group / "cpu.stat").write_text("usage_usec 1000000\n")
+            (group / "memory.current").write_text("4096\n")
+            (group / "memory.peak").write_text("8192\n")
+            result = local_ci.run_child(
+                [
+                    sys.executable,
+                    "-c",
+                    "import pathlib,sys;g=pathlib.Path(sys.argv[1]);"
+                    "g.joinpath('cpu.stat').write_text('usage_usec 3500000\\n')",
+                    str(group),
+                ],
+                cwd=Path(raw),
+                env=os.environ.copy(),
+                log=Path(raw) / "log",
+                timeout=30,
+                output_cap=100000,
+                secrets_=[],
+                stop={"requested": False},
+                cgroup=group,
+            )
+            self.assertEqual(result["metrics"]["cpuSeconds"], 2.5)
+            self.assertEqual(result["metrics"]["peakMemorySampledBytes"], 4096)
+            self.assertEqual(result["metrics"]["scopePeakBytesAfter"], 8192)
+
+    def test_metrics_are_none_without_a_cgroup(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result = local_ci.run_child(
+                [sys.executable, "-c", "pass"],
+                cwd=Path(raw),
+                env=os.environ.copy(),
+                log=Path(raw) / "log",
+                timeout=30,
+                output_cap=1000,
+                secrets_=[],
+                stop={"requested": False},
+            )
+            metrics = result["metrics"]
+            self.assertIsNone(metrics["cpuSeconds"])
+            self.assertIsNone(metrics["cpuPerWall"])
+            self.assertIsNone(metrics["peakMemorySampledBytes"])
+            self.assertIsNone(metrics["scopePeakBytesAfter"])
+            self.assertGreater(metrics["wallSeconds"], 0)
+
+    def _write_run(self, home, name, verdict, stages):
+        run = home / "logs" / name
+        run.mkdir(parents=True)
+        (run / "run.json").write_text(
+            json.dumps({"verdict": verdict, "stages": stages})
+        )
+
+    def test_timing_report_medians_and_not_recorded(self):
+        def stage(sid, wall, cpu=None, peak=None):
+            metrics = {
+                "cpuSeconds": cpu,
+                "cpuPerWall": None if cpu is None else round(cpu / wall, 2),
+                "peakMemorySampledBytes": peak,
+                "scopePeakBytesAfter": None,
+            }
+            return {"id": sid, "durationSec": wall, "metrics": metrics}
+
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw)
+            # Old run: no metrics field at all.
+            self._write_run(home, "1", "PASS", [{"id": "a", "durationSec": 10.0}])
+            self._write_run(home, "2", "PASS", [stage("a", 10.0, 10.0, 1048576 * 100)])
+            self._write_run(home, "3", "PASS", [stage("a", 20.0, 10.0, 1048576 * 300)])
+            self._write_run(home, "4", "PASS", [stage("a", 30.0, 10.0, 1048576 * 200)])
+            self._write_run(home, "5", "FAIL", [stage("a", 999.0, 1.0, 1)])
+            text = local_ci.timing_report(home, 5)
+            row = [r for r in text.splitlines() if r.startswith("a ")][0].split()
+            self.assertEqual(row[1:], ["15.0", "10.0", "0.50", "200", "4"])
+            self.assertIn("over 4 PASS run(s)", text)
+            # Only old runs: not recorded, never zero.
+            old = Path(raw) / "old"
+            self._write_run(old, "1", "PASS", [{"id": "a", "durationSec": 10.0}])
+            text = local_ci.timing_report(old, 3)
+            self.assertIn("not recorded", text)
+            self.assertNotIn(" 0.0", text)
+            self.assertIn("no PASS runs", local_ci.timing_report(Path(raw) / "none"))
+
+    def test_missing_cgroup_counter_is_not_available_not_zero(self):
+        with tempfile.TemporaryDirectory() as raw:
+            group = Path(raw)
+            (group / "cpu.stat").write_text("user_usec 5\n")
+            (group / "memory.current").write_text("garbage\n")
+            self.assertIsNone(local_ci.cpu_seconds(group))
+            self.assertIsNone(local_ci.memory_current(group))
 
 
 class StageFileTests(unittest.TestCase):
