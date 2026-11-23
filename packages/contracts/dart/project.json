@@ -27,7 +27,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "dependsOn": ["prepare"],
-      "inputs": ["dartSources"],
+      "inputs": ["dartSources", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py typecheck"
       }
@@ -35,7 +35,7 @@
     "test": {
       "executor": "nx:run-commands",
       "dependsOn": ["prepare"],
-      "inputs": ["dartSources", "contractData"],
+      "inputs": ["dartSources", "contractData", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py test"
       }
@@ -43,10 +43,11 @@
     "format": {
       "executor": "nx:run-commands",
       "dependsOn": ["prepare"],
-      "inputs": ["dartSources"],
+      "inputs": ["dartSources", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/dart/tool/nx.py format"
       }
     }
-  }
+  },
+  "tags": ["mobile-toolchain"]
 }

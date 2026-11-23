@@ -57,5 +57,6 @@
         "command": "python3 scripts/mobile/run.py stera-recorder build"
       }
     }
-  }
+  },
+  "tags": ["mobile-toolchain"]
 }

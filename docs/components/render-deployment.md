@@ -96,6 +96,6 @@ Presigned URLs use `S3_PUBLIC_ENDPOINT` (default: `S3_ENDPOINT`). Set it only wh
 ## Local evidence commands
 
 ```sh
-pnpm exec nx run infra:integration --skip-nx-cache   # local runner smoke + presign + hosted-mode smoke
+pnpm exec nx run infra:integration   # local runner smoke + presign + hosted-mode smoke
 bash scripts/platform/hosted-smoke.sh                # hosted mode only: PORT=10000, injected env, no .env
 ```

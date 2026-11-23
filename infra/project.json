@@ -8,7 +8,14 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec prettier --check \"infra/**/*.{json,yaml,md,mjs}\" render.yaml docs/components/render-deployment.md"
-      }
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/render.yaml",
+        "{workspaceRoot}/docs/components/render-deployment.md",
+        "{workspaceRoot}/.prettierignore",
+        "prettier"
+      ]
     },
     "integration": {
       "executor": "nx:run-commands",
@@ -22,13 +29,21 @@
       "options": {
         "command": "bash scripts/platform/ci-smoke.sh && bash scripts/platform/hosted-smoke.sh"
       },
-      "inputs": ["default", "runtimeTooling"]
+      "inputs": [
+        "default",
+        "^production",
+        "runtimeTooling",
+        "{workspaceRoot}/render.yaml",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+      ],
+      "parallelism": false
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "command": "node --test --test-concurrency=2 infra/test/*.test.mjs"
-      }
+      },
+      "inputs": ["default", "{workspaceRoot}/render.yaml"]
     },
     "syntax": {
       "executor": "nx:run-commands",

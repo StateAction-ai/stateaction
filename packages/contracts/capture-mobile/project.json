@@ -14,23 +14,27 @@
       "{workspaceRoot}/packages/stera_recorder/android/src/main/assets/stateaction/capture/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/h264/**/*",
       "{workspaceRoot}/packages/contracts/api/common.v1.schema.json",
-      "sharedGlobals"
+      "sharedGlobals",
+      "jsToolchain",
+      "pythonToolchain",
+      "flutterToolchain"
     ]
   },
   "targets": {
     "format": {
       "executor": "nx:run-commands",
-      "inputs": ["captureContract"],
+      "inputs": ["captureContract", "externalDeps"],
       "options": {
         "command": "dart format --output=none --set-exit-if-changed --language-version=3.9 packages/contracts/capture/conformance/dart/capture_conformance.dart packages/contracts/capture/conformance/dart/strict_schema.dart"
       }
     },
     "test": {
       "executor": "nx:run-commands",
-      "inputs": ["captureContract"],
+      "inputs": ["captureContract", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/capture/conformance/run_all.py --only dart,kotlin --require dart,kotlin"
       }
     }
-  }
+  },
+  "tags": ["mobile-toolchain"]
 }

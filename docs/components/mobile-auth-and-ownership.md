@@ -198,7 +198,8 @@ when the same owner is verified again.
   before native Start; denial never reaches native; native failure aborts.
 - Emulator simulation: see `docs/validation/sa-17-mobile-auth.json`.
 - **Real backend** (`apps/mobile/test_backend/`, Nx project
-  `mobile-auth-backend-e2e`, target `mobile-backend-e2e`, uncached, run in
+  `mobile-backend-e2e`, target `e2e` (static analysis stays in
+  `mobile-auth-backend-e2e`), uncached, run in
   the CI Android job): `run_real_backend.mjs` starts a uniquely named
   throwaway Postgres, migrates and seeds it with the published catalog
   migrator, serves the production `next build` with `next start` (Next

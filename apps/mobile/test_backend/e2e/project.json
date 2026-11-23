@@ -1,0 +1,42 @@
+{
+  "name": "mobile-backend-e2e",
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "root": "apps/mobile/test_backend/e2e",
+  "projectType": "application",
+  "tags": ["mobile-toolchain"],
+  "implicitDependencies": [
+    "mobile-auth-backend-e2e",
+    "mobile",
+    "web",
+    "server",
+    "contracts"
+  ],
+  "targets": {
+    "e2e": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "parallelism": false,
+      "dependsOn": [
+        {
+          "projects": ["mobile"],
+          "target": "prepare"
+        },
+        {
+          "projects": ["web"],
+          "target": "build"
+        }
+      ],
+      "inputs": [
+        "{workspaceRoot}/apps/mobile/test_backend/**/*",
+        "^production",
+        "flutterSources",
+        "{workspaceRoot}/packages/server/test-auth/**/*",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "flutterToolchain"
+      ],
+      "options": {
+        "command": "node apps/mobile/test_backend/run_real_backend.mjs"
+      }
+    }
+  }
+}

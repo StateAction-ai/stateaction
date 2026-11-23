@@ -88,7 +88,7 @@ jobs:
           BASE_SHA: ${{ needs.resolve.outputs.base }}
           HEAD_SHA: ${{ needs.resolve.outputs.head }}
           DISPATCHED_PR: ${{ needs.resolve.outputs.dispatched_pr }}
-          RUNTIME_TARGETS: integration auth-integration auth-e2e
+          RUNTIME_TARGETS: catalog-integration integration auth-integration auth-e2e
         run: |
           if [[ "$DISPATCHED_PR" == true ]]; then BASE_SHA=$(git rev-parse origin/main); fi
           if [[ -n "$BASE_SHA" ]] && git cat-file -e "$BASE_SHA:nx.json" 2>/dev/null; then
@@ -98,16 +98,16 @@ jobs:
             # Uncached runtime targets: catalog/infra integration plus the auth HTTP and Next E2E suites.
             projects=$(for target in $RUNTIME_TARGETS; do pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --withTarget="$target" --json; done | jq -cs 'add | unique')
             if [[ "$projects" == '[]' ]]; then echo "integration=false" >> "$GITHUB_OUTPUT"; else echo "integration=true" >> "$GITHUB_OUTPUT"; fi
-            mobile=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --json)
+            mobile=$(pnpm exec nx show projects --affected --base="$BASE_SHA" --head="$HEAD_SHA" --projects=tag:mobile-toolchain --json)
           else
             # The first tooling PR has no Nx graph/lockfile on its base.
             echo "mode=all" >> "$GITHUB_OUTPUT"
             echo "integration=true" >> "$GITHUB_OUTPUT"
             projects=$(for target in $RUNTIME_TARGETS; do pnpm exec nx show projects --withTarget="$target" --json; done | jq -cs 'add | unique')
-            mobile=$(pnpm exec nx show projects --json)
+            mobile=$(pnpm exec nx show projects --projects=tag:mobile-toolchain --json)
           fi
           echo "integration_projects=$(jq -r 'join(",")' <<< "$projects")" >> "$GITHUB_OUTPUT"
-          mobile_projects=$(jq -r '[.[] | select(. == "mobile" or . == "stera-recorder" or . == "contracts-dart" or . == "capture-conformance-mobile" or . == "android-capture-spike-native" or . == "mobile-auth-backend-e2e" or . == "android-upload-spike-native")] | join(",")' <<< "$mobile")
+          mobile_projects=$(jq -r 'join(",")' <<< "$mobile")
           echo "mobile_projects=$mobile_projects" >> "$GITHUB_OUTPUT"
           if [[ -n "$mobile_projects" ]]; then echo "android=true" >> "$GITHUB_OUTPUT"; else echo "android=false" >> "$GITHUB_OUTPUT"; fi
       - name: Build, typecheck, syntax, test and format
@@ -115,9 +115,9 @@ jobs:
           MODE: ${{ steps.scope.outputs.mode }}
         run: |
           if [[ "$MODE" == affected ]]; then
-            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native --outputStyle=static
+            pnpm exec nx affected -t build,typecheck,syntax,test,format --exclude=tag:mobile-toolchain,root-python --outputStyle=static
           else
-            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native --outputStyle=static
+            pnpm exec nx run-many -t build,typecheck,syntax,test,format --exclude=tag:mobile-toolchain,root-python --outputStyle=static
           fi
   android:
     name: Affected Android and Dart checks
@@ -172,12 +172,12 @@ jobs:
           MOBILE_PROJECTS: ${{ needs.checks.outputs.mobile_projects }}
         run: |
           if [[ -n "$MOBILE_PROJECTS" ]]; then
-            python3 scripts/platform/runner_disk.py run -- pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,test,format --outputStyle=static
+            python3 scripts/platform/runner_disk.py run -- pnpm exec nx run-many --projects="$MOBILE_PROJECTS" -t build,typecheck,syntax,test,format --outputStyle=static
           fi
       - name: Mobile auth client against the real Next, Better Auth and Postgres backend
-        if: contains(format(',{0},', needs.checks.outputs.mobile_projects), ',mobile-auth-backend-e2e,')
+        if: contains(format(',{0},', needs.checks.outputs.mobile_projects), ',mobile-backend-e2e,')
         # Uncached: real production Next build, throwaway restricted Postgres and the app's Dart auth code.
-        run: pnpm exec nx run mobile-auth-backend-e2e:mobile-backend-e2e --skip-nx-cache --outputStyle=static
+        run: pnpm exec nx run mobile-backend-e2e:e2e --outputStyle=static
       - name: Report final Android runner storage
         if: always()
         run: |
@@ -209,7 +209,7 @@ jobs:
       - name: Real Next, Render local runner, Python, storage, catalog and auth integration
         env:
           INTEGRATION_PROJECTS: ${{ needs.checks.outputs.integration_projects }}
-        run: pnpm exec nx run-many -t integration,auth-integration,auth-e2e --projects="$INTEGRATION_PROJECTS" --parallel=1 --skip-nx-cache --outputStyle=static
+        run: pnpm exec nx run-many -t catalog-integration,integration,auth-integration,auth-e2e --projects="$INTEGRATION_PROJECTS" --parallel=1 --outputStyle=static
   required:
     name: Required checks
     if: always()

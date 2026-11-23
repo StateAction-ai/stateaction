@@ -4,7 +4,7 @@
   "root": "apps/jobs",
   "sourceRoot": "apps/jobs/src",
   "projectType": "application",
-  "implicitDependencies": ["contracts", "processing"],
+  "implicitDependencies": ["contracts", "processing", "server", "web"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
@@ -29,7 +29,42 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec prettier --check \"apps/jobs/src/**/*\" \"apps/jobs/test/**/*\" \"apps/jobs/*.json\""
+      },
+      "inputs": ["default", "prettier"]
+    },
+    "integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "parallelism": false,
+      "dependsOn": [
+        "^build",
+        {
+          "projects": ["server", "web"],
+          "target": "build"
+        }
+      ],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/packages/server/test-auth/**/*",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+      ],
+      "options": {
+        "command": "pnpm --filter @stateaction/jobs test:integration"
       }
     }
+  },
+  "namedInputs": {
+    "externalDeps": [
+      {
+        "externalDependencies": [
+          "npm:@renderinc/sdk",
+          "npm:@types/node",
+          "npm:modal",
+          "npm:tsx",
+          "npm:typescript"
+        ]
+      }
+    ]
   }
 }

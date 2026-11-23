@@ -3,6 +3,14 @@
   "defaultBase": "main",
   "neverConnectToCloud": true,
   "parallel": 2,
+  "pluginsConfig": {
+    "@nx/js": {
+      "analyzePackageJson": true,
+      "analyzeLockfile": true,
+      "analyzeSourceFiles": false,
+      "projectsAffectedByDependencyUpdates": "auto"
+    }
+  },
   "namedInputs": {
     "default": [
       "{projectRoot}/**/*",
@@ -14,47 +22,28 @@
       "!{projectRoot}/**/__pycache__/**/*",
       "!{projectRoot}/**/*.tsbuildinfo",
       "!{projectRoot}/next-env.d.ts",
-      "sharedGlobals"
+      "sharedGlobals",
+      "jsToolchain",
+      "pythonToolchain",
+      "externalDeps"
     ],
     "production": [
       "default",
       "!{projectRoot}/test/**/*",
-      "!{projectRoot}/tests/**/*"
+      "!{projectRoot}/tests/**/*",
+      "!{projectRoot}/test-auth/**/*",
+      "!{projectRoot}/test-integration/**/*",
+      "!{projectRoot}/test-e2e/**/*",
+      "!{projectRoot}/**/*.test.*"
     ],
     "sharedGlobals": [
       "{workspaceRoot}/nx.json",
-      "{workspaceRoot}/package.json",
-      "{workspaceRoot}/pnpm-lock.yaml",
-      "{workspaceRoot}/pnpm-workspace.yaml",
-      "{workspaceRoot}/.npmrc",
-      "{workspaceRoot}/.node-version",
-      "{workspaceRoot}/.nvmrc",
-      "{workspaceRoot}/.python-version",
       "{workspaceRoot}/config/**/*",
-      "{workspaceRoot}/.github/workflows/checks.yml",
-      "{workspaceRoot}/lefthook.yml",
       "{workspaceRoot}/.env.example",
       "{workspaceRoot}/.env.workflows.example",
       "{workspaceRoot}/Makefile",
       "{workspaceRoot}/.nxignore",
-      {
-        "runtime": "node --version"
-      },
-      {
-        "runtime": "pnpm --version"
-      },
-      {
-        "runtime": "python3 --version"
-      },
-      {
-        "runtime": "uv --version"
-      },
-      {
-        "runtime": "java -version 2>&1"
-      },
-      {
-        "runtime": "flutter --version --machine"
-      }
+      "{workspaceRoot}/.prettierignore"
     ],
     "automationSources": [
       "{workspaceRoot}/scripts/automation/**/*",
@@ -82,6 +71,9 @@
       "!{projectRoot}/.env",
       "!{projectRoot}/.env.*",
       "sharedGlobals",
+      "jsToolchain",
+      "pythonToolchain",
+      "flutterToolchain",
       "{workspaceRoot}/.tool-versions",
       "{workspaceRoot}/scripts/mobile/**/*",
       "{workspaceRoot}/scripts/platform/install-mobile-toolchain.py",
@@ -94,7 +86,57 @@
       "!{projectRoot}/android/.kotlin/**/*",
       "!{projectRoot}/**/.cxx/**/*",
       "{workspaceRoot}/scripts/platform/runner_disk.py",
-      "{workspaceRoot}/scripts/platform/test_mobile_runner_disk.py"
+      "{workspaceRoot}/scripts/platform/test_mobile_runner_disk.py",
+      "externalDeps"
+    ],
+    "jsToolchain": [
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/.npmrc",
+      "{workspaceRoot}/.node-version",
+      "{workspaceRoot}/.nvmrc",
+      {
+        "runtime": "node --version"
+      },
+      {
+        "runtime": "pnpm --version"
+      }
+    ],
+    "pythonToolchain": [
+      "{workspaceRoot}/.python-version",
+      {
+        "runtime": "python3 --version"
+      },
+      {
+        "runtime": "uv --version"
+      }
+    ],
+    "flutterToolchain": [
+      {
+        "runtime": "java -version 2>&1"
+      },
+      {
+        "runtime": "flutter --version --machine"
+      }
+    ],
+    "repositoryConfig": [
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/lefthook.yml",
+      "{workspaceRoot}/.github/workflows/*.yml",
+      "{workspaceRoot}/scripts/local-ci/**/*",
+      "{workspaceRoot}/docs/local-ci.md",
+      "!{workspaceRoot}/scripts/local-ci/**/__pycache__/**/*"
+    ],
+    "externalDeps": [
+      {
+        "externalDependencies": []
+      }
+    ],
+    "prettier": [
+      {
+        "externalDependencies": ["npm:prettier"]
+      }
     ]
   },
   "targetDefaults": {
@@ -118,11 +160,16 @@
       "cache": true
     },
     "integration": {
-      "cache": false
+      "cache": false,
+      "parallelism": false
     },
     "syntax": {
       "inputs": ["default"],
       "cache": true
+    },
+    "e2e": {
+      "cache": false,
+      "parallelism": false
     }
   },
   "cacheDirectory": ".nx/cache"

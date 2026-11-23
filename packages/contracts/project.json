@@ -29,7 +29,20 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec prettier --check \"packages/contracts/api/**/*\" \"packages/contracts/src/**/*\" \"packages/contracts/test/**/*\" \"packages/contracts/*.json\" \"packages/contracts/*.md\""
-      }
+      },
+      "inputs": ["default", "prettier"]
     }
+  },
+  "namedInputs": {
+    "externalDeps": [
+      {
+        "externalDependencies": [
+          "npm:@types/node",
+          "npm:ajv",
+          "npm:tsx",
+          "npm:typescript"
+        ]
+      }
+    ]
   }
 }
