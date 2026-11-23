@@ -179,6 +179,51 @@ class ModalWrapperTests(unittest.TestCase):
             self.assertNotIn(name, env)
         self.assertIn("STATEACTION_HAND_MODEL=/models/hand_landmarker.task", env)
 
+    def test_a_recipe_stage_returns_v2_with_its_last_stdout_line_as_the_receipt(self):
+        module, _ = load_wrapper()
+        receipt = {"schemaVersion": 1, "stage": "hand_pose", "status": "succeeded"}
+        with tempfile.TemporaryDirectory() as d:
+            script = Path(d) / "py"
+            script.write_text(
+                "#!/bin/sh\ncat > /dev/null\necho progress\n"
+                f"echo '{json.dumps(receipt)}'\nexit 0\n"
+            )
+            script.chmod(0o755)
+            staged = dict(BOOTSTRAP, stage="hand_pose")
+            result = module.run_bootstrap(
+                json.dumps(staged),
+                CALL,
+                python=str(script),
+                env_source={"PATH": os.environ["PATH"]},
+            )
+            plain = module.run_bootstrap(
+                json.dumps(BOOTSTRAP),
+                CALL,
+                python=str(script),
+                env_source={"PATH": os.environ["PATH"]},
+            )
+            script.write_text("#!/bin/sh\ncat > /dev/null\necho not json\n")
+            garbled = module.run_bootstrap(
+                json.dumps(staged),
+                CALL,
+                python=str(script),
+                env_source={"PATH": os.environ["PATH"]},
+            )
+        self.assertEqual(
+            result,
+            {
+                "schemaVersion": 2,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "receipt": receipt,
+            },
+        )
+        # No `stage`: exactly the v1 return.
+        self.assertEqual(
+            plain, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+        )
+        self.assertIsNone(garbled["receipt"])
+
     def test_cli_exit_codes_propagate_in_the_structured_result(self):
         module, _ = load_wrapper()
         for code in (0, 70, 75, 78):

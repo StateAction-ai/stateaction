@@ -54,6 +54,7 @@ files = [
   "src/stateaction_processing/artifact_rrd.py",
   "src/stateaction_processing/artifact_clip.py",
   "src/stateaction_processing/artifact_export.py",
+  "src/stateaction_processing/artifact_seal.py",
   "src/stateaction_processing/artifact_reader.py",
   "src/stateaction_processing/artifact_cli.py",
   "src/stateaction_processing/caption_rule.py",

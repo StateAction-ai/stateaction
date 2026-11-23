@@ -13,6 +13,7 @@ ACTUAL MCAP capture profile must equal the admitted profile or the run fails (ne
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -87,6 +88,8 @@ class Api:
         self.job_id: str = context["jobId"]
         self.nonce: str = context["nonce"]
         self.token: str = context["capability"]
+        # Recipe jobs claim the `hand_pose` stage: heartbeats are heartbeat.v2 and name it.
+        self.stage: str | None = context.get("stage")
 
     def call(
         self, method: str, path: str, body: dict[str, Any] | None = None
@@ -106,18 +109,17 @@ class Api:
         raise RuntimeError("api_unavailable") from last
 
     def heartbeat(self, phase: str, frames: int = 0) -> None:
-        self.call(
-            "POST",
-            "heartbeat",
-            {
-                "schemaVersion": 1,
-                "jobId": self.job_id,
-                "invocationNonce": self.nonce,
-                "phase": phase,
-                "processedFrames": str(frames),
-                "totalFrames": None,
-            },
-        )
+        body: dict[str, Any] = {
+            "schemaVersion": 1 if self.stage is None else 2,
+            "jobId": self.job_id,
+            "invocationNonce": self.nonce,
+            "phase": phase,
+            "processedFrames": str(frames),
+            "totalFrames": None,
+        }
+        if self.stage is not None:
+            body["stage"] = self.stage
+        self.call("POST", "heartbeat", body)
 
 
 class _Beater(threading.Thread):
@@ -477,6 +479,79 @@ def _report(
     )
 
 
+MAX_DOCUMENT_BYTES = 32 * 1024 * 1024
+
+
+def _document_reader(api: Api) -> Any:
+    """Bounded read of an earlier stage's annotation file for the consistency check.
+
+    Best effort: any refusal (the job routes let only the caption stage read job outputs), size
+    overrun or digest mismatch returns None, which makes that check `not_evaluated`, never `pass`.
+    """
+
+    def read(out: Any) -> bytes | None:
+        try:
+            plan = api.call("POST", f"outputs/{out.file_id}/read", {})
+            request = urllib.request.Request(plan["readUrl"], method="GET")
+            with _OPENER.open(request, timeout=_HTTP_TIMEOUT) as response:
+                data: bytes = response.read(MAX_DOCUMENT_BYTES + 1)
+        except Exception:
+            return None
+        if (
+            len(data) > MAX_DOCUMENT_BYTES
+            or len(data) != out.size_bytes
+            or hashlib.sha256(data).hexdigest() != out.sha256
+        ):
+            return None
+        return data
+
+    return read
+
+
+def _utc_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _print_stage_receipt(
+    grant: dict[str, Any],
+    context: dict[str, Any],
+    outcome: dict[str, Any],
+    started: str,
+) -> None:
+    """`jobs.stage-receipt.v1` as the last stdout line (sorted, compact, flushed).
+
+    Lists only recording.mp4 and hand-presence.json (the receipt caps outputs at 64; a long
+    recording has far more clip files, which the hand_pose node lists through the inventory).
+    A failed stage lists no output. Nothing may be printed after this line.
+    """
+    import sys
+
+    from stateaction_contracts import validate_value
+
+    receipt: dict[str, Any] = {
+        "schemaVersion": 1,
+        "jobId": grant["jobId"],
+        "stage": "hand_pose",
+        "module": context["module"],
+        "status": outcome["status"],
+        "errorCode": outcome["code"],
+        "outputs": outcome.get("outputs", []),
+        "counts": outcome.get("counts", {}),
+        "gpu": {"requestedType": "none", "observedType": None},
+        "startedAt": started,
+        "finishedAt": _utc_now(),
+    }
+    if not validate_value("jobs.stage-receipt.v1", receipt).valid:
+        receipt.update(
+            status="failed", errorCode="receipt_invalid", outputs=[], counts={}
+        )
+    sys.stdout.write(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        + "\n"
+    )
+    sys.stdout.flush()
+
+
 def _probe_call(metrics: Any, method: str, *args: Any) -> None:
     """SA-45 resource facts are best-effort and can never change the processing result."""
     try:
@@ -486,6 +561,22 @@ def _probe_call(metrics: Any, method: str, *args: Any) -> None:
 
 
 def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
+    started = _utc_now()
+    # Recipe jobs: the outcome of this stage is printed as a stage receipt, the LAST stdout line.
+    outcome: dict[str, Any] | None = (
+        {"status": "failed", "code": "worker_error"}
+        if context.get("stage") is not None
+        else None
+    )
+    if outcome is not None:
+        context = {**context, "_outcome": outcome}
+    code = _run(grant, context)
+    if outcome is not None:
+        _print_stage_receipt(grant, context, outcome, started)
+    return code
+
+
+def _run(grant: dict[str, Any], context: dict[str, Any]) -> int:
     api = Api(context)
     scratch = Path(tempfile.mkdtemp(prefix="sa28-worker-"))
     metrics = context.get("metrics")
@@ -501,8 +592,12 @@ def run(grant: dict[str, Any], context: dict[str, Any]) -> int:
         return _process(api, sink, beater, grant, task, scratch, context)
     except Exception as error:
         if task is None:
+            if "_outcome" in context:
+                context["_outcome"]["code"] = _error_code(error)
             print(f"Worker failed before task input: {type(error).__name__}")
             return EXIT_UNREPORTED
+        if "_outcome" in context:
+            context["_outcome"]["code"] = _error_code(error)
         return _fail(api, sink, grant, task, error, scratch)
     finally:
         beater.stop()
@@ -579,6 +674,14 @@ def _process(
             simulation=_snake_simulation(task.get("simulation")),
         ),
     )
+    extra: dict[str, Any] = {}
+    if (context or {}).get("stage") is not None:
+        # Recipe job: this stage seals it (review video, hand presence, processing-result.v3).
+        from .artifact_seal import plan_from_task
+
+        extra["seal"] = plan_from_task(
+            task, context or {}, grant["jobId"], _document_reader(api)
+        )
     request = urllib.request.Request(mcap["readUrl"], method="GET")
     beater.phase = "decoding"
     with _OPENER.open(request, timeout=_HTTP_TIMEOUT) as source:
@@ -592,6 +695,7 @@ def _process(
             on_clip_closed=lambda meta: setattr(
                 beater, "frames", beater.frames + int(meta["frame_count"])
             ),
+            **extra,
         )
     beater.phase = "sealing"
     manifest_receipt = result.manifest_receipt
@@ -604,6 +708,22 @@ def _process(
         result.manifest["checks"],
         None,
     )
+    if "_outcome" in (context or {}):
+        keep = ("recording.mp4", "hand-presence.json")
+        (context or {})["_outcome"].update(
+            status="succeeded",
+            code=None,
+            outputs=[
+                {
+                    "fileId": result.receipts[slot].file_id,
+                    "role": result.receipts[slot].role,
+                    "sizeBytes": str(result.receipts[slot].size_bytes),
+                    "sha256": result.receipts[slot].sha256,
+                }
+                for slot in keep
+            ],
+            counts={"frames": result.frames, "clips": len(result.clips)},
+        )
     return EXIT_OK
 
 

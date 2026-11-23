@@ -427,8 +427,11 @@ class HttpModeTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "succeeded")
         slots = {o["slot"]: o["role"] for o in self.state["outputs"]}
         self.assertEqual(slots["segments.json"], "segments_json")
-        for name in ("log.txt", "windows.jsonl", "receipt.json"):
+        for name in ("log.txt", "windows.jsonl"):
             self.assertEqual(slots[f"diagnostics/segment/{name}"], "diagnostic_blob")
+        # SA-92: every inventory file must be nameable by a result node, so the receipt (which
+        # cannot list itself) is not a job output.
+        self.assertNotIn("diagnostics/segment/receipt.json", slots)
         beats = [r[2] for r in self.state["requests"] if r[1].endswith("/heartbeat")]
         self.assertTrue(
             beats

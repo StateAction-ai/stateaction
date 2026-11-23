@@ -23,6 +23,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -229,13 +230,24 @@ def run_bootstrap(
     # The controller cannot know the call ID before the spawn: the wrapper supplies it.
     bootstrap["executionRef"] = call_id
     bootstrap["executorKind"] = "modal"
+    # A recipe stage (SA-92 hand_pose) returns its stage receipt: its stdout is drained here and the
+    # last line kept. Without `stage` the return stays exactly the v1 shape.
+    staged = "stage" in bootstrap
     child = subprocess.Popen(
         [python, "-m", "stateaction_processing", "run-job", "--execution-ref", call_id],
         stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE if staged else None,
         shell=False,
         start_new_session=True,  # session and group leader: every descendant is in its session
         env=_child_env(dict(os.environ if env_source is None else env_source)),
     )
+    last_line: list[bytes] = []
+    drain: threading.Thread | None = None
+    if staged:
+        drain = threading.Thread(
+            target=_drain_last_line, args=(child.stdout, last_line), daemon=True
+        )
+        drain.start()
     try:
         try:
             assert child.stdin is not None
@@ -251,6 +263,10 @@ def run_bootstrap(
                 timeout=reap_grace_seconds
             )  # bounded; TimeoutExpired propagates
         _close_group(child.pid, reap_grace_seconds)
+        if drain is not None:
+            drain.join(timeout=reap_grace_seconds)
+            if child.stdout is not None:
+                child.stdout.close()
     except BaseException:
         # No result may be returned. Best effort only; the controller stays uncertain.
         try:
@@ -259,7 +275,37 @@ def run_bootstrap(
             pass
         raise
     result["exitCode"] = max(-255, min(255, int(code)))
+    if staged:
+        result["schemaVersion"] = 2
+        result["receipt"] = _parse_receipt(last_line[0] if last_line else b"")
     return result
+
+
+_RECEIPT_MAX_BYTES = 64 * 1024
+
+
+def _drain_last_line(stream: Any, keep: list[bytes]) -> None:
+    """Pass the child's stdout through to the container log, keeping only the last line."""
+    try:
+        for line in stream:
+            sys.stdout.buffer.write(line)
+            sys.stdout.buffer.flush()
+            stripped = line.strip()
+            if stripped:
+                keep[:] = [stripped[: _RECEIPT_MAX_BYTES + 1]]
+    except (OSError, ValueError):
+        pass
+
+
+def _parse_receipt(line: bytes) -> dict[str, Any] | None:
+    """The stage receipt, or None when the last line is absent, oversized or not a JSON object."""
+    if not line or len(line) > _RECEIPT_MAX_BYTES:
+        return None
+    try:
+        value = json.loads(line)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 @app.function(

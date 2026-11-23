@@ -513,24 +513,6 @@ def execute(
     return receipt
 
 
-def _upload_receipt(io: Any, receipt: dict[str, Any], stage: str) -> None:
-    """Also keep the receipt as a staff diagnostic (it cannot list itself)."""
-    from .artifact_types import make_output
-
-    if isinstance(io, _DirIo):
-        return
-    path = Path(tempfile.mkdtemp(prefix="sa90-receipt-")) / "receipt.json"
-    try:
-        path.write_bytes(_json(receipt))
-        io.put(
-            make_output(
-                "diagnostic_blob", f"diagnostics/{stage}/receipt.json", path, None
-            )
-        )
-    finally:
-        shutil.rmtree(path.parent, ignore_errors=True)
-
-
 def run(execution_ref: str | None, io_dir: Path | None) -> int:
     file_mode = io_dir is not None
     if file_mode:
@@ -602,10 +584,8 @@ def run(execution_ref: str | None, io_dir: Path | None) -> int:
     try:
         io.beat("hashing_source", 0)
         receipt = execute(io, boot, manifest, log)
-        try:
-            _upload_receipt(io, receipt, boot["stage"])
-        except Exception:
-            log("receipt diagnostic not uploaded")
+        # The receipt is NOT uploaded as a job output: the server keeps it on the stage run, and an
+        # inventory file that no receipt (hence no result node) can name would block the seal.
         io.finish(receipt, log.bytes())
     finally:
         io.stop()
