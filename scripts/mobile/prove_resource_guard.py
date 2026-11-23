@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNNER = Path.home() / ".local/bin/agent-resource"
 
 
-# The legacy heavy-job slot applies outside registered roots (SA-124 made `run` in a
-# registered root a Free command), so this proof runs from a neutral directory.
+# The legacy heavy-job scope (no slot since SA-135) applies outside registered
+# roots (SA-124 made `run` in a registered root a Free command), so this proof runs from a neutral directory.
 NEUTRAL = Path(tempfile.gettempdir())
 
 
@@ -67,8 +67,10 @@ def main():
         try:
             wait_file(temp / "ready")
             second = run(str(RUNNER), "run", "--", "/bin/true")
-            assert second.returncode == 75 and "heavy-job" in second.stderr
-            evidence["secondHeavyJobRefused"] = True
+            # SA-135: no one-heavy-job rule; the second job is admitted by memory and runs
+            # beside the first in its own scope.
+            assert second.returncode == 0, second.stderr
+            evidence["secondHeavyJobRanBesideTheFirst"] = True
             # Real reserve-stop path, controlled input; no host-memory exhaustion.
             assert guard.stop_for_pressure(guard.RESERVE_MIN - 1)
             assert first.wait(timeout=15) != 0
@@ -108,15 +110,20 @@ def main():
         evidence["kernelEnforcement"] = json.loads(memory.stdout.strip())
         orphan_ready = temp / "orphan-ready"
         orphan = sentinel(orphan_ready)
+        scopes: set[str] = set()
         try:
             wait_file(orphan_ready)
+            group = guard.work_group()
+            scopes = set(p.name for p in group.glob("agent-mobile-build*.scope"))
+            assert scopes, "the sentinel's agent-mobile-build scope is not running"
             started = time.monotonic()
             os.kill(orphan.pid, signal.SIGKILL)
             orphan.wait(timeout=5)
             deadline = time.monotonic() + 10
-            while (
-                guard.call("systemctl", "--user", "is-active", guard.BUILD, check=False)
+            while any(
+                guard.call("systemctl", "--user", "is-active", unit, check=False)
                 == "active"
+                for unit in scopes
             ):
                 if time.monotonic() > deadline:
                     raise RuntimeError("Orphan scope was not reaped")
@@ -125,7 +132,8 @@ def main():
                 time.monotonic() - started, 2
             )
         finally:
-            guard.call("systemctl", "--user", "stop", guard.BUILD, check=False)
+            for unit in scopes:
+                guard.call("systemctl", "--user", "stop", unit, check=False)
 
     project = ROOT / "artifacts/resource-guard/gradle-defaults"
     project.mkdir(parents=True, exist_ok=True)

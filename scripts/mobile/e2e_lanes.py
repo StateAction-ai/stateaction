@@ -70,6 +70,9 @@ class Bench:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            # A harness started in the background has SIGINT ignored, and children inherit
+            # that, which makes case 5 (Ctrl-C detaches the client) meaningless: restore it.
+            preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
         )
         self.procs.append(proc)
         return proc
@@ -180,7 +183,15 @@ def run(bench: Bench) -> None:
     tickets = []
     for m in markers:
         tickets.append(
-            bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(m, 1.5))
+            bench.guard(
+                "rootA",
+                "run",
+                "--lane",
+                "ci",
+                "--",
+                *snippet(m, 4),
+                env={**bench.env, "AGENT_RESOURCE_TEST_CAP_GIB": "24"},
+            )
         )
         time.sleep(0.5)
     stream = 0
@@ -203,11 +214,9 @@ def run(bench: Bench) -> None:
     slots = tomllib.loads((REPO / "config/agentqueue/lanes.toml").read_text())["lanes"][
         "ci"
     ]["slots"]
-    can_overlap = (
-        slots >= 2 and guard.lane_budget(guard.aggregate_cap()) >= 2 * guard.JOB_MAX
-    )
-    # SA-108: never more tickets at once than the lane has slots; with two slots the first two
-    # overlap (the reservation budget admits two 6 GiB jobs at a cap of 22 GiB or more).
+    # SA-135: memory alone decides; the slot count is a ceiling. The reservation budget admits
+    # two 6 GiB jobs at a cap of 22 GiB or more, one below, so a third ticket always waits.
+    expected_peak = min(slots, guard.lane_budget(24 * guard.GIB) // guard.JOB_MAX)
     peak = max(
         sum(1 for j in range(5) if starts[j] <= starts[i] < ends[j] - 0.05)
         for i in range(5)
@@ -222,13 +231,78 @@ def run(bench: Bench) -> None:
         for j in range(i + 1, 5)
     )
     record(
-        "3 five queued ci tickets run FIFO, at most two at once with distinct scopes, despite Free traffic",
+        "3 five queued ci tickets run FIFO, as many at once as the memory budget admits, with distinct scopes, despite Free traffic",
         in_order
         and serial
-        and (peak == 2 or not can_overlap)
+        and peak == expected_peak
         and not clash
         and all(p.returncode == 0 for p in tickets),
-        f"order ok={in_order} peak concurrency={peak} scope clash={clash}, {stream} Free commands meanwhile",
+        f"order ok={in_order} peak concurrency={peak} (want {expected_peak}) scope clash={clash} "
+        f"rc={[p.returncode for p in tickets]}, {stream} Free commands meanwhile",
+    )
+
+    # 3b. SA-135: android-build admits two jobs at once at a 24 GiB cap, but never two in the same
+    # worktree (the worktree lock): A and B (two worktrees) overlap, C (A's worktree) waits for A.
+    env24 = {**bench.env, "AGENT_RESOURCE_TEST_CAP_GIB": "24"}
+    for sub in ("wt1", "wt2"):
+        (bench.roots["rootA"] / sub).mkdir(exist_ok=True)
+    bench.roots.update(
+        wt1=bench.roots["rootA"] / "wt1", wt2=bench.roots["rootA"] / "wt2"
+    )
+    # FIFO order A (wt1, long), C (wt1), B (wt2): memory and slots admit C beside A at once, so
+    # only the worktree lock makes C wait for A; B (another worktree) waits behind C in the FIFO.
+    builds = [t / "s3b-a", t / "s3b-c", t / "s3b-b"]
+    procs = []
+    for m, where, secs in zip(builds, ("wt1", "wt1", "wt2"), (7, 2, 2)):
+        procs.append(
+            bench.guard(
+                where,
+                "run",
+                "--lane",
+                "android-build",
+                "--",
+                *snippet(m, secs),
+                env=env24,
+            )
+        )
+        time.sleep(0.6)
+    for proc in procs:
+        proc.wait(timeout=120)
+    a_, c_, b_ = builds
+    c_gap = started(c_) - ended(a_)
+    record(
+        "3b android-build: a second ticket in the same worktree waits for the first",
+        c_gap > -0.1 and all(p.returncode == 0 for p in procs),
+        f"C started {c_gap:+.1f}s after A ended (without the lock it starts ~0.6 s after A "
+        f"started); rc={[p.returncode for p in procs]}",
+    )
+    emus = [t / "s3c-a", t / "s3c-b"]
+    ep = [
+        bench.guard(
+            "rootA", "run", "--lane", "emulator", "--", *snippet(emus[0], 3), env=env24
+        )
+    ]
+    time.sleep(0.4)
+    ep.append(
+        bench.guard(
+            "rootB",
+            "run",
+            "--lane",
+            "emulator",
+            "--",
+            *snippet(emus[1], 0.2),
+            env=env24,
+        )
+    )
+    for proc in ep:
+        proc.wait(timeout=120)
+    e_overlap = min(ended(emus[0]), ended(emus[1])) - max(
+        started(emus[0]), started(emus[1])
+    )
+    record(
+        "3c two emulator tickets from two repositories never overlap (exactly one machine-wide)",
+        e_overlap <= 0.2 and all(p.returncode == 0 for p in ep),
+        f"overlap {e_overlap:.1f}s rc={[p.returncode for p in ep]}",
     )
 
     # 4. kill -9 of the submitter keeps both the running and the queued ticket
@@ -253,17 +327,20 @@ def run(bench: Bench) -> None:
     c1 = t / "s5-ctrlc"
     cc = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(c1, 3))
     assert bench.wait_file(c1, 30)
+    signalled = time.time()
     cc.send_signal(signal.SIGINT)
     cc.wait(timeout=30)
+    client_exit = time.time()
     done = bench.wait_file(c1.with_suffix(".end"), 30)
     record(
         "5 Ctrl-C detaches the client, the ticket is not cancelled",
         done and cc.returncode != 0,
-        f"client rc={cc.returncode}, job finished={done}",
+        f"client rc={cc.returncode}, job finished={done}; job started {signalled - started(c1):.1f}s "
+        f"before the signal, client exited {client_exit - signalled:.1f}s after it",
     )
 
-    # 6. kill -9 of the lane wrapper: its slot stays held while the job's scope lives. With two
-    # ci slots the next ticket may run beside the orphan, but a third must not.
+    # 6. kill -9 of the lane wrapper: its slot stays held while the job's scope lives. The next
+    # ticket may run beside the orphan (memory admits two), but a third must not.
     w1, w2, w3 = t / "s6-first", t / "s6-second", t / "s6-third"
     p1 = bench.guard("rootA", "run", "--lane", "ci", "--", *snippet(w1, 9))
     assert bench.wait_file(w1, 30)

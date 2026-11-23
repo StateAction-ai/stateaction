@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -361,8 +362,15 @@ class ParallelSlotTests(RepoCase):
                 self.assertIsInstance(units, int, item["id"])
                 self.assertTrue(0 < units <= local_ci.DB_BUDGET, item["id"])
                 total = max(total, units)
-        # the shared fixture allows 30 connections, 3 reserved for superusers
-        self.assertLessEqual(local_ci.DB_BUDGET, 27)
+        # the shared fixture's definition is the limit: 3 reserved for superusers, and at least
+        # 25 connections stay for other agents' Free runs
+        source = (HERE.parent / "platform/bounded-fixtures.py").read_text()
+        limit = int(re.search(r"^POSTGRES_MAX_CONNECTIONS = (\d+)$", source, re.M)[1])
+        self.assertEqual(limit, 100)
+        self.assertIn('f"max_connections={POSTGRES_MAX_CONNECTIONS}"', source)
+        self.assertLessEqual(local_ci.DB_BUDGET, limit - 3 - 25)
+        # three gates at the largest single-stage peak never wait on each other for connections
+        self.assertGreaterEqual(local_ci.DB_BUDGET, 3 * total)
 
     def test_two_real_gate_processes_at_once_share_nothing_and_both_pass(self):
         """The two-slot dry run: two runner processes on two different trees overlap (each
@@ -1261,6 +1269,7 @@ class CiLaneEntryTests(RepoCase):
     def test_legacy_and_other_lane_scopes_do_not_prove_the_ci_lane(self):
         for scope in (
             "agent-mobile-build.scope",
+            "agent-mobile-build-123-abcdef.scope",
             "agent-lane-android-build-0123abcd.scope",
             "agent-lane-emulator-00000000.scope",
             "agent-free-1-abc.scope",
@@ -1512,17 +1521,50 @@ class FixtureTests(RepoCase):
                 cgroup=sys_root,
             )
         self.assertGreaterEqual(local_ci.SERVICE_CAPS["storage"], int(1.5 * 1018462208))
+        self.assertGreaterEqual(
+            local_ci.SERVICE_CAPS["postgres"], int(1.4 * 1_820_733_440)
+        )
+
+    def test_a_service_scope_with_a_throttle_band_below_its_cap_is_refused(self):
+        proc, sys_root = self.service_tree(
+            scope="agent-service-postgres.scope", memory=str(GIB)
+        )
+        group = next(sys_root.glob("**/agent-service-postgres.scope"))
+        (group / "memory.high").write_text(str(768 * 1024**2) + "\n")
+        with self.assertRaisesRegex(local_ci.Refused, "throttle band"):
+            local_ci.service_proof(
+                "postgres",
+                54340,
+                listeners=lambda _p: [4242],
+                proc=proc,
+                cgroup=sys_root,
+            )
+        (group / "memory.high").write_text("max\n")
+        local_ci.service_proof(
+            "postgres", 54340, listeners=lambda _p: [4242], proc=proc, cgroup=sys_root
+        )
+
+    def test_the_gate_and_guard_service_caps_are_the_same_numbers(self):
+        import importlib.util  # noqa: PLC0415
+
+        spec = importlib.util.spec_from_file_location(
+            "guard_for_caps", HERE.parent / "mobile/resource_guard.py"
+        )
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        for role, cap in local_ci.SERVICE_CAPS.items():
+            self.assertEqual(guard.SERVICE_CAPS[role], (cap, cap), role)
 
     def test_unbounded_or_wrong_fixture_server_is_refused_with_instructions(self):
         for kwargs, role in (
             ({"memory": "max"}, "postgres"),
-            ({"memory": str(2 * GIB)}, "postgres"),
+            ({"memory": str(3 * GIB)}, "postgres"),
             ({"swap": "max"}, "postgres"),
             ({"scope": "agent-service-storage.scope"}, "postgres"),
         ):
             proc, sys_root = self.service_tree(**kwargs)
             with self.assertRaisesRegex(
-                local_ci.Refused, "agent-resource serve|1 GiB|swap"
+                local_ci.Refused, "agent-resource serve|service cap|swap"
             ):
                 local_ci.service_proof(
                     role, 54340, listeners=lambda _p: [4242], proc=proc, cgroup=sys_root

@@ -44,7 +44,7 @@ import flow_hook  # noqa: E402
 
 GIB = 1024**3
 # Finite service caps; SeaweedFS needs 2 GiB (SA-108: throttled at 1 GiB, measured peak 1.02 GiB).
-SERVICE_CAPS = {"storage": 2 * GIB}
+SERVICE_CAPS = {"storage": 2 * GIB, "postgres": 5 * GIB // 2}
 JOB_MAX = 6 * GIB
 TOTAL_MAX = 12 * GIB  # legacy installed guard
 AGG_MAX = 24 * GIB  # only with a positive policy proof
@@ -57,11 +57,12 @@ MAX_PARALLEL = 3
 # Port blocks are claimed machine-wide (any CI home, the stress harness included), so two
 # gates never get the same block even from different homes; more blocks than slots on purpose.
 MAX_PORT_BLOCKS = 6
-# The shared bounded PostgreSQL fixture has max_connections=30 (3 reserved for superusers) and
-# is also used by every agent's Free runs. Gates draw their own connections from one
-# machine-wide budget of this many units (flock files), so concurrent gates never exceed it;
-# each fixture stage declares its measured peak in stages.json (`dbConnections`).
-DB_BUDGET = 20  # measured own peaks 5-16 (+3 admin) per stage; 7 left for other agents
+# The shared bounded PostgreSQL fixture has max_connections=100 since SA-135 (30 before; 3
+# reserved for superusers; scripts/platform/bounded-fixtures.py defines it) and is also used by
+# every agent's Free runs. Gates draw their own connections from one machine-wide budget of
+# this many units (flock files), so concurrent gates never exceed it; each fixture stage
+# declares its measured peak in stages.json (`dbConnections`).
+DB_BUDGET = 60  # three gates at the 19-unit peak fit; 37 are left for other agents
 DB_WAIT_SEC = 3600
 # Below the kernel's ephemeral range (32768+), above well-known dev ports.
 PORT_BASE = 10100
@@ -1748,7 +1749,18 @@ def service_proof(
             slice_limit = _limit(_read(group.parent / "memory.max"))
             if limit > SERVICE_CAPS.get(role, GIB):
                 raise Refused(
-                    f"{scope} exceeds its {SERVICE_CAPS.get(role, GIB) // GIB} GiB service cap"
+                    f"{scope} exceeds its {SERVICE_CAPS.get(role, GIB) / GIB:g} GiB service cap"
+                )
+            try:
+                high = _read(group / "memory.high")
+            except OSError:
+                high = "max"
+            if high != "max" and _limit(high) < limit:
+                # A scope created by an old guard (768M high under a 1G max) throttled every gate
+                # (SA-108); the current guard creates MemoryHigh == MemoryMax.
+                raise Refused(
+                    f"{scope} has memory.high {high} below its memory.max {limit} "
+                    f"(throttle band). {setup}"
                 )
             check_aggregate(slice_limit, policy_fetch)
             if (

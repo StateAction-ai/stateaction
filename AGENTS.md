@@ -36,7 +36,8 @@ Read the linked doc before working in its area.
 - Exactly one Android emulator across all projects, AVDs, ports and agents. Use the guarded launcher only.
 - Never run `emulator.agent-vendor` directly, bypass the machine-wide lock, reset the AVD, update the global SDK, replace the pinned emulator or run `xhost +`.
 - If the `agent-resource` guard is missing or refuses admission, stop. No unbounded retry.
-- Zero swap, 6 GiB per lane or Free job, 1 GiB per service, host RAM under 80% (the aggregate cap is dynamic and at most 24 GiB; numbers in the guard doc). Lane jobs need the 20% reserve plus 8 GiB available; the watchdog stops our workloads below the reserve. Never nest lanes or add ad hoc lock files.
+- Zero swap, 6 GiB per lane or Free job, 1 GiB per service (storage 2 GiB, PostgreSQL 2.5 GiB by measurement), host RAM under 80% (the aggregate cap is dynamic and at most 24 GiB; numbers in the guard doc). Lane jobs need the 20% reserve plus 8 GiB available; the watchdog stops our workloads below the reserve. Never nest lanes or add ad hoc lock files.
+- There is no one-heavy-job rule. Several full gates and other heavy jobs run at the same time while the memory budget allows (two 6 GiB lane jobs at the 24 GiB cap); admission is by memory only, and the lane jobs the budget cannot hold wait in FIFO order (a heavy job outside the lane queue is refused instead). Two `android-build` tickets never run in the same worktree. The emulator stays the single exception: exactly one machine-wide.
 - Gradle: pinned JDK21, heap at most 2 GiB, two workers, no persistent daemons. Clean leftover processes after tests.
 - Emulator rendering is KVM plus host GPU. Software rendering is never a silent default. Label it `software-rendering-not-accelerated`; never cite it as accelerated evidence.
 - Emulator results are never physical-device qualification.

@@ -23,6 +23,9 @@ sys.path.insert(0, str(ROOT / "scripts/mobile"))
 import resource_guard as guard  # noqa: E402
 
 BASE = ROOT / "artifacts/bounded-fixtures"
+# SA-135: several gates and agents share this instance (was 30, with 27 usable). Three reserved
+# for superusers; scripts/local-ci/local_ci.py DB_BUDGET draws gate connections from it.
+POSTGRES_MAX_CONNECTIONS = 100
 
 
 def run(*args: str) -> None:
@@ -167,9 +170,11 @@ def main() -> None:
             "-c",
             "shared_buffers=64MB",
             "-c",
-            "max_connections=30",
+            f"max_connections={POSTGRES_MAX_CONNECTIONS}",
             "-c",
             "work_mem=2MB",
+            "-c",
+            "maintenance_work_mem=16MB",
         )
     else:
         os.chdir(BASE / "storage")
@@ -181,7 +186,7 @@ def main() -> None:
             "-ip.bind=127.0.0.1",
             f"-dir={BASE / 'storage'}",
             # Every isolated test bucket owns a collection (at least one volume).
-            # Keep capacity finite without changing the 1 GiB service cgroup.
+            # Keep capacity finite without changing the 2 GiB service cgroup.
             "-volume.max=256",
             "-master.volumeSizeLimitMB=64",
             "-master.port=19333",

@@ -4,23 +4,22 @@
 # used on purpose: a command without `--lane` runs in the Free class.
 memory_budget = "12G"
 
-# One gate per project is the shipped value: the user's standing rule is one heavy job at a time
-# (6 GiB each under the dynamic cap, host below 80%), and activating a second slot is their
-# decision (SA-108). `slots = 1` is fully supported and tested (slot-unique scope names
-# `agent-lane-ci-<repo>[-s1].scope`, per-slot export/Nx state, port blocks, per-tree lock,
-# shared-Postgres connection budget): change it here and install the guard to activate. Two 6 GiB
-# reservations fit the lane budget only at a cap of at least 22 GiB (otherwise the second ticket
-# waits for memory); three never fit (18 GiB against at most 14 GiB). Includes the Android
-# tooling the gate drives (flattened under one ticket).
+# SA-135: several full gates run at once. `slots` is only a ceiling per project; the machine-wide
+# memory reservation (the guard's `--budget`: aggregate cap - 4 GiB Free share - 6 GiB warm
+# emulator, 14 GiB at the 24 GiB maximum cap, 6 GiB at the 12 GiB boot cap) decides how many
+# 6 GiB tickets run, and the rest wait in FIFO order. At the maximum cap that is two gates; a
+# third needs a 28 GiB cap and waits. Each gate keeps its own scope (`agent-lane-ci-<repo>[-s<n>]`),
+# export/Nx state, port block, per-tree lock and shared-Postgres connection budget (SA-108).
+# Includes the Android tooling the gate drives (flattened under one ticket).
 [lanes.ci]
-slots = 1
+slots = 3
 mem = "6G"
 runtime = "90m"
 timeout = "3h"
 
-# One Android/Flutter/Gradle build or unit-test job per project.
+# Android/Flutter/Gradle build or unit-test jobs per project, admitted by memory like `ci`.
 [lanes.android-build]
-slots = 1
+slots = 2
 mem = "6G"
 runtime = "60m"
 timeout = "3h"

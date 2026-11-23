@@ -21,7 +21,7 @@ import stat
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 GIB = 1024**3
@@ -40,17 +40,27 @@ MIB = 1024**2
 AGG_MAX = 24 * GIB  # absolute upper bound for the aggregate kernel cap
 BOOT_CAP = 12 * GIB  # unit-file default before the first dynamic readback
 TOTAL_MAX = BOOT_CAP  # legacy alias
-JOB_MAX = 6 * GIB  # emulator and heavy job, unchanged
-SERVICE_MAX = 1 * GIB  # default service cap (postgres: measured need under the gate)
+JOB_MAX = 6 * GIB  # emulator and each heavy job, unchanged
+SERVICE_MAX = (
+    1 * GIB
+)  # default service cap (storage and postgres have their own, below)
 # Per-service (MemoryHigh, MemoryMax). SeaweedFS keeps volume files in the page cache that its
 # cgroup is charged for: at 1 GiB / 768 MiB it was throttled (17M memory.high events, S3
 # requests stalling past 30 s) and every gate failed on ETIMEDOUT (SA-108). Measured
 # memory.peak under the gate was 1.02 GiB; the cap keeps >= 1.5x headroom over it.
+# PostgreSQL (SA-135, max_connections 100): 60 concurrent sessions cloning databases and running
+# sort/join/distinct work measured 1.82 GB of anonymous memory in a scratch instance with the same
+# settings (backends plus their psql clients, about 25 MB per session); the cap keeps >= 1.4x.
+# MemoryHigh equals MemoryMax: no early throttle band (a restarted fixture once came back with the
+# 768M/1G default and stalled every gate). `agent-resource serve --name <svc>` creates the scope
+# with exactly these values, the gate check (local_ci.SERVICE_CAPS) accepts nothing above them.
 SERVICE_CAPS = {
-    "storage": (1800 * 1024**2, 2 * GIB),
+    "storage": (2 * GIB, 2 * GIB),
+    "postgres": (5 * GIB // 2, 5 * GIB // 2),
 }
-SERVICE_CAP_DEFAULT = (768 * 1024**2, SERVICE_MAX)
+SERVICE_CAP_DEFAULT = (SERVICE_MAX, SERVICE_MAX)
 STORAGE_PEAK_MEASURED = 1018462208
+POSTGRES_PEAK_MEASURED = 1_820_733_440  # anon, 60 sessions (SA-135)
 
 
 def service_caps(unit: str) -> tuple[int, int]:
@@ -70,7 +80,9 @@ SHRINK_HYSTERESIS = 1 * GIB  # watchdog tightens only for a larger gap
 RESERVE_MIN = 12 * GIB
 ADMISSION_MIN = RESERVE_MIN + ADMISSION_MARGIN
 SLICE = "agent-work.slice"
-BUILD = "agent-mobile-build.scope"
+BUILD = "agent-mobile-build.scope"  # the pre-SA-135 unit name, still reaped if one is left over
+# SA-135: heavy jobs of a project outside the lane queue run in parallel, one unit per process.
+BUILD_SCOPE = re.compile(r"agent-mobile-build(?:-\d+-[0-9a-f]{6})?\.scope")
 EMULATOR = "agent-android-emulator.scope"
 # SA-124 lanes (agentqueue). A lane job runs in its own scope per lane and project; the Free
 # class (every `run` without --lane in a registered root) takes no slot and never waits.
@@ -734,7 +746,9 @@ def current_lane() -> str | None:
 
 def inside_lane() -> bool:
     """A lane ticket (or the legacy heavy-job scope) is held by this process tree."""
-    return guarded_pid() and (own_scope() == BUILD or current_lane() is not None)
+    return guarded_pid() and (
+        BUILD_SCOPE.fullmatch(own_scope()) is not None or current_lane() is not None
+    )
 
 
 def inside_guard() -> bool:
@@ -826,18 +840,70 @@ def verify_binary(binary: Path) -> None:
         )
 
 
+def admit_heavy_job(unit: str) -> None:
+    """Memory admission for a heavy job outside the lane queue (SA-135). Under one blocking lock
+    it counts the live heavy jobs (owner records, which exist before the scope does, so a burst
+    of simultaneous starts cannot all pass) plus the lane scopes, requires them and this job to
+    fit the machine-wide lane budget, and records this job's owner file before releasing."""
+    directory = runtime_dir()
+    fd = os.open(
+        directory / "heavy-admission.lock",
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        live = 0
+        for owner in directory.glob("agent-mobile-build-*.scope.owner"):
+            if owner.name == f"{unit}.owner":
+                continue
+            try:
+                record = json.loads(owner.read_text())
+                if (
+                    record["identity"] is not None
+                    and process_identity(record["pid"]) == record["identity"]
+                ):
+                    live += 1
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+        group = work_group()
+        lanes = len(list(group.glob("agent-lane-*.scope"))) if group else 0
+        budget = lane_budget(aggregate_cap())
+        if (live + lanes + 1) * JOB_MAX > budget:
+            raise Refused(
+                f"{live} heavy job(s) and {lanes} lane job(s) already hold "
+                f"{(live + lanes) * JOB_MAX // GIB} GiB of the {budget / GIB:.0f} GiB job "
+                "budget; this job is refused, not queued (no unbounded retry)"
+            )
+        (directory / f"{unit}.owner").write_text(
+            json.dumps({"pid": os.getpid(), "identity": process_identity(os.getpid())})
+        )
+    finally:
+        os.close(fd)
+
+
 def run_scope(
     unit: str, command: list[str], *, emulator: bool, service: bool = False
 ) -> int:
     if not command:
         raise Refused("A command is required")
-    slot = unit if service else "emulator" if emulator else "heavy-job"
-    with singleton(slot):
+    # Only the emulator (the sole machine-wide one) and a named service own a singleton lock. A
+    # heavy job holds none (SA-135): it is admitted by the memory check below and bounded by its
+    # own 6 GiB scope and the aggregate cap, so several run side by side.
+    with (
+        singleton(unit)
+        if service
+        else singleton("emulator")
+        if emulator
+        else nullcontext()
+    ):
         if emulator and android_processes():
             raise Refused(
                 "An Android emulator already exists; reuse it, regardless of AVD/port"
             )
         admit()
+        if not emulator and not service:
+            admit_heavy_job(unit)
         for vendor in json.loads((INSTALL / "config.json").read_text())["vendors"]:
             verify_binary(Path(vendor).with_name("emulator"))
         enforce_slice()
@@ -922,7 +988,8 @@ def reap_orphans() -> None:
         f"{FREE_SLICE}/{p.name}"
         for p in (group / FREE_SLICE).glob("agent-free-*.scope")
     ]
-    for unit in (BUILD, EMULATOR, *services, *lanes, *free):
+    builds = [p.name for p in group.glob("agent-mobile-build*.scope")]
+    for unit in (*builds, EMULATOR, *services, *lanes, *free):
         kill = group / unit / "cgroup.kill"
         if not kill.exists():
             continue
@@ -993,9 +1060,11 @@ def watch() -> None:
 
 def install(jdk: Path, emulators: list[Path], projects: list[Path]) -> None:
     user_environment()
+    group = work_group()
     if (
         android_processes()
         or call("systemctl", "--user", "is-active", BUILD, check=False) == "active"
+        or (group is not None and any(group.glob("agent-mobile-build*.scope")))
     ):
         raise Refused("Stop guarded emulator/build work before updating the guard")
     if not (jdk / "bin/java").is_file():
@@ -1119,7 +1188,7 @@ def install(jdk: Path, emulators: list[Path], projects: list[Path]) -> None:
                 "perJobGiB": 6,
                 "swapMax": 0,
                 "emulatorSlots": 1,
-                "heavyJobSlots": 1,
+                "heavyJobAdmission": "memory",
             }
         )
     )
@@ -1242,9 +1311,11 @@ def agentqueue_binary() -> Path:
 
 def lane_budget(cap: int | None) -> int:
     """Machine-wide reservation of lane caps: the live aggregate cap minus the protected Free
-    share and the warm emulator scope, clamped to [one job, three jobs]. PROVISIONAL."""
+    share and the warm emulator scope, never below one job. Memory alone decides how many jobs
+    run at once (SA-135): the manifest's slot counts are only ceilings. At the 24 GiB maximum
+    cap this is 14 GiB, so two 6 GiB jobs run and the third waits."""
     cap = BOOT_CAP if cap is None else cap
-    return max(JOB_MAX, min(3 * JOB_MAX, cap - FREE_LOW - EMULATOR_SHARE))
+    return max(JOB_MAX, cap - FREE_LOW - EMULATOR_SHARE)
 
 
 def aq_lane(lane: str, key: str) -> str:
@@ -1556,7 +1627,7 @@ def slot_fds() -> list[int]:
             "/lanes/" in target
             and "/slot-" in target
             and not target.endswith(".holder")
-        ):
+        ) or "agent-resource-guard/android-build-" in target:  # worktree lock (SA-135)
             found.append(int(entry.name))
     return found
 
@@ -1662,28 +1733,60 @@ def lane_job(lane: str, key: str, command: list[str]) -> int:
     env["STATEACTION_LANE_HELD"] = (
         lane  # informational; trust is the cgroup (current_lane)
     )
-    return run_bounded(
-        lane_unit(lane, key, min(slot_index(), 9)),
-        command,
-        slice_name=SLICE,
-        job_max=JOB_MAX,
-        env=env,
-        tasks=LANE_TASKS,
-        cpu_weight=LANE_CPU_WEIGHT,
+    with worktree_lock(lane):
+        return run_bounded(
+            lane_unit(lane, key, min(slot_index(), 9)),
+            command,
+            slice_name=SLICE,
+            job_max=JOB_MAX,
+            env=env,
+            tasks=LANE_TASKS,
+            cpu_weight=LANE_CPU_WEIGHT,
+        )
+
+
+@contextmanager
+def worktree_lock(lane: str):
+    """android-build tickets of one repository may run side by side (SA-135), but never two in the
+    same checkout: `.gradle/`, `build/`, `.dart_tool/` and `pubspec.lock` are per worktree. The
+    second ticket waits here (holding its memory reservation) until the first one ends. Other
+    lanes need no lock: every gate owns an export directory and a per-tree lock."""
+    if lane != "android-build":
+        yield
+        return
+    top = (
+        subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+        ).stdout.strip()
+        or os.getcwd()
     )
+    name = hashlib.sha256(top.encode()).hexdigest()[:16]
+    fd = os.open(
+        runtime_dir() / f"android-build-{name}.lock",
+        os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)  # blocking; SIGTERM ends the wait (SystemExit)
+        os.set_inheritable(
+            fd, True
+        )  # slot_fds() passes it on: held until the scope exits
+        yield
+    finally:
+        os.close(fd)
 
 
 def free_slice_max(cap: int | None = None) -> int:
-    """The aggregate cap minus one gate job and 2 GiB of services, never below the protected
+    """The aggregate cap minus a reference 6 GiB job and 2 GiB for the services (the caps allow 4.5 GiB, typical use is far less), never below the protected
     Free share. Free overlaps the lane budget and the warm emulator on purpose, so at a 24 GiB
-    cap Free 16 + emulator 6 + one gate 6 can exceed the cap: the protection is the aggregate
+    cap Free 16 + emulator 6 + two gates 12 can exceed the cap: the protection is the aggregate
     MemoryMax/High plus the oom_score_adj of Free scopes, not a sum.
     PROVISIONAL (owner approval pending on SA-124)."""
     cap = aggregate_cap() if cap is None else cap
     cap = BOOT_CAP if cap is None else cap
     # 2026-11-23: the old sizing (cap - lane budget - emulator share = 4-5 GiB) made agents' Free /
     # commands (next build, cargo, browsers) hit the Free slice cap: kernel OOM kills and desktop /
-    # 'device memory full' warnings. Free is capped at the aggregate minus one gate job and the services.
+    # 'device memory full' warnings. Free is capped at the aggregate minus a reference job and the services.
     return max(FREE_LOW, cap - JOB_MAX - 2 * GIB)
 
 
@@ -1754,7 +1857,11 @@ def run_command(command: list[str], options: argparse.Namespace) -> int:
         # Not a StateAction root: legacy behavior, never reclassified.
         if inside_lane():
             os.execvpe(command[0], command, os.environ)
-        return run_scope(BUILD, command, emulator=False)
+        return run_scope(
+            f"agent-mobile-build-{os.getpid()}-{secrets.token_hex(3)}.scope",
+            command,
+            emulator=False,
+        )
     return free_run(command, parse_mem(options.mem))
 
 
