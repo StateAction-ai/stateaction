@@ -20,7 +20,7 @@ export function ledgerRun(): LedgerRun | null {
 
 export function recordCreated(
   run: LedgerRun,
-  kind: "database" | "bucket" | "role",
+  kind: "database" | "bucket" | "role" | "template",
   name: string,
   owner?: string,
 ): void {
