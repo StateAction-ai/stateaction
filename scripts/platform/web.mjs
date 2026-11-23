@@ -10,7 +10,11 @@ const hosted =
   process.env.APP_ENV === "production" || process.env.RENDER === "true";
 // Hosted processes receive injected environment variables only. A local file
 // is a development convenience: optional, never overriding injected values.
-const envFile = fileURLToPath(new URL("../../.env", import.meta.url));
+// STATEACTION_ENV_FILE points the launcher at another file (tests use a missing one so a root
+// `.env` that a concurrent smoke run writes can never turn a refusal test into a live server).
+const envFile =
+  process.env.STATEACTION_ENV_FILE ??
+  fileURLToPath(new URL("../../.env", import.meta.url));
 if (!hosted && existsSync(envFile)) process.loadEnvFile(envFile);
 else if (!hosted && !process.env.APP_ENV)
   throw new Error("Create .env from .env.example (APP_ENV is not set)");

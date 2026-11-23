@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -792,7 +793,7 @@ class PipelineTests(RepoCase):
         self.commit_pending()
         record = self.run_tree()
         self.assertEqual(record["verdict"], "FAIL")
-        self.assertEqual([s["status"] for s in record["stages"]], ["failed"])
+        self.assertEqual([s["status"] for s in record["stages"]], ["failed", "not-run"])
         self.assertFalse(marker.exists())
         self.assertEqual(self.receipts(), [])
         self.assertTrue((Path(record["logDir"]) / "run.json").exists())
@@ -1763,6 +1764,589 @@ class VerifyTests(RepoCase):
         record = self.commit_passed()
         self.rewrite(record, lambda d: d["guard"].update(memoryMaxBytes=0))
         self.assertTrue(any("guard" in e for e in self.errors()))
+
+
+class LaneTests(RepoCase):
+    """SA-116: independent stage lanes inside one gate. Concurrency is proved with file
+    handshakes (each lane waits, bounded, for the other), never with sleeps and timings."""
+
+    def errors(self):
+        return local_ci.verify_receipt(self.repo, "HEAD", home=self.home)
+
+    def rewrite(self, record, mutate):
+        path = Path(record["receipt"])
+        data = json.loads(path.read_text())
+        mutate(data)
+        data["receiptSha256"] = local_ci.receipt_digest(data)
+        path.write_text(json.dumps(data))
+
+    def commit_passed(self):
+        (self.repo / "app.txt").write_text("two\n")
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS")
+        return record
+
+    WAIT = """
+        import os, sys, time
+        def wait_for(path, secs=20):
+            end = time.monotonic() + secs
+            while not os.path.exists(path):
+                if time.monotonic() > end:
+                    sys.exit(9)
+                time.sleep(0.02)
+        def touch(path):
+            open(path, "w").write(str(os.getpid()))
+    """
+
+    def lane_stage(self, stage_id, lane, code, memory=1000, **extra):
+        body = textwrap.dedent(self.WAIT) + textwrap.dedent(code)
+        return stage(stage_id, body, lane=lane, memoryMiB=memory, ports=[], **extra)
+
+    def test_lanes_run_concurrently_and_the_receipt_keeps_declared_order(self):
+        a, b = self.tmp / "a.up", self.tmp / "b.up"
+        self.set_stages(
+            [
+                stage("setup", "print('setup')"),
+                # declared first, but it can only finish after the later lane has started
+                self.lane_stage(
+                    "first", "x", f"touch({str(a)!r}); wait_for({str(b)!r})"
+                ),
+                self.lane_stage(
+                    "second", "y", f"touch({str(b)!r}); wait_for({str(a)!r})"
+                ),
+                stage("after", "print('after the barrier')"),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS", record)
+        self.assertEqual(
+            [s["id"] for s in record["stages"]], ["setup", "first", "second", "after"]
+        )
+        by_id = {s["id"]: s for s in record["stages"]}
+        first, second = by_id["first"], by_id["second"]
+        self.assertLess(first["startOffsetSec"], second["endOffsetSec"])
+        self.assertLess(second["startOffsetSec"], first["endOffsetSec"])
+        self.assertLessEqual(by_id["setup"]["endOffsetSec"], first["startOffsetSec"])
+        self.assertGreaterEqual(by_id["after"]["startOffsetSec"], first["endOffsetSec"])
+        self.assertGreaterEqual(
+            by_id["after"]["startOffsetSec"], second["endOffsetSec"]
+        )
+        self.assertEqual((first["lane"], second["lane"]), ("x", "y"))
+        receipt = json.loads(Path(record["receipt"]).read_text())
+        self.assertEqual(
+            [s["id"] for s in receipt["stages"]], ["setup", "first", "second", "after"]
+        )
+        self.assertEqual(
+            [lane["lane"] for lane in receipt["lanePlan"][0]["lanes"]], ["x", "y"]
+        )
+        self.assertEqual(receipt["lanePlan"][0]["memoryMiB"], 2000)
+        self.assertEqual(
+            receipt["lanes"][0]["admittedMemoryMiB"], local_ci.LANE_MEMORY_MIB
+        )
+        self.assertEqual(self.errors(), [])
+
+    def test_entries_are_recorded_in_declared_order_whatever_finished_first(self):
+        declared = [{"id": "setup"}, {"id": "slow"}, {"id": "quick"}]
+        finished_first = {"quick": {"id": "quick"}, "slow": {"id": "slow"}}
+        self.assertEqual(
+            [e["id"] for e in local_ci.in_declared_order(finished_first, declared)],
+            ["slow", "quick"],
+        )
+
+    def test_a_receipt_in_completion_order_is_not_the_declared_order(self):
+        self.set_stages(
+            [
+                self.lane_stage("slow", "x", "print(1)"),
+                self.lane_stage("quick", "y", "print(2)", memory=500),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS", record)
+        self.assertEqual([s["id"] for s in record["stages"]], ["slow", "quick"])
+        self.assertEqual(self.errors(), [])
+        self.rewrite(record, lambda d: d["stages"].reverse())
+        self.assertTrue(
+            any("declared stages in order" in e for e in self.errors()),
+        )
+
+    def test_a_forced_failure_in_one_lane_stops_and_reaps_the_others(self):
+        ready, pid_file, child_file = (
+            self.tmp / "ready",
+            self.tmp / "slow.pid",
+            self.tmp / "child.pid",
+        )
+        self.set_stages(
+            [
+                stage("setup", "print('setup')"),
+                self.lane_stage(
+                    "bad",
+                    "x",
+                    f"wait_for({str(ready)!r}); print('boom'); sys.exit(3)",
+                ),
+                self.lane_stage(
+                    "slow",
+                    "y",
+                    f"""
+                    import subprocess
+                    child = subprocess.Popen(["sleep", "300"])
+                    open({str(child_file)!r}, "w").write(str(child.pid))
+                    touch({str(pid_file)!r})
+                    touch({str(ready)!r})
+                    time.sleep(300)
+                    """,
+                ),
+                self.lane_stage("later", "x", "touch(%r)" % str(self.tmp / "later")),
+                stage("last", "open(%r, 'w').write('x')" % str(self.tmp / "last")),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "FAIL")
+        by_id = {s["id"]: s for s in record["stages"]}
+        self.assertEqual(by_id["bad"]["status"], "failed")
+        self.assertEqual(by_id["slow"]["status"], "cancelled")
+        self.assertEqual(by_id["later"]["status"], "not-run")
+        self.assertEqual(by_id["last"]["status"], "not-run")
+        self.assertEqual(
+            [s["id"] for s in record["stages"]],
+            ["setup", "bad", "slow", "later", "last"],
+        )
+        self.assertFalse((self.tmp / "later").exists())
+        self.assertFalse((self.tmp / "last").exists())
+        self.assertEqual(self.receipts(), [])
+        self.assertTrue((Path(record["logDir"]) / "bad.log").exists())
+        self.assertTrue((Path(record["logDir"]) / "slow.log").exists())
+        for name in (pid_file, child_file):
+            pid = int(name.read_text())
+            self.assertFalse(
+                Path(f"/proc/{pid}").exists(), f"{name.name} {pid} left over"
+            )
+
+    def test_not_run_and_cancelled_stages_never_verify(self):
+        record = self.commit_passed()
+        self.assertEqual(self.errors(), [])
+        for status in ("not-run", "cancelled", "interrupted"):
+            self.rewrite(record, lambda d, st=status: d["stages"][0].update(status=st))
+            self.assertTrue(any("did not pass" in e for e in self.errors()), status)
+        self.rewrite(record, lambda d: d["stages"].pop())
+        self.assertTrue(any("declared stages in order" in e for e in self.errors()))
+
+    def test_lane_membership_is_bound_by_the_receipt(self):
+        self.set_stages(
+            [
+                self.lane_stage("one", "x", "print(1)"),
+                self.lane_stage("two", "y", "print(2)"),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(self.errors(), [])
+        self.rewrite(record, lambda d: d["stages"][0].update(lane="y"))
+        self.assertTrue(any("lane 'y'" in e for e in self.errors()))
+
+    def test_group_leak_is_attributed_and_one_stage_cannot_reap_its_sibling(self):
+        sibling_up = self.tmp / "sibling.up"
+        keeper = self.tmp / "keeper.pid"
+        self.set_stages(
+            [
+                # stage A leaves a daemon of its own session behind and exits at once
+                self.lane_stage(
+                    "leaker",
+                    "x",
+                    f"""
+                    import subprocess
+                    wait_for({str(sibling_up)!r})
+                    subprocess.Popen(["sleep", "300"], start_new_session=True)
+                    """,
+                ),
+                # stage B is alive while A ends and must not be touched by A's reaping
+                self.lane_stage(
+                    "sibling",
+                    "y",
+                    f"""
+                    touch({str(sibling_up)!r})
+                    time.sleep(2)
+                    touch({str(keeper)!r})
+                    """,
+                ),
+            ]
+        )
+        record = self.run_tree()
+        by_id = {s["id"]: s for s in record["stages"]}
+        self.assertTrue(keeper.exists(), "the sibling stage must run to its own end")
+        self.assertEqual(by_id["sibling"]["exitCode"], 0)
+        self.assertEqual(record["verdict"], "FAIL")
+        self.assertEqual(by_id["leaker"]["status"], "leaked-process")
+        self.assertEqual(self.receipts(), [])
+
+    def test_process_left_in_the_stage_session_fails_only_that_stage(self):
+        sibling_up, sibling_done = self.tmp / "sibling.up", self.tmp / "sibling.done"
+        self.set_stages(
+            [
+                self.lane_stage(
+                    "leaker",
+                    "x",
+                    f"""
+                    import subprocess
+                    wait_for({str(sibling_up)!r})
+                    subprocess.Popen(["sleep", "300"])
+                    """,
+                ),
+                self.lane_stage(
+                    "sibling",
+                    "y",
+                    f"""
+                    touch({str(sibling_up)!r})
+                    time.sleep(2)
+                    touch({str(sibling_done)!r})
+                    """,
+                ),
+            ]
+        )
+        record = self.run_tree()
+        by_id = {s["id"]: s for s in record["stages"]}
+        self.assertEqual(by_id["leaker"]["status"], "leaked-process")
+        self.assertEqual(by_id["sibling"]["status"], "passed")
+        self.assertTrue(sibling_done.exists())
+
+    def test_ports_are_listed_per_stage_and_never_shared_between_lanes(self):
+        out = self.tmp / "ports"
+        out.mkdir()
+        dump = (
+            "import os, json; "
+            "json.dump({k: v for k, v in os.environ.items() if k.endswith('_PORT')}, open(%r + '/' + %r, 'w'))"
+        )
+        self.set_stages(
+            [
+                stage(
+                    "web",
+                    dump % (str(out), "web"),
+                    lane="x",
+                    memoryMiB=500,
+                    ports=["CI_SMOKE_WEB_PORT", "CI_SMOKE_RUNNER_PORT"],
+                ),
+                stage(
+                    "hosted",
+                    dump % (str(out), "hosted"),
+                    lane="y",
+                    memoryMiB=500,
+                    ports=["HOSTED_SMOKE_WEB_PORT", "HOSTED_SMOKE_RUNNER_PORT"],
+                ),
+                stage("barrier", dump % (str(out), "barrier")),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS", record)
+        seen = {
+            n: json.loads((out / n).read_text()) for n in ("web", "hosted", "barrier")
+        }
+        self.assertEqual(
+            sorted(seen["web"]), ["CI_SMOKE_RUNNER_PORT", "CI_SMOKE_WEB_PORT"]
+        )
+        self.assertEqual(
+            sorted(seen["hosted"]),
+            ["HOSTED_SMOKE_RUNNER_PORT", "HOSTED_SMOKE_WEB_PORT"],
+        )
+        self.assertFalse(set(seen["web"].values()) & set(seen["hosted"].values()))
+        self.assertEqual(
+            len(seen["barrier"]), 4
+        )  # an unlaned stage keeps the whole block
+
+    def test_a_lane_waiting_for_the_database_budget_is_cancelled_not_interrupted(self):
+        locks = self.tmp / "port-locks"
+        held = local_ci.acquire_db_budget(local_ci.DB_BUDGET, locks)  # a foreign gate
+        self.addCleanup(lambda: [os.close(fd) for fd in held if fd >= 0])
+        ready = self.tmp / "ready"
+        fixture = self.tmp / "fixtures.env"
+        fixture.write_text(FIXTURE_ENV)
+        self.set_stages(
+            [
+                self.lane_stage(
+                    "bad", "x", f"wait_for({str(ready)!r}); sys.exit(3)", memory=500
+                ),
+                self.lane_stage(
+                    "db",
+                    "y",
+                    "print('must not run')",
+                    fixtures=True,
+                    dbConnections=3,
+                ),
+            ]
+        )
+        # the waiting stage is cancelled by the failing sibling; the failure is not lost
+        threading_ready = threading.Timer(1.0, lambda: ready.write_text("x"))
+        threading_ready.start()
+        self.addCleanup(threading_ready.cancel)
+        record = self.run_tree(fixtures_path=str(fixture), service_check=FAKE_SERVICE)
+        self.assertEqual(record["verdict"], "FAIL", record.get("detail"))
+        by_id = {s["id"]: s for s in record["stages"]}
+        self.assertEqual(by_id["bad"]["status"], "failed")
+        self.assertEqual(by_id["db"]["status"], "not-run")
+        self.assertEqual(self.receipts(), [])
+
+    def test_keep_going_runs_every_lane_to_its_end(self):
+        later = self.tmp / "later"
+        self.set_stages(
+            [
+                self.lane_stage("bad", "x", "sys.exit(3)", memory=500),
+                self.lane_stage("good", "y", "time.sleep(1); print('ok')", memory=500),
+                self.lane_stage("after-bad", "x", f"touch({str(later)!r})", memory=500),
+            ]
+        )
+        record = self.run_tree(keep_going=True)
+        by_id = {s["id"]: s for s in record["stages"]}
+        self.assertEqual(
+            (by_id["bad"]["status"], by_id["good"]["status"]), ("failed", "passed")
+        )
+        self.assertEqual(by_id["after-bad"]["status"], "passed")
+        self.assertTrue(later.exists())
+        self.assertEqual(record["verdict"], "FAIL")
+        self.assertEqual(self.receipts(), [])
+
+    def test_an_exception_in_a_lane_keeps_the_other_lanes_records(self):
+        real = local_ci.run_child
+
+        def boom(argv, **kwargs):
+            if "explode" in " ".join(argv):
+                raise RuntimeError("synthetic lane crash")
+            return real(argv, **kwargs)
+
+        self.set_stages(
+            [
+                self.lane_stage("explode", "x", "print('explode')", memory=500),
+                self.lane_stage("fine", "y", "print('fine')", memory=500),
+            ]
+        )
+        with mock.patch.object(local_ci, "run_child", boom):
+            with self.assertRaisesRegex(RuntimeError, "synthetic lane crash"):
+                self.run_tree()
+        run = json.loads(next(self.home.glob("logs/*/run.json")).read_text())
+        self.assertEqual(run["verdict"], "FAIL")
+        self.assertIn("synthetic lane crash", run["detail"])
+        self.assertEqual(self.receipts(), [])
+
+    def test_a_signal_during_the_lanes_ends_interrupted_and_reaps_everything(self):
+        pid_a, pid_b = self.tmp / "a.pid", self.tmp / "b.pid"
+        self.set_stages(
+            [
+                self.lane_stage(
+                    "one", "x", f"touch({str(pid_a)!r}); time.sleep(300)", memory=500
+                ),
+                self.lane_stage(
+                    "two", "y", f"touch({str(pid_b)!r}); time.sleep(300)", memory=500
+                ),
+            ]
+        )
+        self.commit_pending()
+        script = (
+            "import sys; sys.path.insert(0, %r); import local_ci; "
+            "r = local_ci.run_pipeline(%r, home=%r, guard=%r, probe_ports=False, port_locks=%r, log=lambda m: print(m, flush=True)); "
+            "print('verdict', r['verdict'], [s['status'] for s in r['stages']], flush=True); "
+            "sys.exit(130 if r['verdict'] == 'INTERRUPTED' else 1)"
+        ) % (
+            str(HERE),
+            str(self.repo),
+            str(self.home),
+            FAKE_GUARD,
+            str(self.tmp / "port-locks"),
+        )
+        out = self.tmp / "out.txt"
+        with open(out, "w") as sink:
+            runner = subprocess.Popen([sys.executable, "-c", script], stdout=sink)
+            end = time.monotonic() + 30
+            while not (pid_a.exists() and pid_b.exists()):
+                self.assertLess(time.monotonic(), end, "lanes did not start")
+                time.sleep(0.05)
+            runner.send_signal(signal.SIGTERM)
+            self.assertEqual(runner.wait(timeout=60), 130, out.read_text())
+        self.assertIn("verdict INTERRUPTED", out.read_text())
+        for name in (pid_a, pid_b):
+            self.assertFalse(Path(f"/proc/{int(name.read_text())}").exists())
+
+    def test_a_receipt_with_another_lane_plan_is_rejected(self):
+        self.set_stages(
+            [
+                self.lane_stage("one", "x", "print(1)", memory=500),
+                self.lane_stage("two", "y", "print(2)", memory=500),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(self.errors(), [])
+        self.rewrite(record, lambda d: d.update(lanePlan=[]))
+        self.assertTrue(any("lane plan" in e for e in self.errors()))
+
+    def test_the_timing_table_shows_lane_and_window_and_gate_wall_as_total(self):
+        lines = []
+        self.set_stages(
+            [
+                stage("setup", "print(1)"),
+                self.lane_stage("one", "x", "print(1)", memory=500),
+                self.lane_stage("two", "y", "print(2)", memory=500),
+            ]
+        )
+        record = self.run_tree(log=lines.append)
+        table = next(x for x in lines if "wall time" in x)
+        self.assertRegex(table, r"one\s+passed\s+\S+\s+-\s+x\s+\d+-\d+")
+        self.assertRegex(table, r"TOTAL\s+PASS\s+%.1f" % record["wallSec"])
+
+    def test_a_private_nx_state_lane_gets_its_own_data_socket_and_tmp(self):
+        seen = self.tmp / "seen"
+        seen.mkdir()
+        shared = local_ci.private_dir(
+            local_ci.private_dir(self.home) / "nx-workspace-data"
+        )
+        (shared / "index.db").write_text("task index")
+        dump = (
+            "import os, json; keys = ['NX_WORKSPACE_DATA_DIRECTORY', 'NX_SOCKET_DIR', 'TMPDIR']; "
+            "d = {k: os.environ.get(k) for k in keys}; "
+            "d['copy'] = open(os.path.join(d['NX_WORKSPACE_DATA_DIRECTORY'], 'index.db')).read(); "
+            "d['socketDirExists'] = os.path.isdir(d['NX_SOCKET_DIR'] or '/nonexistent'); "
+            "json.dump(d, open(%r + '/' + %r, 'w'))"
+        )
+        self.set_stages(
+            [
+                stage("barrier", dump % (str(seen), "barrier")),
+                stage(
+                    "shared",
+                    dump % (str(seen), "shared"),
+                    lane="x",
+                    memoryMiB=500,
+                    ports=[],
+                ),
+                stage(
+                    "private",
+                    dump % (str(seen), "private"),
+                    lane="y",
+                    memoryMiB=500,
+                    ports=[],
+                    nxState="private",
+                ),
+            ]
+        )
+        record = self.run_tree()
+        self.assertEqual(record["verdict"], "PASS", record)
+        got = {
+            n: json.loads((seen / n).read_text())
+            for n in ("barrier", "shared", "private")
+        }
+        self.assertEqual(
+            got["shared"]["NX_WORKSPACE_DATA_DIRECTORY"],
+            got["barrier"]["NX_WORKSPACE_DATA_DIRECTORY"],
+        )
+        self.assertIsNone(got["shared"]["NX_SOCKET_DIR"])
+        private = got["private"]
+        self.assertNotEqual(
+            private["NX_WORKSPACE_DATA_DIRECTORY"],
+            got["shared"]["NX_WORKSPACE_DATA_DIRECTORY"],
+        )
+        self.assertNotEqual(private["TMPDIR"], got["shared"]["TMPDIR"])
+        self.assertEqual(private["copy"], "task index")
+        self.assertTrue(private["socketDirExists"])
+        # removed after the group, never left behind
+        self.assertFalse(Path(private["NX_SOCKET_DIR"]).exists())
+        self.assertFalse(Path(private["NX_WORKSPACE_DATA_DIRECTORY"]).exists())
+
+    def test_lane_plan_refusals(self):
+        def plan(*stages):
+            return local_ci.lane_plan(list(stages))
+
+        def laned(stage_id, lane, **extra):
+            return {
+                "id": stage_id,
+                "lane": lane,
+                "memoryMiB": 1000,
+                "ports": [],
+                **extra,
+            }
+
+        self.assertEqual(plan(laned("a", "x"), laned("b", "y"))[0]["memoryMiB"], 2000)
+        # the lane budget is its largest stage, summed over lanes, and refused above 4.5 GiB
+        self.assertEqual(
+            plan(
+                laned("a", "x"),
+                laned("c", "x", memoryMiB=3000),
+                laned("b", "y", memoryMiB=1500),
+            )[0]["memoryMiB"],
+            4500,
+        )
+        with self.assertRaisesRegex(local_ci.Refused, "budgeted for 4700 MiB"):
+            plan(laned("a", "x", memoryMiB=3200), laned("b", "y", memoryMiB=1500))
+        with self.assertRaisesRegex(local_ci.Refused, "memoryMiB"):
+            plan(laned("a", "x"), {"id": "b", "lane": "y", "ports": []})
+        with self.assertRaisesRegex(local_ci.Refused, "memoryMiB"):
+            plan(laned("a", "x"), laned("b", "y", memoryMiB=True))
+        with self.assertRaisesRegex(local_ci.Refused, "share port variable"):
+            plan(
+                laned("a", "x", ports=["CI_SMOKE_WEB_PORT"]),
+                laned("b", "y", ports=["CI_SMOKE_WEB_PORT"]),
+            )
+        with self.assertRaisesRegex(local_ci.Refused, "share port variable"):
+            plan(
+                laned("a", "x", ports=None),
+                laned("b", "y", ports=["HOSTED_SMOKE_WEB_PORT"]),
+            )
+        with self.assertRaisesRegex(local_ci.Refused, "connection budget"):
+            plan(
+                laned("a", "x", dbConnections=5, fixtures=True),
+                laned("b", "y", dbConnections=5, fixtures=True),
+            )
+        # only fixture stages acquire units, so a bare number never counts
+        self.assertEqual(
+            plan(laned("a", "x", dbConnections=5), laned("b", "y", dbConnections=5))[0][
+                "lanes"
+            ][0]["dbConnections"],
+            0,
+        )
+        with self.assertRaisesRegex(local_ci.Refused, "dbConnections must be"):
+            plan(laned("a", "x", dbConnections="9"), laned("b", "y"))
+        with self.assertRaisesRegex(local_ci.Refused, "invalid lane name"):
+            plan(laned("a", "X y"), laned("b", "y"))
+        with self.assertRaisesRegex(local_ci.Refused, "ports must be"):
+            plan(laned("a", "x", ports=["NOT_A_PORT"]), laned("b", "y"))
+        # one lane, or stages without a lane, are serial: nothing to budget
+        self.assertEqual(plan(laned("a", "x"), laned("b", "x", memoryMiB=9000)), [])
+        self.assertEqual(plan({"id": "a"}, {"id": "b"}), [])
+
+    def test_barrier_stages_split_lane_groups(self):
+        stages = [
+            {"id": "setup"},
+            {"id": "a", "lane": "x"},
+            {"id": "b", "lane": "y"},
+            {"id": "c", "lane": "x"},
+            {"id": "build"},
+            {"id": "d", "lane": "x"},
+        ]
+        steps = [
+            [[s["id"] for s in lane] for lane in step]
+            for step in local_ci.lane_groups(stages)
+        ]
+        self.assertEqual(
+            steps, [[["setup"]], [["a", "c"], ["b"]], [["build"]], [["d"]]]
+        )
+
+    def test_shipped_lane_plan_fits_the_budget_and_shares_no_port_or_budget(self):
+        spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
+        groups = local_ci.lane_plan(spec["stages"])
+        self.assertEqual(len(groups), 1)
+        self.assertLessEqual(groups[0]["memoryMiB"], local_ci.LANE_MEMORY_MIB)
+        by_lane = {lane["lane"]: lane for lane in groups[0]["lanes"]}
+        self.assertEqual(sorted(by_lane), ["checks", "fixtures"])
+        owners: dict[str, str] = {}
+        for lane in by_lane.values():
+            for port in lane["ports"]:
+                self.assertNotIn(port, owners, f"{port} shared between lanes")
+                owners[port] = lane["lane"]
+        self.assertEqual(by_lane["fixtures"]["stages"], ["integration"])
+        self.assertEqual(by_lane["checks"]["dbConnections"], 0)
+        # every build finishes before any lane starts; fixture stages never cache
+        order = [s["id"] for s in spec["stages"]]
+        build = next(s for s in spec["stages"] if s["id"] == "build")
+        self.assertNotIn("lane", build)
+        self.assertLess(order.index("build"), order.index("static"))
+        self.assertNotIn(
+            "build",
+            next(s for s in spec["stages"] if s["id"] == "static")["affected"][
+                "targets"
+            ],
+        )
 
 
 REAL_RULE = json.loads((HERE / "stages.json").read_text())["docsOnly"]
@@ -2843,7 +3427,7 @@ class CacheTests(RepoCase):
             if item.get("cache") == "nx":
                 self.assertIn("--nxBail", item["affected"]["args"])
         cached = [s["id"] for s in spec["stages"] if s.get("cache") == "nx"]
-        self.assertEqual(cached, ["static", "mobile"])
+        self.assertEqual(cached, ["build", "static", "mobile"])
         for item in spec["stages"]:
             self.assertNotIn("--skip-nx-cache", item.get("argv", []))
             self.assertNotIn(
@@ -3038,11 +3622,11 @@ class StageFileTests(unittest.TestCase):
                 "android-upload-spike-native", " ".join(stages[item["id"]]), item["id"]
             )
 
-    def test_shipped_stage_file_has_four_stages_and_no_project_list(self):
+    def test_shipped_stage_file_has_five_stages_and_no_project_list(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
         self.assertEqual(
             [s["id"] for s in spec["stages"]],
-            ["setup", "static", "mobile", "integration"],
+            ["setup", "build", "static", "mobile", "integration"],
         )
         by_id = {s["id"]: s for s in spec["stages"]}
         self.assertEqual(
@@ -3056,7 +3640,7 @@ class StageFileTests(unittest.TestCase):
             ],
         )
         self.assertTrue(by_id["integration"]["fixtures"])
-        for stage_id in ("static", "mobile", "integration"):
+        for stage_id in ("build", "static", "mobile", "integration"):
             self.assertNotIn("argv", by_id[stage_id])
             self.assertNotIn("projects", json.dumps(by_id[stage_id]["affected"]))
         for item in spec["stages"]:
@@ -3072,7 +3656,11 @@ class StageFileTests(unittest.TestCase):
                 # Only the light static stage parallelises (3 x ~0.6 GB: tsc, prettier, unit,
                 # syntax; web:build is parallelism:false, SA-118); the native toolchains and
                 # the fixture stage stay serial.
-                want = "--parallel=3" if item["id"] == "static" else "--parallel=1"
+                want = (
+                    "--parallel=3"
+                    if item["id"] in ("build", "static")
+                    else "--parallel=1"
+                )
                 self.assertIn(want, joined, item["id"])
                 self.assertNotIn("run-many", joined, item["id"])
         self.assertNotIn("cache", by_id["integration"])

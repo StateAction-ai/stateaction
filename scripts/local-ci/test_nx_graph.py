@@ -43,6 +43,7 @@ UNCACHED = [
 ]
 # Each affected stage of stages.json maps to a file whose change must select one of its tasks.
 STAGE_FILES = {
+    "build": ("packages/server/src/cli.ts", "server"),
     "static": ("packages/server/src/cli.ts", "server"),
     "mobile": ("apps/mobile/lib/main.dart", "mobile"),
     "integration": ("apps/jobs/test-integration/harness.mjs", "jobs"),

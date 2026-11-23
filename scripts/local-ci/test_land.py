@@ -271,6 +271,30 @@ class LandTests(unittest.TestCase):
         )
         self.assertEqual(summary["failedStage"], "static")
 
+    def test_a_stage_cancelled_by_a_failed_lane_is_not_the_reported_failed_stage(self):
+        summary = land.gate_summary(
+            {
+                "verdict": "FAIL",
+                "stages": [
+                    {"id": "setup", "status": "passed", "durationSec": 1},
+                    {"id": "static", "status": "cancelled", "durationSec": 9},
+                    {"id": "mobile", "status": "not-run", "durationSec": 0},
+                    {"id": "integration", "status": "failed", "durationSec": 3},
+                ],
+                "logDir": "/logs/run",
+            }
+        )
+        self.assertEqual(summary["failedStage"], "integration")
+        self.assertEqual(summary["failedStageLog"], "/logs/run/integration.log")
+        only_cancelled = land.gate_summary(
+            {
+                "verdict": "INTERRUPTED",
+                "stages": [{"id": "static", "status": "cancelled"}],
+                "logDir": "/logs/run",
+            }
+        )
+        self.assertEqual(only_cancelled["failedStage"], "static")
+
     def test_main_moving_during_gate_regates_after_rebase_inside_ticket(self):
         b = Bench(self)
         moved = []
