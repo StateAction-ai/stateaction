@@ -3364,6 +3364,10 @@ def render() -> dict[Path, bytes]:
     from generate_sa98_fixtures import render_sa98
 
     files.update(render_sa98())
+    # SA-99 adds only new fixture files for the catalog.v18 segment mark contracts.
+    from generate_sa99_fixtures import render_sa99
+
+    files.update(render_sa99())
     return files
 
 

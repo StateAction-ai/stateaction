@@ -1,6 +1,7 @@
 // Pure helpers for the review time axis: view window, ticks, navigation,
 // filtering. No DOM; unit tested.
 
+import { passesMarkFilter, type MarkMap } from "./marks.ts";
 import type { Card } from "./types.ts";
 
 export type View = readonly [number, number];
@@ -97,7 +98,7 @@ export function neighborStart(
   return null;
 }
 
-export type CardFilter = "all" | "failed";
+export type CardFilter = "all" | "failed" | "issue" | "unchecked";
 
 export function cardText(card: Card): string {
   return card.caption.state === "complete"
@@ -109,12 +110,18 @@ export function filterCards(
   cards: readonly Card[],
   query: string,
   mode: CardFilter,
+  /** SA-99 team marks; without them the Issue and Unchecked chips cannot narrow. */
+  marks: MarkMap = new Map(),
 ): Card[] {
   const q = query.trim().toLowerCase();
+  const chip = (c: Card) =>
+    mode === "all"
+      ? true
+      : mode === "failed"
+        ? c.caption.state === "failed"
+        : passesMarkFilter(c.segmentId, mode, marks);
   return cards.filter(
-    (c) =>
-      (mode === "all" || c.caption.state === "failed") &&
-      (q === "" || cardText(c).toLowerCase().includes(q)),
+    (c) => chip(c) && (q === "" || cardText(c).toLowerCase().includes(q)),
   );
 }
 

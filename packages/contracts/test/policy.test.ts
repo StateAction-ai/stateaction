@@ -6,9 +6,10 @@ import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v17.json is the current registry; catalog.v1.json through
-// catalog.v16.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v17.json"));
+// catalog.v18.json is the current registry; catalog.v1.json through
+// catalog.v17.json stay published and immutable.
+const catalog = JSON.parse(text("catalog.v18.json"));
+const catalogV17 = JSON.parse(text("catalog.v17.json"));
 const catalogV16 = JSON.parse(text("catalog.v16.json"));
 const catalogV15 = JSON.parse(text("catalog.v15.json"));
 const catalogV14 = JSON.parse(text("catalog.v14.json"));
@@ -1036,10 +1037,10 @@ test("v16 lock entries are present and match the published bytes", () => {
 const V17_ADDED = ["http.recording-annotations.v1"];
 
 test("catalog v17 (SA-98) is an exact superset of catalog v16 adding only http.recording-annotations.v1", () => {
-  assertExactSuperset(catalog, catalogV16, ["v16", "v17"], V17_ADDED);
-  assert.deepEqual(catalog.shared, catalogV16.shared);
-  assert.equal(Object.keys(catalog.contracts).length, 85);
-  const entry = catalog.contracts["http.recording-annotations.v1"];
+  assertExactSuperset(catalogV17, catalogV16, ["v16", "v17"], V17_ADDED);
+  assert.deepEqual(catalogV17.shared, catalogV16.shared);
+  assert.equal(Object.keys(catalogV17.contracts).length, 85);
+  const entry = catalogV17.contracts["http.recording-annotations.v1"];
   assert.equal(entry.casing, "snake_case");
   assert.deepEqual(entry.version, {
     field: "schema",
@@ -1052,7 +1053,34 @@ test("catalog v17 (SA-98) is an exact superset of catalog v16 adding only http.r
 test("v17 lock entries are present and match the published bytes", () => {
   const files = [
     "catalog.v17.json",
-    ...V17_ADDED.map((id) => catalog.contracts[id].schema),
+    ...V17_ADDED.map((id) => catalogV17.contracts[id].schema),
+  ];
+  for (const file of files)
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+const V18_ADDED = [
+  "http.segment-mark-command.v1",
+  "http.segment-mark.v1",
+  "http.segment-marks.v1",
+];
+
+test("catalog v18 (SA-99) is an exact superset of catalog v17 adding only the staff segment mark contracts", () => {
+  assertExactSuperset(catalog, catalogV17, ["v17", "v18"], V18_ADDED);
+  assert.deepEqual(catalog.shared, catalogV17.shared);
+  assert.equal(Object.keys(catalog.contracts).length, 88);
+  for (const id of V18_ADDED) {
+    const entry = catalog.contracts[id];
+    assert.equal(entry.casing, "camelCase", id);
+    assert.deepEqual(entry.version, { path: "/api/v1" }, id);
+    assert.deepEqual(entry.rules, [], id);
+  }
+});
+
+test("v18 lock entries are present and match the published bytes", () => {
+  const files = [
+    "catalog.v18.json",
+    ...V18_ADDED.map((id) => catalog.contracts[id].schema),
   ];
   for (const file of files)
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);

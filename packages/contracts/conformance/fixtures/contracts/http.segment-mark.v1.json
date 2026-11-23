@@ -1,0 +1,203 @@
+{
+  "contract": "http.segment-mark.v1",
+  "cases": [
+    {
+      "name": "stored issue",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "stored good",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "good",
+          "issueType": null,
+          "note": "ok",
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "replayed",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": true
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "revision starts at 1",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 0,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/revision"
+        ]
+      }
+    },
+    {
+      "name": "unknown issue type",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "x",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/issueType"
+        ]
+      }
+    },
+    {
+      "name": "timestamp is RFC 3339 UTC",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "yesterday",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/createdAt"
+        ]
+      }
+    },
+    {
+      "name": "segmentId is a UUID",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "x",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation",
+        "paths": [
+          "/segmentId"
+        ]
+      }
+    },
+    {
+      "name": "missing replayed",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown field",
+      "input": {
+        "document": {
+          "markId": "00000000-0000-4000-8000-00000000f099",
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+          "revision": 1,
+          "verdict": "issue",
+          "issueType": "caption",
+          "note": null,
+          "createdAt": "2026-11-22T10:00:00.000000Z",
+          "replayed": false,
+          "reviewer": "x"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

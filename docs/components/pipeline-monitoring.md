@@ -54,7 +54,7 @@ module, state, duration, cost estimate, GPU requested/observed/VRAM/rate,
 output counts (failed counts shown as failed), error code, `not_run` reasons and
 the stage receipt digest, plus the `dag-run.json` panel with Copy and Download.
 A job without a recipe keeps the five derived stages. The list adds segment,
-caption and team-check counts (team checks show an em dash until SA-99) and a
+caption and team-check counts (team checks count segments with a team mark, see [Segment marks](segment-marks.md); an em dash means none) and a
 Review column that says review is not available yet once annotations are
 accepted (no link until the SA-98 route exists).
 

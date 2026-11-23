@@ -31,7 +31,9 @@ test("005 through 007 are applied through the real migrator with the published 0
     applied.rows,
     files.map((m) => ({ version: m.version, sha256: m.sha256 })),
   );
-  assert.equal(applied.rows.at(-1)?.version, 11);
+  // The newest published migration is the last one applied (no hardcoded count to forget).
+  assert.equal(applied.rows.at(-1)?.version, files.at(-1)?.version);
+  assert.ok(files.length >= 12, "001-012 are present");
 });
 
 test("restricted-role matrix for the transport tables", async () => {

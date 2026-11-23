@@ -1,4 +1,4 @@
-// SA-98 real-browser evidence driver for the Review page on the SA-96 SEEDED stack. Run inside ONE
+// SA-98/SA-99 real-browser evidence driver for the Review page on the SA-96 SEEDED stack. Run inside ONE
 // resource-guarded job, e.g. `agent-resource run -- node test-e2e/pipeline-seeded-browser.mjs`
 // (needs the built web and jobs apps, the processing venv and the Render CLI; see
 // serve-console.mjs). Seeds only ok, caption_failed and segment_failed (STATEACTION_SEED_ONLY
@@ -25,7 +25,7 @@ seedMod.seedOnly(process.env.STATEACTION_SEED_ONLY); // validate before starting
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const shots =
-  process.env.SHOTS_DIR ?? "/home/wearaway/flora-work/handoff/SA-98-real-shots";
+  process.env.SHOTS_DIR ?? "/home/wearaway/flora-work/handoff/SA-99-real-shots";
 mkdirSync(shots, { recursive: true });
 const python =
   process.env.PYTHON_EXECUTABLE ??
@@ -70,6 +70,157 @@ const loginAs = async (stack, label) => {
   }
   throw new Error(`could not sign in as ${label}`);
 };
+
+// SA-99: the G, B, N team-check flow on the seeded caption_failed recording. Desktop appends the
+// marks; 390 px reloads and must show the same marks (they live on the server, not in the page).
+const summaryText = () =>
+  ev("document.querySelector('[data-testid=mark-summary]')?.innerText ?? ''");
+const badgeOf = (i) =>
+  ev(
+    `(() => { const b = document.querySelectorAll('[data-testid=rail-card]')[${i}]?.querySelector('[data-testid=mark-badge]'); return b ? { mark: b.dataset.mark, text: b.innerText.trim() } : null })()`,
+  );
+const selectedCard = () =>
+  ev(
+    "[...document.querySelectorAll('[data-testid=rail-card]')].findIndex(c => c.dataset.selected === 'true')",
+  );
+const marksListing = (id) =>
+  ev(
+    `fetch('/api/v1/recordings/${id}/segment-marks').then(r => r.ok ? r.json() : null).then(j => j && j.data)`,
+  );
+async function marksFlow({ label, pre, rec, rows }) {
+  const total = rows.length;
+  if (label === "desktop") {
+    check(
+      `${pre}: starts unchecked`,
+      (await summaryText()) === "0 checked, 0 issue",
+      await summaryText(),
+    );
+    const clickCard = async (i) => {
+      ab(
+        "eval",
+        `document.querySelectorAll('[data-testid=rail-card]')[${i}].click()`,
+      );
+      await until(async () => (await selectedCard()) === i);
+    };
+    // A segment whose caption failed can still be marked (B, then the type picker).
+    const fi = ev(
+      "[...document.querySelectorAll('[data-testid=rail-card]')].findIndex(c => c.dataset.failed === 'true')",
+    );
+    check(`${pre}: a failed-caption card exists`, fi >= 0, fi);
+    await clickCard(fi);
+    ab("press", "b");
+    check(
+      `${pre}: B marks the failed-caption segment Issue (boundary)`,
+      await until(async () => (await badgeOf(fi))?.text === "Boundary"),
+    );
+    ab("click", "[data-issue-type=caption]");
+    check(
+      `${pre}: the issue-type picker changes the type`,
+      await until(async () => (await badgeOf(fi))?.text === "Caption"),
+    );
+    const gi = fi === 0 ? 1 : 0;
+    await clickCard(gi);
+    ab("press", "g");
+    check(
+      `${pre}: G marks a card Good`,
+      await until(async () => (await badgeOf(gi))?.mark === "good"),
+    );
+    // N goes to the next unchecked card after the selected one, wrapping.
+    const expected = [...Array(total).keys()]
+      .map((k) => (gi + 1 + k) % total)
+      .find((i) => i !== fi && i !== gi);
+    ab("press", "n");
+    check(
+      `${pre}: N selects the next unchecked card (${expected})`,
+      await until(async () => (await selectedCard()) === expected),
+      await selectedCard(),
+    );
+    ab("press", "b");
+    await until(async () => (await badgeOf(expected))?.mark === "issue");
+    ab("click", "[data-issue-type=hand_pose]");
+    check(
+      `${pre}: B then Hand pose marks the next card`,
+      await until(async () => (await badgeOf(expected))?.text === "Hand pose"),
+    );
+    check(
+      `${pre}: header counts follow`,
+      await until(async () => (await summaryText()) === "3 checked, 2 issue"),
+      await summaryText(),
+    );
+    ab("screenshot", join(shots, `marks-${scenarioShot}-${label}.png`));
+  } else {
+    await until(async () => (await summaryText()) === "3 checked, 2 issue");
+    check(
+      `${pre}: marks survive a reload and a new viewport`,
+      (await summaryText()) === "3 checked, 2 issue",
+      await summaryText(),
+    );
+    ab("screenshot", join(shots, `marks-${scenarioShot}-${label}.png`));
+  }
+  const listing = await marksListing(rec.recordingId);
+  check(
+    `${pre}: server listing matches (3 checked, 2 issue)`,
+    listing && listing.checkedCount === 3 && listing.issueCount === 2,
+    JSON.stringify(
+      listing && [
+        listing.segmentCount,
+        listing.checkedCount,
+        listing.issueCount,
+      ],
+    ),
+  );
+  for (const f of ["issue", "unchecked"]) {
+    ab("click", `[data-filter=${f}]`);
+    await until(
+      async () =>
+        ev(
+          "document.querySelector('[data-filter=" +
+            f +
+            "]').getAttribute('aria-pressed')",
+        ) === "true",
+    );
+    const shown = ev(
+      "document.querySelectorAll('[data-testid=rail-card]').length",
+    );
+    check(
+      `${pre}: ${f} chip filters the rail`,
+      shown === (f === "issue" ? 2 : total - 3),
+      `${shown}`,
+    );
+    ab("screenshot", join(shots, `marks-${f}-${label}.png`));
+  }
+  ab("click", "[data-filter=all]");
+  check(
+    `${pre}: no horizontal overflow with marks`,
+    ev("document.documentElement.scrollWidth <= window.innerWidth"),
+  );
+  if (label === "desktop") {
+    // The Pipeline list team-check column shows the real counts.
+    ab("open", `${stack.origin}/pipeline`);
+    ab("wait", "table, [data-testid=pipeline-list], main");
+    await sleep(1500);
+    const t = text();
+    check(
+      `${pre}: Pipeline team checks show the counts`,
+      /checked, 2 issue/.test(t),
+      t.slice(0, 200),
+    );
+  } else {
+    ab("open", `${stack.origin}/pipeline`);
+    await sleep(1500);
+    ab("screenshot", "--full", join(shots, `pipeline-marks-${label}.png`));
+    ab("open", `${stack.origin}/review/${rec.recordingId}`);
+    ab("wait", "[data-testid=review-summary]");
+    await sleep(1000);
+  }
+  if (label === "desktop") {
+    ab("screenshot", "--full", join(shots, `pipeline-marks-${label}.png`));
+    ab("open", `${stack.origin}/review/${rec.recordingId}`);
+    ab("wait", "[data-testid=review-summary]");
+    await sleep(1000);
+  }
+}
+const scenarioShot = "caption_failed";
 
 const stackEnv = seedMod.jobsEnv(python);
 const dirs = seedMod.newSeedDirs();
@@ -219,6 +370,7 @@ try {
           handNote,
         );
         ab("click", "#tab-segs");
+        await marksFlow({ label, pre, rec, rows });
       }
     }
   }

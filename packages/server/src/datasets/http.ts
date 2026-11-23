@@ -5,6 +5,7 @@ import {
   type DatasetCreateRequest,
   type DatasetMembersAddRequest,
   type DatasetUpdateRequest,
+  type SegmentMarkCommand,
 } from "@stateaction/contracts";
 import type { Queryable } from "../catalog/catalog.js";
 import { CatalogError, type CatalogErrorCode } from "../catalog/errors.js";
@@ -20,6 +21,11 @@ import {
   getClipReviewState,
   type ClipReviewCommand,
 } from "./review.js";
+import {
+  getSegmentMarks,
+  recordSegmentMark,
+  type SegmentIdSource,
+} from "./marks.js";
 import {
   getClip,
   getDataset,
@@ -46,6 +52,8 @@ import {
  *   POST   /api/v1/clips/{clipId}/reads                   staff, customer*
  *   GET    /api/v1/clips/{clipId}/review                  staff (review state)
  *   POST   /api/v1/clips/{clipId}/review                  staff (atomic review command)
+ *   GET    /api/v1/recordings/{id}/segment-marks          staff (newest mark per segment)
+ *   POST   /api/v1/recordings/{id}/segments/{segmentId}/marks  staff (append a mark)
  *  (* customers: authorized through any dataset currently granted to them)
  *
  * Authentication is injected: production binds the Better Auth session guard
@@ -71,6 +79,8 @@ export type DatasetRoutesDeps = {
   signer: ReadSigner;
   authenticate: DatasetAuthenticate;
   readTtlSeconds?: number;
+  /** SA-99: resolves a job's accepted segment ids; marks are refused without it. */
+  segmentIds?: SegmentIdSource;
 };
 
 export const MAX_BODY_BYTES = 65536;
@@ -451,5 +461,37 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
       }),
     readClip: (request: Request, clipId: string) =>
       run(request, "member", (p) => read(p, request, pathId(clipId, "clipId"))),
+    getSegmentMarks: (request: Request, recordingId: string) =>
+      run(request, "staff", async (p) => {
+        readQuery(request, []);
+        return {
+          data: await getSegmentMarks(pool, {
+            viewerUserId: p.userId,
+            recordingId: pathId(recordingId, "recordingId"),
+          }),
+        };
+      }),
+    postSegmentMark: (
+      request: Request,
+      recordingId: string,
+      segmentId: string,
+    ) =>
+      run(request, "staff", async (p) => {
+        const rid = pathId(recordingId, "recordingId");
+        const sid = pathId(segmentId, "segmentId");
+        const body = await readContract<SegmentMarkCommand>(
+          request,
+          "http.segment-mark-command.v1",
+        );
+        if (!deps.segmentIds)
+          throw new Error("segment marks are not configured");
+        const mark = await recordSegmentMark(pool, deps.segmentIds, {
+          recordingId: rid,
+          segmentId: sid,
+          reviewerUserId: p.userId,
+          command: body,
+        });
+        return { status: mark.replayed ? 200 : 201, data: mark };
+      }),
   };
 }

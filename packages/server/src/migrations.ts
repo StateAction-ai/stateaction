@@ -162,6 +162,11 @@ export async function grantAppRole(
   );
   if (stageRuns)
     await client.query("SELECT stateaction_grant_stage_runs($1)", [role]);
+  const { rowCount: segmentMarks } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_segment_marks(name)') IS NOT NULL",
+  );
+  if (segmentMarks)
+    await client.query("SELECT stateaction_grant_segment_marks($1)", [role]);
   return true;
 }
 

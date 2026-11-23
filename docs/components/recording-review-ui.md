@@ -2,8 +2,8 @@
 
 Staff route `/review/[recordingId]` (`/review` opens the first recording). It
 shows one recording's three outputs on one time axis: temporal segments,
-captions and hand pose. Review verdicts (Good or Issue) are SA-99 and are not
-part of this page.
+captions and hand pose. Team verdicts (Good or Issue per segment, SA-99) sit beside
+the model output and never edit it; see [Segment marks](segment-marks.md).
 
 ## Layout
 
@@ -15,7 +15,7 @@ part of this page.
   Segments coloured by derived hand, Hand left and Hand right presence lanes,
   Failures (failed windows as spans, failed captions). Clicking a block seeks
   and selects its card.
-- Side panel: Segments (caption rail with text filter and All or Failed chips),
+- Side panel: Segments (caption rail with text filter and All, Failed, Issue and Unchecked chips),
   Hand pose (the clip viewer for the clip under the playhead), JSON.
 - Provenance badges per stage: module and revision, engine and quant, observed
   GPU. Replay and stub provenance is labelled as such.
