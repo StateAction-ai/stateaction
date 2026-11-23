@@ -8,7 +8,7 @@
     "build": {
       "executor": "nx:run-commands",
       "cache": false,
-      "inputs": [],
+      "inputs": ["externalDeps"],
       "outputs": [],
       "dependsOn": [
         {

@@ -29,7 +29,8 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "pnpm exec prettier --check \"packages/server/src/**/*\" \"packages/server/test/**/*\" \"packages/server/test-auth/**/*\" \"packages/server/test-integration/**/*\" \"packages/server/*.json\""
-      }
+      },
+      "inputs": ["default", "prettier"]
     },
     "auth-integration": {
       "executor": "nx:run-commands",
@@ -37,15 +38,47 @@
       "dependsOn": ["^build"],
       "options": {
         "command": "pnpm --filter @stateaction/server test:auth"
-      }
+      },
+      "parallelism": false,
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+      ]
     },
-    "integration": {
+    "catalog-integration": {
       "executor": "nx:run-commands",
       "cache": false,
+      "parallelism": false,
       "dependsOn": ["^build"],
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/infra/compose.yaml"
+      ],
       "options": {
-        "command": "pnpm --filter @stateaction/server integration"
+        "command": "bash packages/server/scripts/catalog-integration.sh",
+        "forwardAllArgs": false
       }
     }
+  },
+  "namedInputs": {
+    "externalDeps": [
+      {
+        "externalDependencies": [
+          "npm:@aws-sdk/client-s3",
+          "npm:@aws-sdk/s3-request-presigner",
+          "npm:@renderinc/sdk",
+          "npm:@types/node",
+          "npm:@types/pg",
+          "npm:better-auth",
+          "npm:pg",
+          "npm:server-only",
+          "npm:tsx",
+          "npm:typescript"
+        ]
+      }
+    ]
   }
 }

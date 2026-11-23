@@ -68,7 +68,7 @@ Not claimed by SA-21: ETags and lengths do not prove content, so nothing here ma
 
 ## Tests
 
-`pnpm --filter @stateaction/server test` covers plan arithmetic and the bounded reader with no services. `pnpm exec nx run server:integration` (uncached) starts a throwaway Postgres and a real SeaweedFS on ephemeral loopback ports and runs the transport suites with the catalog suites: direct presigned PUTs, signed-length enforcement, receipts, completion of the journaled object, provider outage/lost response/ambiguity/DB failure, concurrent initializers and receipt writers, revoked sessions and roles, stale epochs, output caps and database-level guards.
+`pnpm --filter @stateaction/server test` covers plan arithmetic and the bounded reader with no services. `pnpm exec nx run server:catalog-integration` (uncached) starts a throwaway Postgres and a real SeaweedFS on ephemeral loopback ports and runs the transport suites with the catalog suites: direct presigned PUTs, signed-length enforcement, receipts, completion of the journaled object, provider outage/lost response/ambiguity/DB failure, concurrent initializers and receipt writers, revoked sessions and roles, stale epochs, output caps and database-level guards.
 
 The Next layer is covered by `test/transport-next.test.ts` (authority resolution, fail-closed configuration) and `apps/web/test-e2e/uploads.e2e.test.mjs` (`nx run web:auth-e2e`, uncached): owner, other-collector, wrong-role, pending, disabled, expired and deleted sessions, revoked role and permission, worker capability (other job, expired deadline, finished job, cookies), malformed/oversized/truncated bodies, duplicate and racing requests, and a paused provider.
 

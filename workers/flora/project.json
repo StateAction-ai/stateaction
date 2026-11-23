@@ -6,9 +6,15 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "python3 -m unittest discover -s tests -v",
+        "command": "uv run --project ../processing --locked python -m unittest discover -s tests -v",
         "cwd": "workers/flora"
-      }
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/workers/processing/pyproject.toml",
+        "{workspaceRoot}/workers/processing/uv.lock",
+        "{workspaceRoot}/packages/contracts/python/**/*"
+      ]
     },
     "format": {
       "executor": "nx:run-commands",
@@ -18,6 +24,18 @@
           "uv run --project workers/processing --locked ruff format --check --config workers/processing/pyproject.toml workers/flora"
         ],
         "parallel": false
+      }
+    },
+    "syntax": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "default",
+        "{workspaceRoot}/workers/processing/pyproject.toml",
+        "{workspaceRoot}/workers/processing/uv.lock"
+      ],
+      "options": {
+        "command": "uv run --project ../processing --locked python -m compileall -q flora_ext tests tools modal_flora.py",
+        "cwd": "workers/flora"
       }
     }
   }

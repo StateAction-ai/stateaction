@@ -10,10 +10,12 @@
           "node --test --test-concurrency=2 scripts/platform/check-staged.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/local-fixtures.test.mjs",
           "node --test --test-concurrency=2 scripts/platform/r2-qualification.test.mjs scripts/platform/r2-qualification-run.test.mjs",
-          "python3 -m unittest discover -s scripts/platform -p 'test_mobile*.py' -v"
+          "python3 -m unittest discover -s scripts/platform -p 'test_mobile*.py' -v",
+          "node --test --test-concurrency=1 scripts/platform/check-staged-dart.test.mjs"
         ],
         "parallel": false
-      }
+      },
+      "inputs": ["default", "flutterToolchain"]
     },
     "format": {
       "executor": "nx:run-commands",
@@ -24,7 +26,15 @@
         ],
         "parallel": false
       },
-      "inputs": ["default", "repositoryDocs", "automationSources"]
+      "inputs": [
+        "default",
+        "repositoryDocs",
+        "automationSources",
+        "repositoryConfig",
+        "{workspaceRoot}/scripts/local-ci/**/*",
+        "!{workspaceRoot}/scripts/local-ci/**/__pycache__/**/*",
+        "prettier"
+      ]
     },
     "syntax": {
       "executor": "nx:run-commands",
@@ -45,6 +55,26 @@
           "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/local-ci/*.py scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
         ],
         "parallel": false
+      }
+    },
+    "test-local-ci": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/scripts/local-ci/**/*",
+        "!{workspaceRoot}/scripts/local-ci/**/__pycache__/**/*",
+        "{workspaceRoot}/scripts/platform/install-render.py",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/**/project.json",
+        "{workspaceRoot}/pnpm-workspace.yaml",
+        "jsToolchain",
+        "pythonToolchain",
+        "{workspaceRoot}/**/package.json",
+        "{workspaceRoot}/pnpm-lock.yaml",
+        "externalDeps"
+      ],
+      "options": {
+        "command": "python3 -m unittest discover -s scripts/local-ci -p 'test_*.py'"
       }
     }
   }

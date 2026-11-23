@@ -77,7 +77,7 @@
         "run-many",
         "-t",
         "build,typecheck,syntax,test,format",
-        "--exclude=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native",
+        "--exclude=tag:mobile-toolchain",
         "--parallel=1",
         "--outputStyle=static",
         "--nxBail"
@@ -93,9 +93,9 @@
         "exec",
         "nx",
         "run-many",
-        "--projects=mobile,stera-recorder,contracts-dart,capture-conformance-mobile,android-capture-spike-native,mobile-auth-backend-e2e,android-upload-spike-native",
+        "--projects=tag:mobile-toolchain",
         "-t",
-        "build,typecheck,test,format",
+        "build,typecheck,syntax,test,format",
         "--parallel=1",
         "--outputStyle=static",
         "--nxBail"
@@ -134,7 +134,14 @@
       "title": "Catalog and storage integration on bounded external PostgreSQL and S3",
       "fixtures": true,
       "timeoutSec": 1500,
-      "argv": ["bash", "packages/server/scripts/catalog-integration.sh"]
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "server:catalog-integration",
+        "--outputStyle=static"
+      ]
     },
     {
       "id": "server-auth-integration",
@@ -147,7 +154,6 @@
         "nx",
         "run",
         "server:auth-integration",
-        "--skip-nx-cache",
         "--outputStyle=static"
       ]
     },
@@ -162,7 +168,6 @@
         "nx",
         "run",
         "web:auth-e2e",
-        "--skip-nx-cache",
         "--outputStyle=static"
       ]
     },
@@ -176,8 +181,7 @@
         "exec",
         "nx",
         "run",
-        "mobile-auth-backend-e2e:mobile-backend-e2e",
-        "--skip-nx-cache",
+        "mobile-backend-e2e:e2e",
         "--outputStyle=static"
       ]
     },
@@ -186,7 +190,14 @@
       "title": "Official Render SDK runner, Next API, PostgreSQL and detached-child controller integration on bounded fixtures",
       "fixtures": true,
       "timeoutSec": 600,
-      "argv": ["pnpm", "--filter", "@stateaction/jobs", "test:integration"]
+      "argv": [
+        "pnpm",
+        "exec",
+        "nx",
+        "run",
+        "jobs:integration",
+        "--outputStyle=static"
+      ]
     },
     {
       "id": "runtime-smoke",
@@ -203,7 +214,6 @@
         "nx",
         "run",
         "infra:integration",
-        "--skip-nx-cache",
         "--outputStyle=static"
       ]
     }

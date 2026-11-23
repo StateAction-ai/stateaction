@@ -37,7 +37,7 @@
       "options": {
         "command": "pnpm exec prettier --check \"apps/web/app/**/*\" \"apps/web/test/**/*\" \"apps/web/test-e2e/**/*\" \"apps/web/*.json\" \"apps/web/next.config.ts\""
       },
-      "inputs": ["default", "{workspaceRoot}/.prettierignore"]
+      "inputs": ["default", "{workspaceRoot}/.prettierignore", "prettier"]
     },
     "auth-e2e": {
       "executor": "nx:run-commands",
@@ -46,7 +46,40 @@
       "options": {
         "command": "node --test --test-concurrency=1 test-e2e/*.test.mjs",
         "cwd": "apps/web"
-      }
+      },
+      "parallelism": false,
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/packages/server/test-auth/**/*",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs"
+      ]
     }
+  },
+  "namedInputs": {
+    "externalDeps": [
+      {
+        "externalDependencies": [
+          "npm:@radix-ui/react-dropdown-menu",
+          "npm:@radix-ui/react-slot",
+          "npm:@rerun-io/web-viewer",
+          "npm:@tailwindcss/postcss",
+          "npm:@types/node",
+          "npm:@types/react",
+          "npm:@types/react-dom",
+          "npm:class-variance-authority",
+          "npm:clsx",
+          "npm:lucide-react",
+          "npm:next",
+          "npm:postcss@8.5.32",
+          "npm:react",
+          "npm:react-dom",
+          "npm:server-only",
+          "npm:tailwind-merge",
+          "npm:tailwindcss",
+          "npm:typescript"
+        ]
+      }
+    ]
   }
 }

@@ -22,5 +22,12 @@
         "cwd": "{workspaceRoot}"
       }
     }
+  },
+  "namedInputs": {
+    "externalDeps": [
+      {
+        "externalDependencies": ["npm:@rerun-io/web-viewer"]
+      }
+    ]
   }
 }

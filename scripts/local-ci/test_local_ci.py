@@ -1577,26 +1577,62 @@ class SubmoduleExportTests(RepoCase):
 class CacheTests(RepoCase):
     NX_STAGE = {"argv": ["pnpm", "exec", "nx", "run-many", "-t", "test"], "cache": "nx"}
 
-    def test_cached_nx_stage_uses_the_cache_but_fresh_and_undeclared_stages_never_do(
-        self,
-    ):
+    def test_nx_cache_is_decided_by_each_target_and_only_fresh_bypasses_it(self):
         argv, skip = local_ci.effective_argv(self.NX_STAGE, fresh=False)
         self.assertFalse(skip)
         self.assertNotIn("--skip-nx-cache", argv)
         argv, skip = local_ci.effective_argv(self.NX_STAGE, fresh=True)
         self.assertTrue(skip)
-        self.assertIn("--skip-nx-cache", argv)
+        self.assertEqual(argv.count("--skip-nx-cache"), 1)
+        # A fixture stage no longer gets the flag: its target declares cache=false.
         undeclared = {"argv": ["pnpm", "exec", "nx", "run", "web:auth-e2e"]}
         argv, skip = local_ci.effective_argv(undeclared, fresh=False)
-        self.assertTrue(skip)
-        self.assertEqual(argv.count("--skip-nx-cache"), 1)
-        again, _ = local_ci.effective_argv({"argv": argv}, fresh=False)
+        self.assertFalse(skip)
+        self.assertNotIn("--skip-nx-cache", argv)
+        again, _ = local_ci.effective_argv({"argv": argv}, fresh=True)
         self.assertEqual(again.count("--skip-nx-cache"), 1)
         other = {"argv": ["python3", "-m", "unittest"], "cache": "nx"}
         self.assertEqual(
             local_ci.effective_argv(other, fresh=False),
             (["python3", "-m", "unittest"], False),
         )
+
+    FIXTURE = {
+        "fixtures": True,
+        "argv": ["pnpm", "exec", "nx", "run", "web:auth-e2e", "--outputStyle=static"],
+    }
+
+    def test_a_fixture_task_replayed_or_unreported_is_detected(self):
+        stage = self.FIXTURE
+        ran = {"executedTasks": ["web:build", "web:auth-e2e"], "hitTasks": []}
+        self.assertIsNone(local_ci.cached_fixture_task(stage, stage["argv"], ran))
+        hit = {"hitTasks": ["web:auth-e2e"], "executedTasks": []}
+        self.assertEqual(
+            local_ci.cached_fixture_task(stage, stage["argv"], hit), "web:auth-e2e"
+        )
+        # Fails closed when the Nx output has no record at all.
+        self.assertEqual(
+            local_ci.cached_fixture_task(stage, stage["argv"], None), "web:auth-e2e"
+        )
+        other = {**stage, "fixtures": False}
+        self.assertIsNone(local_ci.cached_fixture_task(other, stage["argv"], None))
+
+    def test_receipt_verification_requires_proof_that_fixture_tasks_executed(self):
+        item = {
+            "fixtureBacked": True,
+            "cacheMode": "none-by-target",
+            "cache": {"executedTasks": ["web:auth-e2e"]},
+        }
+        self.assertIsNone(local_ci.receipt_fixture_problem(self.FIXTURE, item))
+        for broken in (
+            {**item, "cache": {"executedTasks": [], "hitTasks": ["web:auth-e2e"]}},
+            {**item, "cache": None},
+            {**item, "cacheMode": "nx"},
+            {**item, "fixtureBacked": False},
+        ):
+            self.assertIn(
+                "lacks proof", local_ci.receipt_fixture_problem(self.FIXTURE, broken)
+            )
 
     def test_environment_shares_one_private_cache_and_scopes_gradle_caching(self):
         shim = self.tmp / "shim"
@@ -1748,7 +1784,8 @@ class CacheTests(RepoCase):
         nx = json.loads((HERE.parents[1] / "nx.json").read_text())
         runtime = {
             i["runtime"]
-            for i in nx["namedInputs"]["sharedGlobals"]
+            for name in ("jsToolchain", "pythonToolchain", "flutterToolchain")
+            for i in nx["namedInputs"][name]
             if isinstance(i, dict) and "runtime" in i
         }
         for command in (
@@ -1761,6 +1798,9 @@ class CacheTests(RepoCase):
             self.assertIn(command, runtime)
         self.assertTrue(nx["neverConnectToCloud"])
         self.assertFalse(nx["targetDefaults"]["integration"]["cache"])
+        js = nx["pluginsConfig"]["@nx/js"]
+        self.assertEqual(js["projectsAffectedByDependencyUpdates"], "auto")
+        self.assertFalse(js["analyzeSourceFiles"])
 
 
 class StageOpenFileLimitTests(unittest.TestCase):
@@ -1909,20 +1949,15 @@ class StageMetricsTests(unittest.TestCase):
 
 
 class StageFileTests(unittest.TestCase):
-    def test_android_upload_build_runs_in_mobile_lane(self):
+    def test_mobile_projects_are_selected_by_tag_not_by_name(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
         stages = {item["id"]: item["argv"] for item in spec["stages"]}
-        server = next(
-            arg for arg in stages["server-tooling"] if arg.startswith("--exclude=")
-        )
-        mobile = next(
-            arg
-            for arg in stages["mobile-android-dart"]
-            if arg.startswith("--projects=")
-        )
-        project = "android-upload-spike-native"
-        self.assertIn(project, server.split("=", 1)[1].split(","))
-        self.assertIn(project, mobile.split("=", 1)[1].split(","))
+        self.assertIn("--exclude=tag:mobile-toolchain", stages["server-tooling"])
+        self.assertIn("--projects=tag:mobile-toolchain", stages["mobile-android-dart"])
+        for item in spec["stages"]:
+            self.assertNotIn(
+                "android-upload-spike-native", " ".join(item["argv"]), item["id"]
+            )
 
     def test_shipped_stage_file_is_valid_serial_and_declares_all_suites(self):
         spec = local_ci.load_stages((HERE / "stages.json").read_bytes())
@@ -1943,8 +1978,7 @@ class StageFileTests(unittest.TestCase):
         for item in spec["stages"]:
             joined = " ".join(item["argv"])
             if item["argv"][:3] == ["pnpm", "exec", "nx"]:
-                if item.get("cache") != "nx":
-                    self.assertIn("--skip-nx-cache", joined, item["id"])
+                self.assertNotIn("--skip-nx-cache", joined, item["id"])
                 if "run-many" in joined:
                     self.assertIn("--parallel=1", joined, item["id"])
             self.assertNotIn("docker", joined)
@@ -1955,7 +1989,14 @@ class StageFileTests(unittest.TestCase):
         self.assertNotIn("cache", controller)
         self.assertEqual(
             controller["argv"],
-            ["pnpm", "--filter", "@stateaction/jobs", "test:integration"],
+            [
+                "pnpm",
+                "exec",
+                "nx",
+                "run",
+                "jobs:integration",
+                "--outputStyle=static",
+            ],
         )
         self.assertLess(ids.index("render-cli"), ids.index(controller["id"]))
         self.assertLess(ids.index("python-sync"), ids.index(controller["id"]))

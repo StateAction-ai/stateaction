@@ -8,7 +8,8 @@
       "inputs": [
         "{projectRoot}/harness/**/*",
         "{workspaceRoot}/scripts/android_personal_device.py",
-        "{workspaceRoot}/.python-version"
+        "{workspaceRoot}/.python-version",
+        "externalDeps"
       ],
       "options": {
         "command": "python3 -m unittest discover -s tests -v",
@@ -20,7 +21,7 @@
     },
     "syntax": {
       "executor": "nx:run-commands",
-      "inputs": ["{projectRoot}/harness/**/*"],
+      "inputs": ["{projectRoot}/harness/**/*", "externalDeps"],
       "options": {
         "command": "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml spikes/android/capture/harness"
       }
@@ -30,7 +31,9 @@
       "inputs": [
         "{projectRoot}/harness/**/*",
         "{projectRoot}/*.json",
-        "{projectRoot}/*.md"
+        "{projectRoot}/*.md",
+        "externalDeps",
+        "prettier"
       ],
       "options": {
         "commands": [
@@ -53,5 +56,6 @@
         "parallel": false
       }
     }
-  }
+  },
+  "tags": ["mobile-toolchain"]
 }

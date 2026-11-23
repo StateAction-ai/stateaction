@@ -51,7 +51,8 @@
         "{workspaceRoot}/tests/test_android_personal_device.py",
         "{workspaceRoot}/docs/validation/sa-10-import.json",
         "{workspaceRoot}/docs/validation/mobile-source-import.json",
-        "{workspaceRoot}/third_party/stera-app/**/*"
+        "{workspaceRoot}/third_party/stera-app/**/*",
+        "prettier"
       ]
     }
   }

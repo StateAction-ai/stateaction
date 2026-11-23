@@ -54,13 +54,13 @@ The migrator (`src/migrations.ts`) applies ordered `NNN_*.sql` files inside one 
 
 ## Bounded reads
 
-`listDatasetClips` (approved-only grid; customers additionally need an enabled role and a live grant), `listDatasets` (distinct approved counts/duration) and `listInternalClips` (staff All clips with pending/approved/rejected) run as single statements with keyset cursors on exact microsecond timestamps plus UUID (default 24, max 100). Dataset counts aggregate the members of the returned datasets only. Roles are read from the database, not trusted from the caller. Query plans on a 6,000-clip / 36,000-file / 4,000-membership fixture use the membership/review indexes with LIMIT and no catalog table scans. The grid takes about 1 ms; the dataset list takes about 35–55 ms because it counts about 2,000 members of the largest dataset (`server:integration` writes them to `artifacts/catalog-integration/query-plans.json`).
+`listDatasetClips` (approved-only grid; customers additionally need an enabled role and a live grant), `listDatasets` (distinct approved counts/duration) and `listInternalClips` (staff All clips with pending/approved/rejected) run as single statements with keyset cursors on exact microsecond timestamps plus UUID (default 24, max 100). Dataset counts aggregate the members of the returned datasets only. Roles are read from the database, not trusted from the caller. Query plans on a 6,000-clip / 36,000-file / 4,000-membership fixture use the membership/review indexes with LIMIT and no catalog table scans. The grid takes about 1 ms; the dataset list takes about 35–55 ms because it counts about 2,000 members of the largest dataset (`server:catalog-integration` writes them to `artifacts/catalog-integration/query-plans.json`).
 
 ## Seed and tests
 
 `pnpm --filter @stateaction/server seed` (local only) creates collector, staff and two customer identities. With `LOCAL_SEED_PASSWORD`, it also creates Better Auth credential accounts. It also seeds one sealed/processed recording with five clips: pending, rejected, approved in a shared (granted) dataset, approved in a private (ungranted) dataset, and approved in both. Each seeded recording has a manifest, MCAP, recorder metadata and calibration. Rows are catalog metadata only; no media objects are written.
 
-`pnpm exec nx run server:integration` starts a throwaway pinned Postgres on an ephemeral loopback port, then runs migration, constraint, seed, concurrency and query-plan tests as the unprivileged owner and the restricted app role.
+`pnpm exec nx run server:catalog-integration` starts a throwaway pinned Postgres on an ephemeral loopback port, then runs migration, constraint, seed, concurrency and query-plan tests as the unprivileged owner and the restricted app role.
 
 **SA-19 (migration 004).** Job inserts now also require registration-bound, active ingest permission evidence and an admitted admission row (fail closed for every credential). See [recording admission](recording-admission.md) for the extended lock order (recording → files → evidence row `FOR SHARE`) and the fixture step used by the seed and SA-13 tests.
 

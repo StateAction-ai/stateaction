@@ -14,20 +14,22 @@
       "{workspaceRoot}/packages/stera_recorder/android/src/main/assets/stateaction/capture/**/*",
       "{workspaceRoot}/packages/stera_recorder/android/src/main/kotlin/open/fpvlabs/stera/ar_recorder/data/h264/**/*",
       "{workspaceRoot}/packages/contracts/api/common.v1.schema.json",
-      "sharedGlobals"
+      "sharedGlobals",
+      "jsToolchain",
+      "pythonToolchain"
     ]
   },
   "targets": {
     "syntax": {
       "executor": "nx:run-commands",
-      "inputs": ["captureContract"],
+      "inputs": ["captureContract", "externalDeps"],
       "options": {
         "command": "node --check packages/contracts/capture/conformance/ts/capture_conformance.mjs && node --check packages/contracts/capture/conformance/ts/strict_schema.mjs && python3 packages/contracts/capture/conformance/python/build_schemas.py --check && python3 -c \"import ast,sys; [ast.parse(open(p).read(), p) for p in sys.argv[1:]]\" packages/contracts/capture/verify.py packages/contracts/capture/conformance/run_all.py packages/contracts/capture/conformance/python/capture_conformance.py packages/contracts/capture/conformance/python/gen_golden.py packages/contracts/capture/conformance/python/gen_golden_v12.py packages/contracts/capture/conformance/python/independent_decode.py packages/contracts/capture/conformance/python/build_descriptor.py packages/contracts/capture/conformance/python/build_schemas.py packages/contracts/capture/conformance/python/strict_schema.py"
       }
     },
     "format": {
       "executor": "nx:run-commands",
-      "inputs": ["captureContract"],
+      "inputs": ["captureContract", "externalDeps", "prettier"],
       "options": {
         "commands": [
           "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml packages/contracts/capture",
@@ -39,7 +41,7 @@
     },
     "test": {
       "executor": "nx:run-commands",
-      "inputs": ["captureContract"],
+      "inputs": ["captureContract", "externalDeps"],
       "options": {
         "command": "python3 packages/contracts/capture/conformance/run_all.py --only python,typescript --require python,typescript"
       }

@@ -331,18 +331,35 @@ def is_nx(argv: list[str]) -> bool:
 
 
 def effective_argv(stage: dict, fresh: bool) -> tuple[list[str], bool]:
-    """Nx may use its cache only for stages that declare cache=nx and not on --fresh.
+    """Nx caching is decided by each target's own `cache` flag; only --fresh bypasses it.
 
-    Everything else (integration, auth, E2E, smoke, live fixtures) is forced uncached.
-    Returns the argv and whether the Nx cache is skipped.
+    Integration and E2E targets declare `cache: false` in their project, so the runner
+    no longer forces a cold dependency chain. Returns the argv and whether the cache is skipped.
     """
     argv = list(stage["argv"])
     if not is_nx(argv):
         return argv, False
-    skip = fresh or stage.get("cache") != "nx"
-    if skip and "--skip-nx-cache" not in argv:
+    if fresh and "--skip-nx-cache" not in argv:
         argv.append("--skip-nx-cache")
-    return argv, skip
+    return argv, fresh
+
+
+def fixture_task(stage: dict, argv: list[str]) -> str | None:
+    """The requested task of a fixture-backed `nx run` stage (it must always execute)."""
+    if not stage.get("fixtures") or not is_nx(argv) or argv[3:4] != ["run"]:
+        return None
+    return argv[4] if len(argv) > 4 else None
+
+
+def cached_fixture_task(stage: dict, argv: list[str], cache: dict | None) -> str | None:
+    """The fixture task that did not provably execute: replayed from cache or never reported.
+
+    Fails closed: when the Nx output carries no record of the task, it is reported too.
+    """
+    task = fixture_task(stage, argv)
+    if task is None or task in (cache or {}).get("executedTasks", []):
+        return None
+    return task
 
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -1480,7 +1497,11 @@ def run_pipeline(
                 "logBytes": result.get("logBytes", 0),
                 "logSha256": result.get("logSha256"),
                 "fixtureBacked": bool(stage.get("fixtures")),
-                "cacheMode": "none" if skip_nx or not is_nx(argv) else "nx",
+                "cacheMode": "none"
+                if skip_nx or not is_nx(argv)
+                else "none-by-target"
+                if fixture_task(stage, argv)
+                else "nx",
                 "gradleBuildCache": gradle_cache,
                 "cache": result.get("cache"),
                 "metrics": result.get("metrics"),
@@ -1501,6 +1522,13 @@ def run_pipeline(
                     f"tree changed from {tree} to {observed} during the run"
                 )
             rewritten = modified_since(export, snapshot)
+            replayed = cached_fixture_task(stage, argv, result.get("cache"))
+            if replayed and entry["status"] == "passed":
+                entry["status"] = "cached-fixture"
+                entry["detail"] = (
+                    f"fixture-backed task {replayed} was replayed from cache "
+                    "or missing from the Nx run output"
+                )
             if rewritten and entry["status"] == "passed":
                 entry["status"] = "source-modified"
                 entry["detail"] = "stage rewrote tracked source: " + ", ".join(
@@ -1621,6 +1649,18 @@ def run_pipeline(
 # ------------------------------------------------------------------- verification
 
 
+def receipt_fixture_problem(stage: dict, item: dict) -> str | None:
+    """Why a receipt entry does not prove its fixture `nx run` task executed uncached."""
+    task = fixture_task(stage, stage["argv"])
+    if task and not (
+        item.get("fixtureBacked")
+        and item.get("cacheMode") in ("none", "none-by-target")
+        and task in ((item.get("cache") or {}).get("executedTasks") or [])
+    ):
+        return f"lacks proof that {task} executed uncached"
+    return None
+
+
 def verify_receipt(
     repo: Path,
     head: str = "HEAD",
@@ -1685,7 +1725,8 @@ def verify_receipt(
     if receipt.get("runnerSha256") != sha256_bytes(runner_text):
         errors.append("runner changed since the receipt")
     try:
-        declared = {s["id"]: argv_hash(s) for s in load_stages(stages_text)["stages"]}
+        stage_list = load_stages(stages_text)["stages"]
+        declared = {s["id"]: argv_hash(s) for s in stage_list}
     except (Refused, ValueError, KeyError) as error:
         return errors + [f"stage list invalid: {error}"]
     got = {s.get("id"): s for s in receipt.get("stages", [])}
@@ -1699,6 +1740,12 @@ def verify_receipt(
             or item.get("argvSha256") != digest
         ):
             errors.append(f"stage {stage_id} did not pass with the declared command")
+            continue
+        problem = receipt_fixture_problem(
+            next((x for x in stage_list if x["id"] == stage_id), {"argv": []}), item
+        )
+        if problem:
+            errors.append(f"stage {stage_id} {problem}")
     guard = receipt.get("guard", {})
     if not (
         0 < guard.get("memoryMaxBytes", 0) <= JOB_MAX and guard.get("swapMaxBytes") == 0

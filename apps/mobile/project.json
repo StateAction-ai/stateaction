@@ -46,5 +46,6 @@
         "command": "python3 scripts/mobile/run.py mobile build"
       }
     }
-  }
+  },
+  "tags": ["mobile-toolchain"]
 }

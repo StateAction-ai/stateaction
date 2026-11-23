@@ -2,7 +2,7 @@
   "name": "android-upload-spike",
   "root": "spikes/android/upload",
   "projectType": "application",
-  "tags": ["spike", "android", "simulation-only"],
+  "tags": ["spike", "android", "simulation-only", "mobile-toolchain"],
   "targets": {
     "test": {
       "executor": "nx:run-commands",
@@ -34,7 +34,7 @@
         ],
         "parallel": false
       },
-      "inputs": ["default"]
+      "inputs": ["default", "prettier"]
     },
     "emulator": {
       "executor": "nx:run-commands",
