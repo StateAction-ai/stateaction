@@ -1,0 +1,39 @@
+{
+  "id": "f5a2ae7785b64a34",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 15,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "pnpm",
+    "ci:local"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa-124-adopt-agentqueue",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795393309.0556133,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "STATEACTION_LOCAL_CI_SUBMODULES",
+    "STATEACTION_LOCAL_FIXTURES",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

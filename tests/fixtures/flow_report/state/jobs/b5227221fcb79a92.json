@@ -1,0 +1,36 @@
+{
+  "id": "b5227221fcb79a92",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 6,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "/home/wearaway/flora-work/diag-logs/run-ci.sh"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/diag-webe2e/apps/web",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795391985.138377,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

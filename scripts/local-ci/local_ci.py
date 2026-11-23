@@ -644,6 +644,9 @@ def _group_alive(pgid: int) -> bool:
         return True
 
 
+LEAK_SETTLE_SEC = 2.0  # exiting descendants (Nx plugin workers) get this long before they count as leaked
+
+
 def set_subreaper() -> None:
     """Orphaned descendants (even setsid daemons) re-parent to this runner."""
     libc = ctypes.CDLL(None, use_errno=True)
@@ -684,19 +687,49 @@ def is_gradle_daemon(pid: int) -> bool:
         return False
 
 
+def describe_process(pid: int) -> dict:
+    """Evidence for one leaked process: command line, parent, state and age."""
+    info: dict = {"pid": pid}
+    proc = Path("/proc") / str(pid)
+    with contextlib.suppress(OSError, IndexError, ValueError):
+        fields = (proc / "stat").read_text().rsplit(")", 1)[1].split()
+        info["state"], info["ppid"] = fields[0], int(fields[1])
+        ticks = os.sysconf("SC_CLK_TCK")
+        uptime = float(Path("/proc/uptime").read_text().split()[0])
+        info["ageSec"] = round(uptime - int(fields[19]) / ticks, 2)
+    with contextlib.suppress(OSError):
+        raw = (proc / "cmdline").read_bytes().split(b"\0")
+        info["cmdline"] = " ".join(a.decode(errors="replace") for a in raw if a)[:300]
+    return info
+
+
 def reap_subtree(
-    root: int | None = None, grace: float = 8.0, *, gradle_shutdown: dict | None = None
+    root: int | None = None,
+    grace: float = 8.0,
+    *,
+    gradle_shutdown: dict | None = None,
+    settle: float = 0.0,
+    details: list | None = None,
+    transient: list | None = None,
 ) -> int:
     """Terminate and reap everything below this runner; only its own descendants.
 
     Returns how many live processes were found. Raises Refused when the subtree
     cannot be proved empty, so such a stage can neither pass nor be followed.
+    `settle` is how long descendants that are still exiting on their own (no signal sent) get
+    before they count as leaked: a process that is gone within `settle` seconds of the stage's
+    own exit is not a leak, one that survives it is. `details` collects evidence per leaked process,
+    `transient` the evidence of processes that were alive at first sight but exited within `settle`.
     """
     root = root or os.getpid()
     leaked: set[int] = set()
+    settle_deadline = time.monotonic() + settle
+    seen: dict[int, dict] = {}
     terminated = False
     shutdown_deadline = time.monotonic() + (5.0 if gradle_shutdown is not None else 0)
-    deadline = time.monotonic() + grace
+    deadline = (
+        time.monotonic() + settle + grace
+    )  # the settle window is not taken from grace
     while True:
         procs = descendants(root)
         for pid, state in procs:
@@ -704,7 +737,13 @@ def reap_subtree(
                 with contextlib.suppress(ChildProcessError, OSError):
                     os.waitpid(pid, os.WNOHANG)
         live = [pid for pid, state in procs if state != "Z"]
+        if transient is not None:
+            for pid in live:
+                if pid not in seen:
+                    seen[pid] = describe_process(pid)
         if not procs:
+            if transient is not None:
+                transient.extend(v for k, v in seen.items() if k not in leaked)
             return len(leaked)
         # Gradle's single-use daemon can still be closing its caches after the CLI exits.
         if (
@@ -717,6 +756,11 @@ def reap_subtree(
             time.sleep(0.05)
             continue
         gradle_shutdown = None
+        if live and not terminated and time.monotonic() < settle_deadline:
+            time.sleep(0.02)
+            continue
+        if details is not None:
+            details.extend(describe_process(pid) for pid in live if pid not in leaked)
         leaked.update(live)
         if live:
             sig = (
@@ -828,14 +872,23 @@ def run_child(
         process.stdout.close()
     stop["process"] = None
     leaked = 0
+    leaked_details: list = []
+    settled: list = []
     try:
         leaked = reap_subtree(
             gradle_shutdown=(
                 stop if wait_for_gradle and status is None and code == 0 else None
             ),
+            settle=LEAK_SETTLE_SEC,
+            details=leaked_details,
+            transient=settled,
         )
     except Refused:
         status = "unreaped"
+        leaked = len(leaked_details)
+    for item in leaked_details + settled:
+        if "cmdline" in item:
+            item["cmdline"] = redact(item["cmdline"].encode(), secrets_).decode()
     if status is None:
         if stop.get("requested"):
             status = "interrupted"
@@ -851,6 +904,8 @@ def run_child(
         "durationSec": round(time.monotonic() - started, 2),
         "logBytes": written,
         "leakedProcesses": leaked,
+        "leakedDetails": leaked_details,
+        "settledProcesses": settled,
         "logSha256": digest.hexdigest(),
         "tail": tail.decode(errors="replace") if status != "passed" else "",
     }
@@ -1451,8 +1506,11 @@ def run_pipeline(
                 entry["detail"] = "stage rewrote tracked source: " + ", ".join(
                     rewritten[:10]
                 )
+            if result.get("settledProcesses"):
+                entry["settledProcesses"] = result["settledProcesses"]
             if result.get("leakedProcesses"):
                 entry["leakedProcesses"] = result["leakedProcesses"]
+                entry["leakedDetails"] = result.get("leakedDetails", [])
             if entry["status"] != "passed" and result.get("tail"):
                 log(redact(result["tail"].encode(), secrets_).decode(errors="replace"))
             record["stages"].append(entry)

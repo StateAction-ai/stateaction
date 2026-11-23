@@ -58,6 +58,26 @@ of one repo share one `ci` lane (shared fixtures and ports); a different repo ha
 - **Credentials.** `GH_TOKEN`, `GITHUB_TOKEN`, `GH_CONFIG_DIR`, `GH_HOST`, `SSH_AUTH_SOCK` and `GIT_*`
   are forwarded by name (agentqueue stores values in a 0600 file removed at job end, never argv,
   logs or journal).
+- **Job log and flow report (SA-126).** When the pinned agentqueue has `--log` (SA-125) every lane
+  submit passes `--log ~/.local/state/agent-resource-guard/lane-log.jsonl` (outside tmpfs, so gc and
+  reboot keep one JSONL line per finished job); an older binary runs unlogged. `agent-resource stats
+  [--lane L] [--since T]` wraps `agentqueue stats` over that log, and without `stats` falls back to
+  `scripts/flow-report.py --lanes-only`. `python3 scripts/flow-report.py [--since 24h]` (stdlib,
+  read-only) joins lane records (the log, else the live state dir records, and says which), local-ci
+  `run.json` and stage logs, `gh pr` data, git commit times and the handoff ready markers into a
+  per-ticket Markdown table (ready to PR, queue wait, gate attempts and wall time, failing stage,
+  merge latency, total), lane utilization, gate-failure waste and data-derived improvement
+  candidates. Logging never blocks a lane submit: a binary without `--log` (exact flag token), an unreadable help
+  or an unwritable log directory runs the job unlogged with one stderr warning. Pin bumps: install
+  the new binary first (`scripts/install-agentqueue.sh`), then the guard; a guard whose
+  `pin.json` differs from the installed binary refuses lane submits by design (drift check).
+  `agent-resource stats` forwards `--lane`/`--since` (the fallback `flow-report.py` accepts both).
+  Gate jobs outside an `sa-<n>-` worktree (subdirectories of one still map to it) are listed under
+  "Unattributed gate runs"; a ticket with several PRs shows all, newest merged first.
+  Ready convention: an implementer writes `/home/wearaway/flora-work/handoff/SA-<n>-ready` (touch,
+  after the handoff note) when the code is ready; its mtime is the code-ready time. The note's mtime
+  is only a fallback and is ignored when newer than the PR. Tests: `tests/test_flow_report.py`
+  (fixtures: a real agentqueue snapshot and a log written by the pinned binary).
 - **Output and limits.** The job log streams live to the submitter (a file under
   `$XDG_RUNTIME_DIR/agent-resource-guard/agentqueue/logs`, tmpfs, not the journal). Lease: `ci` 90
   min, `android-build` 60, `emulator` 90; queue timeout 3 h; the exit code of a queue outcome (75,

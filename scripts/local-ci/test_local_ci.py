@@ -523,6 +523,58 @@ class PipelineTests(RepoCase):
         self.assertEqual(self.receipts(), [])
         self.assertDead(pidfile)
 
+    def test_descendant_that_exits_on_its_own_right_after_the_stage_is_not_a_leak(self):
+        # server-tooling: Nx plugin workers were still exiting when the reaper looked (SA-126).
+        pidfile = self.tmp / "exiting.pid"
+        code = (
+            "import subprocess, sys; "
+            "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(0.4)'], "
+            "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, "
+            "stderr=subprocess.DEVNULL, start_new_session=True); "
+            f"open({str(pidfile)!r}, 'w').write(str(p.pid))"
+        )
+        self.set_stages([stage("exiting", code)])
+        self.commit_pending()
+        record = self.run_tree()
+        entry = record["stages"][0]
+        self.assertEqual(entry["status"], "passed")
+        self.assertEqual(entry["settledProcesses"][0]["pid"], int(pidfile.read_text()))
+        self.assertIn("time.sleep(0.4)", entry["settledProcesses"][0]["cmdline"])
+
+    def test_real_leak_records_cmdline_and_parent(self):
+        pidfile = self.tmp / "evidence.pid"
+        self.set_stages([self.detached_stage(pidfile)])
+        self.commit_pending()
+        entry = self.run_tree()["stages"][0]
+        self.assertEqual(entry["status"], "leaked-process")
+        detail = entry["leakedDetails"][0]
+        self.assertEqual(detail["pid"], int(pidfile.read_text()))
+        self.assertIn("time.sleep(120)", detail["cmdline"])
+        self.assertIn("ppid", detail)
+        self.assertIn("ageSec", detail)
+        self.assertEqual(entry.get("settledProcesses"), None)
+        self.assertDead(pidfile)
+
+    def test_leak_evidence_is_redacted_and_survives_unreaped(self):
+        result = local_ci.run_child(
+            [
+                sys.executable,
+                "-c",
+                "import subprocess, sys; subprocess.Popen([sys.executable, '-c', "
+                "'import time; time.sleep(60)  # topsecret'], start_new_session=True)",
+            ],
+            cwd=self.tmp,
+            env=os.environ.copy(),
+            log=self.tmp / "evidence.log",
+            timeout=30,
+            output_cap=10000,
+            secrets_=["topsecret"],
+            stop={},
+        )
+        self.assertEqual(result["status"], "leaked-process")
+        self.assertNotIn("topsecret", json.dumps(result["leakedDetails"]))
+        self.assertIn("<redacted>", result["leakedDetails"][0]["cmdline"])
+
     def test_mobile_stage_allows_gradle_to_finish_shutdown(self):
         pidfile = self.tmp / "gradle.pid"
         code = (

@@ -1,0 +1,37 @@
+{
+  "id": "60a9250cb910a9bc",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 43,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "python3",
+    "-"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa-120-trusted-proxy",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795401951.8389177,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

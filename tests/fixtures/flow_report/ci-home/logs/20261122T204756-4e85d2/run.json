@@ -1,0 +1,99 @@
+{
+ "runId": "20261122T204756-4e85d2",
+ "verdict": "PASS",
+ "head": "0b06f314475447f7ccf9b6121b6b2e53d0a8b380",
+ "finishedAt": "2026-11-23T01:59:49Z",
+ "totalDurationSec": 710.98,
+ "stages": [
+  {
+   "id": "toolchain",
+   "status": "passed",
+   "durationSec": 0.81,
+   "exitCode": 0
+  },
+  {
+   "id": "node-install",
+   "status": "passed",
+   "durationSec": 1.58,
+   "exitCode": 0
+  },
+  {
+   "id": "python-sync",
+   "status": "passed",
+   "durationSec": 0.95,
+   "exitCode": 0
+  },
+  {
+   "id": "render-cli",
+   "status": "passed",
+   "durationSec": 0.2,
+   "exitCode": 0
+  },
+  {
+   "id": "root-python-tests",
+   "status": "passed",
+   "durationSec": 3.31,
+   "exitCode": 0
+  },
+  {
+   "id": "server-tooling",
+   "status": "passed",
+   "durationSec": 12.65,
+   "exitCode": 0
+  },
+  {
+   "id": "mobile-android-dart",
+   "status": "passed",
+   "durationSec": 80.26,
+   "exitCode": 0
+  },
+  {
+   "id": "staged-dart-hook",
+   "status": "passed",
+   "durationSec": 1.32,
+   "exitCode": 0
+  },
+  {
+   "id": "local-ci-self-test",
+   "status": "passed",
+   "durationSec": 34.27,
+   "exitCode": 0
+  },
+  {
+   "id": "catalog-integration",
+   "status": "passed",
+   "durationSec": 159.36,
+   "exitCode": 0
+  },
+  {
+   "id": "server-auth-integration",
+   "status": "passed",
+   "durationSec": 12.02,
+   "exitCode": 0
+  },
+  {
+   "id": "web-auth-e2e",
+   "status": "passed",
+   "durationSec": 153.65,
+   "exitCode": 0
+  },
+  {
+   "id": "mobile-backend-e2e",
+   "status": "passed",
+   "durationSec": 67.85,
+   "exitCode": 0
+  },
+  {
+   "id": "jobs-controller-integration",
+   "status": "passed",
+   "durationSec": 107.71,
+   "exitCode": 0
+  },
+  {
+   "id": "runtime-smoke",
+   "status": "passed",
+   "durationSec": 75.04,
+   "exitCode": 0
+  }
+ ]
+}

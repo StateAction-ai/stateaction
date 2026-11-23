@@ -1,0 +1,38 @@
+{
+  "id": "e8ecadd46ad7a066",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 12,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "bash",
+    "-c",
+    "echo ENV:; env | sed \"s/=.*//\" | sort | tr \"\\n\" \" \"; echo; ulimit -Hn; ulimit -Sn; echo PATH=$PATH | cut -c1-200; echo DISPLAY=$DISPLAY XDG=$XDG_RUNTIME_DIR HOME=$HOME"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/rasbora",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795392986.2748814,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

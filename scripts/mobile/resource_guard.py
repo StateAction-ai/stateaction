@@ -1234,6 +1234,96 @@ def queue_arguments(root: Path) -> list[str]:
     return [str(binary), "--manifest", str(manifest), "--state-dir", str(state)]
 
 
+def durable_log_path() -> Path:
+    """Durable per-job log (SA-125 schema, JSONL), outside tmpfs so gc and reboot keep it."""
+    env = os.environ.get("AGENT_RESOURCE_LANE_LOG") if test_hooks() else None
+    return (
+        Path(env)
+        if env
+        else Path.home() / ".local/state/agent-resource-guard/lane-log.jsonl"
+    )
+
+
+def agentqueue_help(binary: Path) -> str:
+    try:
+        done = subprocess.run(
+            [str(binary), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=user_environment(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout + done.stderr
+
+
+def has_flag(help_text: str, flag: str) -> bool:
+    """Exact option token: `--log-level` or `--logs-dir` is not `--log`."""
+    return re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", help_text) is not None
+
+
+def log_arguments(binary: Path) -> list[str]:
+    """`--log FILE` only when the pinned agentqueue has it (SA-125). A binary without it, an
+    unreadable help or an unwritable log directory runs the lane job unlogged with one warning;
+    logging never blocks a lane submit."""
+    text = agentqueue_help(binary)
+    if not text:
+        print(
+            "agent-resource: cannot read agentqueue --help; lane job runs unlogged",
+            file=sys.stderr,
+        )
+        return []
+    if not has_flag(text, "--log"):
+        return []
+    path = durable_log_path()
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as error:
+        print(
+            f"agent-resource: lane log directory unusable ({error}); lane job runs unlogged",
+            file=sys.stderr,
+        )
+        return []
+    return ["--log", str(path)]
+
+
+def stats_command(rest: list[str]) -> int:
+    """`agent-resource stats`: agentqueue stats over the durable log; for a binary without
+    `stats`, the read-only flow report summarizes the live state dir and the log."""
+    root = registered_root()
+    if root is None:
+        raise Refused("stats works only inside a registered StateAction root")
+    binary = agentqueue_binary()
+    if re.search(r"^\s+stats\b", agentqueue_help(binary), re.M):
+        log = [] if "--log" in rest else ["--log", str(durable_log_path())]
+        return subprocess.run(
+            [str(binary), "stats", *log, *rest], env=user_environment()
+        ).returncode
+    report = root / "scripts/flow-report.py"
+    if not report.is_file():
+        raise Refused(
+            "the pinned agentqueue has no `stats` (SA-125) and scripts/flow-report.py is missing"
+        )
+    print(
+        "agentqueue has no `stats`: using scripts/flow-report.py --lanes-only",
+        file=sys.stderr,
+    )
+    return subprocess.run(
+        [
+            sys.executable,
+            str(report),
+            "--lanes-only",
+            "--lane-log",
+            str(durable_log_path()),
+            "--state-dir",
+            str(lane_files(root, "ci")[0]),
+            *rest,
+        ],
+        env=user_environment(),
+    ).returncode
+
+
 def queue_command(action: str, rest: list[str]) -> int:
     """`agent-resource queue|cancel|find`: thin wrappers over agentqueue status/cancel/find."""
     root = registered_root()
@@ -1281,6 +1371,7 @@ def lane_run(lane: str, command: list[str], options: argparse.Namespace) -> int:
         str(state),
         "--budget",
         str(lane_budget(aggregate_cap())),
+        *log_arguments(binary),
         "run",
         "--lane",
         aq_lane(lane, key),
@@ -1511,6 +1602,7 @@ def main() -> int:
             "queue",
             "cancel",
             "find",
+            "stats",
         ],
     )
     parser.add_argument("--lane", choices=LANES)
@@ -1539,6 +1631,8 @@ def main() -> int:
         elif args.action in ("queue", "cancel", "find"):
             extra = (["--key", args.key] if args.key else []) + command
             return queue_command(args.action, extra)
+        elif args.action == "stats":
+            return stats_command(command)
         elif args.action == "lane-job":
             if not args.lane or not args.project_key:
                 raise Refused("lane-job needs --lane and --project-key")

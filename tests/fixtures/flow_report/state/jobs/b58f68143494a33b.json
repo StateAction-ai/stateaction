@@ -1,0 +1,43 @@
+{
+  "id": "b58f68143494a33b",
+  "lane": "ci-43779948",
+  "key": "ci-local-a42c398dcec3affc8a77a37b656c864183996e73-d003a749b630",
+  "seq": 44,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "/home/linuxbrew/.linuxbrew/opt/python@3.14/bin/python3.14",
+    "/home/wearaway/orca/workspaces/robotics-data-collection/sa-120-trusted-proxy/scripts/local-ci/local_ci.py",
+    "run",
+    "--tree",
+    "HEAD"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa-120-trusted-proxy",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795403060.0952034,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "STATEACTION_LOCAL_CI_REEXEC",
+    "STATEACTION_LOCAL_CI_SUBMODULES",
+    "STATEACTION_LOCAL_FIXTURES",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

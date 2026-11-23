@@ -1,0 +1,45 @@
+{
+ "runId": "20261122T204019-3e7f96",
+ "verdict": "FAIL",
+ "head": "bf4c6feffff2325bed20e2ff87e1cacf7d009d30",
+ "finishedAt": "2026-11-23T01:40:31Z",
+ "totalDurationSec": 10.37,
+ "stages": [
+  {
+   "id": "toolchain",
+   "status": "passed",
+   "durationSec": 0.65,
+   "exitCode": 0
+  },
+  {
+   "id": "node-install",
+   "status": "passed",
+   "durationSec": 1.69,
+   "exitCode": 0
+  },
+  {
+   "id": "python-sync",
+   "status": "passed",
+   "durationSec": 0.66,
+   "exitCode": 0
+  },
+  {
+   "id": "render-cli",
+   "status": "passed",
+   "durationSec": 0.2,
+   "exitCode": 0
+  },
+  {
+   "id": "root-python-tests",
+   "status": "passed",
+   "durationSec": 3.6,
+   "exitCode": 0
+  },
+  {
+   "id": "server-tooling",
+   "status": "failed",
+   "durationSec": 3.57,
+   "exitCode": 1
+  }
+ ]
+}

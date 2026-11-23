@@ -1,0 +1,14 @@
+{"ts": 1795388185.0, "ticket": "SA-124", "event": "start", "note": "backfill worktree birth"}
+{"ts": 1795389222.9959202, "ticket": "SA-124", "event": "review_done", "note": "backfill review file mtime review-sa124.md"}
+{"ts": 1795390310.3663628, "ticket": "SA-124", "event": "review_done", "note": "backfill review file mtime review-sa124-round2.md"}
+{"ts": 1795396104.0, "ticket": "SA-124", "event": "merged", "note": "backfill PR #67"}
+{"ts": 1795397124.0, "ticket": "SA-109", "event": "merged", "note": "backfill PR #68"}
+{"ts": 1795400000.0, "ticket": "SA-900", "event": "start", "note": "synthetic fixture"}
+{"ts": 1795401500.0, "ticket": "SA-900", "event": "code_ready", "note": "synthetic fixture"}
+{"ts": 1795401800.0, "ticket": "SA-900", "event": "review_start", "note": "synthetic fixture"}
+{"ts": 1795402700.0, "ticket": "SA-900", "event": "review_done", "note": "synthetic fixture"}
+{"ts": 1795403300.0, "ticket": "SA-900", "event": "fix_done", "note": "synthetic fixture"}
+{"ts": 1795403600.0, "ticket": "SA-900", "event": "land_submitted", "note": "synthetic fixture"}
+{"ts": 1795403660.0, "ticket": "SA-900", "event": "land_started", "note": "synthetic fixture"}
+{"ts": 1795404500.0, "ticket": "SA-900", "event": "land_done", "note": "synthetic fixture"}
+{"ts": 1795404520.0, "ticket": "SA-900", "event": "merged", "note": "synthetic fixture"}

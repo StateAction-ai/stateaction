@@ -1,0 +1,38 @@
+{
+  "id": "77f7dc3b6511a54c",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 21,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "bash",
+    "-c",
+    "grep -o \"TasksMax=[0-9]*\" /dev/null; cat /sys/fs/cgroup/pids.max 2>/dev/null; ulimit -n; cat /sys/fs/cgroup$(sed \"s/0:://\" /proc/self/cgroup)/pids.max"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa-124-adopt-agentqueue",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795395216.1817167,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}

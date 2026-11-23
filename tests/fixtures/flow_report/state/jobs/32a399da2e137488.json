@@ -1,0 +1,43 @@
+{
+  "id": "32a399da2e137488",
+  "lane": "ci-43779948",
+  "key": null,
+  "seq": 9,
+  "argv": [
+    "/usr/bin/python3",
+    "/home/wearaway/.local/share/agent-resource-guard/resource_guard.py",
+    "lane-job",
+    "--lane",
+    "ci",
+    "--project-key",
+    "43779948",
+    "--",
+    "nice",
+    "-n",
+    "10",
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "test-e2e/rerun-viewer.e2e.test.mjs"
+  ],
+  "cwd": "/home/wearaway/orca/workspaces/robotics-data-collection/sa124-diag-main/apps/web",
+  "mem": 6442450944,
+  "runtime": 5400,
+  "timeout": 10800,
+  "slots": 1,
+  "budget": 6442450944,
+  "submitted": 1795392360.9524014,
+  "pass_env": [
+    "DISPLAY",
+    "GIT_EDITOR",
+    "HOME",
+    "LANG",
+    "NVM_DIR",
+    "PATH",
+    "PNPM_HOME",
+    "SSH_AUTH_SOCK",
+    "STATEACTION_LOCAL_FIXTURES",
+    "XAUTHORITY",
+    "STATEACTION_LANE_LOG"
+  ]
+}
