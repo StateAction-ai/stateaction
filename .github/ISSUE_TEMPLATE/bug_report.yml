@@ -1,0 +1,32 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach recordings, images, credentials or tokens. Use synthetic data.
+        Security problems go through the private report in SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what did you expect
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, inputs and the commit you ran.
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Area
+      description: Mobile recorder, web console, server, processing worker, tooling
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node, Python, Flutter versions, emulator or device model
