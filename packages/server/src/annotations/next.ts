@@ -22,6 +22,8 @@ export type {
   ReviewRecordingRow,
 } from "./annotations.js";
 
+export type { ClipHandFrames } from "./hand-frames.js";
+
 const KEY = Symbol.for("stateaction.annotations.routes");
 type Routes = ReturnType<typeof recordingAnnotationRoutes>;
 
@@ -65,6 +67,10 @@ export function recordingAnnotationRouteHandlers(
     annotations: async (request: Request, recordingId: string) => {
       const r = routes();
       return r instanceof Response ? r : r.annotations(request, recordingId);
+    },
+    handFrames: async (request: Request, recordingId: string) => {
+      const r = routes();
+      return r instanceof Response ? r : r.handFrames(request, recordingId);
     },
     read: async (request: Request, recordingId: string) => {
       const r = routes();

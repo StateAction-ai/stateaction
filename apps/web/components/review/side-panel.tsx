@@ -22,7 +22,7 @@ export type SideTab = "segs" | "hand" | "json";
 
 const TABS: { id: SideTab; label: string }[] = [
   { id: "segs", label: "Segments" },
-  { id: "hand", label: "Hand pose" },
+  { id: "hand", label: "3D / Debug" },
   { id: "json", label: "JSON" },
 ];
 
@@ -46,6 +46,7 @@ export function SidePanel({
   activeIndex,
   t,
   onSelect,
+  seekCount,
   mediaOrigin,
   queryRef,
   marks,
@@ -71,6 +72,7 @@ export function SidePanel({
   activeIndex: number;
   t: number;
   onSelect: (index: number) => void;
+  seekCount: number;
   mediaOrigin: string | null;
   queryRef: React.RefObject<HTMLInputElement | null>;
   /** SA-99 team check. */
@@ -80,6 +82,12 @@ export function SidePanel({
   onChoose: (card: Card, choice: MarkChoice) => void;
   onNextUnchecked: () => void;
 }) {
+  const [suspendedAtSeek, setSuspendedAtSeek] = useState<number | null>(null);
+  const following = suspendedAtSeek !== seekCount;
+  const suspendFollow = useCallback(
+    () => setSuspendedAtSeek(seekCount),
+    [seekCount],
+  );
   const failedTotal = model.cards.filter(
     (c) => c.caption.state === "failed",
   ).length;
@@ -182,6 +190,17 @@ export function SidePanel({
                       : `Unreviewed ${Math.max(0, total - checkedCount)}`}
               </button>
             ))}
+            <button
+              type="button"
+              aria-pressed={following}
+              onClick={() => setSuspendedAtSeek(following ? seekCount : null)}
+              className={cn(
+                "min-h-11 rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-muted hover:bg-field",
+                following && "border-transparent bg-brand-soft text-brand-ink",
+              )}
+            >
+              Follow playback
+            </button>
             <span
               data-testid="rail-shown"
               className="ml-auto text-xs text-muted"
@@ -210,6 +229,9 @@ export function SidePanel({
             }
             selected={selected}
             activeIndex={activeIndex}
+            following={following}
+            seekCount={seekCount}
+            onManualScroll={suspendFollow}
             onSelect={onSelect}
             marks={marks}
             onChoose={onChoose}
@@ -295,6 +317,9 @@ function Rail({
   emptyText,
   selected,
   activeIndex,
+  following,
+  seekCount,
+  onManualScroll,
   onSelect,
   marks,
   onChoose,
@@ -304,39 +329,71 @@ function Rail({
   emptyText: string;
   selected: number | null;
   activeIndex: number;
+  following: boolean;
+  seekCount: number;
+  onManualScroll: () => void;
   onSelect: (index: number) => void;
   marks: MarksState;
   onChoose: (card: Card, choice: MarkChoice) => void;
   onNextUnchecked: () => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
-  const reveal = useCallback((index: number | null) => {
-    const container = list.current;
-    if (
-      index === null ||
-      !container ||
-      container.scrollHeight <= container.clientHeight
-    )
-      return;
-    const element = container.querySelector<HTMLElement>(
-      `[data-index="${index}"]`,
+  const followPosition = useRef(0);
+  const pageFollowPosition = useRef<number | null>(null);
+
+  useEffect(() => {
+    const rail = list.current;
+    if (!following || !rail) return;
+    const card = rail.querySelector<HTMLElement>(
+      '[data-index="' + activeIndex + '"]',
     );
-    if (!element) return;
-    const viewport = container.getBoundingClientRect();
-    const card = element.getBoundingClientRect();
-    if (card.top < viewport.top || card.height > viewport.height) {
-      container.scrollTop += card.top - viewport.top;
-    } else if (card.bottom > viewport.bottom) {
-      container.scrollTop += card.bottom - viewport.bottom;
+    if (!card) return;
+    const desktop = getComputedStyle(rail).overflowY === "auto";
+    if (!desktop && !railIsInView(rail)) return;
+
+    const align = () => {
+      const cardTop = card.getBoundingClientRect().top;
+      if (desktop) {
+        rail.scrollTop += cardTop - rail.getBoundingClientRect().top - 12;
+        followPosition.current = rail.scrollTop;
+      } else {
+        window.scrollBy({ top: cardTop - pageRailTop(), behavior: "instant" });
+        pageFollowPosition.current = window.scrollY;
+      }
+    };
+    align();
+    if (desktop) {
+      // Offscreen cards use estimated heights until they enter the desktop viewport.
+      const settle = requestAnimationFrame(align);
+      return () => cancelAnimationFrame(settle);
     }
-  }, []);
-  useEffect(() => reveal(activeIndex), [activeIndex, reveal]);
-  useEffect(() => reveal(selected), [selected, reveal]);
+  }, [activeIndex, cards, following, seekCount]);
+
+  useEffect(() => {
+    const rail = list.current;
+    if (!rail || !following) return;
+    const onPageScroll = () => {
+      if (getComputedStyle(rail).overflowY === "auto") return;
+      if (window.scrollY === pageFollowPosition.current || !railIsInView(rail))
+        return;
+      pageFollowPosition.current = null;
+      onManualScroll();
+    };
+    window.addEventListener("scroll", onPageScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onPageScroll);
+  }, [following, onManualScroll]);
   return (
     <div
       ref={list}
       data-testid="rail-list"
-      className="min-h-0 flex-1 px-3 pt-3 pb-5 xl:overflow-auto"
+      tabIndex={0}
+      role="region"
+      aria-label="Caption list"
+      onScroll={(e) => {
+        if (e.currentTarget.scrollTop !== followPosition.current)
+          onManualScroll();
+      }}
+      className="min-h-0 flex-1 px-3 pt-3 pb-5 [overflow-anchor:none] xl:overflow-auto"
     >
       {cards.length === 0 ? (
         <p className="p-5 text-center text-xs text-muted">{emptyText}</p>
@@ -357,6 +414,19 @@ function Rail({
       )}
     </div>
   );
+}
+
+function pageRailTop() {
+  const player = document.querySelector<HTMLElement>(
+    '[data-testid="review-player"]',
+  );
+  const sticky = player && getComputedStyle(player).position === "sticky";
+  return sticky ? Math.max(12, player.getBoundingClientRect().bottom + 12) : 12;
+}
+
+function railIsInView(rail: HTMLElement) {
+  const bounds = rail.getBoundingClientRect();
+  return bounds.top < window.innerHeight - 48 && bounds.bottom > pageRailTop();
 }
 
 function RailCard({
@@ -387,9 +457,8 @@ function RailCard({
       data-selected={selected ? "true" : undefined}
       data-failed={failed ? "true" : undefined}
       aria-current={active ? "true" : undefined}
-      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 96px" }}
       className={cn(
-        "relative mb-2.5 grid grid-cols-[62px_minmax(0,1fr)] gap-x-2.5 rounded-lg border border-line bg-field px-3 py-2.5 hover:border-[#cdd6cf] hover:bg-white focus-within:border-brand",
+        "relative mb-2.5 grid grid-cols-[62px_minmax(0,1fr)] gap-x-2.5 rounded-lg border border-line bg-field px-3 py-2.5 hover:border-[#cdd6cf] hover:bg-white focus-within:border-brand xl:[contain-intrinsic-size:auto_96px] xl:[content-visibility:auto]",
         active &&
           "border-[#f0d9a8] bg-[#fff8e1] before:absolute before:top-2.5 before:bottom-2.5 before:-left-px before:w-[3px] before:rounded before:bg-[#e0a100]",
         selected && "border-brand bg-white shadow-[0_0_0_3px_#eaf0fc]",
@@ -537,8 +606,8 @@ function HandPane({
         </div>
       )}
       <p className="m-0 text-xs leading-normal text-muted">
-        <b className="text-ink">Clip under the playhead.</b> Hand pose is
-        previewed per clip; no-hand frames show no hand, never a filled-in pose.
+        <b className="text-ink">Rerun debug view.</b> Shows 3D and source video
+        for the clip under the playhead.
       </p>
       <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 text-[13px]">
         <HandRow k="Clip">

@@ -87,11 +87,12 @@ async function storageProxy(endpoint) {
   };
 }
 
-async function ev(expression) {
+async function ev(expression, { userGesture = false } = {}) {
   const { result, exceptionDetails } = await chrome.send("Runtime.evaluate", {
     expression: `(async()=>JSON.stringify(await(${expression})))()`,
     awaitPromise: true,
     returnByValue: true,
+    userGesture,
   });
   assert.ok(
     !exceptionDetails,
@@ -338,12 +339,54 @@ test("seeking by a tier block selects the matching card and moves the video", as
       `video seeked near ${expected}s`,
     );
   }
-  // Clicking a rail card seeks back and selects it.
+  // Simulate an expired grant without waiting for the broker's 60-second TTL.
+  await ev(`(() => {
+    window.originalVideo = document.querySelector('[data-testid=review-video]');
+    const now = Date.now;
+    Date.now = () => now() + 61_000;
+    document.querySelector('#lSeg [aria-label="Segment 2"]').click();
+    Date.now = now;
+  })()`);
+  await until(
+    () =>
+      ev(`(() => {
+      const v = document.querySelector('[data-testid=review-video]');
+      return v && v !== window.originalVideo && v.readyState >= 1 && !v.seeking;
+    })()`),
+    "expired video source was renewed at the seek target",
+  );
+  assert.equal(
+    await ev("document.querySelectorAll('[data-testid=review-video]').length"),
+    1,
+  );
+  const v = "document.querySelector('[data-testid=review-video]')";
+  const clickPlay = `document.querySelector('button[aria-label=Play]').click()`;
+  await ev(clickPlay, { userGesture: true });
+  await until(() => ev("!" + v + ".paused"), "Play after a timestamp seek");
+  await ev(`document.querySelector('button[aria-label=Pause]').click()`);
+  await until(() => ev(v + ".paused"), "Pause after the renewed seek");
+
+  // A caption selection starts playing even from pause.
   await ev(
     `document.querySelectorAll('[data-testid=rail-card]')[0].querySelector('button').click()`,
+    {
+      userGesture: true,
+    },
   );
   await until(async () => (await selectedIndex()) === 0, "first card");
-  // The overview shows the visible window shrink, even if zoom clips individual blocks.
+  await until(
+    () => ev("!" + v + ".paused && " + v + ".currentTime < 1"),
+    "caption seeks to the beginning and plays",
+  );
+  await ev(`document.querySelector('button[aria-label=Pause]').click()`);
+  assert.ok(
+    await ev(`(() => {
+    const bounds = (name) => document.querySelector('[data-testid=' + name + ']').getBoundingClientRect();
+    return bounds('review-video').bottom <= bounds('review-caption').top &&
+      bounds('review-caption').bottom <= bounds('review-controls').top;
+  })()`),
+  );
+  // The overview window shrinks on zoom and Fit restores it.
   const width = () =>
     ev(
       `document.querySelector('[data-testid=overview-window]').getBoundingClientRect().width`,
@@ -496,7 +539,10 @@ test("a media error renews the broker URL and resumes at the same time", async (
 });
 
 test("staff only: customer, collector and anonymous are denied", async () => {
-  const id = seeded.withClip.recordingId;
+  const { recordingId: id, clipId, jobId } = seeded.withClip;
+  const apiPath = "/api/v1/recordings/" + id;
+  const handPath = apiPath + "/hand-frames?job=" + jobId + "&clip=" + clipId;
+  const staleJob = randomUUID();
   for (const label of ["customer", "collector"]) {
     const jar = await signIn(stack, label);
     const api = await call(
@@ -505,6 +551,11 @@ test("staff only: customer, collector and anonymous are denied", async () => {
       { jar },
     );
     assert.equal(api.status, 403, label);
+    assert.equal(
+      (await call(stack.origin, handPath, { jar })).status,
+      403,
+      label,
+    );
     const page = await call(stack.origin, `/review/${id}`, {
       jar,
       headers: {
@@ -521,6 +572,28 @@ test("staff only: customer, collector and anonymous are denied", async () => {
   }
   const anon = await call(stack.origin, `/api/v1/recordings/${id}/annotations`);
   assert.equal(anon.status, 401);
+  assert.equal((await call(stack.origin, handPath)).status, 401);
+
+  const staff = await signIn(stack, "staff");
+  assert.equal(
+    (
+      await call(stack.origin, handPath.replace(jobId, staleJob), {
+        jar: staff,
+      })
+    ).status,
+    404,
+  );
+  const staleGrant = await call(
+    stack.origin,
+    apiPath + "/reads?job=" + staleJob,
+    {
+      method: "POST",
+      jar: staff,
+      headers: browserHeaders(stack.origin),
+      body: JSON.stringify({ role: "recording_mp4" }),
+    },
+  );
+  assert.equal(staleGrant.status, 404);
 });
 
 test("G, B and N mark segments, survive a reload and feed the counts; customers cannot mark", async () => {

@@ -68,6 +68,18 @@ test("the active card follows the playhead; gaps and the failed window", () => {
   assert.equal(activeCardIndex(m.cards, 200), -1);
 });
 
+test("a short overlap returns to the longer active caption when it ends", () => {
+  const overlapping = [
+    { startS: 2, endS: 10 },
+    { startS: 4, endS: 6 },
+    { startS: 4.5, endS: 5.5 },
+  ];
+  assert.equal(activeCardIndex(overlapping, 5), 2);
+  assert.equal(activeCardIndex(overlapping, 5.5), 1);
+  assert.equal(activeCardIndex(overlapping, 6), 0);
+  assert.equal(activeCardIndex(overlapping, 10), -1);
+});
+
 test("previous and next segment", () => {
   assert.equal(neighborStart(m.cards, 10, 1), 18);
   assert.equal(neighborStart(m.cards, 10, -1), 9);

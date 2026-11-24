@@ -14,6 +14,8 @@ import {
   type AnnotationDeps,
 } from "./annotations.js";
 
+import { loadClipHandFrames } from "./hand-frames.js";
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PRIVATE = {
   "cache-control": "private, no-store, max-age=0",
@@ -113,6 +115,19 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
           headers,
         });
       }),
+    handFrames: (request: Request, recordingId: string): Promise<Response> =>
+      guarded(request, recordingId, async (userId, headers, requestId) => {
+        const query = new URL(request.url).searchParams;
+        const data = await loadClipHandFrames(
+          deps,
+          userId,
+          recordingId,
+          query.get("job") ?? "",
+          query.get("clip") ?? "",
+        );
+        headers.set("content-type", "application/json");
+        return new Response(JSON.stringify({ data, requestId }), { headers });
+      }),
     read: (request: Request, recordingId: string): Promise<Response> =>
       guarded(request, recordingId, async (userId, headers, requestId) => {
         let body: unknown;
@@ -133,6 +148,9 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
             "invalid_request",
             "role must be recording_mp4",
           );
+        const job = new URL(request.url).searchParams.get("job");
+        if (job !== null && !UUID.test(job))
+          throw new TransportError("not_found", "Recording not found");
         const view = await issueRecordingRead(
           {
             pool: deps.pool,
@@ -142,7 +160,12 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
               : {}),
             ...(deps.now ? { now: deps.now } : {}),
           },
-          { viewerUserId: userId, recordingId, role: "recording_mp4" },
+          {
+            viewerUserId: userId,
+            recordingId,
+            role: "recording_mp4",
+            ...(job === null ? {} : { expectedJobId: job }),
+          },
         );
         headers.set("content-type", "application/json");
         return new Response(JSON.stringify({ data: view, requestId }), {

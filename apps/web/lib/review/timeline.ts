@@ -125,7 +125,10 @@ export function activeCardIndex(cards: readonly Card[], t: number): number {
       lo = mid + 1;
     } else hi = mid - 1;
   }
-  return found >= 0 && t < cards[found]!.endS ? found : -1;
+  for (let index = found; index >= 0; index--) {
+    if (t < cards[index]!.endS) return index;
+  }
+  return -1;
 }
 
 /** Previous card start (more than 0.5 s back, so a second press goes further) or next card start. */

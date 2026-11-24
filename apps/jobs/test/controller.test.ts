@@ -227,6 +227,28 @@ describe("shared controller with real spawned children and a contract-shaped stu
     const cfg = settings(stub.url, 120);
     const store = new JournalStore(cfg.stateDir);
     const api = new JobsApi(stub.url, "cap", 5000);
+    const act = api.act.bind(api);
+    let evidencePending = false;
+    let observeRenewal!: () => void;
+    const renewedAfterEvidence = new Promise<void>((resolve) => {
+      observeRenewal = resolve;
+    });
+    api.act = async (id, action) => {
+      const renewingAfterEvidence =
+        action.action === "renew_lease" && evidencePending;
+      if (action.action === "record_execution_evidence") {
+        assert.equal(workerProcesses(action.evidence.executionRef).length, 0);
+      }
+      const result = await act(id, action);
+      if (action.action === "record_execution_evidence") {
+        // Keep the evidence acknowledgement in flight across one renewal.
+        evidencePending = true;
+        await renewedAfterEvidence;
+      } else if (renewingAfterEvidence) {
+        observeRenewal();
+      }
+      return result;
+    };
     const out = await runController(
       { settings: cfg, api, store },
       { jobId, runRef: "run-1" },
@@ -241,8 +263,16 @@ describe("shared controller with real spawned children and a contract-shaped stu
       actions.indexOf("record_worker_submission") <
         actions.indexOf("record_execution"),
     );
-    assert.equal(actions.at(-1), "record_execution_evidence");
-    assert.partialDeepStrictEqual(stub.calls.at(-1)?.body, {
+    const evidence = stub.calls.filter(
+      (c) => c.body?.action === "record_execution_evidence",
+    );
+    assert.equal(evidence.length, 1);
+    assert.equal(actions.at(-1), "renew_lease");
+    assert.equal(
+      actions.filter((action) => action !== "renew_lease").at(-1),
+      "record_execution_evidence",
+    );
+    assert.partialDeepStrictEqual(evidence[0]?.body, {
       evidence: { detail: { termination: "execution_deadline" } },
     });
     const claimAt = stub.calls.findIndex((c) => c.path.endsWith("/claim"));
