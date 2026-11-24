@@ -75,6 +75,36 @@ fallbacks `flora_tempseg_hf`, `flora_captioner_hf` (BF16, batch 1, FP32 original
 never selected automatically). Code: `flora_ext/stage_glue.py` (params, guards, provenance), `flora_ext/stage_runtime.py` (engines),
 `flora_ext/longvideo/` (our wrapper, copied into the cloned FLORA `tempseg/batch_utils/` at image build).
 
+### Job isolation and research use (SA-85)
+
+FLORA stages use signed URLs for their inputs. A single-use container receives a bootstrap scoped to one job and stage. After the
+claim, the API signs only that recording's sealed source inventory. The worker checks that the task's source manifest matches
+the claim, then downloads and verifies the MCAP. Captioning requests the prior segments output by file ID. The API signs only
+a completed or verified segments file belonging to the same job, and the worker checks the returned file ID, content digest,
+and document identity. Input URLs expire no later than the job deadline. Recording scratch lives on the container's ephemeral
+disk. The only Volume mounted in production FLORA stages is the read-only `stateaction-models` checkpoint Volume. The wrapper
+returns the stage receipt with the Modal call ID after the worker process group is gone.
+
+StateAction uses FLORA and its FP8 derivatives for its own non-commercial research and evaluation. Operators obtain FLORA under
+the NVIDIA terms. The integration ships without FLORA source or weights. The NVIDIA grant permits reproducing and deriving the
+work (section 2.1), requires preserving the license and notices (section 3.1), and limits use of the weights and derivatives
+to non-commercial research or evaluation (sections 3.2–3.3). Keep FLORA out of commercial customer processing. Use the recipe's
+module manifest to select a model licensed for that purpose. [NVIDIA OneWay Noncommercial License](https://developer.download.nvidia.com/licenses/NVIDIA-OneWay-Noncommercial-License-22Mar2022.pdf)
+
+### Private checkpoint backup
+
+The staging backup is in the private `stateaction-stage` R2 bucket under `flora/<checkpoint_id>/`. Each directory contains the
+pinned `MANIFEST.json` and its exact file inventory. The sibling `flora/notices/` prefix contains the two pinned NVIDIA licenses
+and model notices, the Qwen base licenses and notices, and `SHA256SUMS`. Keep that prefix with the checkpoints on restore.
+The backup is for operators restoring the models Volume. Jobs continue to load from the read-only Volume.
+
+Before copying a checkpoint, compare its `MANIFEST.json` SHA-256 with `flora_ext/pins.py::PUBLISHED` and run
+`flora_ext.manifest.verify_checkpoint` with `deep=True`. Upload the exact verified inventory to the private staging bucket with
+the bucket-scoped key. Read each object back and compare its SHA-256 against the manifest. Upload the manifest after all files
+verify, then read it back and compare its SHA-256 to the pin. On restore, download into an operator-only scratch directory and
+repeat the pinned-manifest and per-file checks before returning it to the models Volume. Restore the notices and verify their
+checksums as well. Multipart ETags are insufficient for this check.
+
 Operator commands (billable; fixtures first, remove the smoke Volume afterwards):
 
 ```sh

@@ -332,6 +332,7 @@ class FakeApi(BaseHTTPRequestHandler):
                 {
                     "jobId": JOB,
                     "invocationNonce": body["invocationNonce"],
+                    "digests": {"sourceManifestSha256": st["manifest_sha"]},
                     "capability": {"token": "B" * 43},
                     "inputs": [
                         {
@@ -360,7 +361,10 @@ class FakeApi(BaseHTTPRequestHandler):
             )
         if self.path.endswith("/read"):
             return self._data(
-                {"fileId": body.get("fileId", ""), "readUrl": f"{base}/segments"}
+                {
+                    "fileId": st.get("response_file_id", self.path.split("/")[-2]),
+                    "readUrl": f"{base}/segments",
+                }
             )
         self._data({})
 
@@ -381,6 +385,7 @@ class HttpModeTests(unittest.TestCase):
     def bootstrap(self, stage="segment", rec=None, **extra):
         rec = rec or recipe(segment_params=SEGMENT)
         self.state["task"] = task_input(rec)
+        self.state["manifest_sha"] = self.state["task"]["sourceManifestSha256"]
         module = next(s["module"] for s in rec["stages"] if s["stage"] == stage)
         return json.dumps(
             {
@@ -428,9 +433,19 @@ class HttpModeTests(unittest.TestCase):
         self.assertEqual(self.state["requests"], [])
 
     def test_segment_stage_claims_uploads_the_stage_slots_and_heartbeats_with_v2(self):
-        result = self.run_worker(self.bootstrap())
-        self.assertEqual(result.returncode, 0, result.stderr)
-        receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        with tempfile.TemporaryDirectory() as tmp:
+            receipt_file = Path(tmp) / "receipt.json"
+            result = child(
+                ["run-stage", "local-stage-ref"],
+                {
+                    "APP_ENV": "local",
+                    "STATEACTION_STAGE_RECEIPT_FILE": str(receipt_file),
+                },
+                stdin=self.bootstrap(),
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            receipt = json.loads(result.stdout.strip().splitlines()[-1])
+            self.assertEqual(json.loads(receipt_file.read_bytes()), receipt)
         self.assertEqual(receipt["status"], "succeeded")
         slots = {o["slot"]: o["role"] for o in self.state["outputs"]}
         self.assertEqual(slots["segments.json"], "segments_json")
@@ -450,6 +465,29 @@ class HttpModeTests(unittest.TestCase):
         self.assertNotIn(
             "sa_svc_" + "A" * 43, result.stdout.decode() + result.stderr.decode()
         )
+
+    def test_stage_rejects_a_task_for_another_manifest_before_fetching_source(self):
+        boot = self.bootstrap()
+        self.state["manifest_sha"] = "f" * 64
+        result = self.run_worker(boot)
+        receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(
+            (result.returncode, receipt["errorCode"]), (3, "task_source_mismatch")
+        )
+        self.assertNotIn(("GET", "/source"), self.state["requests"])
+
+    def test_caption_rejects_a_read_grant_for_another_file_before_fetching_it(self):
+        self.state["response_file_id"] = str(uuid.uuid4())
+        self.state["segments"] = b"foreign segments"
+        boot = self.bootstrap(
+            "caption", segmentsFileId=str(uuid.uuid4()), segmentsSha256="1" * 64
+        )
+        result = self.run_worker(boot)
+        receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(
+            (result.returncode, receipt["errorCode"]), (3, "segments_file_mismatch")
+        )
+        self.assertNotIn(("GET", "/segments"), self.state["requests"])
 
     def test_caption_stage_reads_segments_through_the_stage_output_read(self):
         seg_dir = tempfile.TemporaryDirectory()

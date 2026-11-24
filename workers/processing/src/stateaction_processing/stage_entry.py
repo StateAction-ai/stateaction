@@ -199,7 +199,13 @@ class _HttpIo:
         self.beater.stop()
 
     def task_input(self) -> dict[str, Any]:
-        return self.api.call("GET", "task-input")
+        task = self.api.call("GET", "task-input")
+        if (
+            task.get("sourceManifestSha256")
+            != self.grant["digests"]["sourceManifestSha256"]
+        ):
+            raise StageFailure("task_source_mismatch")
+        return task
 
     def source(self) -> tuple[BinaryIO, str | None]:
         mcaps = [i for i in self.grant["inputs"] if i["role"] == "source_mcap"]
@@ -209,7 +215,10 @@ class _HttpIo:
         return _OPENER.open(request, timeout=120), mcaps[0]["sha256"]
 
     def segments_bytes(self) -> bytes:
-        plan = self.api.call("POST", f"outputs/{self.boot['segmentsFileId']}/read", {})
+        file_id = self.boot["segmentsFileId"]
+        plan = self.api.call("POST", f"outputs/{file_id}/read", {})
+        if plan.get("fileId") != file_id:
+            raise StageFailure("segments_file_mismatch")
         request = urllib.request.Request(plan["readUrl"], method="GET")
         with _OPENER.open(request, timeout=120) as response:
             data: bytes = response.read(MAX_SEGMENTS_BYTES + 1)
@@ -606,7 +615,12 @@ def run(execution_ref: str | None, io_dir: Path | None) -> int:
         io.finish(receipt, log.bytes())
     finally:
         io.stop()
-    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    encoded_receipt = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+    receipt_path = os.environ.get("STATEACTION_STAGE_RECEIPT_FILE")
+    if not file_mode and receipt_path:
+        with Path(receipt_path).open("x", encoding="utf-8") as output:
+            output.write(encoded_receipt)
+    print(encoded_receipt)
     return EXIT_OK if receipt["status"] == "succeeded" else EXIT_FAILED_REPORTED
 
 

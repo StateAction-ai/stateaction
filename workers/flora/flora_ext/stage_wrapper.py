@@ -23,6 +23,7 @@ from typing import Any
 
 EXIT_INTERNAL = 70
 BOOTSTRAP_MAX_BYTES = 8192
+RECEIPT_MAX_BYTES = 64 * 1024
 _CALL_ID = re.compile(r"^fc-[A-Za-z0-9]{1,77}$")
 _NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 REAP_GRACE_S = 15.0
@@ -122,9 +123,10 @@ def run_stage_bootstrap(
             "function call identity unavailable"
         )  # without it the worker cannot claim
     result: dict[str, Any] = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "functionCallId": call_id,
         "exitCode": EXIT_INTERNAL,
+        "receipt": None,
     }
     try:
         if len(bootstrap_json.encode()) > BOOTSTRAP_MAX_BYTES:
@@ -138,13 +140,29 @@ def run_stage_bootstrap(
         return result
     bootstrap["executionRef"] = call_id
     bootstrap["executorKind"] = "modal"
-    result["exitCode"] = _run(
-        [python, "-m", "stateaction_processing", "run-stage", call_id],
-        json.dumps(bootstrap).encode(),
-        child_env(dict(os.environ if env_source is None else env_source)),
-        deadline_s,
-        reap_grace_s,
-    )
+    with tempfile.TemporaryDirectory(prefix="flora-stage-result-") as directory:
+        receipt_path = Path(directory) / "receipt.json"
+        env = child_env(
+            dict(os.environ if env_source is None else env_source),
+            {"STATEACTION_STAGE_RECEIPT_FILE": str(receipt_path)},
+        )
+        result["exitCode"] = _run(
+            [python, "-m", "stateaction_processing", "run-stage", call_id],
+            json.dumps(bootstrap).encode(),
+            env,
+            deadline_s,
+            reap_grace_s,
+        )
+        if result["exitCode"] in (0, 3) and receipt_path.is_file():
+            with receipt_path.open("rb") as receipt_file:
+                data = receipt_file.read(RECEIPT_MAX_BYTES + 1)
+            if len(data) <= RECEIPT_MAX_BYTES:
+                try:
+                    receipt = json.loads(data)
+                except ValueError:
+                    receipt = None
+                if isinstance(receipt, dict):
+                    result["receipt"] = receipt
     return result
 
 
