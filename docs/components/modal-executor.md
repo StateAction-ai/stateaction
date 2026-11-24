@@ -81,6 +81,31 @@ Deploy the controller version that reads the binding before enabling the new
 Modal wrappers. When rolling back, return the wrappers to their prior version
 before rolling back the controller. Keep dispatch disabled during the switch.
 
+### Provider-confirmed failure before the worker starts
+
+An issued recipe stage with a recorded Modal call can fail before its worker
+claims the stage. In that case use the operator command from a trusted shell
+with Modal credentials and `MIGRATION_DATABASE_URL`:
+
+```sh
+pnpm --filter @stateaction/jobs recover-modal <job-id> --call <fc-id> --run <render-run-id> --stage <stage> --pre-entry
+```
+
+The operator tool queries Modal for the exact call's input count, terminal
+output and call graph. It requires one matching input, zero unfinished inputs,
+no assigned task, no start time and no retry. Only Modal's `INIT_FAILURE`
+and `TERMINATED` statuses qualify. A `RemoteError` on its own leaves the
+slot held. The ordinary controller continues to require its structured result.
+
+The database confirms the original workflow run, an expired controller lease
+and the exact latest stage call with an unconsumed claim. It rejects an
+existing result candidate. One transaction records the provider proof, marks
+the stage `failed` with `startup_failure` or `terminated_before_start`,
+and settles the job. The admission trigger releases the slot only with exact
+proof for every issued stage. A previously requested cancellation stays a
+cancellation. Repeating the exact operation keeps the original evidence and
+does not dispatch anything.
+
 ## Wrapper and image
 
 `modal_app.py` defines a finite CPU function: `cpu`/`memory` request=limit, `ephemeral_disk`, `timeout`, `retries=0`, `max_containers=1`, `min_containers=0`, `single_use_containers=True`, `nonpreemptible=True` (a preemption would otherwise restart the same input; it is billed at 3x CPU/RAM), `restrict_modal_access=True`, `secrets=[]`, no GPU. The wrapper's own deadline is below the Modal timeout so a hung CLI is killed and a result still returned. The sizing values (4 CPU, 8 GiB, 50 GiB scratch, 6 h timeout) are **candidate ceilings, not measured requirements**; no run has measured CPU, memory, scratch or duration, and they must be re-derived from a separately authorized canary. Budget note: `nonpreemptible=True` bills CPU and memory at 3x the list price (Modal documentation), so any spend estimate or workspace spend cap must include that premium; the ceilings above times the premium are an upper bound per call, not an expected cost. This source is **not qualified** and must not be called production-ready.

@@ -7,7 +7,7 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "repair": "node dist/repair-cli.js",
-    "recover-modal": "node dist/modal-recovery-cli.js",
+    "recover-modal": "node --conditions=react-server dist/modal-recovery-cli.js",
     "diag": "node --env-file-if-exists=../../.env dist/diag-cli.js",
     "replay-stage": "node --env-file-if-exists=../../.env dist/replay-stage-cli.js",
     "build": "tsc -p tsconfig.json",

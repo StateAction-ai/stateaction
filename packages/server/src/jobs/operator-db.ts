@@ -1,3 +1,8 @@
+import type {
+  ModalStartupProof,
+  ModalStartupRecovery,
+} from "./modal-startup-recovery.js";
+export type { ModalStartupProof } from "./modal-startup-recovery.js";
 import pg from "pg";
 
 export function operatorDatabaseUrl(env = process.env): string {
@@ -42,17 +47,33 @@ export async function modalRecoveryBootstrapHash(
   return digest;
 }
 
-export async function readModalRecoveryBootstrapHash(
+export function readModalRecoveryBootstrapHash(
   identity: ModalRecoveryIdentity,
-): Promise<string> {
+) {
+  return withOperatorPool((pool) => modalRecoveryBootstrapHash(pool, identity));
+}
+
+export async function settleModalStartupFailure(
+  identity: ModalStartupRecovery,
+  observe: (callId: string) => Promise<ModalStartupProof>,
+) {
+  const { recoverModalStartupFailure } = await import(
+    "./modal-startup-recovery.js"
+  );
+  return withOperatorPool((pool) =>
+    recoverModalStartupFailure(pool, identity, observe),
+  );
+}
+
+async function withOperatorPool<T>(run: (pool: pg.Pool) => Promise<T>) {
   const pool = new pg.Pool({
     connectionString: operatorDatabaseUrl(),
     max: 1,
     connectionTimeoutMillis: 5000,
-    query_timeout: 10000,
+    query_timeout: 20000,
   });
   try {
-    return await modalRecoveryBootstrapHash(pool, identity);
+    return await run(pool);
   } finally {
     await pool.end();
   }
