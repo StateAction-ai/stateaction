@@ -1,0 +1,32 @@
+{
+  "contract": "http.recording-result-selection-command.v1",
+  "cases": [
+    {
+      "name": "first result selection",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedSelectionSeq": 0,
+          "reason": "Select the earlier result"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "negative sequence",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedSelectionSeq": -1,
+          "reason": "Select the earlier result"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

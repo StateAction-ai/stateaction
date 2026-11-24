@@ -96,6 +96,7 @@ type Accepted = {
 async function currentAccepted(
   db: Queryable | Tx,
   recordingId: string,
+  viewJobId?: string,
 ): Promise<{ found: boolean; accepted: Accepted | null }> {
   const { rows } = await db.query<{
     job_id: string | null;
@@ -105,7 +106,7 @@ async function currentAccepted(
   }>(
     `SELECT j.id AS job_id, j.segment_count, f.sha256 AS sha, f.id AS file_id
      FROM recordings r
-     LEFT JOIN jobs j ON j.id = r.current_job_id AND j.recording_id = r.id
+     LEFT JOIN jobs j ON j.id = coalesce($2::uuid, recording_selected_job(r.id), r.current_job_id) AND j.recording_id = r.id
        AND j.state = 'succeeded' AND j.segment_count IS NOT NULL
      LEFT JOIN LATERAL (
        SELECT x.id, x.sha256 FROM files x
@@ -113,7 +114,7 @@ async function currentAccepted(
          AND x.purpose = 'output' AND x.state IN ('completed', 'verified')
        ORDER BY x.created_at DESC, x.id DESC LIMIT 1) f ON true
      WHERE r.id = $1 AND r.deleted_at IS NULL`,
-    [recordingId],
+    [recordingId, viewJobId ?? null],
   );
   const row = rows[0];
   if (!row) return { found: false, accepted: null };
@@ -236,8 +237,17 @@ export async function recordSegmentMark(
 
     const appended = inTransaction(pool, async (tx) => {
       await tx.query("SET LOCAL lock_timeout = '5s'");
+      await tx.query("SELECT 1 FROM recordings WHERE id = $1 FOR UPDATE", [
+        recordingId,
+      ]);
       const prior = (await tx.query<MarkRow>(BY_ID, [c.markId])).rows[0];
       if (prior) return replayOf(prior);
+      const current = await currentAccepted(tx, recordingId);
+      if (
+        current.accepted?.jobId !== c.jobId ||
+        current.accepted?.segmentsSha256 !== c.segmentsSha256
+      )
+        throw new CatalogError("conflict", "Segment result identity changed");
       const latest = await tx.query<{ revision: number | null }>(
         "SELECT max(revision) AS revision FROM segment_marks WHERE job_id = $1 AND segment_id = $2",
         [c.jobId, segmentId],
@@ -284,22 +294,43 @@ export async function recordSegmentMark(
 /** The newest mark of each marked segment of the recording's accepted result. */
 export async function getSegmentMarks(
   pool: Queryable,
-  input: { viewerUserId: string; recordingId: string },
+  input: {
+    viewerUserId: string;
+    recordingId: string;
+    viewJobId?: string | undefined;
+    includeOrigins?: boolean;
+  },
 ): Promise<SegmentMarks> {
   const recordingId = uuid(input.recordingId, "recordingId");
   const tx = await pool.connect();
   try {
     await tx.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     await requireRole(tx, input.viewerUserId, "staff");
-    const { found, accepted } = await currentAccepted(tx, recordingId);
+    const { found, accepted } = await currentAccepted(
+      tx,
+      recordingId,
+      input.viewJobId,
+    );
     if (!found) throw new CatalogError("not_found", "Recording not found");
     const marks = accepted
       ? (
           await tx.query<MarkRow>(
-            `SELECT DISTINCT ON (segment_id) ${COLUMNS}
-             FROM segment_marks WHERE job_id = $1 AND segments_sha256 = $2
-             ORDER BY segment_id, revision DESC`,
-            [accepted.jobId, accepted.segmentsSha256],
+            `WITH RECURSIVE ancestors AS (
+               SELECT $1::uuid AS job_id, 0 AS depth
+               UNION ALL
+               SELECT c.source_job_id, a.depth + 1 FROM ancestors a
+               JOIN job_rerun_copies c ON c.job_id = a.job_id AND c.role = 'segments_json' AND c.sha256 = $2
+               WHERE $3::boolean AND a.depth < 100
+             )
+             SELECT DISTINCT ON (segment_id) ${COLUMNS}
+             FROM segment_marks m WHERE m.segments_sha256 = $2
+               AND m.job_id IN (SELECT job_id FROM ancestors)
+             ORDER BY segment_id, (SELECT depth FROM ancestors a WHERE a.job_id = m.job_id), revision DESC`,
+            [
+              accepted.jobId,
+              accepted.segmentsSha256,
+              input.includeOrigins === true,
+            ],
           )
         ).rows
       : [];
@@ -321,7 +352,10 @@ export async function getSegmentMarks(
       issueCount: marks.filter((m) => m.verdict === "issue").length,
       marks: marks.map((m) => ({
         segmentId: m.segment_id,
-        revision: m.revision,
+        revision: m.job_id === accepted?.jobId ? m.revision : 0,
+        ...(input.includeOrigins
+          ? { originJobId: m.job_id, originRevision: m.revision }
+          : {}),
         verdict: m.verdict,
         issueType: m.issue_type,
         note: m.note,

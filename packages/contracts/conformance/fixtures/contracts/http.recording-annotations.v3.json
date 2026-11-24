@@ -1,0 +1,815 @@
+{
+  "contract": "http.recording-annotations.v3",
+  "cases": [
+    {
+      "name": "unchanged producer artifacts in a derived result",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording-annotations.v3",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "job_id": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "segments": {
+            "schema": "stateaction.segments.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "clock_domain": "android.elapsed_realtime",
+            "producer": {
+              "stage": "segment",
+              "module_id": "flora_tempseg_vllm_fp8",
+              "module_version": 1,
+              "model_name": "nvidia/Flora-TempSeg",
+              "model_revision": "114a1076f70eb53f4a58ac045505db3087e79347",
+              "weights_sha256": "a457b33d526874eedbd767edcd2888c7e461b2242264761666971cb5cab6878b",
+              "quant": {
+                "method": "fp8_per_tensor",
+                "checkpoint_manifest_sha256": "646d10562223636bd1f16a08a768a4a41d30b76fac0abefc92323c818d3c0f75"
+              },
+              "prompt_sha256": "d70cfb87537877860371677a1f928e0e73f16946c0e48b4231c90ab397850e91",
+              "params_sha256": "8ad98cbface853a688aa44256b1ffe49f312a27252faae333675acfb7d70cc1c",
+              "decoding_params": {
+                "do_sample": false,
+                "num_beams": 1,
+                "max_new_tokens": 1024,
+                "temperature": "0.0"
+              },
+              "engine": {
+                "name": "vllm",
+                "version": "0.11.2"
+              },
+              "gpu": {
+                "requested_type": "RTX-PRO-6000",
+                "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              }
+            },
+            "windows": {
+              "total": 7,
+              "ok": 6,
+              "failed": [
+                {
+                  "window_index": 3,
+                  "error_code": "engine_timeout",
+                  "core_start": {
+                    "source_frame_id": "1360",
+                    "timestamp_ns": "16999999880"
+                  },
+                  "core_end": {
+                    "source_frame_id": "1480",
+                    "timestamp_ns": "20999999840"
+                  }
+                }
+              ],
+              "failed_core_spans": [
+                {
+                  "start": {
+                    "source_frame_id": "1360",
+                    "timestamp_ns": "16999999880"
+                  },
+                  "end": {
+                    "source_frame_id": "1480",
+                    "timestamp_ns": "20999999840"
+                  }
+                }
+              ]
+            },
+            "rows": [
+              {
+                "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+                "ordinal": 0,
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1110",
+                  "timestamp_ns": "8666666630"
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              },
+              {
+                "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+                "ordinal": 1,
+                "start": {
+                  "source_frame_id": "1110",
+                  "timestamp_ns": "8666666630"
+                },
+                "end": {
+                  "source_frame_id": "1240",
+                  "timestamp_ns": "12999999920"
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              },
+              {
+                "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+                "ordinal": 2,
+                "start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                },
+                "status": "failed_window",
+                "ext": {}
+              },
+              {
+                "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+                "ordinal": 3,
+                "start": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              }
+            ]
+          },
+          "captions": {
+            "schema": "stateaction.captions.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+            "producer": {
+              "stage": "caption",
+              "module_id": "flora_captioner_vllm_fp8",
+              "module_version": 1,
+              "model_name": "nvidia/Flora-Captioner",
+              "model_revision": "rev-c3",
+              "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+              "quant": {
+                "method": "fp8_per_tensor",
+                "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+              },
+              "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+              "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+              "decoding_params": {
+                "do_sample": false,
+                "num_beams": 1,
+                "max_new_tokens": 1024,
+                "temperature": "0.0"
+              },
+              "engine": {
+                "name": "vllm",
+                "version": "0.11.2"
+              },
+              "gpu": {
+                "requested_type": "RTX-PRO-6000",
+                "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              }
+            },
+            "rows": [
+              {
+                "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+                "status": "complete",
+                "error_code": null,
+                "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+                "lang": "en",
+                "derived": {
+                  "rule": "caption_rule@1",
+                  "short_label": "rotate pitcher",
+                  "hand": "both",
+                  "steps": [
+                    "hold cloth with right hand",
+                    "rotate pitcher with both hands",
+                    "tighten pitcher lid with right hand"
+                  ]
+                }
+              },
+              {
+                "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+                "status": "complete",
+                "error_code": null,
+                "text": "pick up pitcher with right hand",
+                "lang": "en",
+                "derived": {
+                  "rule": "caption_rule@1",
+                  "short_label": "pick up pitcher",
+                  "hand": "right",
+                  "steps": [
+                    "pick up pitcher with right hand"
+                  ]
+                }
+              },
+              {
+                "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+                "status": "not_captioned",
+                "error_code": "segment_failed_window"
+              },
+              {
+                "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+                "status": "failed",
+                "error_code": "unsupported_target_frames"
+              }
+            ]
+          },
+          "hand_presence": {
+            "schema": "stateaction.hand_presence.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "clock_domain": "android.elapsed_realtime",
+            "frame_count": 600,
+            "producer": {
+              "stage": "hand_pose",
+              "module_id": "hand_pose_cpu_v1",
+              "module_version": 1,
+              "model_name": "mediapipe_hand_landmarker",
+              "model_revision": null,
+              "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+              "quant": null,
+              "prompt_sha256": null,
+              "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+              "decoding_params": {},
+              "engine": {
+                "name": "mediapipe",
+                "version": "0.10.21"
+              },
+              "gpu": {
+                "requested_type": "none",
+                "observed_type": null
+              }
+            },
+            "lanes": {
+              "left": [
+                {
+                  "start": {
+                    "source_frame_id": "1000",
+                    "timestamp_ns": "5000000000"
+                  },
+                  "end": {
+                    "source_frame_id": "1200",
+                    "timestamp_ns": "11666666600"
+                  },
+                  "frames": 200,
+                  "state": "present"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1200",
+                    "timestamp_ns": "11666666600"
+                  },
+                  "end": {
+                    "source_frame_id": "1450",
+                    "timestamp_ns": "19999999850"
+                  },
+                  "frames": 250,
+                  "state": "no_hand"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1450",
+                    "timestamp_ns": "19999999850"
+                  },
+                  "end": {
+                    "source_frame_id": "1500",
+                    "timestamp_ns": "21666666500"
+                  },
+                  "frames": 50,
+                  "state": "failed"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1500",
+                    "timestamp_ns": "21666666500"
+                  },
+                  "end": {
+                    "source_frame_id": null,
+                    "timestamp_ns": null
+                  },
+                  "frames": 100,
+                  "state": "present"
+                }
+              ],
+              "right": [
+                {
+                  "start": {
+                    "source_frame_id": "1000",
+                    "timestamp_ns": "5000000000"
+                  },
+                  "end": {
+                    "source_frame_id": null,
+                    "timestamp_ns": null
+                  },
+                  "frames": 600,
+                  "state": "no_hand"
+                }
+              ]
+            }
+          },
+          "dag_run": {
+            "schemaVersion": 2,
+            "jobId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+            "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "jobState": "succeeded",
+            "recipeId": "flora_fp8@1",
+            "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+            "maxJobCostUsd": "3.00",
+            "estimatedCostUsd": "0.41",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "state": "succeeded",
+                "errorCode": null,
+                "callId": "fc-01HSEG123",
+                "gpu": {
+                  "requestedType": "RTX-PRO-6000",
+                  "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+                },
+                "startedAt": "2026-11-22T10:00:00.000Z",
+                "finishedAt": "2026-11-22T10:03:12.250Z",
+                "counts": {
+                  "segments": 4,
+                  "failed_windows": 1
+                },
+                "estimatedCostUsd": "0.16",
+                "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "state": "failed",
+                "errorCode": "stage_timeout",
+                "callId": "fc-01HCAP456",
+                "gpu": {
+                  "requestedType": "RTX-PRO-6000",
+                  "observedType": null
+                },
+                "startedAt": "2026-11-22T10:03:13.000Z",
+                "finishedAt": "2026-11-22T10:08:13.000Z",
+                "counts": {},
+                "estimatedCostUsd": "0.25",
+                "receiptSha256": null
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "state": "succeeded",
+                "errorCode": null,
+                "callId": "child-1",
+                "gpu": {
+                  "requestedType": "none",
+                  "observedType": null
+                },
+                "startedAt": "2026-11-22T10:08:14.000Z",
+                "finishedAt": "2026-11-22T10:20:00.000Z",
+                "counts": {
+                  "clips": 12
+                },
+                "estimatedCostUsd": null,
+                "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+              }
+            ],
+            "renderedAt": "2026-11-22T10:20:01.000Z",
+            "derivedFromJobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "execute": [
+              "hand_pose"
+            ],
+            "reuse": []
+          },
+          "producer_jobs": {
+            "segments": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "captions": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "hand_presence": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "segments name a different producer",
+      "input": {
+        "document": {
+          "schema": "stateaction.recording-annotations.v3",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "job_id": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+          "segments": {
+            "schema": "stateaction.segments.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "clock_domain": "android.elapsed_realtime",
+            "producer": {
+              "stage": "segment",
+              "module_id": "flora_tempseg_vllm_fp8",
+              "module_version": 1,
+              "model_name": "nvidia/Flora-TempSeg",
+              "model_revision": "114a1076f70eb53f4a58ac045505db3087e79347",
+              "weights_sha256": "a457b33d526874eedbd767edcd2888c7e461b2242264761666971cb5cab6878b",
+              "quant": {
+                "method": "fp8_per_tensor",
+                "checkpoint_manifest_sha256": "646d10562223636bd1f16a08a768a4a41d30b76fac0abefc92323c818d3c0f75"
+              },
+              "prompt_sha256": "d70cfb87537877860371677a1f928e0e73f16946c0e48b4231c90ab397850e91",
+              "params_sha256": "8ad98cbface853a688aa44256b1ffe49f312a27252faae333675acfb7d70cc1c",
+              "decoding_params": {
+                "do_sample": false,
+                "num_beams": 1,
+                "max_new_tokens": 1024,
+                "temperature": "0.0"
+              },
+              "engine": {
+                "name": "vllm",
+                "version": "0.11.2"
+              },
+              "gpu": {
+                "requested_type": "RTX-PRO-6000",
+                "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              }
+            },
+            "windows": {
+              "total": 7,
+              "ok": 6,
+              "failed": [
+                {
+                  "window_index": 3,
+                  "error_code": "engine_timeout",
+                  "core_start": {
+                    "source_frame_id": "1360",
+                    "timestamp_ns": "16999999880"
+                  },
+                  "core_end": {
+                    "source_frame_id": "1480",
+                    "timestamp_ns": "20999999840"
+                  }
+                }
+              ],
+              "failed_core_spans": [
+                {
+                  "start": {
+                    "source_frame_id": "1360",
+                    "timestamp_ns": "16999999880"
+                  },
+                  "end": {
+                    "source_frame_id": "1480",
+                    "timestamp_ns": "20999999840"
+                  }
+                }
+              ]
+            },
+            "rows": [
+              {
+                "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+                "ordinal": 0,
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1110",
+                  "timestamp_ns": "8666666630"
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              },
+              {
+                "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+                "ordinal": 1,
+                "start": {
+                  "source_frame_id": "1110",
+                  "timestamp_ns": "8666666630"
+                },
+                "end": {
+                  "source_frame_id": "1240",
+                  "timestamp_ns": "12999999920"
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              },
+              {
+                "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+                "ordinal": 2,
+                "start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                },
+                "status": "failed_window",
+                "ext": {}
+              },
+              {
+                "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+                "ordinal": 3,
+                "start": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "status": "ok",
+                "ext": {
+                  "flora": {
+                    "provenance": "fine",
+                    "stitched": false
+                  }
+                }
+              }
+            ]
+          },
+          "captions": {
+            "schema": "stateaction.captions.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+            "producer": {
+              "stage": "caption",
+              "module_id": "flora_captioner_vllm_fp8",
+              "module_version": 1,
+              "model_name": "nvidia/Flora-Captioner",
+              "model_revision": "rev-c3",
+              "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+              "quant": {
+                "method": "fp8_per_tensor",
+                "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+              },
+              "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+              "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+              "decoding_params": {
+                "do_sample": false,
+                "num_beams": 1,
+                "max_new_tokens": 1024,
+                "temperature": "0.0"
+              },
+              "engine": {
+                "name": "vllm",
+                "version": "0.11.2"
+              },
+              "gpu": {
+                "requested_type": "RTX-PRO-6000",
+                "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+              }
+            },
+            "rows": [
+              {
+                "segment_id": "abde2e65-d357-58df-b8b3-09ea8ef5484c",
+                "status": "complete",
+                "error_code": null,
+                "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+                "lang": "en",
+                "derived": {
+                  "rule": "caption_rule@1",
+                  "short_label": "rotate pitcher",
+                  "hand": "both",
+                  "steps": [
+                    "hold cloth with right hand",
+                    "rotate pitcher with both hands",
+                    "tighten pitcher lid with right hand"
+                  ]
+                }
+              },
+              {
+                "segment_id": "4cfffbd0-bc73-5c2a-abac-d82e58f4952d",
+                "status": "complete",
+                "error_code": null,
+                "text": "pick up pitcher with right hand",
+                "lang": "en",
+                "derived": {
+                  "rule": "caption_rule@1",
+                  "short_label": "pick up pitcher",
+                  "hand": "right",
+                  "steps": [
+                    "pick up pitcher with right hand"
+                  ]
+                }
+              },
+              {
+                "segment_id": "61c3b879-0f66-5b79-b5f9-fb5f3980927b",
+                "status": "not_captioned",
+                "error_code": "segment_failed_window"
+              },
+              {
+                "segment_id": "d6972e46-8df3-583c-afb8-8d5a9eee5d8e",
+                "status": "failed",
+                "error_code": "unsupported_target_frames"
+              }
+            ]
+          },
+          "hand_presence": {
+            "schema": "stateaction.hand_presence.v1",
+            "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "clock_domain": "android.elapsed_realtime",
+            "frame_count": 600,
+            "producer": {
+              "stage": "hand_pose",
+              "module_id": "hand_pose_cpu_v1",
+              "module_version": 1,
+              "model_name": "mediapipe_hand_landmarker",
+              "model_revision": null,
+              "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+              "quant": null,
+              "prompt_sha256": null,
+              "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+              "decoding_params": {},
+              "engine": {
+                "name": "mediapipe",
+                "version": "0.10.21"
+              },
+              "gpu": {
+                "requested_type": "none",
+                "observed_type": null
+              }
+            },
+            "lanes": {
+              "left": [
+                {
+                  "start": {
+                    "source_frame_id": "1000",
+                    "timestamp_ns": "5000000000"
+                  },
+                  "end": {
+                    "source_frame_id": "1200",
+                    "timestamp_ns": "11666666600"
+                  },
+                  "frames": 200,
+                  "state": "present"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1200",
+                    "timestamp_ns": "11666666600"
+                  },
+                  "end": {
+                    "source_frame_id": "1450",
+                    "timestamp_ns": "19999999850"
+                  },
+                  "frames": 250,
+                  "state": "no_hand"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1450",
+                    "timestamp_ns": "19999999850"
+                  },
+                  "end": {
+                    "source_frame_id": "1500",
+                    "timestamp_ns": "21666666500"
+                  },
+                  "frames": 50,
+                  "state": "failed"
+                },
+                {
+                  "start": {
+                    "source_frame_id": "1500",
+                    "timestamp_ns": "21666666500"
+                  },
+                  "end": {
+                    "source_frame_id": null,
+                    "timestamp_ns": null
+                  },
+                  "frames": 100,
+                  "state": "present"
+                }
+              ],
+              "right": [
+                {
+                  "start": {
+                    "source_frame_id": "1000",
+                    "timestamp_ns": "5000000000"
+                  },
+                  "end": {
+                    "source_frame_id": null,
+                    "timestamp_ns": null
+                  },
+                  "frames": 600,
+                  "state": "no_hand"
+                }
+              ]
+            }
+          },
+          "dag_run": {
+            "schemaVersion": 2,
+            "jobId": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+            "recordingId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "jobState": "succeeded",
+            "recipeId": "flora_fp8@1",
+            "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+            "maxJobCostUsd": "3.00",
+            "estimatedCostUsd": "0.41",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "state": "succeeded",
+                "errorCode": null,
+                "callId": "fc-01HSEG123",
+                "gpu": {
+                  "requestedType": "RTX-PRO-6000",
+                  "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+                },
+                "startedAt": "2026-11-22T10:00:00.000Z",
+                "finishedAt": "2026-11-22T10:03:12.250Z",
+                "counts": {
+                  "segments": 4,
+                  "failed_windows": 1
+                },
+                "estimatedCostUsd": "0.16",
+                "receiptSha256": "3ec57ce3800eea76140527b1258eef51f53718d6caed96dea512e84638bc7877"
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "state": "failed",
+                "errorCode": "stage_timeout",
+                "callId": "fc-01HCAP456",
+                "gpu": {
+                  "requestedType": "RTX-PRO-6000",
+                  "observedType": null
+                },
+                "startedAt": "2026-11-22T10:03:13.000Z",
+                "finishedAt": "2026-11-22T10:08:13.000Z",
+                "counts": {},
+                "estimatedCostUsd": "0.25",
+                "receiptSha256": null
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "state": "succeeded",
+                "errorCode": null,
+                "callId": "child-1",
+                "gpu": {
+                  "requestedType": "none",
+                  "observedType": null
+                },
+                "startedAt": "2026-11-22T10:08:14.000Z",
+                "finishedAt": "2026-11-22T10:20:00.000Z",
+                "counts": {
+                  "clips": 12
+                },
+                "estimatedCostUsd": null,
+                "receiptSha256": "da47dbe22646ddb2f7d368b209d7ad62bcd2ff348de0869e02a83fccce025518"
+              }
+            ],
+            "renderedAt": "2026-11-22T10:20:01.000Z",
+            "derivedFromJobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "execute": [
+              "hand_pose"
+            ],
+            "reuse": []
+          },
+          "producer_jobs": {
+            "segments": "519f19f0-1f9c-49f1-bf88-7343fd2dc358",
+            "captions": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "hand_presence": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/segments/job_id"
+        ]
+      }
+    }
+  ]
+}

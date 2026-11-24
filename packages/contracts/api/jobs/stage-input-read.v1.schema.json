@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/stage-input-read.v1.json",
+  "title": "Stage input read v1",
+  "description": "An authorized caption input read with its original producing job identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fileId", "readUrl", "expiresAt", "producerJobId"],
+  "properties": {
+    "fileId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "readUrl": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/signedUrl"
+    },
+    "expiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "producerJobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}

@@ -538,6 +538,16 @@ export async function retryJob(
         "this attempt was already retried and superseded",
       );
     }
+    const derived = await tx.query(
+      "SELECT 1 FROM jobs WHERE id = $1 AND derived_from_job_id IS NOT NULL",
+      [input.jobId],
+    );
+    if (derived.rowCount) {
+      throw refuse(
+        "rerun_confirmation_required",
+        "Use the stage rerun action to confirm a new partial attempt",
+      );
+    }
     if (rec.current_job_id !== input.jobId)
       throw refuse(
         "stale_current_job",

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-command.v1.json",
+  "title": "Stage rerun command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "parentJobId",
+    "stage",
+    "scope",
+    "requestId",
+    "expectedPlanSha256",
+    "expectedMaxGpuCostUsd",
+    "reason"
+  ],
+  "properties": {
+    "parentJobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "stage": {
+      "enum": ["segment", "caption", "hand_pose"]
+    },
+    "scope": {
+      "enum": ["only", "from_here"]
+    },
+    "module": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+    },
+    "params": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/paramMap"
+    },
+    "requestId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "expectedPlanSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "expectedMaxGpuCostUsd": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  }
+}

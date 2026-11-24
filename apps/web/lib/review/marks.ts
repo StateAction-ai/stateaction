@@ -6,11 +6,15 @@
 import type {
   SegmentIssueType,
   SegmentMarkCommand,
-  SegmentMarkRow,
+  SegmentMarkRow as ContractMarkRow,
   SegmentMarkVerdict,
 } from "@stateaction/contracts";
 
-export type { SegmentIssueType, SegmentMarkRow, SegmentMarkVerdict };
+export type { SegmentIssueType, SegmentMarkVerdict };
+export type SegmentMarkRow = ContractMarkRow & {
+  originJobId?: string;
+  originRevision?: number;
+};
 
 /** The newest mark per segment id. */
 export type MarkMap = ReadonlyMap<string, SegmentMarkRow>;
@@ -149,6 +153,8 @@ export function buildMarkCommand(input: {
 export const rowOf = (m: {
   segmentId: string;
   revision: number;
+  originJobId?: string;
+  originRevision?: number;
   verdict: SegmentMarkVerdict;
   issueType: SegmentIssueType | null;
   note: string | null;
@@ -156,6 +162,8 @@ export const rowOf = (m: {
 }): SegmentMarkRow => ({
   segmentId: m.segmentId,
   revision: m.revision,
+  ...(m.originJobId ? { originJobId: m.originJobId } : {}),
+  ...(m.originRevision ? { originRevision: m.originRevision } : {}),
   verdict: m.verdict,
   issueType: m.issueType,
   note: m.note,

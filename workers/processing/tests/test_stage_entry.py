@@ -359,11 +359,14 @@ class FakeApi(BaseHTTPRequestHandler):
                     "partCount": 1,
                 }
             )
-        if self.path.endswith("/read"):
+        path, _, query = self.path.partition("?")
+        if path.endswith("/read") and query == "version=2":
             return self._data(
                 {
-                    "fileId": st.get("response_file_id", self.path.split("/")[-2]),
+                    "fileId": st.get("response_file_id", path.split("/")[-2]),
                     "readUrl": f"{base}/segments",
+                    "expiresAt": "2099-01-01T00:00:00Z",
+                    "producerJobId": JOB,
                 }
             )
         self._data({})
@@ -507,7 +510,7 @@ class HttpModeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(
             any(
-                r[1].endswith(f"/outputs/{file_id}/read")
+                r[1].endswith(f"/outputs/{file_id}/read?version=2")
                 for r in self.state["requests"]
                 if r[0] == "POST"
             )

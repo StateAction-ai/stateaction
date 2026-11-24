@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import {
+  immutableModalAppName,
+  requestSha256,
   validateValue,
+  type ModalRerunBinding,
   type RecipeV1,
   type Stage,
   type StageReceiptV1,
@@ -723,6 +726,297 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
     assert.equal(out.stopped, undefined);
     const j = new JournalStore(cfg.stateDir).readModal(jobId, "segment");
     assert.equal(j?.termination, "budget_exceeded");
+  });
+
+  function verifiedRecipeSettings(
+    cfg: ModalControllerSettings,
+  ): ModalControllerSettings {
+    const codeRevision = "a".repeat(40);
+    const paramsSha256 = requestSha256({});
+    return {
+      ...cfg,
+      verifiedBindings: new Map(
+        Object.entries(MODULES).map(([stage, module]) => [
+          module,
+          {
+            appName: immutableModalAppName(module, codeRevision, paramsSha256),
+            codeRevision,
+            paramsSha256,
+            definitionSha256: "f".repeat(64),
+            definitionId: "fd-Test",
+            functionId: "fu-Test",
+            environment: "fixture",
+            gpu: GPU[stage as Stage],
+            maxBilledSeconds: 760,
+            maxContainers: 1,
+            maxCpuMilli: 8000,
+            maxMemoryMib: 8192,
+            microUsdPerCpuSecond: 211,
+            microUsdPerGpuSecond: stage === "hand_pose" ? 0 : 1100,
+          } satisfies ModalRerunBinding,
+        ]),
+      ),
+    };
+  }
+
+  for (const signal of [
+    "budget_exceeded",
+    "provider_container_restarted",
+    "gpu_watchdog_unavailable",
+  ] as const) {
+    test(`a verified GPU call is cancelled when the watchdog reports ${signal}`, async () => {
+      const { jobId, stub, cfg } = await world({
+        recipeOver: { budget: { segment: 1 } },
+      });
+      const modal = Object.assign(
+        new FakeModal(jobId, {
+          segment: {
+            poll: (id, _n, cancelled) =>
+              cancelled ? returned(v2(id, 137, null)) : pending,
+          },
+        }),
+        {
+          async checkFunction() {
+            return true;
+          },
+          async watchGpuCall() {
+            if (signal === "gpu_watchdog_unavailable")
+              throw new Error("lookup lost");
+            return signal === "provider_container_restarted"
+              ? ["one", "two"]
+              : ["one"];
+          },
+        },
+      );
+      const out = stagesOf(
+        await enter(stub, jobId, verifiedRecipeSettings(cfg), modal),
+      );
+      assert.equal(out.stopped, undefined);
+      assert.deepEqual(modal.cancels, [stub.runs.get("segment")!.callId]);
+      assert.deepEqual(rows(stub).segment, ["failed", signal]);
+      assert.equal(
+        new JournalStore(cfg.stateDir).readModal(jobId, "segment")?.termination,
+        signal,
+      );
+    });
+  }
+
+  for (const cancelAcknowledged of [true, false]) {
+    test(`execution-record refusal handles its exact GPU call with cancellation ${cancelAcknowledged ? "accepted" : "unconfirmed"}`, async () => {
+      const { jobId, stub, cfg } = await world({
+        fault(body) {
+          return body.action === "record_stage_run" &&
+            body.stage === "segment" &&
+            body.state === "running"
+            ? 409
+            : undefined;
+        },
+      });
+      const exactCall = "fc-RefusedKnownGpu";
+      const modal = Object.assign(
+        new FakeModal(jobId, {
+          segment: {
+            spawn: async () => exactCall,
+            poll: () =>
+              assert.fail(
+                "A refused execution record must not report a terminal result",
+              ),
+          },
+        }),
+        {
+          async checkFunction() {
+            return true;
+          },
+          async watchGpuCall() {
+            return ["one"];
+          },
+          async cancel(ref: string) {
+            modal.cancels.push(ref);
+            if (!cancelAcknowledged) throw new Error("provider unavailable");
+          },
+        },
+      );
+      const out = stagesOf(
+        await enter(stub, jobId, verifiedRecipeSettings(cfg), modal),
+      );
+      assert.deepEqual(out.stopped, {
+        outcome: "needs_operator",
+        reason: cancelAcknowledged
+          ? "execution_ref_conflict"
+          : "gpu_cancel_unconfirmed",
+        executionRef: exactCall,
+      });
+      assert.deepEqual(modal.stages(), ["segment"]);
+      assert.deepEqual(modal.cancels, [exactCall]);
+      assert.equal(stub.stageEvidence.size, 0);
+      const stored = new JournalStore(cfg.stateDir).readModal(jobId, "segment");
+      assert.equal(stored?.callId, exactCall);
+      assert.equal(stored?.phase, "submitted");
+      assert.equal(!!stored?.cancelRequestedAt, cancelAcknowledged);
+    });
+  }
+
+  test("an unexpected supervisor failure cancels a known GPU call", async () => {
+    const { jobId, stub, cfg } = await world();
+    const modal = Object.assign(
+      new FakeModal(jobId, {
+        segment: {
+          poll() {
+            throw new Error("unexpected poll failure");
+          },
+        },
+      }),
+      {
+        async checkFunction() {
+          return true;
+        },
+        async watchGpuCall() {
+          return ["one"];
+        },
+      },
+    );
+    const out = stagesOf(
+      await enter(stub, jobId, verifiedRecipeSettings(cfg), modal),
+    );
+    const executionRef = stub.runs.get("segment")?.callId;
+    assert.ok(executionRef);
+    assert.deepEqual(out.stopped, {
+      outcome: "needs_operator",
+      reason: "gpu_supervision_failed",
+      executionRef,
+    });
+    assert.deepEqual(modal.cancels, [executionRef]);
+    assert.equal(stub.stageEvidence.size, 0);
+  });
+
+  for (const journalState of [
+    "acknowledged",
+    "terminal",
+    "uncancelled",
+  ] as const) {
+    test(`a conflicting ${journalState} GPU journal cannot exempt the catalog call`, async () => {
+      const { jobId, stub, cfg } = await world();
+      const catalogId = "fc-CatalogGpu";
+      const journalId = "fc-OlderJournalGpu";
+      const store = new JournalStore(cfg.stateDir);
+      const now = Date.now();
+      const incoming: ModalJournal = {
+        version: 1,
+        executor: "modal",
+        jobId,
+        stage: "segment",
+        runRef: "run-0",
+        phase: journalState === "terminal" ? "terminal" : "submitted",
+        callId: journalId,
+        startDeadline: new Date(now + 60_000).toISOString(),
+        executionDeadline: new Date(now + 60_000).toISOString(),
+        ...(journalState === "terminal" ? { exitCode: 0 } : {}),
+        ...(journalState === "acknowledged"
+          ? {
+              cancelRequestedAt: new Date(now - 2000).toISOString(),
+              termination: "gpu_supervision_stopped",
+            }
+          : {}),
+      };
+      store.writeModal(incoming);
+      stub.runs.set("segment", {
+        state: "running",
+        module: MODULES.segment,
+        callId: catalogId,
+      });
+      const modal = Object.assign(new FakeModal(jobId), {
+        async watchGpuCall() {
+          assert.fail("Conflicting calls must not be polled");
+        },
+        async cancel(ref: string) {
+          modal.cancels.push(ref);
+          if (journalState === "terminal")
+            throw new Error("fixture: no cancel acknowledgement");
+        },
+      });
+      const out = stagesOf(
+        await enter(stub, jobId, verifiedRecipeSettings(cfg), modal),
+      );
+      assert.deepEqual(out.stopped, {
+        outcome: "needs_operator",
+        reason: "execution_ref_mismatch",
+        executionRef: catalogId,
+        conflictingExecutionRef: journalId,
+        ...(journalState === "terminal"
+          ? { unconfirmedCancellationRefs: [catalogId] }
+          : {}),
+      });
+      assert.deepEqual(
+        modal.cancels,
+        journalState === "uncancelled" ? [catalogId, journalId] : [catalogId],
+      );
+      assert.equal(stub.stageEvidence.size, 0);
+      assert.deepEqual(modal.stages(), []);
+      const after = store.readModal(jobId, "segment");
+      assert.equal(after?.callId, journalId);
+      if (journalState !== "uncancelled") assert.deepEqual(after, incoming);
+    });
+  }
+
+  test("verified GPU stages refuse to issue a claim without a watchdog", async () => {
+    const { jobId, stub, cfg } = await world();
+    const modal = Object.assign(new FakeModal(jobId), {
+      async checkFunction() {
+        return true;
+      },
+    });
+    const out = stagesOf(
+      await enter(stub, jobId, verifiedRecipeSettings(cfg), modal),
+    );
+    assert.deepEqual(out.stopped, {
+      outcome: "needs_operator",
+      reason: "rerun_binding_unavailable",
+    });
+    assert.equal(stub.claims.size, 0);
+    assert.deepEqual(modal.stages(), []);
+  });
+
+  test("bound execution records provider identity alongside the original receipt digest", async () => {
+    const seen: unknown[] = [];
+    const { jobId, stub, cfg } = await world({
+      fault(body) {
+        if (
+          body.action === "record_stage_run" &&
+          body.stage === "segment" &&
+          body.receipt
+        )
+          seen.push(body.receipt);
+        return undefined;
+      },
+    });
+    const modal = Object.assign(new FakeModal(jobId), {
+      async checkFunction() {
+        return true;
+      },
+      async watchGpuCall() {
+        return ["one"];
+      },
+    });
+    const settings = verifiedRecipeSettings(cfg);
+    await enter(stub, jobId, settings, modal);
+    const binding = settings.verifiedBindings!.get(MODULES.segment)!;
+    const original = receipt(jobId, "segment");
+    assert.deepEqual(seen, [
+      {
+        ...original,
+        schemaVersion: 2,
+        providerBinding: {
+          appName: binding.appName,
+          codeRevision: binding.codeRevision,
+          environment: binding.environment,
+          functionId: binding.functionId,
+          definitionId: binding.definitionId,
+          paramsSha256: binding.paramsSha256,
+          definitionSha256: binding.definitionSha256,
+          workerReceiptSha256: requestSha256(original),
+        },
+      },
+    ]);
   });
 
   test("a budget cancel that is not provably terminal is needs_operator: the stage stays open, nothing later starts", async () => {

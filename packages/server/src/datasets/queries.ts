@@ -56,17 +56,17 @@ function searchPattern(value: string | undefined): string {
 }
 
 /**
- * Job/recording/latest-review facts for the clip alias `c`. The current-job
+ * Job/recording/latest-review facts for the clip alias `c`. The selected-job
  * gate and the latest review are LATERAL primary-key probes per candidate row
  * (never flattened into a join the planner may reorder ahead of the ordered
- * membership/clip index scan). Rejected or non-current candidates may still
+ * membership/clip index scan). Rejected or non-selected candidates may still
  * require additional index reads before a page fills.
  */
 const CORE = `
   JOIN LATERAL (
     SELECT rec.simulation, rec.imported_from_cache FROM recordings rec
-    JOIN jobs j ON j.id = rec.current_job_id AND j.state = 'succeeded'
-    WHERE rec.id = c.recording_id AND rec.current_job_id = c.job_id
+    JOIN jobs j ON j.id = c.job_id AND j.recording_id = rec.id AND j.state = 'succeeded'
+    WHERE rec.id = c.recording_id AND coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id
       AND rec.deleted_at IS NULL LIMIT 1
   ) rec ON true
   LEFT JOIN LATERAL (

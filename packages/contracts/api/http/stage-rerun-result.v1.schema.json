@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-result.v1.json",
+  "title": "Stage rerun result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "parentJobId", "replayed"],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "parentJobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  }
+}

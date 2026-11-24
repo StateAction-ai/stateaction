@@ -28,8 +28,11 @@ import { renderTaskStarterFromEnv } from "./dispatch.js";
 import { datasetAuthenticator } from "../datasets/next.js";
 import { jobControlRoutes, jobDagRunRoutes } from "./control.js";
 import { jobDiagnosticRoutes } from "./diagnostics.js";
+import { stageRerunRoutes } from "./stage-rerun-http.js";
 import { jobHandlers, type JobHandlers } from "./http.js";
 import type { JobsDeps } from "./service.js";
+import { configuredRerunBindings } from "./stage-rerun-bindings.js";
+import { s3RerunCopy } from "./stage-rerun-storage.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const notFound = () =>
@@ -73,6 +76,7 @@ export function jobsDepsFromEnv(
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
     sealTransport: () => ({ pool, provider: providerFromConfig(config) }),
+    rerunCopy: s3RerunCopy(config),
     acceptance: {
       config: acceptanceConfigFromEnv(env),
       reader: s3ObjectReader(config, { timeoutMs: 15000 }),
@@ -184,6 +188,14 @@ export function jobRouteHandlers(
         controller,
         { kinds: ["workflow"], scope: "jobs:status" },
         (h) => h.dagRun(request, jobId),
+      ),
+    prepareRerun: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:reconcile" },
+        (h) => h.prepareRerun(request, jobId),
       ),
     controller: (request: Request, jobId: string) =>
       guarded(
@@ -378,4 +390,33 @@ export function jobDiagnosticRouteHandlers(
       return routes.read(request, jobId, fileId);
     },
   };
+}
+
+export function stageRerunRouteHandlers() {
+  return {
+    plan: (request: Request, recordingId: string) =>
+      routes().plan(request, recordingId),
+    confirm: (request: Request, recordingId: string) =>
+      routes().confirm(request, recordingId),
+    history: (request: Request, recordingId: string) =>
+      routes().history(request, recordingId),
+    select: (request: Request, recordingId: string) =>
+      routes().select(request, recordingId),
+  };
+
+  function routes() {
+    const runtime = authRuntime();
+    const config = jobsConfigFromEnv();
+    return stageRerunRoutes({
+      pool: runtime.pool,
+      reader: s3ObjectReader(serverConfig(), { timeoutMs: 8000 }),
+      backend: config.executionBackend,
+      production: config.production ?? false,
+      ...(config.publicVideoCanary
+        ? { publicVideoCanary: config.publicVideoCanary }
+        : {}),
+      bindings: configuredRerunBindings(process.env.STATEACTION_RERUN_BINDINGS),
+      authenticate: datasetAuthenticator(),
+    });
+  }
 }

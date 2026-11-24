@@ -155,11 +155,11 @@ test("a stale expectedRevision conflicts and an identical markId replays", async
   assert.equal(n.rows[0].n, 1);
 });
 
-test("a replayed markId returns the stored mark after the accepted result changed", async () => {
+test("mark replay survives changes to the live pointer and recording retirement", async () => {
   const { ids, mark, s, staff } = await acceptedForMarks();
   const markId = randomUUID();
   const first = await mark(ids[0]!, { markId });
-  // The recording moves on: its current job no longer is the marked one.
+  // Only the live pointer changes. The accepted result is still selected.
   await s.db.owner.query(
     "UPDATE recordings SET current_job_id = NULL WHERE id = $1",
     [s.recordingId],
@@ -172,8 +172,15 @@ test("a replayed markId returns the stored mark after the accepted result change
     ),
     "idempotency_conflict",
   );
-  // A new mark still needs the current accepted result.
-  assert.equal(await code(mark(ids[0]!, { expectedRevision: 1 })), "conflict");
+  const next = await mark(ids[0]!, { expectedRevision: 1 });
+  assert.equal(next.revision, 2);
+
+  await s.db.owner.query(
+    "UPDATE recordings SET deleted_at = now() WHERE id = $1",
+    [s.recordingId],
+  );
+  assert.equal((await mark(ids[0]!, { markId })).replayed, true);
+  assert.equal(await code(mark(ids[0]!, { expectedRevision: 2 })), "not_found");
   assert.ok(staff);
 });
 

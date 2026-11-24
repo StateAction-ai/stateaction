@@ -1,0 +1,123 @@
+{
+  "contract": "jobs.controller-action.v4",
+  "cases": [
+    {
+      "name": "record an inspected Modal stage",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "verified-stage-owner",
+          "stage": "segment",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "state": "succeeded",
+          "callId": "fc-Approved",
+          "receipt": {
+            "schemaVersion": 2,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z",
+            "providerBinding": {
+              "functionId": "fu-verified",
+              "definitionId": "fd-revision",
+              "environment": "main",
+              "appName": "stateaction-hand-pose-cpu-v1-36a4b3eadfbc98ad4820eaca",
+              "codeRevision": "1111111111111111111111111111111111111111",
+              "paramsSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+              "definitionSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "workerReceiptSha256": "08f8cd1bd0dfffb10221a18a63113bcda67ebce2e5e6d1786a3ae64560b89d5e"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "bound receipt needs a provider call",
+      "input": {
+        "document": {
+          "action": "record_stage_run",
+          "owner": "verified-stage-owner",
+          "stage": "segment",
+          "module": "flora_tempseg_vllm_fp8@1",
+          "state": "succeeded",
+          "receipt": {
+            "schemaVersion": 2,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "stage": "segment",
+            "module": "flora_tempseg_vllm_fp8@1",
+            "status": "succeeded",
+            "errorCode": null,
+            "outputs": [
+              {
+                "fileId": "29d0e1f2-a3b4-4c5d-8e6f-708192a3b4c5",
+                "role": "segments_json",
+                "sizeBytes": "2048",
+                "sha256": "95733012accf1ca29d64a8665de39e7ec2bcc84c1bc8c7b094b61fbb40e1535a"
+              },
+              {
+                "fileId": "6d14c5d6-e7f8-4091-82a3-b4c5d6e7f809",
+                "role": "diagnostic_blob",
+                "sizeBytes": "4096",
+                "sha256": "819b63b3fa1da0a89fb8e28478c97decef1dd6689252bd02413bdb4da7616d2b"
+              }
+            ],
+            "counts": {
+              "segments": 4,
+              "windows_total": 7,
+              "failed_windows": 1
+            },
+            "gpu": {
+              "requestedType": "RTX-PRO-6000",
+              "observedType": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            },
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:03:12.250Z",
+            "providerBinding": {
+              "functionId": "fu-verified",
+              "definitionId": "fd-revision",
+              "environment": "main",
+              "appName": "stateaction-hand-pose-cpu-v1-36a4b3eadfbc98ad4820eaca",
+              "codeRevision": "1111111111111111111111111111111111111111",
+              "paramsSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+              "definitionSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+              "workerReceiptSha256": "08f8cd1bd0dfffb10221a18a63113bcda67ebce2e5e6d1786a3ae64560b89d5e"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -6,7 +6,11 @@ import {
   openSync,
   readFileSync,
 } from "node:fs";
-import { moduleManifestEntry } from "@stateaction/contracts";
+import {
+  moduleManifestEntry,
+  parseModalRerunBindings,
+  type ModalRerunBinding,
+} from "@stateaction/contracts";
 
 /** Finite, explicit controller limits. Everything here is bounded; nothing waits forever. */
 type BaseSettings = {
@@ -56,6 +60,8 @@ export type ModalControllerSettings = BaseSettings & {
    * bound without an app uses `appName` (the single source of truth for the app is the binding).
    */
   stageApps?: Readonly<Record<string, string>>;
+  /** When present, even native recipe stages require a verified binding. */
+  verifiedBindings?: ReadonlyMap<string, ModalRerunBinding>;
 };
 
 export type ControllerSettings =
@@ -221,6 +227,11 @@ function modalSettings(): ModalControllerSettings {
   const bindings = stageFunctionBindings(process.env.MODAL_STAGE_FUNCTIONS);
   const stageFunctions = bindings?.functions;
   const stageApps = bindings?.apps;
+  const bindingConfig = process.env.STATEACTION_RERUN_BINDINGS;
+  const verifiedBindings =
+    bindingConfig === undefined
+      ? undefined
+      : parseModalRerunBindings(bindingConfig);
   return {
     executor: "modal",
     apiUrl: api,
@@ -229,6 +240,7 @@ function modalSettings(): ModalControllerSettings {
     ...(environmentName === undefined ? {} : { environmentName }),
     ...common(),
     pipeline: "hand_pose_cpu_v1",
+    ...(verifiedBindings ? { verifiedBindings } : {}),
     ...(stageFunctions ? { stageFunctions } : {}),
     ...(stageApps && Object.keys(stageApps).length > 0 ? { stageApps } : {}),
   };

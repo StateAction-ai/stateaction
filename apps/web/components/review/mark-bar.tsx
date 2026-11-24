@@ -23,13 +23,19 @@ export function MarkBadge({ mark }: { mark: SegmentMarkRow | undefined }) {
       </span>
     );
   const issue = ISSUE_TYPES.find((t) => t.id === mark.issueType)?.label;
+  const origin =
+    mark.originJobId && mark.revision === 0 ? (
+      <span className="font-normal text-muted">
+        Marked on run {mark.originJobId.slice(0, 8)}
+      </span>
+    ) : null;
   return mark.verdict === "good" ? (
     <span
       data-testid="mark-badge"
       data-mark="good"
       className="inline-flex items-center gap-1 text-[11px] font-bold text-good"
     >
-      <Check aria-hidden="true" size={12} /> Good
+      <Check aria-hidden="true" size={12} /> Good {origin}
     </span>
   ) : (
     <span
@@ -37,7 +43,7 @@ export function MarkBadge({ mark }: { mark: SegmentMarkRow | undefined }) {
       data-mark="issue"
       className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8a5a00]"
     >
-      <Flag aria-hidden="true" size={12} /> {issue ?? "Issue"}
+      <Flag aria-hidden="true" size={12} /> {issue ?? "Issue"} {origin}
     </span>
   );
 }

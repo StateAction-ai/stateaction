@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  modalBindingMatchesStage,
   requestSha256,
   type RecipeV1,
+  type ModalRerunBinding,
   type Stage,
   type StageReceiptV1,
   type StageRunState,
@@ -89,6 +91,36 @@ export async function runRecipe(
     return { outcome: "needs_operator", reason: "recipe_graph_invalid" };
   const parallel = graph.recorded;
 
+  let execute: Set<Stage> | undefined;
+  let rerunFunctions:
+    | Partial<Record<"segment" | "caption" | "handPose", ModalRerunBinding>>
+    | undefined;
+  if (parallel) {
+    let preparation = await api.prepareRerun(id.jobId, id.owner);
+    while (preparation.state === "copying" && !lost()) {
+      preparation = await api.prepareRerun(id.jobId, id.owner);
+    }
+    if (lost()) return stop({ outcome: "lease_lost" });
+    if (preparation.state === "failed")
+      return stop({ outcome: "no_effect", reason: "reuse_unavailable" });
+    if (preparation.state === "ready") {
+      if (!preparation.execute)
+        return stop({
+          outcome: "needs_operator",
+          reason: "rerun_plan_invalid",
+        });
+      execute = new Set(preparation.execute);
+      rerunFunctions = preparation.functions;
+    }
+  }
+
+  const releaseBindings =
+    settings.executor === "modal" ? settings.verifiedBindings : undefined;
+  const bindingFor = (spec: Spec) =>
+    execute
+      ? rerunFunctions?.[spec.stage === "hand_pose" ? "handPose" : spec.stage]
+      : releaseBindings?.get(spec.module);
+
   /** Relays a settled stage; false when the server refused it (operator path). */
   const record = async (
     spec: Spec,
@@ -96,7 +128,7 @@ export async function runRecipe(
     callId?: string,
   ): Promise<boolean> => {
     try {
-      await recordSettled(deps, id, spec, settled, callId);
+      await recordSettled(deps, id, spec, settled, callId, bindingFor(spec));
     } catch (error) {
       if (!(error instanceof ApiRejection)) throw error;
       return false;
@@ -122,6 +154,7 @@ export async function runRecipe(
       emit("lease_lost");
       return { outcome: "lease_lost" };
     }
+    if (execute && !execute.has(spec.stage)) return;
     const expect: StageExpectation = {
       jobId: id.jobId,
       stage: spec.stage,
@@ -169,6 +202,24 @@ export async function runRecipe(
     // A stage with neither a journal nor a server row has no claim yet: the gates below may
     // still end it as not_run. Once it is claimed it only ends with proof for its call.
     const fresh = !journaled && node === undefined;
+    const binding = bindingFor(spec);
+    if (
+      settings.executor === "modal" &&
+      (execute || releaseBindings) &&
+      (!binding ||
+        !modalBindingMatchesStage(binding, spec) ||
+        (binding.gpu !== "none" &&
+          (binding.maxContainers !== 1 ||
+            binding.maxBilledSeconds <= 60 ||
+            !deps.modal?.watchGpuCall ||
+            settings.apiTimeoutMs > 5_000 ||
+            settings.pollIntervalMs > 3_000)))
+    )
+      return { outcome: "needs_operator", reason: "rerun_binding_unavailable" };
+    const stageBudgetSeconds =
+      binding && binding.gpu !== "none"
+        ? Math.min(spec.resources.budgetSeconds, binding.maxBilledSeconds - 60)
+        : spec.resources.budgetSeconds;
     if (fresh) {
       const gate = gateOf(spec, prior, outOfBudget);
       if (gate) {
@@ -189,14 +240,22 @@ export async function runRecipe(
       // branch. Parallel stages each fit against the shared deadline.
       const handBudget = recipe.stages.find((x) => x.stage === "hand_pose")!
         .resources.budgetSeconds;
-      const required =
-        spec.resources.budgetSeconds + (parallel ? 0 : handBudget);
+      const required = stageBudgetSeconds + (parallel ? 0 : handBudget);
       if (spec.stage !== "hand_pose" && remaining < required * 1000) {
         // Not enough time left for this GPU stage's budget: it and every later GPU stage are not run.
         outOfBudget = true;
         if (!(await record(spec, { state: "not_run", errorCode: "budget" })))
           return refused(spec);
         return;
+      }
+      if (
+        binding &&
+        !(await deps.modal?.checkFunction?.(spec.module, binding))
+      ) {
+        return {
+          outcome: "needs_operator",
+          reason: "rerun_binding_unavailable",
+        };
       }
       const refusal = stageModuleRefusal(settings, spec.stage, spec.module);
       if (refusal) {
@@ -255,7 +314,8 @@ export async function runRecipe(
     const run: ModalStage = {
       stage: spec.stage,
       module: spec.module,
-      budgetSeconds: spec.resources.budgetSeconds,
+      budgetSeconds: stageBudgetSeconds,
+      ...(binding ? { binding } : {}),
       node,
       status,
       bootstrap,
@@ -394,6 +454,7 @@ async function recordSettled(
   spec: Spec,
   settled: Settled,
   callId?: string,
+  binding?: ModalRerunBinding,
 ): Promise<void> {
   const base = {
     action: "record_stage_run" as const,
@@ -402,12 +463,30 @@ async function recordSettled(
     module: spec.module,
     ...(callId ? { callId } : {}),
   };
+  const workerReceipt = settled.receipt;
+  const receipt =
+    workerReceipt && callId && binding
+      ? {
+          ...workerReceipt,
+          schemaVersion: 2 as const,
+          providerBinding: {
+            appName: binding.appName,
+            codeRevision: binding.codeRevision,
+            environment: binding.environment,
+            functionId: binding.functionId,
+            definitionId: binding.definitionId,
+            paramsSha256: binding.paramsSha256,
+            definitionSha256: binding.definitionSha256,
+            workerReceiptSha256: requestSha256(workerReceipt),
+          },
+        }
+      : workerReceipt;
   try {
     await deps.api.act(id.jobId, {
       ...base,
       state: settled.state,
       ...(settled.errorCode ? { errorCode: settled.errorCode } : {}),
-      ...(settled.receipt ? { receipt: settled.receipt } : {}),
+      ...(receipt ? { receipt } : {}),
     });
   } catch (error) {
     if (!(error instanceof ApiRejection) || !settled.receipt) throw error;

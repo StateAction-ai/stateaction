@@ -709,8 +709,12 @@ export async function appendReview(
       };
     }
 
+    // Keep the recording's selected result stable through the review append.
     const clip = await tx.query(
-      "SELECT 1 FROM clips WHERE id = $1 AND job_id = $2",
+      `SELECT 1 FROM clips c
+       JOIN recordings rec ON rec.id = c.recording_id
+       WHERE c.id = $1 AND c.job_id = $2
+       FOR UPDATE OF rec`,
       [clipId, input.jobId],
     );
     if (!clip.rowCount) {
@@ -727,16 +731,17 @@ export async function appendReview(
     );
     if ((latest.rows[0]?.revision ?? 0) !== input.expectedRevision)
       throw new CatalogError("conflict", "Stale review revision");
-    const currentResult = await tx.query(
+    const selectedResult = await tx.query(
       `SELECT 1 FROM clips c
        JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
          AND j.result_manifest_sha256 = $3
        JOIN recordings rec ON rec.id = c.recording_id
-         AND rec.current_job_id = c.job_id AND rec.deleted_at IS NULL
+         AND coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id
+         AND rec.deleted_at IS NULL
        WHERE c.id = $1 AND c.job_id = $2`,
       [clipId, input.jobId, input.resultManifestSha256],
     );
-    if (!currentResult.rowCount) {
+    if (!selectedResult.rowCount) {
       const identity = await tx.query(
         "SELECT 1 FROM jobs WHERE id = $1 AND result_manifest_sha256 = $2",
         [input.jobId, input.resultManifestSha256],
@@ -748,7 +753,7 @@ export async function appendReview(
         );
       throw new CatalogError(
         "conflict",
-        "This is no longer the recording's current accepted result",
+        "This is no longer the recording's selected result",
       );
     }
 

@@ -91,6 +91,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 type FileRow = {
   part: "map" | "hands" | "origin";
   clip_id: string;
+  producer_clip_id: string | null;
+  producer_job_id: string;
   object_key: string;
   size_bytes: string;
   sha256: string;
@@ -102,7 +104,8 @@ async function readArtifact(deps: AnnotationDeps, file: FileRow) {
       ? "artifacts.hand-observations.v1"
       : "artifacts.frame-map.v1";
   const max = contractMaxBytes(contract);
-  if (BigInt(file.size_bytes) > BigInt(max)) invalidFrames();
+  if (!file.producer_clip_id || BigInt(file.size_bytes) > BigInt(max))
+    invalidFrames();
   let bytes: Uint8Array;
   try {
     bytes = await deps.reader.read(file.object_key, max);
@@ -123,7 +126,11 @@ async function readArtifact(deps: AnnotationDeps, file: FileRow) {
   const result = validateBytes(contract, bytes);
   if (!result.valid) invalidFrames();
   const value = result.value as FrameMapV1 | HandObservationsV1;
-  if (value.clip_id !== file.clip_id) invalidFrames();
+  if (
+    value.clip_id !== file.producer_clip_id ||
+    value.job_id !== file.producer_job_id
+  )
+    invalidFrames();
   return value;
 }
 
@@ -133,14 +140,17 @@ export async function loadClipHandFrames(
   recordingId: string,
   jobId: string,
   clipId: string,
+  viewHistorical = false,
 ): Promise<ClipHandFrames> {
   const notFound = () =>
     new TransportError("not_found", "Hand frames not found");
   if (!UUID.test(jobId) || !UUID.test(clipId)) throw notFound();
   const { rows } = await deps.pool.query<FileRow>(
-    `SELECT part.name AS part, part.clip_id, f.object_key, f.size_bytes::text, f.sha256
+    `SELECT part.name AS part, part.clip_id, f.object_key, f.size_bytes::text, f.sha256,
+            coalesce(copy.original_job_id, f.job_id) AS producer_job_id,
+            CASE WHEN copy.file_id IS NULL THEN part.clip_id ELSE producer.id END AS producer_clip_id
      FROM clips c
-     JOIN recordings rec ON rec.id = c.recording_id AND rec.current_job_id = c.job_id
+     JOIN recordings rec ON rec.id = c.recording_id
        AND rec.deleted_at IS NULL
      JOIN jobs j ON j.id = c.job_id AND j.recording_id = rec.id AND j.state = 'succeeded'
      JOIN LATERAL (
@@ -155,9 +165,18 @@ export async function loadClipHandFrames(
      JOIN files f ON f.id = part.file_id AND f.job_id = c.job_id
        AND f.purpose = 'output' AND f.role::text = part.role
        AND f.state IN ('completed', 'verified')
+     LEFT JOIN job_rerun_copies copy ON copy.file_id = f.id AND copy.job_id = f.job_id
+       AND copy.sha256 = f.sha256 AND copy.stage = 'hand_pose'
+       AND copy.role = part.role AND copy.target_ready
+     LEFT JOIN clips producer ON producer.job_id = copy.original_job_id AND producer.recording_id = rec.id
+       AND copy.original_file_id = CASE part.role
+         WHEN 'frame_map_json' THEN producer.frame_map_file_id
+         WHEN 'hand_observations_json' THEN producer.hand_observations_file_id
+       END
      WHERE rec.id = $2 AND c.job_id = $3 AND c.id = $4
+       AND ($5::boolean OR c.job_id = coalesce(recording_selected_job(rec.id), rec.current_job_id))
        AND catalog_has_role($1, 'staff')`,
-    [userId, recordingId, jobId, clipId],
+    [userId, recordingId, jobId, clipId, viewHistorical],
   );
   const mapFile = rows.find((row) => row.part === "map");
   const handFile = rows.find((row) => row.part === "hands");
@@ -172,6 +191,5 @@ export async function loadClipHandFrames(
       ? map
       : (readArtifact(deps, originFile) as Promise<FrameMapV1>),
   ]);
-  if (frameMap.job_id !== jobId) invalidFrames();
   return handFramesFromArtifacts(frameMap, hands, origin);
 }

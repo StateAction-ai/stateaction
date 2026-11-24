@@ -1,0 +1,559 @@
+{
+  "tempseg": {
+    "objectTag": "flora_tempseg",
+    "lookup": {
+      "function": {
+        "moduleName": "modal_stage",
+        "functionName": "flora_tempseg",
+        "functionType": 2,
+        "warmPoolSize": 0,
+        "concurrencyLimit": 1,
+        "taskIdleTimeoutSecs": 10,
+        "ExperimentalGroupSize": 0,
+        "ExperimentalFabricSize": 0,
+        "ExperimentalBufferContainers": 0,
+        "ExperimentalCustomScaling": false,
+        "ExperimentalEnableGpuSnapshot": false,
+        "workerId": "",
+        "timeoutSecs": 800,
+        "webUrl": "",
+        "webUrlInfo": {
+          "truncated": false,
+          "hasUniqueHash": false,
+          "labelStolen": false
+        },
+        "webhookConfig": {
+          "type": 0,
+          "method": "",
+          "requestedSuffix": "",
+          "asyncMode": 0,
+          "customDomains": [],
+          "webServerPort": 0,
+          "webServerStartupTimeout": 0,
+          "webEndpointDocs": false,
+          "requiresProxyAuth": false,
+          "ephemeralSuffix": ""
+        },
+        "customDomainInfo": [],
+        "methodDefinitions": {},
+        "methodDefinitionsSet": true,
+        "isClass": false,
+        "classParameterInfo": {
+          "format": 0,
+          "schema": []
+        },
+        "isMethod": false,
+        "rankedFunctions": [
+          {
+            "rank": 0,
+            "function": {
+              "moduleName": "modal_stage",
+              "functionName": "flora_tempseg",
+              "mountIds": ["mo-Fixtureb462bf9c6c5b", "mo-Fixturec44441b7374b"],
+              "imageId": "im-Fixture24e07be00590",
+              "functionSerialized": [],
+              "definitionType": 2,
+              "functionType": 2,
+              "resources": {
+                "memoryMb": 65536,
+                "milliCpu": 8000,
+                "gpuConfig": {
+                  "type": 0,
+                  "count": 1,
+                  "gpuType": "RTX-PRO-6000"
+                },
+                "memoryMbMax": 65536,
+                "ephemeralDiskMb": 524288,
+                "milliCpuMax": 8000,
+                "rdma": false
+              },
+              "secretIds": [],
+              "sharedVolumeMounts": [],
+              "retryPolicy": {
+                "backoffCoefficient": 1,
+                "initialDelayMs": 1000,
+                "maxDelayMs": 60000,
+                "retries": 0
+              },
+              "concurrencyLimit": 1,
+              "timeoutSecs": 800,
+              "classSerialized": [],
+              "taskIdleTimeoutSecs": 10,
+              "warmPoolSize": 0,
+              "webUrl": "",
+              "runtime": "",
+              "appName": "stateaction-fixturef07b2ba19055",
+              "volumeMounts": [
+                {
+                  "volumeId": "vo-Fixture557bfeb27cf8",
+                  "mountPath": "/models",
+                  "allowBackgroundCommits": true,
+                  "readOnly": true
+                }
+              ],
+              "maxConcurrentInputs": 0,
+              "customDomainInfo": [],
+              "workerId": "",
+              "runtimeDebug": false,
+              "isBuilderFunction": false,
+              "isAutoSnapshot": false,
+              "isMethod": false,
+              "isCheckpointingFunction": false,
+              "checkpointingEnabled": false,
+              "objectDependencies": [
+                {
+                  "objectId": "im-Fixture24e07be00590"
+                },
+                {
+                  "objectId": "vo-Fixture557bfeb27cf8"
+                }
+              ],
+              "blockNetwork": false,
+              "maxInputs": 1,
+              "s3Mounts": [],
+              "cloudBucketMounts": [],
+              "isClass": false,
+              "classParameterInfo": {
+                "format": 0,
+                "schema": []
+              },
+              "batchMaxSize": 0,
+              "batchLingerMs": 0,
+              "i6pnEnabled": false,
+              "ExperimentalConcurrentCancellations": true,
+              "targetConcurrentInputs": 0,
+              "ExperimentalTaskTemplatesEnabled": false,
+              "ExperimentalTaskTemplates": [],
+              "ExperimentalGroupSize": 0,
+              "ExperimentalFabricSize": 0,
+              "untrusted": true,
+              "ExperimentalBufferContainers": 0,
+              "runtimePerfRecord": false,
+              "snapshotDebug": false,
+              "methodDefinitions": {},
+              "methodDefinitionsSet": true,
+              "ExperimentalCustomScaling": false,
+              "cloudProviderStr": "",
+              "ExperimentalEnableGpuSnapshot": false,
+              "autoscalerSettings": {
+                "minContainers": 0,
+                "maxContainers": 1,
+                "scaledownWindow": 10
+              },
+              "functionSchema": {
+                "schemaType": 1,
+                "arguments": [
+                  {
+                    "name": "<redacted>",
+                    "type": 0,
+                    "hasDefault": false,
+                    "fullType": {
+                      "baseType": 5,
+                      "subTypes": []
+                    }
+                  }
+                ],
+                "returnType": {
+                  "baseType": 5,
+                  "subTypes": []
+                }
+              },
+              "experimentalOptions": {},
+              "mountClientDependencies": true,
+              "flashServiceUrls": [],
+              "flashServiceLabel": "",
+              "enableGpuSnapshot": false,
+              "startupTimeoutSecs": 60,
+              "supportedInputFormats": [1, 4],
+              "supportedOutputFormats": [1, 4],
+              "implementationName": "flora_tempseg",
+              "singleUseContainers": true,
+              "isServer": false,
+              "routingRegion": "",
+              "isSessioned": false
+            }
+          }
+        ],
+        "schedule": {},
+        "untrusted": true,
+        "snapshotDebug": false,
+        "runtimePerfRecord": false,
+        "autoscalerSettings": {
+          "minContainers": 0,
+          "maxContainers": 1,
+          "scaledownWindow": 10
+        },
+        "functionSchema": {
+          "schemaType": 1,
+          "arguments": [
+            {
+              "name": "<redacted>",
+              "type": 0,
+              "hasDefault": false,
+              "fullType": {
+                "baseType": 5,
+                "subTypes": []
+              }
+            }
+          ],
+          "returnType": {
+            "baseType": 5,
+            "subTypes": []
+          }
+        },
+        "experimentalOptions": {},
+        "flashServiceUrls": [],
+        "flashServiceLabel": "",
+        "startupTimeoutSecs": 0,
+        "supportedInputFormats": [1, 4],
+        "supportedOutputFormats": [1, 4],
+        "httpConfig": {
+          "port": 0,
+          "proxyRegions": [],
+          "startupTimeout": 0,
+          "exitGracePeriod": 0,
+          "h2Enabled": false,
+          "targetConcurrency": 0,
+          "unauthenticated": false
+        },
+        "implementationName": "",
+        "isServer": false,
+        "routingRegion": "",
+        "isSessioned": false
+      },
+      "handleMetadata": {
+        "functionName": "flora_tempseg",
+        "functionType": 2,
+        "webUrl": "",
+        "isMethod": false,
+        "useMethodName": "",
+        "definitionId": "",
+        "classParameterInfo": {
+          "format": 0,
+          "schema": []
+        },
+        "methodHandleMetadata": {},
+        "functionSchema": {
+          "schemaType": 1,
+          "arguments": [
+            {
+              "name": "<redacted>",
+              "type": 0,
+              "hasDefault": false,
+              "fullType": {
+                "baseType": 5,
+                "subTypes": []
+              }
+            }
+          ],
+          "returnType": {
+            "baseType": 5,
+            "subTypes": []
+          }
+        },
+        "inputPlaneUrl": "<redacted>",
+        "inputPlaneRegion": "<redacted>",
+        "ExperimentalFlashUrls": [],
+        "supportedInputFormats": [1, 4],
+        "supportedOutputFormats": [1, 4],
+        "appId": "ap-Fixture798a2cb79d86",
+        "baseFunctionId": "fu-Fixture9cc5c31cce30"
+      },
+      "functionId": "fu-Fixture9cc5c31cce30"
+    },
+    "schedule": {
+      "autoscalerConfiguration": {
+        "settings": {
+          "maxContainers": 1,
+          "scaledownWindow": 10
+        },
+        "overrideEvents": {},
+        "defaultSettings": {
+          "scaledownWindow": 60
+        },
+        "staticSettings": {
+          "minContainers": 0,
+          "maxContainers": 1,
+          "bufferContainers": 0,
+          "scaledownWindow": 10
+        },
+        "overrideSettings": {}
+      }
+    }
+  },
+  "handPose": {
+    "objectTag": "process_recording",
+    "lookup": {
+      "function": {
+        "moduleName": "modal_app",
+        "functionName": "process_recording",
+        "functionType": 2,
+        "warmPoolSize": 0,
+        "concurrencyLimit": 1,
+        "taskIdleTimeoutSecs": 0,
+        "ExperimentalGroupSize": 0,
+        "ExperimentalFabricSize": 0,
+        "ExperimentalBufferContainers": 0,
+        "ExperimentalCustomScaling": false,
+        "ExperimentalEnableGpuSnapshot": false,
+        "workerId": "",
+        "timeoutSecs": 1100,
+        "webUrl": "",
+        "webUrlInfo": {
+          "truncated": false,
+          "hasUniqueHash": false,
+          "labelStolen": false
+        },
+        "webhookConfig": {
+          "type": 0,
+          "method": "",
+          "requestedSuffix": "",
+          "asyncMode": 0,
+          "customDomains": [],
+          "webServerPort": 0,
+          "webServerStartupTimeout": 0,
+          "webEndpointDocs": false,
+          "requiresProxyAuth": false,
+          "ephemeralSuffix": ""
+        },
+        "customDomainInfo": [],
+        "methodDefinitions": {},
+        "methodDefinitionsSet": true,
+        "isClass": false,
+        "classParameterInfo": {
+          "format": 0,
+          "schema": []
+        },
+        "isMethod": false,
+        "rankedFunctions": [
+          {
+            "rank": 0,
+            "function": {
+              "moduleName": "modal_app",
+              "functionName": "process_recording",
+              "mountIds": ["mo-Fixture9378c250da1f", "mo-Fixtureb462bf9c6c5b"],
+              "imageId": "im-Fixturec2130ac32aba",
+              "functionSerialized": [],
+              "definitionType": 2,
+              "functionType": 2,
+              "resources": {
+                "memoryMb": 26214,
+                "milliCpu": 4000,
+                "gpuConfig": {
+                  "type": 0,
+                  "count": 0,
+                  "gpuType": ""
+                },
+                "memoryMbMax": 8192,
+                "ephemeralDiskMb": 524288,
+                "milliCpuMax": 4000,
+                "rdma": false
+              },
+              "secretIds": [],
+              "sharedVolumeMounts": [],
+              "retryPolicy": {
+                "backoffCoefficient": 1,
+                "initialDelayMs": 1000,
+                "maxDelayMs": 60000,
+                "retries": 0
+              },
+              "concurrencyLimit": 1,
+              "timeoutSecs": 1100,
+              "classSerialized": [],
+              "taskIdleTimeoutSecs": 0,
+              "warmPoolSize": 0,
+              "webUrl": "",
+              "runtime": "",
+              "appName": "stateaction-fixtureaa95ea2fcdad",
+              "volumeMounts": [],
+              "maxConcurrentInputs": 0,
+              "customDomainInfo": [],
+              "workerId": "",
+              "runtimeDebug": false,
+              "isBuilderFunction": false,
+              "isAutoSnapshot": false,
+              "isMethod": false,
+              "isCheckpointingFunction": false,
+              "checkpointingEnabled": false,
+              "objectDependencies": [
+                {
+                  "objectId": "im-Fixturec2130ac32aba"
+                }
+              ],
+              "blockNetwork": false,
+              "maxInputs": 1,
+              "s3Mounts": [],
+              "cloudBucketMounts": [],
+              "schedulerPlacement": {
+                "regions": [],
+                "InstanceTypes": [],
+                "nonpreemptible": true
+              },
+              "isClass": false,
+              "classParameterInfo": {
+                "format": 0,
+                "schema": []
+              },
+              "batchMaxSize": 0,
+              "batchLingerMs": 0,
+              "i6pnEnabled": false,
+              "ExperimentalConcurrentCancellations": true,
+              "targetConcurrentInputs": 0,
+              "ExperimentalTaskTemplatesEnabled": false,
+              "ExperimentalTaskTemplates": [],
+              "ExperimentalGroupSize": 0,
+              "ExperimentalFabricSize": 0,
+              "untrusted": true,
+              "ExperimentalBufferContainers": 0,
+              "runtimePerfRecord": false,
+              "snapshotDebug": false,
+              "methodDefinitions": {},
+              "methodDefinitionsSet": true,
+              "ExperimentalCustomScaling": false,
+              "cloudProviderStr": "",
+              "ExperimentalEnableGpuSnapshot": false,
+              "autoscalerSettings": {
+                "minContainers": 0,
+                "maxContainers": 1
+              },
+              "functionSchema": {
+                "schemaType": 1,
+                "arguments": [
+                  {
+                    "name": "<redacted>",
+                    "type": 0,
+                    "hasDefault": false,
+                    "fullType": {
+                      "baseType": 5,
+                      "subTypes": []
+                    }
+                  }
+                ],
+                "returnType": {
+                  "baseType": 5,
+                  "subTypes": []
+                }
+              },
+              "experimentalOptions": {},
+              "mountClientDependencies": true,
+              "flashServiceUrls": [],
+              "flashServiceLabel": "",
+              "enableGpuSnapshot": false,
+              "startupTimeoutSecs": 120,
+              "supportedInputFormats": [1, 4],
+              "supportedOutputFormats": [1, 4],
+              "implementationName": "process_recording",
+              "singleUseContainers": true,
+              "isServer": false,
+              "routingRegion": "",
+              "isSessioned": false
+            }
+          }
+        ],
+        "schedule": {},
+        "untrusted": true,
+        "snapshotDebug": false,
+        "runtimePerfRecord": false,
+        "autoscalerSettings": {
+          "minContainers": 0,
+          "maxContainers": 1
+        },
+        "functionSchema": {
+          "schemaType": 1,
+          "arguments": [
+            {
+              "name": "<redacted>",
+              "type": 0,
+              "hasDefault": false,
+              "fullType": {
+                "baseType": 5,
+                "subTypes": []
+              }
+            }
+          ],
+          "returnType": {
+            "baseType": 5,
+            "subTypes": []
+          }
+        },
+        "experimentalOptions": {},
+        "flashServiceUrls": [],
+        "flashServiceLabel": "",
+        "startupTimeoutSecs": 0,
+        "supportedInputFormats": [1, 4],
+        "supportedOutputFormats": [1, 4],
+        "httpConfig": {
+          "port": 0,
+          "proxyRegions": [],
+          "startupTimeout": 0,
+          "exitGracePeriod": 0,
+          "h2Enabled": false,
+          "targetConcurrency": 0,
+          "unauthenticated": false
+        },
+        "implementationName": "",
+        "isServer": false,
+        "routingRegion": "",
+        "isSessioned": false
+      },
+      "handleMetadata": {
+        "functionName": "process_recording",
+        "functionType": 2,
+        "webUrl": "",
+        "isMethod": false,
+        "useMethodName": "",
+        "definitionId": "",
+        "classParameterInfo": {
+          "format": 0,
+          "schema": []
+        },
+        "methodHandleMetadata": {},
+        "functionSchema": {
+          "schemaType": 1,
+          "arguments": [
+            {
+              "name": "<redacted>",
+              "type": 0,
+              "hasDefault": false,
+              "fullType": {
+                "baseType": 5,
+                "subTypes": []
+              }
+            }
+          ],
+          "returnType": {
+            "baseType": 5,
+            "subTypes": []
+          }
+        },
+        "inputPlaneUrl": "<redacted>",
+        "inputPlaneRegion": "<redacted>",
+        "ExperimentalFlashUrls": [],
+        "supportedInputFormats": [1, 4],
+        "supportedOutputFormats": [1, 4],
+        "appId": "ap-Fixture0ef3acc19960",
+        "baseFunctionId": "fu-Fixture49326b70a18a"
+      },
+      "functionId": "fu-Fixture49326b70a18a"
+    },
+    "schedule": {
+      "autoscalerConfiguration": {
+        "settings": {
+          "maxContainers": 1,
+          "scaledownWindow": 60
+        },
+        "overrideEvents": {},
+        "defaultSettings": {
+          "scaledownWindow": 60
+        },
+        "staticSettings": {
+          "minContainers": 0,
+          "maxContainers": 1,
+          "bufferContainers": 0,
+          "scaledownWindow": 0
+        },
+        "overrideSettings": {}
+      }
+    }
+  }
+}

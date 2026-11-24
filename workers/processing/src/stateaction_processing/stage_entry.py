@@ -216,7 +216,8 @@ class _HttpIo:
 
     def segments_bytes(self) -> bytes:
         file_id = self.boot["segmentsFileId"]
-        plan = self.api.call("POST", f"outputs/{file_id}/read", {})
+        plan = self.api.call("POST", f"outputs/{file_id}/read?version=2", {})
+        self.segments_producer_job_id = plan.get("producerJobId", self.boot["jobId"])
         if plan.get("fileId") != file_id:
             raise StageFailure("segments_file_mismatch")
         request = urllib.request.Request(plan["readUrl"], method="GET")
@@ -432,7 +433,8 @@ def execute(
             segments_doc = parsed.value
             assert isinstance(segments_doc, dict)
             if (
-                segments_doc["job_id"] != boot["jobId"]
+                segments_doc["job_id"]
+                != getattr(io, "segments_producer_job_id", boot["jobId"])
                 or segments_doc["recording_id"] != task["targetId"]
                 or segments_doc["source_manifest_sha256"]
                 != task["sourceManifestSha256"]

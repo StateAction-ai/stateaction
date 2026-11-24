@@ -172,6 +172,7 @@ export async function seedAnnotations(
     log = () => {},
     source,
     scenarios,
+    afterSeed,
     rgbProfile = SIM,
   },
 ) {
@@ -731,9 +732,11 @@ export async function seedAnnotations(
         r.stages.some((x) => ["running", "submitting"].includes(x.state));
       let { stages, state } = await readRows();
       const settleStart = Date.now();
-      const taskResult = open({ stages })
-        ? JSON.stringify(task?.results ?? null).slice(0, 400)
-        : undefined;
+      const taskResult =
+        open({ stages }) ||
+        !["succeeded", "failed", "cancelled"].includes(state)
+          ? JSON.stringify(task?.results ?? null).slice(0, 400)
+          : undefined;
       while (open({ stages }) && Date.now() - settleStart < 30_000) {
         await sleep(250);
         ({ stages, state } = await readRows());
@@ -796,6 +799,20 @@ export async function seedAnnotations(
           `${rec.scenario}: unexpected outcome: ${mismatch} ${JSON.stringify({ settleMs: result.settleMs, taskResult: result.taskResult, serverLog: stack.logs().slice(-1500) })}`,
         );
       results.push(result);
+    }
+    if (afterSeed) {
+      await afterSeed(results, (recordingId, jobId) => {
+        const parent = recordings.find(
+          (recording) => recording.recordingId === recordingId,
+        );
+        if (!parent) throw new Error("Unknown seeded recording");
+        return runOne({
+          ...parent,
+          jobId,
+          scenario: "derived",
+          drive: undefined,
+        });
+      });
     }
     const stopRunner = () => {
       for (const p of procs)

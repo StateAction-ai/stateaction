@@ -7,6 +7,9 @@
  */
 import type { DagRunNode, DagRunV1 } from "@stateaction/contracts";
 import { RECIPE_STAGE_LABEL, stageHasFailedOutputs } from "./model.js";
+import type { DagRunWithLineage } from "../jobs/stages.js";
+
+type PipelineDagRun = DagRunV1 | DagRunWithLineage;
 import type { GpuRateType } from "../ops/cost.js";
 
 /** Accelerator memory by type: hardware facts for display, never prices. */
@@ -169,7 +172,7 @@ export function gpuUsdPerHour(
 }
 
 export function buildRunStages(
-  run: DagRunV1,
+  run: PipelineDagRun,
   rates?: Partial<Record<string, { amount: number }>>,
   diagnostics: Partial<Record<DagRunNode["stage"], DiagnosticLink[]>> = {},
   accepted: AnnotationCounts = null,
@@ -228,7 +231,7 @@ export function buildRunStages(
 }
 
 /** Wall time spans the earliest start to the latest finish of recorded stages. */
-export function runWallSeconds(run: DagRunV1): number | null {
+export function runWallSeconds(run: PipelineDagRun): number | null {
   const starts = run.stages.flatMap((n) =>
     n.startedAt ? [Date.parse(n.startedAt)] : [],
   );
@@ -245,7 +248,7 @@ export function runWallSeconds(run: DagRunV1): number | null {
  * stage receipts; failed counts are separate fields, never added to totals.
  */
 export function buildRunSummary(
-  run: DagRunV1,
+  run: PipelineDagRun,
   accepted: AnnotationCounts,
 ): RunSummary {
   const seg = run.stages.find((n) => n.stage === "segment");
@@ -273,9 +276,9 @@ export function buildRunSummary(
 }
 
 /** Pretty JSON for the dag-run panel, Copy and Download (the exact document). */
-export const dagRunJson = (run: DagRunV1): string =>
+export const dagRunJson = (run: PipelineDagRun): string =>
   JSON.stringify(run, null, 2);
-export const dagRunFilename = (run: DagRunV1): string =>
+export const dagRunFilename = (run: PipelineDagRun): string =>
   `dag-run-${run.jobId}.json`;
 
 /** List-page annotation counts; null fields render as an em dash. */

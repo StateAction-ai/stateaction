@@ -23,10 +23,10 @@ export function reviewLoader(): ReviewLoader {
   const reads = reviewReads();
   return {
     listRecordings: (userId) => reads.list(userId),
-    async load(userId, recordingId): Promise<ReviewBundle | null> {
+    async load(userId, recordingId, jobId): Promise<ReviewBundle | null> {
       let found;
       try {
-        found = await reads.load(userId, recordingId);
+        found = await reads.load(userId, recordingId, jobId);
       } catch (error) {
         // A coded failure (unreadable or invalid document, storage outage) is shown as such.
         const code = (error as { code?: unknown }).code;
@@ -52,11 +52,7 @@ export function reviewLoader(): ReviewLoader {
         video: extras.hasVideo
           ? {
               kind: "broker",
-              readPath:
-                "/api/v1/recordings/" +
-                recordingId +
-                "/reads?job=" +
-                annotations.job_id,
+              readPath: `/api/v1/recordings/${recordingId}/reads?run=${annotations.job_id}`,
             }
           : { kind: "none", reason: "This recording has no review video." },
         origin: "api",

@@ -839,7 +839,7 @@ Violation? _dagRun(Json doc) {
 }
 
 Violation? _recordingAnnotations(Json modules, Json doc) {
-  // Every present part names the document's job and recording (dag_run in camelCase).
+  // Artifact parts may retain producer job IDs. The DAG always names this job.
   const parts = [
     ('segments', 'job_id', 'recording_id'),
     ('captions', 'job_id', 'recording_id'),
@@ -848,8 +848,16 @@ Violation? _recordingAnnotations(Json modules, Json doc) {
   ];
   for (final (key, jobKey, recordingKey) in parts) {
     final part = doc[key];
-    if (part == null) continue;
-    if (_obj(part)[jobKey] != doc['job_id']) {
+    final producers = doc['producer_jobs'];
+    final hasProducer = producers != null && key != 'dag_run';
+    final expectedJob = hasProducer ? _obj(producers)[key] : doc['job_id'];
+    if (part == null) {
+      if (hasProducer && expectedJob != null) {
+        return _v('reference_mismatch', '/producer_jobs/$key');
+      }
+      continue;
+    }
+    if (_obj(part)[jobKey] != expectedJob) {
       return _v('reference_mismatch', '/$key/$jobKey');
     }
     if (_obj(part)[recordingKey] != doc['recording_id']) {

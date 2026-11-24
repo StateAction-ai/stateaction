@@ -294,6 +294,7 @@ class Clip:
     paths: dict[str, Path]  # file key -> path; reader methods verify bytes on use
     job_id: str
     _outputs: dict[str, _OutputIdentity] = field(default_factory=dict, repr=False)
+    _producer: tuple[str, str] | None = field(default=None, repr=False)
 
     @property
     def clip_id(self) -> str:
@@ -356,9 +357,10 @@ class Clip:
 
     def frame_map_document(self) -> dict[str, Any]:
         doc = json.loads(self._read_output("frame_map_json", _MAX_SIDECAR_BYTES))
+        job_id, clip_id = self._producer or (self.job_id, self.clip_id)
         _req(
-            doc["clip_id"] == self.clip_id
-            and doc["job_id"] == self.job_id
+            doc["clip_id"] == clip_id
+            and doc["job_id"] == job_id
             and doc["frame_count"] == self.frame_count == len(doc["rows"]),
             "E_FRAME_MAP_IDENTITY",
         )
@@ -388,9 +390,10 @@ class Clip:
         doc = json.loads(
             self._read_output("hand_observations_json", _MAX_SIDECAR_BYTES)
         )
+        job_id, clip_id = self._producer or (self.job_id, self.clip_id)
         _req(
-            doc["clip_id"] == self.clip_id
-            and doc["job_id"] == self.job_id
+            doc["clip_id"] == clip_id
+            and doc["job_id"] == job_id
             and doc["frame_count"] == self.frame_count,
             "E_HAND_JSON_IDENTITY",
         )
@@ -547,6 +550,10 @@ def open_result(
         manifest_contract = "artifacts.processing-result.v1"
     elif schema == "stateaction.processing_result.v2":
         manifest_contract = "artifacts.processing-result.v2"
+    elif schema == "stateaction.processing_result.v3":
+        manifest_contract = "artifacts.processing-result.v3"
+    elif schema == "stateaction.processing_result.v4":
+        manifest_contract = "artifacts.processing-result.v4"
     else:
         raise ArtifactError("E_CONTRACT_VIOLATION", "processing-result schema")
     validated = _contract_check(manifest_contract, data, required=require_contracts)
@@ -594,10 +601,33 @@ def open_result(
             found.add(rel)
     _req(found == set(listed), "E_OUTPUT_SET_MISMATCH", sorted(found ^ set(listed)))
     clips = []
+    reused_hand = manifest.get("reused_hand")
+    producers = {}
+    if schema == "stateaction.processing_result.v4":
+        mapping = reused_hand["clips"]
+        producers = {
+            item["clip_id"]: (reused_hand["job_id"], item["original_clip_id"])
+            for item in mapping
+        }
+        _req(
+            len(producers) == len(mapping)
+            and set(producers) == {meta["clip_id"] for meta in manifest["clips"]},
+            "E_CONTRACT_VIOLATION",
+            "invalid reused hand clip origins",
+        )
     for meta in manifest["clips"]:
         paths = {key: by_id[fid][0] for key, fid in meta["files"].items()}
         identities = {key: by_id[fid][1] for key, fid in meta["files"].items()}
-        clips.append(Clip(base, meta, paths, manifest["job_id"], identities))
+        clips.append(
+            Clip(
+                base,
+                meta,
+                paths,
+                manifest["job_id"],
+                identities,
+                producers.get(meta["clip_id"]),
+            )
+        )
     return Result(
         base, manifest, hashlib.sha256(data).hexdigest(), validated, tuple(clips)
     )

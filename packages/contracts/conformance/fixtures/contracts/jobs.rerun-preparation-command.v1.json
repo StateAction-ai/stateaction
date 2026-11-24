@@ -1,0 +1,26 @@
+{
+  "contract": "jobs.rerun-preparation-command.v1",
+  "cases": [
+    {
+      "name": "lease owner",
+      "input": {
+        "document": {
+          "owner": "lease-fixture-owner"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing lease owner",
+      "input": {
+        "document": {}
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

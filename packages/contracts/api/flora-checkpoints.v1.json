@@ -1,0 +1,16 @@
+{
+  "volumeName": "stateaction-models",
+  "volumeVersion": 2,
+  "checkpoints": {
+    "captioner": {
+      "checkpointId": "captioner-fef0bbfe-fp8_per_tensor-compressed-tensors-v1",
+      "manifestSha256": "77e6b9075f62c771441af50ac2d88ac92ea055d93fefd1e159194353420478a9",
+      "modelRevision": "fef0bbfe11829ca7f3539d58da7a6a2c2f109dc6"
+    },
+    "tempseg": {
+      "checkpointId": "tempseg-114a1076-fp8_per_tensor-compressed-tensors-v1",
+      "manifestSha256": "019d2e3a22183ef5a9c5cc9052a224bc978dadbb210320016ab98dc2c93ebcde",
+      "modelRevision": "114a1076f70eb53f4a58ac045505db3087e79347"
+    }
+  }
+}

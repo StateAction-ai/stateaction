@@ -42,16 +42,19 @@ const fail = (code: FailCode): PostResult => ({
   message: COPY[code],
 });
 
-export function apiMarksStore(recordingId: string): MarksStore {
+export function apiMarksStore(recordingId: string, jobId?: string): MarksStore {
   const base = `/api/v1/recordings/${encodeURIComponent(recordingId)}`;
   return {
     async load() {
-      const response = await fetch(`${base}/segment-marks`, {
-        credentials: "same-origin",
-        cache: "no-store",
-        redirect: "error",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+      const response = await fetch(
+        `${base}/segment-marks?version=2${jobId ? `&run=${encodeURIComponent(jobId)}` : ""}`,
+        {
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        },
+      );
       if (!response.ok) throw new Error(`marks failed: ${response.status}`);
       const body = (await response.json()) as { data: MarksListing };
       return {

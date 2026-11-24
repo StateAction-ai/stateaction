@@ -76,7 +76,7 @@ export function ReviewPage({
   const store = useMemo(
     () =>
       bundle.origin === "api"
-        ? apiMarksStore(recording.recordingId)
+        ? apiMarksStore(recording.recordingId, annotations.job_id)
         : memoryMarksStore(
             annotations.job_id,
             annotations.captions?.segments_sha256 ?? "0".repeat(64),
@@ -373,7 +373,7 @@ export function ReviewPage({
               bundle.video.kind === "broker"
                 ? "/api/v1/recordings/" +
                   recording.recordingId +
-                  "/hand-frames?job=" +
+                  "/hand-frames?run=" +
                   annotations.job_id
                 : null
             }

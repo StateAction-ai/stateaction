@@ -1,6 +1,7 @@
+import { rerunReason } from "../../lib/stage-rerun";
 import { Spinner } from "../ui/spinner";
 import Link from "next/link";
-import type { DagRunV1 } from "@stateaction/contracts";
+import type { DagRunV1, Stage } from "@stateaction/contracts";
 import { recipeHref } from "../../lib/recipe-view";
 import {
   AlertCircle,
@@ -16,6 +17,7 @@ import {
   type RunStageView,
 } from "@stateaction/server/pipeline";
 import { cn } from "../../lib/utils";
+import { StageRerunActions } from "./stage-rerun-actions";
 import { DiagnosticLink } from "./diagnostic-link";
 
 type State = RunStageView["displayState"];
@@ -63,9 +65,27 @@ const short = (sha: string) => `${sha.slice(0, 8)}…${sha.slice(-4)}`;
 export function RecipeStageList({
   stages,
   recipe,
+  recordingId,
+  jobId,
+  rerunDisabledReason,
+  handPoseRerunOnly,
+  reuse = [],
 }: {
   stages: RunStageView[];
   recipe: Pick<DagRunV1, "recipeId" | "jobId">;
+  recordingId?: string;
+  jobId?: string;
+  rerunDisabledReason?: string | undefined;
+  handPoseRerunOnly?: boolean;
+  reuse?: {
+    stage: Stage;
+    state: string;
+    sourceJobId: string;
+    executionJobId: string | null;
+    receipt: unknown;
+    importJobId: string | null;
+    importManifestSha256: string | null;
+  }[];
 }) {
   return (
     <ol
@@ -74,7 +94,9 @@ export function RecipeStageList({
       aria-label="Recipe stages"
     >
       {stages.map((s) => {
-        const Icon = ICON[s.displayState];
+        const origin = reuse.find((entry) => entry.stage === s.stage);
+        const reused = origin?.state === "succeeded";
+        const Icon = reused ? CircleDashed : ICON[s.displayState];
         return (
           <li
             key={s.stage}
@@ -104,10 +126,16 @@ export function RecipeStageList({
                 <span
                   className={cn(
                     "rounded-md px-2 py-0.5 text-xs font-semibold",
-                    BADGE[s.displayState],
+                    reused
+                      ? "bg-brand-soft text-brand-ink"
+                      : BADGE[s.displayState],
                   )}
                 >
-                  {s.stateLabel}
+                  {reused
+                    ? origin.importJobId
+                      ? "Reused · imported"
+                      : "Reused"
+                    : s.stateLabel}
                 </span>
                 {s.gpu ? (
                   <span className="rounded bg-field px-1.5 py-0.5 text-[11px] font-semibold text-muted">
@@ -115,6 +143,59 @@ export function RecipeStageList({
                   </span>
                 ) : null}
               </div>
+              {origin && recordingId ? (
+                <p className="m-0 mt-1.5 text-xs text-muted">
+                  {reused ? "Reused from " : "Inherited from "}
+                  <Link
+                    className="text-brand underline"
+                    href={`/pipeline/${recordingId}?run=${origin.sourceJobId}`}
+                  >
+                    run {origin.sourceJobId.slice(0, 8)}
+                  </Link>
+                </p>
+              ) : null}
+              {origin?.importManifestSha256 ? (
+                <p
+                  className="m-0 text-xs text-muted"
+                  title={origin.importManifestSha256}
+                >
+                  Import seal {short(origin.importManifestSha256)}
+                </p>
+              ) : null}
+              {origin?.receipt != null ? (
+                <details className="mt-1.5 text-xs">
+                  <summary>Original receipt</summary>
+                  <pre className="max-w-full overflow-x-auto">
+                    {JSON.stringify(origin.receipt, null, 2)}
+                  </pre>
+                </details>
+              ) : null}
+              {jobId && recordingId ? (
+                <StageRerunActions
+                  recordingId={recordingId}
+                  jobId={jobId}
+                  stage={s.stage}
+                  module={s.module}
+                  disabledReason={
+                    rerunDisabledReason ??
+                    (handPoseRerunOnly && s.stage !== "hand_pose"
+                      ? rerunReason("rerun_outside_admission_scope")
+                      : undefined) ??
+                    (!s.enabled
+                      ? "This stage was disabled in the parent recipe."
+                      : undefined)
+                  }
+                  {...(s.stage === "segment" &&
+                  stages.some(
+                    (stage) => stage.stage === "caption" && stage.enabled,
+                  )
+                    ? {
+                        onlyReason:
+                          "Caption depends on segmentation. Use Re-run from here.",
+                      }
+                    : {})}
+                />
+              ) : null}
               {s.state === "not_run" ? (
                 <p className="m-0 mt-1.5 text-[13px] text-muted">
                   <span

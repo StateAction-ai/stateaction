@@ -12,7 +12,7 @@ import {
 } from "./recovery.js";
 import type { JobsConfig } from "./config.js";
 import { requestJobCancel } from "./service.js";
-import { getDagRun } from "./stages.js";
+import { getDagRun, getDagRunWithLineage } from "./stages.js";
 
 /**
  * POST /api/v1/jobs/{jobId}/control (staff only): the real authenticated
@@ -143,7 +143,10 @@ export function jobDagRunRoutes(
       try {
         if (!UUID.test(jobId))
           throw new TransportError("not_found", "Job not found");
-        const data = await getDagRun({ pool: deps.pool }, jobId);
+        const data = await (new URL(request.url).searchParams.get("version") ===
+        "2"
+          ? getDagRunWithLineage({ pool: deps.pool }, jobId)
+          : getDagRun({ pool: deps.pool }, jobId));
         for (const [k, v] of Object.entries(JSON_HEADERS)) headers.set(k, v);
         return new Response(JSON.stringify({ data, requestId }), {
           status: 200,

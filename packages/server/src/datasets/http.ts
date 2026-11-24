@@ -204,6 +204,8 @@ type Query = {
   reviewStatus?: "pending" | "approved" | "rejected";
   recordingId?: string;
   expectedRevision?: number;
+  run?: string;
+  version?: "2";
 };
 function readQuery(request: Request, allowed: readonly (keyof Query)[]): Query {
   const out: Query = {};
@@ -226,6 +228,12 @@ function readQuery(request: Request, allowed: readonly (keyof Query)[]): Query {
       if (!["pending", "approved", "rejected"].includes(value))
         throw invalid("Invalid reviewStatus");
       out.reviewStatus = value as NonNullable<Query["reviewStatus"]>;
+    } else if (key === "run") {
+      if (!isUuid(value)) throw invalid("run must be a UUID");
+      out.run = value;
+    } else if (key === "version") {
+      if (value !== "2") throw invalid("Unsupported marks version");
+      out.version = value;
     } else if (key === "recordingId") {
       if (!isUuid(value)) throw invalid("recordingId must be a UUID");
       out.recordingId = value;
@@ -463,11 +471,14 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
       run(request, "member", (p) => read(p, request, pathId(clipId, "clipId"))),
     getSegmentMarks: (request: Request, recordingId: string) =>
       run(request, "staff", async (p) => {
-        readQuery(request, []);
+        const { version, run } = readQuery(request, ["version", "run"]);
+        const includeOrigins = version === "2";
         return {
           data: await getSegmentMarks(pool, {
             viewerUserId: p.userId,
             recordingId: pathId(recordingId, "recordingId"),
+            viewJobId: run ? pathId(run, "run") : undefined,
+            includeOrigins,
           }),
         };
       }),

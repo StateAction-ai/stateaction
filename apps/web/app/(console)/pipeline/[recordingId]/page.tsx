@@ -18,6 +18,8 @@ import {
 } from "@stateaction/server/pipeline";
 import { recipeHref } from "../../../../lib/recipe-view";
 import { requireConsoleSession } from "../../../../lib/server-session";
+import { RERUN_STAGE_LABEL, rerunReason } from "../../../../lib/stage-rerun";
+import { SelectResult } from "../../../../components/pipeline/select-result";
 import { Card, CardBody, CardHeader } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
 import { StatusBadge } from "../../../../components/pipeline/status-badge";
@@ -42,12 +44,20 @@ export default async function PipelineRecordingPage({
   const session = await requireConsoleSession(["staff"]);
   const recordingId = parseRecordingId((await params).recordingId);
   if (!recordingId) notFound();
-  const backQuery = pipelineQueryString(parsePipelineQuery(await searchParams));
+  const query = await searchParams;
+  const viewedRun =
+    typeof query.run === "string" ? parseRecordingId(query.run) : null;
+  if (query.run && !viewedRun) notFound();
+  const backQuery = pipelineQueryString(parsePipelineQuery(query));
   const back = backQuery ? `/pipeline?${backQuery}` : "/pipeline";
 
   let detail: PipelineDetail | null;
   try {
-    detail = await reads.detail(session.userId, recordingId);
+    detail = await reads.detail(
+      session.userId,
+      recordingId,
+      viewedRun ?? undefined,
+    );
   } catch (error) {
     console.error(
       "[pipeline] detail unavailable:",
@@ -65,7 +75,23 @@ export default async function PipelineRecordingPage({
     );
   }
   if (!detail) notFound();
-  const actions = await reads.actions(detail);
+  const [actions, history, rerunBlock] = await Promise.all([
+    reads.actions(detail),
+    reads.history(session.userId, recordingId),
+    detail.hasRecipe || detail.cachedImport
+      ? reads
+          .rerunBlock(session.userId, detail)
+          .catch(() => "rerun_unavailable")
+      : Promise.resolve(null),
+  ]);
+  const disabledReason = rerunBlock
+    ? rerunReason(
+        detail.cachedImport && rerunBlock === "recording_not_processable"
+          ? "import_source_unavailable"
+          : rerunBlock,
+      )
+    : undefined;
+  const canSelect = reads.selectionEnabled();
   let run: Awaited<ReturnType<typeof reads.recipeRun>> = null;
   try {
     run = await reads.recipeRun(detail);
@@ -89,6 +115,9 @@ export default async function PipelineRecordingPage({
     ? buildRunStages(run, reads.rates(), diagnostics, detail.annotations)
     : [];
   const summary = run ? buildRunSummary(run, detail.annotations) : null;
+  const reused = (run?.reuse ?? [])
+    .filter(({ state }) => state === "succeeded")
+    .map(({ stage }) => RERUN_STAGE_LABEL[stage]);
   const count = (n: number | null) => (n === null ? "—" : String(n));
   const guidance =
     actions.control.length > 0
@@ -112,6 +141,22 @@ export default async function PipelineRecordingPage({
         {detail.collector}
         {detail.source.size ? " · " + detail.source.size : ""}
       </p>
+
+      {run?.derivedFromJobId ? (
+        <p
+          className="mb-5 rounded-lg border border-[#d8e4fa] bg-brand-soft px-4 py-2 text-sm text-brand-ink"
+          data-testid="rerun-lineage"
+        >
+          <strong>Derived from</strong>{" "}
+          <Link
+            className="text-brand underline"
+            href={`/pipeline/${recordingId}?run=${run.derivedFromJobId}`}
+          >
+            run {run.derivedFromJobId.slice(0, 8)}
+          </Link>
+          {reused.length ? ` · Reused ${reused.join(", ")}` : null}
+        </p>
+      ) : null}
 
       {summary ? (
         <dl
@@ -168,12 +213,8 @@ export default async function PipelineRecordingPage({
         </dl>
       ) : null}
 
-      <div
-        className={
-          run ? "grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_420px]" : ""
-        }
-      >
-        <Card className="mb-5">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.62fr)]">
+        <Card className="min-w-0">
           <CardHeader className="flex items-center justify-between gap-3">
             <h2 className="m-0 text-base font-bold">
               {detail.cachedImport
@@ -199,18 +240,24 @@ export default async function PipelineRecordingPage({
           </CardHeader>
           <CardBody className="grid grid-cols-1 gap-4">
             {detail.cachedImport ? (
-              <ImportedStages cached={detail.cachedImport} />
+              <ImportedStages
+                cached={detail.cachedImport}
+                recordingId={recordingId}
+                jobId={detail.jobId}
+                disabledReason={disabledReason}
+              />
             ) : run ? (
-              <RecipeStageList stages={stages} recipe={run} />
+              <RecipeStageList
+                stages={stages}
+                recipe={run}
+                recordingId={recordingId}
+                jobId={run.jobId}
+                rerunDisabledReason={disabledReason}
+                handPoseRerunOnly={reads.handPoseRerunOnly()}
+                reuse={run.reuse}
+              />
             ) : (
               <StageList stages={detail.stages} />
-            )}
-            {detail.cachedImport ? null : (
-              <p className="m-0 text-xs text-muted">
-                {run
-                  ? "One row per recipe stage from the recorded stage runs. A stage that was never started shows not run with its reason. Failed windows and captions are recorded as failed, never as empty results. Costs are estimates. Processing completion is separate from human review."
-                  : "Stages are shown only from recorded evidence; a stage with no recorded evidence stays unknown. Processing completion is separate from human review."}
-              </p>
             )}
             {detail.error ? (
               <div
@@ -224,7 +271,8 @@ export default async function PipelineRecordingPage({
               <p className="m-0 text-sm text-muted">{detail.statusNote}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              {detail.reviewable ? (
+              {detail.reviewable ||
+              history.runs.some((entry) => entry.selected) ? (
                 <Button asChild>
                   <Link href={"/review/" + detail.id}>Open review</Link>
                 </Button>
@@ -244,14 +292,87 @@ export default async function PipelineRecordingPage({
             ) : null}
           </CardBody>
         </Card>
-        {run ? (
-          <Card className="mb-5 min-w-0">
-            <DagRunPanel
-              json={dagRunJson(run)}
-              filename={dagRunFilename(run)}
-            />
-          </Card>
-        ) : null}
+        <aside className="grid min-w-0 gap-5">
+          {history.runs.length > 0 ? (
+            <Card>
+              <section aria-labelledby="pipeline-run-history">
+                <CardHeader className="flex items-center justify-between gap-3">
+                  <h2
+                    id="pipeline-run-history"
+                    className="m-0 text-base font-bold"
+                  >
+                    Run history
+                  </h2>
+                  <span className="text-xs text-muted">This recording</span>
+                </CardHeader>
+                <CardBody>
+                  <ul className="m-0 list-none divide-y divide-line p-0 text-sm">
+                    {history.runs.map((item) => (
+                      <li
+                        key={item.jobId}
+                        className="grid gap-1.5 py-3 first:pt-0 last:pb-0"
+                        data-run-id={item.jobId}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            className="font-medium text-brand underline underline-offset-2"
+                            href={`/pipeline/${recordingId}?run=${item.jobId}`}
+                            aria-current={
+                              item.jobId === detail.jobId ? "page" : undefined
+                            }
+                          >
+                            Run {item.jobId.slice(0, 8)}
+                          </Link>
+                          <span className="rounded-full bg-field px-2 py-0.5 text-xs font-medium text-muted">
+                            {item.state.replaceAll("_", " ")}
+                          </span>
+                          {item.selected ? (
+                            <strong className="rounded-full bg-[#e9f6ef] px-2 py-0.5 text-xs text-good">
+                              Selected
+                            </strong>
+                          ) : null}
+                        </div>
+                        {item.parentId ? (
+                          <p className="m-0 text-xs text-muted">
+                            Derived from {item.parentId.slice(0, 8)}
+                          </p>
+                        ) : null}
+                        {!item.selected &&
+                        item.state === "succeeded" &&
+                        canSelect ? (
+                          <SelectResult
+                            recordingId={recordingId}
+                            jobId={item.jobId}
+                            sequence={history.selectionSeq}
+                            inPipeline
+                          />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                  {!history.runs.some((entry) => entry.selected) ? (
+                    <p className="m-0 mt-3 text-xs text-muted">
+                      No accepted result is selected.
+                    </p>
+                  ) : null}
+                  {!canSelect ? (
+                    <p className="m-0 mt-3 text-xs text-muted">
+                      Result selection is disabled in the read-only preview.
+                    </p>
+                  ) : null}
+                </CardBody>
+              </section>
+            </Card>
+          ) : null}
+          {run ? (
+            <Card className="min-w-0">
+              <DagRunPanel
+                json={dagRunJson(run)}
+                filename={dagRunFilename(run)}
+              />
+            </Card>
+          ) : null}
+        </aside>
       </div>
 
       <Card>

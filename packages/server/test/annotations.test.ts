@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { sha256Hex } from "@stateaction/contracts";
 import type pg from "pg";
 import { ObjectReadUnavailableError } from "../src/admission/object-reader.js";
 import {
@@ -29,20 +30,36 @@ const doc = (name: string) =>
     ),
   ).cases[0].input.document as Record<string, any>;
 
+const SOURCE_SHA256 = doc("artifacts.hand-presence.v1").source_manifest_sha256;
 type Files = Record<string, Uint8Array | Error>;
 const enc = (v: unknown) => new TextEncoder().encode(JSON.stringify(v));
 
 function fixture(files: Files, accepted = true, notSucceeded: string[] = []) {
-  const slots = Object.keys(files).map((slot) => ({
-    slot,
-    object_key: `k/${slot}`,
-    size_bytes: "10",
-    stage_not_succeeded: notSucceeded.includes(slot),
-  }));
+  const slots = Object.entries(files).map(([slot, entry]) => {
+    const bytes = entry instanceof Error ? new Uint8Array() : entry;
+    return {
+      slot,
+      object_key: `k/${slot}`,
+      size_bytes: String(bytes.byteLength),
+      sha256: sha256Hex(bytes),
+      producer_job_id: JOB,
+      stage_not_succeeded: notSucceeded.includes(slot),
+    };
+  });
   const pool = {
     async query(sql: string) {
       if (sql.includes("FROM recordings rec"))
-        return { rows: accepted ? [{ job_id: JOB, recording_id: REC }] : [] };
+        return {
+          rows: accepted
+            ? [
+                {
+                  job_id: JOB,
+                  recording_id: REC,
+                  source_manifest_sha256: SOURCE_SHA256,
+                },
+              ]
+            : [],
+        };
       if (sql.includes("FROM job_output_slots")) return { rows: slots };
       return { rows: [{ rows: [] }] }; // getDagRun: the job has no recipe
     },
@@ -93,11 +110,20 @@ test("a file left by a stage whose run did not succeed is not that stage's resul
   assert.deepEqual(read, ["k/hand-presence.json"]);
 });
 
-test("a file of another job or recording is refused", async () => {
-  const f = fixture({
-    "segments.json": enc({ ...doc("artifacts.segments.v1"), job_id: REC }),
-  });
-  await assert.rejects(load(f), /different job or recording/);
+test("files from another job, recording or source manifest are refused", async () => {
+  for (const foreign of [
+    { job_id: REC },
+    { recording_id: JOB },
+    { source_manifest_sha256: "b".repeat(64) },
+  ]) {
+    const f = fixture({
+      "hand-presence.json": enc({
+        ...doc("artifacts.hand-presence.v1"),
+        ...foreign,
+      }),
+    });
+    await assert.rejects(load(f), /different job or recording/);
+  }
 });
 
 test("invalid bytes are an error naming the contract, not an empty document", async () => {

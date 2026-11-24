@@ -70,7 +70,7 @@ export async function renameDatasetRecord(
 }
 
 /**
- * Adds approved clips from the recording's current accepted job. The batch is
+ * Adds approved clips from the recording's selected accepted job. The batch is
  * all-or-nothing and bounded. In a shared dataset the sharing guard (SAC05)
  * additionally requires every enabled recipient's active evidence to have
  * cleared each clip first.
@@ -100,14 +100,14 @@ export async function addDatasetMembers(
          SELECT 1 FROM clips c
          JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
          JOIN recordings rec ON rec.id = c.recording_id
-           AND rec.current_job_id = c.job_id AND rec.deleted_at IS NULL
+           AND coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id AND rec.deleted_at IS NULL
          WHERE c.id = u.id AND catalog_latest_decision(c.id) = 'approved')`,
       [clipIds],
     );
     if (rows.length)
       throw new CatalogError(
         "conflict",
-        "Only approved clips from the current accepted result can join a dataset",
+        "Only approved clips from the selected accepted result can join a dataset",
       );
     const inserted = await tx.query(
       `INSERT INTO dataset_clips (dataset_id, clip_id, added_by)

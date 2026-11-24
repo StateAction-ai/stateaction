@@ -123,6 +123,22 @@
     "http/dataset-clip.v2.schema.json": "3b5bbb0e6d18068190cfa148ccd83e5fd5a90521af346310c0f2a18ca140c039",
     "http/staff-clip-page.v2.schema.json": "6c9b7f69ac1d7bf910ab5faae8e7918d4ac676c3b3bed948351392d258256102",
     "http/dataset-page.v2.schema.json": "da7b726de9a820a6dc2e313eeadcbc4f8d31e6a41fd83046db0bf355184fa89d",
-    "http/dataset-clip-page.v2.schema.json": "c0792219e7c62f69ed553de6214d4b067ee570044c8577c39bb7c0ad3b801b41"
+    "http/dataset-clip-page.v2.schema.json": "c0792219e7c62f69ed553de6214d4b067ee570044c8577c39bb7c0ad3b801b41",
+    "flora-checkpoints.v1.json": "610948187a8b4be88d2580b9cb508bf8b014511093ca4f860a519f36f77d5ac2",
+    "catalog.v21.json": "65a5c15036b2fdf3dfc7d849830be127e3d7b9f96ac86c088c646cd817f889f8",
+    "http/stage-rerun-plan-request.v1.schema.json": "d0b135b749e03a79fa354e76db0c25c92fe65ad640411d04867526ab437033c8",
+    "http/stage-rerun-command.v1.schema.json": "8c94a517979ef85ce473b2ec41da309157a8f692196fc67fc60b5ec6b8c3f74d",
+    "http/stage-rerun-result.v1.schema.json": "0a1aec633239374f8a94552a5fb3af8eb896b618cc20b9f4f22629efdf6bde30",
+    "http/recording-result-selection-command.v1.schema.json": "34c7c52e945140ac06d33d4ea3d78815711c0f3fc0cb14d0c599328cee9dc6be",
+    "jobs/rerun-preparation-command.v1.schema.json": "aea92d15e83590b227f2c267e6bf8560c74d7000246ee75cde24f7ef87df1cbc",
+    "jobs/rerun-preparation.v1.schema.json": "52d9a03a30f90f2517455e5d1e8397e8719533ea626cd5acd9187188b9dfe84e",
+    "artifacts/processing-result.v4.schema.json": "ebd0bbfb4b61b7e9033d0f5d2653093a4619f6d7357f1c4ed4f69253494a1c1c",
+    "jobs/stage-input-read.v1.schema.json": "06e0c2370273587af36cb8de90a2aeba02c07e8f301e2000de3a46b23c5c3820",
+    "http/dag-run.v2.schema.json": "f246314a30ee89bc1d257c2dd0e2a8f297c6b0b40595c93d3e903505f9d26380",
+    "jobs/stage-receipt.v2.schema.json": "7a9516a7061cfeba4186a3be0b3813a304fcd6b1c74e4ca114a1df2291019dda",
+    "jobs/controller-action.v4.schema.json": "de193572364d589166fbf273f1a87febab24905c07a08f0ea1788d99c2adf752",
+    "http/stage-rerun-plan.v1.schema.json": "430a0c79c7ad77b91307694a38d2adfd736188e72bd21b0f6ccfc8c37548464c",
+    "http/segment-marks.v2.schema.json": "347028da73fba93295f695e6e15bd4125db86fa79ffe037582a4314dcd29adcf",
+    "http/recording-annotations.v3.schema.json": "8e0eefa098e8440eb612a4e76a31a0f621c3340e407ad037f319f6e31a9b87b1"
   }
 }

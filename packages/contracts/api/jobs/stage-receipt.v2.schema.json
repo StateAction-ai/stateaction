@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/stage-receipt.v2.json",
+  "title": "Stage receipt v2",
+  "description": "Controller-recorded Modal deployment evidence and the SHA-256 of the original v1 worker receipt. The original receipt fields retain their meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "stage",
+    "module",
+    "status",
+    "errorCode",
+    "outputs",
+    "counts",
+    "gpu",
+    "startedAt",
+    "finishedAt",
+    "providerBinding"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "stage": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+    },
+    "module": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed"]
+    },
+    "errorCode": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fileId", "role", "sizeBytes", "sha256"],
+        "properties": {
+          "fileId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "role": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/outputFileRole"
+          },
+          "sizeBytes": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+          },
+          "sha256": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 64
+    },
+    "counts": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requestedType", "observedType"],
+      "properties": {
+        "requestedType": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+        },
+        "observedType": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/observedGpu"
+        }
+      }
+    },
+    "startedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "finishedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "providerBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "functionId",
+        "definitionId",
+        "environment",
+        "appName",
+        "codeRevision",
+        "paramsSha256",
+        "definitionSha256",
+        "workerReceiptSha256"
+      ],
+      "properties": {
+        "functionId": {
+          "type": "string",
+          "pattern": "^fu-[A-Za-z0-9]{1,77}$"
+        },
+        "definitionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,100}$"
+        },
+        "appName": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,64}$"
+        },
+        "codeRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "paramsSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "definitionSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "workerReceiptSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

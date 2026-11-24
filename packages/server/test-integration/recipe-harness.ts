@@ -75,7 +75,9 @@ export const MODULES = {
   hand_pose: "hand_pose_cpu_v1@1",
 } as const;
 
-export function recipe(over: { captionEnabled?: boolean } = {}): RecipeV1 {
+type RecipeOptions = { captionEnabled?: boolean; maxJobCostUsd?: string };
+
+export function recipe(over: RecipeOptions = {}): RecipeV1 {
   const resources = {
     gpu: "none" as const,
     budgetSeconds: 600,
@@ -85,7 +87,7 @@ export function recipe(over: { captionEnabled?: boolean } = {}): RecipeV1 {
   return {
     schemaVersion: 1,
     recipeId: "stub_local@1",
-    maxJobCostUsd: "0.00",
+    maxJobCostUsd: over.maxJobCostUsd ?? "0.00",
     stages: [
       {
         stage: "segment",
@@ -126,7 +128,7 @@ export type Scenario = {
 
 /** A queued job admitted with a v3 task input (inline recipe) and a live lease. */
 export async function recipeJob(
-  over: { captionEnabled?: boolean } = {},
+  over: RecipeOptions = {},
   track: (db: AcceptanceDb) => void = () => {},
 ): Promise<Scenario> {
   const db = await acceptanceDatabase();
@@ -141,7 +143,7 @@ export async function recipeJob(
 export async function recipeJobOn(
   db: AcceptanceDb,
   { transport, accept }: { transport: TransportDeps; accept: AcceptanceDeps },
-  over: { captionEnabled?: boolean } = {},
+  over: RecipeOptions = {},
   runRef = "run-1",
 ): Promise<Scenario> {
   const { jobId, recordingId } = await queuedJob(db);
@@ -305,6 +307,7 @@ export function segmentsDoc(s: Scenario) {
   doc.job_id = s.jobId;
   doc.recording_id = s.recordingId;
   doc.source_manifest_sha256 = s.sourceManifestSha256;
+  doc.producer.params_sha256 = requestSha256(s.recipe.stages[0].params);
   for (const row of doc.rows)
     row.segment_id = segmentId(
       s.sourceManifestSha256,
@@ -332,6 +335,7 @@ export function captionsDoc(
   doc.producer = {
     ...doc.producer,
     module_id: "stub_captioner",
+    params_sha256: requestSha256(s.recipe.stages[1].params),
     model_name: "stub_captioner",
     model_revision: null,
     weights_sha256: null,

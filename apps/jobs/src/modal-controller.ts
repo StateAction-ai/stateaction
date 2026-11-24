@@ -1,3 +1,4 @@
+import type { ModalRerunBinding } from "@stateaction/contracts";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { DagRunNode, Stage } from "@stateaction/contracts";
 import {
@@ -60,6 +61,7 @@ export type ModalStage = {
   stage: Stage;
   module: string;
   budgetSeconds: number;
+  binding?: ModalRerunBinding;
   /** The server's recorded run of this stage (dag-run), or undefined when none is recorded. */
   node: DagRunNode | undefined;
   /** Job status read once by the recipe runner for this entry. */
@@ -68,6 +70,20 @@ export type ModalStage = {
 };
 
 const iso = (ms: number) => new Date(ms).toISOString();
+const GPU_WATCH_INTERVAL_MS = 15_000;
+
+type KnownGpuCall = { catalogId?: string; journal?: ModalJournal };
+
+const primaryGpuCall = (call: KnownGpuCall | undefined) =>
+  call?.catalogId ?? call?.journal?.callId;
+
+function rememberGpuCall(
+  call: KnownGpuCall | undefined,
+  journal: ModalJournal,
+) {
+  if (!call || !journal.callId || !CALL_ID.test(journal.callId)) return;
+  call.journal = journal;
+}
 
 export async function driveModal(
   deps: ModalDeps,
@@ -76,12 +92,93 @@ export async function driveModal(
   emit: Emit,
   stage?: ModalStage,
 ): Promise<Outcome> {
+  const gpu: KnownGpuCall | undefined =
+    stage?.binding && stage.binding.gpu !== "none" ? {} : undefined;
+  if (gpu && stage?.node?.callId && CALL_ID.test(stage.node.callId)) {
+    gpu.catalogId = stage.node.callId;
+  }
+  let outcome: Outcome;
+  try {
+    outcome = await driveModalCall(deps, id, lost, emit, stage, gpu);
+  } catch (error) {
+    const executionRef = primaryGpuCall(gpu);
+    if (!executionRef) throw error;
+    outcome = {
+      outcome: "needs_operator",
+      reason: "gpu_supervision_failed",
+      executionRef,
+    };
+  }
+
+  // A catalog ID and a journal ID are separate facts. An old acknowledgement
+  // or terminal result can exempt only the exact call it names.
+  const executionRef = primaryGpuCall(gpu);
+  if (!executionRef) return outcome;
+  const journal = gpu?.journal;
+  const journalRef = journal?.callId;
+  const failed: string[] = [];
+  for (const ref of new Set([executionRef, journalRef])) {
+    if (
+      !ref ||
+      (outcome.outcome === "call_terminal" && outcome.executionRef === ref) ||
+      (journalRef === ref &&
+        (journal?.phase === "terminal" || journal?.cancelRequestedAt))
+    )
+      continue;
+    try {
+      await deps.modal.cancel(ref);
+    } catch {
+      failed.push(ref);
+      emit("gpu_cancel_unconfirmed", { callId: ref });
+      continue;
+    }
+    emit("gpu_cancel_requested", { callId: ref });
+    if (journal?.phase === "submitted" && journalRef === ref) {
+      try {
+        deps.store.writeModal({
+          ...journal,
+          cancelRequestedAt: iso(Date.now()),
+          termination: "gpu_supervision_stopped",
+        });
+      } catch {
+        // By exact ID, a retried termination request is idempotent.
+      }
+    }
+  }
+  if (journalRef && journalRef !== executionRef) {
+    return {
+      outcome: "needs_operator",
+      reason: "execution_ref_mismatch",
+      executionRef,
+      conflictingExecutionRef: journalRef,
+      ...(failed.length ? { unconfirmedCancellationRefs: failed } : {}),
+    };
+  }
+  if (failed.length)
+    return {
+      outcome: "needs_operator",
+      reason: "gpu_cancel_unconfirmed",
+      executionRef,
+    };
+  if (outcome.outcome === "needs_operator" && !outcome.executionRef)
+    return { ...outcome, executionRef };
+  return outcome;
+}
+
+async function driveModalCall(
+  deps: ModalDeps,
+  id: Id,
+  lost: () => boolean,
+  emit: Emit,
+  stage: ModalStage | undefined,
+  gpu: KnownGpuCall | undefined,
+): Promise<Outcome> {
   const { settings, api, store, modal } = deps;
   const { jobId, owner } = id;
   const key = stage?.stage;
   const uncertain = (reason: string, ref?: string) =>
     stage
-      ? markStageUnknown(api, id, stage, reason, ref)
+      ? markStageUnknown(api, id, stage, reason, ref ?? primaryGpuCall(gpu))
       : markUnknown(api, id, reason, ref);
   const stageFields = (budgetFrom: number) =>
     stage
@@ -97,6 +194,7 @@ export async function driveModal(
   let journal: ModalJournal | undefined;
   try {
     journal = store.readModal(jobId, key);
+    if (journal) rememberGpuCall(gpu, journal);
   } catch (error) {
     if (!(error instanceof JournalCorrupt)) throw error;
     return uncertain("journal_corrupt");
@@ -121,6 +219,7 @@ export async function driveModal(
       executionRef: journal.callId,
     };
 
+  let issuedClaim = false;
   if (!journal) {
     if (known !== null) {
       // The server already holds a call (the worker claim or an earlier controller recorded it):
@@ -142,9 +241,12 @@ export async function driveModal(
         ...stageFields(
           stage?.node?.startedAt
             ? Date.parse(stage.node.startedAt)
-            : Date.now(),
+            : gpu
+              ? Date.now() - stage!.budgetSeconds * 1000
+              : Date.now(),
         ),
       };
+      rememberGpuCall(gpu, journal);
       store.writeModal(journal);
       emit("adopted_from_server");
     } else {
@@ -162,6 +264,7 @@ export async function driveModal(
       if (!("state" in sub) || sub.state !== "recorded")
         // Lost acknowledgement (or another controller): intent exists, the token is gone. NEVER spawn.
         return uncertain("intent_recorded_without_token");
+      issuedClaim = true;
       store.saveToken(jobId, sub.bootstrapToken, key);
       if (sub.executionBackend !== "modal") {
         store.discardToken(jobId, key);
@@ -189,9 +292,12 @@ export async function driveModal(
         callId: known,
         executionRecorded: true,
         ...(stage && journal.budgetDeadline === undefined
-          ? stageFields(Date.now())
+          ? stageFields(
+              gpu ? Date.now() - stage.budgetSeconds * 1000 : Date.now(),
+            )
           : {}),
       };
+      rememberGpuCall(gpu, journal);
       store.writeModal(journal);
       store.discardToken(jobId, key);
       emit("adopted_from_server");
@@ -219,6 +325,14 @@ export async function driveModal(
     );
     if (!token || Date.now() >= submitBy)
       return uncertain("no_token_or_deadline");
+    // Check a resumed intent before recording submission. The SDK rechecks at spawn.
+    if (
+      !issuedClaim &&
+      stage?.binding &&
+      !(await modal.checkFunction?.(stage.module, stage.binding))
+    ) {
+      return { outcome: "needs_operator", reason: "rerun_binding_unavailable" };
+    }
     if (stage) {
       // The server row goes BEFORE the local spawn mark: a lost answer re-enters at `intent`
       // (provably unspawned) and repeats this idempotent record instead of becoming uncertain.
@@ -261,6 +375,7 @@ export async function driveModal(
       callId = await modal.spawn(
         bootstrap,
         () => !lost() && Date.now() < submitBy,
+        stage?.binding,
       );
     } catch (error) {
       store.discardToken(jobId, key);
@@ -271,14 +386,18 @@ export async function driveModal(
       // An issued request can start a call even if its acknowledgement is lost.
       return uncertain("spawn_outcome_uncertain");
     }
-    store.discardToken(jobId, key);
-    if (!CALL_ID.test(callId)) return uncertain("invalid_call_id");
+    if (!CALL_ID.test(callId)) {
+      store.discardToken(jobId, key);
+      return uncertain("invalid_call_id");
+    }
     const submitted: ModalJournal = {
       ...journal,
       phase: "submitted",
       callId,
     };
+    rememberGpuCall(gpu, submitted);
     try {
+      store.discardToken(jobId, key);
       store.writeModal(submitted);
     } catch (error) {
       // Last resort to keep the identity durable somewhere: tell the server, then fail the task.
@@ -297,6 +416,7 @@ export async function driveModal(
       lost,
       emit,
       stage,
+      gpu,
     );
   }
 
@@ -308,6 +428,7 @@ export async function driveModal(
     lost,
     emit,
     stage,
+    gpu,
   );
 }
 
@@ -336,7 +457,8 @@ async function supervise(
   recovery: "spawned_by_this_run" | "adopted_from_journal",
   lost: () => boolean,
   emit: Emit,
-  stage?: ModalStage,
+  stage: ModalStage | undefined,
+  gpu: KnownGpuCall | undefined,
 ): Promise<Outcome> {
   const { settings, api, store, modal } = deps;
   let journal = start;
@@ -351,6 +473,16 @@ async function supervise(
     : undefined;
   let termination = journal.termination ?? "natural_exit";
   let lastStatus = 0;
+  let lastWatch = 0;
+  const gpuBinding = gpu ? stage!.binding : undefined;
+  const containers = new Set<string>();
+  const checkBudget = () => {
+    if (termination !== "natural_exit") return;
+    const now = Date.now();
+    if (now >= deadline) termination = "execution_deadline";
+    else if (budget !== undefined && now >= budget)
+      termination = "budget_exceeded";
+  };
   let graceUntil: number | undefined;
   let result: ModalRunResult | undefined =
     journal.phase === "terminal"
@@ -367,7 +499,8 @@ async function supervise(
       emit("lease_lost");
       return { outcome: "lease_lost", executionRef: callId };
     }
-    if (!journal.executionRecorded) {
+    checkBudget();
+    if (!journal.executionRecorded && termination === "natural_exit") {
       try {
         // Idempotent: `recorded:false` means the worker claim already set this same ID.
         await api.act(id.jobId, recordCall(id.owner, callId, stage));
@@ -390,17 +523,22 @@ async function supervise(
       }
     }
 
-    const seen = await modal.poll(callId);
-    if (seen.kind === "returned") {
-      const parsed = parseRunResult(seen.value, callId, expect);
-      if (parsed) {
-        result = parsed;
-        break;
+    if (
+      gpuBinding &&
+      termination === "natural_exit" &&
+      Date.now() - lastWatch >= GPU_WATCH_INTERVAL_MS
+    ) {
+      lastWatch = Date.now();
+      try {
+        if (!modal.watchGpuCall) throw new Error("GPU watchdog unavailable");
+        for (const container of await modal.watchGpuCall(callId, gpuBinding))
+          containers.add(container);
+        if (containers.size > 1) termination = "provider_container_restarted";
+      } catch {
+        termination = "gpu_watchdog_unavailable";
       }
-      // A value that is not our structured result for this call proves nothing.
-      emit("unexpected_result");
     }
-
+    checkBudget();
     if (
       termination === "natural_exit" &&
       Date.now() - lastStatus >= settings.renewIntervalMs
@@ -419,17 +557,7 @@ async function supervise(
         /* ambiguous status: keep supervising */
       }
     }
-    if (termination === "natural_exit" && Date.now() >= deadline)
-      termination = "execution_deadline";
-    // SA-91: the stage wall budget. Modal requeues a crashed container under the same call ID
-    // (retries=0 does not stop it), so an overrunning call is cancelled, never waited on forever.
-    if (
-      termination === "natural_exit" &&
-      budget !== undefined &&
-      Date.now() >= budget
-    )
-      termination = "budget_exceeded";
-
+    checkBudget();
     if (termination !== "natural_exit") {
       // A cancel is only a REQUEST. We keep polling for an observed terminal result for a finite
       // grace; without one the call stays uncertain and the admission slot stays held.
@@ -442,6 +570,7 @@ async function supervise(
             cancelRequestedAt: new Date().toISOString(),
             termination,
           };
+          rememberGpuCall(gpu, journal);
           store.writeModal(journal);
           emit("cancel_requested", { termination });
         } catch {
@@ -455,6 +584,18 @@ async function supervise(
           executionRef: callId,
         };
     }
+    const seen = await modal.poll(callId);
+    if (gpuBinding) checkBudget();
+    if (seen.kind === "returned") {
+      const parsed = parseRunResult(seen.value, callId, expect);
+      if (parsed) {
+        result = parsed;
+        break;
+      }
+      // A value that is not our structured result for this call proves nothing.
+      emit("unexpected_result");
+    }
+
     await sleep(settings.pollIntervalMs);
   }
 
@@ -466,6 +607,7 @@ async function supervise(
       termination,
       ...(stage && result.receipt ? { receipt: result.receipt } : {}),
     };
+    rememberGpuCall(gpu, journal);
     store.writeModal(journal);
     emit("call_terminal", { exitCode: result.exitCode });
   }

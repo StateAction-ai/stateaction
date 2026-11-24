@@ -1,5 +1,6 @@
 import "server-only";
 import type { CachedImport } from "../cached-import.js";
+import { publicVideoCanaryFromEnv } from "../admission/public-video-canary.js";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
 import { hostedDevProfile } from "../hosted-dev.js";
 import {
@@ -17,14 +18,14 @@ import {
 } from "../jobs/recovery.js";
 import type { JobControlCapabilities, PipelineQuery } from "./model.js";
 import { readFileSync } from "node:fs";
-import type {
-  DagRunV1,
-  Producer,
-  RecipeV1,
-  Stage,
-} from "@stateaction/contracts";
+import type { Producer, RecipeV1, Stage } from "@stateaction/contracts";
 import type { AnnotationCounts, DiagnosticLink } from "./run-view.js";
-import { getDagRun } from "../jobs/stages.js";
+import { recordingRunHistory } from "../jobs/result-selection.js";
+import { stageRerunBlock } from "../jobs/stage-reruns.js";
+import {
+  getDagRunWithLineage,
+  type DagRunWithLineage,
+} from "../jobs/stages.js";
 import { listJobDiagnostics } from "../jobs/diagnostics.js";
 import { readRateCard, type RateCard } from "../ops/cost.js";
 import { loadRecipeProducers } from "../annotations/annotations.js";
@@ -74,7 +75,7 @@ export type RecipeVisualization = {
   recipeSha256: string;
   recordingId: string;
   startedAt: string;
-  run: DagRunV1 | null;
+  run: DagRunWithLineage | null;
   acceptedCounts: AnnotationCounts;
   topology: "parallel" | "serial" | "unselected";
   closure: { closedAt: string; outcome: "succeeded" | "failed" } | null;
@@ -95,16 +96,34 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
     detail: (
       staffUserId: string,
       recordingId: string,
+      jobId?: string,
     ): Promise<PipelineDetail | null> =>
-      getPipelineDetail(get().pool, staffUserId, recordingId),
+      getPipelineDetail(get().pool, staffUserId, recordingId, jobId),
+    history: (staffUserId: string, recordingId: string) =>
+      recordingRunHistory(get().pool, staffUserId, recordingId),
+    selectionEnabled: () => hostedDevProfile()?.mode !== "read-only",
+    handPoseRerunOnly: () =>
+      publicVideoCanaryFromEnv(process.env) !== undefined,
+    rerunBlock: (staffUserId: string, detail: PipelineDetail) => {
+      if (hostedDevProfile()?.mode === "read-only")
+        return Promise.resolve("read_only");
+      if (!detail.jobId) return Promise.resolve("parent_unavailable");
+      const canary = publicVideoCanaryFromEnv(process.env);
+      return stageRerunBlock(get().pool, staffUserId, detail.id, detail.jobId, {
+        production: process.env.APP_ENV === "production",
+        ...(canary ? { publicVideoCanary: canary } : {}),
+      });
+    },
     /**
      * The job's recorded recipe run (stage runs + recipe), or null when the job
      * has no recipe. Stage runs are written by the stage runner (SA-91).
      */
-    recipeRun: async (detail: PipelineDetail): Promise<DagRunV1 | null> => {
+    recipeRun: async (
+      detail: PipelineDetail,
+    ): Promise<DagRunWithLineage | null> => {
       if (!detail.jobId || !detail.hasRecipe) return null;
       try {
-        return await getDagRun({ pool: get().pool }, detail.jobId);
+        return await getDagRunWithLineage({ pool: get().pool }, detail.jobId);
       } catch (error) {
         if (error instanceof TransportError && error.code === "not_found")
           return null;
@@ -136,6 +155,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
       } = await pool.query<{
         recipe: RecipeV1;
         recipe_sha256: string;
+        source_manifest_sha256: string;
         recording_id: string;
         started_at: Date;
         recipe_parallel: boolean;
@@ -147,7 +167,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
         caption_count: number | null;
         caption_failed_count: number | null;
       }>(
-        `SELECT j.recipe, j.recipe_sha256, j.recording_id, r.started_at,
+        `SELECT j.recipe, j.recipe_sha256, j.source_manifest_sha256, j.recording_id, r.started_at,
                 j.recipe_parallel, j.submission_intent_at IS NOT NULL AS submitted,
                 c.closed_at, c.outcome, j.segment_count, j.failed_window_count,
                 j.caption_count, j.caption_failed_count
@@ -158,7 +178,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
         [staffUserId, jobId, recipeId],
       );
       if (!snapshot) return null;
-      const run = showRun ? await getDagRun({ pool }, jobId) : null;
+      const run = showRun ? await getDagRunWithLineage({ pool }, jobId) : null;
       const producers = run?.stages.some((stage) => stage.state === "succeeded")
         ? await loadRecipeProducers(
             {
@@ -166,6 +186,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
               reader: s3ObjectReader(serverConfig(), { timeoutMs: 15_000 }),
             },
             run,
+            snapshot.source_manifest_sha256,
           )
         : {};
       const unknownReasons: Partial<Record<Stage, string>> = {};
