@@ -274,6 +274,11 @@ def run_bootstrap(
         except OSError:
             pass
         raise
+    from stateaction_processing.modal_result import call_binding
+
+    binding = call_binding(bootstrap)
+    if binding is not None:
+        result["callBinding"] = binding
     result["exitCode"] = max(-255, min(255, int(code)))
     if staged:
         result["schemaVersion"] = 2

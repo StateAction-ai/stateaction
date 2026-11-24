@@ -36,6 +36,51 @@ Source implementation of the Modal executor over the SAME `hand_pose_cpu_v1` Pyt
 - our poll timeout (`TimeoutError`), a remote function timeout (`FunctionTimeoutError`), a cancelled or failed call (`RemoteError`), `InternalFailure`, any other SDK error, a lost connection, a value that is not our structured result, or a result for another call. Exception class and message text are never terminal authority; the adapter tests `TimeoutError` before `FunctionTimeoutError` only to label diagnostics (the SDK's deprecated `instanceof` shim makes a poll timeout also an instance of `FunctionTimeoutError`).
 - `FunctionCall.cancel(terminateContainers=True)` is a **request**. After sending it the controller keeps polling for an observed structured result for `CONTROLLER_REAP_GRACE_MS`; without one it returns `needs_operator` (`call_not_provably_terminal_after_cancel`). Lease expiry, our deadline and a heartbeat are never proof.
 
+## Operator recovery after a lost spawn acknowledgement
+
+Recover the existing execution before retrying the job. The operator command
+uses the scoped controller capability, an operator's Modal credentials and
+`MIGRATION_DATABASE_URL` to check the original claim digest. Use a trusted
+operator shell configured for the workflow's API origin and Modal environment.
+
+1. Request cancellation using the existing job controls. Verify the exact job
+   is in `cancel_requested`; it still holds admission. Record the original
+   Render task run ID. Allow its controller lease to expire.
+2. Use the Modal function's [call history](https://modal.com/docs/cli/latest/function#modal-function-calls)
+   and the job's recorded intent window to identify the call ID. If more than
+   one possible call remains, keep the case open until the provider evidence
+   resolves the ambiguity. A missing call, timeout, cancellation response or
+   provider error supplies no proof.
+3. Run `pnpm --filter @stateaction/jobs recover-modal <job-id> --call <fc-id> --run <render-run-id>`.
+   For a recipe job, pass `--stage segment`, `--stage caption` or
+   `--stage hand_pose` for the issued stage. The command observes one Modal
+   result. If the job never recorded a call ID, the result must also carry
+   the wrapper's binding to this API origin, job, stage module and original claim. An older
+   deployed wrapper can recover only an already recorded call. A matching
+   result lets the command take the existing controller lease, attach the
+   exact call, and record terminal proof. It never starts another call or
+   sends a provider cancellation request.
+4. Reconcile the cancelled request using Pipeline controls or
+   `pnpm --filter @stateaction/server job-recovery reconcile <job-id> --expect cancel_requested`.
+   Confirm the job is `cancelled` and admission is free before retrying.
+   If the evidence response was lost, a recipe with an unsettled stage
+   remains in `cancel_requested`. Check status, let the lease expire, and repeat
+   the recovery command for the same call to settle the stage. The earlier job and its output prefix are kept.
+
+The binding is a SHA-256 digest of the API origin, job UUID, stage, module and
+SHA-256 of the original single-use claim token, joined with line feeds. The
+wrapper returns the binding only after the process group has ended. The
+command compares it with the binding derived from the immutable claim digest
+in Postgres. Neither the claim token nor its digest appears in the provider
+result or recovery output. The command reads the
+structured result from the authenticated Modal SDK and the application's
+recorded state. For an unknown call, use the intended workspace and the
+deployed StateAction function's history to locate the candidate ID.
+
+Deploy the controller version that reads the binding before enabling the new
+Modal wrappers. When rolling back, return the wrappers to their prior version
+before rolling back the controller. Keep dispatch disabled during the switch.
+
 ## Wrapper and image
 
 `modal_app.py` defines a finite CPU function: `cpu`/`memory` request=limit, `ephemeral_disk`, `timeout`, `retries=0`, `max_containers=1`, `min_containers=0`, `single_use_containers=True`, `nonpreemptible=True` (a preemption would otherwise restart the same input; it is billed at 3x CPU/RAM), `restrict_modal_access=True`, `secrets=[]`, no GPU. The wrapper's own deadline is below the Modal timeout so a hung CLI is killed and a result still returned. The sizing values (4 CPU, 8 GiB, 50 GiB scratch, 6 h timeout) are **candidate ceilings, not measured requirements**; no run has measured CPU, memory, scratch or duration, and they must be re-derived from a separately authorized canary. Budget note: `nonpreemptible=True` bills CPU and memory at 3x the list price (Modal documentation), so any spend estimate or workspace spend cap must include that premium; the ceilings above times the premium are an upper bound per call, not an expected cost. This source is **not qualified** and must not be called production-ready.

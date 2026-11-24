@@ -1,5 +1,6 @@
 """SA-94 stage function settings and the stage CLI wrapper (stdlib only, no GPU, no Modal)."""
 
+import hashlib
 import json
 import os
 import signal
@@ -158,10 +159,19 @@ class WrapperTests(unittest.TestCase):
             stub = self.python_stub(
                 Path(tmp),
                 f"json.dump(dict(argv=sys.argv[1:], stdin=json.loads(sys.stdin.read()), "
-                f"env=sorted(k for k in os.environ if k.startswith('MODAL_'))), open({str(record)!r}, 'w'))",
+                f"env=sorted(k for k in os.environ if k.startswith('MODAL_'))), open({str(record)!r}, 'w'))\n"
+                "print(json.dumps({'schemaVersion': 1, 'stage': 'segment', 'status': 'succeeded'}))",
             )
             result = stage_wrapper.run_stage_bootstrap(
-                json.dumps({"stage": "segment", "module": "flora_tempseg_vllm_fp8@1"}),
+                json.dumps(
+                    {
+                        "apiUrl": "https://api.example.com",
+                        "jobId": "00573d25-ffa0-4a3f-b1e2-134080fb58fb",
+                        "stage": "segment",
+                        "module": "flora_tempseg_vllm_fp8@1",
+                        "bootstrapToken": "synthetic-bootstrap",
+                    }
+                ),
                 CALL,
                 deadline_s=30,
                 python=stub,
@@ -169,7 +179,21 @@ class WrapperTests(unittest.TestCase):
             )
             seen = json.loads(record.read_text())
         self.assertEqual(
-            result, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            result,
+            {
+                "schemaVersion": 2,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "receipt": {
+                    "schemaVersion": 1,
+                    "stage": "segment",
+                    "status": "succeeded",
+                },
+                "callBinding": hashlib.sha256(
+                    b"https://api.example.com\n00573d25-ffa0-4a3f-b1e2-134080fb58fb\nsegment\nflora_tempseg_vllm_fp8@1\n"
+                    + hashlib.sha256(b"synthetic-bootstrap").hexdigest().encode()
+                ).hexdigest(),
+            },
         )
         self.assertEqual(
             seen["argv"], ["-m", "stateaction_processing", "run-stage", CALL]

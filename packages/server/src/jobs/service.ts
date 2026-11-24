@@ -758,6 +758,24 @@ export async function recordExecutionEvidence(
       [jobId],
     );
     if (!rows[0]) throw new TransportError("not_found", "Job not found");
+    if (!rows[0].recipe && ev.kind === "provider_call_terminal") {
+      const { rows: prior } = await tx.query<{
+        kind: string;
+        execution_ref: string | null;
+      }>(
+        "SELECT kind, execution_ref FROM job_execution_evidence WHERE job_id = $1",
+        [jobId],
+      );
+      if (prior[0]) {
+        if (prior[0].kind !== ev.kind || prior[0].execution_ref !== ref)
+          throw conflict("A different termination proof is already recorded");
+        const held = await tx.query(
+          "SELECT 1 FROM dispatch_admission WHERE slot = 1 AND job_id = $1",
+          [jobId],
+        );
+        return { recorded: true, slotReleased: held.rowCount === 0 } as const;
+      }
+    }
     // SA-88 recipe job: the proof first names the exact call of one stage
     // (job_stage_evidence). It is also the job's terminal evidence only when
     // that stage is the latest issued and no later stage can still run (the
