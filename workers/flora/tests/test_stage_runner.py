@@ -86,6 +86,7 @@ class SettingsTests(unittest.TestCase):
         for forbidden in ("fixtures", "smoke", "STATEACTION_IO_DIR_HARNESS", "dry_run"):
             self.assertNotIn(forbidden, code, forbidden)
         self.assertIn("stage_settings.function_options(name)", src)
+        self.assertIn('{"/models": models.read_only()}', code)
 
     def test_image_dependencies_are_pinned(self):
         src = (HERE.parents[1] / "modal_stage.py").read_text()
@@ -153,12 +154,14 @@ class WrapperTests(unittest.TestCase):
         return str(script)
 
     def test_bootstrap_gets_call_id_and_executor_and_goes_to_stdin_only(self):
+        receipt = {"schemaVersion": 1, "stage": "segment"}
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "record.json"
             stub = self.python_stub(
                 Path(tmp),
                 f"json.dump(dict(argv=sys.argv[1:], stdin=json.loads(sys.stdin.read()), "
-                f"env=sorted(k for k in os.environ if k.startswith('MODAL_'))), open({str(record)!r}, 'w'))",
+                f"env=sorted(k for k in os.environ if k.startswith('MODAL_'))), open({str(record)!r}, 'w'))\n"
+                f"json.dump({receipt!r}, open(os.environ['STATEACTION_STAGE_RECEIPT_FILE'], 'x'))",
             )
             result = stage_wrapper.run_stage_bootstrap(
                 json.dumps({"stage": "segment", "module": "flora_tempseg_vllm_fp8@1"}),
@@ -169,7 +172,13 @@ class WrapperTests(unittest.TestCase):
             )
             seen = json.loads(record.read_text())
         self.assertEqual(
-            result, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            result,
+            {
+                "schemaVersion": 2,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "receipt": receipt,
+            },
         )
         self.assertEqual(
             seen["argv"], ["-m", "stateaction_processing", "run-stage", CALL]
@@ -210,7 +219,15 @@ class WrapperTests(unittest.TestCase):
                 "{}", CALL, deadline_s=1.5, python=stub, reap_grace_s=10
             )
             elapsed = time.monotonic() - started
-            self.assertEqual(result["exitCode"], -signal.SIGKILL)
+            self.assertEqual(
+                result,
+                {
+                    "schemaVersion": 2,
+                    "functionCallId": CALL,
+                    "exitCode": -signal.SIGKILL,
+                    "receipt": None,
+                },
+            )
             self.assertLess(elapsed, 20)
             pid = int(pidfile.read_text())
             # A killed orphan may stay a zombie until its subreaper waits for it (as in a service scope),

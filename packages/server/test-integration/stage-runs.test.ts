@@ -42,7 +42,7 @@ import {
   uploadOutput,
   type AcceptanceDb,
 } from "./acceptance-harness.js";
-import { writeArtifact } from "./harness.js";
+import { createActors, writeArtifact } from "./harness.js";
 import { JOBS_CONFIG, nonce, queuedJob } from "./jobs-harness.js";
 
 /**
@@ -378,6 +378,62 @@ test("recipe admission stores the recipe once and dag-run renders every stage", 
     "conflict",
   );
   evidence.dagDisabled = dag.stages;
+});
+
+test("segment claims sign only their job's source inventory across recording owners", async () => {
+  const s = await recipeJob();
+  const other = await queuedJob({
+    app: s.db.app,
+    actors: await createActors(s.db.owner),
+  });
+  const issued = await issueStageClaim(s.deps, {
+    jobId: s.jobId,
+    owner: s.ctl,
+    stage: "segment",
+  });
+  assert.equal(issued.state, "recorded");
+  assert.ok("bootstrapToken" in issued);
+  const signed: string[] = [];
+  const deps = {
+    ...s.deps,
+    presignRead: async (key: string, ttl: number) => {
+      signed.push(key);
+      return s.deps.presignRead(key, ttl);
+    },
+  };
+  const claim = {
+    bootstrapToken: issued.bootstrapToken,
+    invocationNonce: nonce(),
+    executor: { kind: "local", localExecutionRef: "sa85-segment" } as const,
+  };
+
+  assert.equal(
+    await code(claimStage(deps, { ...claim, jobId: other.jobId })),
+    "conflict",
+  );
+  assert.deepEqual(signed, []);
+
+  const grant = await claimStage(deps, { ...claim, jobId: s.jobId });
+  const files = await s.db.owner.query<{ id: string; object_key: string }>(
+    "SELECT id, object_key FROM files WHERE recording_id = $1 ORDER BY id",
+    [s.recordingId],
+  );
+  assert.ok(files.rows.length > 0);
+  assert.deepEqual(
+    signed,
+    files.rows.map((row) => row.object_key),
+  );
+  assert.deepEqual(
+    grant.inputs.map((input) => input.fileId),
+    files.rows.map((row) => row.id),
+  );
+  assert.equal(grant.digests.sourceManifestSha256, s.sourceManifestSha256);
+  assert.ok(
+    grant.inputs.every(
+      (input) =>
+        Date.parse(input.expiresAt) <= Date.parse(grant.executionDeadline),
+    ),
+  );
 });
 
 test("stage claims: own nonce and token per stage, replay and second claim rejected, recipe order", async () => {
