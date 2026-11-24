@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { after, before, describe, test } from "node:test";
 import pg from "pg";
-import { validateValue, type InventoryFile } from "@stateaction/contracts";
+import {
+  requestSha256,
+  validateValue,
+  type InventoryFile,
+} from "@stateaction/contracts";
 import {
   createProcessingJob,
   recordFileCompleted,
@@ -28,6 +32,14 @@ import {
   revokeIngestPermission,
 } from "../src/admission/permissions.js";
 import type { AuthenticateCollector } from "../src/admission/http.js";
+import {
+  PUBLIC_VIDEO_LABEL,
+  PUBLIC_VIDEO_RECIPE,
+} from "../src/admission/public-video-canary.js";
+import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
+import { admitNextJob, listPendingDispatches } from "../src/jobs/service.js";
+import { failUndispatched, retryJob } from "../src/jobs/recovery.js";
+import { JOBS_CONFIG } from "./jobs-harness.js";
 import {
   createActors,
   expectCode,
@@ -146,6 +158,18 @@ type Scenario = {
   seal: { files: InventoryFile[] };
 };
 
+const publicVideoSimulation = {
+  schema: "stateaction.simulation_provenance.v1",
+  qualification: "simulation_only",
+  mappedTimelineSemantics: "simulation_transport_only",
+  productionQualified: false,
+  provenance: {
+    camera: { status: "known", label: PUBLIC_VIDEO_LABEL },
+    encoder: { status: "unknown" },
+    clock: { status: "unknown" },
+  },
+};
+
 /**
  * Registers through SA-19, reserves the logical source files through the
  * SA-13 catalog (the SA-20 transport is not exercised) and builds an exact
@@ -158,13 +182,28 @@ async function scenario(
     mutate?: (doc: Record<string, unknown>) => void;
     calibration?: boolean;
     rawManifest?: (doc: Record<string, unknown>) => Uint8Array;
+    publicVideo?: boolean;
   } = {},
 ): Promise<Scenario> {
   const clientRecordingId = randomUUID();
+  const canary = {
+    ownerUserId: owner,
+    clientRecordingId,
+    sourceSha256: sha("pending"),
+  };
   const { recording } = await registerRecording(
-    deps,
+    options.publicVideo
+      ? { ...deps, config: { ...deps.config, publicVideoCanary: canary } }
+      : deps,
     { userId: owner },
-    createBody(clientRecordingId),
+    options.publicVideo
+      ? {
+          ...createBody(clientRecordingId),
+          schema: "stateaction.recording_create.v2",
+          rgbProfile: "h264_mcap_simulation_v1",
+          simulation: publicVideoSimulation,
+        }
+      : createBody(clientRecordingId),
   );
   const recordingId = recording.recordingId;
   const files: Scenario["files"] = [];
@@ -222,6 +261,17 @@ async function scenario(
     collection_permission_ref: permissionRef.get(owner) ?? "none",
     source_verification: "pending",
   };
+  if (options.publicVideo) {
+    doc.schema = "stateaction.recording_source.v2";
+    doc.rgb_profile = "h264_mcap_simulation_v1";
+    doc.simulation = {
+      schema: publicVideoSimulation.schema,
+      qualification: publicVideoSimulation.qualification,
+      mapped_timeline_semantics: publicVideoSimulation.mappedTimelineSemantics,
+      production_qualified: publicVideoSimulation.productionQualified,
+      provenance: publicVideoSimulation.provenance,
+    };
+  }
   options.mutate?.(doc);
   const manifest = options.rawManifest
     ? options.rawManifest(doc)
@@ -294,6 +344,163 @@ const admissionOf = async (recordingId: string) =>
       [recordingId],
     )
   ).rows[0];
+
+test("a hosted public-video recipe binds the collector, client id and source bytes", async (t) => {
+  const s = await scenario(actors.collector, { publicVideo: true });
+  const canary = {
+    ownerUserId: s.owner,
+    clientRecordingId: s.clientRecordingId,
+    sourceSha256: s.files.find((f) => f.role === "source_mcap")!.sha256,
+  };
+  const jobs = {
+    pool: db.app,
+    config: {
+      ...JOBS_CONFIG,
+      executionBackend: "modal" as const,
+      production: true,
+    },
+    presignRead: async () => "https://example.test",
+  };
+  const scopedJobs = {
+    ...jobs,
+    config: { ...jobs.config, publicVideoCanary: canary },
+  };
+  const registration = {
+    ...createBody(s.clientRecordingId),
+    schema: "stateaction.recording_create.v2",
+    rgbProfile: "h264_mcap_simulation_v1",
+    simulation: publicVideoSimulation,
+  };
+  const scoped = {
+    ...deps,
+    config: { ...deps.config, publicVideoCanary: canary },
+  };
+  await expectCode(
+    registerRecording(scoped, { userId: second }, registration),
+    "forbidden",
+  );
+  await expectCode(
+    registerRecording(
+      scoped,
+      { userId: s.owner },
+      { ...registration, clientRecordingId: randomUUID() },
+    ),
+    "forbidden",
+  );
+  for (const file of s.files) await complete(s, file.role);
+  const wrongBytes = {
+    ...scoped,
+    config: {
+      ...scoped.config,
+      publicVideoCanary: { ...canary, sourceSha256: sha("wrong") },
+    },
+  };
+  const sealed = await sealRecordingInventory(
+    wrongBytes,
+    { userId: s.owner },
+    s.recordingId,
+    s.seal,
+  );
+  assert.deepEqual(sealed.admission, {
+    state: "deferred",
+    code: "profile_unsupported",
+  });
+  assert.deepEqual(await admitNextJob(scopedJobs), { state: "idle" });
+  const ready = await admitRecording(scoped, s.recordingId);
+  assert.equal(ready.state, "admitted");
+  if (ready.state !== "admitted") return;
+  const abandon = () =>
+    failUndispatched(
+      {
+        ...scopedJobs,
+        config: { ...scopedJobs.config, repair: { dispatchWindowSeconds: 0 } },
+      },
+      { recordedBy: "public-video-test", limit: 1, jobId: ready.jobId },
+    );
+  t.after(async () => {
+    await abandon();
+  });
+  const started = await admitNextJob(scopedJobs);
+  assert.equal(started.state, "admitted");
+  if (started.state !== "admitted") return;
+  assert.equal(started.job.jobId, ready.jobId);
+  assert.equal(
+    started.job.executionDeadline.getTime() - started.job.admittedAt.getTime(),
+    5_000_000,
+  );
+  const input = await db.app.query(
+    "SELECT task_input FROM job_inputs WHERE job_id = $1",
+    [ready.jobId],
+  );
+  assert.deepEqual(input.rows[0]?.task_input.recipe, PUBLIC_VIDEO_RECIPE);
+  assert.deepEqual(input.rows[0]?.task_input.simulation, publicVideoSimulation);
+  assert.deepEqual(await listPendingDispatches(jobs), [
+    { jobId: ready.jobId, dispatchKey: started.job.dispatchKey },
+  ]);
+  assert.deepEqual(await abandon(), [ready.jobId]);
+  await assert.rejects(
+    retryJob(scopedJobs, { jobId: ready.jobId, expectedState: "failed" }),
+    /canary_one_attempt/,
+  );
+  assert.equal((await jobsOf(s.recordingId)).length, 1);
+});
+test("a public-video job keeps its retry fence after the recipe budgets change", async (t) => {
+  const s = await scenario(actors.collector, { publicVideo: true });
+  for (const file of s.files) await complete(s, file.role);
+  const { admission } = await sealRecordingInventory(
+    {
+      ...deps,
+      config: {
+        ...deps.config,
+        publicVideoCanary: {
+          ownerUserId: s.owner,
+          clientRecordingId: s.clientRecordingId,
+          sourceSha256: s.files.find((file) => file.role === "source_mcap")!
+            .sha256,
+        },
+      },
+    },
+    { userId: s.owner },
+    s.recordingId,
+    s.seal,
+  );
+  assert.equal(admission.state, "admitted");
+  if (admission.state !== "admitted") return;
+
+  const recipe = { ...PUBLIC_VIDEO_RECIPE, maxJobCostUsd: "5.00" };
+  const input = await processRecordingTaskInputV2(db.app, admission.jobId);
+  const jobs = {
+    pool: db.app,
+    config: { ...JOBS_CONFIG, repair: { dispatchWindowSeconds: 0 } },
+    presignRead: async () => "https://example.test",
+    taskInput: async () => ({
+      ...input,
+      schemaVersion: 3,
+      recipe,
+      recipeSha256: requestSha256(recipe),
+    }),
+  };
+  const abandon = () =>
+    failUndispatched(jobs, {
+      recordedBy: "public-video-test",
+      limit: 1,
+      jobId: admission.jobId,
+    });
+  t.after(async () => {
+    await abandon();
+  });
+  const started = await admitNextJob(jobs);
+  assert.equal(started.state, "admitted");
+  if (started.state !== "admitted") return;
+  assert.equal(started.job.jobId, admission.jobId);
+  assert.deepEqual(await abandon(), [admission.jobId]);
+  await assert.rejects(
+    retryJob(jobs, { jobId: admission.jobId, expectedState: "failed" }),
+    /canary_one_attempt/,
+  );
+  assert.equal((await jobsOf(s.recordingId)).length, 1);
+});
+
 const settle = async <T>(work: Promise<T>[]) => {
   const results = await Promise.allSettled(work);
   return {

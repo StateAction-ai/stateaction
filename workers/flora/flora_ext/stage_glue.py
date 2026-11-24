@@ -90,7 +90,7 @@ def parse_params(stage: str, engine: str, params: dict[str, Any]) -> dict[str, A
     if stage == "segment":
         if params.get("grid_profile", GRID["profile"]) != GRID["profile"]:
             raise StageError("params_invalid")
-        # 64 is the vendor ceiling; scaling the repair cap for hour-scale input is F01.
+        # A recipe can set a lower ceiling than the vendor's limit of 64.
         out["repair_budget"] = _int(
             "repair_budget", params.get("repair_budget", 64), 1, 64
         )
@@ -393,6 +393,10 @@ def _adapter_error(exc: StageError) -> StageError:
 def run_segment(ctx: StageContext, engine: str) -> ModuleOutput:
     runtime = _runtime()
     params, ckpt, gpu = _prepare(ctx, engine, "tempseg", "segment")
+    # Size the shared repair budget by the number of 12-second timeline cores.
+    # The remux supplies nonempty PTS starting at zero for the whole recording.
+    timeline_cores = 1 + ctx.frames.pts_us[-1] // (GRID["core_s"] * 1_000_000)
+    params["repair_budget"] = min(params["repair_budget"], timeline_cores)
     work = ctx.scratch / "tempseg"
     shutil.rmtree(work, ignore_errors=True)
     try:

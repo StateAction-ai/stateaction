@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from stage_helpers import make_ctx
+from stage_helpers import make_ctx, synthetic_frames
 from stateaction_contracts import validate_value
 
 from stateaction_processing import modules
@@ -370,10 +370,13 @@ class GpuAndErrorTests(unittest.TestCase):
 
 
 class SegmentModuleTests(unittest.TestCase):
-    def run_segment(self, native=None, engine="vllm", params=None, **fake):
+    def run_segment(self, native=None, engine="vllm", params=None, frames=None, **fake):
         runtime = FakeRuntime(native, **fake)
         module = "flora_tempseg_vllm_fp8" if engine == "vllm" else "flora_tempseg_hf"
-        ctx = flora_ctx("segment", module, params=params)
+        scratch = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        ctx = dataclasses.replace(
+            flora_ctx("segment", module, params=params, frames=frames), scratch=scratch
+        )
         patches = [mock.patch.object(stage_glue, "_runtime", return_value=runtime)]
         if engine == "vllm":
             patches.append(
@@ -412,11 +415,11 @@ class SegmentModuleTests(unittest.TestCase):
                 decoding["repair_batch_size"],
                 decoding["repair_budget"],
             ),
-            (8, 1, 64),
+            (8, 1, 1),
         )
         self.assertEqual(decoding["quant_format"], "compressed-tensors")
         self.assertIn("gdn_prefill=triton", decoding["kernel_set"])
-        self.assertEqual(runtime.calls, [("tempseg_vllm", CKPT["dir"], 8, 64)])
+        self.assertEqual(runtime.calls, [("tempseg_vllm", CKPT["dir"], 8, 1)])
         self.assertEqual(out.observed_gpu, SMI)
         self.assertEqual(
             (out.counts["cold_load_ms"], out.counts["gpu_ms"]), (204000, 31500)
@@ -426,6 +429,35 @@ class SegmentModuleTests(unittest.TestCase):
         self.assertNotIn("dir", blob["checkpoint"])
         self.assertEqual(blob["timing"]["cold_load_s"], 204.0)
         self.assertIn("native_segments.json", out.extra_diagnostics)
+
+    def test_repair_cap_uses_the_full_frame_timeline_and_configured_ceiling(self):
+        for duration_s, configured, expected in (
+            (12, 64, 1),
+            (13, 64, 2),
+            (299, 64, 25),
+            (600, 64, 50),
+            (600, 10, 10),
+            (1697, 64, 64),
+        ):
+            for engine in ("vllm", "hf"):
+                with self.subTest(
+                    duration_s=duration_s, configured=configured, engine=engine
+                ):
+                    frames = synthetic_frames(count=duration_s * 10, step_us=100_000)
+                    native = native_segments()
+                    native["source"]["frames"] = len(frames)
+                    native["source"]["duration_s"] = duration_s
+                    _, runtime, out = self.run_segment(
+                        native=native,
+                        engine=engine,
+                        params={"repair_budget": configured},
+                        frames=frames,
+                    )
+                    self.assertEqual(runtime.calls[0][-1], expected)
+                    self.assertEqual(
+                        out.document["producer"]["decoding_params"]["repair_budget"],
+                        expected,
+                    )
 
     def test_native_seconds_are_kept_so_captions_can_use_the_native_span(self):
         _ctx, _rt, out = self.run_segment()

@@ -48,6 +48,10 @@ ENV = {
     "PYTHONNOUSERSITE": "1",
     "STATEACTION_CAPTURE_CONTRACT_DIR": f"{APP_ROOT}/packages/contracts/capture",
     "PYTHONPATH": f"/root:{APP_ROOT}/workers/processing/src:{APP_ROOT}/packages/contracts/python/src",
+    **{
+        env_key: str(stage_settings.budget_s(name))
+        for name, env_key in stage_settings.BUDGET_ENV.items()
+    },
 }
 
 # One image for every stage module: vLLM (fp8 restore) and the HF reference stack, FLORA cloned at the

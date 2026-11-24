@@ -531,14 +531,23 @@ def build_mcap(src: Source, recording_id: str) -> bytes:
 
 
 def convert(
-    mp4: Path, out: Path, *, reencode: str = "auto", camera_label: str = "WGO-Bench"
+    mp4: Path,
+    out: Path,
+    *,
+    reencode: str = "auto",
+    camera_label: str = "WGO-Bench",
+    recording_id: uuid.UUID | None = None,
 ) -> dict[str, object]:
     h = hashlib.sha256()
     with mp4.open("rb") as f:
         while chunk := f.read(16 << 20):
             h.update(chunk)
     src = read_source(mp4, reencode)
-    rid = recording_id_for(h.hexdigest())
+    rid = (
+        str(recording_id)
+        if recording_id is not None
+        else recording_id_for(h.hexdigest())
+    )
     data = build_mcap(src, rid)
     out.write_bytes(data)
     mk = marker(camera_label)
@@ -570,9 +579,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("out", type=Path)
     p.add_argument("--reencode", choices=("auto", "never", "always"), default="auto")
     p.add_argument("--camera-label", default="WGO-Bench")
+    p.add_argument(
+        "--recording-id", type=uuid.UUID, help="explicit fixture recording UUID"
+    )
     a = p.parse_args(argv)
     try:
-        conv = convert(a.mp4, a.out, reencode=a.reencode, camera_label=a.camera_label)
+        conv = convert(
+            a.mp4,
+            a.out,
+            reencode=a.reencode,
+            camera_label=a.camera_label,
+            recording_id=a.recording_id,
+        )
     except ConvertError as e:
         print(f"convert failed: {e}", file=sys.stderr)
         return 2

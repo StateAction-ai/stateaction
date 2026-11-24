@@ -212,7 +212,7 @@ class FakeModal implements ModalClient {
     if (custom) return custom(id, n, this.cancels.includes(id));
     return returned(
       stage === "hand_pose"
-        ? { schemaVersion: 1, functionCallId: id, exitCode: 0 }
+        ? v2(id, 0, null)
         : v2(id, 0, receipt(this.jobId, stage)),
     );
   }
@@ -1026,7 +1026,7 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
     });
   });
 
-  test("the run result is parsed strictly: v2 with a valid receipt for exactly this stage; v1 only for hand_pose_cpu_v1", () => {
+  test("the run result is parsed strictly: v2 with a valid receipt for exactly this stage", () => {
     const jobId = randomUUID();
     const id = callId();
     const seg = { jobId, stage: "segment" as const, module: MODULES.segment };
@@ -1034,7 +1034,7 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
     assert.ok(validateValue("jobs.stage-receipt.v1", ok).valid);
     assert.ok(parseRunResult(v2(id, 0, ok), id, seg));
     assert.equal(parseRunResult(v2(id, 0, null), id, seg)?.receipt, null);
-    // v1 is the job-level shape (and hand_pose_cpu_v1's); never a GPU stage's.
+    // v1 is the non-recipe job-level result. Every recipe stage requires v2.
     assert.equal(
       parseRunResult(
         { schemaVersion: 1, functionCallId: id, exitCode: 0 },
@@ -1043,7 +1043,7 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
       ),
       undefined,
     );
-    assert.ok(
+    assert.equal(
       parseRunResult(
         { schemaVersion: 1, functionCallId: id, exitCode: 0 },
         id,
@@ -1053,6 +1053,7 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
           module: MODULES.hand_pose,
         },
       ),
+      undefined,
     );
     assert.equal(
       parseRunResult(v2(id, 0, ok), id),

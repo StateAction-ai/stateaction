@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { PUBLIC_VIDEO_CANARY } from "../src/admission/public-video-canary.js";
 import { jobsConfigFromEnv } from "../src/jobs/config.js";
 
 const settings = {
@@ -28,5 +29,37 @@ test("admitted jobs pin a bounded output file budget", () => {
       () =>
         jobsConfigFromEnv({ ...settings, PROCESSING_MAX_OUTPUT_FILES: value }),
       /PROCESSING_MAX_OUTPUT_FILES/,
+    );
+});
+
+test("public-video canary accepts only the approved digest on a production Render web service", () => {
+  const clip = {
+    ownerUserId: "approved-collector",
+    clientRecordingId: "d47e7ade-2642-4ae1-905b-f8cf6f9047f1",
+    sourceSha256:
+      "4e5e5a2abfe6d867a86ce8a254b1a85f225c0c1d57e05b2a74d8a538861f9e32",
+  };
+  const env = {
+    ...settings,
+    APP_ENV: "production",
+    RENDER_SERVICE_ID: "srv-test",
+    PROCESSING_EXECUTION_BACKEND: "modal",
+    [PUBLIC_VIDEO_CANARY]: JSON.stringify(clip),
+  };
+  assert.deepEqual(jobsConfigFromEnv(env).publicVideoCanary, clip);
+  for (const changes of [
+    { APP_ENV: "development" },
+    { IS_PULL_REQUEST: "true" },
+    { RENDER_SERVICE_ID: "wfl-test" },
+    {
+      [PUBLIC_VIDEO_CANARY]: JSON.stringify({
+        ...clip,
+        sourceSha256: "f".repeat(64),
+      }),
+    },
+  ])
+    assert.throws(
+      () => jobsConfigFromEnv({ ...env, ...changes }),
+      /STATEACTION_PUBLIC_VIDEO_CANARY/,
     );
 });
