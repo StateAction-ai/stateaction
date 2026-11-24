@@ -12,7 +12,7 @@ export class VideoUrlError extends Error {
 export async function fetchVideoUrl(
   readPath: string,
   options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
-): Promise<string> {
+): Promise<{ url: string; expiresAt: number }> {
   const doFetch = options.fetchImpl ?? fetch;
   let response: Response;
   try {
@@ -33,26 +33,18 @@ export async function fetchVideoUrl(
   }
   if (!response.ok) throw new VideoUrlError("The video link was not issued.");
   const body = (await response.json().catch(() => null)) as {
-    data?: { url?: unknown };
+    data?: { url?: unknown; expiresAt?: unknown };
   } | null;
   if (typeof body?.data?.url !== "string")
     throw new VideoUrlError("The video link was missing.");
-  return body.data.url;
+  const expiresAt =
+    typeof body.data.expiresAt === "string"
+      ? Date.parse(body.data.expiresAt)
+      : NaN;
+  if (!Number.isFinite(expiresAt))
+    throw new VideoUrlError("The video link expiry was missing.");
+  return { url: body.data.url, expiresAt };
 }
 
 /** Renewals allowed in a row before the player reports the video as unavailable. */
 export const MAX_RENEWALS = 3;
-
-/**
- * Where playback resumes after a renewal: the time the element had reached,
- * clamped into the recording; falls back to the last known playhead.
- */
-export function resumeAt(
-  elementTime: number,
-  lastKnown: number,
-  durationS: number,
-): number {
-  const t =
-    Number.isFinite(elementTime) && elementTime > 0 ? elementTime : lastKnown;
-  return Math.min(Math.max(0, t), Math.max(0, durationS));
-}

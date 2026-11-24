@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import type { Card, ReviewModel } from "../../lib/review/types";
 import { fmtClock, fmtPrecise } from "../../lib/review/timeline";
 import { cn } from "../../lib/utils";
+import { HandOverlay } from "./hand-overlay";
 import type { usePlayback } from "./use-playback";
 
 type Playback = ReturnType<typeof usePlayback>;
@@ -25,6 +26,8 @@ export function Player({
   playback,
   active,
   videoMessage,
+  handFramesPath,
+  handPoseFailed,
   onPrev,
   onNext,
 }: {
@@ -32,16 +35,23 @@ export function Player({
   playback: Playback;
   active: Card | null;
   videoMessage: string | null;
+  handFramesPath: string | null;
+  handPoseFailed: boolean;
   onPrev: () => void;
   onNext: () => void;
 }) {
   const { t, playing, status } = playback;
+  const [overlay, setOverlay] = useState(true);
+  const canOverlay = handFramesPath !== null && model.clips.length > 0;
   const l = laneState(model, model.lanes.left, t);
   const r = laneState(model, model.lanes.right, t);
   const handText = (state: ReturnType<typeof laneState>) =>
     state === "failed" ? "no result" : state;
   return (
-    <section className="overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06]">
+    <section
+      data-testid="review-player"
+      className="min-w-0 overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06] max-md:sticky max-md:top-0 max-md:z-20"
+    >
       <div className="relative aspect-video max-h-[50vh] w-full overflow-hidden bg-[#05060a]">
         {playback.src ? (
           <video
@@ -55,6 +65,8 @@ export function Player({
             onLoadedMetadata={playback.onLoadedMetadata}
             onError={playback.onVideoError}
             onEnded={playback.onEnded}
+            onSeeked={playback.onSeeked}
+            onPlaying={playback.onPlaying}
           />
         ) : (
           <div
@@ -66,22 +78,41 @@ export function Player({
               : (videoMessage ?? "The review video is not available.")}
           </div>
         )}
+        {playback.src && canOverlay && !handPoseFailed ? (
+          <HandOverlay
+            key={"hand-" + playback.srcKey}
+            videoRef={playback.videoRef}
+            model={model}
+            path={handFramesPath}
+            enabled={overlay}
+          />
+        ) : null}
         <div className="absolute top-3 left-3.5 flex flex-wrap gap-1.5">
           <Overlay data-testid="review-clock">{fmtPrecise(t)}</Overlay>
           {status === "unavailable" ? (
             <Overlay className="text-[#f2b84b]">video link unavailable</Overlay>
           ) : null}
         </div>
-        <div className="absolute top-3 right-3.5 flex max-w-[70%] gap-1.5 text-right">
-          <Overlay>
-            Left: {handText(l)} · Right: {handText(r)}
-          </Overlay>
-        </div>
+        {!canOverlay || !overlay || handPoseFailed ? (
+          <div className="absolute top-3 right-3.5 flex max-w-[70%] gap-1.5 text-right">
+            <Overlay>
+              {handPoseFailed || l === "failed" || r === "failed" ? (
+                "Hand pose failed"
+              ) : (
+                <>
+                  Left: {handText(l)} · Right: {handText(r)}
+                </>
+              )}
+            </Overlay>
+          </div>
+        ) : null}
+      </div>
+      <div
+        data-testid="review-caption"
+        className="min-h-[3.5rem] bg-[#080a0f] px-3.5 py-1.5 text-center text-[13.5px] text-[#f1f2f6]"
+      >
         {active ? (
-          <div
-            data-testid="review-overlay-caption"
-            className="absolute bottom-4 left-1/2 max-w-[78%] -translate-x-1/2 rounded-lg border border-white/10 bg-[rgba(8,10,15,.72)] px-3.5 py-1.5 text-center text-[13.5px] text-[#f1f2f6] backdrop-blur-md"
-          >
+          <>
             <small className="mb-px block text-[11px] text-[#9aa3b8]">
               #{active.index + 1}
               {active.caption.state === "complete"
@@ -97,13 +128,17 @@ export function Player({
                   : "No caption is available for this segment."}
               </span>
             )}
-          </div>
+          </>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-field px-5 py-3">
+      <div
+        data-testid="review-controls"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-field px-5 py-3"
+      >
         <button
           type="button"
           onClick={playback.toggle}
+          disabled={status === "unavailable"}
           aria-label={playing ? "Pause" : "Play"}
           title="Play / pause (space)"
           className="grid h-11 w-11 flex-none place-items-center rounded-full border-0 bg-brand text-white hover:bg-brand-strong"
@@ -140,6 +175,21 @@ export function Player({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          aria-pressed={overlay && canOverlay && !handPoseFailed}
+          disabled={!canOverlay || handPoseFailed}
+          onClick={() => setOverlay((shown) => !shown)}
+          className={cn(
+            "min-h-11 rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink disabled:opacity-50",
+            overlay &&
+              canOverlay &&
+              !handPoseFailed &&
+              "border-transparent bg-brand-soft text-brand-ink",
+          )}
+        >
+          Hand overlay
+        </button>
       </div>
     </section>
   );

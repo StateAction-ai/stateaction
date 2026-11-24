@@ -211,6 +211,7 @@ export async function issueRecordingRead(
     viewerUserId: string;
     recordingId: string;
     role: RecordingReadRole;
+    expectedJobId?: string;
   },
 ): Promise<RecordingReadView> {
   if (input.role !== "recording_mp4")
@@ -236,8 +237,9 @@ export async function issueRecordingRead(
          AND f.purpose = 'output' AND f.role = 'recording_mp4'
          AND f.state IN ('completed', 'verified')
        WHERE rec.id = $2 AND rec.deleted_at IS NULL
+         AND ($3::uuid IS NULL OR j.id = $3)
          AND catalog_has_role($1, 'staff')`,
-      [input.viewerUserId, recordingId],
+      [input.viewerUserId, recordingId, input.expectedJobId ?? null],
     ));
   } catch (error) {
     throw toCatalogError(error);

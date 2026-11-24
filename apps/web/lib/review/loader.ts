@@ -52,7 +52,11 @@ export function reviewLoader(): ReviewLoader {
         video: extras.hasVideo
           ? {
               kind: "broker",
-              readPath: `/api/v1/recordings/${recordingId}/reads`,
+              readPath:
+                "/api/v1/recordings/" +
+                recordingId +
+                "/reads?job=" +
+                annotations.job_id,
             }
           : { kind: "none", reason: "This recording has no review video." },
         origin: "api",

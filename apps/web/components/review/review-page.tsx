@@ -132,11 +132,11 @@ export function ReviewPage({
   }, [t, model.durationS]);
 
   const selectCard = useCallback(
-    (index: number) => {
+    (index: number, startPlaying = false) => {
       const card = model.cards[index];
       if (!card) return;
       setSelected(index);
-      playback.seek(card.startS);
+      playback.seek(card.startS, startPlaying);
       setTab((current) => (current === "hand" ? current : "segs"));
     },
     [model.cards, playback],
@@ -201,7 +201,7 @@ export function ReviewPage({
         e.ctrlKey ||
         e.altKey ||
         target?.closest(
-          "input, textarea, select, [role=slider], [role=button], button, a",
+          "input, textarea, select, [role=slider], [role=button], button, a, [data-testid=rail-list]",
         )
       )
         return;
@@ -361,13 +361,27 @@ export function ReviewPage({
       </div>
 
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,72fr)_minmax(340px,28fr)]">
-        <div className="min-w-0">
+        <div className="min-w-0 max-md:contents">
           <Player
             model={model}
             playback={playback}
             active={active}
             videoMessage={
               bundle.video.kind === "none" ? bundle.video.reason : null
+            }
+            handFramesPath={
+              bundle.video.kind === "broker"
+                ? "/api/v1/recordings/" +
+                  recording.recordingId +
+                  "/hand-frames?job=" +
+                  annotations.job_id
+                : null
+            }
+            handPoseFailed={
+              annotations.dag_run?.stages.some(
+                (stage) =>
+                  stage.stage === "hand_pose" && stage.state === "failed",
+              ) ?? false
             }
             onPrev={() => step(-1)}
             onNext={() => step(1)}
@@ -412,7 +426,8 @@ export function ReviewPage({
           selected={selected}
           activeIndex={activeIndex}
           t={t}
-          onSelect={selectCard}
+          onSelect={(index) => selectCard(index, true)}
+          seekCount={playback.seekCount}
           mediaOrigin={mediaOrigin}
           queryRef={queryRef}
           marks={marks}

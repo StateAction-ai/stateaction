@@ -8,15 +8,19 @@ the model output and never edit it; see [Segment marks](segment-marks.md).
 ## Layout
 
 - Recording selector, state and counts, Pipeline run link, Download JSON.
-- Player: `<video>` over `recording.mp4`, play/pause (Space), previous and next
-  segment (arrow keys), speed, scrubber with segment-start and failure ticks,
-  and the current caption overlaid on the video.
+- The player uses `recording.mp4` and puts the current caption in its own row
+  above the controls. Play/pause (Space), previous and next segment (arrow keys),
+  speed and the scrubber share the playback clock. The hand overlay starts on.
 - Annotation tiers (zoom +, -, Fit; scroll pans, ctrl+scroll zooms): ruler,
   Segments coloured by derived hand, Hand left and Hand right presence lanes,
   Failures (failed windows as spans, failed captions). Clicking a block seeks
   and selects its card.
-- Side panel: Segments (caption rail with text filter and All, Failed, Issue and Unchecked chips),
-  Hand pose (the clip viewer for the clip under the playhead), JSON.
+- The Segments tab follows the current caption inside its desktop list. On
+  narrow screens it follows through the page once the caption list is in view,
+  with the player kept at the top on phones. Manual scroll suspends follow
+  until the viewer presses Follow playback or seeks. Clicking a
+  caption seeks to its segment start and plays. The 3D / Debug tab opens Rerun
+  for the clip under the playhead. The JSON tab shows the annotation document.
 - Provenance badges per stage: module and revision, engine and quant, observed
   GPU. Replay and stub provenance is labelled as such.
 
@@ -55,11 +59,18 @@ The page reads the recording's ACCEPTED job (`recordings.current_job_id`, state
   a 60 s presigned GET for the accepted job's `recording.mp4`, `video/mp4`. The
   size limit defaults to 8 GiB and is set with
   `STATEACTION_RECORDING_MP4_MAX_BYTES` (an invalid value fails closed). The
-  player asks again on a media error or URL expiry and resumes at the time it
-  had reached.
-- The page itself calls the same readers in the Server Component
-  (`@stateaction/server/annotations`) and takes the recording's clips
-  (`clips.source_start_ns`, `source_end_ns`) for the Hand pose tab.
+  player asks again on a media error or URL expiry and resumes at its last
+  requested or presented time. It supplies the job ID from the loaded page so
+  a renewal cannot pair an older overlay with a superseding job's video.
+- `GET /api/v1/recordings/{id}/hand-frames?job={jobId}&clip={clipId}` serves
+  the 2D image landmarks for one clip. It checks the staff session and the
+  enabled staff role, then binds the clip and its fixed output slots to the
+  recording's current accepted job. The server checks stored sizes and hashes
+  and validates the frame map and hand observations before joining them. The
+  response is private and uncached. The player holds up to four clip payloads.
+- The page calls the same annotation readers in the Server Component
+  (`@stateaction/server/annotations`) and reads the clip windows for the
+  overlay and 3D / Debug tab.
 
 `lib/review/types.ts` defines `ReviewLoader` and `ReviewBundle`;
 `lib/review/loader.ts` is the real loader. Fixture data (`lib/review/fixture.ts`)
@@ -78,3 +89,21 @@ Seconds are measured from the first decoded frame (video time zero): the first
 hand-presence span, else the first segment. An end-of-stream sentinel resolves
 to the recording duration. Clip windows (`source_start_ns`, `source_end_ns`)
 use the same origin.
+
+## Overlay frame identity
+
+The worker remuxes the full recording with PTS in microseconds, subtracting the
+first source encoder PTS. The review endpoint subtracts the first clip's first
+`source_pts` from each clip frame's `source_pts` to recover that same timeline.
+It pairs each frame-map row with its hand observations by accepted job, clip
+and frame index. It retains `source_frame_id` and the integer native timestamp.
+
+The player draws to a canvas with the saved raster dimensions and the same
+contain sizing as the video. It uses `requestVideoFrameCallback` to match the
+presented media timestamp to an exact encoder PTS. The native clip windows
+guide the first fetch. The clip's measured PTS range then guides selection,
+including across clip boundaries when the native and video clocks differ.
+The canvas draws only the masked-in points and connections of the matching
+frame. It clears on seek, no hand or unavailable data. Failed presence
+spans suppress the affected side using the matched frame's native timestamp.
+An unqualified raster or a missing frame has no visible skeleton.

@@ -259,6 +259,7 @@ export function Tiers({
               major ? (
                 <div
                   key={s}
+                  data-seek={s}
                   className="absolute top-0 h-full border-l border-line pl-1 font-mono text-[10px] leading-4 text-muted"
                   style={{ left: x(s) }}
                 >
