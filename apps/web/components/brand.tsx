@@ -18,7 +18,7 @@ export function Brand({ href = "/" }: { href?: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2.5 rounded-md text-[19px] font-bold tracking-[-0.04em] text-brand"
+      className="inline-flex min-h-11 items-center gap-2.5 rounded-md text-[19px] font-bold tracking-[-0.04em] text-brand"
     >
       <BrandMark />
       <span className="whitespace-nowrap">StateAction.ai</span>

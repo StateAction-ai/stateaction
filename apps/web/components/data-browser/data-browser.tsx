@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMediaDuration } from "../../lib/media-duration";
 import * as React from "react";
 import Link from "next/link";
 import { shortRecordingId } from "@stateaction/server/pipeline-model";
@@ -28,15 +29,6 @@ type Page = {
 type Loaded = { href: string; page: Page; dataset?: DatasetView };
 const field =
   "min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm";
-const hours = (ns: string) =>
-  (Number(BigInt(ns)) / 3_600_000_000_000).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-const duration = (ns: string) => {
-  const seconds = Number(BigInt(ns) / 1_000_000_000n);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-};
 const decision = (value: string) =>
   ({ pending: "Not reviewed", approved: "Approved", rejected: "Rejected" })[
     value
@@ -136,11 +128,12 @@ export function DataBrowser({
             </p>
           ) : dataset ? (
             <p className="mt-2 text-muted">
-              {dataset.clipCount.toLocaleString()} approved clips{" "}
+              {dataset.clipCount.toLocaleString()} approved{" "}
+              {dataset.clipCount === 1 ? "clip" : "clips"}{" "}
               <span className="mx-2" aria-hidden="true">
                 /
               </span>{" "}
-              {hours(dataset.durationNs)} total hours
+              {formatMediaDuration(dataset.durationNs)} total
             </p>
           ) : null}
         </div>
@@ -221,9 +214,10 @@ export function DataBrowser({
           </label>
           {query.mode === "clips" ? (
             <label className="min-w-0 text-xs font-medium">
-              Task label
+              Exact task label
               <input
                 name="label"
+                placeholder="e.g. Pick up part"
                 defaultValue={query.label}
                 maxLength={160}
                 className={`${field} mt-1`}
@@ -291,7 +285,7 @@ export function DataBrowser({
           <p className="mb-3 text-xs text-muted">
             {clips.length}{" "}
             {query.q || query.label || query.reviewStatus ? "matching " : ""}
-            clips on this page
+            {clips.length === 1 ? "clip" : "clips"} on this page
           </p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {clips.map((clip) => (
@@ -323,7 +317,7 @@ export function DataBrowser({
                       {clip.taskLabel ?? "No task label"}
                     </p>
                     <p className="mt-3 text-xs text-muted">
-                      {duration(clip.durationNs)}{" "}
+                      {formatMediaDuration(clip.durationNs)}{" "}
                       <span className="mx-1" aria-hidden="true">
                         /
                       </span>{" "}
@@ -411,7 +405,7 @@ function DatasetTable({ datasets }: { datasets: DatasetView[] }) {
               Clips
             </th>
             <th scope="col" className="px-3 py-3 font-medium">
-              Total hours
+              Total duration
             </th>
           </tr>
         </thead>
@@ -438,7 +432,7 @@ function DatasetTable({ datasets }: { datasets: DatasetView[] }) {
                 {dataset.clipCount.toLocaleString()}
               </td>
               <td className="px-3 py-4 tabular-nums">
-                {hours(dataset.durationNs)}
+                {formatMediaDuration(dataset.durationNs)}
               </td>
             </tr>
           ))}
@@ -467,8 +461,14 @@ function Modal({
   const ref = React.useRef<HTMLDialogElement>(null);
   const titleId = React.useId();
   React.useEffect(() => {
-    ref.current?.showModal();
-    return () => ref.current?.close();
+    const dialog = ref.current;
+    const opener = document.activeElement;
+    dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('[name="name"]')?.focus();
+    return () => {
+      dialog?.close();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
   }, []);
   return (
     <dialog
@@ -659,7 +659,7 @@ function AddClips({
                   </span>
                   <span className="block text-xs text-muted">
                     {clip.taskLabel ?? "No task label"} /{" "}
-                    {duration(clip.durationNs)}
+                    {formatMediaDuration(clip.durationNs)}
                   </span>
                 </span>
               </label>

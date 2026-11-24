@@ -36,12 +36,15 @@ export function DagRunPanel({
         <h2 className="m-0 font-mono text-base font-bold">dag-run.json</h2>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={copy}>
-            {copied === "copied"
-              ? "Copied"
-              : copied === "failed"
-                ? "Copy failed"
-                : "Copy"}
+            Copy
           </Button>
+          <span role="status" className="sr-only">
+            {copied === "copied"
+              ? "Copied run JSON."
+              : copied === "failed"
+                ? "Could not copy run JSON."
+                : ""}
+          </span>
           <Button type="button" variant="outline" onClick={download}>
             Download
           </Button>
@@ -51,7 +54,7 @@ export function DagRunPanel({
         data-testid="dag-run-json"
         tabIndex={0}
         aria-label="dag-run.json"
-        className="m-0 max-h-[640px] overflow-auto border-t border-line bg-field px-5 py-4 font-mono text-[11.5px] leading-relaxed"
+        className="m-0 max-h-72 overflow-auto lg:max-h-[640px] border-t border-line bg-field px-5 py-4 font-mono text-[11.5px] leading-relaxed"
       >
         {json}
       </pre>

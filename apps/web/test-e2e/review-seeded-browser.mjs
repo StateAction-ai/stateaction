@@ -98,7 +98,7 @@ async function marksFlow({ label, pre, rec, rows }) {
     const clickCard = async (i) => {
       ab(
         "eval",
-        `document.querySelectorAll('[data-testid=rail-card]')[${i}].click()`,
+        `document.querySelectorAll('[data-testid=rail-card]')[${i}].querySelector('button').click()`,
       );
       await until(async () => (await selectedCard()) === i);
     };
@@ -202,7 +202,7 @@ async function marksFlow({ label, pre, rec, rows }) {
     const t = text();
     check(
       `${pre}: Pipeline team checks show the counts`,
-      /checked, 2 issue/.test(t),
+      /3 reviewed\s+2 flagged/.test(t),
       t.slice(0, 200),
     );
   } else {
@@ -302,7 +302,7 @@ try {
         (r) => r.status === "failed",
       ).length;
       const failedShown = ev(
-        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.startsWith('caption failed: ')).length",
+        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.querySelector('[title]')?.title)).length",
       );
       check(
         `${pre}: failed captions shown with codes`,

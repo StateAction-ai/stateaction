@@ -29,6 +29,48 @@ export function niceStep(span: number): number {
   return steps.find((s) => span / s <= 9) ?? 7200;
 }
 
+export function rulerTicks(view: View, step: number) {
+  const minor = step / 5;
+  const ticks: { s: number; major: boolean }[] = [];
+  const first = Math.ceil((view[0] * 5) / step);
+  const last = Math.floor((view[1] * 5) / step);
+  for (let index = first; index <= last; index++) {
+    const major = index % 5 === 0;
+    ticks.push({ s: major ? (index / 5) * step : index * minor, major });
+  }
+  return ticks;
+}
+
+/** Cards are ordered by start time. A row can be reused at the previous span's end. */
+export function packSegmentRows(cards: readonly Card[]): Card[][] {
+  const rows: Card[][] = [];
+  for (const card of cards) {
+    const row = rows.find((row) => row.at(-1)!.endS <= card.startS);
+    if (row) row.push(card);
+    else rows.push([card]);
+  }
+  return rows;
+}
+
+export function rowFocusIndex(
+  key: string,
+  current: number,
+  length: number,
+): number | null {
+  switch (key) {
+    case "Home":
+      return 0;
+    case "End":
+      return length - 1;
+    case "ArrowLeft":
+      return Math.max(0, current - 1);
+    case "ArrowRight":
+      return Math.min(length - 1, current + 1);
+    default:
+      return null;
+  }
+}
+
 export function clampView(start: number, end: number, duration: number): View {
   const span = Math.min(duration, Math.max(MIN_SPAN_S, end - start));
   const a = Math.min(Math.max(0, start), Math.max(0, duration - span));

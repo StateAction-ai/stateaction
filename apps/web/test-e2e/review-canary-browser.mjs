@@ -138,7 +138,7 @@ try {
       );
       const failedCaps = capRows.filter((r) => r.status === "failed").length;
       const failedShown = ev(
-        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.startsWith('caption failed: ')).length",
+        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.querySelector('[title]')?.title)).length",
       );
       check(
         `${pre}: failed captions shown as found (never forced to 0)`,

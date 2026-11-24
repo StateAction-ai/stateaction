@@ -321,7 +321,7 @@ const railCards = () =>
   );
 const railFailed = () =>
   ev(
-    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => e.textContent.trim())`,
+    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.querySelector('[title]')?.title }))`,
   );
 const count = (testid) =>
   ev(`document.querySelectorAll('[data-testid=${testid}]').length`);
@@ -517,8 +517,11 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     await reviewAndDownload("caption_failed");
     const shown = await railFailed();
     assert.equal(shown.length, 2, JSON.stringify(shown));
-    for (const text of shown)
-      assert.match(text, /^caption failed: injected_caption_failure/);
+    for (const item of shown)
+      assert.deepEqual(item, {
+        text: "No caption is available for this segment.",
+        code: "injected_caption_failure",
+      });
     assert.equal((await railCards()).filter((c) => c.failed).length, 2);
     assert.equal(
       await count("failure-caption"),
@@ -564,7 +567,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       "exactly the failed window's card is failed",
     );
     assert.deepEqual(await railFailed(), [
-      "window failed: injected_window_failure",
+      {
+        text: "No segments could be produced for this time range.",
+        code: "injected_window_failure",
+      },
     ]);
     assert.equal(await count("block-failed-window"), 1);
     assert.equal(

@@ -38,8 +38,8 @@ export function Player({
   const { t, playing, status } = playback;
   const l = laneState(model, model.lanes.left, t);
   const r = laneState(model, model.lanes.right, t);
-  const mark = (s: string) =>
-    s === "present" ? "✓" : s === "failed" ? "!" : s === "unknown" ? "?" : "–";
+  const handText = (state: ReturnType<typeof laneState>) =>
+    state === "failed" ? "no result" : state;
   return (
     <section className="overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06]">
       <div className="relative aspect-video max-h-[50vh] w-full overflow-hidden bg-[#05060a]">
@@ -72,9 +72,9 @@ export function Player({
             <Overlay className="text-[#f2b84b]">video link unavailable</Overlay>
           ) : null}
         </div>
-        <div className="absolute top-3 right-3.5 flex gap-1.5">
+        <div className="absolute top-3 right-3.5 flex max-w-[70%] gap-1.5 text-right">
           <Overlay>
-            L {mark(l)} · R {mark(r)}
+            Left: {handText(l)} · Right: {handText(r)}
           </Overlay>
         </div>
         {active ? (
@@ -88,9 +88,15 @@ export function Player({
                 ? ` · ${active.caption.label}`
                 : ""}
             </small>
-            {active.caption.state === "complete"
-              ? active.caption.text
-              : active.caption.message}
+            {active.caption.state === "complete" ? (
+              active.caption.text
+            ) : (
+              <span title={active.caption.code}>
+                {active.kind === "failed_window"
+                  ? "No segments could be produced for this time range."
+                  : "No caption is available for this segment."}
+              </span>
+            )}
           </div>
         ) : null}
       </div>
@@ -100,7 +106,7 @@ export function Player({
           onClick={playback.toggle}
           aria-label={playing ? "Pause" : "Play"}
           title="Play / pause (space)"
-          className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full border-0 bg-brand text-white hover:bg-brand-strong"
+          className="grid h-11 w-11 flex-none place-items-center rounded-full border-0 bg-brand text-white hover:bg-brand-strong"
         >
           {playing ? (
             <Pause aria-hidden="true" size={16} fill="currentColor" />
@@ -126,7 +132,7 @@ export function Player({
           title="Playback speed"
           value={playback.rate}
           onChange={(e) => playback.setRate(Number(e.target.value))}
-          className="min-h-10 rounded-lg border border-line bg-white px-3 text-sm text-ink"
+          className="min-h-11 rounded-lg border border-line bg-white px-3 text-sm text-ink"
         >
           {SPEEDS.map((s) => (
             <option key={s} value={s}>
@@ -169,7 +175,7 @@ function IconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="inline-grid h-9 w-9 place-items-center rounded-lg border border-line bg-white text-ink hover:bg-field"
+      className="inline-grid h-11 w-11 place-items-center rounded-lg border border-line bg-white text-ink hover:bg-field"
     >
       {children}
     </button>
@@ -207,7 +213,7 @@ function Scrubber({
       aria-valuenow={Math.round(t)}
       aria-valuetext={fmtClock(t)}
       data-testid="review-scrubber"
-      className="relative h-[22px] min-w-24 flex-1 cursor-pointer touch-none"
+      className="relative h-11 min-w-24 flex-1 cursor-pointer touch-none"
       onPointerDown={(e) => {
         e.currentTarget.setPointerCapture(e.pointerId);
         seekFromEvent(e);
@@ -216,25 +222,35 @@ function Scrubber({
         if (e.buttons === 1) seekFromEvent(e);
       }}
       onKeyDown={(e) => {
-        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-          e.preventDefault();
-          e.stopPropagation();
-          onSeek(t + (e.key === "ArrowLeft" ? -5 : 5));
-        }
+        const target =
+          e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? model.durationS
+              : e.key === "ArrowLeft" || e.key === "ArrowDown"
+                ? t - 5
+                : e.key === "ArrowRight" || e.key === "ArrowUp"
+                  ? t + 5
+                  : null;
+        if (target === null) return;
+        e.preventDefault();
+        onSeek(target);
       }}
     >
-      <div className="absolute top-[9px] right-0 left-0 h-1.5 overflow-hidden rounded bg-[#e6eae4]">
+      <div className="absolute top-1/2 -translate-y-1/2 right-0 left-0 h-1.5 overflow-hidden rounded bg-[#e6eae4]">
         <div
           className="absolute inset-y-0 left-0 bg-brand opacity-35"
           style={{ width: pct(t) }}
         />
-        {model.cards.map((c) => (
-          <i
-            key={c.segmentId}
-            className="absolute top-0 h-full w-px bg-ink/25"
-            style={{ left: pct(c.startS) }}
-          />
-        ))}
+        {model.cards.length <= 40
+          ? model.cards.map((c) => (
+              <i
+                key={c.segmentId}
+                className="absolute top-0 h-full w-px bg-ink/25"
+                style={{ left: pct(c.startS) }}
+              />
+            ))
+          : null}
         {model.failures.map((f, i) => (
           <i
             key={`${f.kind}-${i}`}
@@ -248,7 +264,7 @@ function Scrubber({
         ))}
       </div>
       <div
-        className="absolute top-1 h-3.5 w-3.5 -translate-x-[7px] rounded-full border-2 border-brand bg-white shadow"
+        className="absolute top-1/2 h-3.5 w-3.5 -translate-1/2 rounded-full border-2 border-brand bg-white shadow"
         style={{ left: pct(t) }}
       />
     </div>

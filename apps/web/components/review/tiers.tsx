@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Card, LaneSpan, ReviewModel } from "../../lib/review/types";
 import {
   fmtClock,
   fmtPrecise,
   niceStep,
+  packSegmentRows,
+  rulerTicks,
+  rowFocusIndex,
   tOf,
   xOf,
   type View,
@@ -13,6 +16,7 @@ import {
 import { HAND_COLORS, HAND_ORDER } from "./palette";
 
 interface Tip {
+  cardIndex?: number;
   x: number;
   y: number;
   title: string;
@@ -47,9 +51,13 @@ export function Tiers({
   onFit: () => void;
   onView: (view: View) => void;
 }) {
+  const tooltipId = useId();
   const track = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  const [tip, setTip] = useState<Tip | null>(null);
+  const [pointerTip, setPointerTip] = useState<Tip | null>(null);
+  const [focusTip, setFocusTip] = useState<Tip | null>(null);
+  const tip = focusTip ?? pointerTip;
+  const [focusedByRow, setFocusedByRow] = useState<Record<number, number>>({});
   const [hover, setHover] = useState<number | null>(null);
 
   useEffect(() => {
@@ -69,6 +77,13 @@ export function Tiers({
     const el = track.current;
     if (!el) return;
     const wheel = (e: WheelEvent) => {
+      if (
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        Math.abs(e.deltaY) >= Math.abs(e.deltaX)
+      )
+        return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const { view: v, onZoom: zoom, onPan: pan } = latest.current;
@@ -90,24 +105,27 @@ export function Tiers({
   const x = (s: number) => xOf(s, view, width);
   const visible = (a: number, b: number) => b > view[0] && a < view[1];
   const step = niceStep(span);
-  const minor = step / 5;
-  const ticks = useMemo(() => {
-    const out: { s: number; major: boolean }[] = [];
-    for (let s = Math.ceil(view[0] / minor) * minor; s <= view[1]; s += minor)
-      out.push({ s, major: Math.abs(s / step - Math.round(s / step)) < 1e-6 });
-    return out;
-  }, [view, minor, step]);
+  const ticks = useMemo(() => rulerTicks(view, step), [view, step]);
+  const rows = useMemo(() => packSegmentRows(model.cards), [model.cards]);
+  const visibleRows = rows.map((row) =>
+    row.filter((c) => visible(c.startS, c.endS)),
+  );
+  const segmentHeight = Math.max(1, rows.length) * 44;
 
   const showTip = (e: React.MouseEvent, next: Omit<Tip, "x" | "y">) =>
-    setTip({ x: e.clientX, y: e.clientY, ...next });
+    setPointerTip({ x: e.clientX, y: e.clientY, ...next });
 
   const cardTip = (c: Card): Omit<Tip, "x" | "y"> => ({
+    cardIndex: c.index,
     title:
       c.caption.state === "complete"
         ? `${fmtClock(c.startS)} · ${c.caption.label} · ${c.caption.hand}`
-        : `${fmtClock(c.startS)} · ${c.kind === "failed_window" ? "failed window" : "caption failed"}`,
-    sub: `#${c.index + 1}/${model.cards.length} · ${(c.endS - c.startS).toFixed(1)} s · click to open it in the rail`,
-    body: c.caption.state === "complete" ? c.caption.text : c.caption.message,
+        : `${fmtClock(c.startS)} · ${c.kind === "failed_window" ? "Segmentation failed" : "Caption unavailable"}`,
+    sub: `#${c.index + 1}/${model.cards.length} · ${(c.endS - c.startS).toFixed(1)} s · open to show details`,
+    body:
+      c.caption.state === "complete"
+        ? c.caption.text
+        : `Error code: ${c.caption.code}`,
     bad: c.caption.state === "failed",
   });
 
@@ -156,7 +174,7 @@ export function Tiers({
               {h} {model.handCounts[h].toLocaleString()}
             </span>
           ))}
-          <span>derived</span>
+          <span>Segments by hand presence</span>
         </span>
         <span className="flex-1" />
         <div className="flex gap-1.5">
@@ -182,11 +200,11 @@ export function Tiers({
           <LabelCell h="h-[26px]" first>
             <span className="text-[11px] text-muted">time</span>
           </LabelCell>
-          <LabelCell h="h-11">
+          <LabelCell height={segmentHeight}>
             <span className="flex flex-col leading-tight whitespace-normal">
               Segments
               <small className="hidden text-[10.5px] font-medium text-muted md:block">
-                color = hand (derived)
+                Color shows hand presence
               </small>
             </span>
           </LabelCell>
@@ -197,7 +215,7 @@ export function Tiers({
         <div
           ref={track}
           data-testid="tiers-track"
-          className="relative mr-6 cursor-crosshair overflow-hidden rounded-br-lg bg-field"
+          className="relative mr-3 cursor-crosshair md:mr-6 overflow-hidden rounded-br-lg bg-field"
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             setHover(e.clientX - rect.left);
@@ -205,7 +223,7 @@ export function Tiers({
               "[data-tip]",
             );
             if (!el) {
-              setTip({
+              setPointerTip({
                 x: e.clientX,
                 y: e.clientY,
                 title: "",
@@ -214,7 +232,7 @@ export function Tiers({
             }
           }}
           onMouseLeave={() => {
-            setTip(null);
+            setPointerTip(null);
             setHover(null);
           }}
           onClick={(e) => {
@@ -256,74 +274,126 @@ export function Tiers({
             )}
           </div>
           <div
-            className="relative h-11 border-t border-line"
+            className="relative border-t border-line"
+            style={{ height: segmentHeight }}
             id="lSeg"
             data-lane="segments"
           >
-            {model.cards.map((c) => {
-              if (!visible(c.startS, c.endS)) return null;
-              const l = x(c.startS);
-              const w = Math.max(2, x(c.endS) - l - 1);
-              const on = selected === c.index;
-              const dim = dimmed.has(c.index);
-              const ok = c.caption.state === "complete";
-              const gap = c.kind === "failed_window";
-              const hc =
-                c.caption.state === "complete"
-                  ? HAND_COLORS[c.caption.hand]
-                  : null;
+            {visibleRows.map((row, rowIndex) => {
+              const focusable =
+                row.find((c) => c.index === focusedByRow[rowIndex]) ??
+                row.find((c) => c.index === selected) ??
+                row[0];
               return (
                 <div
-                  key={c.segmentId}
-                  data-card={c.index}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Segment ${c.index + 1}`}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(c.index);
-                    }
-                  }}
-                  data-testid={gap ? "block-failed-window" : "block-segment"}
-                  data-selected={on ? "true" : undefined}
-                  data-tip="1"
-                  className={[
-                    "absolute top-1.5 bottom-1.5 flex cursor-pointer items-center overflow-hidden rounded-md px-1.5 text-[11px] font-semibold whitespace-nowrap",
-                    gap
-                      ? "border border-dashed border-[#edc8cc] text-danger [background-image:repeating-linear-gradient(135deg,rgba(173,57,65,.10)_0_5px,transparent_5px_10px)]"
-                      : "shadow-[inset_0_0_0_1px_rgba(25,38,35,.18)]",
-                    !ok && !gap
-                      ? "bg-danger-soft text-danger [background-image:repeating-linear-gradient(135deg,rgba(173,57,65,.18)_0_4px,transparent_4px_8px)]"
-                      : "",
-                    on
-                      ? "z-[2] shadow-[0_0_0_2px_#192623,inset_0_0_0_1px_rgba(0,0,0,.2)]"
-                      : "",
-                    dim ? "opacity-20" : "",
-                  ].join(" ")}
-                  style={{
-                    left: l,
-                    width: w,
-                    ...(hc
-                      ? {
-                          background: on ? hc.sat : hc.bg,
-                          color: on ? "#fff" : hc.ink,
-                        }
-                      : {}),
-                  }}
-                  onMouseMove={(e) => {
-                    showTip(e, cardTip(c));
-                  }}
+                  key={rowIndex}
+                  role="group"
+                  aria-label={`Segment row ${rowIndex + 1}`}
+                  data-testid="segment-row"
+                  className="relative h-11 border-b border-line/50"
                 >
-                  {w > 64 ? (
-                    <span className="min-w-0 truncate">
-                      {c.caption.state === "complete"
-                        ? c.caption.label
-                        : gap
-                          ? "window failed"
-                          : "caption failed"}
-                    </span>
-                  ) : null}
+                  {row.map((c, position) => {
+                    const left = Math.max(0, xOf(c.startS, view, 100));
+                    const right = Math.min(100, xOf(c.endS, view, 100));
+                    const size = right - left;
+
+                    const on = selected === c.index;
+                    const dim = dimmed.has(c.index);
+                    const ok = c.caption.state === "complete";
+                    const gap = c.kind === "failed_window";
+                    const hc =
+                      c.caption.state === "complete"
+                        ? HAND_COLORS[c.caption.hand]
+                        : null;
+                    return (
+                      <button
+                        key={c.segmentId}
+                        type="button"
+                        data-card={c.index}
+                        tabIndex={focusable === c ? 0 : -1}
+                        aria-label={`Segment ${c.index + 1}`}
+                        aria-pressed={on}
+                        aria-describedby={
+                          tip?.cardIndex === c.index ? tooltipId : undefined
+                        }
+                        onFocus={(e) => {
+                          setFocusedByRow((current) => ({
+                            ...current,
+                            [rowIndex]: c.index,
+                          }));
+                          const bounds =
+                            e.currentTarget.getBoundingClientRect();
+                          setFocusTip({
+                            ...cardTip(c),
+                            x: bounds.left,
+                            y: bounds.bottom,
+                          });
+                        }}
+                        onBlur={() => setFocusTip(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setFocusTip(null);
+                            setPointerTip(null);
+                          }
+                          const destination = rowFocusIndex(
+                            e.key,
+                            position,
+                            row.length,
+                          );
+                          if (destination === null) return;
+                          e.preventDefault();
+                          e.currentTarget.parentElement
+                            ?.querySelector<HTMLButtonElement>(
+                              `[data-card="${row[destination]!.index}"]`,
+                            )
+                            ?.focus();
+                        }}
+                        data-testid={
+                          gap ? "block-failed-window" : "block-segment"
+                        }
+                        data-selected={on ? "true" : undefined}
+                        data-tip="1"
+                        className={[
+                          "absolute top-1.5 bottom-1.5 flex cursor-pointer items-center overflow-hidden rounded-md text-[11px] font-semibold whitespace-nowrap focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink",
+                          gap
+                            ? "border border-dashed border-[#edc8cc] text-danger [background-image:repeating-linear-gradient(135deg,rgba(173,57,65,.10)_0_5px,transparent_5px_10px)]"
+                            : "shadow-[inset_0_0_0_1px_rgba(25,38,35,.18)]",
+                          !ok && !gap
+                            ? "bg-danger-soft text-danger [background-image:repeating-linear-gradient(135deg,rgba(173,57,65,.18)_0_4px,transparent_4px_8px)]"
+                            : "",
+                          on
+                            ? "z-[2] shadow-[0_0_0_2px_#192623,inset_0_0_0_1px_rgba(0,0,0,.2)]"
+                            : "",
+                          dim && !on
+                            ? "outline outline-dashed -outline-offset-2 outline-muted"
+                            : "",
+                        ].join(" ")}
+                        style={{
+                          left: `${left}%`,
+                          width: `${size}%`,
+                          ...(hc
+                            ? {
+                                background: on ? hc.sat : hc.bg,
+                                color: on ? "#16201d" : hc.ink,
+                              }
+                            : {}),
+                        }}
+                        onMouseMove={(e) => {
+                          showTip(e, cardTip(c));
+                        }}
+                      >
+                        {(size * width) / 100 >= 34 ? (
+                          <span className="min-w-0 truncate px-1.5">
+                            {c.caption.state === "complete"
+                              ? c.caption.label
+                              : gap
+                                ? "window failed"
+                                : "caption failed"}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -360,8 +430,8 @@ export function Tiers({
                 const w = Math.max(f.kind === "window" ? 3 : 4, x(f.endS) - l);
                 const title =
                   f.kind === "window"
-                    ? `Failed window · ${f.code}`
-                    : `Caption failed · ${f.code}`;
+                    ? "No segments could be produced for this time range."
+                    : "No caption is available for this segment.";
                 return (
                   <div
                     key={`${f.kind}-${i}`}
@@ -375,6 +445,7 @@ export function Tiers({
                       showTip(e, {
                         title,
                         sub: `${fmtClock(f.startS)} – ${fmtClock(f.endS)}`,
+                        body: `Error code: ${f.code}`,
                         bad: true,
                       });
                     }}
@@ -424,14 +495,16 @@ export function Tiers({
         <LegendItem style={{ border: "1px dashed #ad3941" }}>
           failed window · no segments
         </LegendItem>
+        <span>Gaps in hand rows mean no hand was detected.</span>
         <span className="hidden md:inline">
-          scroll to pan · ctrl+scroll to zoom · click a block to open it in the
-          rail
+          Shift + scroll to pan. Ctrl + scroll to zoom. Arrow keys move within a
+          segment row.
         </span>
       </div>
       {tip ? (
         <div
           role="tooltip"
+          id={tooltipId}
           data-testid="tier-tooltip"
           className="pointer-events-none fixed z-50 max-w-[280px] rounded-lg border border-line bg-white px-3 py-2 text-xs shadow-[0_8px_28px_#21332a22]"
           style={{
@@ -439,7 +512,9 @@ export function Tiers({
               (typeof window === "undefined" ? 1200 : window.innerWidth) - 290,
               tip.x + 14,
             ),
-            top: tip.y + 16,
+            top: tip.y > window.innerHeight / 2 ? tip.y - 12 : tip.y + 12,
+            transform:
+              tip.y > window.innerHeight / 2 ? "translateY(-100%)" : undefined,
           }}
         >
           {tip.title ? <b className="mb-0.5 block">{tip.title}</b> : null}
@@ -470,16 +545,19 @@ function Unavailable({ note }: { note: string | null }) {
 
 function LabelCell({
   h,
+  height,
   first,
   children,
 }: {
-  h: string;
+  h?: string;
+  height?: number;
   first?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div
-      className={`flex items-center gap-2 pr-2 pl-3 whitespace-nowrap md:pr-3.5 md:pl-6 ${h} ${first ? "" : "border-t border-line"}`}
+      style={{ height }}
+      className={`flex items-center gap-2 pr-2 pl-3 whitespace-nowrap md:pr-3.5 md:pl-6 ${h ?? ""} ${first ? "" : "border-t border-line"}`}
     >
       {children}
     </div>
@@ -500,7 +578,7 @@ function ZoomButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="inline-flex min-h-[30px] items-center justify-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold hover:bg-field"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold hover:bg-field"
     >
       {children}
     </button>
@@ -568,6 +646,7 @@ function Overview({
         />
       ))}
       <div
+        data-testid="overview-window"
         className="absolute inset-y-0 rounded-[5px] border-[1.5px] border-brand bg-brand-soft opacity-80"
         style={{
           left: pct(view[0]),

@@ -157,7 +157,7 @@ try {
       await open(stack, "/data-browser");
       check(
         `${label}: default datasets table`,
-        /Dataset[\s\S]*Clips[\s\S]*Total hours/.test(text()) &&
+        /Dataset[\s\S]*Clips[\s\S]*Total duration/.test(text()) &&
           /Shared pick-and-place/.test(text()) &&
           /Internal holdout/.test(text()),
       );

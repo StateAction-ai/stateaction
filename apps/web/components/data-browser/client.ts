@@ -82,11 +82,13 @@ export async function browserApi<T>(
       response.status,
       response.status === 401
         ? "Your session ended. Sign in again."
-        : response.status === 403 || response.status === 404
-          ? "This view is unavailable for your account."
-          : response.status === 409
-            ? "The dataset changed, or a clip is not cleared for its recipients. Refresh and try again."
-            : "The request could not be completed. Try again.",
+        : response.status === 404
+          ? "This page could not be found or is unavailable to your account."
+          : response.status === 403
+            ? "This view is unavailable for your account."
+            : response.status === 409
+              ? "The dataset changed, or a clip is not cleared for its recipients. Refresh and try again."
+              : "The request could not be completed. Try again.",
     );
   }
   if (json.data === undefined)

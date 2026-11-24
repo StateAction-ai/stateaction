@@ -117,15 +117,14 @@ export type AnnotationCounts = {
   captionsFailed: number | null;
 } | null;
 
-const COUNT_LABEL: Record<string, string> = {
-  segments: "segments",
-  failed_windows: "failed windows",
-  captions_complete: "captions ok",
-  captions_failed: "captions failed",
-  failed_captions: "captions failed",
-  clips: "clips",
+const COUNT_LABEL: Record<string, readonly [string, string]> = {
+  segments: ["segment", "segments"],
+  failed_windows: ["failed window", "failed windows"],
+  captions_complete: ["caption ok", "captions ok"],
+  captions_failed: ["caption failed", "captions failed"],
+  failed_captions: ["caption failed", "captions failed"],
+  clips: ["clip", "clips"],
 };
-const labelOf = (key: string) => COUNT_LABEL[key] ?? key.replace(/_/g, " ");
 
 export function parseModule(ref: string): { name: string; version: string } {
   const at = ref.lastIndexOf("@");
@@ -189,7 +188,7 @@ export function buildRunStages(
           };
     const counts = Object.entries(node.counts).map(([key, value]) => ({
       key,
-      label: labelOf(key),
+      label: COUNT_LABEL[key]?.[value === 1 ? 0 : 1] ?? key.replace(/_/g, " "),
       value,
       failed: key.includes("failed"),
     }));

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { ClipViewer } from "../rerun/clip-viewer";
 import type { ClipViewerState } from "../../lib/rerun/clip-viewer";
@@ -84,16 +84,16 @@ export function SidePanel({
     (c) => c.caption.state === "failed",
   ).length;
   return (
-    <aside
+    <section
       aria-label="Review side panel"
-      className="flex h-[640px] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06] xl:sticky xl:top-5 xl:h-[calc(100vh-40px)]"
+      className="flex min-w-0 flex-col rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06] xl:sticky xl:top-5 xl:h-[max(560px,calc(100vh-40px))] xl:overflow-hidden"
     >
       <div
         role="tablist"
         aria-label="Review panes"
-        className="flex gap-1 overflow-x-auto border-b border-line bg-paper px-3"
+        className="flex shrink-0 flex-wrap gap-1 rounded-t-2xl border-b border-line bg-paper px-3"
       >
-        {TABS.map((x) => (
+        {TABS.map((x, index) => (
           <button
             key={x.id}
             type="button"
@@ -101,6 +101,24 @@ export function SidePanel({
             id={`tab-${x.id}`}
             aria-selected={tab === x.id}
             aria-controls={`pane-${x.id}`}
+            tabIndex={tab === x.id ? 0 : -1}
+            onKeyDown={(e) => {
+              const next =
+                e.key === "Home"
+                  ? 0
+                  : e.key === "End"
+                    ? TABS.length - 1
+                    : e.key === "ArrowLeft"
+                      ? (index + TABS.length - 1) % TABS.length
+                      : e.key === "ArrowRight"
+                        ? (index + 1) % TABS.length
+                        : null;
+              if (next === null) return;
+              e.preventDefault();
+              const id = TABS[next]!.id;
+              onTab(id);
+              document.getElementById(`tab-${id}`)?.focus();
+            }}
             onClick={() => onTab(x.id)}
             className={cn(
               "-mb-px min-h-[52px] border-0 border-b-2 border-transparent bg-transparent px-2.5 text-[13px] font-semibold whitespace-nowrap text-muted",
@@ -110,14 +128,16 @@ export function SidePanel({
             {x.label}
           </button>
         ))}
-        <span
-          data-testid="rail-counter"
-          title="selected / total"
-          className="ml-auto self-center rounded-md bg-[#eef0ec] px-2 py-0.5 font-mono text-xs font-semibold text-[#4d5a54]"
-        >
-          #{selected === null ? "–" : selected + 1}/{total.toLocaleString()}
-        </span>
       </div>
+      {TABS.filter((pane) => pane.id !== tab).map((pane) => (
+        <div
+          key={pane.id}
+          role="tabpanel"
+          id={`pane-${pane.id}`}
+          aria-labelledby={`tab-${pane.id}`}
+          hidden
+        />
+      ))}
 
       {tab === "segs" ? (
         <div
@@ -127,13 +147,13 @@ export function SidePanel({
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="px-4 pt-3">
-            <label className="flex min-h-[34px] items-center gap-2 rounded-lg border border-line bg-white px-2.5 text-[13px]">
+            <label className="flex min-h-11 items-center gap-2 rounded-lg border border-line bg-white px-2.5 text-[13px]">
               <Search aria-hidden="true" size={14} className="text-muted" />
               <input
                 ref={queryRef}
                 value={query}
                 onChange={(e) => onQuery(e.target.value)}
-                placeholder="Filter captions  /"
+                placeholder="Search captions"
                 aria-label="Filter captions by text"
                 className="min-w-0 flex-1 border-0 bg-transparent outline-0"
               />
@@ -148,7 +168,7 @@ export function SidePanel({
                 aria-pressed={filter === f}
                 onClick={() => onFilter(f)}
                 className={cn(
-                  "rounded-lg border border-line bg-white px-2.5 py-[3px] text-xs font-semibold text-muted hover:bg-field",
+                  "rounded-lg border border-line bg-white px-2.5 min-h-11 text-xs font-semibold text-muted hover:bg-field",
                   filter === f &&
                     "border-transparent bg-brand-soft text-brand-ink",
                 )}
@@ -158,17 +178,25 @@ export function SidePanel({
                   : f === "failed"
                     ? `Failed ${failedTotal}`
                     : f === "issue"
-                      ? `Issue ${issueCount}`
-                      : `Unchecked ${Math.max(0, total - checkedCount)}`}
+                      ? `Flagged ${issueCount}`
+                      : `Unreviewed ${Math.max(0, total - checkedCount)}`}
               </button>
             ))}
             <span
               data-testid="rail-shown"
               className="ml-auto text-xs text-muted"
             >
-              {cards.length.toLocaleString()} shown
+              {cards.length.toLocaleString()} of {total.toLocaleString()} shown
             </span>
           </div>
+          <p
+            className="m-0 px-4 pt-2 text-xs text-muted"
+            data-testid="rail-counter"
+          >
+            {selected === null
+              ? "Select a segment to see details and review controls."
+              : `Segment ${selected + 1} of ${total.toLocaleString()} selected`}
+          </p>
           <Rail
             cards={cards}
             emptyText={
@@ -180,7 +208,6 @@ export function SidePanel({
                     ? "No segments were found."
                     : "No segments match."
             }
-            total={total}
             selected={selected}
             activeIndex={activeIndex}
             onSelect={onSelect}
@@ -220,7 +247,7 @@ export function SidePanel({
 
       <div
         data-testid="provenance"
-        className="flex flex-wrap gap-1.5 border-t border-line bg-field px-3 py-2.5"
+        className="flex shrink-0 flex-wrap gap-1.5 rounded-b-2xl border-t border-line bg-field px-3 py-2.5"
       >
         {model.provenance.map((badge) => {
           const run = linkProvenance ? annotations.dag_run : null;
@@ -259,14 +286,13 @@ export function SidePanel({
             : "no derived fields"}
         </span>
       </div>
-    </aside>
+    </section>
   );
 }
 
 function Rail({
   cards,
   emptyText,
-  total,
   selected,
   activeIndex,
   onSelect,
@@ -276,7 +302,6 @@ function Rail({
 }: {
   cards: Card[];
   emptyText: string;
-  total: number;
   selected: number | null;
   activeIndex: number;
   onSelect: (index: number) => void;
@@ -285,26 +310,33 @@ function Rail({
   onNextUnchecked: () => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
-  // The active card follows the playhead.
-  useEffect(() => {
-    if (activeIndex < 0) return;
-    const el = list.current?.querySelector<HTMLElement>(
-      `[data-index="${activeIndex}"]`,
+  const reveal = useCallback((index: number | null) => {
+    const container = list.current;
+    if (
+      index === null ||
+      !container ||
+      container.scrollHeight <= container.clientHeight
+    )
+      return;
+    const element = container.querySelector<HTMLElement>(
+      `[data-index="${index}"]`,
     );
-    el?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex]);
-  // A card chosen from the tiers scrolls into view as well.
-  useEffect(() => {
-    if (selected === null) return;
-    list.current
-      ?.querySelector<HTMLElement>(`[data-index="${selected}"]`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [selected]);
+    if (!element) return;
+    const viewport = container.getBoundingClientRect();
+    const card = element.getBoundingClientRect();
+    if (card.top < viewport.top || card.height > viewport.height) {
+      container.scrollTop += card.top - viewport.top;
+    } else if (card.bottom > viewport.bottom) {
+      container.scrollTop += card.bottom - viewport.bottom;
+    }
+  }, []);
+  useEffect(() => reveal(activeIndex), [activeIndex, reveal]);
+  useEffect(() => reveal(selected), [selected, reveal]);
   return (
     <div
       ref={list}
       data-testid="rail-list"
-      className="min-h-0 flex-1 overflow-auto px-3 pt-3 pb-5"
+      className="min-h-0 flex-1 px-3 pt-3 pb-5 xl:overflow-auto"
     >
       {cards.length === 0 ? (
         <p className="p-5 text-center text-xs text-muted">{emptyText}</p>
@@ -313,7 +345,6 @@ function Rail({
           <RailCard
             key={c.segmentId}
             card={c}
-            total={total}
             selected={selected === c.index}
             active={activeIndex === c.index}
             onSelect={onSelect}
@@ -330,7 +361,6 @@ function Rail({
 
 function RailCard({
   card: c,
-  total,
   selected,
   active,
   onSelect,
@@ -340,7 +370,6 @@ function RailCard({
   onNextUnchecked,
 }: {
   card: Card;
-  total: number;
   selected: boolean;
   active: boolean;
   onSelect: (index: number) => void;
@@ -351,36 +380,31 @@ function RailCard({
 }) {
   const failed = c.caption.state === "failed";
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <article
       data-testid="rail-card"
       data-index={c.index}
       data-active={active ? "true" : undefined}
       data-selected={selected ? "true" : undefined}
       data-failed={failed ? "true" : undefined}
       aria-current={active ? "true" : undefined}
-      aria-expanded={selected}
-      onClick={() => onSelect(c.index)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(c.index);
-        }
-      }}
       style={{ contentVisibility: "auto", containIntrinsicSize: "auto 96px" }}
       className={cn(
-        "relative mb-2.5 grid cursor-pointer grid-cols-[62px_minmax(0,1fr)] gap-x-2.5 rounded-lg border border-line bg-field px-3 py-2.5 hover:border-[#cdd6cf] hover:bg-white",
+        "relative mb-2.5 grid grid-cols-[62px_minmax(0,1fr)] gap-x-2.5 rounded-lg border border-line bg-field px-3 py-2.5 hover:border-[#cdd6cf] hover:bg-white focus-within:border-brand",
         active &&
           "border-[#f0d9a8] bg-[#fff8e1] before:absolute before:top-2.5 before:bottom-2.5 before:-left-px before:w-[3px] before:rounded before:bg-[#e0a100]",
         selected && "border-brand bg-white shadow-[0_0_0_3px_#eaf0fc]",
       )}
     >
+      <button
+        type="button"
+        id={`review-segment-${c.index}`}
+        className="col-span-full mb-2 min-h-11 cursor-pointer rounded-md border border-line bg-white px-2 text-left text-xs font-semibold text-brand-ink hover:bg-brand-soft"
+        aria-expanded={selected}
+        onClick={() => onSelect(c.index)}
+      >
+        Segment {c.index + 1} · {fmtClock(c.startS)}
+      </button>
       <div className="font-mono text-xs leading-tight font-semibold">
-        {fmtClock(c.startS)}
-        <small className="block text-[10.5px] font-medium text-muted">
-          #{c.index + 1}/{total.toLocaleString()}
-        </small>
         <div className="mt-1">
           <MarkBadge mark={mark} />
         </div>
@@ -414,7 +438,14 @@ function RailCard({
             data-testid="rail-failed"
             className="m-0 inline-flex items-center rounded-md bg-danger-soft px-2 py-0.5 text-[13px] font-semibold text-danger"
           >
-            {c.caption.message}
+            <span
+              title={c.caption.code}
+              aria-description={`Error code: ${c.caption.code}`}
+            >
+              {c.kind === "failed_window"
+                ? "No segments could be produced for this time range."
+                : "No caption is available for this segment."}
+            </span>
           </p>
         )}
       </div>
@@ -432,11 +463,16 @@ function RailCard({
           <dd className="m-0 py-[3px] text-right font-mono">
             {c.startFrameId} → {c.endFrameId ?? "end of stream"}
           </dd>
-          <dt className="py-[3px] text-muted">Hands L/R</dt>
+          <dt className="py-[3px] text-muted">Left / right hand</dt>
           <dd className="m-0 py-[3px] text-right font-mono">
             {pctText(c.handsLR.left, c.handsLR.partial)} /{" "}
             {pctText(c.handsLR.right, c.handsLR.partial)}
           </dd>
+          {c.handsLR.partial ? (
+            <dd className="col-span-full m-0 text-muted">
+              * Based on frames with hand pose results.
+            </dd>
+          ) : null}
         </dl>
       ) : null}
       {selected ? (
@@ -449,7 +485,7 @@ function RailCard({
           onNext={onNextUnchecked}
         />
       ) : null}
-    </div>
+    </article>
   );
 }
 
@@ -518,7 +554,7 @@ function HandPane({
         <HandRow k="This segment">
           <span className="font-mono">
             {card
-              ? `L ${pctText(card.handsLR.left, card.handsLR.partial)} · R ${pctText(card.handsLR.right, card.handsLR.partial)}`
+              ? `${pctText(card.handsLR.left, card.handsLR.partial)} / ${pctText(card.handsLR.right, card.handsLR.partial)} left / right`
               : "select a segment"}
           </span>
         </HandRow>
@@ -579,7 +615,7 @@ function JsonPane({
   }, [annotations, mode, selected]);
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-line px-5 py-3 text-[13px] text-muted">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3 text-[13px] text-muted">
         <div className="flex gap-0.5 rounded-lg border border-line bg-white p-[3px]">
           {(["segment", "recording"] as const).map((m) => (
             <button

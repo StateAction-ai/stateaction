@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FIXTURE_RECORDINGS, fixtureBundle } from "../lib/review/fixture.ts";
+import { formatMediaDuration } from "../lib/media-duration.ts";
 import { buildReviewModel } from "../lib/review/model.ts";
 import {
   activeCardIndex,
@@ -13,6 +14,9 @@ import {
   neighborStart,
   niceStep,
   panView,
+  packSegmentRows,
+  rulerTicks,
+  rowFocusIndex,
   tOf,
   xOf,
   zoomView,
@@ -86,4 +90,46 @@ test("the clip containing the playhead, or none", () => {
   assert.equal(clipAt(m.clips, 10).clipId, b.clips[0].clipId);
   assert.equal(clipAt(m.clips, 63), null);
   assert.equal(clipAt(m.clips, 70).clipId, b.clips[1].clipId);
+});
+
+test("fractional minor ticks keep exact major seconds in a panned view", () => {
+  const labels = rulerTicks([0.2, 12], 2)
+    .filter((tick) => tick.major)
+    .map((tick) => fmtClock(tick.s));
+  assert.deepEqual(labels, ["0:02", "0:04", "0:06", "0:08", "0:10", "0:12"]);
+});
+
+test("timeline rows keep every overlap visible and reuse rows at shared boundaries", () => {
+  const spans = [
+    [0, 10],
+    [1, 3],
+    [1, 5],
+    [3, 5],
+    [5, 7],
+    [10, 11],
+  ];
+  const cards = spans.map(([startS, endS], index) => ({
+    ...m.cards[0],
+    index,
+    startS,
+    endS,
+  }));
+  assert.deepEqual(
+    packSegmentRows(cards).map((row) => row.map((card) => card.index)),
+    [[0, 5], [1, 3, 4], [2]],
+  );
+  assert.deepEqual(packSegmentRows([]), []);
+});
+
+test("clip and dataset duration use the same rounded clock format", () => {
+  assert.equal(formatMediaDuration("11500000000"), "0:12");
+  assert.equal(formatMediaDuration("3725000000000"), "1:02:05");
+});
+
+test("roving focus moves within a row and stops at its edges", () => {
+  assert.equal(rowFocusIndex("Home", 2, 3), 0);
+  assert.equal(rowFocusIndex("End", 0, 3), 2);
+  assert.equal(rowFocusIndex("ArrowLeft", 0, 3), 0);
+  assert.equal(rowFocusIndex("ArrowRight", 1, 3), 2);
+  assert.equal(rowFocusIndex("Tab", 1, 3), null);
 });

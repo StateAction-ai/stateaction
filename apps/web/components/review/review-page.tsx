@@ -28,6 +28,7 @@ import type {
 import {
   activeCardIndex,
   filterCards,
+  fmtClock,
   fitView,
   followView,
   neighborStart,
@@ -262,19 +263,21 @@ export function ReviewPage({
 
   return (
     <div className="min-w-0">
-      <h1 className="sr-only">Review · {recording.title}</h1>
+      <h1 className="mb-3 text-xl font-bold wrap-anywhere">
+        {recording.title}
+      </h1>
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-paper px-3.5 py-2.5 shadow-[0_6px_25px_#21332a06]">
         <select
           aria-label="Recording"
           value={recording.recordingId}
           onChange={(e) => router.push(`/review/${e.target.value}`)}
-          className="min-h-[34px] max-w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink"
+          className="min-h-11 w-full min-w-0 max-w-full sm:w-auto rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink"
         >
           {choices.map((r) => (
             <option key={r.recordingId} value={r.recordingId}>
               {[
-                r.title,
                 shortRecordingId(r.recordingId),
+                r.title,
                 r.source === "imported" ? "Imported" : r.collector,
                 r.sourceSize,
               ]
@@ -284,8 +287,7 @@ export function ReviewPage({
           ))}
         </select>
         <span className="font-mono text-xs text-muted">
-          {Math.floor(model.durationS / 60)}:
-          {String(Math.floor(model.durationS % 60)).padStart(2, "0")}
+          {fmtClock(model.durationS)}
         </span>
         <div
           data-testid="review-state"
@@ -304,7 +306,8 @@ export function ReviewPage({
         <span data-testid="review-summary" className="text-xs text-muted">
           {annotations.segments
             ? [
-                summary.segments.toLocaleString() + " segments",
+                summary.segments.toLocaleString() +
+                  (summary.segments === 1 ? " segment" : " segments"),
                 summary.failedWindows +
                   (summary.failedWindows === 1
                     ? " failed window"
@@ -336,7 +339,7 @@ export function ReviewPage({
         <span className="flex-1" />
         <Link
           href={`/pipeline/${recording.recordingId}`}
-          className="inline-flex min-h-[30px] items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold hover:bg-field"
+          className="inline-flex min-h-11 items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold hover:bg-field"
         >
           Pipeline run
         </Link>
@@ -345,7 +348,7 @@ export function ReviewPage({
           id="dlBtn"
           data-testid="download-json"
           onClick={download}
-          className="inline-flex min-h-[30px] items-center gap-2 rounded-lg border border-brand bg-brand px-2.5 text-xs font-semibold text-white hover:bg-brand-strong"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-brand bg-brand px-2.5 text-xs font-semibold text-white hover:bg-brand-strong"
         >
           <Download aria-hidden="true" size={14} />
           Download JSON
@@ -384,6 +387,14 @@ export function ReviewPage({
             onFit={() => setView(fitView(model.durationS))}
             onView={(v) => setView(clampView(v[0], v[1], model.durationS))}
           />
+          {tab === "segs" && selected !== null && !dimmed.has(selected) ? (
+            <a
+              href={`#review-segment-${selected}`}
+              className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-brand underline xl:hidden"
+            >
+              Jump to segment {selected + 1} details
+            </a>
+          ) : null}
         </div>
         <SidePanel
           model={model}
