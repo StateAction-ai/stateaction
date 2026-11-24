@@ -69,6 +69,7 @@ interface DatasetWriter {
     )
     fun logTrackingStateTransition(previousState: String, nextState: String, timestampNs: Long)
     fun writePointCloud(timestamp: Long, frameData: PointCloudFrameData?)
+    fun writeThumbnail(jpegData: ByteArray) {}
     fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long = timestamp)
     fun writeDepthFrame(timestamp: Long, frameData: DepthFrameData?, associationTimestampNs: Long = timestamp): Boolean
     fun writeIntrinsics(timestampNs: Long, intrinsics: Map<String, Any>)

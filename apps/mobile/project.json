@@ -32,7 +32,12 @@
       "executor": "nx:run-commands",
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["flutterSources", "^flutterSources", "androidToolchain"],
+      "inputs": [
+        "flutterSources",
+        "^flutterSources",
+        "androidToolchain",
+        "{workspaceRoot}/workers/processing/src/stateaction_processing/hand_model.json"
+      ],
       "outputs": [],
       "options": {
         "command": "python3 scripts/mobile/run.py mobile build"

@@ -68,6 +68,12 @@ class ArRecorderProvider extends ChangeNotifier {
   bool _isLowQualityMode = false;
   bool get isLowQualityMode => _isLowQualityMode;
 
+  String? _cameraId;
+  String? get cameraId => _cameraId;
+
+  String? _cameraLens;
+  String? get cameraLens => _cameraLens;
+
   String? _lowQualityReason;
   String? get lowQualityReason => _lowQualityReason;
 
@@ -228,6 +234,8 @@ class ArRecorderProvider extends ChangeNotifier {
         (result["isLowQualityMode"] as bool? ?? _isLowQualityMode) !=
             _isLowQualityMode ||
         (result["lowQualityReason"] as String?) != _lowQualityReason ||
+        (result["cameraLens"] as String?) != _cameraLens ||
+        (result["cameraId"] as String?) != _cameraId ||
         (result["cameraResolution"] as String?) != _cameraResolution ||
         (result["recordingResolution"] as String?) != _recordingResolution ||
         (result["previewWidth"] as int?) != _previewWidth ||
@@ -261,6 +269,8 @@ class ArRecorderProvider extends ChangeNotifier {
     _errorMessage = null;
     _isLowQualityMode = false;
     _lowQualityReason = null;
+    _cameraLens = null;
+    _cameraId = null;
     _cameraResolution = null;
     _recordingResolution = null;
     _previewWidth = null;
@@ -681,6 +691,8 @@ class ArRecorderProvider extends ChangeNotifier {
           result["isFinalizationInProgress"] as bool? ?? false;
       _textureId ??= result["textureId"] as int?;
       _frameCount = result["frameCount"] as int?;
+      _cameraLens = result["cameraLens"] as String?;
+      _cameraId = result["cameraId"] as String?;
       _isLowQualityMode =
           result["isLowQualityMode"] as bool? ?? _isLowQualityMode;
       _lowQualityReason =

@@ -2,6 +2,8 @@ package open.fpvlabs.stera.ar_recorder.session
 
 import android.app.Activity
 import android.content.Context
+import android.hardware.camera2.CameraManager
+import android.os.Build
 import android.os.SystemClock
 import open.fpvlabs.stera.ar_recorder.ArTrackingState
 import com.google.ar.core.ArCoreApk
@@ -48,6 +50,9 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
     private var consecutiveTrackingFrames: Int = 0
     private var stableTrackingSinceMs: Long? = null
 
+    override var cameraLensEvidence: Map<String, Any?> = emptyMap()
+        private set
+
     override var selectedCameraResolution: String = "unknown"
         private set
 
@@ -90,12 +95,26 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
             val fpsFilter = CameraConfigFilter(sessionInstance).setTargetFps(
                 EnumSet.of(CameraConfig.TargetFps.TARGET_FPS_30)
             )
+            fpsFilter.facingDirection = CameraConfig.FacingDirection.BACK
+            val defaultCameraId = sessionInstance.cameraConfig.cameraId
             val supportedConfigs = sessionInstance.getSupportedCameraConfigs(fpsFilter)
+            val cameraManager = context.getSystemService(CameraManager::class.java)
+            val supportedIds = supportedConfigs.map { it.cameraId } + defaultCameraId
+            val availableIds = runCatching {
+                cameraManager.cameraIdList.flatMap { id ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        listOf(id) + cameraManager.getCameraCharacteristics(id).physicalCameraIds
+                    } else listOf(id)
+                }
+            }.getOrDefault(emptyList())
+            val fieldsOfView = RearCameraLens.fieldsOfView(cameraManager, supportedIds + availableIds)
             val eligible = if (exactCamera) supportedConfigs.filter { it.imageSize.width == targetWidth && it.imageSize.height == targetHeight } else supportedConfigs
             check(!exactCamera || eligible.isNotEmpty()) { "ARCore has no exact native ${targetWidth}x${targetHeight} 30fps camera configuration; refusing resize/fallback" }
             if (eligible.isNotEmpty()) {
                 val bestConfig = eligible.minWithOrNull(
-                    compareBy<CameraConfig> {
+                    compareByDescending<CameraConfig> { fieldsOfView[it.cameraId] ?: -1.0 }
+                        .thenBy { it.cameraId != defaultCameraId }
+                        .thenBy {
                         val size = it.imageSize
                         kotlin.math.abs(size.width - targetWidth) +
                             kotlin.math.abs(size.height - targetHeight)
@@ -114,6 +133,23 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
                 selectedCameraResolution = "${fallbackSize.width}x${fallbackSize.height}"
                 println("⚠️ 30 FPS camera config unavailable, using fallback: ${fallbackSize.width}x${fallbackSize.height}")
             }
+
+            val selectedId = sessionInstance.cameraConfig.cameraId
+            val selectedFov = fieldsOfView[selectedId]
+            val defaultFov = fieldsOfView[defaultCameraId]
+            val widestFov = fieldsOfView.values.maxOrNull()
+            val ultrawide = RearCameraLens.isUltrawide(selectedFov, defaultFov, widestFov)
+            cameraLensEvidence = mapOf(
+                "camera_id" to selectedId,
+                "lens" to when {
+                    ultrawide -> "ultrawide"
+                    selectedId == defaultCameraId -> "default_rear"
+                    else -> "unverified_rear"
+                },
+                "estimated_optical_horizontal_fov_degrees" to selectedFov,
+                "default_camera_id" to defaultCameraId,
+                "default_estimated_optical_horizontal_fov_degrees" to defaultFov,
+            )
 
             // Configure session
             val config = Config(session).apply {
@@ -239,6 +275,7 @@ class ArSessionManagerImpl(private val context: Context) : ArSessionManager {
             skippedFrames = 0
             consecutiveTrackingFrames = 0
             stableTrackingSinceMs = null
+            cameraLensEvidence = emptyMap()
             selectedCameraResolution = "unknown"
             selectedFocusMode = "unknown"
             println("✅ ARCore session released")

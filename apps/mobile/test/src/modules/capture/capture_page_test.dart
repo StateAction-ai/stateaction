@@ -42,7 +42,9 @@ void main() {
             permissions: const _DeniedRecorderPermissions(),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => RecordingsProvider()),
+        ChangeNotifierProvider<RecordingsProvider>(
+          create: (_) => _EmptyRecordingsProvider(),
+        ),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -68,6 +70,16 @@ void main() {
     expect(find.text("Recordings"), findsOneWidget);
   });
 
+  testWidgets("opens the guide without the demo header", (tester) async {
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+
+    expect(find.text("Collect Multimodal data"), findsNothing);
+    await tester.tap(find.text("Step-by-step guide"));
+    await tester.pumpAndSettle();
+    expect(find.text("Recording guide"), findsOneWidget);
+  });
+
   testWidgets("shows no upload or account surfaces", (tester) async {
     await tester.pumpWidget(host());
     await tester.pump();
@@ -88,4 +100,9 @@ class _DeniedRecorderPermissions implements RecorderPermissions {
 
   @override
   Future<bool> openSettings() async => false;
+}
+
+class _EmptyRecordingsProvider extends RecordingsProvider {
+  @override
+  Future<void> loadSessions() async {}
 }

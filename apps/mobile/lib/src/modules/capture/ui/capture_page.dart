@@ -15,7 +15,7 @@ import "package:stera/src/core/theme/app_type.dart";
 import "package:stera/src/modules/ar_recorder/helpers/ar_recorder_launcher.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_recording_settings_pannel/ar_recording_settings_header_button.dart";
 import "package:stera/src/modules/capture/ui/widgets/capture_recordings_section.dart";
-import "package:stera/src/modules/demo/ui/widgets/app_demo_video_inline_intro_card.dart";
+import "package:stera/src/modules/home/ui/widgets/recording_guide_button.dart";
 import "package:stera/src/modules/recordings/providers/recordings_provider.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 
@@ -123,9 +123,6 @@ class _CapturePageState extends State<CapturePage> with WidgetsBindingObserver {
             ),
             // The content scrolls as one column and only the action is pinned —
             // the same footer layout `AddUploadPage` uses for `UploadActions`.
-            // The demo card has an intrinsic height, so leaving it and the
-            // recordings grid as siblings of a pinned button overflows a short
-            // screen.
             body: Column(
               children: [
                 Expanded(
@@ -138,8 +135,6 @@ class _CapturePageState extends State<CapturePage> with WidgetsBindingObserver {
                       physics: AlwaysScrollableScrollPhysics(),
                       child: Column(
                         children: [
-                          // Still thumbnail when DEMO_VIDEO_URL is unset (common
-                          // in NO_AUTH_MODE); inline playback when it is set.
                           Padding(
                             padding: EdgeInsets.fromLTRB(
                               AppSpacing.lg,
@@ -147,7 +142,7 @@ class _CapturePageState extends State<CapturePage> with WidgetsBindingObserver {
                               AppSpacing.lg,
                               AppSpacing.none,
                             ),
-                            child: AppDemoVideoInlineIntroCard(),
+                            child: RecordingGuideButton(),
                           ),
                           AppSpacing.gapLg,
                           CaptureRecordingsSection(),

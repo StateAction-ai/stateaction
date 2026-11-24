@@ -961,7 +961,8 @@ class ArRecorderImpl(
             )
 
             // Requested vs effective settings and every unrequested-but-not-delivered stream are durable evidence.
-            finalizationResult.metadata["capture_settings"] = activeRecordingConfig.effective()
+            finalizationResult.metadata["capture_settings"] = activeRecordingConfig.effective() +
+                ("camera_lens" to sessionManager.cameraLensEvidence)
             if (activeRecordingConfig.isH264) {
                 finalizationResult.metadata["rgb_codec"] = "h264"
                 finalizationResult.metadata["recording_id"] = h264TerminalStats["recording_id"]
@@ -1236,6 +1237,8 @@ class ArRecorderImpl(
             "lowQualityReason" to lowQualityReason,
             "upscaleApplied" to upscaleApplied,
             "error" to lastErrorMessage,
+            "cameraLens" to sessionManager.cameraLensEvidence["lens"],
+            "cameraId" to sessionManager.cameraLensEvidence["camera_id"],
             "captureStopReason" to motionCapture.stopReason
         )
     }

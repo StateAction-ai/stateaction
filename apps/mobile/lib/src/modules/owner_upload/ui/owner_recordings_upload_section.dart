@@ -10,12 +10,14 @@ import "package:stera/src/core/common/widgets/app_button/enums/button_type.dart"
 import "package:stera/src/core/common/widgets/app_card.dart";
 import "package:stera/src/core/common/widgets/app_slider_dialog.dart";
 import "package:stera/src/core/common/widgets/section_header.dart";
+import "package:stera/src/core/common/widgets/video_thumbnail/video_thumbnail.dart";
 import "package:stera/src/core/theme/app_radii.dart";
 import "package:stera/src/core/theme/app_spacing.dart";
 import "package:stera/src/modules/auth/session/auth_services.dart";
 import "package:stera/src/modules/auth/ui/widgets/login_modal.dart";
 import "package:stera/src/modules/home/data/enums/current_page.dart";
 import "package:stera/src/modules/home/providers/navigation_provider.dart";
+import "package:stera/src/modules/mcap_preview/ui/mcap_preview_page.dart";
 import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_controller.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_services.dart";
@@ -190,6 +192,17 @@ class _OwnerRecordingsUploadSectionState
                 session: session,
                 view: view,
                 onAction: () => _act(controller, session, view),
+                onPreview:
+                    context.read<RecordingsProvider>().isFinalizing(session)
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => McapPreviewPage(
+                            sessionDir: session.fullPath,
+                            title: RecordingSessionTile.titleFor(session),
+                          ),
+                        ),
+                      ),
               ),
           ],
         ),
@@ -232,12 +245,14 @@ class OwnerTakeRow extends StatelessWidget {
     required this.session,
     required this.view,
     required this.onAction,
+    this.onPreview,
     super.key,
   });
 
   final RecordingSession session;
   final TakeUploadView view;
   final VoidCallback onAction;
+  final VoidCallback? onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -248,6 +263,27 @@ class OwnerTakeRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Semantics(
+            button: onPreview != null,
+            label: "Preview recording",
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onPreview,
+              child: VideoThumbnail(
+                filePath: session.thumbnailPath,
+                durationMs: (session.durationSeconds * 1000).round(),
+                overlay: onPreview == null
+                    ? null
+                    : const Center(
+                        child: Icon(
+                          Icons.play_circle_fill,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ),
+          AppSpacing.gapSm,
           Text(
             RecordingSessionTile.titleFor(session),
             maxLines: 1,

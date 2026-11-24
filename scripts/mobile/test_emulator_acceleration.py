@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import emulator_acceleration as ea
 
@@ -68,6 +69,46 @@ class ProcessTest(unittest.TestCase):
             self.assertIsNone(ea.find_qemu(5582, "b", proc))
             self.assertTrue(ea.has_kvm_fd(11, proc))
             self.assertFalse(ea.has_kvm_fd(12, proc))
+
+
+class CameraSourceTest(unittest.TestCase):
+    def test_verify_rejects_a_different_source_and_redacts_the_filename(self):
+        source = "videofile:/private/test scene.mp4"
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.object(ea, "find_qemu", return_value=123),
+            mock.patch.object(
+                ea, "cmdline_of", return_value=GOOD + ["-camera-back", source]
+            ),
+            mock.patch.object(ea, "has_kvm_fd", return_value=True),
+            mock.patch.object(ea, "adb", side_effect=[f"GLES: {NVIDIA}", "x86_64"] * 2),
+        ):
+            receipt = Path(directory) / "receipt.json"
+            evidence = ea.verify(
+                "emulator-5582",
+                "a",
+                5582,
+                ea.ACCELERATED,
+                "NVIDIA",
+                False,
+                receipt,
+                None,
+                source,
+            )
+            self.assertEqual(evidence["camera_back"], "videofile")
+            self.assertNotIn("test scene", receipt.read_text())
+            with self.assertRaisesRegex(ea.VerificationError, "different back camera"):
+                ea.verify(
+                    "emulator-5582",
+                    "a",
+                    5582,
+                    ea.ACCELERATED,
+                    "NVIDIA",
+                    False,
+                    receipt,
+                    None,
+                    "virtualscene",
+                )
 
 
 class DisplayOutputTest(unittest.TestCase):

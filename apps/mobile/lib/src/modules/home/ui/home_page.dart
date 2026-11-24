@@ -4,8 +4,7 @@ import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/constants/app_assets.dart";
 import "package:stera/src/core/common/widgets/app_header.dart";
 import "package:stera/src/modules/auth/providers/auth_provider.dart";
-import "package:stera/src/modules/demo/providers/demo_video_preload_provider.dart";
-import "package:stera/src/modules/demo/ui/widgets/app_demo_video_inline_intro_card.dart";
+import "package:stera/src/modules/home/ui/widgets/recording_guide_button.dart";
 import "package:stera/src/core/common/widgets/open_source_badge.dart";
 import "package:stera/src/core/theme/app_spacing.dart";
 import "package:stera/src/core/theme/app_type.dart";
@@ -31,11 +30,6 @@ class _HomePageState extends State<HomePage> {
       final upv = context.read<UploadedVideosProvider>();
 
       if (ap.user == null) return;
-
-      context
-          .read<DemoVideoPreloadProvider>()
-          .obtainFullscreenController()
-          .then((_) {}, onError: (_) {});
 
       if (upv.videos.isEmpty) {
         final err = await upv.getUploadedVideos();
@@ -108,7 +102,7 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AppDemoVideoInlineIntroCard(),
+                  RecordingGuideButton(),
                   SizedBox(height: AppSpacing.lg),
                   UploadProgressCard(),
                   OwnerRecordingsUploadSection(),

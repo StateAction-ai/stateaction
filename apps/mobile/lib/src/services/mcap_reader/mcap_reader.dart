@@ -111,7 +111,14 @@ class McapReader {
   /// the MessageIndex records of every chunk that contains it. Sorted by
   /// logTime.
   Future<List<McapMessageRef>> buildTopicIndex(int channelId) async {
-    final refs = <McapMessageRef>[];
+    final refs = await streamTopicIndex(channelId).toList();
+    refs.sort((a, b) => a.logTimeNs.compareTo(b.logTimeNs));
+    return refs;
+  }
+
+  /// Reads bounded index batches in file order. Native RGB is written in
+  /// timestamp order, so replay can remux a long take without indexing it all.
+  Stream<McapMessageRef> streamTopicIndex(int channelId) async* {
     for (final chunk in chunkIndexes) {
       final indexOffset = chunk.messageIndexOffsets[channelId];
       if (indexOffset == null) continue;
@@ -127,16 +134,12 @@ class McapReader {
       while (buf.offset < entriesEnd) {
         final logTime = buf.uint64();
         final offsetInChunk = buf.uint64();
-        refs.add(
-          McapMessageRef(
-            logTimeNs: logTime,
-            fileOffset: recordsBase + offsetInChunk,
-          ),
+        yield McapMessageRef(
+          logTimeNs: logTime,
+          fileOffset: recordsBase + offsetInChunk,
         );
       }
     }
-    refs.sort((a, b) => a.logTimeNs.compareTo(b.logTimeNs));
-    return refs;
   }
 
   /// Reads the full Message record at [ref] (header + raw CDR payload).

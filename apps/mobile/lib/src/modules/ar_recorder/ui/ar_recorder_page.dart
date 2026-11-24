@@ -2,6 +2,7 @@ import "dart:async";
 import "dart:developer" as dev;
 import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/router/app_router.dart";
+import "package:stera/src/modules/ar_recorder/ui/framing_setup_page.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_error_overlay.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_low_quality_banner.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_preview_area.dart";
@@ -19,7 +20,9 @@ import "package:stera_recorder/stera_recorder.dart";
 class ArRecorderPage extends StatefulWidget {
   static const String routeName = "/ar-recorder";
 
-  const ArRecorderPage({super.key});
+  const ArRecorderPage({super.key, this.framing});
+
+  final FramingEvidence? framing;
 
   @override
   State<ArRecorderPage> createState() => _ArRecorderPageState();
@@ -43,7 +46,10 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
     super.initState();
     _arp = context.read<ArRecorderProvider>();
     _arChannel.setMethodCallHandler(_handleNativeCall);
-    SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeRight]);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
 
     _batteryMonitor = BatteryMonitorService(
       onLowBatteryWarning: _handleLowBatteryWarning,
@@ -52,11 +58,6 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
     _arp.addListener(_syncBatteryMonitor);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      AppToast.info(
-        title: "Hold your device in landscape mode",
-        description: "Keep the home button on the left for best results.",
-        holdDuration: 4,
-      );
       await _arp.initializeSession();
       if (!mounted) return;
       await _initAudioCueServiceIfNeeded();
@@ -372,6 +373,26 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
       (arp) => arp.state == ArRecorderState.error,
     );
 
+    final checkRecordingFrame = context.select<ArRecorderProvider, bool>((arp) {
+      final framing = widget.framing;
+      if (framing == null || arp.state != ArRecorderState.ready) return false;
+      if (framing.cameraId == null || arp.cameraId != framing.cameraId) {
+        return true;
+      }
+      final dimensions = arp.recordingResolution?.split("x");
+      final width = int.tryParse(dimensions?.first ?? "");
+      final height = dimensions?.length == 2
+          ? int.tryParse(dimensions!.last)
+          : null;
+      final previewWidth = framing.width;
+      final previewHeight = framing.height;
+      return width == null ||
+          height == null ||
+          previewWidth == null ||
+          previewHeight == null ||
+          width * previewHeight != height * previewWidth;
+    });
+
     return PopScope(
       canPop: !isRecordingActive,
       onPopInvokedWithResult: (didPop, _) {
@@ -401,14 +422,31 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
                   child: ArLowQualityBanner(),
                 ),
               Positioned(
-                bottom: 24,
-                left: 0,
-                right: 0,
+                top: 0,
+                bottom: 0,
+                right: 8,
                 child: ArRecordingControls(
                   onStartPressed: _startRecordingFromUi,
                   onStopPressed: _handleStopRecording,
                 ),
               ),
+              if (checkRecordingFrame)
+                const Positioned(
+                  bottom: 8,
+                  left: 8,
+                  right: 150,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text(
+                          "Check both hands again. The recording camera or crop may differ from the framing preview.",
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               if (showError) const ArErrorOverlay(),
             ],
           ),

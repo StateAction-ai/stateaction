@@ -2,8 +2,10 @@ import "dart:io";
 
 import "package:flutter/cupertino.dart";
 import "package:flutter/material.dart";
+import "package:provider/provider.dart";
 import "package:stera/src/core/router/app_router.dart";
 import "package:stera/src/modules/ar_recorder/ui/ar_recorder_page.dart";
+import "package:stera/src/modules/ar_recorder/ui/framing_setup_page.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_unsupported_device_bottom_sheet.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
@@ -76,10 +78,31 @@ abstract final class ArRecorderLauncher {
       );
     }
 
+    FramingEvidence? framing;
+    if (Platform.isAndroid) {
+      final config = ctx.read<ArRecorderProvider>().recordingConfig;
+      framing = await Navigator.of(ctx).push<FramingEvidence>(
+        MaterialPageRoute(
+          builder: (_) => FramingSetupPage(
+            aspectRatio: config.h264SimulationMode ? 4 / 3 : 16 / 9,
+          ),
+        ),
+      );
+      if (framing == null || !ctx.mounted) {
+        return (
+          null,
+          Failure(
+            code: ErrorType.cancelled,
+            message: "User cancelled recording",
+          ),
+        );
+      }
+    }
+
     final sessionDir = await Navigator.of(ctx).push<String>(
       CupertinoPageRoute(
         settings: const RouteSettings(name: ArRecorderPage.routeName),
-        builder: (_) => const ArRecorderPage(),
+        builder: (_) => ArRecorderPage(framing: framing),
       ),
     );
 

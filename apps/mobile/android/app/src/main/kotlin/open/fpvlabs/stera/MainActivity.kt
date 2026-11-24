@@ -1,6 +1,8 @@
 package open.fpvlabs.stera
 
 import android.content.Intent
+import open.fpvlabs.stera.framing.FramingMethodChannelHandler
+import open.fpvlabs.stera.local_playback.LocalPlaybackMethodChannelHandler
 import open.fpvlabs.stera.content_uri_helper.ContentUriMethodChannelHandler
 import open.fpvlabs.stera.gallery_manager.GalleryManagerMethodChannelHandler
 import open.fpvlabs.stera.video_metadata_extractor.VideoMetadataMethodChannelHandler
@@ -10,12 +12,16 @@ import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
 
+    private var framingHandler: FramingMethodChannelHandler? = null
     private var videoPickerHandler: VideoPickerMethodChannelHandler? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         val binaryMessenger = flutterEngine.dartExecutor.binaryMessenger
+
+        framingHandler = FramingMethodChannelHandler(this, binaryMessenger, flutterEngine.renderer)
+        LocalPlaybackMethodChannelHandler(applicationContext, binaryMessenger)
 
         // Content URI Helper Channel
         ContentUriMethodChannelHandler(applicationContext, binaryMessenger)
@@ -31,6 +37,12 @@ class MainActivity : FlutterActivity() {
 
         // AR Recorder lives in the stera_recorder plugin and registers itself
         // through GeneratedPluginRegistrant.
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        framingHandler?.dispose()
+        framingHandler = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

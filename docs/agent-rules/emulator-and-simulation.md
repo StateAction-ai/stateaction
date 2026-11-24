@@ -21,3 +21,19 @@ Launch with [`scripts/supervise_capture_emulator.sh`](../../scripts/supervise_ca
 - `--software` (or `CAPTURE_EMULATOR_PROFILE=software`) is the explicit CI/compatibility override. Its output and evidence carry the label `software-rendering-not-accelerated` and must never be cited as accelerated evidence. Earlier software-rendered results stay valid but labeled as such.
 - Report acceleration as rendering only: the guest video encoder stays software, and emulator results are never physical-device qualification. Make no speedup claim without comparable timings of the same task.
 - Run expensive emulator, Flutter and Gradle work in the `emulator` lane (emulator sessions) or `android-build` (Flutter/Gradle builds), with no ad hoc lock files, use incremental builds, and do not weaken recorder assertions for speed. Verification evidence is written to the ignored `artifacts/emulator-verification/`.
+
+## Known-bad video-file camera on the pinned API33 emulator
+
+Do not use `-camera-back videofile:<file>` or the launcher’s `--camera-video` option with emulator **36.4.10** and the x86_64 `stera_ar_api33` AVD (`emulator-5582`). Use the default VirtualScene camera for capture smoke tests. Use the physical Pixel for chest-mount footage and optical lens comparisons.
+
+On November 24, 2026, SA-139 cold-booted the pinned AVD through `scripts/supervise_capture_emulator.sh --ar --camera-video <absolute-mp4-path> -no-window`. The file was a 640×480, 30 fps, H.264 MP4 in `yuv420p`. The emulator verifier confirmed `camera_back=videofile`, an open KVM descriptor, `-gpu host`, and the RTX 3090 guest renderer.
+
+The SA-139 debug collector opened its Camera2 framing preview and requested camera ID `0`. Logcat reached `CameraService::connect call` and `makeClient: Camera2 API, override to portrait 0`, but the app received no frames. The command `adb -s emulator-5582 shell dumpsys -t 5 media.camera` returned:
+
+```text
+!! CameraService may be deadlocked !!
+Device 0 is closed, no client instance
+*** SERVICE 'media.camera' DUMP TIMEOUT (5000ms) EXPIRED ***
+```
+
+Recovery used the exact serial `adb -s emulator-5582 emu kill` and the resource guard’s `wait-emulator-gone` check. Once the supervisor scope exited, `scripts/supervise_capture_emulator.sh --ar -no-window` restored VirtualScene. The guarded app smoke then finalized and replayed an H.264 take, and the camera service dump completed without a timeout. The video-source verification, camera-service dump, and screenshot are in the ignored SA-139 worktree artifacts under `artifacts/sa139/`.

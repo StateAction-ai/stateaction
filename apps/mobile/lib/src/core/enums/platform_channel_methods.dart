@@ -70,3 +70,22 @@ enum IosBackgroundUploaderMethod {
 
   static PlatformChannels get channel => PlatformChannels.iosBackgroundUploader;
 }
+
+enum CaptureFramingMethod {
+  start("start"),
+  latest("latest"),
+  stop("stop");
+
+  const CaptureFramingMethod(this.methodName);
+  final String methodName;
+}
+
+enum LocalRecordingPlaybackMethod {
+  start("start"),
+  append("append"),
+  finish("finish"),
+  discard("discard");
+
+  const LocalRecordingPlaybackMethod(this.methodName);
+  final String methodName;
+}

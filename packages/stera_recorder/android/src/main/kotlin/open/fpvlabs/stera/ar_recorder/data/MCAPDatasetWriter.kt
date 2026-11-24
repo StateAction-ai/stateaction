@@ -536,21 +536,29 @@ class MCAPDatasetWriter(
         }
     }
 
+    override fun writeThumbnail(jpegData: ByteArray) {
+        if (!isInitialized || thumbnailSaved) return
+        try {
+            val dir = sessionDir ?: return
+            val file = AtomicFile(File(dir, "thumbnail.jpg"))
+            val stream = file.startWrite()
+            try {
+                stream.write(makeThumbnailJpeg(jpegData))
+                file.finishWrite(stream)
+                thumbnailSaved = true
+            } catch (error: Exception) {
+                file.failWrite(stream)
+                throw error
+            }
+        } catch (error: Exception) {
+            println("Failed to save thumbnail: ${error.message}")
+        }
+    }
+
     override fun writeCompressedRgbFrame(timestamp: Long, jpegData: ByteArray, associationTimestampNs: Long) {
         if (!legacyStreams) { recordWriteFailure("JPEG cannot be written to an H.264 recording"); return }
         if (!isInitialized || writersPaused) return
-        // Save first JPEG frame as thumbnail
-        if (!thumbnailSaved) {
-            try {
-                sessionDir?.let { dir ->
-                    File(dir, "thumbnail.jpg").writeBytes(makeThumbnailJpeg(jpegData))
-                    thumbnailSaved = true
-                    println("thumbnail.jpg saved in ${dir.absolutePath}")
-                }
-            } catch (e: Exception) {
-                println("Failed to save thumbnail: ${e.message}")
-            }
-        }
+        writeThumbnail(jpegData)
         val startNs = SystemClock.elapsedRealtimeNanos()
         try {
             val data = CDRSerializer.serializeCompressedImage(

@@ -5,6 +5,8 @@ enum PlatformChannels {
   videoHelper("video_helper"),
   videoPicker("custom_document_picker"),
   galleryManager("gallery_manager"),
+  captureFraming("capture_framing"),
+  localRecordingPlayback("local_recording_playback"),
   uploadService("upload_service"),
   iosBackgroundUploader("ios_background_uploader");
 

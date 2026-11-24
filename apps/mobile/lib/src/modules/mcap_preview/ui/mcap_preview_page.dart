@@ -1,8 +1,12 @@
+import "dart:io";
+
 import "package:flutter/material.dart";
 import "package:stera/src/core/common/utils/extensions.dart";
 import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/constants/app_assets.dart";
 import "package:stera/src/modules/mcap_preview/providers/mcap_preview_provider.dart";
+import "package:stera/src/modules/mcap_preview/helpers/h264_playback.dart";
+import "package:stera/src/modules/mcap_preview/ui/h264_playback_page.dart";
 import "package:stera/src/modules/mcap_preview/ui/mcap_topic_player_page.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/mcap_error_state.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/mcap_loading_state.dart";
@@ -59,7 +63,10 @@ class _McapPreviewPageState extends State<McapPreviewPage> {
     if (reader == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => McapTopicPlayerPage(reader: reader, topic: topic),
+        builder: (_) =>
+            Platform.isAndroid && topic.schemaName == compressedVideoSchema
+            ? H264PlaybackPage(reader: reader, topic: topic)
+            : McapTopicPlayerPage(reader: reader, topic: topic),
       ),
     );
   }
