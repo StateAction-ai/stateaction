@@ -389,6 +389,7 @@ export function ReviewPage({
           model={model}
           annotations={annotations}
           segmentationFailure={segmentationFailure}
+          linkProvenance={bundle.origin === "api"}
           tab={tab}
           onTab={setTab}
           cards={shown}

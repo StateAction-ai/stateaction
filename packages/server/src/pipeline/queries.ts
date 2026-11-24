@@ -73,6 +73,7 @@ const BASE_SQL = `WITH staff AS (
       OR j.workflow_run_ref IS NOT NULL) AS job_submitted,
     a.outcome AS admission_outcome, a.rejection_code,
     (j.recipe IS NOT NULL) AS has_recipe,
+    j.recipe ->> 'recipeId' AS recipe_id,
     j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count,
     ARRAY(
       SELECT stage FROM (
@@ -138,6 +139,7 @@ type Row = {
   admission_outcome: string | null;
   rejection_code: string | null;
   has_recipe: boolean | null;
+  recipe_id: string | null;
   segment_count: number | null;
   failed_window_count: number | null;
   caption_count: number | null;
@@ -154,6 +156,7 @@ type Row = {
 };
 
 export type PipelineListItem = {
+  recipe: { id: string; jobId: string } | null;
   id: string;
   title: string;
   collector: string;
@@ -200,7 +203,15 @@ function failureNote(row: Row): string | null {
   return null;
 }
 
-function annotationCounts(row: Row): AnnotationCounts {
+export function annotationCounts(
+  row: Pick<
+    Row,
+    | "segment_count"
+    | "failed_window_count"
+    | "caption_count"
+    | "caption_failed_count"
+  >,
+): AnnotationCounts {
   return row.segment_count === null
     ? null
     : {
@@ -241,6 +252,10 @@ function toListItem(row: Row): PipelineListItem {
   else if (row.status === "cancelled") note = "Cancelled";
   return {
     id: row.id,
+    recipe:
+      row.recipe_id && row.job_id
+        ? { id: row.recipe_id, jobId: row.job_id }
+        : null,
     title: recordingTitle(row.started_at),
     collector: row.collector_name,
     source: sourceText(row),

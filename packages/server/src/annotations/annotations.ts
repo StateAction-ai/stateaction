@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type pg from "pg";
 import {
   contractMaxBytes,
@@ -7,6 +8,8 @@ import {
   type DagRunV1,
   type HandPresenceV1,
   type SegmentsV1,
+  type Producer,
+  type Stage,
 } from "@stateaction/contracts";
 import {
   ObjectTooLargeError,
@@ -48,18 +51,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PARTS = [
   {
     key: "segments",
+    stage: "segment",
     slot: "segments.json",
     role: "segments_json",
     contract: "artifacts.segments.v1",
   },
   {
     key: "captions",
+    stage: "caption",
     slot: "captions.json",
     role: "captions_json",
     contract: "artifacts.captions.v1",
   },
   {
     key: "hand_presence",
+    stage: "hand_pose",
     slot: "hand-presence.json",
     role: "hand_presence_json",
     contract: "artifacts.hand-presence.v1",
@@ -98,7 +104,7 @@ async function acceptedJob(
 async function readPart(
   deps: AnnotationDeps,
   part: (typeof PARTS)[number],
-  file: { object_key: string; size_bytes: string },
+  file: { object_key: string; size_bytes: string; sha256?: string },
   job: Accepted,
 ): Promise<unknown> {
   const max = contractMaxBytes(part.contract);
@@ -132,6 +138,15 @@ async function readPart(
     }
     throw error;
   }
+  if (
+    file.sha256 !== undefined &&
+    (String(bytes.byteLength) !== file.size_bytes ||
+      createHash("sha256").update(bytes).digest("hex") !== file.sha256)
+  )
+    throw new TransportError(
+      "conflict",
+      `${part.slot} does not match the stored file digest`,
+    );
   const result = validateBytes(part.contract, bytes);
   if (!result.valid)
     throw new TransportError(
@@ -147,25 +162,15 @@ async function readPart(
   return result.value;
 }
 
-/**
- * The annotations of a recording's accepted job; null when the recording does
- * not exist, is not visible to staff, or has no accepted job (the same answer
- * for each, so existence is not disclosed).
- */
-export async function loadRecordingAnnotations(
-  deps: AnnotationDeps,
-  staffUserId: string,
-  recordingId: string,
-): Promise<RecordingAnnotationsDocument | null> {
-  const job = await acceptedJob(deps.pool, staffUserId, recordingId);
-  if (!job) return null;
-  const { rows: files } = await deps.pool.query<{
+async function annotationFiles(pool: AnnotationDeps["pool"], jobId: string) {
+  const { rows: files } = await pool.query<{
     slot: string;
     object_key: string | null;
     size_bytes: string | null;
+    sha256: string | null;
     stage_not_succeeded: boolean;
   }>(
-    `SELECT s.slot, f.object_key, f.size_bytes::text,
+    `SELECT s.slot, f.object_key, f.size_bytes::text, f.sha256,
             (r.state IS NOT NULL AND r.state <> 'succeeded') AS stage_not_succeeded
      FROM job_output_slots s
      LEFT JOIN job_stage_runs r ON r.job_id = s.job_id AND r.stage = CASE s.slot
@@ -179,9 +184,69 @@ export async function loadRecordingAnnotations(
          WHEN 'captions.json' THEN 'captions_json'
          WHEN 'hand-presence.json' THEN 'hand_presence_json' END
      WHERE s.job_id = $1 AND s.slot = ANY($2::text[])`,
-    [job.job_id, PARTS.map((p) => p.slot)],
+    [jobId, PARTS.map((p) => p.slot)],
   );
-  const bySlot = new Map(files.map((f) => [f.slot, f]));
+  return new Map(files.map((f) => [f.slot, f]));
+}
+
+/** Read provenance for the already-authorized exact run, including historical jobs. */
+export async function loadRecipeProducers(
+  deps: AnnotationDeps,
+  run: DagRunV1,
+): Promise<Partial<Record<Stage, Producer | "unavailable">>> {
+  const stages = run.stages.filter((node) => node.state === "succeeded");
+  if (!stages.length) return {};
+  const files = await annotationFiles(deps.pool, run.jobId);
+  const job = { job_id: run.jobId, recording_id: run.recordingId };
+  const producers: Partial<Record<Stage, Producer | "unavailable">> = {};
+  for (const node of stages) {
+    const part = PARTS.find((item) => item.stage === node.stage);
+    if (!part) continue;
+    const file = files.get(part.slot);
+    if (!file || file.stage_not_succeeded) continue;
+    try {
+      if (
+        file.object_key === null ||
+        file.size_bytes === null ||
+        file.sha256 === null
+      ) {
+        producers[node.stage] = "unavailable";
+        continue;
+      }
+      const { producer } = (await readPart(
+        deps,
+        part,
+        {
+          object_key: file.object_key,
+          size_bytes: file.size_bytes,
+          sha256: file.sha256,
+        },
+        job,
+      )) as { producer: Producer };
+      producers[node.stage] =
+        `${producer.module_id}@${producer.module_version}` === node.module
+          ? producer
+          : "unavailable";
+    } catch {
+      producers[node.stage] = "unavailable";
+    }
+  }
+  return producers;
+}
+
+/**
+ * The annotations of a recording's accepted job; null when the recording does
+ * not exist, is not visible to staff, or has no accepted job (the same answer
+ * for each, so existence is not disclosed).
+ */
+export async function loadRecordingAnnotations(
+  deps: AnnotationDeps,
+  staffUserId: string,
+  recordingId: string,
+): Promise<RecordingAnnotationsDocument | null> {
+  const job = await acceptedJob(deps.pool, staffUserId, recordingId);
+  if (!job) return null;
+  const bySlot = await annotationFiles(deps.pool, job.job_id);
   const parts: Record<string, unknown> = {};
   for (const part of PARTS) {
     const file = bySlot.get(part.slot);

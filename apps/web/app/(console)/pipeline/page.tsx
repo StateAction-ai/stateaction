@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { recipeHref } from "../../../lib/recipe-view";
 import { Search } from "lucide-react";
 import {
   PIPELINE_STATUSES,
@@ -189,6 +190,19 @@ export default async function PipelinePage({
                         {shortRecordingId(item.id)}
                       </span>
                     </Link>
+                    {item.recipe ? (
+                      <Link
+                        href={recipeHref(item.recipe.id, item.recipe.jobId)}
+                        aria-label={`Recipe ${item.recipe.id} for ${item.title}`}
+                        className="relative z-10 mt-1 block w-fit break-all text-xs text-brand underline underline-offset-2"
+                      >
+                        {item.recipe.id}
+                      </Link>
+                    ) : (
+                      <p className="m-0 mt-1 text-xs text-muted">
+                        Recipe not recorded
+                      </p>
+                    )}
                   </td>
                   <td
                     data-label="Collector"

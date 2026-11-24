@@ -15,6 +15,7 @@ import {
   PIPELINE_STATUS_LABEL,
   type PipelineDetail,
 } from "@stateaction/server/pipeline";
+import { recipeHref } from "../../../../lib/recipe-view";
 import { requireConsoleSession } from "../../../../lib/server-session";
 import { Card, CardBody, CardHeader } from "../../../../components/ui/card";
 import { Button } from "../../../../components/ui/button";
@@ -172,13 +173,21 @@ export default async function PipelineRecordingPage({
         <Card className="mb-5">
           <CardHeader className="flex items-center justify-between gap-3">
             <h2 className="m-0 text-base font-bold">
-              {run ? `Stages · recipe ${run.recipeId}` : "Processing stages"}
+              Processing stages
+              {run ? (
+                <Link
+                  className="ml-2 break-all text-brand underline underline-offset-2"
+                  href={recipeHref(run.recipeId, run.jobId)}
+                >
+                  {run.recipeId}
+                </Link>
+              ) : null}
             </h2>
             <StatusBadge status={detail.status} />
           </CardHeader>
           <CardBody className="grid gap-4">
             {run ? (
-              <RecipeStageList stages={stages} />
+              <RecipeStageList stages={stages} recipe={run} />
             ) : (
               <StageList stages={detail.stages} />
             )}
