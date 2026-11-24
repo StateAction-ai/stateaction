@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { HOSTED_DEV_DATABASE_HOST } from "../src/hosted-dev.js";
+import { pipelineReads } from "../src/pipeline/next.js";
 import {
   PIPELINE_MAX_PAGE,
   deriveStages,
@@ -248,4 +250,30 @@ test("actions: provider output for another job or stale state is dropped", async
     out.control.map((a) => a.kind),
     ["cancel"],
   );
+});
+
+test("read-only hosted preview keeps the review link without requesting live job controls", async () => {
+  const originalEnv = process.env;
+  process.env = {
+    STATEACTION_HOSTED_DEV_MODE: "read-only",
+    NODE_ENV: "development",
+    APP_ENV: "development",
+    DATABASE_URL: `postgresql://stateaction_dev_reader:test@${HOSTED_DEV_DATABASE_HOST}/stateaction?sslmode=verify-full`,
+    STATEACTION_HOSTED_DEV_AUTH_DATABASE_URL:
+      "postgresql://stateaction_app:test@127.0.0.1/local",
+    STATEACTION_WEB_HOST: "127.0.0.1",
+    BETTER_AUTH_URL: "http://127.0.0.1:3008",
+    AUTH_LOCAL_PASSWORD: "true",
+    S3_BUCKET: "stateaction-prod",
+  };
+  try {
+    const read = pipelineReads(() =>
+      assert.fail("live controls opened a database connection"),
+    );
+    const actions = await read.actions(detail({}));
+    assert.equal(actions.reviewClipsHref, reviewClipsHref(detail({}).id));
+    assert.deepEqual(actions.control, []);
+  } finally {
+    process.env = originalEnv;
+  }
 });

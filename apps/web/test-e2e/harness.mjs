@@ -50,6 +50,7 @@ export class Jar {
 
 export async function startStack({
   storage = false,
+  authOnly = false,
   storagePublicEndpoint,
   storageProxy = startOutageProxy,
   viewerHarness = false,
@@ -128,6 +129,7 @@ export async function startStack({
         "--import",
         "tsx",
         "test-auth/catalog-bootstrap-cli.ts",
+        ...(authOnly ? ["--auth-only"] : []),
       ],
       {
         cwd: serverDir,

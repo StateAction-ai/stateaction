@@ -1,29 +1,8 @@
-import type {
-  CaptionsV1,
-  DagRunV1,
-  HandPresenceV1,
-  SegmentsV1,
-} from "@stateaction/contracts";
+import type { RecordingAnnotations } from "@stateaction/contracts";
+export type { RecordingAnnotations } from "@stateaction/contracts";
 import type { Hand } from "./short-label.ts";
 
 export type { Hand };
-
-/**
- * The annotations document of one recording: what
- * `GET /api/v1/recordings/{id}/annotations` returns from the accepted job and
- * what the JSON tab shows and the download saves. Every part is a published
- * contract; a part is null only when its stage produced nothing (the dag-run
- * says why), never as a substitute for a failure.
- */
-export interface RecordingAnnotations {
-  schema: "stateaction.recording-annotations.v1";
-  recording_id: string;
-  job_id: string;
-  segments: SegmentsV1 | null;
-  captions: CaptionsV1 | null;
-  hand_presence: HandPresenceV1 | null;
-  dag_run: DagRunV1 | null;
-}
 
 /** A clip of the recording (`clips.source_start_ns` / `source_end_ns`). */
 export interface ClipSpan {
@@ -44,6 +23,7 @@ export interface ReviewRecordingSummary {
   title: string;
   collector?: string;
   sourceSize?: string | null;
+  source?: "imported";
 }
 
 export interface ReviewBundle {

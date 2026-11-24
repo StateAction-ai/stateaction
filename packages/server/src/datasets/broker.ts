@@ -1,3 +1,4 @@
+import { issueHostedDevMedia } from "./hosted-dev-media.js";
 import { GetObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { uuid, type Queryable } from "../catalog/catalog.js";
@@ -92,12 +93,12 @@ export class S3ReadSigner implements ReadSigner {
     private readonly signing: S3Client,
     private readonly bucket: string,
   ) {}
-  presignRead(request: {
+  async presignRead(request: {
     key: string;
     expiresInSeconds: number;
     contentType: string;
   }): Promise<string> {
-    return getSignedUrl(
+    const signedUrl = await getSignedUrl(
       this.signing,
       new GetObjectCommand({
         Bucket: this.bucket,
@@ -108,6 +109,7 @@ export class S3ReadSigner implements ReadSigner {
       }),
       { expiresIn: request.expiresInSeconds },
     );
+    return issueHostedDevMedia(signedUrl, request.expiresInSeconds);
   }
 }
 

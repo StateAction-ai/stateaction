@@ -493,6 +493,11 @@ Json _moduleIndex(Json manifest) => {
 Violation? _producerRule(Json modules, Json doc, String stage) {
   final p = _obj(doc['producer']);
   if (p['stage'] != stage) return _v('reference_mismatch', '/producer/stage');
+  if ((doc['schema']! as String).endsWith('.v2')) {
+    return p['module_id'] == 'imported_$stage' && _same(p['module_version'], 1)
+        ? null
+        : _v('reference_mismatch', '/producer/module_id');
+  }
   final module = modules[_ref(p['module_id'], p['module_version'])];
   if (module == null || _obj(module)['stage'] != stage) {
     return _v('reference_mismatch', '/producer/module_id');
@@ -623,7 +628,10 @@ Violation? _segments(Json modules, Json doc) {
     final start = _obj(row['start']);
     final end = _obj(row['end']);
     if (!_before(start, end)) return _v('ordering_violation', '$p/end');
-    if (i > 0 && !_atOrBefore(_obj(rows[i - 1]['end']), start)) {
+    final boundary = doc['schema'] == 'stateaction.segments.v2'
+        ? 'start'
+        : 'end';
+    if (i > 0 && !_atOrBefore(_obj(rows[i - 1][boundary]), start)) {
       return _v('ordering_violation', '$p/start');
     }
     final expected = _segmentId(

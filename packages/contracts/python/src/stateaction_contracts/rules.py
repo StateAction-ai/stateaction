@@ -441,6 +441,10 @@ def _producer(doc: Any, stage: str) -> Violation:
     p = doc["producer"]
     if p["stage"] != stage:
         return ("reference_mismatch", "/producer/stage")
+    if doc["schema"].endswith(".v2"):
+        if p["module_id"] == f"imported_{stage}" and p["module_version"] == 1:
+            return None
+        return ("reference_mismatch", "/producer/module_id")
     module = _modules().get(f"{p['module_id']}@{int(p['module_version'])}")
     if module is None or module["stage"] != stage:
         return ("reference_mismatch", "/producer/module_id")
@@ -553,7 +557,8 @@ def segments(doc: Any) -> Violation:
         seen.add(row["segment_id"])
         if not _before(row["start"], row["end"]):
             return ("ordering_violation", f"{p}/end")
-        if i > 0 and not _at_or_before(rows[i - 1]["end"], row["start"]):
+        boundary = "start" if doc["schema"] == "stateaction.segments.v2" else "end"
+        if i > 0 and not _at_or_before(rows[i - 1][boundary], row["start"]):
             return ("ordering_violation", f"{p}/start")
         expected = segment_id(
             doc["source_manifest_sha256"],

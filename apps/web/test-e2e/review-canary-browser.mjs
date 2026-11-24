@@ -3,7 +3,7 @@
 // `modal_flora.py::canary`). Run inside ONE resource-guarded job, e.g.
 // `REVIEW_STACK_JSON=<line> agent-resource run -- node test-e2e/review-canary-browser.mjs`, where the line
 // is the output of `STATEACTION_SEED_ONLY=replay_canary_homer_33 node test-e2e/serve-console.mjs --seed
-// annotations` (needs the built web and jobs apps, the processing venv and the Render CLI). The stack
+// failure-fixtures` (needs the built web and jobs apps, the processing venv and the Render CLI). The stack
 // must live in ANOTHER process: this driver blocks its event loop in `agent-browser` calls, and the
 // stack's in-process storage proxy (outage-proxy.mjs) then cannot answer the web server, so the review
 // page fails with provider_unavailable (seen 3 of 3 times when the driver hosted the stack). Signs in as staff, opens the review
@@ -75,7 +75,7 @@ const receipt = { seedOnly: process.env.STATEACTION_SEED_ONLY, recordings: {} };
 try {
   if (!process.env.REVIEW_STACK_JSON)
     throw new Error(
-      "REVIEW_STACK_JSON is required: seed with serve-console --seed annotations in another process",
+      "REVIEW_STACK_JSON is required: seed with serve-console --seed failure-fixtures in another process",
     );
   const live = JSON.parse(process.env.REVIEW_STACK_JSON);
   stack = {

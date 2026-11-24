@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/common.v3.json",
+  "title": "StateAction shared definitions v3",
+  "description": "Producer evidence for cached imports.",
+  "$defs": {
+    "producer": {
+      "description": "Provenance recovered from cached generator records. Null means the value was not recorded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "module_id",
+        "module_version",
+        "model_name",
+        "model_revision",
+        "weights_sha256",
+        "quant",
+        "prompt_sha256",
+        "params_sha256",
+        "decoding_params",
+        "engine",
+        "gpu"
+      ],
+      "properties": {
+        "stage": {
+          "$ref": "#/$defs/stage"
+        },
+        "module_id": {
+          "$ref": "#/$defs/moduleId"
+        },
+        "module_version": {
+          "$ref": "#/$defs/moduleVersion"
+        },
+        "model_name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._/@+-]{0,127}$"
+        },
+        "model_revision": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weights_sha256": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quant": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["method", "checkpoint_manifest_sha256"],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "checkpoint_manifest_sha256": {
+                  "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_sha256": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "params_sha256": {
+          "description": "sa-cjson-v1 digest of the recipe stage params this run used.",
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "decoding_params": {
+          "$ref": "#/$defs/paramMap"
+        },
+        "engine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": ["string", "null"],
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+            },
+            "version": {
+              "type": ["string", "null"],
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+            }
+          }
+        },
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested_type", "observed_type"],
+          "properties": {
+            "requested_type": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/gpuType"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "observed_type": {
+              "$ref": "#/$defs/observedGpu"
+            }
+          }
+        }
+      }
+    },
+    "gpuType": {
+      "description": "Requested accelerator, as named by the executor (Modal GPU names). none means CPU only. No ordering is implied; a module manifest lists the types it is qualified on.",
+      "type": "string",
+      "enum": [
+        "none",
+        "T4",
+        "L4",
+        "A10G",
+        "L40S",
+        "A100-40GB",
+        "A100-80GB",
+        "RTX-PRO-6000",
+        "H100",
+        "H200",
+        "B200"
+      ]
+    },
+    "moduleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "moduleVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 999999
+    },
+    "observedGpu": {
+      "description": "Accelerator name the container reported (for example from nvidia-smi), or null when no GPU was attached or the name is unknown. Never copied from the request.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,127}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "paramMap": {
+      "description": "Flat bounded parameter map. Its sa-cjson-v1 digest is params_sha256.",
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/scalar"
+      }
+    },
+    "scalar": {
+      "description": "Parameter value. Fractions are decimal strings (\"0.9\"), so every value stays inside the sa-cjson-v1 digest domain.",
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 256
+        },
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stage": {
+      "description": "Recipe stage. The MVP order is sequential: segment, caption, then hand_pose, which seals the job.",
+      "type": "string",
+      "enum": ["segment", "caption", "hand_pose"]
+    }
+  }
+}

@@ -1,5 +1,11 @@
+import Link from "next/link";
+import { ImportedStages } from "../../../../components/pipeline/imported-stages";
 import { notFound } from "next/navigation";
-import { parseRecordingId, pipelineReads } from "@stateaction/server/pipeline";
+import {
+  CACHED_IMPORT_EVIDENCE_ID,
+  parseRecordingId,
+  pipelineReads,
+} from "@stateaction/server/pipeline";
 import { parseRecipeId } from "../../../../lib/recipe-view";
 import { RecipePage } from "../../../../components/recipe/recipe-page";
 import { requireConsoleSession } from "../../../../lib/server-session";
@@ -22,6 +28,25 @@ export default async function Route({
   const jobId = typeof job === "string" ? parseRecordingId(job) : null;
   if (!jobId || !recipeId) notFound();
 
+  if (recipeId === CACHED_IMPORT_EVIDENCE_ID) {
+    const cached = await reads.cachedImportByJob(staff.userId, jobId);
+    if (!cached) notFound();
+    return (
+      <section className="grid gap-4">
+        <Link
+          href={`/pipeline/${cached.recordingId}`}
+          className="text-sm text-brand"
+        >
+          ← Pipeline
+        </Link>
+        <h1 className="text-2xl font-bold">Imported from cached results</h1>
+        <p className="text-sm text-muted">
+          Original StateAction recipe and DAG: not recorded.
+        </p>
+        <ImportedStages cached={cached} />
+      </section>
+    );
+  }
   const recipe = await reads.recipeVisualization(
     staff.userId,
     recipeId,

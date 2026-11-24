@@ -64,7 +64,7 @@ function searchPattern(value: string | undefined): string {
  */
 const CORE = `
   JOIN LATERAL (
-    SELECT rec.simulation FROM recordings rec
+    SELECT rec.simulation, rec.imported_from_cache FROM recordings rec
     JOIN jobs j ON j.id = rec.current_job_id AND j.state = 'succeeded'
     WHERE rec.id = c.recording_id AND rec.current_job_id = c.job_id
       AND rec.deleted_at IS NULL LIMIT 1
@@ -123,16 +123,18 @@ type DatasetRow = {
   revision: number;
   clip_count: string;
   duration_ns: string;
+  contains_imported: boolean | null;
   is_staff: boolean;
   created_at: string;
   ts: string;
 };
-const DATASET_SELECT = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.duration_ns::text,
+const DATASET_SELECT = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.duration_ns::text, s.contains_imported,
        catalog_has_role($1, 'staff') AS is_staff, ${ts("d.created_at")} AS created_at,
        ${ts("d.created_at")} AS ts
      FROM datasets d
      CROSS JOIN LATERAL (
-       SELECT count(*) AS clip_count, coalesce(sum(c.duration_ns), 0) AS duration_ns
+       SELECT count(*) AS clip_count, coalesce(sum(c.duration_ns), 0) AS duration_ns,
+              bool_or(rec.imported_from_cache) AS contains_imported
        FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id ${CORE}
        WHERE dc.dataset_id = d.id AND ${memberGate("d.id")}
      ) s`;
@@ -148,8 +150,12 @@ function datasetView(row: DatasetRow): DatasetView {
     name: row.name,
     clipCount: Number(row.clip_count),
     durationNs: row.duration_ns,
+    ...(row.contains_imported ? { containsImported: true as const } : {}),
     ...(row.is_staff
-      ? { revision: row.revision, createdAt: row.created_at }
+      ? {
+          revision: row.revision,
+          createdAt: row.created_at,
+        }
       : {}),
   };
 }
@@ -210,6 +216,7 @@ type ClipRow = {
   review_revision: number | null;
   review_decision: string | null;
   simulation: unknown;
+  imported_from_cache: boolean;
   recording_id: string;
   job_id: string;
   is_staff: boolean;
@@ -221,7 +228,7 @@ type ClipRow = {
 };
 const CLIP_COLUMNS = `c.id, c.title, c.duration_ns::text, c.raster_width, c.raster_height,
   c.frame_count, lr.task_label, lr.revision AS review_revision, lr.decision AS review_decision,
-  rec.simulation, c.recording_id, c.job_id, catalog_has_role($1, 'staff') AS is_staff,
+  rec.simulation, rec.imported_from_cache, c.recording_id, c.job_id, catalog_has_role($1, 'staff') AS is_staff,
   (th.id IS NOT NULL) AS has_thumbnail, (vw.id IS NOT NULL) AS has_viewer`;
 
 /**
@@ -234,6 +241,7 @@ function clipView(row: ClipRow, datasetId: string | null): DatasetClipView {
     clipId: row.id,
     ...(datasetId ? { datasetId } : {}),
     title: row.title,
+    ...(row.imported_from_cache ? { source: "imported" as const } : {}),
     taskLabel: row.task_label,
     durationNs: row.duration_ns,
     raster: { width: row.raster_width, height: row.raster_height },

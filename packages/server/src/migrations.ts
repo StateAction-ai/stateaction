@@ -172,6 +172,11 @@ export async function grantAppRole(
   );
   if (parallelRecipe)
     await client.query("SELECT stateaction_grant_parallel_recipe($1)", [role]);
+  const { rowCount: cachedImports } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_cached_imports(name)') IS NOT NULL",
+  );
+  if (cachedImports)
+    await client.query("SELECT stateaction_grant_cached_imports($1)", [role]);
   return true;
 }
 

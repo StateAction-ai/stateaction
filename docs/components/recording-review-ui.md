@@ -66,7 +66,7 @@ The page reads the recording's ACCEPTED job (`recordings.current_job_id`, state
 exists for screenshots only: it needs `STATEACTION_REVIEW_DATA=fixture` (never
 with `RENDER=true` or `APP_ENV` production or staging) and its pages carry a
 "Fixture data" chip. `APP_ENV=local` alone reads the real stack, so the SA-96
-dev stack (`serve-console --seed annotations`) shows its seeded recordings.
+dev stack (`serve-console --seed failure-fixtures`) shows its seeded recordings.
 
 The annotations carry no duration, so the time axis length is estimated
 (`lib/review/duration.ts`): the latest known timestamp, or `frame_count / fps`

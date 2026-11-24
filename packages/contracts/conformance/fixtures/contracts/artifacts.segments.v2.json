@@ -1,0 +1,301 @@
+{
+  "contract": "artifacts.segments.v2",
+  "cases": [
+    {
+      "name": "cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.segments.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "producer": {
+            "stage": "segment",
+            "module_id": "imported_segment",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-TempSeg",
+            "model_revision": "114a1076f70eb53f4a58ac045505db3087e79347",
+            "weights_sha256": "a457b33d526874eedbd767edcd2888c7e461b2242264761666971cb5cab6878b",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "646d10562223636bd1f16a08a768a4a41d30b76fac0abefc92323c818d3c0f75"
+            },
+            "prompt_sha256": "d70cfb87537877860371677a1f928e0e73f16946c0e48b4231c90ab397850e91",
+            "params_sha256": "8ad98cbface853a688aa44256b1ffe49f312a27252faae333675acfb7d70cc1c",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": null,
+              "version": null
+            },
+            "gpu": {
+              "requested_type": null,
+              "observed_type": null
+            }
+          },
+          "windows": {
+            "total": 7,
+            "ok": 6,
+            "failed": [
+              {
+                "window_index": 3,
+                "error_code": "engine_timeout",
+                "core_start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "core_end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                }
+              }
+            ],
+            "failed_core_spans": [
+              {
+                "start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                }
+              }
+            ]
+          },
+          "rows": [
+            {
+              "segment_id": "2b019560-615d-56b7-8658-90817f6fb70c",
+              "ordinal": 0,
+              "start": {
+                "source_frame_id": "1000",
+                "timestamp_ns": "5000000000"
+              },
+              "end": {
+                "source_frame_id": "1110",
+                "timestamp_ns": "8666666630"
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            },
+            {
+              "segment_id": "4a690173-72a7-5f07-bf1a-bda4e7495ab9",
+              "ordinal": 1,
+              "start": {
+                "source_frame_id": "1100",
+                "timestamp_ns": "8333333300"
+              },
+              "end": {
+                "source_frame_id": "1240",
+                "timestamp_ns": "12999999920"
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            },
+            {
+              "segment_id": "ff616299-5642-523b-b4c9-2cfa42acaa6e",
+              "ordinal": 2,
+              "start": {
+                "source_frame_id": "1360",
+                "timestamp_ns": "16999999880"
+              },
+              "end": {
+                "source_frame_id": "1480",
+                "timestamp_ns": "20999999840"
+              },
+              "status": "failed_window",
+              "ext": {}
+            },
+            {
+              "segment_id": "add274cd-767a-5242-a049-676506fcd331",
+              "ordinal": 3,
+              "start": {
+                "source_frame_id": "1480",
+                "timestamp_ns": "20999999840"
+              },
+              "end": {
+                "source_frame_id": null,
+                "timestamp_ns": null
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "live producer cannot produce a cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.segments.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "producer": {
+            "stage": "segment",
+            "module_id": "flora_tempseg_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-TempSeg",
+            "model_revision": "114a1076f70eb53f4a58ac045505db3087e79347",
+            "weights_sha256": "a457b33d526874eedbd767edcd2888c7e461b2242264761666971cb5cab6878b",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "646d10562223636bd1f16a08a768a4a41d30b76fac0abefc92323c818d3c0f75"
+            },
+            "prompt_sha256": "d70cfb87537877860371677a1f928e0e73f16946c0e48b4231c90ab397850e91",
+            "params_sha256": "8ad98cbface853a688aa44256b1ffe49f312a27252faae333675acfb7d70cc1c",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "windows": {
+            "total": 7,
+            "ok": 6,
+            "failed": [
+              {
+                "window_index": 3,
+                "error_code": "engine_timeout",
+                "core_start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "core_end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                }
+              }
+            ],
+            "failed_core_spans": [
+              {
+                "start": {
+                  "source_frame_id": "1360",
+                  "timestamp_ns": "16999999880"
+                },
+                "end": {
+                  "source_frame_id": "1480",
+                  "timestamp_ns": "20999999840"
+                }
+              }
+            ]
+          },
+          "rows": [
+            {
+              "segment_id": "2b019560-615d-56b7-8658-90817f6fb70c",
+              "ordinal": 0,
+              "start": {
+                "source_frame_id": "1000",
+                "timestamp_ns": "5000000000"
+              },
+              "end": {
+                "source_frame_id": "1110",
+                "timestamp_ns": "8666666630"
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            },
+            {
+              "segment_id": "4a690173-72a7-5f07-bf1a-bda4e7495ab9",
+              "ordinal": 1,
+              "start": {
+                "source_frame_id": "1100",
+                "timestamp_ns": "8333333300"
+              },
+              "end": {
+                "source_frame_id": "1240",
+                "timestamp_ns": "12999999920"
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            },
+            {
+              "segment_id": "ff616299-5642-523b-b4c9-2cfa42acaa6e",
+              "ordinal": 2,
+              "start": {
+                "source_frame_id": "1360",
+                "timestamp_ns": "16999999880"
+              },
+              "end": {
+                "source_frame_id": "1480",
+                "timestamp_ns": "20999999840"
+              },
+              "status": "failed_window",
+              "ext": {}
+            },
+            {
+              "segment_id": "add274cd-767a-5242-a049-676506fcd331",
+              "ordinal": 3,
+              "start": {
+                "source_frame_id": "1480",
+                "timestamp_ns": "20999999840"
+              },
+              "end": {
+                "source_frame_id": null,
+                "timestamp_ns": null
+              },
+              "status": "ok",
+              "ext": {
+                "flora": {
+                  "provenance": "fine",
+                  "stitched": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/module_id"
+        ]
+      }
+    }
+  ]
+}

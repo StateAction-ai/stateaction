@@ -20,7 +20,7 @@ from unittest import mock
 
 from indexed_fixture import chunked
 from stage_helpers import GOLDEN_MCAP, JOB, recipe, task_input, write_io_dir
-from stateaction_contracts import request_sha256, validate_bytes
+from stateaction_contracts import request_sha256, segment_id, validate_bytes
 
 from stateaction_processing import stage_entry
 
@@ -513,6 +513,40 @@ class HttpModeTests(unittest.TestCase):
             )
         )
         self.assertIn("captions.json", {o["slot"] for o in self.state["outputs"]})
+
+    def test_live_caption_rejects_valid_imported_segment_projection(self):
+        with tempfile.TemporaryDirectory() as seg_dir:
+            path = Path(seg_dir)
+            write_io_dir(path, "segment", recipe(segment_params=SEGMENT))
+            self.assertEqual(run_dir(path)[0], 0)
+            document = json.loads((path / "segments.json").read_bytes())
+        producer = document["producer"]
+        producer["module_id"] = "imported_segment"
+        document["schema"] = "stateaction.segments.v2"
+        for row in document["rows"]:
+            row["segment_id"] = segment_id(
+                document["source_manifest_sha256"],
+                "imported_segment@1",
+                producer["params_sha256"],
+                row["start"]["source_frame_id"],
+                row["end"]["source_frame_id"],
+            )
+        segments = json.dumps(document).encode()
+        self.assertTrue(validate_bytes("artifacts.segments.v2", segments).valid)
+        self.state["segments"] = segments
+        result = self.run_worker(
+            self.bootstrap(
+                "caption",
+                recipe(segment_params=SEGMENT),
+                segmentsFileId=str(uuid.uuid4()),
+                segmentsSha256=hashlib.sha256(segments).hexdigest(),
+            )
+        )
+        receipt = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(
+            (result.returncode, receipt["errorCode"]), (3, "segments_invalid")
+        )
+        self.assertNotIn("captions.json", {o["slot"] for o in self.state["outputs"]})
 
     def test_caption_stage_rejects_a_digest_that_differs_from_the_pinned_one(self):
         self.state["segments"] = b'{"not":"the segments"}'

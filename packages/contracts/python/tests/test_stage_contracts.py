@@ -40,6 +40,34 @@ class StageContracts(unittest.TestCase):
                 ),
             )
 
+    def test_only_imported_segments_preserve_native_overlap(self) -> None:
+        doc = first_valid("artifacts.segments.v1")
+        first, second, *_ = doc["rows"]
+        doc["rows"].insert(1, {**first, "end": second["end"]})
+
+        def rekey():
+            for idx, row in enumerate(doc["rows"]):
+                row["ordinal"] = idx
+                producer = doc["producer"]
+                row["segment_id"] = segment_id(
+                    doc["source_manifest_sha256"],
+                    f"{producer['module_id']}@{producer['module_version']}",
+                    producer["params_sha256"],
+                    row["start"]["source_frame_id"],
+                    row["end"]["source_frame_id"],
+                )
+
+        rekey()
+        self.assertFalse(validate_value("artifacts.segments.v1", doc).valid)
+        doc["producer"]["module_id"] = "imported_segment"
+        rekey()
+        self.assertFalse(validate_value("artifacts.segments.v1", doc).valid)
+        doc["schema"] = "stateaction.segments.v2"
+        self.assertTrue(validate_value("artifacts.segments.v2", doc).valid)
+        doc["producer"]["module_version"] = 2
+        rekey()
+        self.assertFalse(validate_value("artifacts.segments.v2", doc).valid)
+
     def test_caption_steps(self) -> None:
         self.assertEqual(
             caption_steps(" hold cup with left hand,,\tpour water ,"),

@@ -1,0 +1,46 @@
+{
+  "contract": "http.dataset-page.v2",
+  "cases": [
+    {
+      "name": "includes import provenance",
+      "input": {
+        "document": {
+          "datasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen pours",
+              "clipCount": 3,
+              "durationNs": "2700",
+              "containsImported": true
+            }
+          ],
+          "nextCursor": "WyIyMDI2IiwiaWQiXQ"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "reject false provenance",
+      "input": {
+        "document": {
+          "datasets": [
+            {
+              "datasetId": "00000000-0000-4000-8000-00000000d001",
+              "name": "Kitchen pours",
+              "clipCount": 3,
+              "durationNs": "2700",
+              "containsImported": false
+            }
+          ],
+          "nextCursor": "WyIyMDI2IiwiaWQiXQ"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

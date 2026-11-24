@@ -5,6 +5,7 @@ import {
   parseRecordingId,
   pipelineQueryString,
   pipelineReads,
+  CACHED_IMPORT_EVIDENCE_ID,
   buildRunStages,
   buildRunSummary,
   dagRunFilename,
@@ -23,6 +24,7 @@ import { StatusBadge } from "../../../../components/pipeline/status-badge";
 import { StageList } from "../../../../components/pipeline/stage-list";
 import { JobControls } from "../../../../components/pipeline/job-controls";
 import { RecipeStageList } from "../../../../components/pipeline/recipe-stage-list";
+import { ImportedStages } from "../../../../components/pipeline/imported-stages";
 import { DagRunPanel } from "../../../../components/pipeline/dag-run-panel";
 
 export const metadata = { title: "Recording · StateAction.ai" };
@@ -73,15 +75,16 @@ export default async function PipelineRecordingPage({
       error instanceof Error ? error.message : error,
     );
   }
-  const diagnostics = run
-    ? await reads.diagnostics(session.userId, detail).catch((error) => {
-        console.error(
-          "[pipeline] diagnostics unavailable:",
-          error instanceof Error ? error.message : error,
-        );
-        return {};
-      })
-    : {};
+  const diagnostics =
+    run || detail.cachedImport
+      ? await reads.diagnostics(session.userId, detail).catch((error) => {
+          console.error(
+            "[pipeline] diagnostics unavailable:",
+            error instanceof Error ? error.message : error,
+          );
+          return {};
+        })
+      : {};
   const stages = run
     ? buildRunStages(run, reads.rates(), diagnostics, detail.annotations)
     : [];
@@ -173,8 +176,17 @@ export default async function PipelineRecordingPage({
         <Card className="mb-5">
           <CardHeader className="flex items-center justify-between gap-3">
             <h2 className="m-0 text-base font-bold">
-              Processing stages
-              {run ? (
+              {detail.cachedImport
+                ? "Imported from cached results"
+                : "Processing stages"}
+              {detail.cachedImport && detail.jobId ? (
+                <Link
+                  className="ml-2 text-brand underline"
+                  href={recipeHref(CACHED_IMPORT_EVIDENCE_ID, detail.jobId)}
+                >
+                  View import evidence
+                </Link>
+              ) : run ? (
                 <Link
                   className="ml-2 break-all text-brand underline underline-offset-2"
                   href={recipeHref(run.recipeId, run.jobId)}
@@ -186,16 +198,20 @@ export default async function PipelineRecordingPage({
             <StatusBadge status={detail.status} />
           </CardHeader>
           <CardBody className="grid gap-4">
-            {run ? (
+            {detail.cachedImport ? (
+              <ImportedStages cached={detail.cachedImport} />
+            ) : run ? (
               <RecipeStageList stages={stages} recipe={run} />
             ) : (
               <StageList stages={detail.stages} />
             )}
-            <p className="m-0 text-xs text-muted">
-              {run
-                ? "One row per recipe stage from the recorded stage runs. A stage that was never started shows not run with its reason. Failed windows and captions are recorded as failed, never as empty results. Costs are estimates. Processing completion is separate from human review."
-                : "Stages are shown only from recorded evidence; a stage with no recorded evidence stays unknown. Processing completion is separate from human review."}
-            </p>
+            {detail.cachedImport ? null : (
+              <p className="m-0 text-xs text-muted">
+                {run
+                  ? "One row per recipe stage from the recorded stage runs. A stage that was never started shows not run with its reason. Failed windows and captions are recorded as failed, never as empty results. Costs are estimates. Processing completion is separate from human review."
+                  : "Stages are shown only from recorded evidence; a stage with no recorded evidence stays unknown. Processing completion is separate from human review."}
+              </p>
+            )}
             {detail.error ? (
               <div
                 role="alert"
@@ -253,10 +269,10 @@ export default async function PipelineRecordingPage({
               [
                 ["Started", detail.startedLabel],
                 ["Collector", detail.collector],
-                ["Duration", "Unknown"],
+                ["Duration", formatDuration(detail.source.duration)],
                 ["Source size", detail.source.size ?? "Unknown"],
                 ["Format", detail.source.format ?? "Unknown"],
-                ["Source hash", "Not reported"],
+                ["Source hash", detail.source.hash ?? "Not recorded"],
               ] as const
             ).map(([label, value]) => (
               <div

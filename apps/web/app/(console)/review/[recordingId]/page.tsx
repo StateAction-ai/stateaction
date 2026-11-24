@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { serverConfig } from "@stateaction/server";
+import { mediaReadOrigin } from "@stateaction/server";
 import {
   pipelineReads,
   failedStageNote,
@@ -75,29 +75,44 @@ export default async function ReviewRecordingPage({
     );
     let mediaOrigin: string | null = null;
     try {
-      mediaOrigin = new URL(serverConfig().publicEndpoint).origin;
+      mediaOrigin = mediaReadOrigin();
     } catch {
       mediaOrigin = null;
     }
     return (
-      <ReviewPage
-        key={recordingId}
-        bundle={bundle}
-        recordings={recordings}
-        mediaOrigin={mediaOrigin}
-        status={
-          failedStages.size
-            ? "needs_attention"
-            : (matched?.status ?? "completed")
-        }
-        failureNote={failedStageNote([...failedStages])}
-        segmentationFailure={
-          segmentFailure
-            ? (stageReason(segmentFailure.errorCode) ??
-              "No explanation was recorded.")
-            : null
-        }
-      />
+      <>
+        {annotations.source === "imported" ? (
+          <p className="mb-4 rounded-md border bg-surface p-3 text-sm">
+            Imported from cached results ·{" "}
+            <Link
+              className="text-brand underline"
+              href={"/pipeline/" + recordingId}
+            >
+              Source and model provenance
+            </Link>
+          </p>
+        ) : null}
+        <ReviewPage
+          key={recordingId}
+          bundle={bundle}
+          recordings={recordings}
+          mediaOrigin={mediaOrigin}
+          status={
+            failedStages.size
+              ? "needs_attention"
+              : (matched?.status ?? "completed")
+          }
+          failureNote={failedStageNote([...failedStages])}
+          segmentationFailure={
+            segmentFailure
+              ? (stageReason(segmentFailure.errorCode) ??
+                (segmentFailure.errorCode
+                  ? `Recorded reason code ${segmentFailure.errorCode}.`
+                  : "No explanation was recorded."))
+              : null
+          }
+        />
+      </>
     );
   } catch (error) {
     if (error instanceof ReviewDataUnavailable)

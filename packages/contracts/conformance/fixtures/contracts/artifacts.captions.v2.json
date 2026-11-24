@@ -1,0 +1,183 @@
+{
+  "contract": "artifacts.captions.v2",
+  "cases": [
+    {
+      "name": "cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "imported_caption",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": null,
+              "version": null
+            },
+            "gpu": {
+              "requested_type": null,
+              "observed_type": null
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "2b019560-615d-56b7-8658-90817f6fb70c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4a690173-72a7-5f07-bf1a-bda4e7495ab9",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "ff616299-5642-523b-b4c9-2cfa42acaa6e",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "add274cd-767a-5242-a049-676506fcd331",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "live producer cannot produce a cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.captions.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "segments_sha256": "227ec0c62541179ed4ac8327643cc8cc3fb73fac7fda8f3f33024744122aec3f",
+          "producer": {
+            "stage": "caption",
+            "module_id": "flora_captioner_vllm_fp8",
+            "module_version": 1,
+            "model_name": "nvidia/Flora-Captioner",
+            "model_revision": "rev-c3",
+            "weights_sha256": "312f3177789720e391434d3601fa08f66c398986d176da59667e9ad916ee4b4d",
+            "quant": {
+              "method": "fp8_per_tensor",
+              "checkpoint_manifest_sha256": "856bbc25cfbb95535ef16b31b6613254fce1101539b0df89b9909c0f504f6de0"
+            },
+            "prompt_sha256": "1af8e453dc87226c41828c003010eedc8372429fb067ff92935bbb60d9aa786b",
+            "params_sha256": "6b83806e23540e14cc3a1e41df6392940ae4f4249f19ca574c646493867c3c5a",
+            "decoding_params": {
+              "do_sample": false,
+              "num_beams": 1,
+              "max_new_tokens": 1024,
+              "temperature": "0.0"
+            },
+            "engine": {
+              "name": "vllm",
+              "version": "0.11.2"
+            },
+            "gpu": {
+              "requested_type": "RTX-PRO-6000",
+              "observed_type": "NVIDIA RTX PRO 6000 Blackwell Server Edition"
+            }
+          },
+          "rows": [
+            {
+              "segment_id": "2b019560-615d-56b7-8658-90817f6fb70c",
+              "status": "complete",
+              "error_code": null,
+              "text": "hold cloth with right hand, rotate pitcher with both hands, tighten pitcher lid with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "rotate pitcher",
+                "hand": "both",
+                "steps": [
+                  "hold cloth with right hand",
+                  "rotate pitcher with both hands",
+                  "tighten pitcher lid with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "4a690173-72a7-5f07-bf1a-bda4e7495ab9",
+              "status": "complete",
+              "error_code": null,
+              "text": "pick up pitcher with right hand",
+              "lang": "en",
+              "derived": {
+                "rule": "caption_rule@1",
+                "short_label": "pick up pitcher",
+                "hand": "right",
+                "steps": [
+                  "pick up pitcher with right hand"
+                ]
+              }
+            },
+            {
+              "segment_id": "ff616299-5642-523b-b4c9-2cfa42acaa6e",
+              "status": "not_captioned",
+              "error_code": "segment_failed_window"
+            },
+            {
+              "segment_id": "add274cd-767a-5242-a049-676506fcd331",
+              "status": "failed",
+              "error_code": "unsupported_target_frames"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/module_id"
+        ]
+      }
+    }
+  ]
+}

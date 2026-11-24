@@ -427,94 +427,109 @@ export type ClipInput = {
  * Accepts a validated result: clips and success commit together. Replaying
  * the same manifest returns the same clip IDs; nothing can repoint them.
  */
+type AcceptedResult = {
+  jobId: string;
+  manifestFileId: string;
+  manifestSha256: string;
+  clips: ClipInput[];
+  annotations?: {
+    segments: number;
+    failedWindows: number;
+    captions: number;
+    failedCaptions: number;
+  };
+};
+
 export async function acceptProcessingResult(
   pool: Queryable,
-  input: {
-    jobId: string;
-    manifestFileId: string;
-    manifestSha256: string;
-    clips: ClipInput[];
-  },
+  input: AcceptedResult,
 ) {
-  return inTransaction(pool, async (tx) => {
-    const { rows } = await tx.query<{
-      state: string;
-      recording_id: string;
-      result_manifest_sha256: string | null;
-    }>(
-      "SELECT state, recording_id, result_manifest_sha256 FROM jobs WHERE id = $1 FOR UPDATE",
+  return inTransaction(pool, (tx) => acceptCatalogResult(tx, input));
+}
+
+export async function acceptCatalogResult(tx: Tx, input: AcceptedResult) {
+  const { rows } = await tx.query<{
+    state: string;
+    recording_id: string;
+    result_manifest_sha256: string | null;
+  }>(
+    "SELECT state, recording_id, result_manifest_sha256 FROM jobs WHERE id = $1 FOR UPDATE",
+    [input.jobId],
+  );
+  const job = rows[0];
+  if (!job) throw new CatalogError("not_found", "Job not found");
+  if (job.state === "succeeded") {
+    const existing = await tx.query<{ id: string; ordinal: number }>(
+      "SELECT id, ordinal FROM clips WHERE job_id = $1 ORDER BY ordinal",
       [input.jobId],
     );
-    const job = rows[0];
-    if (!job) throw new CatalogError("not_found", "Job not found");
-    if (job.state === "succeeded") {
-      const existing = await tx.query<{ id: string; ordinal: number }>(
-        "SELECT id, ordinal FROM clips WHERE job_id = $1 ORDER BY ordinal",
-        [input.jobId],
+    const same =
+      job.result_manifest_sha256 === input.manifestSha256 &&
+      existing.rows.length === input.clips.length &&
+      existing.rows.every(
+        (row) =>
+          input.clips.find((c) => c.ordinal === row.ordinal)?.clipId === row.id,
       );
-      const same =
-        job.result_manifest_sha256 === input.manifestSha256 &&
-        existing.rows.length === input.clips.length &&
-        existing.rows.every(
-          (row) =>
-            input.clips.find((c) => c.ordinal === row.ordinal)?.clipId ===
-            row.id,
-        );
-      if (!same)
-        throw new CatalogError(
-          "conflict",
-          "Job already accepted a different result",
-        );
-      return { clipIds: existing.rows.map((r) => r.id), replayed: true };
-    }
-    if (job.state !== "result_pending")
+    if (!same)
       throw new CatalogError(
         "conflict",
-        "Job is not awaiting result acceptance",
+        "Job already accepted a different result",
       );
-    for (const clip of input.clips)
-      await tx.query(
-        `INSERT INTO clips (id, job_id, recording_id, ordinal, title, source_start_ns, source_end_ns,
+    return { clipIds: existing.rows.map((r) => r.id), replayed: true };
+  }
+  if (job.state !== "result_pending")
+    throw new CatalogError("conflict", "Job is not awaiting result acceptance");
+  for (const clip of input.clips)
+    await tx.query(
+      `INSERT INTO clips (id, job_id, recording_id, ordinal, title, source_start_ns, source_end_ns,
            duration_ns, clock_domain, raster_width, raster_height, frame_count, rgb_mp4_file_id,
            hand_arrays_file_id, hand_observations_file_id, frame_map_file_id, thumbnail_file_id, viewer_rrd_file_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-        [
-          uuid(clip.clipId, "clipId"),
-          input.jobId,
-          job.recording_id,
-          clip.ordinal,
-          clip.title,
-          clip.sourceStartNs,
-          clip.sourceEndNs,
-          clip.durationNs,
-          clip.clockDomain,
-          clip.raster.width,
-          clip.raster.height,
-          clip.frameCount,
-          clip.files.rgbMp4,
-          clip.files.handArraysNpz,
-          clip.files.handObservationsJson,
-          clip.files.frameMapJson,
-          clip.files.thumbnailJpeg,
-          clip.files.viewerRrd,
-        ],
-      );
-    await tx.query(
-      `UPDATE jobs SET state = 'succeeded', result_manifest_file_id = $2, result_manifest_sha256 = $3, finished_at = now()
-       WHERE id = $1`,
-      [input.jobId, input.manifestFileId, input.manifestSha256],
+      [
+        uuid(clip.clipId, "clipId"),
+        input.jobId,
+        job.recording_id,
+        clip.ordinal,
+        clip.title,
+        clip.sourceStartNs,
+        clip.sourceEndNs,
+        clip.durationNs,
+        clip.clockDomain,
+        clip.raster.width,
+        clip.raster.height,
+        clip.frameCount,
+        clip.files.rgbMp4,
+        clip.files.handArraysNpz,
+        clip.files.handObservationsJson,
+        clip.files.frameMapJson,
+        clip.files.thumbnailJpeg,
+        clip.files.viewerRrd,
+      ],
     );
-    await tx.query(
-      "UPDATE recordings SET status = 'reviewable' WHERE id = $1 AND current_job_id = $2",
-      [job.recording_id, input.jobId],
-    );
-    return {
-      clipIds: [...input.clips]
-        .sort((a, b) => a.ordinal - b.ordinal)
-        .map((c) => c.clipId),
-      replayed: false,
-    };
-  });
+  await tx.query(
+    `UPDATE jobs SET state = 'succeeded', result_manifest_file_id = $2, result_manifest_sha256 = $3,
+      segment_count = $4, failed_window_count = $5, caption_count = $6, caption_failed_count = $7,
+      finished_at = now() WHERE id = $1`,
+    [
+      input.jobId,
+      input.manifestFileId,
+      input.manifestSha256,
+      input.annotations?.segments ?? null,
+      input.annotations?.failedWindows ?? null,
+      input.annotations?.captions ?? null,
+      input.annotations?.failedCaptions ?? null,
+    ],
+  );
+  await tx.query(
+    "UPDATE recordings SET status = 'reviewable' WHERE id = $1 AND current_job_id = $2",
+    [job.recording_id, input.jobId],
+  );
+  return {
+    clipIds: [...input.clips]
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((c) => c.clipId),
+    replayed: false,
+  };
 }
 
 // --------------------------------------------------------------- reviews

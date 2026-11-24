@@ -6,7 +6,10 @@ export {
   applicationDatabaseUrl,
   assertLocalDispatch,
   appEnv,
+  mediaReadOrigin,
 } from "./config.js";
+export { hostedDevProfile } from "./hosted-dev.js";
+export { hostedDevMediaRoute } from "./datasets/hosted-dev-media.js";
 export { storageClient, initializeStorage, presignObject } from "./storage.js";
 export * from "./catalog/catalog.js";
 export { CatalogError } from "./catalog/errors.js";

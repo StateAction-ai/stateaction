@@ -55,7 +55,8 @@ const STAGE_REASON: Readonly<Record<string, string>> = {
 };
 
 export function stageReason(code: string | null): string | null {
-  return code && Object.hasOwn(STAGE_REASON, code) ? STAGE_REASON[code]! : null;
+  if (!code) return null;
+  return Object.hasOwn(STAGE_REASON, code) ? STAGE_REASON[code]! : null;
 }
 
 export type GpuView = {
@@ -214,7 +215,9 @@ export function buildRunStages(
       stateLabel: RUN_STATE_LABEL[displayState],
       enabled: node.enabled,
       errorCode: node.errorCode,
-      reason: stageReason(node.errorCode),
+      reason:
+        stageReason(node.errorCode) ??
+        (node.errorCode ? `Recorded reason code ${node.errorCode}.` : null),
       durationSeconds: nodeDurationSeconds(node),
       costUsd: node.estimatedCostUsd,
       gpu,

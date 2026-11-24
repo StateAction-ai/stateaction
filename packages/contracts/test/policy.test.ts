@@ -6,9 +6,9 @@ import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v19.json is the current registry; catalog.v1.json through
-// catalog.v17.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v19.json"));
+// Prior catalog revisions stay published and immutable.
+const catalog = JSON.parse(text("catalog.v20.json"));
+const catalogV19 = JSON.parse(text("catalog.v19.json"));
 const catalogV18 = JSON.parse(text("catalog.v18.json"));
 const catalogV17 = JSON.parse(text("catalog.v17.json"));
 const catalogV16 = JSON.parse(text("catalog.v16.json"));
@@ -736,6 +736,7 @@ test("schemas are closed, bounded and use the documented casing", () => {
     const snake =
       file.startsWith("artifacts/") ||
       file === "common.v2.schema.json" ||
+      file === "common.v3.schema.json" ||
       Object.values<any>(catalog.contracts).some(
         (c) => c.schema === file && c.casing === "snake_case",
       );
@@ -783,8 +784,9 @@ test("schemas are closed, bounded and use the documented casing", () => {
 test("every contract declares a byte bound and version discriminator", () => {
   for (const [id, c] of Object.entries<any>(catalog.contracts)) {
     // The annotations document embeds up to three 16 MiB artifacts (SA-98).
-    const bound =
-      id === "http.recording-annotations.v1" ? 64 * 1048576 : 16 * 1048576;
+    const bound = id.startsWith("http.recording-annotations.")
+      ? 64 * 1048576
+      : 16 * 1048576;
     assert.ok(c.maxBytes > 0 && c.maxBytes <= bound, id);
     assert.ok(c.version, `${id}: version`);
   }
@@ -1089,7 +1091,7 @@ test("v18 lock entries are present and match the published bytes", () => {
 
 test("catalog v19 only adds the parallel recipe controller action", () => {
   assertExactSuperset(
-    catalog,
+    catalogV19,
     catalogV18,
     ["v18", "v19"],
     ["jobs.controller-action.v3"],
@@ -1097,6 +1099,31 @@ test("catalog v19 only adds the parallel recipe controller action", () => {
   for (const file of [
     "catalog.v19.json",
     "jobs/controller-action.v3.schema.json",
+  ])
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+test("catalog v20 adds the cached import and catalog provenance contracts", () => {
+  const added = [
+    "artifacts.segments.v2",
+    "artifacts.captions.v2",
+    "artifacts.hand-presence.v2",
+    "http.recording-annotations.v2",
+    "http.dataset.v2",
+    "http.dataset-clip.v2",
+    "http.staff-clip-page.v2",
+    "http.dataset-page.v2",
+    "http.dataset-clip-page.v2",
+  ];
+  assertExactSuperset(catalog, catalogV19, ["v19", "v20"], added);
+  assert.deepEqual(catalog.shared, [
+    ...catalogV19.shared,
+    "common.v3.schema.json",
+  ]);
+  for (const file of [
+    "catalog.v20.json",
+    "common.v3.schema.json",
+    ...added.map((id) => catalog.contracts[id].schema),
   ])
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
 });

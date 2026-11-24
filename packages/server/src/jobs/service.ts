@@ -285,7 +285,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
     }>(
       `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256
        FROM jobs j JOIN recordings r ON r.id = j.recording_id
-       WHERE j.state = 'queued' AND r.current_job_id = j.id AND r.deleted_at IS NULL
+       WHERE j.kind = 'process_recording' AND j.state = 'queued' AND r.current_job_id = j.id AND r.deleted_at IS NULL
          AND r.status IN ('uploaded', 'processing')
          AND (
            ($1::uuid IS NULL AND (NOT $3::boolean OR r.rgb_profile <> $4))
@@ -1185,7 +1185,7 @@ export async function getJobStatus(
   }>(
     `SELECT id, kind, recording_id, state, previous_job_id, created_at, updated_at,
             execution_backend, execution_call_id, start_deadline, execution_deadline
-     FROM jobs WHERE id = $1`,
+     FROM jobs WHERE id = $1 AND kind = 'process_recording'`,
     [jobId],
   );
   const j = rows[0];

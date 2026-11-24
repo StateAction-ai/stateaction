@@ -1,4 +1,5 @@
-import type pg from "pg";
+import pg from "pg";
+import { hostedDevProfile } from "../hosted-dev.js";
 import {
   CatalogAccessStore,
   TestFixtureAccessStore,
@@ -92,9 +93,27 @@ type Holder = { [KEY]?: AuthRuntime };
 /** Process-wide runtime from the environment (survives Next dev reloads). */
 export function authRuntime(): AuthRuntime {
   const holder = globalThis as Holder;
-  return (holder[KEY] ??= createAuthRuntime(
-    authConfig(process.env, { resolveDatabaseUrl: applicationDatabaseUrl }),
-  ));
+  if (holder[KEY]) return holder[KEY]!;
+  const profile = hostedDevProfile();
+  if (!profile)
+    return (holder[KEY] = createAuthRuntime(
+      authConfig(process.env, { resolveDatabaseUrl: applicationDatabaseUrl }),
+    ));
+  const local = createAuthRuntime(
+    authConfig(process.env, {
+      resolveDatabaseUrl: () => profile.authDatabaseUrl,
+    }),
+  );
+  // Better Auth writes sessions and rate limits only to the local database.
+  // Catalog handlers receive the independently scoped hosted connection.
+  return (holder[KEY] = {
+    ...local,
+    pool: new pg.Pool({
+      connectionString: applicationDatabaseUrl(),
+      max: 4,
+      idleTimeoutMillis: 5000,
+    }),
+  });
 }
 
 function unavailable(error: unknown): Response {

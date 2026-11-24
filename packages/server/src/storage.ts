@@ -6,13 +6,14 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { hostedDevProfile } from "./hosted-dev.js";
 import type { ServerConfig } from "./config.js";
 export function storageClient(
   config: ServerConfig,
   timeoutMs = 3000,
   endpoint = config.endpoint,
 ): S3Client {
-  return new S3Client({
+  const client = new S3Client({
     endpoint,
     region: config.region,
     forcePathStyle: true,
@@ -30,6 +31,23 @@ export function storageClient(
       connectionTimeout: 1000,
     },
   });
+  if (hostedDevProfile()?.mode === "read-only") {
+    const reads = new Set([
+      "GetObjectCommand",
+      "HeadObjectCommand",
+      "HeadBucketCommand",
+      "ListObjectsV2Command",
+    ]);
+    client.middlewareStack.add(
+      (next, context) => async (args) => {
+        if (!context.commandName || !reads.has(context.commandName))
+          throw new Error("Hosted data profile permits only storage reads");
+        return next(args);
+      },
+      { step: "initialize", name: "hostedDevStorageReadOnly" },
+    );
+  }
+  return client;
 }
 export async function initializeStorage(config: ServerConfig): Promise<void> {
   const client = storageClient(config);

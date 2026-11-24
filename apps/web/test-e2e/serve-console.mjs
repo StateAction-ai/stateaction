@@ -2,19 +2,25 @@
 // Prints one JSON line (origin, seeded emails, password) to stdout; stop with
 // SIGTERM. The password is a throwaway for this ephemeral database only.
 //
-// `--seed annotations` (SA-96) also uploads simulated recordings through the real SA-71 path and
+// `--seed failure-fixtures` (SA-96) also uploads simulated recordings through the real SA-71 path and
 // runs them through the local loopback controller with stub or replay modules (zero model spend),
 // then prints the recordings, job ids and stage states. Needs the built web app, the built jobs
 // app (`pnpm --filter @stateaction/jobs... build`), the processing venv and the Render CLI.
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { startStack } from "./harness.mjs";
 
 const args = process.argv.slice(2);
 const seedAt = args.indexOf("--seed");
 const seed = seedAt === -1 ? undefined : args[seedAt + 1];
-if (seed !== undefined && seed !== "annotations") {
-  console.error(`unknown --seed ${seed} (supported: annotations)`);
+const bundles = seed === "cached" ? args.slice(seedAt + 2) : [];
+if (
+  seedAt !== -1 &&
+  ((seed !== "failure-fixtures" && seed !== "cached") ||
+    (seed === "cached" && !bundles.length))
+) {
+  console.error("Use --seed cached <bundle-dir> or --seed failure-fixtures");
   process.exit(2);
 }
 let seedMod;
@@ -25,24 +31,28 @@ if (seed) {
   const guards = await import("./seed-scenarios.mjs");
   try {
     guards.refuseNonLocalEnv(process.env);
-    for (const sc of Object.values({
-      ...guards.SYNTHETIC_SCENARIOS,
-      ...guards.REPLAY_SCENARIOS,
-      ...guards.CANARY_SCENARIOS,
-    }))
-      guards.refuseSpend(sc.recipe);
+    if (seed === "failure-fixtures") {
+      for (const sc of Object.values({
+        ...guards.SYNTHETIC_SCENARIOS,
+        ...guards.REPLAY_SCENARIOS,
+        ...guards.CANARY_SCENARIOS,
+      }))
+        guards.refuseSpend(sc.recipe);
+    }
   } catch (error) {
     console.error(error.message);
     process.exit(2);
   }
-  seedMod = await import("./seed-annotations.mjs");
-  dirs = seedMod.newSeedDirs();
+  if (seed === "failure-fixtures") {
+    seedMod = await import("./seed-annotations.mjs");
+    dirs = seedMod.newSeedDirs();
+  }
 }
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const python =
   process.env.PYTHON_EXECUTABLE ??
   join(repoRoot, "workers/processing/.venv/bin/python");
-const stackOptions = seed
+const stackOptions = seedMod
   ? {
       storage: true,
       extraEnv: {
@@ -50,7 +60,11 @@ const stackOptions = seed
         STATEACTION_LOCAL_RECIPE_DIR: dirs.recipes,
       },
     }
-  : {};
+  : {
+      storage: bundles.length > 0,
+      authOnly: true,
+      storageProxy: (endpoint) => ({ endpoint, stop() {} }),
+    };
 stack = await startStack(stackOptions);
 const done = async () => {
   stopRunner();
@@ -60,7 +74,40 @@ const done = async () => {
 process.on("SIGTERM", done);
 process.on("SIGINT", done);
 let seeded;
-if (seed) {
+if (bundles.length) {
+  seeded = [];
+  for (const bundle of bundles) {
+    const imported = spawnSync(
+      process.execPath,
+      [
+        "--conditions=react-server",
+        "--import",
+        "tsx",
+        "src/cached-import-cli.ts",
+        "publish",
+        resolve(bundle),
+        stack.users.staff.email,
+        "--approve-for-data",
+      ],
+      {
+        cwd: join(repoRoot, "packages/server"),
+        env: {
+          ...stack.env,
+          CACHED_IMPORT_OWNER_DATABASE_URL: stack.db.ownerUrl,
+        },
+        encoding: "utf8",
+      },
+    );
+    if (imported.status !== 0) {
+      console.error(
+        imported.stderr || imported.error?.message || "Cached import failed",
+      );
+      await stack.stop();
+      process.exit(1);
+    }
+    seeded.push(JSON.parse(imported.stdout));
+  }
+} else if (seedMod) {
   try {
     const result = await seedMod.seedAnnotations(stack, {
       dirs,

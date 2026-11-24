@@ -283,6 +283,7 @@ export type DatasetMembersAddRequest = {
 export type ClipReadRole = "thumbnail_jpeg" | "viewer_rrd";
 export type ClipReadCreateRequest = { role: ClipReadRole };
 export type DatasetView = {
+  containsImported?: true;
   datasetId: Uuid;
   name: string;
   clipCount: number;
@@ -303,6 +304,7 @@ export type ClipSimulationMarker = {
   productionQualified: false;
 };
 export type DatasetClipView = {
+  source?: "imported";
   clipId: Uuid;
   datasetId?: Uuid;
   title: string;
@@ -1127,6 +1129,46 @@ export type HandPresenceV1 = RecordingDocument & {
   frame_count: number;
   lanes: { left: HandPresenceSpan[]; right: HandPresenceSpan[] };
 };
+export type ImportedProducer = Omit<Producer, "engine" | "gpu"> & {
+  engine: { name: string | null; version: string | null };
+  gpu: { requested_type: GpuType | null; observed_type: string | null };
+};
+export type ImportedSegments = Omit<SegmentsV1, "schema" | "producer"> & {
+  schema: "stateaction.segments.v2";
+  producer: ImportedProducer;
+};
+export type ImportedCaptions = Omit<CaptionsV1, "schema" | "producer"> & {
+  schema: "stateaction.captions.v2";
+  producer: ImportedProducer;
+};
+export type ImportedHandPresence = Omit<
+  HandPresenceV1,
+  "schema" | "producer"
+> & {
+  schema: "stateaction.hand_presence.v2";
+  producer: ImportedProducer;
+};
+export type RecordingAnnotations = {
+  recording_id: Uuid;
+  job_id: Uuid;
+} & (
+  | {
+      schema: "stateaction.recording-annotations.v1";
+      source?: never;
+      segments: SegmentsV1 | null;
+      captions: CaptionsV1 | null;
+      hand_presence: HandPresenceV1 | null;
+      dag_run: DagRunV1 | null;
+    }
+  | {
+      schema: "stateaction.recording-annotations.v2";
+      source: "imported";
+      segments: ImportedSegments;
+      captions: ImportedCaptions;
+      hand_presence: ImportedHandPresence;
+      dag_run: null;
+    }
+);
 export type StageResources = {
   gpu: GpuType;
   budgetSeconds: number;

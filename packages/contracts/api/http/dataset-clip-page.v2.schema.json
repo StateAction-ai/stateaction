@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dataset-clip-page.v2.json",
+  "title": "Dataset clip page v2",
+  "description": "Data payload of GET /api/v1/datasets/{datasetId}/clips: approved members only, newest membership first, keyset page (default 24, maximum 100).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["clips", "nextCursor"],
+  "properties": {
+    "clips": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "https://stateaction.ai/schemas/http/dataset-clip.v2.json"
+      }
+    },
+    "nextCursor": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

@@ -313,6 +313,11 @@ export function DataBrowser({
                   <div className="p-4">
                     <h2 className="m-0 break-words text-base font-semibold">
                       {clip.title}
+                      {clip.source === "imported" ? (
+                        <span className="ml-2 text-xs text-muted">
+                          Imported
+                        </span>
+                      ) : null}
                     </h2>
                     <p className="mt-1 break-words text-sm text-muted">
                       {clip.taskLabel ?? "No task label"}
@@ -422,6 +427,11 @@ function DatasetTable({ datasets }: { datasets: DatasetView[] }) {
                   })}
                 >
                   {dataset.name}
+                  {dataset.containsImported ? (
+                    <span className="ml-2 text-xs text-muted">
+                      Contains imported clips
+                    </span>
+                  ) : null}
                 </Link>
               </td>
               <td className="px-3 py-4 tabular-nums">
