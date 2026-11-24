@@ -1,5 +1,6 @@
 """The thin Modal wrapper against a fake `modal` module and a fake CLI (SA-42). Nothing is deployed."""
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -22,7 +23,7 @@ class _Chain:
         return lambda *a, **k: self
 
 
-def load_wrapper(call_id=CALL):
+def load_wrapper(call_id=CALL, *, runtime_path=None):
     """Import modal_app.py with a recording fake `modal` (never the real SDK)."""
     seen = {}
     fake = types.ModuleType("modal")
@@ -44,6 +45,8 @@ def load_wrapper(call_id=CALL):
     try:
         spec = importlib.util.spec_from_file_location("modal_app_under_test", APP_PATH)
         module = importlib.util.module_from_spec(spec)
+        if runtime_path is not None:
+            module.__file__ = runtime_path
         spec.loader.exec_module(module)
     finally:
         if previous is None:
@@ -81,6 +84,19 @@ BOOTSTRAP = {
     "bootstrapToken": TOKEN,
     "pipeline": "hand_pose_cpu_v1",
 }
+BINDING = hashlib.sha256(
+    (
+        "\n".join(
+            [
+                BOOTSTRAP["apiUrl"],
+                BOOTSTRAP["jobId"],
+                "",
+                "",
+                hashlib.sha256(TOKEN.encode()).hexdigest(),
+            ]
+        )
+    ).encode()
+).hexdigest()
 
 
 def alive(pid):
@@ -107,6 +123,48 @@ def kill_leftovers(directory):
 
 
 class ModalWrapperTests(unittest.TestCase):
+    def test_image_installs_native_libraries_and_loads_the_pinned_model(self):
+        module, _seen = load_wrapper()
+        calls = []
+
+        class RecordingImage:
+            def __getattr__(self, name):
+                def record(*args, **kwargs):
+                    calls.append((name, args, kwargs))
+                    return self
+
+                return record
+
+        module.modal.Image.debian_slim = RecordingImage().debian_slim
+        module.build_image(Path("requirements.txt"), "revision", "image-spec")
+        package_args = next(
+            args for method, args, _ in calls if method == "apt_install"
+        )
+        self.assertIn("libegl1", package_args)
+        self.assertIn("libgles2", package_args)
+        self.assertEqual(calls[-1][0], "run_commands")
+        self.assertIn("HandInferencer().close()", calls[-1][1][0])
+
+    def test_container_import_does_not_require_a_repository_checkout(self):
+        _, seen = load_wrapper(runtime_path="/root/modal_app.py")
+        self.assertEqual(seen["app"], "stateaction-processing")
+        self.assertEqual(seen["function"]["name"], "process_recording")
+
+    def test_canary_timeout_bounds_both_function_and_worker(self):
+        with mock.patch.dict(
+            os.environ, {"STATEACTION_MODAL_HAND_POSE_TIMEOUT_S": "1200"}
+        ):
+            module, seen = load_wrapper()
+        self.assertEqual(seen["function"]["timeout"], 1200)
+        self.assertEqual(module.WRAPPER_DEADLINE_SECONDS, 900)
+        with (
+            mock.patch.dict(
+                os.environ, {"STATEACTION_MODAL_HAND_POSE_TIMEOUT_S": "599"}
+            ),
+            self.assertRaisesRegex(ValueError, "out of range"),
+        ):
+            load_wrapper()
+
     def test_function_is_finite_cpu_with_explicit_pins_and_no_credentials(self):
         _module, seen = load_wrapper()
         fn = seen["function"]
@@ -120,6 +178,7 @@ class ModalWrapperTests(unittest.TestCase):
         self.assertIs(fn["nonpreemptible"], True)
         for key in ("cpu", "memory", "ephemeral_disk", "timeout"):
             self.assertIn(key, fn, key)
+        self.assertEqual(fn["ephemeral_disk"], 524_288)
         self.assertNotIn("gpu", fn)
         # The Modal timeout is only a backstop for the wrapper's own deadline.
         module, _ = load_wrapper()
@@ -138,7 +197,13 @@ class ModalWrapperTests(unittest.TestCase):
             stdin = json.loads((Path(d) / "stdin").read_text())
             env = (Path(d) / "env").read_text()
         self.assertEqual(
-            result, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            result,
+            {
+                "schemaVersion": 1,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "callBinding": BINDING,
+            },
         )
         self.assertEqual(
             argv.split(),
@@ -181,7 +246,19 @@ class ModalWrapperTests(unittest.TestCase):
 
     def test_a_recipe_stage_returns_v2_with_its_last_stdout_line_as_the_receipt(self):
         module, _ = load_wrapper()
-        receipt = {"schemaVersion": 1, "stage": "hand_pose", "status": "succeeded"}
+        receipt = {
+            "schemaVersion": 1,
+            "jobId": JOB,
+            "stage": "hand_pose",
+            "module": "hand_pose_cpu_v1@1",
+            "status": "succeeded",
+            "errorCode": None,
+            "outputs": [],
+            "counts": {},
+            "gpu": {"requestedType": "none", "observedType": None},
+            "startedAt": "2026-11-22T10:00:00.000Z",
+            "finishedAt": "2026-11-22T10:00:01.000Z",
+        }
         with tempfile.TemporaryDirectory() as d:
             script = Path(d) / "py"
             script.write_text(
@@ -189,7 +266,7 @@ class ModalWrapperTests(unittest.TestCase):
                 f"echo '{json.dumps(receipt)}'\nexit 0\n"
             )
             script.chmod(0o755)
-            staged = dict(BOOTSTRAP, stage="hand_pose")
+            staged = dict(BOOTSTRAP, stage="hand_pose", module="hand_pose_cpu_v1@1")
             result = module.run_bootstrap(
                 json.dumps(staged),
                 CALL,
@@ -202,7 +279,9 @@ class ModalWrapperTests(unittest.TestCase):
                 python=str(script),
                 env_source={"PATH": os.environ["PATH"]},
             )
-            script.write_text("#!/bin/sh\ncat > /dev/null\necho not json\n")
+            script.write_text(
+                '#!/bin/sh\ncat > /dev/null\necho \'{"kind":"progress"}\'\n'
+            )
             garbled = module.run_bootstrap(
                 json.dumps(staged),
                 CALL,
@@ -216,11 +295,30 @@ class ModalWrapperTests(unittest.TestCase):
                 "functionCallId": CALL,
                 "exitCode": 0,
                 "receipt": receipt,
+                "callBinding": hashlib.sha256(
+                    (
+                        "\n".join(
+                            [
+                                BOOTSTRAP["apiUrl"],
+                                BOOTSTRAP["jobId"],
+                                "hand_pose",
+                                "hand_pose_cpu_v1@1",
+                                hashlib.sha256(TOKEN.encode()).hexdigest(),
+                            ]
+                        )
+                    ).encode()
+                ).hexdigest(),
             },
         )
         # No `stage`: exactly the v1 return.
         self.assertEqual(
-            plain, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            plain,
+            {
+                "schemaVersion": 1,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "callBinding": BINDING,
+            },
         )
         self.assertIsNone(garbled["receipt"])
 

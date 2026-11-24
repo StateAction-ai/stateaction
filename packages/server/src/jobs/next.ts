@@ -65,10 +65,11 @@ export function jobsDepsFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): JobsDeps {
   const config = serverConfig(env);
+  const jobsConfig = jobsConfigFromEnv(env);
   return {
     pool,
-    config: jobsConfigFromEnv(env),
-    taskStarter: starterFromEnv(env),
+    config: jobsConfig,
+    taskStarter: jobsConfig.publicVideoCanary ? null : starterFromEnv(env),
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
     sealTransport: () => ({ pool, provider: providerFromConfig(config) }),

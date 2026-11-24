@@ -36,10 +36,13 @@ FUNCTION_NAME = "process_recording"
 # Explicit resources (provisional sizing: confirm with the authorized canary before production).
 CPU_REQUEST, CPU_LIMIT = 4.0, 4.0
 MEMORY_REQUEST_MIB, MEMORY_LIMIT_MIB = 8192, 8192
-SCRATCH_DISK_MIB = 51_200
+SCRATCH_DISK_MIB = 524_288  # Modal's minimum container disk request.
 # Modal's function timeout is a backstop; the wrapper kills the CLI first and still returns a result.
-FUNCTION_TIMEOUT_SECONDS = 21_600
-WRAPPER_DEADLINE_SECONDS = 21_300
+TIMEOUT_ENV = "STATEACTION_MODAL_HAND_POSE_TIMEOUT_S"
+FUNCTION_TIMEOUT_SECONDS = int(os.environ.get(TIMEOUT_ENV, "21600"))
+if not 600 <= FUNCTION_TIMEOUT_SECONDS <= 21_600:
+    raise ValueError(f"{TIMEOUT_ENV} out of range")
+WRAPPER_DEADLINE_SECONDS = FUNCTION_TIMEOUT_SECONDS - 300
 # Bounded proof that the CLI's whole process group/session is gone before a result is returned.
 REAP_GRACE_SECONDS = 15.0
 
@@ -62,7 +65,6 @@ _ENV_ALLOWLIST = (
 )
 _BOOTSTRAP_MAX_BYTES = 8192
 
-REPO = Path(__file__).resolve().parents[2]
 IMAGE_ROOT = "/app"
 
 
@@ -74,11 +76,12 @@ def build_image(
     `requirements_txt` is `uv export --locked --no-dev --no-emit-project
     --no-emit-package stateaction-contracts -o <file>` from uv.lock (hashes kept, so pip
     enforces them). The Python patch level is not selectable on Modal ("3.12" is the only
-    available pin), and mediapipe's shared libraries are UNVERIFIED until an authorized build.
+    available pin). The build loads the pinned MediaPipe model to check the native runtime.
     """
+    repo = Path(__file__).resolve().parents[2]
     pins = json.loads(
         (
-            REPO / "workers/processing/src/stateaction_processing/hand_model.json"
+            repo / "workers/processing/src/stateaction_processing/hand_model.json"
         ).read_text(encoding="utf-8")
     )
     model_path = "/models/hand_landmarker.task"
@@ -91,7 +94,9 @@ def build_image(
     ]
     return (
         modal.Image.debian_slim(python_version="3.12")
-        .apt_install("ca-certificates", "curl", "libgl1", "libglib2.0-0")
+        .apt_install(
+            "ca-certificates", "curl", "libgl1", "libglib2.0-0", "libegl1", "libgles2"
+        )
         .pip_install_from_requirements(str(requirements_txt))
         .run_commands(
             f"mkdir -p /models && curl -fsSL --proto '=https' -o {model_path} {pins['url']}",
@@ -114,26 +119,30 @@ def build_image(
             }
         )
         .add_local_dir(
-            str(REPO / "workers/processing/src"),
+            str(repo / "workers/processing/src"),
             f"{IMAGE_ROOT}/workers/processing/src",
             copy=True,
             ignore=ignore,
         )
         .add_local_dir(
-            str(REPO / "packages/contracts/python/src"),
+            str(repo / "packages/contracts/python/src"),
             f"{IMAGE_ROOT}/packages/contracts/python/src",
             copy=True,
             ignore=ignore,
         )
         .add_local_dir(
-            str(REPO / "packages/contracts/api"),
+            str(repo / "packages/contracts/api"),
             f"{IMAGE_ROOT}/packages/contracts/api",
             copy=True,
         )
         .add_local_dir(
-            str(REPO / "packages/contracts/capture"),
+            str(repo / "packages/contracts/capture"),
             f"{IMAGE_ROOT}/packages/contracts/capture",
             copy=True,
+        )
+        .run_commands(
+            "python -c 'from stateaction_processing.hands import HandInferencer; "
+            'HandInferencer().close(); print("Pinned CPU hand model loaded")\''
         )
     )
 
@@ -152,7 +161,9 @@ if modal.is_local():
             "STATEACTION_CODE_REVISION and STATEACTION_IMAGE_SPEC_SHA256 "
             "(the admitted PROCESSING_IMAGE_SPEC_SHA256) before deploying"
         )
-    image = build_image(Path(_requirements), _revision, _image_spec)
+    image = build_image(Path(_requirements), _revision, _image_spec).env(
+        {TIMEOUT_ENV: str(FUNCTION_TIMEOUT_SECONDS)}
+    )
 else:
     image = modal.Image.debian_slim()
 
@@ -274,10 +285,17 @@ def run_bootstrap(
         except OSError:
             pass
         raise
+    from stateaction_processing.modal_result import call_binding, parse_worker_receipt
+
+    binding = call_binding(bootstrap)
+    if binding is not None:
+        result["callBinding"] = binding
     result["exitCode"] = max(-255, min(255, int(code)))
     if staged:
         result["schemaVersion"] = 2
-        result["receipt"] = _parse_receipt(last_line[0] if last_line else b"")
+        result["receipt"] = parse_worker_receipt(
+            last_line[0] if last_line else b"", bootstrap, result["exitCode"]
+        )
     return result
 
 
@@ -295,17 +313,6 @@ def _drain_last_line(stream: Any, keep: list[bytes]) -> None:
                 keep[:] = [stripped[: _RECEIPT_MAX_BYTES + 1]]
     except (OSError, ValueError):
         pass
-
-
-def _parse_receipt(line: bytes) -> dict[str, Any] | None:
-    """The stage receipt, or None when the last line is absent, oversized or not a JSON object."""
-    if not line or len(line) > _RECEIPT_MAX_BYTES:
-        return None
-    try:
-        value = json.loads(line)
-    except ValueError:
-        return None
-    return value if isinstance(value, dict) else None
 
 
 @app.function(

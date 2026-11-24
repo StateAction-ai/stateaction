@@ -75,12 +75,10 @@ def _run(
     env: dict[str, str],
     deadline_s: float,
     grace_s: float,
-    stdout: Any = None,
 ) -> int:
     child = subprocess.Popen(
         args,
         stdin=subprocess.PIPE if stdin is not None else None,
-        stdout=stdout,
         shell=False,
         start_new_session=True,  # session and group leader: every descendant (vLLM workers) is in it
         env=env,
@@ -140,6 +138,8 @@ def run_stage_bootstrap(
         return result
     bootstrap["executionRef"] = call_id
     bootstrap["executorKind"] = "modal"
+    from stateaction_processing.modal_result import call_binding, parse_worker_receipt
+
     with tempfile.TemporaryDirectory(prefix="flora-stage-result-") as directory:
         receipt_path = Path(directory) / "receipt.json"
         env = child_env(
@@ -156,13 +156,12 @@ def run_stage_bootstrap(
         if result["exitCode"] in (0, 3) and receipt_path.is_file():
             with receipt_path.open("rb") as receipt_file:
                 data = receipt_file.read(RECEIPT_MAX_BYTES + 1)
-            if len(data) <= RECEIPT_MAX_BYTES:
-                try:
-                    receipt = json.loads(data)
-                except ValueError:
-                    receipt = None
-                if isinstance(receipt, dict):
-                    result["receipt"] = receipt
+            result["receipt"] = parse_worker_receipt(
+                data, bootstrap, result["exitCode"]
+            )
+    binding = call_binding(bootstrap)
+    if binding is not None:
+        result["callBinding"] = binding
     return result
 
 

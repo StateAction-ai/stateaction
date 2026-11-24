@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   validateValue,
   type Stage,
@@ -90,6 +91,7 @@ export type ModalRunResult = {
   schemaVersion: 1 | 2;
   functionCallId: string;
   exitCode: number;
+  callBinding?: string;
   /** v2 (SA-91 stage): the stage receipt, or null when the stage produced none (crash). */
   receipt?: StageReceiptV1 | null;
 };
@@ -130,12 +132,31 @@ export interface ModalClient {
   close?(): void;
 }
 
+export function recoveryBinding(
+  jobId: string,
+  apiUrl: string,
+  bootstrapSha256: string,
+  stage?: StageExpectation,
+): string {
+  return createHash("sha256")
+    .update(
+      [
+        apiUrl,
+        jobId,
+        stage?.stage ?? "",
+        stage?.module ?? "",
+        bootstrapSha256,
+      ].join("\n"),
+    )
+    .digest("hex");
+}
+
 /**
  * Strict: exact keys, the exact call this controller recorded, a small integer exit code.
  * Without `stage` only the SA-42 v1 shape is accepted (a job without a recipe). For a stage, v2
  * `{schemaVersion: 2, functionCallId, exitCode, receipt}` is required, with a receipt valid
  * against `jobs.stage-receipt.v1` for exactly this job, stage and module (or `null` when the
- * stage produced none); `hand_pose_cpu_v1` may still return v1.
+ * stage produced none).
  */
 export function parseRunResult(
   value: unknown,
@@ -147,13 +168,17 @@ export function parseRunResult(
   const v = value as Record<string, unknown>;
   const keys = Object.keys(v);
   const v2 = v.schemaVersion === 2 && stage !== undefined;
-  const v1 =
-    v.schemaVersion === 1 &&
-    (stage === undefined || stage.module === "hand_pose_cpu_v1@1");
+  const v1 = v.schemaVersion === 1 && stage === undefined;
   if (!v1 && !v2) return undefined;
   const allowed = v2
     ? ["schemaVersion", "functionCallId", "exitCode", "receipt"]
     : ["schemaVersion", "functionCallId", "exitCode"];
+  const binding = v.callBinding;
+  if (binding !== undefined) {
+    if (typeof binding !== "string" || !/^[0-9a-f]{64}$/.test(binding))
+      return undefined;
+    allowed.push("callBinding");
+  }
   if (keys.length !== allowed.length || !keys.every((k) => allowed.includes(k)))
     return undefined;
   if (
@@ -164,11 +189,16 @@ export function parseRunResult(
     return undefined;
   const exitCode = exitCodeOf(v.exitCode);
   if (exitCode === undefined) return undefined;
-  if (!v2) return { schemaVersion: 1, functionCallId: callId, exitCode };
+  const common = {
+    functionCallId: callId,
+    exitCode,
+    ...(binding === undefined ? {} : { callBinding: binding }),
+  };
+  if (!v2) return { schemaVersion: 1, ...common };
   const receipt =
     v.receipt === null ? null : parseStageReceipt(v.receipt, stage!, exitCode);
   if (receipt === undefined) return undefined;
-  return { schemaVersion: 2, functionCallId: callId, exitCode, receipt };
+  return { schemaVersion: 2, ...common, receipt };
 }
 
 export function exitCodeOf(value: unknown): number | undefined {

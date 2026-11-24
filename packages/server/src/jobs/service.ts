@@ -3,11 +3,18 @@ import { randomBytes } from "node:crypto";
 import type pg from "pg";
 import {
   ContractViolation,
+  SIMULATION_RGB_PROFILE,
+  parseContract,
   requestSha256,
   validateValue,
   type Sha256Hex,
+  type TaskInputV2,
 } from "@stateaction/contracts";
 import { processRecordingTaskInputV2 } from "../admission/job-input.js";
+import {
+  PUBLIC_VIDEO_RECIPE,
+  isPublicVideoProvenance,
+} from "../admission/public-video-canary.js";
 import { inTransaction, type Queryable } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { hashServiceToken } from "../auth/service.js";
@@ -254,6 +261,7 @@ function isBuilderRejection(error: unknown): boolean {
  * the rest observe `slot_busy`. Queued jobs hold nothing.
  */
 export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
+  const canary = deps.config.publicVideoCanary;
   const build =
     deps.taskInput ??
     (deps.config.localRecipeDir
@@ -279,8 +287,28 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
        FROM jobs j JOIN recordings r ON r.id = j.recording_id
        WHERE j.state = 'queued' AND r.current_job_id = j.id AND r.deleted_at IS NULL
          AND r.status IN ('uploaded', 'processing')
+         AND (
+           ($1::uuid IS NULL AND (NOT $3::boolean OR r.rgb_profile <> $4))
+           OR (r.client_recording_id = $1 AND r.owner_user_id = $2 AND r.rgb_profile = $4
+             AND EXISTS (
+               SELECT 1 FROM recording_admissions a
+               WHERE a.recording_id = r.id AND a.outcome = 'admitted'
+                 AND a.job_id = j.id
+                 AND a.source_manifest_sha256 = j.source_manifest_sha256
+                 AND a.declared_files @> jsonb_build_array(
+                   jsonb_build_object('role', 'source_mcap', 'required', true, 'sha256', $5::text)
+                 )
+             ))
+         )
        ORDER BY j.created_at, j.id
        FOR UPDATE OF j SKIP LOCKED LIMIT 25`,
+      [
+        canary?.clientRecordingId ?? null,
+        canary?.ownerUserId ?? null,
+        deps.config.production === true,
+        SIMULATION_RGB_PROFILE,
+        canary?.sourceSha256 ?? null,
+      ],
     );
     const rejectedJobIds: string[] = [];
     for (const c of candidates.rows) {
@@ -300,6 +328,23 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           profileRevision: c.profile_revision,
           sourceManifestSha256: c.source_manifest_sha256,
         });
+        if (canary) {
+          const input = parseContract<TaskInputV2>("jobs.task-input.v2", task);
+          if (
+            !("simulation" in input) ||
+            !isPublicVideoProvenance(input.simulation)
+          )
+            throw new CatalogError(
+              "not_found",
+              "Public video provenance does not match",
+            );
+          task = {
+            ...input,
+            schemaVersion: 3,
+            recipe: PUBLIC_VIDEO_RECIPE,
+            recipeSha256: requestSha256(PUBLIC_VIDEO_RECIPE),
+          };
+        }
       } catch (error) {
         if (!isBuilderRejection(error)) throw error;
         // Cancel THIS job only (SA-121): the same no-block rule as SA-109.
@@ -764,6 +809,24 @@ export async function recordExecutionEvidence(
       [jobId],
     );
     if (!rows[0]) throw new TransportError("not_found", "Job not found");
+    if (!rows[0].recipe && ev.kind === "provider_call_terminal") {
+      const { rows: prior } = await tx.query<{
+        kind: string;
+        execution_ref: string | null;
+      }>(
+        "SELECT kind, execution_ref FROM job_execution_evidence WHERE job_id = $1",
+        [jobId],
+      );
+      if (prior[0]) {
+        if (prior[0].kind !== ev.kind || prior[0].execution_ref !== ref)
+          throw conflict("A different termination proof is already recorded");
+        const held = await tx.query(
+          "SELECT 1 FROM dispatch_admission WHERE slot = 1 AND job_id = $1",
+          [jobId],
+        );
+        return { recorded: true, slotReleased: held.rowCount === 0 } as const;
+      }
+    }
     // SA-88 recipe job: the proof first names the exact call of one stage
     // (job_stage_evidence). It is also the job's terminal evidence only when
     // that stage is the latest issued and no later stage can still run (the

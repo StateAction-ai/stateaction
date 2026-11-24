@@ -60,7 +60,7 @@ If parity fails, nothing is published and load-time quantization stays the docum
 ## Tests (no GPU, no Modal)
 
 ```sh
-python3 -m unittest discover -s workers/flora/tests -v
+uv run --project workers/processing --locked python -m unittest discover -s workers/flora/tests -v
 ```
 
 ## Stage modules on Modal GPUs (SA-94, T09)
@@ -149,3 +149,18 @@ prints the summary: a killed client leaves results lost and the container runnin
 - A model segment fully covered by its predecessor is dropped from the rows and recorded in `segments.json` on the covering row
   (`ext.flora_dropped`: reason `dropped_covered_by_predecessor`, count, ids, native frame spans) and in `decoding_params.covered_dropped`.
 - Spawn seam: set the controller's `MODAL_STAGE_FUNCTIONS` to `controller_env()` from `flora_ext/stage_settings.py` (`APP_NAME`, `FUNCTION_OF_MODULE`; entries are `module@1=stateaction-flora-stages/function`, so `MODAL_APP_NAME` stays the hand_pose app); smoke and dry-run live in `modal_stage_smoke.py` so `modal deploy workers/flora/modal_stage.py` has two functions.
+
+### TempSeg repair budget (SA-81)
+
+TempSeg's run-wide adaptive repair budget is the number of 12-second timeline
+cores through the last source frame, limited by the recipe's `repair_budget`
+(default and vendor maximum 64).
+Both engines receive the effective budget and record it in
+`producer.decoding_params.repair_budget`. Each run uses one source timeline.
+
+At 10 fps, 299 seconds allows 25 repairs and 600 seconds allows 50. The
+historical Plan 2.5 run at 1,696.7 seconds used 142 initial windows, all 64
+adaptive repairs and 13 directional completion windows. The vendor ceiling
+still applies at that length. SA-81 qualification is limited to the approved
+public clip and a maximum duration of 600 seconds.
+Two-hour processing remains unqualified.

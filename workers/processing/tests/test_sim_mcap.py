@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 from indexed_fixture import flat_records
@@ -149,6 +150,24 @@ class SimMcapTests(unittest.TestCase):
         )
         self.assertEqual(m["provenance"]["encoder"], {"status": "unknown"})
         self.assertEqual(m["provenance"]["clock"], {"status": "unknown"})
+
+    def test_hosted_fixture_can_pin_its_uuid_without_changing_simulation_provenance(
+        self,
+    ):
+        out = self.dir / "hosted.mcap"
+        recording_id = uuid.UUID("00573d25-ffa0-4a3f-b1e2-134080fb58fb")
+        label = "IndEgo.User_15_410_0511_1_480"
+        receipt = self.tool.convert(
+            self.plain, out, camera_label=label, recording_id=recording_id
+        )
+        frames, report = self.decode(out.read_bytes())
+        self.assertEqual(receipt["recording_id"], str(recording_id))
+        self.assertEqual(report.profile["recording_id"], str(recording_id))
+        self.assertEqual(report.profile["rgb_profile"], "h264_mcap_simulation_v1")
+        self.assertFalse(report.profile["production_qualified"])
+        self.assertEqual(len(frames), 24)
+        provenance = json.loads(out.with_suffix(".simulation.json").read_bytes())
+        self.assertEqual(provenance["provenance"]["camera"]["label"], label)
 
     def test_hardware_profile_reader_refuses_the_simulation_file(self):
         from stateaction_processing.frames import FrameStream

@@ -24,6 +24,11 @@ import {
   SOURCE_MANIFEST_MAX_BYTES,
 } from "./inventory.js";
 import { simulatedCaptureInputsEnabled } from "./simulation.js";
+import {
+  isPublicVideoProvenance,
+  publicVideoCanaryFromEnv,
+  type PublicVideoCanary,
+} from "./public-video-canary.js";
 
 type Tx = pg.PoolClient;
 
@@ -54,6 +59,7 @@ export type AdmissionConfig = {
   supportedRgbProfiles: readonly string[];
   /** SA-71: development-only acceptance of h264_mcap_simulation_v1. Default false. */
   simulatedCaptureInputs?: boolean;
+  publicVideoCanary?: PublicVideoCanary;
 };
 
 export type AdmissionDeps = {
@@ -83,12 +89,14 @@ export function admissionConfigFromEnv(
       "Missing or invalid server setting: SUPPORTED_RGB_PROFILES",
     );
   const simulated = simulatedCaptureInputsEnabled(env);
+  const publicVideoCanary = publicVideoCanaryFromEnv(env);
   return {
     processingProfileRevision: revision,
     supportedRgbProfiles: simulated
       ? [...profiles, SIMULATION_RGB_PROFILE]
       : profiles,
     ...(simulated ? { simulatedCaptureInputs: true } : {}),
+    ...(publicVideoCanary ? { publicVideoCanary } : {}),
   };
 }
 
@@ -263,7 +271,10 @@ export function toRecordingV2(view: RecordingView): RecordingV2 {
  */
 export async function registerRecording(
   deps: Pick<AdmissionDeps, "pool" | "newId"> & {
-    config?: Pick<AdmissionConfig, "simulatedCaptureInputs">;
+    config?: Pick<
+      AdmissionConfig,
+      "simulatedCaptureInputs" | "publicVideoCanary"
+    >;
   },
   principal: CollectorPrincipal,
   body: unknown,
@@ -286,7 +297,13 @@ export async function registerRecording(
   };
   if (
     request.rgbProfile === SIMULATION_RGB_PROFILE &&
-    !deps.config?.simulatedCaptureInputs
+    !deps.config?.simulatedCaptureInputs &&
+    !(
+      deps.config?.publicVideoCanary?.ownerUserId === owner &&
+      deps.config.publicVideoCanary.clientRecordingId ===
+        request.clientRecordingId &&
+      isPublicVideoProvenance(request.simulation)
+    )
   )
     throw new CatalogError(
       "forbidden",
@@ -518,6 +535,18 @@ export async function admitInTransaction(
     [r.ingest_permission_id, r.owner_user_id],
   );
   if (!permitted.rows[0]?.ok) return { state: "blocked_permission" };
+  const canary = deps.config.publicVideoCanary;
+  const canarySource =
+    r.rgb_profile === SIMULATION_RGB_PROFILE &&
+    canary?.ownerUserId === r.owner_user_id &&
+    canary.clientRecordingId === r.client_recording_id &&
+    isPublicVideoProvenance(r.simulation) &&
+    r.inventory.some(
+      (f) =>
+        f.role === "source_mcap" &&
+        f.required &&
+        f.sha256 === canary.sourceSha256,
+    );
   const check = manifest.tooLarge
     ? ({ ok: false, code: "manifest_too_large" } as const)
     : checkSourceDeclaration(manifest.bytes!, {
@@ -530,7 +559,9 @@ export async function admitInTransaction(
         sizeBytes: stored.observed,
         permissionRef: r.permission_ref,
         seal: r.inventory,
-        supportedRgbProfiles: deps.config.supportedRgbProfiles,
+        supportedRgbProfiles: canarySource
+          ? [...deps.config.supportedRgbProfiles, SIMULATION_RGB_PROFILE]
+          : deps.config.supportedRgbProfiles,
       });
   // Until the bytes hash to the pinned digest nothing is decided durably: a
   // short/corrupt read or wrong object stays retryable.
@@ -550,6 +581,8 @@ export async function admitInTransaction(
     return { state: "rejected", code: check.code };
   }
   const e = check.evidence;
+  if (canarySource && !isPublicVideoProvenance(e.simulation))
+    return { state: "deferred", code: "profile_unsupported" };
   const jobId = (deps.newId ?? randomUUID)();
   // Evidence first: the jobs trigger requires the admitted row naming this job.
   await tx.query(

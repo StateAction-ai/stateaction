@@ -1,5 +1,6 @@
 """SA-94 stage function settings and the stage CLI wrapper (stdlib only, no GPU, no Modal)."""
 
+import hashlib
 import json
 import os
 import signal
@@ -154,7 +155,9 @@ class WrapperTests(unittest.TestCase):
         return str(script)
 
     def test_bootstrap_gets_call_id_and_executor_and_goes_to_stdin_only(self):
-        receipt = {"schemaVersion": 1, "stage": "segment"}
+        fixture = RECIPE.with_name("jobs.stage-receipt.v1.json")
+        receipt = json.loads(fixture.read_text())["cases"][0]["input"]["document"]
+        receipt["jobId"] = "00573d25-ffa0-4a3f-b1e2-134080fb58fb"
         with tempfile.TemporaryDirectory() as tmp:
             record = Path(tmp) / "record.json"
             stub = self.python_stub(
@@ -164,7 +167,15 @@ class WrapperTests(unittest.TestCase):
                 f"json.dump({receipt!r}, open(os.environ['STATEACTION_STAGE_RECEIPT_FILE'], 'x'))",
             )
             result = stage_wrapper.run_stage_bootstrap(
-                json.dumps({"stage": "segment", "module": "flora_tempseg_vllm_fp8@1"}),
+                json.dumps(
+                    {
+                        "apiUrl": "https://api.example.com",
+                        "jobId": "00573d25-ffa0-4a3f-b1e2-134080fb58fb",
+                        "stage": "segment",
+                        "module": "flora_tempseg_vllm_fp8@1",
+                        "bootstrapToken": "synthetic-bootstrap",
+                    }
+                ),
                 CALL,
                 deadline_s=30,
                 python=stub,
@@ -178,6 +189,10 @@ class WrapperTests(unittest.TestCase):
                 "functionCallId": CALL,
                 "exitCode": 0,
                 "receipt": receipt,
+                "callBinding": hashlib.sha256(
+                    b"https://api.example.com\n00573d25-ffa0-4a3f-b1e2-134080fb58fb\nsegment\nflora_tempseg_vllm_fp8@1\n"
+                    + hashlib.sha256(b"synthetic-bootstrap").hexdigest().encode()
+                ).hexdigest(),
             },
         )
         self.assertEqual(
@@ -188,12 +203,33 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(seen["env"], [], "no Modal credential reaches the stage")
         self.assertNotIn("bootstrap", " ".join(seen["argv"]))
 
+    def test_a_json_diagnostic_is_not_a_stage_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = self.python_stub(
+                Path(tmp),
+                "sys.stdin.read()\nprint(json.dumps({'kind': 'progress'}))\nsys.exit(70)",
+            )
+            result = stage_wrapper.run_stage_bootstrap(
+                "{}", CALL, deadline_s=5, python=stub
+            )
+        self.assertEqual(
+            result,
+            {
+                "schemaVersion": 2,
+                "functionCallId": CALL,
+                "exitCode": 70,
+                "receipt": None,
+            },
+        )
+
     def test_caller_may_not_set_the_execution_identity(self):
         for forbidden in ({"executionRef": "fc-x"}, {"executorKind": "local"}):
             result = stage_wrapper.run_stage_bootstrap(
                 json.dumps(forbidden), CALL, deadline_s=5, python="/bin/false"
             )
             self.assertEqual(result["exitCode"], stage_wrapper.EXIT_INTERNAL)
+            self.assertEqual(result["schemaVersion"], 2)
+            self.assertIsNone(result["receipt"])
         oversized = stage_wrapper.run_stage_bootstrap(
             json.dumps({"x": "y" * 9000}), CALL, deadline_s=5, python="/bin/false"
         )

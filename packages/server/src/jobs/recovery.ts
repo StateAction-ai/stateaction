@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
+import { PUBLIC_VIDEO_RECIPE } from "../admission/public-video-canary.js";
 import type {
   JobControlAction,
   JobControlCapabilities,
@@ -255,16 +256,26 @@ export async function finalizeCancellations(
         never: boolean;
         holds: boolean;
         evidence: boolean;
+        unfinished_stage: boolean;
       }>(
         `SELECT j.state, j.recipe_parallel,
            (j.submission_intent_at IS NULL AND j.execution_call_id IS NULL AND j.invocation_nonce IS NULL) AS never,
            EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id) AS holds,
-           EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id) AS evidence
+           EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id) AS evidence,
+           EXISTS (
+             SELECT 1 FROM job_stage_claims c
+             LEFT JOIN job_stage_runs r ON r.job_id = c.job_id AND r.stage = c.stage
+             WHERE c.job_id = j.id AND
+               (r.state IS NULL OR r.state NOT IN ('succeeded', 'failed', 'cancelled'))
+           ) AS unfinished_stage
          FROM jobs j WHERE j.id = $1 FOR UPDATE`,
         [id],
       );
       const j = job.rows[0];
       if (!j || j.state !== "cancel_requested") return false;
+      // The controller records stage proof before settling the stage. A lost response
+      // must leave the job available to the original workflow lease for re-entry.
+      if (j.unfinished_stage) return false;
       const proven =
         j.evidence ||
         (j.recipe_parallel &&
@@ -459,6 +470,7 @@ export async function retryJob(
         [recordingId],
       )
     ).rows[0]!;
+    // Prior canary jobs keep the same identity after their approved budgets change.
     const job = (
       await tx.query<{
         state: string;
@@ -466,10 +478,15 @@ export async function retryJob(
         admitted_at: Date | null;
         profile_revision: string;
         source_manifest_sha256: string;
+        public_video_canary: boolean;
       }>(
-        `SELECT state, error_code, admitted_at, profile_revision, source_manifest_sha256
+        `SELECT state, error_code, admitted_at, profile_revision, source_manifest_sha256,
+                EXISTS (
+                  SELECT 1 FROM job_inputs i WHERE i.job_id = $1
+                    AND i.task_input->'recipe'->>'recipeId' = $2
+                ) AS public_video_canary
          FROM jobs WHERE id = $1 FOR UPDATE`,
-        [input.jobId],
+        [input.jobId, PUBLIC_VIDEO_RECIPE.recipeId],
       )
     ).rows[0]!;
     // Bind the request to the exact prior job AND the terminal state the operator
@@ -532,6 +549,11 @@ export async function retryJob(
         job.state === "cancel_requested"
           ? "cancel_requested is not stopped; retry waits for exact termination evidence"
           : "only a failed or cancelled job can be retried",
+      );
+    if (job.public_video_canary)
+      throw refuse(
+        "canary_one_attempt",
+        "public-video canary allows one approved attempt",
       );
     if (
       job.state === "failed" &&
