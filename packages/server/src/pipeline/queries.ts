@@ -440,3 +440,68 @@ export async function pipelineActionsFor(
     ),
   };
 }
+
+export type ReviewQueueOptionsQuery = {
+  recordingId?: string;
+  collectorId?: string;
+  recordingSearch?: string;
+  collectorSearch?: string;
+};
+
+export async function listReviewQueueFilters(
+  pool: Queryable,
+  userId: string,
+  query: ReviewQueueOptionsQuery,
+) {
+  const limit = 200;
+  const [recordings, collectors] = await Promise.all([
+    pool.query<{ id: string; started_at: Date; import_title: string | null }>(
+      `SELECT r.id, r.started_at, ci.evidence #>> '{attribution,title}' AS import_title
+       FROM recordings r
+       LEFT JOIN cached_processing_imports ci
+         ON ci.job_id = coalesce(recording_selected_job(r.id), r.current_job_id)
+       WHERE r.deleted_at IS NULL
+         AND EXISTS (SELECT 1 FROM review_clips c WHERE c.recording_id = r.id)
+         AND catalog_has_role($1, 'staff')
+         AND ($3::text IS NULL OR r.id = $2
+           OR r.id::text ILIKE $3
+           OR coalesce(ci.evidence #>> '{attribution,title}', '') ILIKE $3
+           OR ('Recording ' || to_char(r.started_at AT TIME ZONE 'UTC', 'FMDD Mon YYYY, HH24:MI "UTC"')) ILIKE $3)
+       ORDER BY (r.id = $2::uuid) DESC, r.created_at DESC, r.id DESC LIMIT $4`,
+      [
+        userId,
+        query.recordingId ?? null,
+        query.recordingSearch ? likePattern(query.recordingSearch) : null,
+        limit + 1,
+      ],
+    ),
+    pool.query<{ id: string; name: string }>(
+      `SELECT u.id, u.name FROM "user" u
+       WHERE catalog_has_role($1, 'staff')
+         AND EXISTS (
+           SELECT 1 FROM recordings r WHERE r.owner_user_id = u.id
+             AND r.deleted_at IS NULL
+             AND EXISTS (SELECT 1 FROM review_clips c WHERE c.recording_id = r.id)
+         )
+         AND ($3::text IS NULL OR u.id = $2 OR u.name ILIKE $3 OR u.id ILIKE $3)
+       ORDER BY (u.id = $2::text) DESC, u.name, u.id LIMIT $4`,
+      [
+        userId,
+        query.collectorId ?? null,
+        query.collectorSearch ? likePattern(query.collectorSearch) : null,
+        limit + 1,
+      ],
+    ),
+  ]);
+  return {
+    recordings: recordings.rows.slice(0, limit).map((r) => ({
+      id: r.id,
+      label: r.import_title ?? recordingTitle(r.started_at),
+    })),
+    collectors: collectors.rows
+      .slice(0, limit)
+      .map(({ id, name }) => ({ id, label: name })),
+    recordingsTruncated: recordings.rows.length > limit,
+    collectorsTruncated: collectors.rows.length > limit,
+  };
+}

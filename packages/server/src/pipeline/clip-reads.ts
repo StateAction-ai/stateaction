@@ -19,7 +19,10 @@ import {
 import { uuid } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { issueRecordingRead, type ReadSigner } from "../datasets/broker.js";
-import { getSegmentMarks } from "../datasets/marks.js";
+import {
+  effectiveSegmentMarksSql,
+  getSegmentMarks,
+} from "../datasets/marks.js";
 import { getDagRunWithLineage } from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
 import { recordingTitle } from "./model.js";
@@ -66,8 +69,12 @@ const selectClips = `
       'first_source_frame_id', c.first_source_frame_id::text, 'last_source_frame_id', c.last_source_frame_id::text,
       'start_ts_ns', c.start_ts_ns::text, 'end_ts_ns', c.end_ts_ns::text
     ) END AS range,
-    (c.start_ts_ns - (p.plan ->> 'origin_ts_ns')::bigint)::text AS source_offset_ns,
-    (c.end_ts_ns - c.start_ts_ns)::text AS duration_ns,
+    CASE WHEN p.plan_job_id IS NULL THEN '0'
+      ELSE (c.start_ts_ns - (p.plan ->> 'origin_ts_ns')::bigint)::text END AS source_offset_ns,
+    CASE WHEN c.end_ts_ns IS NOT NULL THEN (c.end_ts_ns - c.start_ts_ns)::text
+      WHEN jsonb_typeof(i.evidence -> 'durationSeconds') = 'number'
+        THEN round((i.evidence ->> 'durationSeconds')::numeric * 1000000000)::text
+    END AS duration_ns,
     live.state AS job_state, live.error_code, live.recipe IS NOT NULL AS has_recipe,
     chosen.recipe IS NOT NULL AS selected_has_recipe,
     chosen.result_manifest_sha256 AS manifest_sha256, selection.seq AS selection_revision,
@@ -84,8 +91,8 @@ const selectClips = `
       'segmentCount', chosen.segment_count,
       'checkedCount', marks.checked_count, 'issueCount', marks.issue_count
     ) END AS marks,
-    CASE WHEN chosen.id IS NULL THEN 'not_ready' WHEN review.rejected THEN 'rejected'
-      WHEN review.approved THEN 'approved' ELSE 'pending' END AS review_status,
+    CASE WHEN chosen.result_manifest_sha256 IS NULL OR selection.seq IS NULL THEN 'not_ready'
+      ELSE coalesce(review.decision, 'pending') END AS review_status,
     (p.original_mp4_file_id IS NOT NULL OR EXISTS (
       SELECT 1 FROM job_output_slots s
       JOIN files f ON f.id = s.file_id AND f.job_id = s.job_id AND f.role = 'recording_mp4'
@@ -99,24 +106,25 @@ const selectClips = `
   LEFT JOIN jobs chosen ON chosen.id = c.selected_job_id AND chosen.state = 'succeeded'
   LEFT JOIN cached_processing_imports i ON i.job_id = chosen.id
   LEFT JOIN LATERAL (
-    SELECT seq FROM clip_result_selections WHERE clip_id = c.id ORDER BY seq DESC LIMIT 1
-  ) selection ON true
+    SELECT seq, job_id FROM clip_result_selections WHERE clip_id = c.id ORDER BY seq DESC LIMIT 1
+  ) selection ON selection.job_id = chosen.id
+  LEFT JOIN LATERAL (
+    SELECT f.sha256 FROM files f
+    WHERE f.job_id = chosen.id AND f.role = 'segments_json' AND f.purpose = 'output'
+      AND f.state IN ('completed', 'verified')
+    ORDER BY f.created_at DESC, f.id DESC LIMIT 1
+  ) segments ON chosen.segment_count IS NOT NULL
   LEFT JOIN LATERAL (
     SELECT count(*)::int AS checked_count,
-      (count(*) FILTER (WHERE m.verdict = 'issue'))::int AS issue_count
-    FROM (
-      SELECT DISTINCT ON (segment_id) verdict FROM segment_marks
-      WHERE job_id = chosen.id ORDER BY segment_id, revision DESC
-    ) m
+      count(*) FILTER (WHERE m.verdict = 'issue')::int AS issue_count
+    FROM (${effectiveSegmentMarksSql("chosen.id", "segments.sha256", "verdict")}) m
   ) marks ON chosen.segment_count IS NOT NULL
   LEFT JOIN LATERAL (
-    SELECT bool_or(latest.decision = 'rejected') AS rejected,
-      bool_and(coalesce(latest.decision = 'approved', false)) AS approved
-    FROM clips chunk LEFT JOIN LATERAL (
-      SELECT decision FROM reviews WHERE clip_id = chunk.id AND job_id = chosen.id
-        AND result_manifest_sha256 = chosen.result_manifest_sha256
-      ORDER BY revision DESC LIMIT 1
-    ) latest ON true WHERE chunk.job_id = chosen.id
+    SELECT decision FROM review_clip_decisions
+    WHERE clip_id = c.id AND job_id = chosen.id
+      AND result_manifest_sha256 = chosen.result_manifest_sha256
+      AND selection_revision = selection.seq
+    ORDER BY revision DESC LIMIT 1
   ) review ON chosen.id IS NOT NULL
   WHERE catalog_has_role($1, 'staff')`;
 
@@ -142,7 +150,9 @@ async function effectiveDag(
 }
 
 function resultRef(row: ClipRow): ClipSelectedResultRef | null {
-  return row.selected_job_id && row.manifest_sha256
+  return row.selected_job_id &&
+    row.manifest_sha256 &&
+    row.selection_revision !== null
     ? {
         jobId: row.selected_job_id,
         resultManifestSha256: row.manifest_sha256,

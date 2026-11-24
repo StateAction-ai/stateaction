@@ -167,7 +167,17 @@ const apiDoc = async (jar, id) => {
 };
 
 before(async () => {
-  stack = await startStack({ storage: true, storageProxy });
+  stack = await startStack({
+    storage: true,
+    storageProxy,
+    extraEnv: {
+      PROCESSING_EXECUTION_BACKEND: "local",
+      PROCESSING_CODE_REVISION: "1".repeat(40),
+      PROCESSING_IMAGE_SPEC_SHA256: "2".repeat(64),
+      PROCESSING_MODEL_SHA256: "3".repeat(64),
+      PROCESSING_CONFIG_SHA256: "4".repeat(64),
+    },
+  });
   origin = stack.origin;
   const seed = spawnSync(
     process.execPath,
@@ -462,26 +472,41 @@ test("Hand pose tab loads the golden RRD for the clip under the playhead", async
   );
 });
 
-test("a recording without a clip says so; the selector switches recordings", async () => {
+async function openQueue(state) {
+  await chrome.send("Page.navigate", {
+    url: origin + "/review?state=" + state,
+  });
+  await until(
+    () => ev('document.querySelector("h1")?.textContent === "Review queue"'),
+    "review queue loads",
+  );
+}
+
+test("the legacy review redirects to its clip and the queue opens another clip", async () => {
   await open(`/review/${seeded.withoutClip.recordingId}`);
   await openTab("hand");
   await until(
     () => ev(`!!document.querySelector('[data-testid=hand-no-clip]')`),
     "no clip message",
   );
-  const options = await ev(
-    `[...document.querySelectorAll('select[aria-label=Recording] option')].map(o => o.value)`,
+  assert.equal(
+    await ev("location.pathname"),
+    "/review/clips/" + seeded.withoutClip.recordingId,
   );
-  assert.deepEqual(
-    options.sort(),
-    [seeded.withClip.recordingId, seeded.withoutClip.recordingId].sort(),
+  await openQueue("all");
+  const path = "/review/clips/" + seeded.withClip.recordingId;
+  const anchor =
+    "document.querySelector(" + JSON.stringify('a[href="' + path + '"]') + ")";
+  await until(() => ev("Boolean(" + anchor + ")"), "clip link rendered");
+  assert.match(
+    await ev(anchor + '.closest("[role=row]").innerText'),
+    /[1-9]\d* stages? with failures/,
   );
-  await ev(
-    `(() => { const s = document.querySelector('select[aria-label=Recording]'); const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; set.call(s, ${JSON.stringify(seeded.withClip.recordingId)}); s.dispatchEvent(new Event('change', { bubbles: true })); })()`,
-  );
+  // Navigation removes the link. Click once, then wait for the destination.
+  await ev(anchor + ".click()");
   await until(
-    () => ev(`location.pathname === '/review/${seeded.withClip.recordingId}'`),
-    "navigated to the other recording",
+    () => ev("location.pathname === " + JSON.stringify(path)),
+    "navigated to the other clip",
   );
 });
 
@@ -491,7 +516,7 @@ test("no horizontal page scroll at 390 px on every tab", async () => {
     seeded.withoutClip.recordingId,
   ]) {
     await open(`/review/${id}`, 390);
-    for (const tab of ["segs", "json", "hand"]) {
+    for (const tab of ["segs", "json", "hand", "decision"]) {
       await openTab(tab);
       await sleep(300);
       const widths = await ev(
@@ -535,6 +560,42 @@ test("a media error renews the broker URL and resumes at the same time", async (
     ),
     null,
     "a fresh <video> was mounted by the renewal",
+  );
+});
+
+test("the clip video grant is scoped to the selected job", async () => {
+  const jar = await signIn(stack, "staff");
+  const clip = seeded.withClip;
+  const readPath = "/api/v1/recordings/" + clip.recordingId + "/reads";
+  const request = {
+    method: "POST",
+    jar,
+    headers: browserHeaders(stack.origin),
+    body: JSON.stringify({ role: "recording_mp4" }),
+  };
+  assert.equal(
+    (await call(stack.origin, readPath + "?job=" + clip.jobId, request)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await call(
+        stack.origin,
+        readPath + "?job=" + seeded.withoutClip.jobId,
+        request,
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await call(
+        stack.origin,
+        readPath + "?job=" + clip.jobId + "&job=" + clip.jobId,
+        request,
+      )
+    ).status,
+    400,
   );
 });
 
@@ -756,5 +817,281 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
       },
     );
     assert.equal(write.status, 403, label);
+  }
+});
+
+test("a review clip saves its own decision and dataset assignment under the selection revision", async () => {
+  const staff = await signIn(stack, "staff");
+  const customer = await signIn(stack, "customer");
+  const { recordingId, jobId, clipId: viewerChunkId } = seeded.withClip;
+  const reviewPage = "/review/clips/" + recordingId;
+  const recordingBase = "/api/v1/recordings/" + recordingId;
+  const decisionBase = "/api/v1/review-clips/" + recordingId + "/decision";
+  const get = (path, jar = staff) => call(origin, path, { jar });
+  const post = (path, body) =>
+    call(origin, path, {
+      method: "POST",
+      jar: staff,
+      headers: browserHeaders(origin),
+      body: JSON.stringify(body),
+    });
+  const data = async (path) => {
+    const res = await get(path);
+    assert.equal(res.status, 200, res.text);
+    return JSON.parse(res.text).data;
+  };
+  const { selectionSeq } = await data(recordingBase + "/runs");
+  const oldDecision = decisionBase + "?selection=" + selectionSeq;
+  const initial = await data(oldDecision);
+  assert.equal(initial.clipId, recordingId);
+  assert.equal(initial.jobId, jobId);
+  assert.equal(initial.review.decision, null);
+  assert.ok(viewerChunkId);
+  assert.equal((await get(oldDecision, customer)).status, 403);
+
+  const datasetId = randomUUID();
+  const datasetPath = "/api/v1/datasets/" + datasetId;
+  const datasetName = "Clip review regression";
+  const created = await post("/api/v1/datasets", {
+    datasetId,
+    name: datasetName,
+  });
+  assert.equal(created.status, 201, created.text);
+
+  const reselect = await post(recordingBase + "/result-selection", {
+    jobId,
+    expectedSelectionSeq: selectionSeq,
+    reason: "Verify that an earlier open review cannot write after reselection",
+  });
+  assert.equal(reselect.status, 201, reselect.text);
+  const decisionPath = decisionBase + "?selection=" + (selectionSeq + 1);
+  const command = {
+    reviewId: randomUUID(),
+    expectedReviewRevision: initial.review.revision,
+    jobId,
+    resultManifestSha256: initial.resultManifestSha256,
+    decision: "approved",
+    taskLabel: "Verify task",
+    datasetSelection: {
+      datasetIds: [datasetId],
+      expectedRevisions: { [datasetId]: 1 },
+    },
+  };
+  const stale = await post(oldDecision, command);
+  assert.equal(stale.status, 409, stale.text);
+  assert.equal((await get(oldDecision)).status, 409);
+  assert.equal((await data(datasetPath)).revision, 1);
+  const staleVideo = await post(
+    recordingBase +
+      "/reads?" +
+      new URLSearchParams({
+        job: jobId,
+        clip: recordingId,
+        revision: String(selectionSeq),
+      }),
+    { role: "recording_mp4" },
+  );
+  assert.equal(staleVideo.status, 404);
+  const wrongClip = await post(
+    "/api/v1/review-clips/" +
+      viewerChunkId +
+      "/decision?selection=" +
+      (selectionSeq + 1),
+    command,
+  );
+  assert.equal(wrongClip.status, 409, wrongClip.text);
+  assert.deepEqual((await data(decisionPath)).memberships, []);
+
+  await open(reviewPage, 390);
+  await openTab("decision");
+  await until(
+    () =>
+      ev(
+        "!document.getElementById('task-label')?.disabled && !!document.getElementById('task-label')",
+      ),
+    "review editor is ready",
+  );
+  await ev("document.getElementById('task-label').focus()");
+  await chrome.send("Input.insertText", { text: "Verify task" });
+  const datasetBox = `[...document.querySelectorAll("#pane-decision label")].find((label) => label.textContent.trim() === ${JSON.stringify(datasetName)})?.querySelector("input")`;
+  await until(
+    () => ev("Boolean(" + datasetBox + ")"),
+    "the assigned dataset is listed",
+  );
+  await ev(datasetBox + ".click()");
+  const button = (label) =>
+    `[...document.querySelectorAll("#pane-decision button")].find((button) => button.textContent.trim() === "${label}")`;
+  await until(
+    () => ev("!" + button("Approve") + "?.disabled"),
+    "Approve is enabled",
+  );
+  await ev(button("Approve") + ".click()");
+  await until(
+    () =>
+      ev(
+        'document.getElementById("pane-decision").innerText.includes("Review saved.")',
+      ),
+    "approval is saved through the browser",
+  );
+
+  const approved = await data(decisionPath);
+  assert.equal(approved.review.decision, "approved");
+  assert.equal(approved.review.taskLabel, "Verify task");
+  assert.deepEqual(
+    approved.memberships.map((member) => member.datasetId),
+    [datasetId],
+  );
+  const approvedQueue = await get(
+    "/review?state=approved&recording=" + recordingId,
+  );
+  assert.equal(approvedQueue.status, 200);
+  assert.ok(approvedQueue.text.includes(reviewPage));
+  const pendingQueue = await get(
+    "/review?state=pending&recording=" + recordingId,
+  );
+  assert.equal(pendingQueue.status, 200);
+  assert.ok(!pendingQueue.text.includes(reviewPage));
+  assert.equal((await data(datasetPath)).clipCount, 1);
+  assert.equal((await data(datasetPath)).revision, 2);
+  const datasetPage = await get("/data-browser?datasetId=" + datasetId);
+  assert.equal(datasetPage.status, 200);
+  assert.ok(datasetPage.text.includes(reviewPage));
+  assert.equal((await get(datasetPath, customer)).status, 404);
+
+  const revised = {
+    ...command,
+    reviewId: randomUUID(),
+    expectedReviewRevision: approved.review.revision,
+    taskLabel: "Verified task",
+    datasetSelection: {
+      datasetIds: [datasetId],
+      expectedRevisions: { [datasetId]: 2 },
+    },
+  };
+  assert.equal((await post(decisionPath, revised)).status, 201);
+  assert.equal((await post(decisionPath, revised)).status, 200);
+  assert.equal(
+    (await post(decisionPath, { ...revised, notes: "Different payload" }))
+      .status,
+    409,
+  );
+  assert.equal((await data(datasetPath)).revision, 2);
+
+  const { Pool } = requireServer("pg");
+  const { recordSharingPermission, grantDatasetAccess } = await import(
+    new URL(
+      "../../../packages/server/dist/datasets/operator.js",
+      import.meta.url,
+    )
+  );
+  const owner = new Pool({ connectionString: stack.db.ownerUrl, max: 1 });
+  try {
+    const permissionRef = "review-clip-" + randomUUID();
+    const addPermission = (id, ref) =>
+      recordSharingPermission(owner, {
+        permissionRef: ref,
+        datasetId: id,
+        recipientUserId: stack.users.customer.id,
+        evidenceRef: "local test fixture",
+        recordedBy: stack.users.staff.id,
+      });
+    const grant = (ref) =>
+      grantDatasetAccess(owner, {
+        permissionRef: ref,
+        actorUserId: stack.users.staff.id,
+      });
+    await addPermission(datasetId, permissionRef);
+    await assert.rejects(grant(permissionRef), { code: "forbidden" });
+
+    const sharedId = randomUUID();
+    assert.equal(
+      (
+        await post("/api/v1/datasets", {
+          datasetId: sharedId,
+          name: "Shared fixture dataset",
+        })
+      ).status,
+      201,
+    );
+    const sharedRef = "review-clip-" + randomUUID();
+    await addPermission(sharedId, sharedRef);
+    await grant(sharedRef);
+    const addShared = await post(decisionPath, {
+      ...revised,
+      reviewId: randomUUID(),
+      expectedReviewRevision: approved.review.revision + 1,
+      datasetSelection: {
+        datasetIds: [datasetId, sharedId],
+        expectedRevisions: { [datasetId]: 2, [sharedId]: 1 },
+      },
+    });
+    assert.equal(addShared.status, 403, addShared.text);
+
+    const laterSelection = selectionSeq + 2;
+    assert.equal(
+      (
+        await post(recordingBase + "/result-selection", {
+          jobId,
+          expectedSelectionSeq: laterSelection - 1,
+          reason:
+            "Reselect the same result without carrying its prior decision",
+        })
+      ).status,
+      201,
+    );
+    const laterDecision = decisionBase + "?selection=" + laterSelection;
+    const later = await data(laterDecision);
+    assert.equal(later.review.decision, null);
+    assert.deepEqual(later.memberships, []);
+    assert.equal((await data(datasetPath)).clipCount, 0);
+    assert.equal((await data(datasetPath)).revision, 2);
+    assert.equal((await post(decisionPath, revised)).status, 200);
+    assert.equal((await data(datasetPath)).clipCount, 0);
+    assert.equal(
+      (await get("/review/" + recordingId + "?run=" + jobId)).headers.location,
+      reviewPage,
+    );
+    assert.equal(
+      (
+        await post(laterDecision, {
+          ...revised,
+          reviewId: randomUUID(),
+          expectedReviewRevision: later.review.revision,
+        })
+      ).status,
+      201,
+    );
+    assert.equal((await data(datasetPath)).clipCount, 1);
+
+    const reject = {
+      reviewId: randomUUID(),
+      expectedReviewRevision: later.review.revision + 1,
+      jobId,
+      resultManifestSha256: initial.resultManifestSha256,
+      decision: "rejected",
+    };
+    assert.equal((await post(laterDecision, reject)).status, 201);
+    const rejected = await data(laterDecision);
+    assert.equal(rejected.review.decision, "rejected");
+    assert.deepEqual(rejected.memberships, []);
+    const rejectedQueue = await get(
+      "/review?state=rejected&recording=" + recordingId,
+    );
+    assert.equal(rejectedQueue.status, 200);
+    assert.ok(rejectedQueue.text.includes(reviewPage));
+    assert.equal((await data(datasetPath)).clipCount, 0);
+    assert.equal((await data(datasetPath)).revision, 4);
+
+    await owner.query(
+      "UPDATE recordings SET deleted_at = now() WHERE id = $1",
+      [recordingId],
+    );
+    assert.equal((await post(laterDecision, reject)).status, 200);
+    assert.equal(
+      (await post(laterDecision, { ...reject, reviewId: randomUUID() })).status,
+      409,
+    );
+  } finally {
+    await owner.end();
   }
 });

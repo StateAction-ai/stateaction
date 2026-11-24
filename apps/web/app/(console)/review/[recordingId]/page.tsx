@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { mediaReadOrigin } from "@stateaction/server";
 import {
   pipelineReads,
@@ -10,7 +10,12 @@ import {
 } from "@stateaction/server/pipeline";
 import { StatusBadge } from "../../../../components/pipeline/status-badge";
 import { fixtureEnabled } from "../../../../lib/review/fixture-gate";
-import { SelectResult } from "../../../../components/pipeline/select-result";
+import { loadReviewRecording } from "../../../../lib/review/clip-reads";
+import {
+  REVIEW_QUEUE_UUID,
+  reviewQueueHref,
+} from "../../../../lib/review/queue";
+import { ReviewRunHistory } from "../../../../components/review/review-run-history";
 import { requireConsoleSession } from "../../../../lib/server-session";
 import { ReviewPage } from "../../../../components/review/review-page";
 import { reviewLoader } from "../../../../lib/review/loader";
@@ -21,23 +26,36 @@ export const dynamic = "force-dynamic";
 
 const pipeline = pipelineReads();
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export default async function ReviewRecordingPage({
   params,
   searchParams,
 }: {
   params: Promise<{ recordingId: string }>;
-  searchParams: Promise<{ run?: string }>;
+  searchParams: Promise<{ run?: string | string[] }>;
 }) {
   const session = await requireConsoleSession(["staff"]);
   const { recordingId } = await params;
-  if (!UUID.test(recordingId)) notFound();
+  if (!REVIEW_QUEUE_UUID.test(recordingId)) notFound();
   const { run } = await searchParams;
-  if (run && !UUID.test(run)) notFound();
+  if (
+    run !== undefined &&
+    (typeof run !== "string" || !REVIEW_QUEUE_UUID.test(run))
+  )
+    notFound();
+  const fixture = fixtureEnabled(process.env);
+  if (!fixture) {
+    const recording = await loadReviewRecording(session.userId, recordingId);
+    const selected = run
+      ? recording?.clips.find((clip) => clip.selectedResult?.jobId === run)
+      : recording?.clips.length === 1
+        ? recording.clips[0]
+        : undefined;
+    if (selected?.selectedResult) redirect("/review/clips/" + selected.id);
+    if (!run && recording?.clips.length && recording.state !== "failed")
+      redirect(reviewQueueHref({ state: "all", recordingId }));
+  }
   const loader = reviewLoader();
   try {
-    const fixture = fixtureEnabled(process.env);
     const [bundle, recordings, detail, history] = await Promise.all([
       loader.load(session.userId, recordingId, run),
       loader.listRecordings(session.userId),
@@ -99,44 +117,15 @@ export default async function ReviewRecordingPage({
             </Link>
           </p>
         ) : null}
-        {history.runs.length > 1 ? (
-          <details className="mb-4 rounded-lg border border-line px-4 py-2 text-sm">
-            <summary className="font-semibold">Run history</summary>
-            <ul className="m-0 mt-2 grid list-none gap-2 p-0">
-              {history.runs.map((item) => (
-                <li
-                  key={item.jobId}
-                  className="flex flex-wrap items-center gap-2"
-                >
-                  <Link
-                    className="text-brand underline"
-                    href={
-                      item.state === "succeeded"
-                        ? `/review/${recordingId}?run=${item.jobId}`
-                        : `/pipeline/${recordingId}?run=${item.jobId}`
-                    }
-                  >
-                    Run {item.jobId.slice(0, 8)}
-                  </Link>
-                  <span>{item.state.replaceAll("_", " ")}</span>
-                  {item.selected ? (
-                    <strong>Selected</strong>
-                  ) : item.state === "succeeded" &&
-                    pipeline.selectionEnabled() ? (
-                    <SelectResult
-                      recordingId={recordingId}
-                      jobId={item.jobId}
-                      sequence={history.selectionSeq}
-                    />
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
+        <ReviewRunHistory
+          recordingId={recordingId}
+          history={history}
+          selectionEnabled={false}
+        />
         <ReviewPage
           key={bundle.annotations.job_id}
           bundle={bundle}
+          readOnly={!fixture}
           recordings={recordings}
           mediaOrigin={mediaOrigin}
           status={

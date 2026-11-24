@@ -58,6 +58,10 @@ test("draft storage and return links preserve the user and allowed browser conte
     draftKey("owner-a", s.clipId, s.resultManifestSha256),
     draftKey("owner-a", s.clipId, "b".repeat(64)),
   );
+  assert.notEqual(
+    draftKey("owner-a", s.clipId, s.resultManifestSha256, 2),
+    draftKey("owner-a", s.clipId, s.resultManifestSha256, 3),
+  );
   const href = `/data-browser?datasetId=${id(4)}&q=cup&cursor=abc`;
   assert.equal(clipReturnTo(href, "staff"), href);
   const unicode = `/data-browser?view=clips&q=${encodeURIComponent("杯".repeat(160))}&label=${encodeURIComponent("手".repeat(160))}`;

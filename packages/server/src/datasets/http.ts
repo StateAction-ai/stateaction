@@ -9,6 +9,7 @@ import {
 } from "@stateaction/contracts";
 import type { Queryable } from "../catalog/catalog.js";
 import { CatalogError, type CatalogErrorCode } from "../catalog/errors.js";
+import { hostedDevProfile } from "../hosted-dev.js";
 import { issueRead, type ReadSigner } from "./broker.js";
 import {
   addDatasetMembers,
@@ -206,6 +207,8 @@ type Query = {
   expectedRevision?: number;
   run?: string;
   version?: "2";
+  clip?: string;
+  selection?: number;
 };
 function readQuery(request: Request, allowed: readonly (keyof Query)[]): Query {
   const out: Query = {};
@@ -234,9 +237,13 @@ function readQuery(request: Request, allowed: readonly (keyof Query)[]): Query {
     } else if (key === "version") {
       if (value !== "2") throw invalid("Unsupported marks version");
       out.version = value;
-    } else if (key === "recordingId") {
-      if (!isUuid(value)) throw invalid("recordingId must be a UUID");
-      out.recordingId = value;
+    } else if (key === "recordingId" || key === "clip") {
+      if (!isUuid(value)) throw invalid(key + " must be a UUID");
+      out[key] = value;
+    } else if (key === "selection") {
+      if (!/^[1-9]\d{0,9}$/.test(value) || Number(value) > 2147483647)
+        throw invalid("Invalid selection revision");
+      out.selection = Number(value);
     } else if (key === "expectedRevision") {
       if (!/^[0-9]{1,10}$/.test(value))
         throw invalid("Invalid expectedRevision");
@@ -250,6 +257,12 @@ const pathId = (value: string, field: string) => {
   if (!isUuid(value)) throw invalid(`${field} must be a UUID`);
   return value;
 };
+
+function clipSelectionRevision(request: Request) {
+  const { selection } = readQuery(request, ["selection"]);
+  if (selection === undefined) throw invalid("Selection revision is required");
+  return selection;
+}
 
 export function datasetRoutes(deps: DatasetRoutesDeps) {
   if (typeof deps.authenticate !== "function")
@@ -443,19 +456,28 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
           clipId: pathId(clipId, "clipId"),
         }),
       })),
-    getClipReview: (request: Request, clipId: string) =>
+    getClipReview: (request: Request, clipId: string, persisted = false) =>
       run(request, "staff", async (p) => {
-        readQuery(request, []);
+        const selectionRevision = persisted
+          ? clipSelectionRevision(request)
+          : undefined;
+        if (!persisted) readQuery(request, []);
         return {
           data: await getClipReviewState(pool, {
             viewerUserId: p.userId,
             clipId: pathId(clipId, "clipId"),
+            ...(selectionRevision !== undefined ? { selectionRevision } : {}),
           }),
         };
       }),
-    commitClipReview: (request: Request, clipId: string) =>
+    commitClipReview: (request: Request, clipId: string, persisted = false) =>
       run(request, "staff", async (p) => {
+        if (persisted && hostedDevProfile()?.mode === "read-only")
+          throw new CatalogError("forbidden", "Clip review is read-only");
         const id = pathId(clipId, "clipId");
+        const selectionRevision = persisted
+          ? clipSelectionRevision(request)
+          : undefined;
         const body = await readContract<ClipReviewCommand>(
           request,
           "http.clip-review-command.v1",
@@ -464,6 +486,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
           clipId: id,
           reviewerUserId: p.userId,
           command: body,
+          ...(selectionRevision !== undefined ? { selectionRevision } : {}),
         });
         return { status: out.replayed ? 200 : 201, data: out.review };
       }),
@@ -490,6 +513,9 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
       run(request, "staff", async (p) => {
         const rid = pathId(recordingId, "recordingId");
         const sid = pathId(segmentId, "segmentId");
+        const { clip, selection } = readQuery(request, ["clip", "selection"]);
+        if ((clip === undefined) !== (selection === undefined))
+          throw invalid("A clip and selection revision are required together");
         const body = await readContract<SegmentMarkCommand>(
           request,
           "http.segment-mark-command.v1",
@@ -501,6 +527,9 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
           segmentId: sid,
           reviewerUserId: p.userId,
           command: body,
+          ...(clip && selection
+            ? { clipSelection: { clipId: clip, revision: selection } }
+            : {}),
         });
         return { status: mark.replayed ? 200 : 201, data: mark };
       }),

@@ -31,8 +31,14 @@ const revisionsValid = (value: unknown): value is Record<string, number> =>
     ([id, revision]) =>
       UUID.test(id) && Number.isSafeInteger(revision) && Number(revision) >= 1,
   );
-export const draftKey = (userId: string, clipId: string, digest: string) =>
-  `sa:review:${encodeURIComponent(userId)}:${clipId}:${digest}`;
+export const draftKey = (
+  userId: string,
+  clipId: string,
+  digest: string,
+  selectionRevision?: number,
+) =>
+  `sa:review:${encodeURIComponent(userId)}:${clipId}:${digest}` +
+  (selectionRevision === undefined ? "" : ":" + selectionRevision);
 
 export function clipReturnTo(
   raw: string | undefined,

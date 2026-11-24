@@ -573,6 +573,7 @@ type ReviewRow = {
   result_manifest_sha256: string;
   revision: number;
   reviewer_user_id: string;
+  selection_revision?: number;
   decision: "approved" | "rejected";
   task_label: string | null;
   notes: string | null;
@@ -607,6 +608,7 @@ const canonicalSelection = (s: DatasetSelection | null | undefined) =>
 export async function appendReview(
   pool: Queryable,
   input: ReviewInput,
+  selectionRevision?: number,
 ): Promise<{
   revision: number;
   added: string[];
@@ -614,6 +616,16 @@ export async function appendReview(
   review: ReviewRecord;
   replayed: boolean;
 }> {
+  const persisted = selectionRevision !== undefined;
+  if (
+    persisted &&
+    (!Number.isInteger(selectionRevision) ||
+      selectionRevision < 1 ||
+      selectionRevision > 2147483647)
+  )
+    throw new CatalogError("invalid_request", "Selection revision invalid");
+  const decisions = persisted ? "review_clip_decisions" : "reviews";
+  const memberships = persisted ? "dataset_review_clips" : "dataset_clips";
   const clipId = uuid(input.clipId, "clipId");
   const reviewId = uuid(input.reviewId, "reviewId");
   uuid(input.jobId, "jobId");
@@ -669,23 +681,26 @@ export async function appendReview(
   });
   const COLUMNS = `id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id,
     decision, task_label, notes, dataset_selection,
+    ${persisted ? "selection_revision," : ""}
     to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`;
 
   return inTransaction(pool, async (tx) => {
     await tx.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT}'`);
     await requireRole(tx, input.reviewerUserId, "staff");
-    await lockClips(tx, [clipId]);
+    if (persisted) await tx.query("SELECT lock_review_clip($1)", [clipId]);
+    else await lockClips(tx, [clipId]);
 
     // Idempotent replay (append-only rows are stable once visible).
     const prior = (
       await tx.query<ReviewRow>(
-        `SELECT ${COLUMNS} FROM reviews WHERE id = $1`,
+        `SELECT ${COLUMNS} FROM ${decisions} WHERE id = $1`,
         [reviewId],
       )
     ).rows[0];
     if (prior) {
       if (
         prior.clip_id !== clipId ||
+        (persisted && prior.selection_revision !== selectionRevision) ||
         prior.reviewer_user_id !== input.reviewerUserId ||
         prior.job_id !== input.jobId ||
         prior.result_manifest_sha256 !== input.resultManifestSha256 ||
@@ -709,58 +724,72 @@ export async function appendReview(
       };
     }
 
-    // Keep the recording's selected result stable through the review append.
-    const clip = await tx.query(
-      `SELECT 1 FROM clips c
-       JOIN recordings rec ON rec.id = c.recording_id
-       WHERE c.id = $1 AND c.job_id = $2
-       FOR UPDATE OF rec`,
-      [clipId, input.jobId],
-    );
-    if (!clip.rowCount) {
-      const exists = await tx.query("SELECT 1 FROM clips WHERE id = $1", [
+    if (persisted) {
+      await tx.query("SELECT require_review_clip_result($1, $2, $3, $4)", [
         clipId,
+        input.jobId,
+        input.resultManifestSha256,
+        selectionRevision,
       ]);
-      throw exists.rowCount
-        ? new CatalogError("conflict", "Clip result identity changed")
-        : new CatalogError("not_found", "Clip not found");
+    } else {
+      // Keep the recording's selected result stable through the review append.
+      const clip = await tx.query(
+        `SELECT 1 FROM clips c
+         JOIN recordings rec ON rec.id = c.recording_id
+         WHERE c.id = $1 AND c.job_id = $2
+         FOR UPDATE OF rec`,
+        [clipId, input.jobId],
+      );
+      if (!clip.rowCount) {
+        const exists = await tx.query("SELECT 1 FROM clips WHERE id = $1", [
+          clipId,
+        ]);
+        throw exists.rowCount
+          ? new CatalogError("conflict", "Clip result identity changed")
+          : new CatalogError("not_found", "Clip not found");
+      }
+      const selectedResult = await tx.query(
+        `SELECT 1 FROM clips c
+         JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
+           AND j.result_manifest_sha256 = $3
+         JOIN recordings rec ON rec.id = c.recording_id
+           AND coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id
+           AND rec.deleted_at IS NULL
+         WHERE c.id = $1 AND c.job_id = $2`,
+        [clipId, input.jobId, input.resultManifestSha256],
+      );
+      if (!selectedResult.rowCount) {
+        const identity = await tx.query(
+          "SELECT 1 FROM jobs WHERE id = $1 AND result_manifest_sha256 = $2",
+          [input.jobId, input.resultManifestSha256],
+        );
+        if (!identity.rowCount)
+          throw new CatalogError(
+            "invalid_request",
+            "Job and result manifest hash do not identify a result",
+          );
+        throw new CatalogError(
+          "conflict",
+          "This is no longer the recording's selected result",
+        );
+      }
     }
     const latest = await tx.query<{ revision: number | null }>(
-      "SELECT max(revision) AS revision FROM reviews WHERE clip_id = $1",
+      `SELECT max(revision) AS revision FROM ${decisions} WHERE clip_id = $1`,
       [clipId],
     );
     if ((latest.rows[0]?.revision ?? 0) !== input.expectedRevision)
       throw new CatalogError("conflict", "Stale review revision");
-    const selectedResult = await tx.query(
-      `SELECT 1 FROM clips c
-       JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
-         AND j.result_manifest_sha256 = $3
-       JOIN recordings rec ON rec.id = c.recording_id
-         AND coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id
-         AND rec.deleted_at IS NULL
-       WHERE c.id = $1 AND c.job_id = $2`,
-      [clipId, input.jobId, input.resultManifestSha256],
-    );
-    if (!selectedResult.rowCount) {
-      const identity = await tx.query(
-        "SELECT 1 FROM jobs WHERE id = $1 AND result_manifest_sha256 = $2",
-        [input.jobId, input.resultManifestSha256],
-      );
-      if (!identity.rowCount)
-        throw new CatalogError(
-          "invalid_request",
-          "Job and result manifest hash do not identify a result",
-        );
-      throw new CatalogError(
-        "conflict",
-        "This is no longer the recording's selected result",
-      );
-    }
-
+    const resultPredicate = persisted
+      ? "AND job_id = $2 AND result_manifest_sha256 = $3 AND selection_revision = $4"
+      : "";
+    const memberIdentity = persisted
+      ? [clipId, input.jobId, input.resultManifestSha256, selectionRevision]
+      : [clipId];
     const current = (
       await tx.query<{ dataset_id: string }>(
-        "SELECT dataset_id FROM dataset_clips WHERE clip_id = $1",
-        [clipId],
+        `SELECT dataset_id FROM ${memberships} WHERE clip_id = $1 ${resultPredicate}`,
+        memberIdentity,
       )
     ).rows.map((r) => r.dataset_id);
     const approved = input.decision === "approved";
@@ -791,24 +820,29 @@ export async function appendReview(
     // for a precise refusal before any write.
     for (const id of additions) {
       const ok = await tx.query<{ ok: boolean }>(
-        "SELECT public.dataset_sharing_ok($1, $2) AS ok",
-        [id, clipId],
+        persisted
+          ? "SELECT NOT EXISTS (SELECT 1 FROM dataset_access WHERE dataset_id = $1 AND enabled) AS ok"
+          : "SELECT public.dataset_sharing_ok($1, $2) AS ok",
+        persisted ? [id] : [id, clipId],
       );
       if (!ok.rows[0]?.ok)
         throw new CatalogError(
           "forbidden",
-          "A dataset is shared: every enabled recipient needs active sharing permission clearing this clip before it is added",
+          persisted
+            ? "A shared dataset needs review clip clearance before this clip can be added"
+            : "A dataset is shared: every enabled recipient needs active sharing permission clearing this clip before it is added",
         );
     }
     for (const id of removals)
       await tx.query(
-        "DELETE FROM dataset_clips WHERE dataset_id = $1 AND clip_id = $2",
-        [id, clipId],
+        `DELETE FROM ${memberships} WHERE clip_id = $1 ${resultPredicate}
+          AND dataset_id = $${memberIdentity.length + 1}`,
+        [...memberIdentity, id],
       );
     const inserted = await tx.query<ReviewRow>(
-      `INSERT INTO reviews (id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id,
-         decision, task_label, notes, dataset_selection)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO ${decisions} (id, clip_id, job_id, result_manifest_sha256, revision, reviewer_user_id,
+         decision, task_label, notes, dataset_selection${persisted ? ", selection_revision" : ""})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10${persisted ? ", $11" : ""})
        RETURNING ${COLUMNS}`,
       [
         reviewId,
@@ -821,12 +855,23 @@ export async function appendReview(
         taskLabel,
         notes,
         approved ? storedSelection : null,
+        ...(persisted ? [selectionRevision] : []),
       ],
     );
     for (const id of additions)
       await tx.query(
-        "INSERT INTO dataset_clips (dataset_id, clip_id, added_by) VALUES ($1, $2, $3)",
-        [id, clipId, input.reviewerUserId],
+        persisted
+          ? `INSERT INTO dataset_review_clips (dataset_id, clip_id, added_by,
+               job_id, result_manifest_sha256, selection_revision) VALUES ($1, $2, $3, $4, $5, $6)`
+          : "INSERT INTO dataset_clips (dataset_id, clip_id, added_by) VALUES ($1, $2, $3)",
+        [
+          id,
+          clipId,
+          input.reviewerUserId,
+          ...(persisted
+            ? [input.jobId, input.resultManifestSha256, selectionRevision]
+            : []),
+        ],
       );
     for (const id of [...removals, ...additions].sort())
       await bumpDataset(tx, id, input.reviewerUserId);

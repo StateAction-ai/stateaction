@@ -115,6 +115,14 @@ export function datasetRouteHandlers(get: () => AuthRuntime = authRuntime) {
     getClip: guarded((r) => r.getClip),
     getClipReview: guarded((r) => r.getClipReview),
     commitClipReview: guarded((r) => r.commitClipReview),
+    getReviewClipDecision: guarded(
+      (r) => (request: Request, clipId: string) =>
+        r.getClipReview(request, clipId, true),
+    ),
+    commitReviewClipDecision: guarded(
+      (r) => (request: Request, clipId: string) =>
+        r.commitClipReview(request, clipId, true),
+    ),
     readClip: guarded((r) => r.readClip),
     getSegmentMarks: guarded((r) => r.getSegmentMarks),
     postSegmentMark: guarded((r) => r.postSegmentMark),

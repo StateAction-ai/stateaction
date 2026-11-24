@@ -12,6 +12,7 @@ import type {
   ClipReviewCommand,
   ClipReviewState,
 } from "@stateaction/contracts";
+import { hostedDevProfile } from "../hosted-dev.js";
 import { CatalogError, toCatalogError } from "../catalog/errors.js";
 
 /**
@@ -25,21 +26,30 @@ export const AVAILABLE_DATASET_LIMIT = MAX_BATCH;
 
 export async function commitClipReview(
   pool: Queryable,
-  input: { clipId: string; reviewerUserId: string; command: ClipReviewCommand },
+  input: {
+    clipId: string;
+    reviewerUserId: string;
+    command: ClipReviewCommand;
+    selectionRevision?: number;
+  },
 ): Promise<{ review: ClipReview; replayed: boolean }> {
   const c = input.command;
-  const out = await appendReview(pool, {
-    reviewId: c.reviewId,
-    clipId: input.clipId,
-    jobId: c.jobId,
-    resultManifestSha256: c.resultManifestSha256,
-    reviewerUserId: input.reviewerUserId,
-    expectedRevision: c.expectedReviewRevision,
-    decision: c.decision,
-    ...(c.taskLabel !== undefined ? { taskLabel: c.taskLabel } : {}),
-    ...(c.notes !== undefined ? { notes: c.notes } : {}),
-    ...(c.datasetSelection ? { datasetSelection: c.datasetSelection } : {}),
-  });
+  const out = await appendReview(
+    pool,
+    {
+      reviewId: c.reviewId,
+      clipId: input.clipId,
+      jobId: c.jobId,
+      resultManifestSha256: c.resultManifestSha256,
+      reviewerUserId: input.reviewerUserId,
+      expectedRevision: c.expectedReviewRevision,
+      decision: c.decision,
+      ...(c.taskLabel !== undefined ? { taskLabel: c.taskLabel } : {}),
+      ...(c.notes !== undefined ? { notes: c.notes } : {}),
+      ...(c.datasetSelection ? { datasetSelection: c.datasetSelection } : {}),
+    },
+    input.selectionRevision,
+  );
   return { review: out.review, replayed: out.replayed };
 }
 
@@ -86,9 +96,15 @@ type QualityChecks = ClipReviewState["qualityChecks"];
 
 export async function getClipReviewState(
   pool: Queryable,
-  input: { viewerUserId: string; clipId: string },
+  input: { viewerUserId: string; clipId: string; selectionRevision?: number },
 ): Promise<ClipReviewState> {
   const clipId = uuid(input.clipId, "clipId");
+  const persisted = input.selectionRevision !== undefined;
+  const decisions = persisted ? "review_clip_decisions" : "reviews";
+  const members = persisted ? "dataset_review_clips" : "dataset_clips";
+  const sameResult = persisted
+    ? "AND job_id = $3 AND result_manifest_sha256 = $4 AND selection_revision = $5"
+    : "";
   const tx = await pool.connect();
   try {
     await tx.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -101,7 +117,20 @@ export async function getClipReviewState(
         current: boolean;
         checks: unknown;
       }>(
-        `SELECT c.recording_id, c.job_id, j.result_manifest_sha256 AS sha,
+        persisted
+          ? `SELECT c.recording_id, j.id AS job_id, j.result_manifest_sha256 AS sha,
+                    true AS current, jc.verified_checks AS checks
+             FROM review_clips c
+             JOIN recordings rec ON rec.id = c.recording_id AND rec.deleted_at IS NULL
+             JOIN jobs j ON j.id = c.selected_job_id AND j.clip_id = c.id AND j.state = 'succeeded'
+             JOIN LATERAL (
+               SELECT seq, job_id FROM clip_result_selections WHERE clip_id = c.id
+               ORDER BY seq DESC LIMIT 1
+             ) selection ON selection.job_id = j.id AND selection.seq = $2
+             LEFT JOIN job_result_candidates jc ON jc.job_id = j.id AND jc.status = 'accepted'
+               AND jc.manifest_sha256 = j.result_manifest_sha256
+             WHERE c.id = $1`
+          : `SELECT c.recording_id, c.job_id, j.result_manifest_sha256 AS sha,
                 (SELECT jc.verified_checks FROM job_result_candidates jc
                   WHERE jc.job_id = c.job_id AND jc.status = 'accepted'
                     AND jc.manifest_sha256 = j.result_manifest_sha256
@@ -113,10 +142,25 @@ export async function getClipReviewState(
          JOIN jobs j ON j.id = c.job_id
          JOIN recordings rec ON rec.id = c.recording_id
          WHERE c.id = $1`,
-        [clipId],
+        persisted ? [clipId, input.selectionRevision] : [clipId],
       )
     ).rows[0];
-    if (!clip) throw new CatalogError("not_found", "Clip not found");
+    if (!clip) {
+      if (persisted)
+        throw new CatalogError("conflict", "The selected clip result changed");
+      throw new CatalogError("not_found", "Clip not found");
+    }
+    const resultParameters = persisted
+      ? [clip.job_id, clip.sha, input.selectionRevision]
+      : [];
+    const latestRevision = persisted
+      ? ((
+          await tx.query<{ revision: number | null }>(
+            "SELECT max(revision) AS revision FROM review_clip_decisions WHERE clip_id = $1",
+            [clipId],
+          )
+        ).rows[0]?.revision ?? 0)
+      : null;
     const history = (
       await tx.query<{
         revision: number;
@@ -126,8 +170,8 @@ export async function getClipReviewState(
         at: string;
       }>(
         `SELECT revision, decision, task_label, notes, ${ts("created_at")} AS at
-         FROM reviews WHERE clip_id = $1 ORDER BY revision DESC LIMIT $2`,
-        [clipId, REVIEW_HISTORY_LIMIT],
+         FROM ${decisions} WHERE clip_id = $1 ${sameResult} ORDER BY revision DESC LIMIT $2`,
+        [clipId, REVIEW_HISTORY_LIMIT, ...resultParameters],
       )
     ).rows;
     const memberships = (
@@ -138,9 +182,9 @@ export async function getClipReviewState(
         at: string;
       }>(
         `SELECT d.id, d.name, d.revision, ${ts("dc.added_at")} AS at
-         FROM dataset_clips dc JOIN datasets d ON d.id = dc.dataset_id
-         WHERE dc.clip_id = $1 ORDER BY d.id LIMIT $2`,
-        [clipId, MAX_BATCH + 1],
+         FROM ${members} dc JOIN datasets d ON d.id = dc.dataset_id
+         WHERE dc.clip_id = $1 ${sameResult} ORDER BY d.id LIMIT $2`,
+        [clipId, MAX_BATCH + 1, ...resultParameters],
       )
     ).rows;
     const datasets = (
@@ -152,12 +196,12 @@ export async function getClipReviewState(
         shared: boolean;
       }>(
         `SELECT d.id, d.name, d.revision,
-                EXISTS (SELECT 1 FROM dataset_clips dc
-                        WHERE dc.dataset_id = d.id AND dc.clip_id = $1) AS member,
+                EXISTS (SELECT 1 FROM ${members} dc
+                        WHERE dc.dataset_id = d.id AND dc.clip_id = $1 ${sameResult}) AS member,
                 EXISTS (SELECT 1 FROM dataset_access da
                         WHERE da.dataset_id = d.id AND da.enabled) AS shared
          FROM datasets d ORDER BY d.updated_at DESC, d.id DESC LIMIT $2`,
-        [clipId, AVAILABLE_DATASET_LIMIT + 1],
+        [clipId, AVAILABLE_DATASET_LIMIT + 1, ...resultParameters],
       )
     ).rows;
     await tx.query("COMMIT");
@@ -169,9 +213,11 @@ export async function getClipReviewState(
       jobId: clip.job_id,
       resultManifestSha256: clip.sha,
       current: clip.current,
-      capabilities: { canReview: clip.current },
+      capabilities: {
+        canReview: clip.current && hostedDevProfile()?.mode !== "read-only",
+      },
       review: {
-        revision: latest?.revision ?? 0,
+        revision: latestRevision ?? latest?.revision ?? 0,
         decision: latest?.decision ?? null,
         taskLabel: latest?.task_label ?? null,
         notes: latest?.notes ?? null,

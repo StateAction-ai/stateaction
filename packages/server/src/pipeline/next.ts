@@ -7,6 +7,8 @@ import {
   annotationCounts,
   getPipelineDetail,
   listPipelineRecordings,
+  listReviewQueueFilters,
+  type ReviewQueueOptionsQuery,
   pipelineActionsFor,
   type PipelineDetail,
   type PipelineList,
@@ -108,6 +110,8 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
   return {
     list: (staffUserId: string, query: PipelineQuery): Promise<PipelineList> =>
       listPipelineRecordings(get().pool, staffUserId, query),
+    reviewQueueFilters: (userId: string, query: ReviewQueueOptionsQuery) =>
+      listReviewQueueFilters(get().pool, userId, query),
     detail: (
       staffUserId: string,
       recordingId: string,

@@ -8,6 +8,7 @@ import {
   type Queryable,
 } from "../catalog/catalog.js";
 import { CatalogError, toCatalogError } from "../catalog/errors.js";
+import { recordingTitle } from "../pipeline/model.js";
 import type {
   ClipSimulation,
   DatasetClipView,
@@ -133,10 +134,17 @@ const DATASET_SELECT = `SELECT d.id, d.name, d.revision, s.clip_count::text, s.d
        ${ts("d.created_at")} AS ts
      FROM datasets d
      CROSS JOIN LATERAL (
-       SELECT count(*) AS clip_count, coalesce(sum(c.duration_ns), 0) AS duration_ns,
-              bool_or(rec.imported_from_cache) AS contains_imported
-       FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id ${CORE}
-       WHERE dc.dataset_id = d.id AND ${memberGate("d.id")}
+       SELECT count(*) AS clip_count, coalesce(sum(m.duration_ns), 0) AS duration_ns,
+              bool_or(m.imported_from_cache) AS contains_imported
+       FROM (
+         SELECT c.duration_ns, rec.imported_from_cache
+         FROM dataset_clips dc JOIN clips c ON c.id = dc.clip_id ${CORE}
+         WHERE dc.dataset_id = d.id AND ${memberGate("d.id")}
+         UNION ALL
+         SELECT m.duration_ns, m.imported_from_cache
+         FROM selected_dataset_review_clips m
+         WHERE m.dataset_id = d.id AND catalog_has_role($1, 'staff')
+       ) m
      ) s`;
 /** Params: viewer, after-timestamp, after-id, limit + 1. */
 export const LIST_DATASETS_SQL = `${DATASET_SELECT}
@@ -306,6 +314,60 @@ export async function listDatasetClips(
   } catch (error) {
     throw toCatalogError(error);
   }
+}
+
+/** Staff browse reviewed results in their dataset without exposing the raw source to recipients. */
+export async function listDatasetReviewClips(
+  pool: Queryable,
+  input: {
+    viewerUserId: string;
+    datasetId: string;
+    cursor?: string;
+    q?: string;
+    label?: string;
+  },
+) {
+  const limit = 24;
+  const [afterTs, afterId] = decodeCursor(input.cursor);
+  const { rows } = await pool.query<{
+    clip_id: string;
+    started_at: Date;
+    import_title: string | null;
+    task_label: string;
+    duration_ns: string | null;
+    ts: string;
+  }>(
+    `SELECT clip_id, started_at, import_title, task_label, duration_ns::text, ${ts("added_at")} AS ts
+     FROM selected_dataset_review_clips
+     WHERE dataset_id = $2 AND catalog_has_role($1, 'staff')
+       AND ($3::timestamptz IS NULL OR (added_at, clip_id) < ($3, $4::uuid))
+       AND ($5::text = '' OR task_label ILIKE $5 ESCAPE '\\'
+         OR coalesce(import_title, 'Recording ' ||
+             to_char(started_at AT TIME ZONE 'UTC', 'FMDD Mon YYYY, HH24:MI "UTC"')) ILIKE $5 ESCAPE '\\')
+       AND ($6::text = '' OR lower(task_label) = lower($6))
+     ORDER BY added_at DESC, clip_id DESC LIMIT $7`,
+    [
+      input.viewerUserId,
+      uuid(input.datasetId, "datasetId"),
+      afterTs,
+      afterId,
+      searchPattern(input.q),
+      filterText(input.label),
+      limit + 1,
+    ],
+  );
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  return {
+    items: page.map((row) => ({
+      clipId: row.clip_id,
+      title: row.import_title ?? recordingTitle(row.started_at),
+      taskLabel: row.task_label,
+      durationNs: row.duration_ns,
+    })),
+    nextCursor:
+      rows.length > limit && last ? encodeCursor(last.ts, last.clip_id) : null,
+  };
 }
 
 /**

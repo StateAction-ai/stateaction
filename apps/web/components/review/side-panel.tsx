@@ -18,13 +18,13 @@ import { MarkBadge, MarkBar } from "./mark-bar";
 import { recipeHref } from "../../lib/recipe-view";
 import { HAND_COLORS } from "./palette";
 
-export type SideTab = "segs" | "hand" | "json";
+export type SideTab = "segs" | "decision" | "hand" | "json";
 
-const TABS: { id: SideTab; label: string }[] = [
+const TABS = [
   { id: "segs", label: "Segments" },
   { id: "hand", label: "3D / Debug" },
   { id: "json", label: "JSON" },
-];
+] as const;
 
 /** JSON shown in the tab is capped; the download always carries the full document. */
 export const JSON_VIEW_LIMIT = 200_000;
@@ -54,6 +54,7 @@ export function SidePanel({
   issueCount,
   onChoose,
   onNextUnchecked,
+  decision,
 }: {
   model: ReviewModel;
   annotations: RecordingAnnotations;
@@ -79,8 +80,9 @@ export function SidePanel({
   marks: MarksState;
   checkedCount: number;
   issueCount: number;
-  onChoose: (card: Card, choice: MarkChoice) => void;
+  onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
+  decision?: React.ReactNode;
 }) {
   const [suspendedAtSeek, setSuspendedAtSeek] = useState<number | null>(null);
   const following = suspendedAtSeek !== seekCount;
@@ -88,6 +90,14 @@ export function SidePanel({
     () => setSuspendedAtSeek(seekCount),
     [seekCount],
   );
+  const tabs: readonly { id: SideTab; label: string }[] = decision
+    ? [
+        TABS[0],
+        { id: "decision", label: "Review clip" },
+        { id: "hand", label: "3D / debug" },
+        TABS[2],
+      ]
+    : TABS;
   const failedTotal = model.cards.filter(
     (c) => c.caption.state === "failed",
   ).length;
@@ -101,29 +111,29 @@ export function SidePanel({
         aria-label="Review panes"
         className="flex shrink-0 flex-wrap gap-1 rounded-t-2xl border-b border-line bg-paper px-3"
       >
-        {TABS.map((x, index) => (
+        {tabs.map((x, index) => (
           <button
             key={x.id}
             type="button"
             role="tab"
             id={`tab-${x.id}`}
             aria-selected={tab === x.id}
-            aria-controls={`pane-${x.id}`}
             tabIndex={tab === x.id ? 0 : -1}
+            aria-controls={`pane-${x.id}`}
             onKeyDown={(e) => {
               const next =
                 e.key === "Home"
                   ? 0
                   : e.key === "End"
-                    ? TABS.length - 1
+                    ? tabs.length - 1
                     : e.key === "ArrowLeft"
-                      ? (index + TABS.length - 1) % TABS.length
+                      ? (index + tabs.length - 1) % tabs.length
                       : e.key === "ArrowRight"
-                        ? (index + 1) % TABS.length
+                        ? (index + 1) % tabs.length
                         : null;
               if (next === null) return;
               e.preventDefault();
-              const id = TABS[next]!.id;
+              const id = tabs[next]!.id;
               onTab(id);
               document.getElementById(`tab-${id}`)?.focus();
             }}
@@ -137,15 +147,17 @@ export function SidePanel({
           </button>
         ))}
       </div>
-      {TABS.filter((pane) => pane.id !== tab).map((pane) => (
-        <div
-          key={pane.id}
-          role="tabpanel"
-          id={`pane-${pane.id}`}
-          aria-labelledby={`tab-${pane.id}`}
-          hidden
-        />
-      ))}
+      {tabs
+        .filter((pane) => pane.id !== tab && pane.id !== "decision")
+        .map((pane) => (
+          <div
+            key={pane.id}
+            role="tabpanel"
+            id={`pane-${pane.id}`}
+            aria-labelledby={`tab-${pane.id}`}
+            hidden
+          />
+        ))}
 
       {tab === "segs" ? (
         <div
@@ -237,6 +249,18 @@ export function SidePanel({
             onChoose={onChoose}
             onNextUnchecked={onNextUnchecked}
           />
+        </div>
+      ) : null}
+
+      {decision ? (
+        <div
+          role="tabpanel"
+          id="pane-decision"
+          aria-labelledby="tab-decision"
+          hidden={tab !== "decision"}
+          className="min-h-0 flex-1 overflow-auto"
+        >
+          {decision}
         </div>
       ) : null}
 
@@ -334,7 +358,7 @@ function Rail({
   onManualScroll: () => void;
   onSelect: (index: number) => void;
   marks: MarksState;
-  onChoose: (card: Card, choice: MarkChoice) => void;
+  onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
@@ -445,7 +469,7 @@ function RailCard({
   onSelect: (index: number) => void;
   mark: SegmentMarkRow | undefined;
   marks: MarksState;
-  onChoose: (card: Card, choice: MarkChoice) => void;
+  onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
 }) {
   const failed = c.caption.state === "failed";
@@ -544,7 +568,7 @@ function RailCard({
           ) : null}
         </dl>
       ) : null}
-      {selected ? (
+      {selected && onChoose ? (
         <MarkBar
           mark={mark}
           busy={marks.busy}
