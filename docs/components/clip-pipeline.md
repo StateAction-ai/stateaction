@@ -270,6 +270,14 @@ Changes this needs:
 
 ## Failure semantics
 
+Migration 017 gives retained recordings and cached imports one stable review
+clip with their existing job history. Recordings already registered at
+migration time continue through the recording-scoped lifecycle. Newly sealed
+recordings start with the CPU plan. Per-clip stage reruns follow in item 8.
+
+The hosted public-video canary allows one approved plan and clip attempt.
+A failed attempt needs a new fixture and fresh consent before another window.
+
 - Plan failed: one whole-recording clip, "not filtered: <error>", pipeline
   continues.
 - One clip job failed: only that clip is failed; other clips continue and stay

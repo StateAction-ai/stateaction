@@ -139,6 +139,13 @@
     "jobs/controller-action.v4.schema.json": "de193572364d589166fbf273f1a87febab24905c07a08f0ea1788d99c2adf752",
     "http/stage-rerun-plan.v1.schema.json": "430a0c79c7ad77b91307694a38d2adfd736188e72bd21b0f6ccfc8c37548464c",
     "http/segment-marks.v2.schema.json": "347028da73fba93295f695e6e15bd4125db86fa79ffe037582a4314dcd29adcf",
-    "http/recording-annotations.v3.schema.json": "8e0eefa098e8440eb612a4e76a31a0f621c3340e407ad037f319f6e31a9b87b1"
+    "http/recording-annotations.v3.schema.json": "8e0eefa098e8440eb612a4e76a31a0f621c3340e407ad037f319f6e31a9b87b1",
+    "catalog.v22.json": "2dd4801612fef78335409f452999b1042b45a9837e25ab47d144d4fc546939d9",
+    "artifacts/clip-plan.v1.schema.json": "0b3a9c657066bf409fbd0e835dd50d9b947e7fa1a481275042583112849a9e38",
+    "jobs/recipe.v2.schema.json": "09ee8f2e6c46ede540780a6c6f07b136ed2f449c660fdb38b6ac252f451991de",
+    "jobs/task-input.v4.schema.json": "60f2c88a4be40f7b08ab8daef52744e5ac3dc17626cde098b4bb5644b25443ae",
+    "artifacts/processing-result.v5.schema.json": "8910f29ddd75547b1003519fa51a5c0933238471f8f2d7af6ed06e51e8e9721c",
+    "jobs/task-input.v5.schema.json": "b2e2476715be6c1292e3a05b5e3ee615e47bcedf6b1c7609b9093a24d26c4286",
+    "jobs/job-status.v3.schema.json": "c44fece3e1f0808abff3e201b1e3531a480ffa8596405d3c448fdd979a3480fb"
   }
 }

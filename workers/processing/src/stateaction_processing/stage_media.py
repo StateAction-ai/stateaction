@@ -1,4 +1,4 @@
-"""Full-recording native remux plus the frame map (MP4 index -> source frame identity).
+"""Native recording or clip remux plus the frame map (MP4 index -> source identity).
 
 The H.264 access units of the verified-so-far MCAP are muxed unchanged into one MP4 (no decode, no
 encode, no frame-rate conversion), exactly as `artifact_clip.ClipWriter` does per clip. The frame
@@ -6,8 +6,9 @@ map keeps, per MP4 index, the native `source_frame_id`, the integer `timestamp_n
 clock domain and the PTS (microseconds from the first frame), so a module that reports MP4 frame
 indices or seconds can be mapped back to the frame identities the contracts use.
 
-The AU count must equal the MCAP's video message count and the demuxed MP4 packet count. Success
-requires whole-source verification (footer, CRC, SHA-256 and Close) and a completed capture.
+A clip can start between keyframes. The MP4 edit list hides the preceding decode context.
+Success requires whole-source verification (footer, CRC, SHA-256 and Close) and a completed
+capture, even when only part of the source is muxed.
 """
 
 from __future__ import annotations
@@ -19,9 +20,9 @@ from pathlib import Path
 from typing import BinaryIO, Callable
 
 from .capture_stream import CaptureStream, StreamLimits
+from .source_range import MAX_FRAMES, SourceRange, select_access_units
 
 TIME_BASE = Fraction(1, 1_000_000)
-MAX_FRAMES = 10_000_000
 
 
 class StageMediaError(RuntimeError):
@@ -44,6 +45,8 @@ class FrameMap:
     frame_ids: list[str] = field(default_factory=list)
     timestamps_ns: list[str] = field(default_factory=list)
     pts_us: list[int] = field(default_factory=list)  # relative to the first frame
+
+    source_origin_pts_us: int = 0
 
     def __len__(self) -> int:
         return len(self.frame_ids)
@@ -68,14 +71,14 @@ class FrameMap:
 
 
 def _raster_of(idr: bytes) -> tuple[int, int]:
-    """Coded raster of the first IDR (its SPS), read by decoding that one access unit only."""
+    """Get the coded raster from the keyframe headers without decoding pixels."""
     import av
 
     ctx = av.CodecContext.create("h264", "r")
-    ctx.thread_count = 1
-    frames = list(ctx.decode(av.Packet(idr))) or list(ctx.decode(None))
-    _require(bool(frames), "raster_undeclared")
-    return int(frames[0].width), int(frames[0].height)
+    ctx.parse(idr)
+    ctx.parse(b"")
+    _require(ctx.width > 0 and ctx.height > 0, "raster_undeclared")
+    return int(ctx.width), int(ctx.height)
 
 
 def remux_source(
@@ -85,8 +88,9 @@ def remux_source(
     expected_profile: str | None = None,
     limits: StreamLimits | None = None,
     on_frame: Callable[[int], None] | None = None,
+    source_range: SourceRange | None = None,
 ) -> FrameMap:
-    """Mux every access unit natively into `out_path`; return the frame map. Raises on any mismatch."""
+    """Mux a verified source range natively and return its visible frame map."""
     import av
 
     from .artifact_clip import TIME_BASE as CLIP_TIME_BASE
@@ -95,13 +99,23 @@ def remux_source(
     assert CLIP_TIME_BASE == TIME_BASE
     stream = CaptureStream(raw, limits, expected_profile=expected_profile)
     frames = FrameMap()
-    hashes: list[tuple[int, list[str]]] = []
-    container = av.open(str(out_path), "w", format="mp4")
+    hashes: list[tuple[int, bool, list[str]]] = []
+    options = (
+        {
+            "use_editlist": "1",
+            "avoid_negative_ts": "disabled",
+            "movie_timescale": "1000000",
+        }
+        if source_range is not None
+        else {}
+    )
+    container = av.open(str(out_path), "w", format="mp4", options=options)
     try:
         video = None
-        origin = 0
-        last_pts = -1
-        for au in stream:
+        last_pts: int | None = None
+        for au, origin, discard in select_access_units(
+            stream, source_range, out_path.parent
+        ):
             _require(au.source_frame_id.isdigit(), "source_frame_id_not_int64")
             _require(len(frames) < MAX_FRAMES, "too_many_frames")
             if video is None:
@@ -109,7 +123,7 @@ def remux_source(
                 video = container.add_stream("h264")
                 video.width, video.height = _raster_of(au.data)
                 video.time_base = TIME_BASE
-                origin = au.encoder_pts_us
+                frames.source_origin_pts_us = origin
                 frames.clock_domain = au.native_clock_id
             _require(
                 au.calibration_raster in (None, (video.width, video.height)),
@@ -117,7 +131,7 @@ def remux_source(
             )
             _require(au.native_clock_id == frames.clock_domain, "clock_changed")
             pts = au.encoder_pts_us - origin
-            _require(pts > last_pts, "pts_not_increasing")
+            _require(last_pts is None or pts > last_pts, "pts_not_increasing")
             last_pts = pts
             packet = av.Packet(au.data)
             packet.pts = packet.dts = pts
@@ -125,7 +139,9 @@ def remux_source(
             packet.stream = video
             packet.is_keyframe = au.is_idr
             container.mux(packet)
-            hashes.append((pts, _vcl_hashes_annexb(au.data)))
+            hashes.append((pts, discard, _vcl_hashes_annexb(au.data)))
+            if discard:
+                continue
             frames.frame_ids.append(au.source_frame_id)
             frames.timestamps_ns.append(au.native_timestamp_ns)
             frames.pts_us.append(pts)
@@ -135,19 +151,27 @@ def remux_source(
         container.close()
     stream_report = stream.report
     stream_report.require_auto_admissible()
+    if source_range is not None:
+        _require(
+            source_range.end_ordinal <= stream_report.video_messages,
+            "clip_range_not_in_source",
+        )
+        expected = source_range.frame_count
+    else:
+        expected = stream_report.video_messages
     _require(len(frames) > 0, "no_video_frames")
     frames.source_sha256 = stream_report.source.sha256
-    _require(len(frames) == stream_report.video_messages, "au_count_mismatch")
+    _require(len(frames) == expected, "au_count_mismatch")
     with av.open(str(out_path)) as src:
         track = src.streams.video[0]
         extra = track.codec_context.extradata
         _require(extra is not None and extra[0] == 1, "mp4_no_avcc")
         nal_len = (extra[4] & 3) + 1
         got = [
-            (int(p.pts), _vcl_hashes_avcc(bytes(p), nal_len))
+            (int(p.pts), p.is_discard, _vcl_hashes_avcc(bytes(p), nal_len))
             for p in src.demux(track)
             if p.size
         ]
-    _require(len(got) == len(frames), "mp4_packet_count_mismatch")
+    _require(len(got) == len(hashes), "mp4_packet_count_mismatch")
     _require(got == hashes, "mp4_remux_mismatch")
     return frames

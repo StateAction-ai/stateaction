@@ -34,7 +34,7 @@ export async function processRecordingTaskInputV2(
      FROM jobs j JOIN recording_admissions a
        ON a.recording_id = j.recording_id AND a.outcome = 'admitted'
           AND a.source_manifest_sha256 = j.source_manifest_sha256
-     WHERE j.id = $1 AND j.kind = 'process_recording'`,
+     WHERE j.id = $1 AND j.kind IN ('process_recording', 'clip_plan', 'clip_pipeline')`,
     [jobId],
   );
   const row = rows[0];

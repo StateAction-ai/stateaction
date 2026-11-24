@@ -1,5 +1,9 @@
-import type { RecipeV1 } from "@stateaction/contracts";
-import { clipsForSeconds, jobOutputFileLimit } from "../acceptance/config.js";
+import type { ClipTaskInputV4 } from "@stateaction/contracts";
+import {
+  clipsForSeconds,
+  jobOutputByteLimit,
+  jobOutputFileLimit,
+} from "../acceptance/config.js";
 import {
   publicVideoCanaryFromEnv,
   type PublicVideoCanary,
@@ -20,6 +24,8 @@ export type JobsConfig = {
   limits: {
     /** Per-job output file budget (pinned at admission), never above the ceiling. */
     maxOutputFiles: number;
+    /** Configured ceiling before applying the recording or clip workload budget. */
+    outputFileCeiling?: number;
     maxOutputBytes: string;
     maxControlDocumentBytes: number;
   };
@@ -92,21 +98,67 @@ export const TASK_INPUT_BUILD_FAILED_ERROR_CODE = "task_input_build_failed";
  * fixed margin, clamped to [1 h, 12 h]. A sum above the 12 h bound is refused
  * with RECIPE_DEADLINE_ERROR_CODE rather than clamped, so no job runs past it.
  */
-export function recipeExecutionDeadlineSeconds(recipe: {
+type RecipeBudget = {
   stages: ReadonlyArray<{
     enabled: boolean;
     resources: { budgetSeconds: number };
   }>;
-}): number {
+};
+
+function budgetWithMargin(recipe: RecipeBudget, marginSeconds: number): number {
   const budget = recipe.stages
     .filter((stage) => stage.enabled)
     .reduce((sum, stage) => sum + stage.resources.budgetSeconds, 0);
-  const total = budget + RECIPE_DEADLINE_MARGIN_SECONDS;
+  const total = budget + marginSeconds;
   if (total > RECIPE_DEADLINE_MAX_SECONDS)
     throw new Error(
       `${RECIPE_DEADLINE_ERROR_CODE}: enabled stage budgets need ${total} s, above the ${RECIPE_DEADLINE_MAX_SECONDS} s maximum`,
     );
-  return Math.max(RECIPE_DEADLINE_MIN_SECONDS, total);
+  return total;
+}
+
+export function recipeExecutionDeadlineSeconds(recipe: RecipeBudget): number {
+  return Math.max(
+    RECIPE_DEADLINE_MIN_SECONDS,
+    budgetWithMargin(recipe, RECIPE_DEADLINE_MARGIN_SECONDS),
+  );
+}
+
+/** Pin clip-specific output caps and the deadline from the admitted source range. */
+export function clipAdmissionBudget(config: JobsConfig, task: ClipTaskInputV4) {
+  const range = task.clip.sourceRange;
+  const frames = range.end_ordinal - range.start_ordinal;
+  const durationNs = BigInt(range.end_ts_ns) - BigInt(range.start_ts_ns);
+  const oneFrame = frames === 1;
+  if (
+    frames < 1 ||
+    (oneFrame ? durationNs !== 0n : durationNs <= 0n) ||
+    oneFrame !== (range.first_source_frame_id === range.last_source_frame_id)
+  )
+    throw new Error("clip_source_range_invalid");
+
+  const durationSeconds = Number(durationNs) / 1e9;
+  // Mirrors ExportLimits in artifact_types.py. Each cut can be triggered by
+  // elapsed time or frame count; summing both gives a conservative chunk cap.
+  const chunks =
+    1 + Math.floor(durationSeconds / 30) + Math.floor((frames - 1) / 3000);
+  const startMargin = config.startDeadlineSeconds;
+  const durationMargin =
+    Math.max(0, RECIPE_DEADLINE_MARGIN_SECONDS - startMargin) *
+    (Math.min(durationSeconds, MAX_RECORDING_SECONDS) / MAX_RECORDING_SECONDS);
+  return {
+    maxOutputFiles: jobOutputFileLimit(
+      config.limits.outputFileCeiling ?? config.limits.maxOutputFiles,
+      chunks,
+    ),
+    maxOutputBytes: String(
+      jobOutputByteLimit(Number(config.limits.maxOutputBytes), chunks),
+    ),
+    deadlineSeconds: budgetWithMargin(
+      task.recipe,
+      startMargin + Math.ceil(durationMargin),
+    ),
+  };
 }
 
 /** Deadline written once at admission: the recipe's, else the configured fallback. */
@@ -166,6 +218,7 @@ export function jobsConfigFromEnv(
     configSha256: setting(env, "PROCESSING_CONFIG_SHA256", SHA),
     limits: {
       maxOutputFiles,
+      outputFileCeiling: ceiling,
       maxOutputBytes: "68719476736",
       maxControlDocumentBytes: 1048576,
     },

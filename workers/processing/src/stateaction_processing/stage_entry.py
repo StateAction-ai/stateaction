@@ -334,13 +334,16 @@ def _stage_config(
     task: dict[str, Any], boot: dict[str, Any]
 ) -> tuple[dict[str, Any], str]:
     """The recipe stage this bootstrap is for, after the digest and the module were checked."""
-    from stateaction_contracts import request_sha256
+    from stateaction_contracts import request_sha256, validate_value
 
+    version = task.get("schemaVersion")
     if (
-        task.get("schemaVersion") != 3
+        version not in (3, 4)
         or task.get("kind") != "process_recording"
         or task.get("jobId") != boot["jobId"]
     ):
+        raise StageFailure("task_input_invalid")
+    if version == 4 and not validate_value("jobs.task-input.v4", task).valid:
         raise StageFailure("task_input_invalid")
     recipe = task["recipe"]
     if (
@@ -372,6 +375,7 @@ def execute(
 
     from . import modules
     from .artifact_types import make_output
+    from .source_range import ClipBinding
     from .stage_docs import StageContext
     from .stage_media import remux_source
 
@@ -405,6 +409,7 @@ def execute(
         )  # first import of module code: after the claim
         io.beat("remuxing", 0)
         log("remux start")
+        clip = ClipBinding.from_task(task) if task["schemaVersion"] == 4 else None
         raw, expected_sha = io.source()
         try:
             frames = remux_source(
@@ -412,11 +417,17 @@ def execute(
                 scratch / "recording.mp4",
                 expected_profile=task["rgbProfile"],
                 on_frame=lambda n: io.beat("remuxing", n),
+                source_range=clip.source_range if clip else None,
             )
         finally:
             raw.close()
         if expected_sha is not None and frames.source_sha256 != expected_sha:
             raise StageFailure("source_digest_mismatch")
+        if clip and (
+            (frames.frame_ids[0], frames.timestamps_ns[0]) != clip.first
+            or (frames.frame_ids[-1], frames.timestamps_ns[-1]) != clip.last
+        ):
+            raise StageFailure("clip_source_mismatch")
         log(f"remux done frames={len(frames)}")
         segments_doc: dict[str, Any] | None = None
         segments_sha: str | None = None

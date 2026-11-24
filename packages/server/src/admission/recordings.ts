@@ -610,7 +610,8 @@ export async function admitInTransaction(
   );
   await tx.query(
     `INSERT INTO jobs (id, kind, recording_id, source_manifest_sha256, profile_revision)
-     VALUES ($1, 'process_recording', $2, $3, $4)`,
+     VALUES ($1, CASE WHEN EXISTS (SELECT 1 FROM clip_plans WHERE recording_id = $2
+                AND plan_job_id IS NULL) THEN 'process_recording' ELSE 'clip_plan' END, $2, $3, $4)`,
     [jobId, recordingId, r.manifest_sha, deps.config.processingProfileRevision],
   );
   await tx.query(

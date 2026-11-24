@@ -48,6 +48,7 @@ type ConfirmResult = { jobId: string; parentJobId: string; replayed: boolean };
 type Read = Pick<pg.Pool, "query">;
 type Parent = {
   id: string;
+  kind: string;
   recipe: RecipeV1 | null;
   state: string;
   admitted_at: Date | null;
@@ -127,7 +128,7 @@ async function loadParent(
   const {
     rows: [parent],
   } = await db.query<Parent>(
-    `SELECT j.id, j.recipe, j.state, j.admitted_at, j.source_manifest_sha256, j.profile_revision,
+    `SELECT j.id, j.kind, j.recipe, j.state, j.admitted_at, j.source_manifest_sha256, j.profile_revision,
             r.deleted_at,
             j.kind = 'process_recording' AND r.source_manifest_sha256 = j.source_manifest_sha256
               AND r.status IN ('uploaded', 'processing', 'reviewable', 'failed', 'cancelled')
@@ -171,6 +172,8 @@ async function loadParent(
   );
   if (!parent || parent.deleted_at)
     throw new TransportError("not_found", "Run not found");
+  if (parent.kind === "clip_pipeline" || parent.kind === "clip_plan")
+    throw refused("clip_rerun_unavailable");
   if (!terminal.has(parent.state)) throw refused("parent_not_terminal");
   if (parent.admitted_at && !parent.settled)
     throw refused("termination_unproven");

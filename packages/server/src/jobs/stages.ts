@@ -81,12 +81,16 @@ export function stageOfCredential(credentialId: string): Stage | null {
   return m ? (m[1] as Stage) : null;
 }
 
-/** The v2 projection of an admitted v3 task input (controller-result.v1 shape). */
+/** The v2 projection of an admitted recipe task input (controller-result.v1 shape). */
 export function taskInputV2Projection(
   task: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (task.schemaVersion !== 3) return task;
-  const { recipe: _recipe, recipeSha256: _sha, ...rest } = task;
+  if (task.schemaVersion === 5) {
+    const { planVersion: _plan, clipFilter: _filter, ...rest } = task;
+    return { ...rest, schemaVersion: 2, kind: "process_recording" };
+  }
+  if (task.schemaVersion !== 3 && task.schemaVersion !== 4) return task;
+  const { recipe: _recipe, recipeSha256: _sha, clip: _clip, ...rest } = task;
   return { ...rest, schemaVersion: 2 };
 }
 

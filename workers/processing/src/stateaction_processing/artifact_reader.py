@@ -554,6 +554,8 @@ def open_result(
         manifest_contract = "artifacts.processing-result.v3"
     elif schema == "stateaction.processing_result.v4":
         manifest_contract = "artifacts.processing-result.v4"
+    elif schema == "stateaction.processing_result.v5":
+        manifest_contract = "artifacts.processing-result.v5"
     else:
         raise ArtifactError("E_CONTRACT_VIOLATION", "processing-result schema")
     validated = _contract_check(manifest_contract, data, required=require_contracts)

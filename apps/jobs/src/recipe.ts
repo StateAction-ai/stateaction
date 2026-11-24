@@ -11,6 +11,7 @@ import {
 import {
   AmbiguousApiError,
   ApiRejection,
+  type JobStatus,
   type PriorStage,
 } from "./api-client.js";
 import { stageModuleRefusal, type LocalControllerSettings } from "./config.js";
@@ -59,6 +60,7 @@ export async function runRecipe(
   deps: ControllerDeps,
   id: Id,
   recipe: RecipeV1,
+  admitted: Pick<JobStatus, "kind" | "codeRevision">,
   leaseDeadline: () => number | undefined,
   emit: Emit,
 ): Promise<Outcome> {
@@ -203,6 +205,20 @@ export async function runRecipe(
     // still end it as not_run. Once it is claimed it only ends with proof for its call.
     const fresh = !journaled && node === undefined;
     const binding = bindingFor(spec);
+    const clipHandPose =
+      admitted.kind === "clip_pipeline" && spec.stage === "hand_pose";
+    if (
+      settings.executor === "modal" &&
+      clipHandPose &&
+      !node?.callId &&
+      (!binding ||
+        binding.gpu !== "none" ||
+        binding.codeRevision !== admitted.codeRevision)
+    )
+      return {
+        outcome: "needs_operator",
+        reason: "clip_hand_pose_binding_unavailable",
+      };
     if (
       settings.executor === "modal" &&
       (execute || releaseBindings) &&

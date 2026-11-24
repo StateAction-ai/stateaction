@@ -1,0 +1,52 @@
+{
+  "contract": "jobs.task-input.v5",
+  "cases": [
+    {
+      "name": "plan job is pinned to a passthrough filter",
+      "input": {
+        "document": {
+          "schemaVersion": 5,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "clip_plan",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "planVersion": 1,
+          "clipFilter": {
+            "mode": "passthrough",
+            "module": "clip_filter@0",
+            "params": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "plan job cannot request apply",
+      "input": {
+        "document": {
+          "schemaVersion": 5,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "clip_plan",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "planVersion": 1,
+          "clipFilter": {
+            "mode": "apply",
+            "module": "clip_filter@0",
+            "params": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

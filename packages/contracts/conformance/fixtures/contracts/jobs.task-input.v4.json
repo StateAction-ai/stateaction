@@ -1,0 +1,250 @@
+{
+  "contract": "jobs.task-input.v4",
+  "cases": [
+    {
+      "name": "clip-bound task input",
+      "input": {
+        "document": {
+          "schemaVersion": 4,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "clip": {
+            "id": "ad30fea5-011b-4cb1-9820-f076c0401e6a",
+            "planVersion": 1,
+            "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceRange": {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing source range",
+      "input": {
+        "document": {
+          "schemaVersion": 4,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "d35dde6c007fb7ca7bfb01461db4bc5faefbdf10e97ba7a5b63126c868035ada",
+          "clip": {
+            "id": "ad30fea5-011b-4cb1-9820-f076c0401e6a",
+            "planVersion": 1,
+            "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "wrong recipe digest",
+      "input": {
+        "document": {
+          "schemaVersion": 4,
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "profileRevision": "cpu-mediapipe-1",
+          "kind": "process_recording",
+          "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "rgbProfile": "h264_mcap_v1",
+          "recipe": {
+            "schemaVersion": 1,
+            "recipeId": "flora_fp8@1",
+            "maxJobCostUsd": "3.00",
+            "stages": [
+              {
+                "stage": "segment",
+                "enabled": true,
+                "module": "flora_tempseg_vllm_fp8@1",
+                "params": {
+                  "grid_profile": "human_16s_4hz",
+                  "batch_size": 8,
+                  "repair_budget": 64
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 1800,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "caption",
+                "enabled": true,
+                "module": "flora_captioner_vllm_fp8@1",
+                "params": {
+                  "max_new_tokens": 256,
+                  "temperature": "0.0",
+                  "overlap": true
+                },
+                "resources": {
+                  "gpu": "RTX-PRO-6000",
+                  "budgetSeconds": 3600,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              },
+              {
+                "stage": "hand_pose",
+                "enabled": true,
+                "module": "hand_pose_cpu_v1@1",
+                "params": {},
+                "resources": {
+                  "gpu": "none",
+                  "budgetSeconds": 7200,
+                  "maxContainers": 1,
+                  "retries": 0
+                }
+              }
+            ]
+          },
+          "recipeSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "clip": {
+            "id": "ad30fea5-011b-4cb1-9820-f076c0401e6a",
+            "planVersion": 1,
+            "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceRange": {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/recipeSha256"
+        ]
+      }
+    }
+  ]
+}

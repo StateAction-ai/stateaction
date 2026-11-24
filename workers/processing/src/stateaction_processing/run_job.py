@@ -34,12 +34,14 @@ _REF = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 # A Modal function call ID, exactly as the controller contract pins it (SA-42).
 _CALL_ID = re.compile(r"^fc-[A-Za-z0-9]{1,77}$")
 _EXECUTORS = ("local", "modal")
+_CPU_PIPELINES = {"hand_pose_cpu_v1", "clip_plan_cpu_v1"}
 _TOKEN = re.compile(r"^sa_svc_[A-Za-z0-9_-]{43}$")
 _MODULE_REF = re.compile(r"^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 # Pipelines are resolved from this fixed table; never from caller-supplied names.
 _PIPELINES = {
     "hand_pose_cpu_v1": "hand_pose_cpu_v1",
+    "clip_plan_cpu_v1": "clip_plan",
     "local_fixture_noop": "fixture_noop",
 }
 _CLAIM_TIMEOUT_SECONDS = 30
@@ -203,11 +205,11 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             raise ValueError("executor_ref")
         value["apiUrl"] = _strict_origin(value["apiUrl"])
         if kind == "modal" and (
-            value["pipeline"] != "hand_pose_cpu_v1"
+            value["pipeline"] not in _CPU_PIPELINES
             or not value["apiUrl"].startswith("https://")
             or urlparse(value["apiUrl"]).hostname in ("127.0.0.1", "localhost", "::1")
         ):
-            # Modal runs only the production pipeline and can never reach a loopback API.
+            # Modal runs only production pipelines and never reaches a loopback API.
             raise ValueError("modal_bootstrap")
         return value
     except (ValueError, KeyError, TypeError) as error:
@@ -276,7 +278,9 @@ def run(execution_ref: str) -> int:
     if os.environ.get("STATEACTION_FIXTURE_ISOLATION_FD") == "3":
         isolated_pipeline = _FIXTURE_PIPELINE
     elif os.environ.get("STATEACTION_THREADED_ISOLATION_FD") == "3":
-        isolated_pipeline = "hand_pose_cpu_v1"
+        isolated_pipeline = os.environ.get("WORKER_PIPELINE", "hand_pose_cpu_v1")
+        if isolated_pipeline not in _CPU_PIPELINES:
+            raise WorkerExit(EXIT_PIPELINE_UNAVAILABLE, "PipelineUnavailable")
     if isolated_pipeline:
         if not _pipeline_present(isolated_pipeline):
             raise WorkerExit(EXIT_PIPELINE_UNAVAILABLE, "PipelineUnavailable")
@@ -292,7 +296,7 @@ def run(execution_ref: str) -> int:
         pipeline != isolated_pipeline or boot["executorKind"] != "local"
     ):
         raise WorkerExit(EXIT_INTERNAL, "InvalidBootstrap")
-    if isolated_pipeline == "hand_pose_cpu_v1" and (
+    if isolated_pipeline in _CPU_PIPELINES and (
         os.environ.get("APP_ENV") != "local"
         or urlparse(boot["apiUrl"]).hostname not in ("127.0.0.1", "localhost", "::1")
     ):

@@ -60,13 +60,18 @@ export async function fixtureRunJob(
       source_manifest_sha256: string;
       profile_revision: string;
       recording_id: string;
+      kind: string;
+      rgb_profile: string;
+      simulation: unknown;
     }>(
-      "SELECT source_manifest_sha256, profile_revision, recording_id FROM jobs WHERE id = $1",
+      `SELECT j.source_manifest_sha256, j.profile_revision, j.recording_id,
+              j.kind, r.rgb_profile, r.simulation
+       FROM jobs j JOIN recordings r ON r.id = j.recording_id WHERE j.id = $1`,
       [jobId],
     )
   ).rows[0];
   if (!job) throw new Error("Fixture job not found");
-  const task = {
+  const base = {
     schemaVersion: 2,
     rgbProfile: "h264_mcap_v1",
     jobId,
@@ -75,6 +80,22 @@ export async function fixtureRunJob(
     kind: "process_recording",
     sourceManifestSha256: job.source_manifest_sha256,
   };
+  const task =
+    job.kind === "clip_plan"
+      ? {
+          ...base,
+          schemaVersion: 5,
+          kind: "clip_plan",
+          rgbProfile: job.rgb_profile,
+          ...(job.simulation ? { simulation: job.simulation } : {}),
+          planVersion: 1,
+          clipFilter: {
+            mode: "passthrough",
+            module: "clip_filter@0",
+            params: {},
+          },
+        }
+      : base;
   await db.query(
     `INSERT INTO job_inputs (job_id, source_manifest_sha256, profile_revision, execution_backend,
        code_revision, image_spec_sha256, model_sha256, config_sha256, max_output_files,

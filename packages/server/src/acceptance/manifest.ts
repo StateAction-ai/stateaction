@@ -193,6 +193,34 @@ export function checkManifest(
       : bad("failed_manifest_has_outputs");
   }
 
+  const clipTask = facts.inputs.taskInput.schemaVersion === 4;
+  if (clipTask !== (manifest.schema === "stateaction.processing_result.v5")) {
+    return bad("manifest_clip_mismatch");
+  }
+  if (clipTask) {
+    const clip = obj(facts.inputs.taskInput.clip);
+    if (
+      typeof clip.id !== "string" ||
+      typeof clip.planSha256 !== "string" ||
+      manifest.review_clip_id !== clip.id ||
+      manifest.clip_plan_sha256 !== clip.planSha256
+    ) {
+      return bad("manifest_clip_mismatch");
+    }
+
+    const span = obj(clip.sourceRange);
+    const frameCount = Number(span.end_ordinal) - Number(span.start_ordinal);
+    if (
+      clips.length === 0 ||
+      clips[0]?.source_start_ns !== span.start_ts_ns ||
+      clips.at(-1)?.source_end_ns !== span.end_ts_ns ||
+      clips.reduce((sum, chunk) => sum + Number(chunk.frame_count), 0) !==
+        frameCount
+    ) {
+      return bad("manifest_clip_range_mismatch");
+    }
+  }
+
   // Succeeded: source verified to EOF, exact source identity, exact inventory.
   if (att.source_eof_verified !== true) return bad("source_not_eof_verified");
   if (!mcap || att.source_file_id !== mcap.fileId)

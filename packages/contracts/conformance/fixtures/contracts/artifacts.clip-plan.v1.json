@@ -1,0 +1,550 @@
+{
+  "contract": "artifacts.clip-plan.v1",
+  "cases": [
+    {
+      "name": "whole recording with a dropped source ID and large native timestamps",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@0",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "0",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "failed filter keeps the whole recording with its error",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "failed",
+          "error_code": "decode_failed",
+          "filter_version": "clip_filter@0",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "0",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "certified planner output partitions the recording",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "apply",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@1",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "1",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 1,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "7",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854100000"
+            },
+            {
+              "kind": "excluded",
+              "start_ordinal": 1,
+              "end_ordinal": 2,
+              "first_source_frame_id": "9",
+              "last_source_frame_id": "9",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854200000",
+              "reason": "idle",
+              "signals": {
+                "motion": "0.01"
+              },
+              "thresholds": {
+                "motion": "0.025"
+              },
+              "filter_version": "clip_filter@1"
+            },
+            {
+              "kind": "clip",
+              "start_ordinal": 2,
+              "end_ordinal": 3,
+              "first_source_frame_id": "10",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854600000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "gap before the end",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@0",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "0",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 2,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/spans"
+        ]
+      }
+    },
+    {
+      "name": "overlap",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "apply",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@1",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "1",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 1,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "7",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854100000"
+            },
+            {
+              "kind": "excluded",
+              "start_ordinal": 1,
+              "end_ordinal": 2,
+              "first_source_frame_id": "9",
+              "last_source_frame_id": "9",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854200000",
+              "reason": "idle",
+              "signals": {
+                "motion": "0.01"
+              },
+              "thresholds": {
+                "motion": "0.025"
+              },
+              "filter_version": "clip_filter@1"
+            },
+            {
+              "kind": "clip",
+              "start_ordinal": 1,
+              "end_ordinal": 3,
+              "first_source_frame_id": "10",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854600000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "dimension_mismatch",
+        "paths": [
+          "/spans/2/start_ordinal"
+        ]
+      }
+    },
+    {
+      "name": "wrong clock origin",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "0",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@0",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "0",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/spans/0/start_ts_ns"
+        ]
+      }
+    },
+    {
+      "name": "rounded timestamp",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "apply",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@1",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "1",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 1,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "7",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854100000"
+            },
+            {
+              "kind": "excluded",
+              "start_ordinal": 1,
+              "end_ordinal": 2,
+              "first_source_frame_id": "9",
+              "last_source_frame_id": "9",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854200000",
+              "reason": "idle",
+              "signals": {
+                "motion": "0.01"
+              },
+              "thresholds": {
+                "motion": "0.025"
+              },
+              "filter_version": "clip_filter@1"
+            },
+            {
+              "kind": "clip",
+              "start_ordinal": 2,
+              "end_ordinal": 3,
+              "first_source_frame_id": "10",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "ordering_violation",
+        "paths": [
+          "/spans/2/start_ts_ns"
+        ]
+      }
+    },
+    {
+      "name": "failed plan without an error",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "failed",
+          "error_code": null,
+          "filter_version": "clip_filter@0",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "0",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 3,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "passthrough cannot exclude",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "passthrough",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@1",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "1",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 1,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "7",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854100000"
+            },
+            {
+              "kind": "excluded",
+              "start_ordinal": 1,
+              "end_ordinal": 2,
+              "first_source_frame_id": "9",
+              "last_source_frame_id": "9",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854200000",
+              "reason": "idle",
+              "signals": {
+                "motion": "0.01"
+              },
+              "thresholds": {
+                "motion": "0.025"
+              },
+              "filter_version": "clip_filter@1"
+            },
+            {
+              "kind": "clip",
+              "start_ordinal": 2,
+              "end_ordinal": 3,
+              "first_source_frame_id": "10",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854600000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "outcome_mismatch",
+        "paths": [
+          "/spans"
+        ]
+      }
+    },
+    {
+      "name": "excluded span with wrong filter version",
+      "input": {
+        "document": {
+          "schema": "stateaction.clip-plan.v1",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "plan_version": 1,
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "frame_count": 3,
+          "origin_ts_ns": "9223372036854100000",
+          "clock_domain": "android.elapsed_realtime",
+          "mode": "apply",
+          "state": "succeeded",
+          "error_code": null,
+          "filter_version": "clip_filter@1",
+          "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "producer": {
+            "module_id": "clip_filter",
+            "revision": "1",
+            "weights_sha256": null,
+            "gpu_type": null
+          },
+          "spans": [
+            {
+              "kind": "clip",
+              "start_ordinal": 0,
+              "end_ordinal": 1,
+              "first_source_frame_id": "7",
+              "last_source_frame_id": "7",
+              "start_ts_ns": "9223372036854100000",
+              "end_ts_ns": "9223372036854100000"
+            },
+            {
+              "kind": "excluded",
+              "start_ordinal": 1,
+              "end_ordinal": 2,
+              "first_source_frame_id": "9",
+              "last_source_frame_id": "9",
+              "start_ts_ns": "9223372036854200000",
+              "end_ts_ns": "9223372036854200000",
+              "reason": "idle",
+              "signals": {
+                "motion": "0.01"
+              },
+              "thresholds": {
+                "motion": "0.025"
+              },
+              "filter_version": "clip_filter@0"
+            },
+            {
+              "kind": "clip",
+              "start_ordinal": 2,
+              "end_ordinal": 3,
+              "first_source_frame_id": "10",
+              "last_source_frame_id": "10",
+              "start_ts_ns": "9223372036854600000",
+              "end_ts_ns": "9223372036854600000"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/spans/1/filter_version"
+        ]
+      }
+    }
+  ]
+}

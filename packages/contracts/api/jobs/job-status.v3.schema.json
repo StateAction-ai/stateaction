@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/job-status.v3.json",
+  "title": "Job status v3",
+  "description": "Controller status with clip job kinds and the admitted code revision for CPU binding checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "kind",
+    "targetId",
+    "state",
+    "previousJobId",
+    "createdAt",
+    "updatedAt",
+    "executionBackend",
+    "executionRef",
+    "startDeadline",
+    "executionDeadline"
+  ],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "kind": {
+      "enum": [
+        "process_recording",
+        "export_release",
+        "clip_plan",
+        "clip_pipeline"
+      ]
+    },
+    "targetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "state": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobState"
+    },
+    "previousJobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "updatedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "executionBackend": {
+      "oneOf": [
+        {
+          "enum": ["local", "modal"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "codeRevision": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+    },
+    "executionRef": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "startDeadline": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "executionDeadline": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

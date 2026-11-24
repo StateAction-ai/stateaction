@@ -1,5 +1,6 @@
-// SA-96 dev-stack seed: simulated recordings uploaded through the real SA-71 path (HTTP create and
-// seal over the production Next server, library reserve/complete as the SA-71 e2e does), then run
+// SA-96 dev-stack seed. The clip-pipeline path uses the real HTTP create and seal.
+// Legacy recipe scenarios use the existing local-only fixture admission helper.
+// Both run
 // through the REAL local loopback controller (`render workflows dev` + process-recording) with
 // stub or replay stage modules. Zero model spend; nothing here is a live model run. Local only.
 import { spawn, spawnSync } from "node:child_process";
@@ -174,6 +175,7 @@ export async function seedAnnotations(
     scenarios,
     afterSeed,
     rgbProfile = SIM,
+    clipPipeline = false,
   },
 ) {
   const pg = serverRequire("pg");
@@ -181,8 +183,13 @@ export async function seedAnnotations(
     serverRequire("@aws-sdk/client-s3");
   const { recordSourceCompletion } = await dist("admission/recordings.js");
   const { s3ObjectReader } = await dist("admission/object-reader.js");
-  const { reserveSourceFile, sourceObjectKey } =
-    await dist("catalog/catalog.js");
+  const {
+    createProcessingJob,
+    reserveSourceFile,
+    sealRecording,
+    sourceObjectKey,
+  } = await dist("catalog/catalog.js");
+  const { establishFixtureAdmission } = await dist("admission/fixtures.js");
   const { storageClient } = await dist("storage.js");
   const { issueControllerCapability } = await dist("jobs/credentials.js");
   const { recordIngestPermission } = await dist("admission/permissions.js");
@@ -308,9 +315,38 @@ export async function seedAnnotations(
       else skipped.push({ scenario, reason: store.reason });
     }
 
-    // 1. Upload every recording through the real create and seal path (recipe file written first).
+    const timelines = new Map();
     const upload = async (p) => {
       const bytes = readFileSync(p.source);
+      let timeline = { count: "30", clock: "android.elapsed_realtime" };
+      if (clipPipeline) {
+        if (!timelines.has(p.source)) {
+          const probe = spawnSync(
+            python,
+            [
+              "-c",
+              [
+                "import json, sys",
+                "from stateaction_processing.capture_stream import CaptureStream",
+                "with open(sys.argv[1], 'rb') as raw:",
+                "    stream = CaptureStream(raw, expected_profile=sys.argv[2])",
+                "    frames = iter(stream)",
+                "    first = next(frames)",
+                "    count = 1 + sum(1 for _ in frames)",
+                "    stream.report.require_auto_admissible()",
+                "    print(json.dumps({'count': str(count), 'clock': first.native_clock_id}))",
+              ].join("\n"),
+              p.source,
+              rgbProfile,
+            ],
+            { cwd: repoRoot, encoding: "utf8" },
+          );
+          if (probe.status !== 0)
+            throw new Error("Source fixture has no verified frame timeline");
+          timelines.set(p.source, JSON.parse(probe.stdout));
+        }
+        timeline = timelines.get(p.source);
+      }
       const clientRecordingId = randomUUID();
       const created = await post(
         "/api/v1/recordings",
@@ -385,18 +421,18 @@ export async function seedAnnotations(
             size_bytes: String(f.body.byteLength),
             sha256: sha(f.body),
           })),
-          clock_domains: ["android.elapsed_realtime"],
+          clock_domains: [timeline.clock],
           channels: [
             {
               topic: "/camera/rgb",
               message_encoding: "protobuf",
               schema_name: "foxglove.CompressedVideo",
-              clock_domain: "android.elapsed_realtime",
-              message_count: "30",
+              clock_domain: timeline.clock,
+              message_count: timeline.count,
             },
           ],
           counts: {
-            video_frames: "30",
+            video_frames: timeline.count,
             dropped_video_frames: "0",
             motion_events: "30",
           },
@@ -442,36 +478,59 @@ export async function seedAnnotations(
             observedSizeBytes: String(f.body.byteLength),
           },
         );
-      const sealed = await post(`/api/v1/recordings/${recordingId}/seal`, {
-        files: files.map((f) => ({
-          fileId: f.fileId,
-          role: f.role,
-          sizeBytes: String(f.body.byteLength),
-          sha256: sha(f.body),
-          required: true,
-        })),
-      });
-      if (sealed.status !== 200)
-        throw new Error(
-          `${p.scenario}: seal ${sealed.status} ${sealed.text.slice(0, 200)}`,
+      let jobId;
+      if (clipPipeline) {
+        const sealed = await post(`/api/v1/recordings/${recordingId}/seal`, {
+          files: files.map((f) => ({
+            fileId: f.fileId,
+            role: f.role,
+            sizeBytes: String(f.body.byteLength),
+            sha256: sha(f.body),
+            required: true,
+          })),
+        });
+        if (sealed.status !== 200)
+          throw new Error(
+            `${p.scenario}: seal ${sealed.status} ${sealed.text.slice(0, 200)}`,
+          );
+        const {
+          rows: [admitted],
+        } = await app.query(
+          "SELECT job_id FROM recording_admissions WHERE recording_id = $1 AND outcome = 'admitted'",
+          [recordingId],
         );
-      const job = (
-        await owner.query("SELECT id FROM jobs WHERE recording_id = $1", [
+        if (!admitted?.job_id)
+          throw new Error(`${p.scenario}: seal did not admit a plan`);
+        jobId = admitted.job_id;
+      } else {
+        jobId = randomUUID();
+        await sealRecording(app, {
           recordingId,
-        ])
-      ).rows[0];
+          ownerUserId: collector.id,
+          manifestFileId: manifestId,
+        });
+        await establishFixtureAdmission(owner, {
+          recordingId,
+          firstJobId: jobId,
+        });
+        await createProcessingJob(app, {
+          recordingId,
+          jobId,
+          profileRevision: stack.env.PROCESSING_PROFILE_REVISION,
+        });
+      }
       log(`uploaded ${p.scenario}`);
       return {
         scenario: p.scenario,
         recordingId,
-        jobId: job.id,
+        jobId,
         source: p.source,
         drive: p.drive,
         releaseFile,
       };
     };
     const recordings = [];
-    for (const p of plan) recordings.push(await upload(p));
+    if (!clipPipeline) for (const p of plan) recordings.push(await upload(p));
 
     // 2. Run them through the real local loopback controller, one admission slot at a time.
     const secrets = join(dirs.root, "secrets");
@@ -743,40 +802,42 @@ export async function seedAnnotations(
       }
       const settleMs = taskResult ? Date.now() - settleStart : 0;
       // Cache the inputs and outputs of the job for `jobs diag` and `jobs replay-stage`.
-      const jobCache = join(dirs.cache, rec.jobId);
-      mkdirSync(join(jobCache, "outputs"), { recursive: true });
-      copyFileSync(rec.source, join(jobCache, "source.mcap"));
-      const input = (
-        await owner.query(
-          "SELECT task_input FROM job_inputs WHERE job_id = $1",
-          [rec.jobId],
-        )
-      ).rows[0];
-      if (input)
-        writeFileSync(
-          join(jobCache, "task-input.json"),
-          JSON.stringify(input.task_input),
-        );
-      const out = await owner.query(
-        `SELECT s.slot, f.object_key FROM files f
+      if (!clipPipeline) {
+        const jobCache = join(dirs.cache, rec.jobId);
+        mkdirSync(join(jobCache, "outputs"), { recursive: true });
+        copyFileSync(rec.source, join(jobCache, "source.mcap"));
+        const input = (
+          await owner.query(
+            "SELECT task_input FROM job_inputs WHERE job_id = $1",
+            [rec.jobId],
+          )
+        ).rows[0];
+        if (input)
+          writeFileSync(
+            join(jobCache, "task-input.json"),
+            JSON.stringify(input.task_input),
+          );
+        const out = await owner.query(
+          `SELECT s.slot, f.object_key FROM files f
          JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
          WHERE f.job_id = $1 AND f.purpose = 'output' AND f.state IN ('completed', 'verified')
            AND (s.slot IN ('segments.json', 'captions.json') OR s.slot LIKE 'diagnostics/%')`,
-        [rec.jobId],
-      );
-      for (const row of out.rows) {
-        const body = await storage.send(
-          new GetObjectCommand({
-            Bucket: storageConfig.bucket,
-            Key: row.object_key,
-          }),
+          [rec.jobId],
         );
-        const dest = join(jobCache, "outputs", row.slot);
-        mkdirSync(join(dest, ".."), { recursive: true });
-        writeFileSync(
-          dest,
-          Buffer.from(await body.Body.transformToByteArray()),
-        );
+        for (const row of out.rows) {
+          const body = await storage.send(
+            new GetObjectCommand({
+              Bucket: storageConfig.bucket,
+              Key: row.object_key,
+            }),
+          );
+          const dest = join(jobCache, "outputs", row.slot);
+          mkdirSync(join(dest, ".."), { recursive: true });
+          writeFileSync(
+            dest,
+            Buffer.from(await body.Body.transformToByteArray()),
+          );
+        }
       }
       log(`ran ${rec.scenario}: ${state}`);
       return {
@@ -791,8 +852,29 @@ export async function seedAnnotations(
     };
     // Zero-flaky rule: every scenario must end in its expected states on the first attempt.
     const results = [];
-    for (const rec of recordings) {
+    for (const p of plan) {
+      let rec = clipPipeline
+        ? await upload(p)
+        : recordings.find((r) => r.scenario === p.scenario);
+      let planJobId;
+      if (clipPipeline) {
+        planJobId = rec.jobId;
+        const original = await runOne({ ...rec, drive: undefined });
+        if (original.jobState !== "succeeded")
+          throw new Error(
+            `${rec.scenario}: clip plan ${original.jobState} ${original.taskResult ?? ""}`,
+          );
+        const {
+          rows: [clip],
+        } = await owner.query(
+          "SELECT live_job_id FROM review_clips WHERE id = $1",
+          [rec.recordingId],
+        );
+        rec = { ...rec, jobId: clip.live_job_id };
+        recordings.push(rec);
+      }
       const result = await runOne(rec);
+      if (planJobId) result.planJobId = planJobId;
       const mismatch = scenarioMismatch(result, scenarios);
       if (mismatch)
         throw new Error(

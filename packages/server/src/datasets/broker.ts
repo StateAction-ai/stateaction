@@ -198,9 +198,9 @@ export async function issueRead(
 
 /**
  * Authorizes and signs one `recording_mp4` read. Staff only; the object key is
- * the `recording.mp4` slot of the selected accepted job by default, or an
- * explicitly requested succeeded run of the recording. The slot must point
- * to a completed or verified output with that role. Every failure to
+ * the verified plan original, or the selected legacy run's video. When a
+ * caller pins a run, it must be a succeeded run from this recording or its
+ * current clip attempt with a verified source plan. Every failure to
  * authorize, including a missing file, is the same "not found".
  */
 export async function issueRecordingRead(
@@ -230,14 +230,23 @@ export async function issueRecordingRead(
     } = await deps.pool.query<{ object_key: string; size_bytes: string }>(
       `SELECT f.object_key, f.size_bytes::text
        FROM recordings rec
-       JOIN jobs j ON j.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id)
-         AND j.state = 'succeeded' AND j.recording_id = rec.id
+       JOIN jobs view ON view.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id)
+         AND view.recording_id = rec.id
+         AND (view.state = 'succeeded' OR (view.kind = 'clip_pipeline' AND job_is_current(view.id)))
+       LEFT JOIN review_clips c ON c.id = view.clip_id
+       LEFT JOIN clip_plans p ON p.recording_id = rec.id
+         AND ((c.id IS NOT NULL AND p.version = c.plan_version) OR p.plan_job_id = view.id)
+       JOIN jobs j ON j.id = coalesce(p.plan_job_id, view.id)
+         AND j.recording_id = rec.id AND j.state = 'succeeded'
        JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
        JOIN files f ON f.id = s.file_id AND f.job_id = j.id
          AND f.purpose = 'output' AND f.role = 'recording_mp4'
          AND f.state IN ('completed', 'verified')
        WHERE rec.id = $2 AND rec.deleted_at IS NULL
-         AND ($4::uuid IS NULL OR j.id = $4)
+         AND ($4::uuid IS NULL OR view.id = $4)
+         AND (p.plan_job_id IS NULL OR
+              (j.result_manifest_sha256 = p.manifest_sha256 AND f.id = p.original_mp4_file_id
+               AND f.sha256 = p.original_mp4_sha256 AND f.state = 'verified'))
          AND catalog_has_role($1, 'staff')`,
       [
         input.viewerUserId,

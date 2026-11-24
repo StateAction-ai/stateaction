@@ -35,7 +35,7 @@ export const JOB_CURRENT_SQL = `
   WHERE j.id = $1 AND j.state = 'running' AND j.claimed_at IS NOT NULL
     AND j.execution_deadline > now()
     AND ($2::text IS NULL OR public.job_seal_nonce(j.id) = $2)
-    AND r.current_job_id = j.id AND r.deleted_at IS NULL AND r.status = 'processing'
+    AND job_is_current(j.id) AND r.status = 'processing'
     AND EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id)
     AND catalog_has_role(r.owner_user_id, 'collector')
     AND EXISTS (

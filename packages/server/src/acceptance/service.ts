@@ -1,8 +1,12 @@
 import type pg from "pg";
+import { randomUUID } from "node:crypto";
 import {
   canonicalJson,
+  requestSha256,
   sha256Hex,
   validateBytes,
+  type ClipPlanTaskInputV5,
+  type ClipPlanV1,
 } from "@stateaction/contracts";
 import {
   ObjectTooLargeError,
@@ -10,6 +14,7 @@ import {
 } from "../admission/recordings.js";
 import { inTransaction } from "../catalog/catalog.js";
 import { CatalogError, toCatalogError } from "../catalog/errors.js";
+import { recordingMp4MaxBytes } from "../datasets/broker.js";
 import { JOB_CURRENT_SQL, JOB_OUTPUT_OPEN_SQL } from "../jobs/current.js";
 import {
   getJobRecipe,
@@ -60,6 +65,10 @@ const MANIFEST_CONTRACT = "artifacts.processing-result.v2";
 /** SA-88: a recipe job's sealing hand_pose stage posts processing-result.v3. */
 const MANIFEST_CONTRACT_V3 = "artifacts.processing-result.v3";
 const MANIFEST_CONTRACT_V4 = "artifacts.processing-result.v4";
+const MANIFEST_CONTRACT_V5 = "artifacts.processing-result.v5";
+
+const recipeManifestContract = (clipTask: boolean) =>
+  clipTask ? MANIFEST_CONTRACT_V5 : MANIFEST_CONTRACT_V3;
 /**
  * Bounded read of each recording-level annotation document (segments,
  * captions, hand presence) at acceptance. Larger documents are rejected
@@ -253,6 +262,7 @@ type CandidateRow = {
   summary: ManifestFacts["summary"] & { outcome: string };
   status: "provisional" | "verified" | "accepted" | "rejected";
   clip_plan: unknown[] | null;
+  verified_clip_plan: ClipPlanV1 | null;
   verified_counts: AnnotationCounts | null;
   reason_code: string | null;
   received_at: Date;
@@ -267,7 +277,8 @@ export type AnnotationCounts = {
 };
 
 const CANDIDATE_COLUMNS = `job_id, invocation_nonce, manifest_file_id, manifest_sha256, inventory_sha256,
-  outcome, clip_count, error_code, summary, status, clip_plan, verified_counts, reason_code, received_at`;
+  outcome, clip_count, error_code, summary, status, clip_plan, verified_clip_plan,
+  verified_counts, reason_code, received_at`;
 
 function ackOf(jobId: string, cand: CandidateRow, jobState: string): ResultAck {
   return {
@@ -396,10 +407,13 @@ async function publishPreparedManifest(
       nonce: string;
       recipe_sha256: string;
       stage_state: string;
+      clip_task: boolean;
     }>(
       `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text, s.slot,
-              job_seal_nonce(j.id) AS nonce, j.recipe_sha256, r.state AS stage_state
+              job_seal_nonce(j.id) AS nonce, j.recipe_sha256, r.state AS stage_state,
+              i.task_input -> 'schemaVersion' = '4'::jsonb AS clip_task
        FROM jobs j
+       JOIN job_inputs i ON i.job_id = j.id
        JOIN job_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose' AND r.state IN ('succeeded', 'failed')
        JOIN job_output_slots s ON s.job_id = j.id AND s.slot = $3
        JOIN files f ON f.id = s.file_id AND f.state = 'completed' AND f.role = 'diagnostic_blob'
@@ -480,6 +494,7 @@ async function composePreparedManifest(
     sha256: string;
     nonce: string;
     recipe_sha256: string;
+    clip_task: boolean;
   },
   bytes: Uint8Array,
 ): Promise<Buffer | undefined> {
@@ -551,7 +566,8 @@ async function composePreparedManifest(
     ],
   };
   const finalBytes = Buffer.from(JSON.stringify(manifest));
-  return validateBytes(MANIFEST_CONTRACT_V3, finalBytes).valid
+  return validateBytes(recipeManifestContract(draft.clip_task), finalBytes)
+    .valid
     ? finalBytes
     : undefined;
 }
@@ -727,10 +743,13 @@ export async function sealParallelRecipe(
       state: string;
       error_code: string | null;
       reused: boolean;
+      clip_task: boolean;
     }>(
       `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text,
-              job_seal_nonce(j.id) AS invocation_nonce, r.state, r.error_code, (r.source_job_id IS NOT NULL) AS reused
+              job_seal_nonce(j.id) AS invocation_nonce, r.state, r.error_code, (r.source_job_id IS NOT NULL) AS reused,
+              i.task_input -> 'schemaVersion' = '4'::jsonb AS clip_task
        FROM jobs j
+       JOIN job_inputs i ON i.job_id = j.id
        JOIN job_effective_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose'
        JOIN files f ON f.job_id = j.id AND f.role = 'result_manifest' AND f.state = 'completed'
        WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
@@ -755,7 +774,7 @@ export async function sealParallelRecipe(
         succeeded
           ? file.reused
             ? MANIFEST_CONTRACT_V4
-            : MANIFEST_CONTRACT_V3
+            : recipeManifestContract(file.clip_task)
           : MANIFEST_CONTRACT,
         bytes,
       );
@@ -843,6 +862,7 @@ type State = {
   job: {
     id: string;
     recording_id: string;
+    kind: string;
     state: string;
     execution_deadline: Date;
   };
@@ -852,7 +872,7 @@ type State = {
 
 async function loadState(pool: pg.Pool, jobId: string): Promise<State | null> {
   const job = await pool.query<State["job"]>(
-    "SELECT id, recording_id, state, execution_deadline FROM jobs WHERE id = $1",
+    "SELECT id, recording_id, kind, state, execution_deadline FROM jobs WHERE id = $1",
     [jobId],
   );
   if (!job.rows[0]) return null;
@@ -937,10 +957,16 @@ async function verifyCandidate(
   const required =
     cand.outcome === "succeeded" ? files : files.filter((f) => f === manifest);
   const totalBytes = required.reduce((n, f) => n + Number(f.size_bytes), 0);
+  const planJob = st.job.kind === "clip_plan" && cand.outcome === "succeeded";
   // Per-job budget from the closure's declared clip count, never above the
   // configured hard ceiling (SA-89).
   const maxFiles = jobOutputFileLimit(config.verifyMaxFiles, cand.clip_count);
-  const maxBytes = jobOutputByteLimit(config.verifyMaxBytes, cand.clip_count);
+  const maxBytes = planJob
+    ? Math.min(
+        config.verifyMaxBytes,
+        recordingMp4MaxBytes() + MANIFEST_MAX_BYTES,
+      )
+    : jobOutputByteLimit(config.verifyMaxBytes, cand.clip_count);
   if (files.length > maxFiles || totalBytes > maxBytes)
     return reject("verification_budget_exceeded");
 
@@ -976,9 +1002,8 @@ async function verifyCandidate(
   )
     return reject("manifest_hash_mismatch");
   const recipe = await recipeFacts(pool, st.job.id);
-  // SA-91: a recipe job seals with processing-result.v3; its FAILURE report is the
-  // diagnostics-only v2 failure manifest (no clips, no outputs, no nodes to check):
-  // a v3 document cannot list the earlier stages' files without listing outputs.
+  // Successful recipe jobs seal using the contract selected at admission.
+  // Failed runs still carry a diagnostics-only v2 manifest.
   const sealing = recipe !== null && cand.outcome === "succeeded";
   const handOrigin = sealing
     ? (
@@ -1000,14 +1025,60 @@ async function verifyCandidate(
       ).rows[0]
     : undefined;
   const verdict = validateBytes(
-    sealing
-      ? handOrigin
-        ? MANIFEST_CONTRACT_V4
-        : MANIFEST_CONTRACT_V3
-      : MANIFEST_CONTRACT,
+    planJob
+      ? "artifacts.clip-plan.v1"
+      : sealing
+        ? handOrigin
+          ? MANIFEST_CONTRACT_V4
+          : recipeManifestContract(inputs.task_input.schemaVersion === 4)
+        : MANIFEST_CONTRACT,
     bytes,
   );
   if (!verdict.valid) return reject("manifest_contract_invalid", verdict.code);
+
+  const verifiedClipPlan = planJob ? (verdict.value as ClipPlanV1) : null;
+  if (verifiedClipPlan) {
+    const task = inputs.task_input as ClipPlanTaskInputV5;
+    const original = files.find((f) => f.slot === "recording.mp4");
+    const originalMatches =
+      verifiedClipPlan.state === "succeeded"
+        ? files.length === 2 &&
+          original?.role === "recording_mp4" &&
+          BigInt(original.size_bytes) <= BigInt(recordingMp4MaxBytes())
+        : files.length === 1;
+    const {
+      rows: [admission],
+    } = await pool.query<{
+      frames: string;
+      clock_domains: string[];
+    }>(
+      `SELECT counts ->> 'video_frames' AS frames, clock_domains
+       FROM recording_admissions
+       WHERE recording_id = $1 AND source_manifest_sha256 = $2 AND outcome = 'admitted'`,
+      [st.job.recording_id, inputs.source_manifest_sha256],
+    );
+    if (
+      task.schemaVersion !== 5 ||
+      verifiedClipPlan.recording_id !== st.job.recording_id ||
+      verifiedClipPlan.source_manifest_sha256 !==
+        inputs.source_manifest_sha256 ||
+      verifiedClipPlan.plan_version !== task.planVersion ||
+      verifiedClipPlan.mode !== task.clipFilter.mode ||
+      verifiedClipPlan.filter_version !== task.clipFilter.module ||
+      verifiedClipPlan.params_sha256 !==
+        requestSha256(task.clipFilter.params) ||
+      verifiedClipPlan.producer.module_id !== "clip_filter" ||
+      verifiedClipPlan.producer.revision !== "0" ||
+      verifiedClipPlan.producer.weights_sha256 !== null ||
+      verifiedClipPlan.producer.gpu_type !== null ||
+      String(verifiedClipPlan.frame_count) !== admission?.frames ||
+      !admission?.clock_domains.includes(verifiedClipPlan.clock_domain) ||
+      cand.clip_count !== 0 ||
+      Object.values(cand.summary.checks).some((n) => n !== 0) ||
+      !originalMatches
+    )
+      return reject("clip_plan_provenance_mismatch");
+  }
 
   if (handOrigin) {
     const origin = (verdict.value as { reused_hand: HandOrigin }).reused_hand;
@@ -1043,30 +1114,32 @@ async function verifyCandidate(
       sizeBytes: f.size_bytes,
       sha256: f.sha256,
     }));
-  const checked = checkManifest(verdict.value as Record<string, unknown>, {
-    jobId: st.job.id,
-    recordingId: st.job.recording_id,
-    nonce: cand.invocation_nonce,
-    outcome: cand.outcome,
-    summary: {
-      clipCount: cand.summary.clipCount,
-      checks: cand.summary.checks,
-      errorCode: cand.error_code,
-    },
-    inputs: {
-      sourceManifestSha256: inputs.source_manifest_sha256,
-      profileRevision: inputs.profile_revision,
-      codeRevision: handOrigin?.code_revision ?? inputs.code_revision,
-      imageSpecSha256:
-        handOrigin?.image_spec_sha256 ?? inputs.image_spec_sha256,
-      modelSha256: handOrigin?.model_sha256 ?? inputs.model_sha256,
-      configSha256: handOrigin?.config_sha256 ?? inputs.config_sha256,
-      taskInput: inputs.task_input,
-    },
-    outputs,
-    sources,
-    ...(sealing ? { recipe: recipe! } : {}),
-  });
+  const checked = verifiedClipPlan
+    ? { ok: true as const, clipPlan: [], annotations: null }
+    : checkManifest(verdict.value as Record<string, unknown>, {
+        jobId: st.job.id,
+        recordingId: st.job.recording_id,
+        nonce: cand.invocation_nonce,
+        outcome: cand.outcome,
+        summary: {
+          clipCount: cand.summary.clipCount,
+          checks: cand.summary.checks,
+          errorCode: cand.error_code,
+        },
+        inputs: {
+          sourceManifestSha256: inputs.source_manifest_sha256,
+          profileRevision: inputs.profile_revision,
+          codeRevision: handOrigin?.code_revision ?? inputs.code_revision,
+          imageSpecSha256:
+            handOrigin?.image_spec_sha256 ?? inputs.image_spec_sha256,
+          modelSha256: handOrigin?.model_sha256 ?? inputs.model_sha256,
+          configSha256: handOrigin?.config_sha256 ?? inputs.config_sha256,
+          taskInput: inputs.task_input,
+        },
+        outputs,
+        sources,
+        ...(sealing ? { recipe: recipe! } : {}),
+      });
   if (!checked.ok) return reject(checked.code, checked.detail);
   let counts: AnnotationCounts | null = null;
   if (recipe && cand.outcome === "succeeded") {
@@ -1135,7 +1208,7 @@ async function verifyCandidate(
   await run(pool, async (tx) => {
     await tx.query(
       `UPDATE job_result_candidates SET status = 'verified', clip_plan = $2, verified_checks = $3,
-         verified_counts = $4::jsonb, verified_at = now()
+         verified_counts = $4::jsonb, verified_clip_plan = $5::jsonb, verified_at = now()
        WHERE job_id = $1 AND status = 'provisional'`,
       [
         st.job.id,
@@ -1145,6 +1218,7 @@ async function verifyCandidate(
             [],
         ),
         counts === null ? null : JSON.stringify(counts),
+        verifiedClipPlan === null ? null : JSON.stringify(verifiedClipPlan),
       ],
     );
   });
@@ -1407,8 +1481,8 @@ async function acceptVerified(
       recordingId,
     ]);
     const job = (
-      await tx.query<{ state: string }>(
-        "SELECT state FROM jobs WHERE id = $1 FOR UPDATE",
+      await tx.query<{ state: string; kind: string; clip_id: string | null }>(
+        "SELECT state, kind, clip_id FROM jobs WHERE id = $1 FOR UPDATE",
         [jobId],
       )
     ).rows[0]!;
@@ -1453,7 +1527,7 @@ async function acceptVerified(
       permission: boolean;
       in_time: boolean;
     }>(
-      `SELECT r.current_job_id = $1 AS pointer, r.deleted_at IS NULL AS live, r.status = 'processing' AS processing,
+      `SELECT job_is_current($1) AS pointer, r.deleted_at IS NULL AS live, r.status = 'processing' AS processing,
               catalog_has_role(r.owner_user_id, 'collector') AS role,
               EXISTS (SELECT 1 FROM recording_registrations g
                       WHERE g.recording_id = r.id AND g.owner_user_id = r.owner_user_id
@@ -1547,12 +1621,70 @@ async function acceptVerified(
       ],
     );
     await tx.query(
-      "UPDATE recordings SET status = 'reviewable' WHERE id = $1 AND current_job_id = $2",
-      [recordingId, jobId],
-    );
-    await tx.query(
       "UPDATE job_result_candidates SET status = 'accepted', decided_at = now() WHERE job_id = $1",
       [jobId],
+    );
+    if (job.kind === "clip_plan") {
+      const plan = cand.verified_clip_plan!;
+      // The admitted passthrough filter allows exactly one whole-source span.
+      const span = plan.spans[0]!;
+      await tx.query(
+        `INSERT INTO clip_plans (recording_id, version, plan_job_id, manifest_sha256,
+                                original_mp4_file_id, original_mp4_sha256, frame_count, plan)
+         SELECT j.recording_id, $2, j.id, j.result_manifest_sha256, f.id, f.sha256, $3, $4
+         FROM jobs j LEFT JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
+         LEFT JOIN files f ON f.id = s.file_id AND f.job_id = j.id AND f.role = 'recording_mp4'
+         WHERE j.id = $1`,
+        [jobId, plan.plan_version, plan.frame_count, JSON.stringify(plan)],
+      );
+      await tx.query(
+        `INSERT INTO review_clips (id, recording_id, plan_version, ordinal, start_ordinal, end_ordinal,
+                                   first_source_frame_id, last_source_frame_id, start_ts_ns, end_ts_ns)
+         VALUES ($1,$1,$2,0,$3,$4,$5,$6,$7,$8)`,
+        [
+          recordingId,
+          plan.plan_version,
+          span.start_ordinal,
+          span.end_ordinal,
+          span.first_source_frame_id,
+          span.last_source_frame_id,
+          span.start_ts_ns,
+          span.end_ts_ns,
+        ],
+      );
+      const clipJobId = randomUUID();
+      await tx.query(
+        `INSERT INTO jobs (id, kind, recording_id, source_manifest_sha256, profile_revision, clip_id)
+         SELECT $2, 'clip_pipeline', recording_id, source_manifest_sha256, profile_revision, recording_id
+         FROM jobs WHERE id = $1`,
+        [jobId, clipJobId],
+      );
+      await tx.query("UPDATE review_clips SET live_job_id = $2 WHERE id = $1", [
+        recordingId,
+        clipJobId,
+      ]);
+      return "accepted";
+    }
+    if (job.kind === "clip_pipeline") {
+      await tx.query(
+        `INSERT INTO clip_result_selections (clip_id, seq, job_id, reason, kind)
+         SELECT c.id, 1 + coalesce(max(s.seq), 0), $1, 'Accepted result', 'auto'
+         FROM review_clips c LEFT JOIN clip_result_selections s ON s.clip_id = c.id
+         WHERE c.id = $2 GROUP BY c.id`,
+        [jobId, job.clip_id],
+      );
+      await tx.query(
+        `UPDATE recordings r SET status = 'reviewable' WHERE r.id = $1 AND NOT EXISTS (
+           SELECT 1 FROM review_clips c LEFT JOIN jobs j ON j.id = c.live_job_id
+           WHERE c.recording_id = r.id AND j.state IS DISTINCT FROM 'succeeded'
+         )`,
+        [recordingId],
+      );
+      return "accepted";
+    }
+    await tx.query(
+      "UPDATE recordings SET status = 'reviewable' WHERE id = $1 AND current_job_id = $2",
+      [recordingId, jobId],
     );
     await tx.query(
       `INSERT INTO recording_result_selections (recording_id, seq, job_id, reason, kind)

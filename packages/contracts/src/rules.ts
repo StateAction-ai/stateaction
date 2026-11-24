@@ -488,6 +488,7 @@ const STAGE_RULES: Readonly<Record<string, Rule>> = {
       : v("reference_mismatch", "/recipeSha256");
   },
   processing_result_nodes: (doc) => {
+    const isClip = doc.schema === "stateaction.processing_result.v5";
     const outputs = list(doc.outputs).map(obj);
     const roles = new Map(outputs.map((o) => [o.file_id, o.role as string]));
     const claimed = new Set<unknown>();
@@ -502,7 +503,11 @@ const STAGE_RULES: Readonly<Record<string, Rule>> = {
       const nodeRoles: string[] = [];
       for (const [j, fileId] of files.entries()) {
         const role = roles.get(fileId);
-        if (role === undefined || !allowed.includes(role))
+        if (
+          role === undefined ||
+          !allowed.includes(role) ||
+          (isClip && role === "recording_mp4")
+        )
           return v("reference_mismatch", `${p}/outputs/${j}`);
         if (claimed.has(fileId))
           return v("duplicate_identity", `${p}/outputs/${j}`);
@@ -511,7 +516,10 @@ const STAGE_RULES: Readonly<Record<string, Rule>> = {
       }
       if (node.status === "succeeded")
         for (const role of PRIMARY_ROLES[node.stage as string]!)
-          if (nodeRoles.filter((r) => r === role).length !== 1)
+          if (
+            !(isClip && role === "recording_mp4") &&
+            nodeRoles.filter((r) => r === role).length !== 1
+          )
             return v("inventory_incomplete", `${p}/outputs`);
     }
     for (const [k, output] of outputs.entries())
@@ -655,6 +663,48 @@ export const RULES: Readonly<Record<string, Rule>> = {
       if (!domains.has(obj(channel).clock_domain))
         return v("reference_mismatch", `/channels/${i}/clock_domain`);
     return null;
+  },
+  clip_plan: (doc) => {
+    const spans = list(doc.spans).map(obj);
+    if (
+      (doc.mode !== "apply" || doc.state === "failed") &&
+      (spans.length !== 1 || spans[0]!.kind !== "clip")
+    )
+      return v("outcome_mismatch", "/spans");
+    if (!spans.some((span) => span.kind === "clip"))
+      return v("outcome_mismatch", "/spans");
+
+    let ordinal = 0;
+    let lastTimestamp = -1n;
+    for (const [index, span] of spans.entries()) {
+      const path = `/spans/${index}`;
+      const end = span.end_ordinal as number;
+      if (span.start_ordinal !== ordinal)
+        return v("dimension_mismatch", `${path}/start_ordinal`);
+      if (end <= ordinal || end > (doc.frame_count as number))
+        return v("dimension_mismatch", `${path}/end_ordinal`);
+      const startTime = big(span.start_ts_ns);
+      const endTime = big(span.end_ts_ns);
+      if (ordinal === 0 && span.start_ts_ns !== doc.origin_ts_ns)
+        return v("reference_mismatch", `${path}/start_ts_ns`);
+      if (startTime <= lastTimestamp)
+        return v("ordering_violation", `${path}/start_ts_ns`);
+      const single = end === ordinal + 1;
+      if (single ? endTime !== startTime : endTime <= startTime)
+        return v("ordering_violation", `${path}/end_ts_ns`);
+      if (single !== (span.first_source_frame_id === span.last_source_frame_id))
+        return v("reference_mismatch", `${path}/last_source_frame_id`);
+      if (
+        span.kind === "excluded" &&
+        span.filter_version !== doc.filter_version
+      )
+        return v("reference_mismatch", `${path}/filter_version`);
+      ordinal = end;
+      lastTimestamp = endTime;
+    }
+    return ordinal === doc.frame_count
+      ? null
+      : v("dimension_mismatch", "/spans");
   },
   frame_map: (doc) => {
     const rows = list(doc.rows).map(obj);

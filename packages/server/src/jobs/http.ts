@@ -55,6 +55,7 @@ import {
   recordStageRun,
   stageOfCredential,
   startParallelRecipe,
+  taskInputV2Projection,
 } from "./stages.js";
 
 /** controller-action.v2 bodies may carry a stage receipt (<= 64 KiB). */
@@ -269,6 +270,7 @@ export function jobHandlers(deps: () => JobsDeps) {
                     ...r,
                     startDeadline: iso(r.startDeadline),
                     executionDeadline: iso(r.executionDeadline),
+                    taskInput: taskInputV2Projection(r.taskInput),
                   }
                 : r;
             }
@@ -450,9 +452,13 @@ export function jobHandlers(deps: () => JobsDeps) {
       respond(async () => {
         const task = await readTaskInput(deps(), { jobId });
         return checked<Record<string, unknown>>(
-          task.schemaVersion === 3
-            ? "jobs.task-input.v3"
-            : "jobs.task-input.v2",
+          task.schemaVersion === 5
+            ? "jobs.task-input.v5"
+            : task.schemaVersion === 4
+              ? "jobs.task-input.v4"
+              : task.schemaVersion === 3
+                ? "jobs.task-input.v3"
+                : "jobs.task-input.v2",
           task,
         );
       }),

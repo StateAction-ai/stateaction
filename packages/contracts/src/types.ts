@@ -1424,3 +1424,93 @@ export type RecordingAnnotationsV1 = {
   hand_presence: HandPresenceV1 | null;
   dag_run: DagRunV1 | null;
 };
+
+/** Decode ordinals are half-open. IDs and timestamps name the included endpoints. */
+export type SourceFrameRange = {
+  start_ordinal: number;
+  end_ordinal: number;
+  first_source_frame_id: string;
+  last_source_frame_id: string;
+  start_ts_ns: string;
+  end_ts_ns: string;
+};
+
+export type ClipPlanV1 = {
+  schema: "stateaction.clip-plan.v1";
+  recording_id: string;
+  plan_version: number;
+  source_manifest_sha256: Sha256Hex;
+  frame_count: number;
+  origin_ts_ns: string;
+  clock_domain: string;
+  mode: "passthrough" | "shadow" | "apply";
+  state: "succeeded" | "failed";
+  error_code: string | null;
+  filter_version: string;
+  params_sha256: Sha256Hex;
+  producer: {
+    module_id: string;
+    revision: string;
+    weights_sha256: Sha256Hex | null;
+    gpu_type: string | null;
+  };
+  spans: (SourceFrameRange &
+    (
+      | { kind: "clip" }
+      | {
+          kind: "excluded";
+          reason:
+            | "walking"
+            | "idle"
+            | "no_hand"
+            | "talking"
+            | "judge_no_action";
+          signals: ParamMap;
+          thresholds: ParamMap;
+          filter_version: string;
+        }
+    ))[];
+};
+
+export type RecipeV2 = Omit<RecipeV1, "schemaVersion"> & {
+  schemaVersion: 2;
+  clipFilter: {
+    mode: "passthrough";
+    module: "clip_filter@0";
+    params: Record<string, never>;
+  };
+};
+
+export type ReviewClip = {
+  id: string;
+  recordingId: string;
+  planVersion: number;
+  ordinal: number;
+  /** Null when a legacy recording has no verified frame boundaries. */
+  sourceRange: SourceFrameRange | null;
+  liveJobId: string | null;
+  selectedJobId: string | null;
+};
+
+export type ClipTaskInputV4 = Omit<
+  Extract<TaskInputV3, { kind: "process_recording" }>,
+  "schemaVersion"
+> & {
+  schemaVersion: 4;
+  clip: {
+    id: string;
+    planVersion: number;
+    planSha256: Sha256Hex;
+    sourceRange: SourceFrameRange & { kind: "clip" };
+  };
+};
+
+export type ClipPlanTaskInputV5 = Omit<
+  ClipTaskInputV4,
+  "schemaVersion" | "kind" | "recipe" | "recipeSha256" | "clip"
+> & {
+  schemaVersion: 5;
+  kind: "clip_plan";
+  planVersion: number;
+  clipFilter: RecipeV2["clipFilter"];
+};

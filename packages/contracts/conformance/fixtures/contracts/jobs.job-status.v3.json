@@ -1,0 +1,115 @@
+{
+  "contract": "jobs.job-status.v3",
+  "cases": [
+    {
+      "name": "legacy processing status",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recording-level plan job",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "clip_plan",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z",
+          "codeRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "clip pipeline job",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "clip_pipeline",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z",
+          "codeRevision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "invalid admitted code revision",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "process_recording",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z",
+          "codeRevision": "invalid revision!"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown job kind",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "kind": "planner",
+          "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "state": "submit_unknown",
+          "previousJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "createdAt": "2026-11-01T18:04:07Z",
+          "updatedAt": "2026-11-01T18:05:07Z",
+          "executionBackend": "modal",
+          "executionRef": "fc-0123456789ABCDEFabcdef",
+          "startDeadline": "2026-11-01T18:14:07Z",
+          "executionDeadline": "2026-11-02T00:04:07Z"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

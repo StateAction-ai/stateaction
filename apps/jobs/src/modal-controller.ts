@@ -6,7 +6,7 @@ import {
   ApiRejection,
   type JobStatus,
 } from "./api-client.js";
-import type { ModalControllerSettings } from "./config.js";
+import { HAND_POSE_MODULE, type ModalControllerSettings } from "./config.js";
 import type { ControllerDeps } from "./controller.js";
 import { CALL_ID, JournalCorrupt, type ModalJournal } from "./journal.js";
 import {
@@ -206,6 +206,26 @@ async function driveModalCall(
     return { outcome: "needs_operator", reason: "backend_mismatch" };
   // A stage's known call is the server's stage call (the claiming worker's, else the spawn's).
   const known = stage ? (stage.node?.callId ?? null) : status.executionRef;
+  const clipPlan =
+    stage === undefined && settings.pipeline === "clip_plan_cpu_v1";
+  const planBinding = clipPlan
+    ? settings.verifiedBindings?.get(HAND_POSE_MODULE)
+    : undefined;
+  // An existing call remains adoptable by exact ID even if settings changed.
+  if (
+    clipPlan &&
+    known === null &&
+    (!journal || journal.phase === "intent") &&
+    (!planBinding ||
+      planBinding.gpu !== "none" ||
+      planBinding.codeRevision !== status.codeRevision ||
+      !(await modal.checkFunction?.(HAND_POSE_MODULE, planBinding)))
+  ) {
+    return {
+      outcome: "needs_operator",
+      reason: "clip_plan_binding_unavailable",
+    };
+  }
   if (known !== null && !CALL_ID.test(known))
     return { outcome: "needs_operator", reason: "invalid_recorded_ref" };
   if (
@@ -375,7 +395,7 @@ async function driveModalCall(
       callId = await modal.spawn(
         bootstrap,
         () => !lost() && Date.now() < submitBy,
-        stage?.binding,
+        stage?.binding ?? planBinding,
       );
     } catch (error) {
       store.discardToken(jobId, key);
