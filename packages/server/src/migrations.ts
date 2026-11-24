@@ -167,6 +167,11 @@ export async function grantAppRole(
   );
   if (segmentMarks)
     await client.query("SELECT stateaction_grant_segment_marks($1)", [role]);
+  const { rowCount: parallelRecipe } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_parallel_recipe(name)') IS NOT NULL",
+  );
+  if (parallelRecipe)
+    await client.query("SELECT stateaction_grant_parallel_recipe($1)", [role]);
   return true;
 }
 

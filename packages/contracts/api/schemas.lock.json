@@ -110,6 +110,8 @@
     "catalog.v18.json": "fcc459cda942cb4645ae776cac4a820ab9eaf0863b6c78e087d0cd52c87bc7f6",
     "http/segment-mark-command.v1.schema.json": "4a504f4bde49bc4c2e9c7170f9c943f1564776dc91226c78c14ba39ccc6344c5",
     "http/segment-mark.v1.schema.json": "aff9d6feef6b74ae83100f4d06f993a5ab7dbf6f436d7aa2ea47fdcf28956b95",
-    "http/segment-marks.v1.schema.json": "b9d7b2197388ccb219aa72e39e1058df6fb0d0a1f2dd105c144ce20ec27b48c6"
+    "http/segment-marks.v1.schema.json": "b9d7b2197388ccb219aa72e39e1058df6fb0d0a1f2dd105c144ce20ec27b48c6",
+    "catalog.v19.json": "ba5eb03c47128c13ebd96c233ec659aaad3717bde5b12349a35da3a6839ee128",
+    "jobs/controller-action.v3.schema.json": "4465759001221df912a0c9ae1afcb92d61a8a9c37a322e425b059ea6e26ab95b"
   }
 }

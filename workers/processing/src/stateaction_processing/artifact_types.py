@@ -39,6 +39,7 @@ FILE_NAMES = {
     "viewer_rrd": "viewer.rrd",
 }
 MANIFEST_NAME = "result-manifest.json"
+PREPARED_RECIPE_SLOT = "diagnostics/hand_pose/prepared-result.json"
 
 
 class ExportError(RuntimeError):

@@ -197,6 +197,7 @@ class SealPlan:
     read_document: Callable[[PriorOutput], bytes | None] | None = field(
         default=None, compare=False
     )
+    prepare_only: bool = False
 
 
 def plan_from_task(
@@ -233,8 +234,11 @@ def plan_from_task(
         recipe_sha256=task["recipeSha256"],
         hand_module=entry["module"],
         hand_params_sha256=request_sha256(entry["params"]),
-        prior=tuple(parse_prior_stages(stage_ctx["priorStages"], recipe)),
+        prior=()
+        if stage_ctx.get("prepareOnly")
+        else tuple(parse_prior_stages(stage_ctx["priorStages"], recipe)),
         read_document=read_document,
+        prepare_only=stage_ctx.get("prepareOnly") is True,
     )
 
 
@@ -588,5 +592,6 @@ def to_v3(
         }
     )
     out["nodes"] = nodes
-    out["checks"] = [*doc["checks"], annotation_check(plan)]
+    if not plan.prepare_only:
+        out["checks"] = [*doc["checks"], annotation_check(plan)]
     return out

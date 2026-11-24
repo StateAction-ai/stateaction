@@ -26,6 +26,7 @@ export type StubOptions = {
    * exactly as the real API does.
    */
   recipe?: RecipeV1;
+  parallelRecipe?: boolean;
   /** SA-91: the server refuses a stage receipt naming this output digest (no such stored file). */
   rejectReceiptSha256?: string;
   /** SA-91 fault injection: a status code to answer instead of handling this action body. */
@@ -73,6 +74,7 @@ export async function startStub(options: StubOptions) {
   const callOf = (stage: string) =>
     claims.get(stage)?.callId ?? runs.get(stage)?.callId;
   const priorSettled = (stage: string) =>
+    (options.parallelRecipe && stage === "hand_pose") ||
     (options.recipe?.stages ?? [])
       .slice(
         0,
@@ -296,6 +298,14 @@ export async function startStub(options: StubOptions) {
       if (injected !== undefined)
         return send({ error: { code: "injected" } }, injected);
       switch (body.action) {
+        case "start_parallel_recipe":
+          return send({ recorded: options.parallelRecipe ?? false });
+        case "seal_parallel_recipe":
+          return send({
+            recorded: options.recipe?.stages.every((spec) =>
+              TERMINAL.has(runs.get(spec.stage)?.state ?? ""),
+            ),
+          });
         case "record_workflow_run":
           return send({ recorded: true });
         case "claim_lease":

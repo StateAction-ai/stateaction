@@ -533,6 +533,17 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
     ev(
       `(() => { const b = document.querySelectorAll('[data-testid=rail-card]')[${i}]?.querySelector('[data-testid=mark-badge]'); return b ? { mark: b.dataset.mark, text: b.innerText.trim() } : null })()`,
     );
+  const assertCaptionBadge = async (i) => {
+    const element = `document.querySelectorAll('[data-testid=rail-card]')[${i}].querySelector('[data-testid=mark-badge]')`;
+    // Rail cards use content-visibility:auto. Scroll the badge into view before
+    // reading rendered text, which Chrome omits while skipping the card.
+    await ev(`${element}.scrollIntoView({ block: 'nearest' })`);
+    await until(
+      () => ev(`${element}.checkVisibility({ contentVisibilityAuto: true })`),
+      "the caption badge is visible",
+    );
+    assert.equal((await badge(i))?.text, "Caption");
+  };
   const chip = (f) =>
     ev(`document.querySelector('[data-filter=${f}]').innerText`);
   const doc = await apiDoc(await signIn(stack, "staff"), rec.recordingId);
@@ -615,14 +626,14 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
   );
   await until(async () => (await summary()) === "2 checked, 1 issue", "reload");
   assert.equal((await badge(0))?.mark, "good");
-  assert.equal((await badge(1))?.text, "Caption");
+  await assertCaptionBadge(1);
   assert.equal((await badge(2))?.mark, "none");
   await clickUntil(
     `document.querySelector('[data-filter=issue]').click()`,
     `document.querySelectorAll('[data-testid=rail-card]').length === 1`,
     "Issue chip applied",
   );
-  assert.equal((await badge(0))?.text, "Caption");
+  await assertCaptionBadge(0);
   await clickUntil(
     `document.querySelector('[data-filter=unchecked]').click()`,
     `document.querySelectorAll('[data-testid=rail-card]').length === ${total - 2}`,

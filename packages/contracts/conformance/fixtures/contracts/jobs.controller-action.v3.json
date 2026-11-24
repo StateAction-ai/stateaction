@@ -1,0 +1,53 @@
+{
+  "contract": "jobs.controller-action.v3",
+  "cases": [
+    {
+      "name": "start parallel recipe",
+      "input": {
+        "document": {
+          "action": "start_parallel_recipe",
+          "owner": "ctl-a"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "seal parallel recipe",
+      "input": {
+        "document": {
+          "action": "seal_parallel_recipe",
+          "owner": "ctl-a"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "legacy lease",
+      "input": {
+        "document": {
+          "action": "renew_lease",
+          "owner": "ctl-a"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing lease owner",
+      "input": {
+        "document": {
+          "action": "seal_parallel_recipe"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

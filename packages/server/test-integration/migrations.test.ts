@@ -65,7 +65,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-012 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-013 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -78,7 +78,8 @@ test("published migrations 001-005 are byte-identical; 006-012 follow", async ()
   assert.equal(files[9]?.name, "010_source_cleanup_proof.sql");
   assert.equal(files[10]?.name, "011_stage_runs.sql");
   assert.equal(files[11]?.name, "012_segment_marks.sql");
-  assert.equal(files.length, 12);
+  assert.equal(files[12]?.name, "013_parallel_recipe.sql");
+  assert.equal(files.length, 13);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -93,7 +94,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -106,7 +107,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
       adopted: [],
       appRoleGranted: true,
     });
@@ -151,8 +152,8 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const broken = [
       ...files,
       {
-        version: 13,
-        name: "013_broken.sql",
+        version: files.length + 1,
+        name: "014_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -164,7 +165,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
     const left = await db.owner.query(
       "SELECT to_regclass('releases') AS t, max(version) AS v FROM platform_schema_migrations",
     );
-    assert.deepEqual(left.rows[0], { t: null, v: 12 });
+    assert.deepEqual(left.rows[0], { t: null, v: files.length });
   } finally {
     await db.close();
   }
@@ -180,7 +181,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -193,14 +194,15 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
 test("concurrent migrators serialize and apply each version once", async () => {
   const db = await freshDatabase({ migrate: false });
   try {
+    const count = (await loadMigrations()).length;
     const reports = await Promise.all(
       Array.from({ length: 4 }, () =>
         migrateDatabase({ ownerUrl: db.ownerUrl }),
       ),
     );
-    assert.equal(reports.filter((r) => r.applied.length === 12).length, 1);
+    assert.equal(reports.filter((r) => r.applied.length === count).length, 1);
     assert.equal(
-      reports.filter((r) => r.alreadyApplied.length === 12).length,
+      reports.filter((r) => r.alreadyApplied.length === count).length,
       3,
     );
   } finally {
@@ -262,6 +264,8 @@ test("the restricted app role cannot change schema, roles or append-only rows", 
       "INSERT INTO job_stage_evidence (job_id, stage, kind, execution_ref, recorded_by) VALUES (gen_random_uuid(), 'segment', 'local_child_reaped', 'x', 'x')",
       "DELETE FROM job_stage_evidence",
       "SELECT stateaction_grant_stage_runs('stateaction_app')",
+      "UPDATE jobs SET recipe_parallel = true",
+      "SELECT stateaction_grant_parallel_recipe('stateaction_app')",
       // SA-99: marks are append-only; the web role can only SELECT and INSERT.
       "UPDATE segment_marks SET note = 'x'",
       "DELETE FROM segment_marks",

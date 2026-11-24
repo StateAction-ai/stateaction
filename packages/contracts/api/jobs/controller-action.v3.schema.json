@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/controller-action.v3.json",
+  "title": "Workflow controller action v3",
+  "description": "Adds lease-fenced actions to start the parallel recipe graph and seal its finished outputs. All v2 actions remain valid.",
+  "oneOf": [
+    {
+      "$ref": "controller-action.v2.json"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "owner"],
+      "properties": {
+        "action": {
+          "enum": ["start_parallel_recipe", "seal_parallel_recipe"]
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        }
+      }
+    }
+  ]
+}

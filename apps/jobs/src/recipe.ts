@@ -34,23 +34,7 @@ import {
 } from "./outcomes.js";
 import { bootId } from "./proc.js";
 
-/**
- * SA-91 recipe runner: the ONE process-recording task runs a recipe job's stages as plain,
- * sequential code (segment, caption, hand_pose). Each stage reuses the existing executor driver
- * (`driveModal` with a stage key, or the local child supervisor), so every SA-42 invariant holds
- * per stage: a crash-safe journal per (job, stage), intent and the server row before the one
- * spawn, a known call adopted and never respawned, terminal proof only from the exact call.
- *
- * Per stage: server row terminal -> take it; disabled -> not_run(stage_disabled); caption after a
- * failed segment -> not_run(upstream_failed); after zero segments -> not_run(no_segments); less
- * remaining deadline than the budget -> this and every later GPU stage not_run(budget) (never
- * hand_pose); a bootstrap over 8 KiB -> failed(bootstrap_too_large); otherwise
- * claim, spawn, supervise (cancel on budget overrun), evidence, then the terminal stage run with
- * its receipt. hand_pose always runs (it seals the job; H3: the job succeeds when it seals). A
- * stage that cannot finish (unknown call, operator path, lost lease, unconfirmed evidence) stops
- * the recipe: no later stage can start while an earlier issued claim is open.
- */
-
+/** Each stage keeps its SA-91 claim, journal and exact-call terminal proof. */
 type Id = { jobId: string; runRef: string; owner: string };
 type Emit = (event: string, detail?: Record<string, unknown>) => void;
 type Spec = RecipeV1["stages"][number];
@@ -78,10 +62,15 @@ export async function runRecipe(
 ): Promise<Outcome> {
   const { api, store, settings } = deps;
   const lost = () => leaseDeadline() === undefined;
-  const stages: StageSummary[] = [];
+  const summaries = new Map<Stage, StageSummary>();
+  const stages = () =>
+    recipe.stages.flatMap(({ stage }) => {
+      const summary = summaries.get(stage);
+      return summary ? [summary] : [];
+    });
   const stop = (stopped: Outcome): Outcome => ({
     outcome: "recipe_run",
-    stages,
+    stages: stages(),
     stopped,
   });
   if (settings.executor === "modal" && !deps.modal)
@@ -90,6 +79,15 @@ export async function runRecipe(
   const dag = await api.dagRun(id.jobId);
   if (dag.recipeSha256 !== recipeSha256)
     return { outcome: "needs_operator", reason: "recipe_mismatch" };
+
+  // A legacy hand_pose claim may already be responsible for sealing on re-entry.
+  const graph = await api.act(id.jobId, {
+    action: "start_parallel_recipe",
+    owner: id.owner,
+  });
+  if (!("recorded" in graph))
+    return { outcome: "needs_operator", reason: "recipe_graph_invalid" };
+  const parallel = graph.recorded;
 
   /** Relays a settled stage; false when the server refused it (operator path). */
   const record = async (
@@ -103,7 +101,7 @@ export async function runRecipe(
       if (!(error instanceof ApiRejection)) throw error;
       return false;
     }
-    stages.push({
+    summaries.set(spec.stage, {
       stage: spec.stage,
       state: settled.state,
       ...(settled.errorCode ? { errorCode: settled.errorCode } : {}),
@@ -113,16 +111,16 @@ export async function runRecipe(
     return true;
   };
   const refused = (spec: Spec) =>
-    stop({
+    ({
       outcome: "needs_operator",
       reason: `${spec.stage}_record_refused`,
-    });
+    }) as const;
 
   let outOfBudget = false;
-  for (const spec of recipe.stages) {
+  const runStage = async (spec: Spec): Promise<Outcome | undefined> => {
     if (lost()) {
       emit("lease_lost");
-      return stop({ outcome: "lease_lost" });
+      return { outcome: "lease_lost" };
     }
     const expect: StageExpectation = {
       jobId: id.jobId,
@@ -133,10 +131,7 @@ export async function runRecipe(
     const found = dag.stages.find((n) => n.stage === spec.stage);
     const node = found && found.state !== "pending" ? found : undefined;
     if (node && node.module !== spec.module)
-      return stop({
-        outcome: "needs_operator",
-        reason: "stage_module_mismatch",
-      });
+      return { outcome: "needs_operator", reason: "stage_module_mismatch" };
 
     if (!spec.enabled) {
       // Always relayed (an identical replay is a no-op): the server renders a disabled stage
@@ -145,25 +140,26 @@ export async function runRecipe(
         !(await record(spec, { state: "not_run", errorCode: "stage_disabled" }))
       )
         return refused(spec);
-      continue;
+      return;
     }
     if (node && TERMINAL.has(node.state)) {
       // Already settled (an earlier entry): never run it again.
-      stages.push({
+      summaries.set(spec.stage, {
         stage: spec.stage,
         state: node.state,
         ...(node.errorCode ? { errorCode: node.errorCode } : {}),
         ...(node.callId ? { callId: node.callId } : {}),
       });
-      if (node.errorCode === "budget") outOfBudget = true;
-      continue;
+      if (spec.stage !== "hand_pose" && node.errorCode === "budget")
+        outOfBudget = true;
+      return;
     }
 
     // The earlier stages as the SERVER recorded them, with every file their slots attribute to
     // them: the caption's segments input and the sealing stage's priorStages. Read per entry, so a
     // controller on a fresh host loses nothing.
     const prior =
-      spec.stage === "segment"
+      spec.stage === "segment" || (parallel && spec.stage === "hand_pose")
         ? undefined
         : (await api.priorStages(id.jobId)).stages;
     const segmentsRef = segmentsOf(prior);
@@ -178,37 +174,35 @@ export async function runRecipe(
       if (gate) {
         if (!(await record(spec, { state: "not_run", errorCode: gate })))
           return refused(spec);
-        continue;
+        return;
       }
     }
     const status = await api.status(id.jobId);
     if (fresh) {
       if (!ACTIVE.has(status.state))
-        return stop({ outcome: "no_effect", reason: "job_not_active" });
+        return { outcome: "no_effect", reason: "job_not_active" };
       const remaining =
         status.executionDeadline === null
           ? 0
           : Date.parse(status.executionDeadline) - Date.now();
-      // hand_pose always runs (it seals the job); its own budget still bounds the call. A GPU
-      // stage starts only if its budget AND the seal's budget still fit, so it cannot starve
-      // the seal of the time it needs.
-      const seal = recipe.stages.find((x) => x.stage === "hand_pose")!;
-      if (
-        spec.stage !== "hand_pose" &&
-        remaining <
-          (spec.resources.budgetSeconds + seal.resources.budgetSeconds) * 1000
-      ) {
+      // The legacy serial graph reserves time for hand pose after the GPU
+      // branch. Parallel stages each fit against the shared deadline.
+      const handBudget = recipe.stages.find((x) => x.stage === "hand_pose")!
+        .resources.budgetSeconds;
+      const required =
+        spec.resources.budgetSeconds + (parallel ? 0 : handBudget);
+      if (spec.stage !== "hand_pose" && remaining < required * 1000) {
         // Not enough time left for this GPU stage's budget: it and every later GPU stage are not run.
         outOfBudget = true;
         if (!(await record(spec, { state: "not_run", errorCode: "budget" })))
           return refused(spec);
-        continue;
+        return;
       }
       const refusal = stageModuleRefusal(settings, spec.stage, spec.module);
       if (refusal) {
         if (!(await record(spec, { state: "not_run", errorCode: refusal })))
           return refused(spec);
-        continue;
+        return;
       }
     }
 
@@ -223,6 +217,7 @@ export async function runRecipe(
             stage: "hand_pose",
             module: spec.module,
             recipeSha256,
+            ...(parallel ? { prepareOnly: true as const } : {}),
             priorStages: (prior ?? []).map((p) => ({
               stage: p.stage,
               state: p.state,
@@ -255,7 +250,7 @@ export async function runRecipe(
         }))
       )
         return refused(spec);
-      continue;
+      return;
     }
     const run: ModalStage = {
       stage: spec.stage,
@@ -299,11 +294,47 @@ export async function runRecipe(
         journal?.termination ?? "natural_exit",
         localReceipt(deps, id.jobId, expect, out.exit.code),
       );
-    } else return stop(out);
+    } else return out;
 
     if (!(await record(spec, settled, callId))) return refused(spec);
+  };
+
+  const runSequence = async (specs: Spec[]) => {
+    for (const spec of specs) {
+      const stopped = await runStage(spec);
+      if (stopped) return stopped;
+    }
+  };
+  if (parallel) {
+    const [annotations, hands] = await Promise.allSettled([
+      runSequence(recipe.stages.filter(({ stage }) => stage !== "hand_pose")),
+      runStage(recipe.stages.find(({ stage }) => stage === "hand_pose")!),
+    ]);
+    // Keep supervising the other call under the same lease until both branches return.
+    if (annotations.status === "rejected") throw annotations.reason;
+    if (hands.status === "rejected") throw hands.reason;
+    const stopped = annotations.value ?? hands.value;
+    if (stopped) return stop(stopped);
+    if (lost()) return stop({ outcome: "lease_lost" });
+    try {
+      const sealed = await api.act(id.jobId, {
+        action: "seal_parallel_recipe",
+        owner: id.owner,
+      });
+      if (!("recorded" in sealed) || !sealed.recorded)
+        return stop({
+          outcome: "needs_operator",
+          reason: "recipe_seal_refused",
+        });
+    } catch (error) {
+      if (!(error instanceof ApiRejection)) throw error;
+      return stop({ outcome: "needs_operator", reason: "recipe_seal_refused" });
+    }
+  } else {
+    const stopped = await runSequence(recipe.stages);
+    if (stopped) return stop(stopped);
   }
-  return { outcome: "recipe_run", stages };
+  return { outcome: "recipe_run", stages: stages() };
 }
 
 /** Why an unclaimed stage is not run, or undefined when it should run. */

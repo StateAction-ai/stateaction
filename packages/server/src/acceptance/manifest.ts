@@ -173,12 +173,7 @@ export function checkManifest(
   const mcap = facts.sources.find((s) => s.role === "source_mcap");
 
   // Summary agrees with the manifest it summarizes.
-  const counts = { pass: 0, warn: 0, fail: 0, measured: 0, notEvaluated: 0 };
-  for (const c of arr(manifest.checks).map(obj)) {
-    const status = String(c.status);
-    if (status === "not_evaluated") counts.notEvaluated += 1;
-    else if (status in counts) counts[status as keyof typeof counts] += 1;
-  }
+  const counts = summarizeChecks(arr(manifest.checks).map(obj));
   const clips = arr(manifest.clips).map(obj);
   if (
     canonicalJson(counts) !== canonicalJson(facts.summary.checks) ||
@@ -351,4 +346,14 @@ function checkRecipeNodes(
       return bad("manifest_node_mismatch", `${stage} output`);
   }
   return null;
+}
+
+export function summarizeChecks(checks: readonly { status?: unknown }[]) {
+  const counts = { pass: 0, warn: 0, fail: 0, measured: 0, notEvaluated: 0 };
+  for (const c of checks) {
+    const status = String(c.status);
+    if (status === "not_evaluated") counts.notEvaluated += 1;
+    else if (status in counts) counts[status as keyof typeof counts] += 1;
+  }
+  return counts;
 }

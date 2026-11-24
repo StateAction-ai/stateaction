@@ -9,10 +9,25 @@ import {
   type ObjectReader,
 } from "../admission/recordings.js";
 import { inTransaction } from "../catalog/catalog.js";
-import { CatalogError } from "../catalog/errors.js";
+import { CatalogError, toCatalogError } from "../catalog/errors.js";
 import { JOB_CURRENT_SQL, JOB_OUTPUT_OPEN_SQL } from "../jobs/current.js";
-import { STAGE_SLOT_SQL } from "../jobs/stages.js";
+import {
+  getJobRecipe,
+  getPriorStages,
+  promoteRecipeEvidence,
+  STAGE_SLOT_SQL,
+} from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
+import {
+  PREPARED_RECIPE_SLOT,
+  RESULT_MANIFEST_SLOT,
+} from "../transport/authority.js";
+import { completeTransport } from "../transport/recovery.js";
+import {
+  allocateJobOutput,
+  signParts,
+  type TransportDeps,
+} from "../transport/service.js";
 import {
   jobOutputByteLimit,
   jobOutputFileLimit,
@@ -20,6 +35,7 @@ import {
 } from "./config.js";
 import {
   checkManifest,
+  summarizeChecks,
   type AnnotationFiles,
   type InventoryFile,
   type ManifestFacts,
@@ -140,62 +156,70 @@ export async function closeOutputs(
     outcome: "succeeded" | "failed";
   },
 ): Promise<OutputClosure> {
+  return run(deps.pool, (tx) => closeOutputsInTransaction(tx, input));
+}
+
+async function closeOutputsInTransaction(
+  tx: Tx,
+  input: {
+    jobId: string;
+    invocationNonce: string;
+    outcome: "succeeded" | "failed";
+  },
+): Promise<OutputClosure> {
   const jobId = uuid(input.jobId, "jobId");
   const nonce = nonceOf(input.invocationNonce);
-  return run(deps.pool, async (tx) => {
-    const locked = await tx.query(
-      "SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE",
-      [jobId],
-    );
-    if (!locked.rows[0]) throw new TransportError("not_found", "Job not found");
-    const existing = await tx.query<ClosureRow>(
-      `SELECT ${CLOSURE_COLUMNS} FROM job_output_closures WHERE job_id = $1`,
-      [jobId],
-    );
-    if (existing.rows[0]) {
-      if (
-        existing.rows[0].invocation_nonce !== nonce ||
-        existing.rows[0].outcome !== input.outcome
-      )
-        throw conflict("Output inventory is already closed differently");
-      return closureView(existing.rows[0]);
-    }
-    const open = await tx.query(JOB_OUTPUT_OPEN_SQL, [jobId, nonce]);
-    if (!open.rows[0]) throw forbidden();
-    const stats = await tx.query<{
-      files: number;
-      bytes: string;
-      clips: number;
-      manifest: string | null;
-    }>(
-      `SELECT count(*)::int AS files, coalesce(sum(f.size_bytes), 0)::text AS bytes,
+  const locked = await tx.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [
+    jobId,
+  ]);
+  if (!locked.rows[0]) throw new TransportError("not_found", "Job not found");
+  const existing = await tx.query<ClosureRow>(
+    `SELECT ${CLOSURE_COLUMNS} FROM job_output_closures WHERE job_id = $1`,
+    [jobId],
+  );
+  if (existing.rows[0]) {
+    if (
+      existing.rows[0].invocation_nonce !== nonce ||
+      existing.rows[0].outcome !== input.outcome
+    )
+      throw conflict("Output inventory is already closed differently");
+    return closureView(existing.rows[0]);
+  }
+  const open = await tx.query(JOB_OUTPUT_OPEN_SQL, [jobId, nonce]);
+  if (!open.rows[0]) throw forbidden();
+  const stats = await tx.query<{
+    files: number;
+    bytes: string;
+    clips: number;
+    manifest: string | null;
+  }>(
+    `SELECT count(*)::int AS files, coalesce(sum(f.size_bytes), 0)::text AS bytes,
               count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE s.slot LIKE 'clips/%')::int AS clips,
               (array_agg(f.id) FILTER (WHERE f.role = 'result_manifest'))[1] AS manifest
        FROM files f LEFT JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
        WHERE f.job_id = $1 AND f.purpose = 'output'`,
-      [jobId],
-    );
-    const s = stats.rows[0]!;
-    if (!s.manifest || s.files < 1)
-      throw conflict("A completed result manifest output is required");
-    const inserted = await tx.query<ClosureRow>(
-      `INSERT INTO job_output_closures
+    [jobId],
+  );
+  const s = stats.rows[0]!;
+  if (!s.manifest || s.files < 1)
+    throw conflict("A completed result manifest output is required");
+  const inserted = await tx.query<ClosureRow>(
+    `INSERT INTO job_output_closures
          (job_id, invocation_nonce, outcome, file_count, clip_count, total_bytes, manifest_file_id, inventory_sha256)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING ${CLOSURE_COLUMNS}`,
-      [
-        jobId,
-        nonce,
-        input.outcome,
-        s.files,
-        s.clips,
-        s.bytes,
-        s.manifest,
-        SHA_ZERO,
-      ],
-    );
-    return closureView(inserted.rows[0]!);
-  });
+    [
+      jobId,
+      nonce,
+      input.outcome,
+      s.files,
+      s.clips,
+      s.bytes,
+      s.manifest,
+      SHA_ZERO,
+    ],
+  );
+  return closureView(inserted.rows[0]!);
 }
 
 // ------------------------------------------------------------------ candidate
@@ -266,80 +290,390 @@ export async function submitCandidate(
   deps: Pick<AcceptanceDeps, "pool" | "config">,
   body: CandidateBody,
 ): Promise<ResultAck> {
+  return run(deps.pool, (tx) =>
+    submitCandidateInTransaction(tx, deps.config, body),
+  );
+}
+
+async function submitCandidateInTransaction(
+  tx: Tx,
+  config: AcceptanceConfig,
+  body: CandidateBody,
+): Promise<ResultAck> {
   const jobId = uuid(body.jobId, "jobId");
   const nonce = nonceOf(body.invocationNonce);
-  return run(deps.pool, async (tx) => {
-    const job = await tx.query<{ state: string }>(
-      "SELECT state FROM jobs WHERE id = $1 FOR UPDATE",
-      [jobId],
-    );
-    if (!job.rows[0]) throw new TransportError("not_found", "Job not found");
-    const existing = await tx.query<CandidateRow>(
-      `SELECT ${CANDIDATE_COLUMNS} FROM job_result_candidates WHERE job_id = $1`,
-      [jobId],
-    );
-    if (existing.rows[0]) {
-      const c = existing.rows[0];
-      if (
-        c.invocation_nonce !== nonce ||
-        c.manifest_file_id !== body.manifestFileId ||
-        c.manifest_sha256 !== body.manifestSha256 ||
-        canonicalJson(c.summary) !== canonicalJson(body.summary)
-      )
-        throw conflict("A different result candidate was already received");
-      return ackOf(jobId, c, job.rows[0].state);
-    }
-    const current = await tx.query(JOB_CURRENT_SQL, [jobId, nonce]);
-    if (!current.rows[0]) throw forbidden();
-    // The finite grace runs from the exact terminal-evidence timestamp and is
-    // never reset: a candidate after it is refused even if reconcile has not
-    // yet failed the job. (A candidate received before it stays eligible no
-    // matter how long verification then takes.)
-    const late = await tx.query(
-      `SELECT 1 FROM job_execution_evidence
-       WHERE job_id = $1 AND now() > recorded_at + make_interval(secs => $2)`,
-      [jobId, deps.config.graceSeconds],
-    );
-    if (late.rows[0])
-      throw forbidden("Result grace after execution ended elapsed");
-    const closure = await tx.query<ClosureRow>(
-      `SELECT ${CLOSURE_COLUMNS} FROM job_output_closures WHERE job_id = $1`,
-      [jobId],
-    );
-    const closed = closure.rows[0];
+  const job = await tx.query<{ state: string }>(
+    "SELECT state FROM jobs WHERE id = $1 FOR UPDATE",
+    [jobId],
+  );
+  if (!job.rows[0]) throw new TransportError("not_found", "Job not found");
+  const existing = await tx.query<CandidateRow>(
+    `SELECT ${CANDIDATE_COLUMNS} FROM job_result_candidates WHERE job_id = $1`,
+    [jobId],
+  );
+  if (existing.rows[0]) {
+    const c = existing.rows[0];
     if (
-      !closed ||
-      closed.manifest_file_id !== body.manifestFileId ||
-      closed.invocation_nonce !== nonce ||
-      closed.outcome !== body.summary.outcome
+      c.invocation_nonce !== nonce ||
+      c.manifest_file_id !== body.manifestFileId ||
+      c.manifest_sha256 !== body.manifestSha256 ||
+      canonicalJson(c.summary) !== canonicalJson(body.summary)
     )
-      throw conflict(
-        "Close the output inventory for this manifest and outcome first",
-      );
-    await tx.query(
-      "UPDATE jobs SET state = 'result_pending' WHERE id = $1 AND state = 'running'",
-      [jobId],
+      throw conflict("A different result candidate was already received");
+    return ackOf(jobId, c, job.rows[0].state);
+  }
+  const current = await tx.query(JOB_CURRENT_SQL, [jobId, nonce]);
+  if (!current.rows[0]) throw forbidden();
+  // The finite grace runs from the exact terminal-evidence timestamp and is
+  // never reset: a candidate after it is refused even if reconcile has not
+  // yet failed the job. (A candidate received before it stays eligible no
+  // matter how long verification then takes.)
+  const late = await tx.query(
+    `SELECT 1 FROM job_execution_evidence
+       WHERE job_id = $1 AND now() > recorded_at + make_interval(secs => $2)`,
+    [jobId, config.graceSeconds],
+  );
+  if (late.rows[0])
+    throw forbidden("Result grace after execution ended elapsed");
+  const closure = await tx.query<ClosureRow>(
+    `SELECT ${CLOSURE_COLUMNS} FROM job_output_closures WHERE job_id = $1`,
+    [jobId],
+  );
+  const closed = closure.rows[0];
+  if (
+    !closed ||
+    closed.manifest_file_id !== body.manifestFileId ||
+    closed.invocation_nonce !== nonce ||
+    closed.outcome !== body.summary.outcome
+  )
+    throw conflict(
+      "Close the output inventory for this manifest and outcome first",
     );
-    const outcome = body.summary.outcome;
-    const inserted = await tx.query<CandidateRow>(
-      `INSERT INTO job_result_candidates
+  await tx.query(
+    "UPDATE jobs SET state = 'result_pending' WHERE id = $1 AND state = 'running'",
+    [jobId],
+  );
+  const outcome = body.summary.outcome;
+  const inserted = await tx.query<CandidateRow>(
+    `INSERT INTO job_result_candidates
          (job_id, invocation_nonce, manifest_file_id, manifest_sha256, inventory_sha256,
           outcome, clip_count, error_code, summary)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${CANDIDATE_COLUMNS}`,
-      [
-        jobId,
-        nonce,
-        body.manifestFileId,
-        body.manifestSha256,
-        closed.inventory_sha256,
-        outcome,
-        outcome === "failed" ? 0 : body.summary.clipCount,
-        body.summary.errorCode,
-        JSON.stringify(body.summary),
-      ],
+    [
+      jobId,
+      nonce,
+      body.manifestFileId,
+      body.manifestSha256,
+      closed.inventory_sha256,
+      outcome,
+      outcome === "failed" ? 0 : body.summary.clipCount,
+      body.summary.errorCode,
+      JSON.stringify(body.summary),
+    ],
+  );
+  return ackOf(jobId, inserted.rows[0]!, "result_pending");
+}
+
+// ------------------------------------------------------------ parallel recipes
+
+/** The draft is a completed, immutable hand-pose output. Its final bytes are
+ * deterministic because the controller joins only terminal stage rows. */
+async function publishPreparedManifest(
+  deps: AcceptanceDeps,
+  transport: TransportDeps,
+  jobId: string,
+  owner: string,
+): Promise<void> {
+  const draft = (
+    await deps.pool.query<{
+      id: string;
+      object_key: string;
+      sha256: string;
+      size_bytes: string;
+      slot: string;
+      nonce: string;
+      recipe_sha256: string;
+      stage_state: string;
+    }>(
+      `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text, s.slot,
+              job_seal_nonce(j.id) AS nonce, j.recipe_sha256, r.state AS stage_state
+       FROM jobs j
+       JOIN job_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose' AND r.state IN ('succeeded', 'failed')
+       JOIN job_output_slots s ON s.job_id = j.id AND s.slot = $3
+       JOIN files f ON f.id = s.file_id AND f.state = 'completed' AND f.role = 'diagnostic_blob'
+       WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
+         AND j.controller_lease_owner = $2 AND j.controller_lease_expires_at > now()
+         AND job_recipe_stages_settled(j.id)`,
+      [jobId, owner, PREPARED_RECIPE_SLOT],
+    )
+  ).rows[0];
+  if (!draft || Number(draft.size_bytes) > MANIFEST_MAX_BYTES) return;
+
+  const bytes = await deps.reader.read(draft.object_key, MANIFEST_MAX_BYTES);
+  if (
+    bytes.length !== Number(draft.size_bytes) ||
+    sha256Hex(bytes) !== draft.sha256
+  )
+    return;
+  const finalBytes =
+    draft.stage_state === "failed"
+      ? validateBytes(MANIFEST_CONTRACT, bytes).valid
+        ? Buffer.from(bytes)
+        : undefined
+      : await composePreparedManifest(deps, jobId, draft, bytes);
+  if (!finalBytes) return;
+
+  const authority = { kind: "job" as const, jobId, sealLeaseOwner: owner };
+  const plan = await allocateJobOutput(transport, authority, {
+    slot: RESULT_MANIFEST_SLOT,
+    role: "result_manifest",
+    sizeBytes: String(finalBytes.length),
+    sha256: sha256Hex(finalBytes),
+  });
+  if (plan.state === "completed") return;
+  const epoch = { expectedTransportEpoch: plan.transportEpoch };
+  if (plan.state === "uploading") {
+    const {
+      parts: [part],
+    } = await signParts(transport, authority, plan.fileId, {
+      ...epoch,
+      partNumbers: [1],
+    });
+    const uploaded = await fetch(part!.url, {
+      method: "PUT",
+      headers: part!.headers,
+      body: finalBytes,
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => undefined);
+    if (!uploaded?.ok)
+      throw new TransportError(
+        "provider_unavailable",
+        "Manifest upload unavailable",
+      );
+  }
+  const complete = await completeTransport(
+    transport,
+    authority,
+    plan.fileId,
+    epoch,
+  );
+  if (complete.state !== "completed")
+    throw new TransportError(
+      "provider_unavailable",
+      "Manifest upload is awaiting completion",
     );
-    return ackOf(jobId, inserted.rows[0]!, "result_pending");
+}
+
+async function composePreparedManifest(
+  deps: AcceptanceDeps,
+  jobId: string,
+  draft: {
+    id: string;
+    slot: string;
+    size_bytes: string;
+    sha256: string;
+    nonce: string;
+    recipe_sha256: string;
+  },
+  bytes: Uint8Array,
+): Promise<Buffer | undefined> {
+  let prepared: Record<string, unknown>;
+  try {
+    prepared = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+    );
+  } catch {
+    return;
+  }
+  if (
+    !prepared ||
+    prepared.job_id !== jobId ||
+    prepared.recipe_sha256 !== draft.recipe_sha256 ||
+    (prepared.attestation as { invocation_nonce?: unknown } | undefined)
+      ?.invocation_nonce !== draft.nonce ||
+    !Array.isArray(prepared.outputs) ||
+    !Array.isArray(prepared.nodes) ||
+    prepared.nodes.length !== 1 ||
+    prepared.nodes[0]?.stage !== "hand_pose" ||
+    !Array.isArray(prepared.nodes[0]?.outputs) ||
+    !Array.isArray(prepared.checks)
+  )
+    return;
+  const [recipe, prior] = await Promise.all([
+    getJobRecipe(deps, jobId),
+    getPriorStages(deps, jobId),
+  ]);
+  const upstream = prior.stages.flatMap((row) =>
+    row.outputs.map((f) => ({
+      file_id: f.fileId,
+      role: f.role,
+      relative_path: f.slot,
+      size_bytes: f.sizeBytes,
+      sha256: f.sha256,
+    })),
+  );
+  const output = {
+    file_id: draft.id,
+    role: "diagnostic_blob",
+    relative_path: draft.slot,
+    size_bytes: draft.size_bytes,
+    sha256: draft.sha256,
+  };
+  const hand = prepared.nodes[0];
+  const manifest = {
+    ...prepared,
+    outputs: [...upstream, ...prepared.outputs, output],
+    nodes: [
+      ...prior.stages.map((row) => ({
+        stage: row.stage,
+        status: row.state === "cancelled" ? "failed" : row.state,
+        module: recipe.stages.find((s) => s.stage === row.stage)!.module,
+        error_code: row.errorCode,
+        counts: row.counts,
+        outputs: row.outputs.map((f) => f.fileId),
+      })),
+      { ...hand, outputs: [...hand.outputs, draft.id] },
+    ],
+    checks: [
+      ...prepared.checks,
+      {
+        code: "annotation_files_consistent",
+        status: "not_evaluated",
+        message: "Acceptance verifies the completed annotation files.",
+        rule_revision: "sa31-export-2",
+      },
+    ],
+  };
+  const finalBytes = Buffer.from(JSON.stringify(manifest));
+  return validateBytes(MANIFEST_CONTRACT_V3, finalBytes).valid
+    ? finalBytes
+    : undefined;
+}
+
+/** Close and submit prepared outputs only under a lease and after all stages have settled. */
+export async function sealParallelRecipe(
+  deps: AcceptanceDeps,
+  jobId: string,
+  owner: string,
+  recordedBy: string,
+  transport: TransportDeps,
+): Promise<boolean> {
+  uuid(jobId, "jobId");
+  await publishPreparedManifest(deps, transport, jobId, owner);
+  const file = (
+    await deps.pool.query<{
+      id: string;
+      object_key: string;
+      sha256: string;
+      size_bytes: string;
+      invocation_nonce: string;
+      state: string;
+      error_code: string | null;
+    }>(
+      `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text, c.invocation_nonce, r.state, r.error_code
+       FROM jobs j
+       JOIN job_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose'
+       JOIN job_stage_claims c ON c.job_id = j.id AND c.stage = r.stage
+       JOIN files f ON f.job_id = j.id AND f.role = 'result_manifest' AND f.state = 'completed'
+       WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
+         AND j.controller_lease_owner = $2 AND j.controller_lease_expires_at > now()
+         AND job_recipe_stages_settled(j.id)`,
+      [uuid(jobId, "jobId"), owner],
+    )
+  ).rows[0];
+
+  let candidate: CandidateBody | undefined;
+  if (file && (file.state === "succeeded" || file.state === "failed")) {
+    const succeeded = file.state === "succeeded";
+    const bytes = await deps.reader
+      .read(file.object_key, MANIFEST_MAX_BYTES)
+      .catch((error: unknown) => {
+        if (error instanceof ObjectTooLargeError) return undefined;
+        throw error;
+      });
+    const parsed =
+      bytes &&
+      validateBytes(
+        succeeded ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
+        bytes,
+      );
+    if (
+      parsed?.valid &&
+      bytes &&
+      bytes.length === Number(file.size_bytes) &&
+      sha256Hex(bytes) === file.sha256
+    ) {
+      const manifest = parsed.value as {
+        clips: unknown[];
+        checks: { status: string }[];
+      };
+      candidate = {
+        jobId,
+        invocationNonce: file.invocation_nonce,
+        manifestFileId: file.id,
+        manifestSha256: file.sha256,
+        summary: {
+          outcome: succeeded ? "succeeded" : "failed",
+          clipCount: manifest.clips.length,
+          checks: summarizeChecks(manifest.checks),
+          errorCode: file.error_code,
+        },
+      };
+    }
+  }
+
+  return run(deps.pool, async (tx) => {
+    const {
+      rows: [job],
+    } = await tx.query<{
+      state: string;
+      ended: boolean;
+      has_candidate: boolean;
+    }>(
+      `SELECT state, EXISTS (SELECT 1 FROM job_execution_evidence WHERE job_id = jobs.id) AS ended,
+                     EXISTS (SELECT 1 FROM job_result_candidates WHERE job_id = jobs.id) AS has_candidate
+       FROM jobs WHERE id = $1 AND recipe_parallel AND controller_lease_owner = $2
+         AND controller_lease_expires_at > now() AND job_recipe_stages_settled(id)
+       FOR UPDATE`,
+      [jobId, owner],
+    );
+    if (!job) throw forbidden("Parallel recipe cannot be sealed");
+    if (job.ended) return job.has_candidate;
+    let sealed = false;
+    if (candidate && job.state === "running") {
+      const { invocationNonce, summary } = candidate;
+      await tx.query("SAVEPOINT recipe_candidate");
+      try {
+        await closeOutputsInTransaction(tx, {
+          jobId,
+          invocationNonce,
+          outcome: summary.outcome,
+        });
+        await submitCandidateInTransaction(tx, deps.config, candidate);
+        sealed = true;
+      } catch (error) {
+        // An incomplete or refused inventory cannot produce a candidate.
+        // Keep the independently proven physical outcome for grace/recovery.
+        const refusal = toCatalogError(error);
+        if (
+          !(
+            refusal instanceof TransportError &&
+            ["conflict", "forbidden"].includes(refusal.code)
+          ) &&
+          !(
+            refusal instanceof CatalogError &&
+            ["SAC03", "SAC04", "SAC05"].includes(refusal.sqlstate ?? "")
+          )
+        )
+          throw error;
+        await tx.query("ROLLBACK TO SAVEPOINT recipe_candidate");
+      }
+      await tx.query("RELEASE SAVEPOINT recipe_candidate");
+    }
+    await promoteRecipeEvidence(tx, jobId, recordedBy);
+    return sealed;
   });
 }
 

@@ -1223,6 +1223,12 @@ export type ControllerActionV2 =
       /** Required for succeeded; allowed for failed. */
       receipt?: StageReceiptV1;
     };
+export type ControllerActionV3 =
+  | ControllerActionV2
+  | {
+      action: "start_parallel_recipe" | "seal_parallel_recipe";
+      owner: string;
+    };
 export type HeartbeatV2 = Omit<Heartbeat, "schemaVersion" | "phase"> & {
   schemaVersion: 2;
   stage: Stage;

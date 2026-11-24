@@ -13,7 +13,11 @@ import { s3ObjectHasher } from "../acceptance/storage.js";
 import { s3ObjectReader } from "../admission/object-reader.js";
 import { presignObject, storageClient } from "../storage.js";
 import { S3ReadSigner } from "../datasets/broker.js";
-import { JobCapabilityStore, WORKER_AUDIENCE } from "../transport/runtime.js";
+import {
+  JobCapabilityStore,
+  providerFromConfig,
+  WORKER_AUDIENCE,
+} from "../transport/runtime.js";
 import {
   BootstrapCapabilityStore,
   ControllerCapabilityStore,
@@ -67,6 +71,7 @@ export function jobsDepsFromEnv(
     taskStarter: starterFromEnv(env),
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
+    sealTransport: () => ({ pool, provider: providerFromConfig(config) }),
     acceptance: {
       config: acceptanceConfigFromEnv(env),
       reader: s3ObjectReader(config, { timeoutMs: 15000 }),

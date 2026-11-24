@@ -165,6 +165,7 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             "module",
             "recipeSha256",
             "priorStages",
+            "prepareOnly",
         }
         if not isinstance(value, dict) or not set(value) <= allowed:
             raise ValueError("shape")
@@ -190,6 +191,10 @@ def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
             or not isinstance(value["priorStages"], list)
         ):
             raise ValueError("recipe_stage")
+        if "prepareOnly" in value and (
+            not recipe_keys or value["prepareOnly"] is not True or value["priorStages"]
+        ):
+            raise ValueError("prepare_only")
         kind = value.setdefault("executorKind", "local")
         if kind not in _EXECUTORS:
             raise ValueError("executor")
@@ -345,7 +350,13 @@ def run(execution_ref: str) -> int:
             "metrics": probe,
             **{
                 key: boot[key]
-                for key in ("stage", "module", "recipeSha256", "priorStages")
+                for key in (
+                    "stage",
+                    "module",
+                    "recipeSha256",
+                    "priorStages",
+                    "prepareOnly",
+                )
                 if key in boot
             },
         }

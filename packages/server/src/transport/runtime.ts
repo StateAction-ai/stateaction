@@ -92,9 +92,10 @@ export class JobCapabilityStore implements ServiceCredentialStore {
     const { rows } = await this.pool.query<{
       job_id: string;
       stage: string;
+      recipe_parallel: boolean;
       execution_deadline: Date | null;
     }>(
-      `SELECT c.job_id, c.stage, j.execution_deadline FROM job_stage_claims c JOIN jobs j ON j.id = c.job_id
+      `SELECT c.job_id, c.stage, j.recipe_parallel, j.execution_deadline FROM job_stage_claims c JOIN jobs j ON j.id = c.job_id
        WHERE c.capability_token_sha256 = $1 AND c.claimed_at IS NOT NULL
          AND j.state = 'running' AND j.claimed_at IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM job_stage_runs r WHERE r.job_id = c.job_id AND r.stage = c.stage
@@ -108,7 +109,7 @@ export class JobCapabilityStore implements ServiceCredentialStore {
       kind: "worker",
       audience: this.audience,
       scopes:
-        claim.stage === "hand_pose"
+        claim.stage === "hand_pose" && !claim.recipe_parallel
           ? this.scopes
           : this.scopes.filter((s) => s !== "job:result"),
       jobId: claim.job_id,

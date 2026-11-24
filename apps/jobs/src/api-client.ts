@@ -1,7 +1,7 @@
 import {
   contractMaxBytes,
   parseContract,
-  type ControllerActionV2,
+  type ControllerActionV3,
   type ControllerResult,
   type DagRunV1,
   type ReconcileResult,
@@ -173,10 +173,10 @@ export class JobsApi {
 
   async act(
     jobId: string,
-    action: ControllerActionV2,
+    action: ControllerActionV3,
   ): Promise<ControllerResult> {
-    // v2 is an exact superset of v1 (SA-87): v1 actions validate unchanged.
-    parseContract("jobs.controller-action.v2", action);
+    // v3 preserves the earlier actions and adds the parallel recipe controls.
+    parseContract("jobs.controller-action.v3", action);
     const data = await this.call(
       `/internal/v1/jobs/${jobId}/controller`,
       "POST",
