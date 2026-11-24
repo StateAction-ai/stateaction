@@ -38,6 +38,9 @@ export function providerFromConfig(config: ServerConfig): S3MultipartProvider {
     storageClient(config, 15_000),
     storageClient(config, 15_000, config.publicEndpoint),
     config.bucket,
+    // Retry transient failures of exact-key HEAD and multipart metadata reads.
+    // Keep multipart mutations on the single-attempt control client.
+    storageClient(config, 15_000, config.endpoint, 2),
   );
 }
 

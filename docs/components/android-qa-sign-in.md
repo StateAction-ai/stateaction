@@ -1,0 +1,19 @@
+# Android QA collector sign-in
+
+SA-78 uses a separate signed debug APK with application ID `ai.stateaction.collector.qa`. The QA flag is `STATEACTION_QA_AUTO_SIGN_IN=true`. Gradle requires the flag and package ID together and enables only the debug variant. The capture-only collector continues to use `NO_AUTH_MODE=true`.
+
+Set up an isolated development database with an enabled collector and active ingest permission. Set the backend's `AUTH_QA_COLLECTOR_EMAIL` to that collector and enable the existing `AUTH_LOCAL_PASSWORD=true` mode. Set `BETTER_AUTH_URL` to the exact loopback or HTTPS Tailscale origin and start the server in development mode. The marked password request is refused when `NODE_ENV=production`, `RENDER=true`, the application is in a hosted environment, or the target differs from the configured development origin.
+
+Use an isolated build workspace. The QA APK's `apps/mobile/.env` needs `ENVIRONMENT=dev`, `NO_AUTH_MODE=false`, `DEV_BACKEND_ORIGIN` set to the development server, `LOCAL_PASSWORD_AUTH=true`, and `OWNER_NATIVE_UPLOAD=true`. Keep credentials out of the asset. Set `ORG_GRADLE_PROJECT_stateactionApplicationId=ai.stateaction.collector.qa` and `ORG_GRADLE_PROJECT_stateactionNativeUpload=true`, and build with `flutter build apk --debug --dart-define=STATEACTION_QA_AUTO_SIGN_IN=true` in the guarded Android build lane. Only an emulator using a loopback fixture needs the separate `stateactionNativeUploadCleartext` switch. Use the HTTPS backend for physical device tests.
+
+Use [the personal-device helper](../../scripts/ANDROID_PERSONAL_DEVICE.md) for installation, launch and scope verification. Pass a JSON object with `origin`, `email` and `password` on stdin to `scripts/android_qa_sign_in.py --serial SERIAL`. The script verifies personal user 0 and the QA package before and after writing a private, five-minute credential file. Launch the QA app for user 0. The app consumes the file at startup, sends the ordinary Better Auth password request with the QA marker and verifies the collector via `/me`. It retains the session in the existing keystore-backed cookie jar. An already active app session is restored first. Sign out before provisioning a different QA owner.
+
+On physical hardware, only the user starts a capture. Record the APK hash, Android API level and scheduler when conducting the [SA-78 recovery checklist](sa78-r2-qualification.md#android-upload-and-recovery).
+
+## Verification
+
+The signed x86_64 debug APK (`ab9912faed2c2910356ef75ab2f6e695f0e21b5d793264c4ebc67fb8fab3e7a6`) passed startup on the guarded API 33 emulator in verified personal user 0. Startup created one collector session, received 200 from `/me` and deleted the credential file without a Google sign-in tap. The earlier API 35 emulator run ended when QEMU stopped responding. The APK audit found only the five non-credential configuration fields in its environment asset. The development HTTP probe separately exercised the real Next route and Better Auth. The configured QA collector received 200 from the marked sign-in and `/me`. The unrelated seeded identity received 404 with no session.
+
+The server test exercises production and Render denial before the auth runtime initializes, including a mismatched host and a normalized Next loopback URL. The server QA test file and the Dart credential-file test each passed 20 consecutive runs. The focused Dart auth and capture suite passed 16 tests, including the capture-only widget checks.
+
+Two independent reviewers checked the server and Android auth paths. The server reviewer reproduced a 404 caused by Next's internal loopback URL. The guard now checks the configured public origin against the request origin and host, including the loopback proxy form. The real development HTTP probe and the guarded app run passed after that correction.

@@ -104,6 +104,7 @@ export class S3MultipartProvider implements MultipartProvider {
     private readonly control: S3Client,
     private readonly signing: S3Client,
     private readonly bucket: string,
+    private readonly metadata: S3Client = control,
   ) {}
 
   async listUploadsForKey(key: string): Promise<ProviderUpload[]> {
@@ -111,7 +112,7 @@ export class S3MultipartProvider implements MultipartProvider {
     let keyMarker: string | undefined;
     let uploadIdMarker: string | undefined;
     for (let page = 0; page < MAX_LIST_PAGES; page++) {
-      const out = await this.control.send(
+      const out = await this.metadata.send(
         new ListMultipartUploadsCommand({
           Bucket: this.bucket,
           Prefix: key,
@@ -195,7 +196,7 @@ export class S3MultipartProvider implements MultipartProvider {
 
   async headObject(key: string): Promise<ProviderObject | null> {
     try {
-      const out = await this.control.send(
+      const out = await this.metadata.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
       );
       if (out.ContentLength === undefined)
@@ -224,7 +225,7 @@ export class S3MultipartProvider implements MultipartProvider {
     for (let page = 0; page < MAX_LIST_PAGES; page++) {
       let out;
       try {
-        out = await this.control.send(
+        out = await this.metadata.send(
           new ListPartsCommand({
             Bucket: this.bucket,
             Key: key,

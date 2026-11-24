@@ -107,7 +107,7 @@ Monthly cap **30 USD** (user, 2026-11-23). `config/render-deploy.json` holds the
 
 ### Private R2
 
-`config/r2-bucket-policy.json` and `scripts/platform/r2-bucket-policy.mjs` (operator-only, needs the temporary Cloudflare admin token, never given to the app or the workflow): CORS exact origin `https://stateaction-web.onrender.com` (GET, HEAD, PUT; no wildcard) on `stateaction-prod`, a 7-day abort-incomplete-multipart lifecycle on prod and stage, and a check that the managed `r2.dev` domain is disabled and no custom domain exists. Buckets are private; the app signs URLs and never proxies media.
+`config/r2-bucket-policy.json` and `scripts/platform/r2-bucket-policy.mjs` (operator-only, needs the temporary Cloudflare admin token, never given to the app or the workflow): CORS exact origin `https://stateaction-web.onrender.com` (GET, HEAD, PUT; no wildcard) on `stateaction-prod`, the [stage playback CORS rule](sa78-r2-qualification.md#browser-and-broker), a 7-day abort-incomplete-multipart lifecycle on prod and stage, and a check that the managed `r2.dev` domain is disabled and no custom domain exists. Buckets are private; the app signs URLs and never proxies media.
 
 ### Deploy workflow and script
 

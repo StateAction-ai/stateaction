@@ -2,7 +2,16 @@
   "schema": "stateaction.r2-bucket-policy.v1",
   "buckets": {
     "stateaction-prod": { "origins": ["https://stateaction-web.onrender.com"] },
-    "stateaction-stage": { "origins": [] }
+    "stateaction-stage": {
+      "origins": ["http://127.0.0.1:24178"],
+      "cors": {
+        "id": "sa78-stage-playback",
+        "methods": ["GET"],
+        "headers": ["range", "if-match"],
+        "expose": ["ETag", "Content-Range"],
+        "maxAgeSeconds": 60
+      }
+    }
   },
   "cors": {
     "methods": ["GET", "HEAD", "PUT"],

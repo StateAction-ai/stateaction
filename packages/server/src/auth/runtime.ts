@@ -27,6 +27,7 @@ import {
   withPrivateHeaders,
 } from "./http.js";
 import { createAuth, createAuthPool, type Auth } from "./instance.js";
+import { allowsQaSignIn } from "./qa-sign-in.js";
 
 export type AuthRuntime = {
   config: AuthConfig;
@@ -110,8 +111,16 @@ function unavailable(error: unknown): Response {
 }
 
 /** `/api/auth/[...all]` handlers with private cache headers on every reply. */
-export function authRouteHandlers(get: () => AuthRuntime = authRuntime) {
+export function authRouteHandlers(
+  get: () => AuthRuntime = authRuntime,
+  env: NodeJS.ProcessEnv = process.env,
+) {
   const handler = async (request: Request): Promise<Response> => {
+    if (!(await allowsQaSignIn(request, env)))
+      return new Response(null, {
+        status: 404,
+        headers: withPrivateHeaders(new Headers()),
+      });
     let runtime: AuthRuntime;
     try {
       runtime = get();

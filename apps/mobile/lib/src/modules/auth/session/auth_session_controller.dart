@@ -245,7 +245,10 @@ class AuthSessionController extends ChangeNotifier {
   Future<AuthOutcome<ServerIdentity>> signInWithEmail({
     required String email,
     required String password,
-  }) => _signIn(() => _client.signInEmail(email: email, password: password));
+    bool qa = false,
+  }) => _signIn(
+    () => _client.signInEmail(email: email, password: password, qa: qa),
+  );
 
   Future<AuthOutcome<ServerIdentity>> signInWithIdToken({
     required String provider,
