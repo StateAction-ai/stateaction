@@ -33,6 +33,7 @@ from .artifact_seal import RecordingWriter, SealPlan, to_v3
 from .artifact_types import (
     FILE_NAMES,
     MANIFEST_NAME,
+    PREPARED_RECIPE_SLOT,
     ROLE_BY_KEY,
     RULE_REVISION,
     Attestation,
@@ -289,24 +290,38 @@ def export_artifacts(
         ).encode()
         from stateaction_contracts import validate_bytes
 
-        verdict = validate_bytes(
-            "artifacts.processing-result.v3"
-            if seal is not None
-            else "artifacts.processing-result.v2"
-            if att is not None
-            else "artifacts.processing-result.v1",
-            data,
-        )
-        if not verdict.valid:
-            raise ExportError(
-                "E_CONTRACT_VIOLATION",
-                ("processing-result", verdict.code, verdict.errors[:3]),
+        if seal is not None and seal.prepare_only:
+            # A private, incomplete document with only the hand-pose facts. The
+            # controller adds upstream nodes after their terminal proofs exist.
+            mpath = scratch / "prepared-result.json"
+            mpath.write_bytes(data)
+            _scan_forbidden(mpath, forbidden)
+            out = make_output(
+                "diagnostic_blob",
+                PREPARED_RECIPE_SLOT,
+                mpath,
+                None,
             )
-        mpath = scratch / MANIFEST_NAME
-        mpath.write_bytes(data)
-        _scan_forbidden(mpath, forbidden)
-        out = make_output("result_manifest", MANIFEST_NAME, mpath, None)
-        mrc = sink.seal(out)  # LAST: after every file is closed, hashed and put
+            mrc = sink.put(out)
+        else:
+            verdict = validate_bytes(
+                "artifacts.processing-result.v3"
+                if seal is not None
+                else "artifacts.processing-result.v2"
+                if att is not None
+                else "artifacts.processing-result.v1",
+                data,
+            )
+            if not verdict.valid:
+                raise ExportError(
+                    "E_CONTRACT_VIOLATION",
+                    ("processing-result", verdict.code, verdict.errors[:3]),
+                )
+            mpath = scratch / MANIFEST_NAME
+            mpath.write_bytes(data)
+            _scan_forbidden(mpath, forbidden)
+            out = make_output("result_manifest", MANIFEST_NAME, mpath, None)
+            mrc = sink.seal(out)  # LAST: after every file is closed, hashed and put
         require(
             (mrc.role, mrc.size_bytes, mrc.sha256)
             == (out.role, out.size_bytes, out.sha256),

@@ -1,3 +1,4 @@
+import { promoteRecipeEvidence } from "./stages.js";
 import { randomBytes } from "node:crypto";
 import type pg from "pg";
 import {
@@ -61,6 +62,7 @@ export type JobsDeps = {
    * exercise acceptance; the result routes then fail closed.
    */
   acceptance?: Omit<import("../acceptance/service.js").AcceptanceDeps, "pool">;
+  sealTransport?: () => import("../transport/service.js").TransportDeps;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -753,8 +755,12 @@ export async function recordExecutionEvidence(
       ? null
       : pattern(ev.executionRef, REF, "executionRef");
   return run(deps.pool, async (tx) => {
-    const { rows } = await tx.query<{ state: string; recipe: boolean }>(
-      "SELECT state, recipe IS NOT NULL AS recipe FROM jobs WHERE id = $1 FOR UPDATE",
+    const { rows } = await tx.query<{
+      state: string;
+      recipe: boolean;
+      recipe_parallel: boolean;
+    }>(
+      "SELECT state, recipe IS NOT NULL AS recipe, recipe_parallel FROM jobs WHERE id = $1 FOR UPDATE",
       [jobId],
     );
     if (!rows[0]) throw new TransportError("not_found", "Job not found");
@@ -769,6 +775,19 @@ export async function recordExecutionEvidence(
           [jobId, ev.kind, ref, JSON.stringify(ev.detail ?? {}), by],
         )
       ).rows[0]!.stage;
+      if (rows[0].recipe_parallel) {
+        // A hand-pose call may finish before caption launches. While the job
+        // can run, only the seal transaction can publish job-level evidence.
+        if (
+          !["submitting", "submit_unknown", "running"].includes(rows[0].state)
+        )
+          await promoteRecipeEvidence(tx, jobId, by);
+        const held = await tx.query(
+          "SELECT 1 FROM dispatch_admission WHERE slot = 1 AND job_id = $1",
+          [jobId],
+        );
+        return { recorded: true, slotReleased: held.rowCount === 0 };
+      }
       const latest = (
         await tx.query<{ stage: string }>(
           `SELECT stage FROM job_stage_claims WHERE job_id = $1

@@ -14,6 +14,8 @@ import {
   type PendingDispatch,
 } from "./service.js";
 
+import { promoteRecipeEvidence } from "./stages.js";
+
 /**
  * SA-27 safe recovery. Everything here builds on SA-25's state machine and
  * evidence rules; none of it writes a state the database guards would refuse,
@@ -249,11 +251,12 @@ export async function finalizeCancellations(
       if (!(await lockJob(tx, id))) return false;
       const job = await tx.query<{
         state: string;
+        recipe_parallel: boolean;
         never: boolean;
         holds: boolean;
         evidence: boolean;
       }>(
-        `SELECT j.state,
+        `SELECT j.state, j.recipe_parallel,
            (j.submission_intent_at IS NULL AND j.execution_call_id IS NULL AND j.invocation_nonce IS NULL) AS never,
            EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id) AS holds,
            EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id) AS evidence
@@ -262,7 +265,12 @@ export async function finalizeCancellations(
       );
       const j = job.rows[0];
       if (!j || j.state !== "cancel_requested") return false;
-      if (!j.evidence) {
+      const proven =
+        j.evidence ||
+        (j.recipe_parallel &&
+          j.holds &&
+          (await promoteRecipeEvidence(tx, id, input.recordedBy)));
+      if (!proven) {
         // Unproven (possibly running): stays cancel_requested and holds capacity.
         if (!j.never || !j.holds) return false;
         await tx.query(

@@ -1,4 +1,5 @@
 import "server-only";
+import { stageOfCredential } from "../jobs/stages.js";
 import { authenticateHuman } from "../auth/guard.js";
 import { errorResponse as authError, newRequestId } from "../auth/http.js";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
@@ -90,7 +91,11 @@ export async function jobAuthority(
     },
   );
   if (!result.ok) return result;
-  return { ok: true, authority: { kind: "job", jobId } };
+  const stage = stageOfCredential(result.principal.credentialId);
+  return {
+    ok: true,
+    authority: { kind: "job", jobId, ...(stage ? { stage } : {}) },
+  };
 }
 
 function unavailable(): Response {

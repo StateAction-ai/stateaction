@@ -3368,6 +3368,25 @@ def render() -> dict[Path, bytes]:
     from generate_sa99_fixtures import render_sa99
 
     files.update(render_sa99())
+    ident = "jobs.controller-action.v3"
+    start = {"action": "start_parallel_recipe", "owner": "ctl-a"}
+    graph_seal = {"action": "seal_parallel_recipe", "owner": "ctl-a"}
+    files[OUT / "contracts" / f"{ident}.json"] = dump(
+        {
+            "contract": ident,
+            "cases": [
+                ok("start parallel recipe", start),
+                ok("seal parallel recipe", graph_seal),
+                ok("legacy lease", {"action": "renew_lease", "owner": "ctl-a"}),
+                mut(
+                    "missing lease owner",
+                    graph_seal,
+                    [("/owner", DELETE)],
+                    "schema_violation",
+                ),
+            ],
+        }
+    )
     return files
 
 

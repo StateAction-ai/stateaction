@@ -1,17 +1,6 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v18.json (checked by tests).
-// catalog.v18.json is the current registry: an exact superset of the immutable
-// catalog.v17.json (adds only the SA-99 segment mark contracts), itself a superset of the immutable
-// catalog.v16.json (adds only http.recording-annotations.v1, SA-98), itself a superset of the immutable
-// catalog.v15.json (adds only jobs.prior-stages.v1, SA-91), itself a superset of the immutable
-// catalog.v14.json (adds only http.output-create.v2 and http.output-plan.v2, SA-103), itself a superset of the immutable
-// catalog.v13.json (adds only the SA-87 segment, caption, recipe and stage-run contracts and the
-// shared common.v2.schema.json), itself a superset of the immutable
-// catalog.v12.json (adds only the SA-73 source-copy confirmation and cleanup-proof contracts), itself a superset of the immutable
-// catalog.v11.json (adds only jobs.job-status.v2, SA-42), itself a superset of the immutable
-// catalog.v8.json, itself an exact superset of the immutable catalog.v7.json, itself an exact superset of the immutable catalog.v6.json,
-// itself an exact superset of the immutable catalog.v5.json,
-// catalog.v4.json, catalog.v3.json, catalog.v2.json and catalog.v1.json.
-import catalog from "../api/catalog.v18.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v19.json (checked by tests).
+// Catalog v19 adds the parallel recipe controller actions. Earlier catalogs are immutable.
+import catalog from "../api/catalog.v19.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -102,6 +91,8 @@ import s84 from "../api/http/recording-annotations.v1.schema.json" with { type: 
 import s85 from "../api/http/segment-mark-command.v1.schema.json" with { type: "json" };
 import s86 from "../api/http/segment-mark.v1.schema.json" with { type: "json" };
 import s87 from "../api/http/segment-marks.v1.schema.json" with { type: "json" };
+import controllerActionV3 from "../api/jobs/controller-action.v3.schema.json" with { type: "json" };
+
 export { catalog };
 export const commonSchema: object = common;
 /** Shared definition documents listed in the catalog `shared` key (common.v2). */
@@ -187,6 +178,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.module-manifest.v1": s75,
   "jobs.task-input.v3": s76,
   "jobs.controller-action.v2": s77,
+  "jobs.controller-action.v3": controllerActionV3,
   "jobs.heartbeat.v2": s78,
   "jobs.stage-receipt.v1": s79,
   "http.dag-run.v1": s80,

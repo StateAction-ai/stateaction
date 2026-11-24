@@ -61,6 +61,7 @@ export type HandPoseBootstrap = {
   stage: "hand_pose";
   module: string;
   recipeSha256: string;
+  prepareOnly?: true;
   priorStages: {
     stage: "segment" | "caption";
     state: string;

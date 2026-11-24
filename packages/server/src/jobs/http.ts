@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   validateBytes,
   validateValue,
-  type ControllerActionV2,
+  type ControllerActionV3,
   type ControllerResult,
   type HeartbeatAck,
   type InputRead,
@@ -12,6 +12,7 @@ import {
   advanceResult,
   closeOutputs,
   repairResults,
+  sealParallelRecipe,
   submitCandidate,
   type AcceptanceDeps,
   type CandidateBody,
@@ -52,6 +53,7 @@ import {
   recordStageHeartbeat,
   recordStageRun,
   stageOfCredential,
+  startParallelRecipe,
 } from "./stages.js";
 
 /** controller-action.v2 bodies may carry a stage receipt (<= 64 KiB). */
@@ -214,12 +216,11 @@ export function jobHandlers(deps: () => JobsDeps) {
 
     controller: (request: Request, jobId: string, principalId: string) =>
       respond(async () => {
-        // v2 is an exact superset of v1 (SA-87): the v1 actions are unchanged.
         const a = (await readBoundedJson(
           request,
-          "jobs.controller-action.v2",
+          "jobs.controller-action.v3",
           CONTROLLER_BODY_MAX_BYTES,
-        )) as ControllerActionV2;
+        )) as ControllerActionV3;
         const d = deps();
         const out = async (): Promise<unknown> => {
           switch (a.action) {
@@ -286,6 +287,26 @@ export function jobHandlers(deps: () => JobsDeps) {
                 [jobId],
               );
               return { ...recorded, slotReleased: held.rowCount === 0 };
+            }
+            case "start_parallel_recipe":
+              return {
+                recorded: await startParallelRecipe(d.pool, jobId, a.owner),
+              };
+            case "seal_parallel_recipe": {
+              if (!d.sealTransport)
+                throw new TransportError(
+                  "provider_unavailable",
+                  "Seal transport is not configured",
+                );
+              const recorded = await sealParallelRecipe(
+                acceptanceOf(d),
+                jobId,
+                a.owner,
+                principalId,
+                d.sealTransport(),
+              );
+              await advanceQuietly(d, jobId);
+              return { recorded };
             }
             case "issue_stage_claim": {
               const r = await issueStageClaim(d, {

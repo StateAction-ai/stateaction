@@ -9,6 +9,7 @@ import type { AdmissionDeps } from "../admission/recordings.js";
 import { CatalogError } from "../catalog/errors.js";
 import {
   assertJobAuthority,
+  assertResultSlotAuthority,
   assertOwnerAuthority,
   authorizeFile,
   FILE_COLUMNS,
@@ -247,14 +248,19 @@ export async function allocateJobOutput(
     .digest("hex");
   const fileId = await mapped(() =>
     inTransaction(deps.pool, async (tx) => {
-      // Serialize slot allocation and cap accounting for this job, and take the
-      // row lock BEFORE the live authority check: a cancellation, deadline or
-      // pointer change that already won its transition is then always seen, so
-      // no new output allocation is granted after it.
+      // Take the recording FK lock before the job lock, the order used by
+      // stage claims. A concurrent claim cannot wait on this job while
+      // blocking insertion of the output file's recording reference.
+      await tx.query(
+        `SELECT r.id FROM recordings r JOIN jobs j ON j.recording_id = r.id
+         WHERE j.id = $1 FOR KEY SHARE OF r`,
+        [authority.jobId],
+      );
       await tx.query("SELECT 1 FROM jobs WHERE id = $1 FOR UPDATE", [
         authority.jobId,
       ]);
       const { jobId, recordingId } = await assertJobAuthority(tx, authority);
+      await assertResultSlotAuthority(tx, authority, request.slot);
       const existing = await tx.query<{
         file_id: string;
         request_digest: string;

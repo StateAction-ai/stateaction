@@ -89,6 +89,21 @@ export function taskInputV2Projection(
   return { ...rest, schemaVersion: 2 };
 }
 
+/** A leased controller selects the graph before any stage claim is issued. */
+export async function startParallelRecipe(
+  pool: pg.Pool,
+  jobId: string,
+  owner: string,
+): Promise<boolean> {
+  return run(pool, async (tx) => {
+    const { rows } = await tx.query<{ enabled: boolean }>(
+      "SELECT job_start_parallel_recipe($1, $2) AS enabled",
+      [uuid(jobId, "jobId"), pattern(owner, OWNER, "owner")],
+    );
+    return rows[0]!.enabled;
+  });
+}
+
 // ------------------------------------------------------------- stage claims
 
 export type StageClaimIssue =
@@ -630,4 +645,28 @@ export async function getDagRun(
   const valid = validateValue("http.dag-run.v1", doc);
   if (!valid.valid) throw new Error(`dag-run invalid: ${valid.code}`);
   return doc as unknown as DagRunV1;
+}
+
+/** Publish the last issued call as job evidence only after every issued call is proven over. */
+export async function promoteRecipeEvidence(
+  tx: Tx,
+  jobId: string,
+  recordedBy: string,
+): Promise<boolean> {
+  const written = await tx.query(
+    `INSERT INTO job_execution_evidence (job_id, kind, execution_ref, detail, recorded_by)
+     SELECT e.job_id, e.kind, e.execution_ref, e.detail, $2
+     FROM job_stage_evidence e
+     WHERE e.job_id = $1 AND e.stage = (
+       SELECT c.stage FROM job_stage_claims c WHERE c.job_id = $1
+       ORDER BY job_stage_ord(c.stage) DESC LIMIT 1
+     ) AND NOT EXISTS (
+       SELECT 1 FROM job_stage_claims c
+       WHERE c.job_id = $1 AND NOT EXISTS (
+         SELECT 1 FROM job_stage_evidence proof WHERE proof.job_id = $1 AND proof.stage = c.stage
+       )
+     ) AND NOT EXISTS (SELECT 1 FROM job_execution_evidence WHERE job_id = $1)`,
+    [jobId, recordedBy],
+  );
+  return written.rowCount === 1;
 }

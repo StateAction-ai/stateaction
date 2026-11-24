@@ -20,7 +20,7 @@ from .rules import RULES
 
 # Current registry: an exact superset of the immutable catalog.v17.json, which
 # is an exact superset of catalog.v16.json through catalog.v1.json (all immutable).
-CATALOG_FILE = "catalog.v18.json"
+CATALOG_FILE = "catalog.v19.json"
 
 
 def _api_dir() -> Path:

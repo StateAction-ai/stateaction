@@ -606,7 +606,15 @@ def _run(grant: dict[str, Any], context: dict[str, Any]) -> int:
             return EXIT_UNREPORTED
         if "_outcome" in context:
             context["_outcome"]["code"] = _error_code(error)
-        return _fail(api, sink, grant, task, error, scratch)
+        return _fail(
+            api,
+            sink,
+            grant,
+            task,
+            error,
+            scratch,
+            prepare_only=context.get("prepareOnly") is True,
+        )
     finally:
         beater.stop()
         if metrics is not None:
@@ -683,12 +691,16 @@ def _process(
         ),
     )
     extra: dict[str, Any] = {}
+    prepare_only = (context or {}).get("prepareOnly") is True
     if (context or {}).get("stage") is not None:
         # Recipe job: this stage seals it (review video, hand presence, processing-result.v3).
         from .artifact_seal import plan_from_task
 
         extra["seal"] = plan_from_task(
-            task, context or {}, grant["jobId"], _document_reader(api)
+            task,
+            context or {},
+            grant["jobId"],
+            _document_reader(api),
         )
     request = urllib.request.Request(mcap["readUrl"], method="GET")
     beater.phase = "decoding"
@@ -707,15 +719,16 @@ def _process(
         )
     beater.phase = "sealing"
     manifest_receipt = result.manifest_receipt
-    _report(
-        api,
-        sink,
-        manifest_receipt,
-        "succeeded",
-        len(result.clips),
-        result.manifest["checks"],
-        None,
-    )
+    if not prepare_only:
+        _report(
+            api,
+            sink,
+            manifest_receipt,
+            "succeeded",
+            len(result.clips),
+            result.manifest["checks"],
+            None,
+        )
     if "_outcome" in (context or {}):
         keep = ("recording.mp4", "hand-presence.json")
         (context or {})["_outcome"].update(
@@ -742,9 +755,11 @@ def _fail(
     task: dict[str, Any],
     error: BaseException,
     scratch: Path,
+    *,
+    prepare_only: bool = False,
 ) -> int:
     """Upload a diagnostic manifest and report a failed candidate; never fabricate a result."""
-    from .artifact_types import make_output
+    from .artifact_types import MANIFEST_NAME, PREPARED_RECIPE_SLOT, make_output
 
     code = _error_code(error)
     print(f"Worker failed: {code}")
@@ -759,12 +774,16 @@ def _fail(
         data = _failure_manifest(
             grant, task, api.nonce, code, error, len(sink.receipts)
         )
-        path = scratch / "result-manifest.json"
+        path = scratch / MANIFEST_NAME
         path.write_bytes(data)
-        out = make_output("result_manifest", "result-manifest.json", path, None)
-        receipt = sink.seal(out)
-        checks = json.loads(data)["checks"]
-        _report(api, sink, receipt, "failed", 0, checks, code)
+        if prepare_only:
+            sink.put(make_output("diagnostic_blob", PREPARED_RECIPE_SLOT, path, None))
+        else:
+            receipt = sink.seal(
+                make_output("result_manifest", MANIFEST_NAME, path, None)
+            )
+            checks = json.loads(data)["checks"]
+            _report(api, sink, receipt, "failed", 0, checks, code)
         return EXIT_FAILURE_REPORTED
     except Exception as report_error:
         print(f"Worker could not report failure: {type(report_error).__name__}")

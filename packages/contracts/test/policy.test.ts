@@ -6,9 +6,10 @@ import { requestSha256 } from "../src/canonical.js";
 
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
-// catalog.v18.json is the current registry; catalog.v1.json through
+// catalog.v19.json is the current registry; catalog.v1.json through
 // catalog.v17.json stay published and immutable.
-const catalog = JSON.parse(text("catalog.v18.json"));
+const catalog = JSON.parse(text("catalog.v19.json"));
+const catalogV18 = JSON.parse(text("catalog.v18.json"));
 const catalogV17 = JSON.parse(text("catalog.v17.json"));
 const catalogV16 = JSON.parse(text("catalog.v16.json"));
 const catalogV15 = JSON.parse(text("catalog.v15.json"));
@@ -1066,11 +1067,11 @@ const V18_ADDED = [
 ];
 
 test("catalog v18 (SA-99) is an exact superset of catalog v17 adding only the staff segment mark contracts", () => {
-  assertExactSuperset(catalog, catalogV17, ["v17", "v18"], V18_ADDED);
-  assert.deepEqual(catalog.shared, catalogV17.shared);
-  assert.equal(Object.keys(catalog.contracts).length, 88);
+  assertExactSuperset(catalogV18, catalogV17, ["v17", "v18"], V18_ADDED);
+  assert.deepEqual(catalogV18.shared, catalogV17.shared);
+  assert.equal(Object.keys(catalogV18.contracts).length, 88);
   for (const id of V18_ADDED) {
-    const entry = catalog.contracts[id];
+    const entry = catalogV18.contracts[id];
     assert.equal(entry.casing, "camelCase", id);
     assert.deepEqual(entry.version, { path: "/api/v1" }, id);
     assert.deepEqual(entry.rules, [], id);
@@ -1083,5 +1084,19 @@ test("v18 lock entries are present and match the published bytes", () => {
     ...V18_ADDED.map((id) => catalog.contracts[id].schema),
   ];
   for (const file of files)
+    assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+test("catalog v19 only adds the parallel recipe controller action", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV18,
+    ["v18", "v19"],
+    ["jobs.controller-action.v3"],
+  );
+  for (const file of [
+    "catalog.v19.json",
+    "jobs/controller-action.v3.schema.json",
+  ])
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
 });

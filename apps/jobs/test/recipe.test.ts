@@ -299,6 +299,83 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
     assert.ok(stub.calls.some((c) => c.path.endsWith("/recipe")));
   });
 
+  test("parallel hand pose can end before caption starts, but seal waits for both branches", async () => {
+    const { jobId, stub, cfg } = await world(
+      {
+        parallelRecipe: true,
+        recipeOver: { budget: { segment: 10, hand_pose: 30, caption: 30 } },
+      },
+      50_000,
+    );
+    const hands = receipt(jobId, "hand_pose", {
+      outputs: (["recording_mp4", "hand_presence_json"] as const).map(
+        (role) => ({
+          fileId: randomUUID(),
+          role,
+          sizeBytes: "240",
+          sha256: SEGMENTS_SHA,
+        }),
+      ),
+    });
+    const modal = new FakeModal(jobId, {
+      hand_pose: { poll: (id) => returned(v2(id, 0, hands)) },
+      segment: {
+        poll: (id) =>
+          stub.runs.get("hand_pose")?.state === "succeeded"
+            ? returned(v2(id, 0, receipt(jobId, "segment")))
+            : pending,
+      },
+    });
+    const out = stagesOf(await enter(stub, jobId, cfg, modal));
+    assert.equal(out.stopped, undefined);
+    assert.deepEqual(
+      modal.stages().filter((stage) => stage !== "hand_pose"),
+      ["segment", "caption"],
+    );
+    const calls = stub.calls.map((c) => c.body);
+    const handEnd = calls.findIndex(
+      (b) =>
+        b?.action === "record_stage_run" &&
+        b.stage === "hand_pose" &&
+        b.state === "succeeded",
+    );
+    const captionStart = calls.findIndex(
+      (b) => b?.action === "issue_stage_claim" && b.stage === "caption",
+    );
+    const captionEnd = calls.findIndex(
+      (b) =>
+        b?.action === "record_stage_run" &&
+        b.stage === "caption" &&
+        b.state === "succeeded",
+    );
+    const seal = calls.findIndex((b) => b?.action === "seal_parallel_recipe");
+    assert.ok(
+      handEnd >= 0 &&
+        handEnd < captionStart &&
+        captionStart < captionEnd &&
+        captionEnd < seal,
+    );
+    assert.equal(stub.stageEvidence.size, 3);
+  });
+
+  test("a parallel sibling settles its own proof when a spawn is ambiguous, and seal is withheld", async () => {
+    const { jobId, stub, cfg } = await world({ parallelRecipe: true });
+    const modal = new FakeModal(jobId, {
+      segment: {
+        spawn: async () => {
+          throw new Error("lost spawn acknowledgement");
+        },
+      },
+    });
+    const out = stagesOf(await enter(stub, jobId, cfg, modal));
+    assert.equal(out.stopped?.outcome, "submit_unknown");
+    assert.equal(stub.runs.get("hand_pose")?.state, "failed");
+    assert.equal(stub.stageEvidence.size, 1);
+    assert.equal(stub.runs.get("segment")?.state, "submit_unknown");
+    assert.ok(!stub.actions().includes("seal_parallel_recipe"));
+    assert.ok(!modal.stages().includes("caption"));
+  });
+
   // Table: the downstream rules and partial-success policy.
   const cases: {
     name: string;

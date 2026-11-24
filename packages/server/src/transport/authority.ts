@@ -17,7 +17,16 @@ export type Authority =
    * i.e. a server-issued credential bound to exactly this job. Never a human
    * session and never a client-supplied key.
    */
-  | { kind: "job"; jobId: string };
+  | {
+      kind: "job";
+      jobId: string;
+      sealLeaseOwner?: string;
+      stage?: string;
+    };
+
+export const PREPARED_RECIPE_SLOT =
+  "diagnostics/hand_pose/prepared-result.json";
+export const RESULT_MANIFEST_SLOT = "result-manifest.json";
 
 export type FileRow = {
   id: string;
@@ -88,9 +97,35 @@ export async function assertJobAuthority(
   if (expectedJobId && expectedJobId !== authority.jobId) throw forbidden();
   try {
     const current = await assertJobOutputOpen(db, authority.jobId);
+    if (authority.sealLeaseOwner !== undefined) {
+      const { rowCount } = await db.query(
+        `SELECT 1 FROM jobs WHERE id = $1 AND recipe_parallel
+           AND controller_lease_owner = $2 AND controller_lease_expires_at > now()
+           AND job_recipe_stages_settled(id)`,
+        [authority.jobId, authority.sealLeaseOwner],
+      );
+      if (!rowCount) throw forbidden();
+    }
     return { jobId: current.jobId, recordingId: current.recordingId };
   } catch {
     throw forbidden();
+  }
+}
+
+/** The prepared and final manifest slots each have a single writer. */
+export async function assertResultSlotAuthority(
+  db: Db,
+  authority: Extract<Authority, { kind: "job" }>,
+  slot: string,
+): Promise<void> {
+  if (slot === PREPARED_RECIPE_SLOT && authority.stage !== "hand_pose")
+    throw forbidden();
+  if (slot === RESULT_MANIFEST_SLOT && authority.sealLeaseOwner === undefined) {
+    const { rows } = await db.query<{ recipe_parallel: boolean }>(
+      "SELECT recipe_parallel FROM jobs WHERE id = $1",
+      [authority.jobId],
+    );
+    if (rows[0]?.recipe_parallel) throw forbidden();
   }
 }
 
@@ -117,6 +152,15 @@ export async function authorizeFile(
   } else {
     if (file.purpose !== "output") throw forbidden();
     await assertJobAuthority(db, authority, file.job_id);
+    if (file.role === "result_manifest")
+      await assertResultSlotAuthority(db, authority, RESULT_MANIFEST_SLOT);
+    if (file.role === "diagnostic_blob" && authority.stage !== "hand_pose") {
+      const { rowCount } = await db.query(
+        "SELECT 1 FROM job_output_slots WHERE job_id = $1 AND file_id = $2 AND slot = $3",
+        [authority.jobId, file.id, PREPARED_RECIPE_SLOT],
+      );
+      if (rowCount) throw forbidden();
+    }
   }
   return file;
 }
