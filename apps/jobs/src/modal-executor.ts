@@ -1,3 +1,4 @@
+import type { CpuPipeline } from "./config.js";
 import { createHash } from "node:crypto";
 import {
   validateValue,
@@ -24,8 +25,7 @@ export type ModalJobBootstrap = {
   apiUrl: string;
   jobId: string;
   bootstrapToken: string;
-  /** Modal runs the production pipeline only. */
-  pipeline: "hand_pose_cpu_v1";
+  pipeline: CpuPipeline;
 };
 
 /**

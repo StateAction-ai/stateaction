@@ -11,6 +11,8 @@ const REASONS: Record<string, string> = {
     "Caption depends on segmentation. Choose Re-run from here to run both.",
   read_only: "Run changes are disabled in the read-only preview.",
   parent_unavailable: "The parent run is unavailable.",
+  clip_rerun_unavailable:
+    "Stage reruns are available for legacy recording jobs.",
   rerun_unavailable:
     "Rerun eligibility could not be checked. Reload to try again.",
   import_source_unavailable:

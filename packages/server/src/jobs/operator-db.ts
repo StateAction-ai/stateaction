@@ -28,7 +28,7 @@ export async function modalRecoveryBootstrapHash(
     `SELECT CASE WHEN $3::text IS NULL THEN j.bootstrap_token_sha256
                   ELSE c.bootstrap_token_sha256 END AS digest
      FROM jobs j
-     JOIN recordings r ON r.id = j.recording_id AND r.current_job_id = j.id
+     JOIN recordings r ON r.id = j.recording_id AND job_is_current(j.id)
      JOIN dispatch_admission a ON a.slot = 1 AND a.job_id = j.id
      LEFT JOIN job_stage_claims c ON c.job_id = j.id AND c.stage = $3::text
      WHERE j.id = $1 AND j.workflow_run_ref = $2 AND j.state = 'cancel_requested'

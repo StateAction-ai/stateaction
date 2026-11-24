@@ -16,10 +16,12 @@ It preserves original ROS/MCAP evidence and verifies the MCAP container through 
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import BinaryIO
 
 from .capture_stream import (
+    AccessUnit,
     CaptureReport,
     CaptureStream,
     CaptureStreamError,
@@ -28,6 +30,7 @@ from .capture_stream import (
 from .h264_decode import DecodedFrame, DecodeError, DecodeStats, H264Decoder
 from .jpeg_decode import JpegDecoder
 from .jpeg_stream import JPEG_PROFILE, JpegCaptureStream
+from .source_range import SourceRange, select_access_units
 
 
 class FrameStream:
@@ -38,9 +41,14 @@ class FrameStream:
         *,
         max_decoder_pending: int = 4,
         source_profile: str | None = None,
+        source_range: SourceRange | None = None,
+        work_dir: Path | None = None,
+        on_preroll: Callable[[AccessUnit], None] | None = None,
     ):
         self.limits = limits or StreamLimits()
         if source_profile == JPEG_PROFILE:
+            if source_range is not None:
+                raise CaptureStreamError("E_SOURCE_PROFILE", source_profile)
             self.capture: CaptureStream | JpegCaptureStream = JpegCaptureStream(
                 raw, self.limits
             )
@@ -51,6 +59,10 @@ class FrameStream:
         else:
             raise CaptureStreamError("E_SOURCE_PROFILE", source_profile)
         self._max_pending = max_decoder_pending
+        self.source_range = source_range
+        self._work_dir = work_dir
+        self._on_preroll = on_preroll
+        self._selected = 0
         self.decode_stats: DecodeStats | None = None
         self._decoded_ok = False
 
@@ -60,13 +72,17 @@ class FrameStream:
 
     @property
     def accepted(self) -> bool:
-        """True after a publishable capture has been verified and fully decoded."""
-        st, rep = self.decode_stats, self.capture.report
+        """True after source verification and complete decode of the requested frames."""
+        st, rep = self.decode_stats, self.report
+        if not self._decoded_ok or not rep.auto_admissible or st is None:
+            return False
+        if st.packets_sent != st.frames_out:
+            return False
+        if self.source_range is None:
+            return st.frames_out == rep.video_messages
         return (
-            self._decoded_ok
-            and rep.auto_admissible
-            and st is not None
-            and st.packets_sent == st.frames_out == rep.video_messages
+            self.source_range.end_ordinal <= rep.video_messages
+            and self._selected == self.source_range.frame_count
         )
 
     def require_accepted(self) -> CaptureReport:
@@ -87,10 +103,11 @@ class FrameStream:
 
     def __iter__(self) -> Iterator[DecodedFrame]:
         self._decoded_ok = False
-        if isinstance(self.capture, JpegCaptureStream):
+        capture = self.capture
+        if isinstance(capture, JpegCaptureStream):
             jpeg = JpegDecoder(self.limits.max_pixels)
             self.decode_stats = jpeg.stats
-            yield from jpeg.decode(iter(self.capture))
+            yield from jpeg.decode(iter(capture))
             self._decoded_ok = True
             return
         decoder = H264Decoder(
@@ -99,7 +116,17 @@ class FrameStream:
             max_side=self.limits.max_raster_side,
         )
         self.decode_stats = decoder.stats
-        for frame in decoder.decode(iter(self.capture)):
+
+        def units() -> Iterator[AccessUnit]:
+            for au, _, preroll in select_access_units(
+                capture, self.source_range, self._work_dir
+            ):
+                if preroll and self._on_preroll is not None:
+                    self._on_preroll(au)
+                yield au
+
+        self._selected = 0
+        for frame in decoder.decode(units()):
             declared = self._declared_raster()  # Profile precedes every access unit
             if declared is not None and frame.transform.raster != declared:
                 raise DecodeError(
@@ -109,5 +136,11 @@ class FrameStream:
                         "declared": list(declared),
                     },
                 )
+            if (
+                self.source_range is not None
+                and frame.access_unit.index < self.source_range.start_ordinal
+            ):
+                continue
+            self._selected += 1
             yield frame
         self._decoded_ok = True

@@ -59,6 +59,8 @@ files = [
   "src/stateaction_processing/artifact_reader.py",
   "src/stateaction_processing/artifact_cli.py",
   "src/stateaction_processing/caption_rule.py",
+  "src/stateaction_processing/source_range.py",
+  "src/stateaction_processing/clip_plan.py",
   "src/stateaction_processing/stage_media.py",
   "src/stateaction_processing/stage_docs.py",
   "src/stateaction_processing/flora_adapter.py",

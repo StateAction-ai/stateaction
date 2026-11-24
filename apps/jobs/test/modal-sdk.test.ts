@@ -689,6 +689,26 @@ test("bound Modal spawn checks fresh immutable identity, image and bounded resou
       "fc-ABC123",
     );
     assert.equal(calls, 2);
+    const planner = {
+      schemaVersion: 1 as const,
+      apiUrl: bootstrap.apiUrl,
+      jobId: bootstrap.jobId,
+      bootstrapToken: bootstrap.bootstrapToken,
+      pipeline: "clip_plan_cpu_v1" as const,
+    };
+    chain.length = 0;
+    await assert.rejects(
+      client.spawn(planner, () => true),
+      ModalSpawnNotSent,
+    );
+    assert.deepEqual(chain, []);
+    assert.equal(calls, 2);
+    assert.equal(
+      await client.spawn(planner, () => true, fallbackBinding),
+      "fc-ABC123",
+    );
+    assert.deepEqual(chain, ["inspect", fallbackBinding.functionId, "spawn"]);
+    assert.equal(calls, 3);
     client.close();
   });
 });

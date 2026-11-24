@@ -122,16 +122,25 @@ export async function runController(
   try {
     // SA-91: a job admitted with a recipe runs its stages; a job without one runs as before.
     const recipe = await api.recipe(jobId);
+    const clipPlan = status.kind === "clip_plan";
+    if (clipPlan && recipe)
+      return {
+        outcome: "needs_operator",
+        reason: "unexpected_clip_plan_recipe",
+      };
     if (recipe)
       return await runRecipe(
         deps,
         { jobId, runRef, owner },
         recipe,
+        status,
         leaseDeadline,
         emit,
       );
     return await drive(
-      deps,
+      clipPlan
+        ? { ...deps, settings: { ...settings, pipeline: "clip_plan_cpu_v1" } }
+        : deps,
       { jobId, runRef, owner },
       status.executionBackend,
       leaseDeadline,
@@ -236,7 +245,7 @@ async function drive(
       runRef: id.runRef,
       executionRef: `local-${randomUUID()}`,
       phase: "intent",
-      ...(settings.pipeline === "hand_pose_cpu_v1"
+      ...(settings.pipeline !== "local_fixture_noop"
         ? { threadedPipeline: true }
         : {}),
       bootId: currentBoot,
@@ -255,7 +264,7 @@ async function drive(
     if (
       !supportsLocalPipeline(settings) ||
       Boolean(journal.threadedPipeline) !==
-        (settings.pipeline === "hand_pose_cpu_v1")
+        (settings.pipeline !== "local_fixture_noop")
     )
       return unknown(
         deps,
@@ -280,7 +289,7 @@ async function drive(
     if (
       !supportsLocalPipeline(settings) ||
       Boolean(journal.threadedPipeline) !==
-        (settings.pipeline === "hand_pose_cpu_v1")
+        (settings.pipeline !== "local_fixture_noop")
     )
       return unknown(
         deps,

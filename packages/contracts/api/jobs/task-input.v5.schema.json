@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/task-input.v5.json",
+  "title": "Clip plan job task input v5",
+  "description": "A CPU planner job pinned to one sealed source, plan version and passthrough filter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "targetId",
+    "profileRevision",
+    "kind",
+    "sourceManifestSha256",
+    "rgbProfile",
+    "planVersion",
+    "clipFilter"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 5
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "targetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "profileRevision": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    },
+    "kind": {
+      "const": "clip_plan"
+    },
+    "sourceManifestSha256": {
+      "description": "SHA-256 of the exact sealed source_manifest file bytes (recording-source/v1).",
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    },
+    "planVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000000
+    },
+    "clipFilter": {
+      "$ref": "https://stateaction.ai/schemas/jobs/recipe.v2.json#/properties/clipFilter"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    }
+  ]
+}

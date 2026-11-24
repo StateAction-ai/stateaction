@@ -29,7 +29,7 @@ from typing import Any, BinaryIO
 
 from . import hand_model
 from .artifact_clip import ClipWriter
-from .artifact_seal import RecordingWriter, SealPlan, to_v3
+from .artifact_seal import RecordingWriter, SealPlan, to_recipe_result
 from .artifact_types import (
     FILE_NAMES,
     MANIFEST_NAME,
@@ -53,6 +53,7 @@ from .frames import FrameStream
 from .h264_decode import DecodedFrame
 from .hand_stream import Missingness
 from .hands import HandInferenceError, HandInferencer
+from .source_range import AccessUnitBuffer
 
 
 @dataclass
@@ -152,6 +153,8 @@ def export_artifacts(
         "E_SEAL_NEEDS_ATTESTATION",
         "a recipe seal is a backend job: it needs the claim-bound attestation",
     )
+    clip = seal.clip if seal else None
+    source_range = clip.source_range if clip else None
     stream_limits = stream_limits or StreamLimits()
     own_scratch = scratch_dir is None
     scratch = (
@@ -162,7 +165,18 @@ def export_artifacts(
     scratch.mkdir(parents=True, exist_ok=True)
     forbidden = (*context.forbidden_strings, str(scratch))
     verified = hand_model.resolve_model(model)  # hash-checked BEFORE any decode
-    stream = FrameStream(raw, stream_limits)
+    preroll = (
+        AccessUnitBuffer(scratch)
+        if source_range and source_range.start_ordinal
+        else None
+    )
+    stream = FrameStream(
+        raw,
+        stream_limits,
+        source_range=source_range,
+        work_dir=scratch,
+        on_preroll=preroll.append if preroll is not None else None,
+    )
     miss = Missingness()
     digest = hashlib.sha256()
     total_ms = max_ms = 0.0
@@ -215,6 +229,17 @@ def export_artifacts(
     try:
         with HandInferencer(verified) as inferencer:
             for frame in stream:
+                if clip is not None:
+                    au = frame.access_unit
+                    edge = (au.source_frame_id, au.native_timestamp_ns)
+                    require(
+                        (inferred > 0 or edge == clip.first)
+                        and (
+                            inferred + 1 < clip.source_range.frame_count
+                            or edge == clip.last
+                        ),
+                        "E_CLIP_SOURCE_MISMATCH",
+                    )
                 obs = inferencer.infer(frame)  # the only inference of this frame
                 inferred += 1
                 if writer is not None and plan_cut(frame):
@@ -230,11 +255,16 @@ def export_artifacts(
                         frame,
                         limits,
                         sim_note,
+                        preroll=preroll if ordinal == 0 and preroll is not None else (),
                     )
+                    if preroll is not None:
+                        preroll.clear()
                 writer.add(frame, obs)
                 if seal is not None:
                     if recording is None:
-                        recording = RecordingWriter(scratch, frame)
+                        recording = RecordingWriter(
+                            scratch, frame, include_video=clip is None
+                        )
                     recording.add(frame, obs)
                 miss.add(obs)
                 obs.digest_into(digest)
@@ -247,7 +277,10 @@ def export_artifacts(
         stage = "source_verification"
         report = stream.require_accepted()
         stats = stream.decode_stats
-        if stats is None or frames_inferred != stats.frames_out or frames_inferred == 0:
+        expected_frames = (
+            source_range.frame_count if source_range else report.video_messages
+        )
+        if stats is None or frames_inferred != expected_frames or frames_inferred == 0:
             raise HandInferenceError("E_INFERENCE_COUNT", (frames_inferred, stats))
         sha, nbytes = report.source.sha256, report.source.bytes_read
         if context.expected_source_sha256 and context.expected_source_sha256 != sha:
@@ -261,9 +294,9 @@ def export_artifacts(
         if seal is not None:
             assert recording is not None
             require(
-                recording.frames == report.video_messages == frames_inferred,
+                recording.frames == expected_frames == frames_inferred,
                 "E_RECORDING_FRAME_COUNT",
-                (recording.frames, report.video_messages, frames_inferred),
+                (recording.frames, expected_frames, frames_inferred),
             )
             for f in recording.close(seal, context):
                 _scan_forbidden(f.path, forbidden)
@@ -282,7 +315,7 @@ def export_artifacts(
             total_ms, digest.hexdigest(), config_hash, limits,
         )  # fmt: skip
         if seal is not None:
-            manifest = to_v3(
+            manifest = to_recipe_result(
                 seal, manifest, outputs, frames_inferred, len(clips_meta), miss
             )
         data = json.dumps(
@@ -305,7 +338,9 @@ def export_artifacts(
             mrc = sink.put(out)
         else:
             verdict = validate_bytes(
-                "artifacts.processing-result.v3"
+                "artifacts.processing-result.v5"
+                if clip is not None
+                else "artifacts.processing-result.v3"
                 if seal is not None
                 else "artifacts.processing-result.v2"
                 if att is not None
@@ -340,6 +375,8 @@ def export_artifacts(
         sink.abort(getattr(e, "code", type(e).__name__))
         raise
     finally:
+        if preroll is not None:
+            preroll.close()
         if own_scratch:
             shutil.rmtree(scratch, ignore_errors=True)
     return ExportResult(
@@ -482,11 +519,11 @@ def build_manifest(
     checks = [
         _check("source_accepted", "pass", "Entire source verified to footer, CRC, SHA-256 and Close; decoder flushed.",
                d(source_bytes=nbytes, video_messages=report.video_messages, frames_decoded=stats.frames_out)),
-        _check("decode_and_inference_once", "pass", "One persistent decoder; one CPU inference per decoded frame.",
+        _check("decode_and_inference_once", "pass", "One persistent decoder and one CPU inference per output frame.",
                d(decoder_instances=stats.decoder_instances, frames_decoded=stats.frames_out, frames_inferred=frames)),
         _check("native_mp4_remux", "pass", "Original access units remuxed unchanged; PTS and VCL NAL bytes match.",
                d(clips=len(clips_meta), reencoded_clips=0)),
-        _check("clip_bounds", "pass", "Every clip starts at an IDR and respects the duration and frame ceilings.",
+        _check("clip_bounds", "pass", "Viewer chunks respect the duration and frame ceilings. Non-IDR clip edges include decode context.",
                d(ceiling_seconds=int(limits.clip_ceiling_seconds), target_seconds=int(limits.clip_target_seconds),
                  max_frames=limits.clip_max_frames)),
         _check("proxy_rrd_bounds", "pass", "Pixel-encoded RRDs are within the byte and raster bounds.",

@@ -35,6 +35,7 @@ from .artifact_types import (
     make_output,
     require,
 )
+from .source_range import ClipBinding
 
 TIME_BASE = Fraction(1, 1_000_000)
 RECORDING_NAME = "recording.mp4"
@@ -198,6 +199,7 @@ class SealPlan:
         default=None, compare=False
     )
     prepare_only: bool = False
+    clip: ClipBinding | None = None
 
 
 def plan_from_task(
@@ -206,14 +208,17 @@ def plan_from_task(
     job_id: str,
     read_document: Callable[[PriorOutput], bytes | None] | None = None,
 ) -> SealPlan:
-    """The seal plan of a claimed hand_pose stage: the admitted v3 task input plus the stage rows."""
-    from stateaction_contracts import request_sha256
+    """The seal plan of a claimed hand_pose stage: the admitted task input and recorded stage rows."""
+    from stateaction_contracts import request_sha256, validate_value
 
+    version = task.get("schemaVersion")
     if (
-        task.get("schemaVersion") != 3
+        version not in (3, 4)
         or task.get("kind") != "process_recording"
         or task.get("jobId") != job_id
     ):
+        raise SealError("task_input_invalid")
+    if version == 4 and not validate_value("jobs.task-input.v4", task).valid:
         raise SealError("task_input_invalid")
     recipe = task["recipe"]
     if (
@@ -239,6 +244,7 @@ def plan_from_task(
         else tuple(parse_prior_stages(stage_ctx["priorStages"], recipe)),
         read_document=read_document,
         prepare_only=stage_ctx.get("prepareOnly") is True,
+        clip=ClipBinding.from_task(task) if version == 4 else None,
     )
 
 
@@ -308,13 +314,17 @@ def _jsonb(doc: Any) -> bytes:
 
 
 class RecordingWriter:
-    """Native full-recording remux plus presence lanes, fed one decoded frame at a time."""
+    """Build presence lanes and, for legacy jobs, also remux the recording."""
 
-    def __init__(self, scratch: Path, first: Any) -> None:
+    def __init__(
+        self, scratch: Path, first: Any, *, include_video: bool = True
+    ) -> None:
         import av
 
         au = first.access_unit
-        require(au.is_idr, "E_RECORDING_START_NOT_IDR", au.sequence)
+        require(
+            not include_video or au.is_idr, "E_RECORDING_START_NOT_IDR", au.sequence
+        )
         self._av = av
         self.path = scratch / RECORDING_NAME
         self.origin = au.encoder_pts_us
@@ -324,10 +334,14 @@ class RecordingWriter:
         self.last_pts = -1
         self.left, self.right = LaneBuilder(), LaneBuilder()
         self._digests: list[tuple[int, bytes]] = []
-        self._mp4 = av.open(str(self.path), "w", format="mp4")
-        self._stream = self._mp4.add_stream("h264")
-        self._stream.width, self._stream.height = self.raster
-        self._stream.time_base = TIME_BASE
+        self._mp4 = (
+            av.open(str(self.path), "w", format="mp4") if include_video else None
+        )
+        self._stream = None
+        if self._mp4 is not None:
+            self._stream = self._mp4.add_stream("h264")
+            self._stream.width, self._stream.height = self.raster
+            self._stream.time_base = TIME_BASE
 
     def add(self, frame: Any, obs: Any) -> None:
         au = frame.access_unit
@@ -337,13 +351,14 @@ class RecordingWriter:
         pts = au.encoder_pts_us - self.origin
         require(pts > self.last_pts, "E_RECORDING_PTS_ORDER", pts)
         self.last_pts = pts
-        packet = self._av.Packet(au.data)
-        packet.pts = packet.dts = pts
-        packet.time_base = TIME_BASE
-        packet.stream = self._stream
-        packet.is_keyframe = au.is_idr
-        self._mp4.mux(packet)  # the original Annex B access unit, unchanged
-        self._digests.append((pts, _au_digest(_vcl_hashes_annexb(au.data))))
+        if self._mp4 is not None:
+            packet = self._av.Packet(au.data)
+            packet.pts = packet.dts = pts
+            packet.time_base = TIME_BASE
+            packet.stream = self._stream
+            packet.is_keyframe = au.is_idr
+            self._mp4.mux(packet)  # the original Annex B access unit, unchanged
+            self._digests.append((pts, _au_digest(_vcl_hashes_annexb(au.data))))
         ref = {
             "source_frame_id": au.source_frame_id,
             "timestamp_ns": au.native_timestamp_ns,
@@ -376,15 +391,20 @@ class RecordingWriter:
             (len(got), len(self._digests)),
         )
 
-    def close(self, plan: SealPlan, context: Any) -> tuple[OutputFile, OutputFile]:
-        """Finish both files: (recording.mp4, hand-presence.json), verified, in scratch."""
+    def close(self, plan: SealPlan, context: Any) -> tuple[OutputFile, ...]:
+        """Finish presence and any legacy original MP4 in scratch."""
         from stateaction_contracts import validate_bytes
 
         from . import hand_model
 
         require(self.frames >= 1, "E_RECORDING_EMPTY")
-        self._mp4.close()
-        self._verify()
+        outputs = []
+        if self._mp4 is not None:
+            self._mp4.close()
+            self._verify()
+            outputs.append(
+                make_output("recording_mp4", RECORDING_NAME, self.path, None)
+            )
         provenance = hand_model.PINS
         doc = {
             "schema": "stateaction.hand_presence.v1",
@@ -427,14 +447,15 @@ class RecordingWriter:
             )
         presence_path = self.path.with_name(PRESENCE_NAME)
         presence_path.write_bytes(data)
-        return (
-            make_output("recording_mp4", RECORDING_NAME, self.path, None),
-            make_output("hand_presence_json", PRESENCE_NAME, presence_path, None),
+        outputs.append(
+            make_output("hand_presence_json", PRESENCE_NAME, presence_path, None)
         )
+        return tuple(outputs)
 
     def abort(self) -> None:
         try:
-            self._mp4.close()
+            if self._mp4 is not None:
+                self._mp4.close()
         except Exception:  # best effort during failure cleanup
             pass
 
@@ -527,7 +548,7 @@ def annotation_check(plan: SealPlan) -> dict[str, Any]:
 # --------------------------------------------------------------------- processing-result.v3
 
 
-def to_v3(
+def to_recipe_result(
     plan: SealPlan,
     doc: dict[str, Any],
     own: list[OutputFile],
@@ -535,7 +556,7 @@ def to_v3(
     clips: int,
     miss: Any,
 ) -> dict[str, Any]:
-    """Turn the v2 manifest of this run into `processing-result.v3` with every job output."""
+    """Add recipe and clip identity to the manifest and attribute every output."""
     prior_outputs = [o for row in plan.prior for o in row.outputs]
     listed = list(
         doc["outputs"]
@@ -552,6 +573,10 @@ def to_v3(
     )
     out = dict(doc)
     out["schema"] = "stateaction.processing_result.v3"
+    if plan.clip is not None:
+        out["schema"] = "stateaction.processing_result.v5"
+        out["review_clip_id"] = plan.clip.clip_id
+        out["clip_plan_sha256"] = plan.clip.plan_sha256
     out["outputs"] = [
         {
             "file_id": o.file_id,

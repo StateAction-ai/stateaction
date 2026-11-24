@@ -9,6 +9,7 @@ import { requestSha256, type RecipeV1 } from "@stateaction/contracts";
  */
 export type StubOptions = {
   jobId: string;
+  jobKind?: "process_recording" | "clip_plan" | "clip_pipeline";
   state: string;
   executionDeadline: Date;
   /** Override only the worker's deadline when testing controller enforcement. */
@@ -18,6 +19,7 @@ export type StubOptions = {
   claimWins?: boolean;
   /** SA-42: status identity projection (default local with no reference). */
   statusBackend?: "local" | "modal";
+  statusCodeRevision?: string;
   initialExecutionRef?: string;
   /** SA-42 test control: false makes every lease renewal report a lost lease. */
   renewWins?: boolean;
@@ -238,13 +240,16 @@ export async function startStub(options: StubOptions) {
       if (req.method === "GET")
         return send({
           jobId: options.jobId,
-          kind: "process_recording",
+          kind: options.jobKind ?? "process_recording",
           targetId: randomUUID(),
           state,
           previousJobId: null,
           createdAt: iso(new Date()),
           updatedAt: iso(new Date()),
           executionBackend: options.statusBackend ?? "local",
+          ...(options.statusCodeRevision
+            ? { codeRevision: options.statusCodeRevision }
+            : {}),
           executionRef,
           startDeadline: iso(
             new Date(

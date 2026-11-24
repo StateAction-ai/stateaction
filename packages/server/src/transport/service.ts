@@ -62,7 +62,7 @@ export const OUTPUT_ROLES = [
   "thumbnail_jpeg",
   "viewer_rrd",
   // SA-88 recording-level annotation outputs (common.v2 outputFileRole). The
-  // database accepts them only in their fixed slots and only for recipe jobs.
+  // database seals them only in their fixed slots for the owning job kind.
   "segments_json",
   "captions_json",
   "hand_presence_json",
@@ -279,21 +279,35 @@ export async function allocateJobOutput(
       const {
         rows: [inventory],
       } = await tx.query<{
+        kind: string;
         max_output_files: number;
+        max_output_bytes: string;
         n: string;
         bytes: string;
       }>(
-        `SELECT i.max_output_files, count(f.id)::text AS n,
+        `SELECT j.kind, i.max_output_files, i.max_output_bytes::text, count(f.id)::text AS n,
                 COALESCE(sum(f.size_bytes), 0)::text AS bytes
-         FROM job_inputs i LEFT JOIN files f ON f.job_id = i.job_id
+         FROM job_inputs i JOIN jobs j ON j.id = i.job_id
+         LEFT JOIN files f ON f.job_id = i.job_id
            AND f.purpose = 'output' AND f.state NOT IN ('cancelled', 'failed', 'expired')
-         WHERE i.job_id = $1 GROUP BY i.max_output_files`,
+         WHERE i.job_id = $1 GROUP BY j.kind, i.max_output_files, i.max_output_bytes`,
         [jobId],
       );
       if (!inventory)
         throw new TransportError("forbidden", "Job input limits unavailable");
+      const planJob = inventory.kind === "clip_plan";
+      const clipJob = inventory.kind === "clip_pipeline";
+      if (
+        (planJob &&
+          !["recording_mp4", "result_manifest"].includes(request.role)) ||
+        (clipJob && request.role === "recording_mp4")
+      )
+        throw invalid("Output role is unavailable for this job");
       if (
         Number(inventory.n) >= inventory.max_output_files ||
+        ((planJob || clipJob) &&
+          BigInt(inventory.bytes) + size >
+            BigInt(inventory.max_output_bytes)) ||
         BigInt(inventory.bytes) + size > MAX_JOB_OUTPUT_BYTES
       )
         throw new TransportError(

@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type pg from "pg";
-import { PUBLIC_VIDEO_RECIPE } from "../admission/public-video-canary.js";
+import {
+  PUBLIC_VIDEO_LABEL,
+  PUBLIC_VIDEO_RECIPE,
+} from "../admission/public-video-canary.js";
 import type {
   JobControlAction,
   JobControlCapabilities,
@@ -54,6 +57,7 @@ const refuse = (reason: string, text: string) =>
 export const SOURCE_REUPLOAD_ERROR_CODES: ReadonlySet<string> = new Set([
   "source_sha_mismatch",
   "source_checksum_mismatch",
+  "source_digest_mismatch",
 ]);
 
 // ------------------------------------------------------------------ snapshot
@@ -77,7 +81,7 @@ export type RecoverySnapshot = {
 
 const SNAPSHOT_SQL = `
   SELECT j.id, j.recording_id, j.state, j.error_code,
-    (r.current_job_id = j.id) AS is_current,
+    job_is_current(j.id) AS is_current,
     EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id) AS holds_slot,
     e.kind AS evidence_kind,
     (j.submission_intent_at IS NULL AND j.execution_call_id IS NULL AND j.invocation_nonce IS NULL) AS never_submitted,
@@ -462,17 +466,18 @@ export async function retryJob(
     if (!recordingId) throw new TransportError("not_found", "Job not found");
     const rec = (
       await tx.query<{
-        current_job_id: string | null;
         deleted_at: Date | null;
         status: string;
-      }>(
-        "SELECT current_job_id, deleted_at, status FROM recordings WHERE id = $1",
-        [recordingId],
-      )
+      }>("SELECT deleted_at, status FROM recordings WHERE id = $1", [
+        recordingId,
+      ])
     ).rows[0]!;
     // Prior canary jobs keep the same identity after their approved budgets change.
     const job = (
       await tx.query<{
+        kind: string;
+        clip_id: string | null;
+        is_current: boolean;
         state: string;
         error_code: string | null;
         admitted_at: Date | null;
@@ -480,13 +485,16 @@ export async function retryJob(
         source_manifest_sha256: string;
         public_video_canary: boolean;
       }>(
-        `SELECT state, error_code, admitted_at, profile_revision, source_manifest_sha256,
+        `SELECT kind, clip_id, job_is_current(id) AS is_current,
+                state, error_code, admitted_at, profile_revision, source_manifest_sha256,
                 EXISTS (
-                  SELECT 1 FROM job_inputs i WHERE i.job_id = $1
-                    AND i.task_input->'recipe'->>'recipeId' = $2
+                  SELECT 1 FROM job_inputs i
+                  WHERE i.job_id = $1 AND (i.task_input->'recipe'->>'recipeId' = $2
+                    OR (jobs.kind IN ('clip_plan', 'clip_pipeline') AND
+                        i.task_input #>> '{simulation,provenance,camera,label}' = $3))
                 ) AS public_video_canary
          FROM jobs WHERE id = $1 FOR UPDATE`,
-        [input.jobId, PUBLIC_VIDEO_RECIPE.recipeId],
+        [input.jobId, PUBLIC_VIDEO_RECIPE.recipeId, PUBLIC_VIDEO_LABEL],
       )
     ).rows[0]!;
     // Bind the request to the exact prior job AND the terminal state the operator
@@ -497,8 +505,8 @@ export async function retryJob(
         `job is ${job.state}, not ${input.expectedState}`,
       );
     const successor = (
-      await tx.query<{ id: string }>(
-        "SELECT id FROM jobs WHERE previous_job_id = $1",
+      await tx.query<{ id: string; is_current: boolean }>(
+        "SELECT id, job_is_current(id) AS is_current FROM jobs WHERE previous_job_id = $1",
         [input.jobId],
       )
     ).rows[0];
@@ -527,7 +535,7 @@ export async function retryJob(
         );
     } else if (successor) {
       // Operator CLI has no request ID: report the existing current successor.
-      if (rec.current_job_id === successor.id)
+      if (successor.is_current)
         return {
           jobId: successor.id,
           previousJobId: input.jobId,
@@ -548,7 +556,7 @@ export async function retryJob(
         "Use the stage rerun action to confirm a new partial attempt",
       );
     }
-    if (rec.current_job_id !== input.jobId)
+    if (!job.is_current)
       throw refuse(
         "stale_current_job",
         "the recording has a different current job",
@@ -595,20 +603,28 @@ export async function retryJob(
         "the recording cannot be processed",
       );
     await tx.query(
-      `INSERT INTO jobs (id, kind, recording_id, previous_job_id, source_manifest_sha256, profile_revision)
-       VALUES ($1, 'process_recording', $2, $3, $4, $5)`,
+      `INSERT INTO jobs (id, kind, recording_id, previous_job_id, source_manifest_sha256, profile_revision, clip_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         newId,
+        job.kind,
         recordingId,
         input.jobId,
         job.source_manifest_sha256,
         job.profile_revision,
+        job.clip_id,
       ],
     );
-    await tx.query(
-      "UPDATE recordings SET current_job_id = $2, status = 'processing' WHERE id = $1",
-      [recordingId, newId],
-    );
+    if (job.kind === "clip_pipeline")
+      await tx.query("UPDATE review_clips SET live_job_id = $2 WHERE id = $1", [
+        job.clip_id,
+        newId,
+      ]);
+    else
+      await tx.query(
+        "UPDATE recordings SET current_job_id = $2, status = 'processing' WHERE id = $1",
+        [recordingId, newId],
+      );
     return { jobId: newId, previousJobId: input.jobId, replayed: false };
   });
 }

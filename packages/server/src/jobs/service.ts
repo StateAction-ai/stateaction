@@ -7,6 +7,7 @@ import {
   parseContract,
   requestSha256,
   validateValue,
+  type ClipTaskInputV4,
   type Sha256Hex,
   type TaskInputV2,
 } from "@stateaction/contracts";
@@ -17,11 +18,13 @@ import {
 } from "../admission/public-video-canary.js";
 import { inTransaction, type Queryable } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
+import { recordingMp4MaxBytes } from "../datasets/broker.js";
 import { hashServiceToken } from "../auth/service.js";
 import { TransportError } from "../transport/errors.js";
 import type { RecipeV1 } from "@stateaction/contracts";
 import {
   admissionDeadlineSeconds,
+  clipAdmissionBudget,
   RECIPE_DEADLINE_ERROR_CODE,
   TASK_INPUT_BUILD_FAILED_ERROR_CODE,
   TASK_INPUT_INVALID_ERROR_CODE,
@@ -283,15 +286,27 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       owner_user_id: string;
       profile_revision: string;
       source_manifest_sha256: string;
+      kind: "process_recording" | "clip_plan" | "clip_pipeline";
+      clip: ClipTaskInputV4["clip"] | null;
       derived_from_job_id: string | null;
       rerun_recipe: RecipeV1 | null;
       rerun_stages: string[] | null;
     }>(
       `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256,
-              j.derived_from_job_id, p.plan -> 'recipe' AS rerun_recipe, p.plan -> 'execute' AS rerun_stages
+              j.derived_from_job_id, p.plan -> 'recipe' AS rerun_recipe, p.plan -> 'execute' AS rerun_stages,
+         j.kind,
+         CASE WHEN j.kind = 'clip_pipeline' THEN jsonb_build_object(
+           'id', c.id, 'planVersion', c.plan_version, 'planSha256', plan.manifest_sha256,
+           'sourceRange', jsonb_build_object(
+             'kind', 'clip', 'start_ordinal', c.start_ordinal, 'end_ordinal', c.end_ordinal,
+             'first_source_frame_id', c.first_source_frame_id::text,
+             'last_source_frame_id', c.last_source_frame_id::text,
+             'start_ts_ns', c.start_ts_ns::text, 'end_ts_ns', c.end_ts_ns::text)) END AS clip
        FROM jobs j JOIN recordings r ON r.id = j.recording_id
        LEFT JOIN job_rerun_plans p ON p.job_id = j.id
-       WHERE j.kind = 'process_recording' AND j.state = 'queued' AND r.current_job_id = j.id AND r.deleted_at IS NULL
+       LEFT JOIN review_clips c ON c.id = j.clip_id
+       LEFT JOIN clip_plans plan ON plan.recording_id = c.recording_id AND plan.version = c.plan_version
+       WHERE j.kind IN ('process_recording','clip_plan','clip_pipeline') AND j.state = 'queued' AND job_is_current(j.id)
          AND r.status IN ('uploaded', 'processing')
          AND (
            ($1::uuid IS NULL AND (NOT $3::boolean OR r.rgb_profile <> $4))
@@ -299,7 +314,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
              AND EXISTS (
                SELECT 1 FROM recording_admissions a
                WHERE a.recording_id = r.id AND a.outcome = 'admitted'
-                 AND (a.job_id = j.id OR (
+                 AND (a.job_id = j.id OR a.job_id = plan.plan_job_id OR (
                    j.derived_from_job_id = a.job_id
                    AND p.plan -> 'execute' = '["hand_pose"]'::jsonb
                    AND p.plan ->> 'maxGpuCostUsd' = '0.00'
@@ -345,7 +360,11 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       }
       let task: Record<string, unknown>;
       try {
-        task = await (c.derived_from_job_id ? defaultTaskInput : build)(tx, {
+        task = await (
+          c.derived_from_job_id || c.kind === "clip_plan"
+            ? defaultTaskInput
+            : build
+        )(tx, {
           jobId: c.id,
           recordingId: c.recording_id,
           profileRevision: c.profile_revision,
@@ -361,12 +380,15 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
               "not_found",
               "Public video provenance does not match",
             );
-          task = {
-            ...input,
-            schemaVersion: 3,
-            recipe: PUBLIC_VIDEO_RECIPE,
-            recipeSha256: requestSha256(PUBLIC_VIDEO_RECIPE),
-          };
+          task =
+            c.kind === "process_recording"
+              ? {
+                  ...input,
+                  schemaVersion: 3,
+                  recipe: PUBLIC_VIDEO_RECIPE,
+                  recipeSha256: requestSha256(PUBLIC_VIDEO_RECIPE),
+                }
+              : input;
         }
       } catch (error) {
         if (!isBuilderRejection(error)) throw error;
@@ -388,13 +410,50 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           recipeSha256: requestSha256(c.rerun_recipe),
         };
       }
-      // v3 (SA-88) carries the inline recipe; v1/v2 keep the single-claim path.
+      if (c.kind === "clip_plan") {
+        const { recipe: _recipe, recipeSha256: _sha, ...base } = task;
+        task = {
+          ...base,
+          schemaVersion: 5,
+          kind: "clip_plan",
+          planVersion: 1,
+          clipFilter: {
+            mode: "passthrough",
+            module: "clip_filter@0",
+            params: {},
+          },
+        };
+      }
+      if (c.kind === "clip_pipeline") {
+        const recipe = (task.recipe as RecipeV1 | undefined) ?? {
+          ...PUBLIC_VIDEO_RECIPE,
+          recipeId: "clip_hand_pose@1",
+          maxJobCostUsd: "0.00",
+          stages: PUBLIC_VIDEO_RECIPE.stages.map((stage) => ({
+            ...stage,
+            enabled: stage.stage === "hand_pose",
+          })),
+        };
+        task = {
+          ...task,
+          schemaVersion: 4,
+          recipe,
+          recipeSha256: requestSha256(recipe),
+          clip: c.clip,
+        };
+      }
+      // Legacy single-claim jobs keep their input versions. Both recipe
+      // versions pin the same inline recipe; v4 also carries a source range.
       const contract =
-        task.schemaVersion === 3
-          ? "jobs.task-input.v3"
-          : task.schemaVersion === 2
-            ? "jobs.task-input.v2"
-            : "jobs.task-input.v1";
+        task.schemaVersion === 5
+          ? "jobs.task-input.v5"
+          : task.schemaVersion === 4
+            ? "jobs.task-input.v4"
+            : task.schemaVersion === 3
+              ? "jobs.task-input.v3"
+              : task.schemaVersion === 2
+                ? "jobs.task-input.v2"
+                : "jobs.task-input.v1";
       // A bad task input rejects only THIS job (never a throw, which would
       // roll back the transaction and leave it at the head of the queue).
       const valid = validateValue(contract, task);
@@ -409,32 +468,50 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         continue;
       }
       const cfg = deps.config;
-      // Deadline from the recipe (SA-89), or the fallback without one. A
-      // recipe over the 12 h bound is refused here, before any write.
-      let deadlineSeconds: number;
+      const recipe =
+        task.schemaVersion === 3 || task.schemaVersion === 4
+          ? (task.recipe as RecipeV1)
+          : null;
+      let budget;
       try {
-        // The v3 task input was validated above, so its recipe has the RecipeV1 shape.
-        deadlineSeconds = admissionDeadlineSeconds(
-          cfg,
-          c.rerun_recipe && c.rerun_stages
-            ? {
-                stages: c.rerun_recipe.stages.map((spec) => ({
-                  ...spec,
-                  enabled: c.rerun_stages!.includes(spec.stage),
-                })),
-              }
-            : task.schemaVersion === 3
-              ? (task.recipe as RecipeV1)
-              : null,
-        );
+        budget =
+          task.schemaVersion === 4
+            ? clipAdmissionBudget(cfg, valid.value as ClipTaskInputV4)
+            : task.schemaVersion === 5
+              ? {
+                  maxOutputFiles: Math.min(cfg.limits.maxOutputFiles, 2),
+                  maxOutputBytes: String(
+                    Math.min(
+                      Number(cfg.limits.maxOutputBytes),
+                      recordingMp4MaxBytes() +
+                        cfg.limits.maxControlDocumentBytes,
+                    ),
+                  ),
+                  deadlineSeconds: cfg.executionDeadlineSeconds,
+                }
+              : {
+                  ...cfg.limits,
+                  deadlineSeconds: admissionDeadlineSeconds(
+                    cfg,
+                    c.rerun_recipe && c.rerun_stages
+                      ? {
+                          stages: c.rerun_recipe.stages.map((spec) => ({
+                            ...spec,
+                            enabled: c.rerun_stages!.includes(spec.stage),
+                          })),
+                        }
+                      : recipe,
+                  ),
+                };
       } catch (error) {
-        // Reject THIS job (queued -> cancelled with the code) and keep going,
-        // so a permanently over-limit recipe never blocks the jobs behind it.
+        const message = (error as Error).message;
         await rejectQueuedJob(
           tx,
           c.id,
-          RECIPE_DEADLINE_ERROR_CODE,
-          (error as Error).message,
+          message === "clip_source_range_invalid"
+            ? TASK_INPUT_INVALID_ERROR_CODE
+            : RECIPE_DEADLINE_ERROR_CODE,
+          message,
         );
         rejectedJobIds.push(c.id);
         continue;
@@ -453,8 +530,8 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           cfg.imageSpecSha256,
           cfg.modelSha256,
           cfg.configSha256,
-          cfg.limits.maxOutputFiles,
-          cfg.limits.maxOutputBytes,
+          budget.maxOutputFiles,
+          budget.maxOutputBytes,
           cfg.limits.maxControlDocumentBytes,
           JSON.stringify(task),
           requestSha256(task),
@@ -469,7 +546,6 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       const admittedAt = won.rows[0]!.admitted_at;
       // The recipe (if any) is stored with the admission, written once and
       // checked by the database against the persisted task input.
-      const recipe = task.schemaVersion === 3 ? task.recipe : null;
       const updated = await tx.query<{ execution_deadline: Date }>(
         `UPDATE jobs SET state = 'submitting', admitted_at = $2, dispatch_key = 'job:' || id::text,
            execution_backend = $3,
@@ -480,7 +556,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           c.id,
           admittedAt,
           cfg.executionBackend,
-          deadlineSeconds,
+          budget.deadlineSeconds,
           recipe === null ? null : JSON.stringify(recipe),
           recipe === null ? null : task.recipeSha256,
         ],
@@ -777,7 +853,7 @@ export async function requestJobCancel(
     // Operator requests are bound to the exact current job and state they saw.
     if (guard.requireCurrent) {
       const cur = await tx.query<{ current: boolean }>(
-        "SELECT current_job_id = $2 AS current FROM recordings WHERE id = $1",
+        "SELECT job_is_current($2) AS current FROM recordings WHERE id = $1",
         [rec.rows[0].recording_id, jobId],
       );
       if (!cur.rows[0]?.current)
@@ -1060,7 +1136,7 @@ export async function claimWorker(
     if (job.execution_call_id !== null && job.execution_call_id !== ref)
       throw conflict("Execution does not match the submitted execution");
     const gate = await tx.query<{ ok: boolean }>(
-      `SELECT r.current_job_id = $1 AND r.deleted_at IS NULL AND r.status IN ('uploaded', 'processing')
+      `SELECT job_is_current($1) AND r.status IN ('uploaded', 'processing')
          AND EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = $1)
          AND catalog_has_role(r.owner_user_id, 'collector')
          AND EXISTS (SELECT 1 FROM recording_registrations g
@@ -1222,10 +1298,13 @@ export async function getJobStatus(
     execution_call_id: string | null;
     start_deadline: Date | null;
     execution_deadline: Date | null;
+    code_revision: string | null;
   }>(
-    `SELECT id, kind, recording_id, state, previous_job_id, created_at, updated_at,
-            execution_backend, execution_call_id, start_deadline, execution_deadline
-     FROM jobs WHERE id = $1 AND kind = 'process_recording'`,
+    `SELECT j.id, j.kind, j.recording_id, j.state, j.previous_job_id, j.created_at, j.updated_at,
+            j.execution_backend, j.execution_call_id, j.start_deadline, j.execution_deadline,
+            i.code_revision
+     FROM jobs j LEFT JOIN job_inputs i ON i.job_id = j.id AND j.kind IN ('clip_plan', 'clip_pipeline')
+     WHERE j.id = $1 AND j.kind IN ('process_recording', 'clip_plan', 'clip_pipeline')`,
     [jobId],
   );
   const j = rows[0];
@@ -1241,11 +1320,12 @@ export async function getJobStatus(
     // SA-42: the recorded identity only (set by the controller or the winning worker claim).
     // It lets a controller on another instance ADOPT a known call; it never authorizes a spawn.
     executionBackend: j.execution_backend,
+    ...(j.code_revision === null ? {} : { codeRevision: j.code_revision }),
     executionRef: j.execution_call_id,
     startDeadline: j.start_deadline ? iso(j.start_deadline) : null,
     executionDeadline: j.execution_deadline ? iso(j.execution_deadline) : null,
   };
-  const valid = validateValue("jobs.job-status.v2", status);
+  const valid = validateValue("jobs.job-status.v3", status);
   if (!valid.valid) throw new Error(`job status invalid: ${valid.code}`);
   return status;
 }

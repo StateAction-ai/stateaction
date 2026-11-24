@@ -759,6 +759,44 @@ describe("SA-91 recipe stages from process-recording (fake Modal, stub API)", ()
     };
   }
 
+  test("a hosted clip hand-pose stage rejects a missing or stale binding before a claim", async () => {
+    for (const stale of [false, true]) {
+      const base = recipe();
+      const { jobId, stub, cfg } = await world({
+        jobKind: "clip_pipeline",
+        statusCodeRevision: "b".repeat(40),
+        recipe: {
+          ...base,
+          stages: base.stages.map((s) => ({
+            ...s,
+            enabled: s.stage === "hand_pose",
+          })),
+        },
+      });
+      const modal = Object.assign(new FakeModal(jobId), {
+        async checkFunction() {
+          assert.fail(
+            "missing or stale bindings must stop before provider inspection",
+          );
+        },
+      });
+      const out = stagesOf(
+        await enter(
+          stub,
+          jobId,
+          stale ? verifiedRecipeSettings(cfg) : cfg,
+          modal,
+        ),
+      );
+      assert.deepEqual(out.stopped, {
+        outcome: "needs_operator",
+        reason: "clip_hand_pose_binding_unavailable",
+      });
+      assert.equal(stub.claims.size, 0);
+      assert.deepEqual(modal.stages(), []);
+    }
+  });
+
   for (const signal of [
     "budget_exceeded",
     "provider_container_restarted",

@@ -7,6 +7,7 @@ import {
   type ModalInspectionApi,
 } from "./modal-deployment.js";
 import {
+  HAND_POSE_MODULE,
   modalCredentials,
   modalAppFor,
   modalFunctionFor,
@@ -215,6 +216,11 @@ export function createModalSdkClient(
       canSubmit: () => boolean,
       binding?: ModalRerunBinding,
     ): Promise<string> {
+      const clipPlan =
+        bootstrap.schemaVersion === 1 &&
+        bootstrap.pipeline === "clip_plan_cpu_v1";
+      if (clipPlan && (!binding || binding.gpu !== "none"))
+        throw new ModalSpawnNotSent();
       const deadline = performance.now() + settings.apiTimeoutMs;
       // SA-91: a stage bootstrap names its module; each module has its own deployed function.
       // The sealing hand_pose stage keeps the v1 `run-job` shape (and the hand-pose function).
@@ -239,7 +245,11 @@ export function createModalSdkClient(
             if (binding) {
               try {
                 const module =
-                  "module" in bootstrap ? bootstrap.module : undefined;
+                  "module" in bootstrap
+                    ? bootstrap.module
+                    : clipPlan
+                      ? HAND_POSE_MODULE
+                      : undefined;
                 if (!module || !(await verify(client, module, binding)))
                   throw new ModalSpawnNotSent();
                 fn = await client.functions.fromId?.(binding.functionId);

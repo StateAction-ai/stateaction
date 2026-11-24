@@ -96,7 +96,7 @@ async function acceptedJob(
               (j.derived_from_job_id IS NOT NULL) AS derived, j.source_manifest_sha256
      FROM recordings rec
      JOIN jobs j ON j.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id) AND j.recording_id = rec.id
-       AND j.state = 'succeeded'
+       AND j.state = 'succeeded' AND j.kind <> 'clip_plan'
      WHERE rec.id = $2 AND rec.deleted_at IS NULL
        AND catalog_has_role($1, 'staff')`,
     [staffUserId, recordingId, viewJobId ?? null],
@@ -392,7 +392,7 @@ export async function listReviewRecordings(
      FROM recordings rec
      JOIN "user" u ON u.id = rec.owner_user_id
      JOIN jobs j ON j.id = coalesce(recording_selected_job(rec.id), rec.current_job_id) AND j.recording_id = rec.id
-       AND j.state = 'succeeded'
+       AND j.state = 'succeeded' AND j.kind <> 'clip_plan'
      LEFT JOIN cached_processing_imports i ON i.job_id = j.id
      WHERE rec.deleted_at IS NULL AND catalog_has_role($1, 'staff')
        AND EXISTS (
@@ -442,8 +442,12 @@ export async function loadReviewExtras(
                 JOIN files f ON f.id = s.file_id AND f.job_id = s.job_id
                   AND f.purpose = 'output' AND f.role = 'recording_mp4'
                   AND f.state IN ('completed', 'verified')
-                WHERE s.job_id = $2 AND s.slot = 'recording.mp4') AS has_video
-       FROM recordings rec LEFT JOIN cached_processing_imports i ON i.job_id = rec.current_job_id WHERE rec.id = $1`,
+                WHERE s.job_id = coalesce(p.plan_job_id, $2) AND s.slot = 'recording.mp4') AS has_video
+       FROM recordings rec
+       LEFT JOIN jobs j ON j.id = $2 AND j.recording_id = rec.id
+       LEFT JOIN review_clips c ON c.id = j.clip_id
+       LEFT JOIN clip_plans p ON p.recording_id = c.recording_id AND p.version = c.plan_version
+       LEFT JOIN cached_processing_imports i ON i.job_id = rec.current_job_id WHERE rec.id = $1`,
       [job.recording_id, job.job_id],
     )
   ).rows[0]!;

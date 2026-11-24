@@ -52,3 +52,5 @@ export function parseWorkerHealth(value: unknown): WorkerHealth {
     throw new TypeError("Invalid worker health");
   return item as WorkerHealth;
 }
+
+export * from "./clip-read-model.js";

@@ -246,6 +246,46 @@ def recording_source(doc: Any) -> Violation:
     return None
 
 
+def clip_plan(doc: Any) -> Violation:
+    spans = doc["spans"]
+    if (doc["mode"] != "apply" or doc["state"] == "failed") and (
+        len(spans) != 1 or spans[0]["kind"] != "clip"
+    ):
+        return ("outcome_mismatch", "/spans")
+    if not any(span["kind"] == "clip" for span in spans):
+        return ("outcome_mismatch", "/spans")
+
+    ordinal = 0
+    last_timestamp = -1
+    for index, span in enumerate(spans):
+        path = f"/spans/{index}"
+        end = span["end_ordinal"]
+        if span["start_ordinal"] != ordinal:
+            return ("dimension_mismatch", f"{path}/start_ordinal")
+        if end <= ordinal or end > doc["frame_count"]:
+            return ("dimension_mismatch", f"{path}/end_ordinal")
+        start_time = int(span["start_ts_ns"])
+        end_time = int(span["end_ts_ns"])
+        if ordinal == 0 and span["start_ts_ns"] != doc["origin_ts_ns"]:
+            return ("reference_mismatch", f"{path}/start_ts_ns")
+        if start_time <= last_timestamp:
+            return ("ordering_violation", f"{path}/start_ts_ns")
+        single = end == ordinal + 1
+        timestamp_invalid = end_time != start_time if single else end_time <= start_time
+        if timestamp_invalid:
+            return ("ordering_violation", f"{path}/end_ts_ns")
+        if single != (span["first_source_frame_id"] == span["last_source_frame_id"]):
+            return ("reference_mismatch", f"{path}/last_source_frame_id")
+        if (
+            span["kind"] == "excluded"
+            and span["filter_version"] != doc["filter_version"]
+        ):
+            return ("reference_mismatch", f"{path}/filter_version")
+        ordinal = end
+        last_timestamp = end_time
+    return None if ordinal == doc["frame_count"] else ("dimension_mismatch", "/spans")
+
+
 def frame_map(doc: Any) -> Violation:
     rows = doc["rows"]
     found = _duplicate(rows, "source_frame_id", "/rows")
@@ -658,6 +698,7 @@ def task_input_recipe(doc: Any) -> Violation:
 
 
 def processing_result_nodes(doc: Any) -> Violation:
+    is_clip = doc["schema"] == "stateaction.processing_result.v5"
     outputs = doc["outputs"]
     roles = {o["file_id"]: o["role"] for o in outputs}
     claimed: set[str] = set()
@@ -671,7 +712,11 @@ def processing_result_nodes(doc: Any) -> Violation:
         node_roles: list[str] = []
         for j, file_id in enumerate(node["outputs"]):
             role = roles.get(file_id)
-            if role is None or role not in allowed:
+            if (
+                role is None
+                or role not in allowed
+                or (is_clip and role == "recording_mp4")
+            ):
                 return ("reference_mismatch", f"{p}/outputs/{j}")
             if file_id in claimed:
                 return ("duplicate_identity", f"{p}/outputs/{j}")
@@ -679,7 +724,10 @@ def processing_result_nodes(doc: Any) -> Violation:
             node_roles.append(role)
         if node["status"] == "succeeded":
             for role in PRIMARY_ROLES[node["stage"]]:
-                if node_roles.count(role) != 1:
+                if (
+                    not (is_clip and role == "recording_mp4")
+                    and node_roles.count(role) != 1
+                ):
                     return ("inventory_incomplete", f"{p}/outputs")
     for k, output in enumerate(outputs):
         if output["file_id"] not in claimed:
@@ -789,6 +837,7 @@ RULES: dict[str, Callable[[Any], Violation]] = {
     "upload_plan": upload_plan,
     "heartbeat_progress": heartbeat_progress,
     "recording_source": recording_source,
+    "clip_plan": clip_plan,
     "frame_map": frame_map,
     "hand_observations": hand_observations,
     "processing_result": processing_result,

@@ -1,0 +1,199 @@
+{
+  "contract": "jobs.recipe.v2",
+  "cases": [
+    {
+      "name": "recipe explicitly uses a whole-recording clip",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ],
+          "clipFilter": {
+            "mode": "passthrough",
+            "module": "clip_filter@0",
+            "params": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "uncertified apply is refused",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ],
+          "clipFilter": {
+            "mode": "apply",
+            "module": "clip_filter@0",
+            "params": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "unknown planner is refused",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "recipeId": "flora_fp8@1",
+          "maxJobCostUsd": "3.00",
+          "stages": [
+            {
+              "stage": "segment",
+              "enabled": true,
+              "module": "flora_tempseg_vllm_fp8@1",
+              "params": {
+                "grid_profile": "human_16s_4hz",
+                "batch_size": 8,
+                "repair_budget": 64
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 1800,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "caption",
+              "enabled": true,
+              "module": "flora_captioner_vllm_fp8@1",
+              "params": {
+                "max_new_tokens": 256,
+                "temperature": "0.0",
+                "overlap": true
+              },
+              "resources": {
+                "gpu": "RTX-PRO-6000",
+                "budgetSeconds": 3600,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            },
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 7200,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ],
+          "clipFilter": {
+            "mode": "passthrough",
+            "module": "clip_filter@1",
+            "params": {}
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

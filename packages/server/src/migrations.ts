@@ -182,6 +182,11 @@ export async function grantAppRole(
   );
   if (stageReruns)
     await client.query("SELECT stateaction_grant_stage_reruns($1)", [role]);
+  const { rowCount: clipPipeline } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_clip_pipeline(name)') IS NOT NULL",
+  );
+  if (clipPipeline)
+    await client.query("SELECT stateaction_grant_clip_pipeline($1)", [role]);
   return true;
 }
 

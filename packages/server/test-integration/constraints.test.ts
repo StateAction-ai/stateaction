@@ -519,10 +519,13 @@ describe("identity and logical uniqueness", () => {
       ),
       "SAC01",
     );
+    // A valid source and predecessor let the unknown kind reach its own CHECK.
     await expectCode(
       db.app.query(
-        "INSERT INTO jobs (id, kind, recording_id, source_manifest_sha256, profile_revision) VALUES (gen_random_uuid(), 'export_release', $1, $2, 'x')",
-        [p.recordingId, seedSha("x")],
+        `INSERT INTO jobs (id, kind, recording_id, previous_job_id, source_manifest_sha256, profile_revision)
+         SELECT gen_random_uuid(), 'export_release', id, $2, source_manifest_sha256, 'x'
+         FROM recordings WHERE id = $1`,
+        [p.recordingId, p.jobId],
       ),
       "23514",
     );

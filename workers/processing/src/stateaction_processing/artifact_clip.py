@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -34,8 +35,10 @@ from .artifact_types import (
     make_output,
     require,
 )
+from .capture_stream import AccessUnit
 from .h264_decode import DecodedFrame
 from .hand_model import MAX_HANDS, NUM_LANDMARKS
+from .jpeg_stream import JpegImage
 
 TIME_BASE = Fraction(1, 1_000_000)
 JOINT_ORDER = [
@@ -96,12 +99,17 @@ class ClipWriter:
         first: DecodedFrame,
         limits: ExportLimits,
         rrd_note: str | None = None,
+        preroll: Iterable[AccessUnit] = (),
     ):
         import av
 
         self._av = av
+        context = iter(preroll)
+        keyframe = next(context, None)
         require(
-            first.access_unit.is_idr, "E_CLIP_START_NOT_IDR", first.access_unit.sequence
+            (keyframe or first.access_unit).is_idr,
+            "E_CLIP_START_NOT_IDR",
+            first.access_unit.sequence,
         )
         self.ordinal, self.clip_id, self.job_id, self.limits = (
             ordinal,
@@ -117,20 +125,35 @@ class ClipWriter:
         self.raster = (w, h)
         self.clock_domain = first.access_unit.native_clock_id
         self.rows: list[dict[str, Any]] = []
-        self.packet_hashes: list[tuple[int, list[str]]] = []
+        self.packet_hashes: list[tuple[int, bool, list[str]]] = []
         self.frames = 0
         self.hands_frames = 0
         self._arr: dict[str, list[Any]] = {k: [] for k, _ in ARRAY_SPEC[:7]}
         self._hand_frames: list[dict[str, Any]] = []
         self.thumbnail: bytes | None = None
-        self.mp4 = av.open(str(self.dir / FILE_NAMES["rgb_mp4"]), "w", format="mp4")
+        options = (
+            {
+                "use_editlist": "1",
+                "avoid_negative_ts": "disabled",
+                "movie_timescale": "1000000",
+            }
+            if keyframe is not None
+            else {}
+        )
+        self.mp4 = av.open(
+            str(self.dir / FILE_NAMES["rgb_mp4"]), "w", format="mp4", options=options
+        )
         self.stream = self.mp4.add_stream("h264")
         self.stream.width, self.stream.height = w, h
         self.stream.time_base = TIME_BASE
         self.rrd = RrdWriter(
             self.dir / FILE_NAMES["viewer_rrd"], clip_id, (w, h), limits, rrd_note
         )
-        self.last_pts = -1
+        self.last_pts: int | None = None
+        if keyframe is not None:
+            self._mux(keyframe, preroll=True)
+            for au in context:
+                self._mux(au, preroll=True)
         self._thumb_from(first)
 
     # ------------------------------------------------------------------ per frame
@@ -140,6 +163,25 @@ class ClipWriter:
 
     def age_us(self, encoder_pts_us: int) -> int:
         return encoder_pts_us - self.origin
+
+    def _mux(self, au: AccessUnit | JpegImage, *, preroll: bool = False) -> int:
+        clip_pts = au.encoder_pts_us - self.origin
+        require(
+            self.last_pts is None or clip_pts > self.last_pts,
+            "E_CLIP_PTS_ORDER",
+            clip_pts,
+        )
+        require((clip_pts < 0) == preroll, "E_CLIP_PREROLL", clip_pts)
+        self.last_pts = clip_pts
+        # Native remux: the original Annex B AU goes into the muxer unchanged.
+        packet = self._av.Packet(au.data)
+        packet.pts = packet.dts = clip_pts
+        packet.time_base = TIME_BASE
+        packet.stream = self.stream
+        packet.is_keyframe = au.is_idr
+        self.mp4.mux(packet)
+        self.packet_hashes.append((clip_pts, preroll, _vcl_hashes_annexb(au.data)))
+        return clip_pts
 
     def add(self, frame: DecodedFrame, obs: Any) -> None:
         au = frame.access_unit
@@ -151,17 +193,7 @@ class ClipWriter:
             "E_SOURCE_FRAME_ID_NOT_INT64",
             au.source_frame_id,
         )
-        clip_pts = au.encoder_pts_us - self.origin
-        require(clip_pts > self.last_pts, "E_CLIP_PTS_ORDER", clip_pts)
-        self.last_pts = clip_pts
-        # Native remux: the original Annex B AU goes into the muxer unchanged.
-        packet = self._av.Packet(au.data)
-        packet.pts = packet.dts = clip_pts
-        packet.time_base = TIME_BASE
-        packet.stream = self.stream
-        packet.is_keyframe = au.is_idr
-        self.mp4.mux(packet)
-        self.packet_hashes.append((clip_pts, _vcl_hashes_annexb(au.data)))
+        clip_pts = self._mux(au)
         self.rrd.add(frame.rgb, clip_pts, int(au.source_frame_id), obs)
 
         index = self.frames
@@ -372,7 +404,9 @@ class ClipWriter:
                 require(
                     p.pts is not None and p.time_base == TIME_BASE, "E_MP4_TIMEBASE"
                 )
-                got.append((int(p.pts), _vcl_hashes_avcc(bytes(p), nal_len)))
+                got.append(
+                    (int(p.pts), p.is_discard, _vcl_hashes_avcc(bytes(p), nal_len))
+                )
         require(
             got == self.packet_hashes,
             "E_MP4_REMUX_MISMATCH",

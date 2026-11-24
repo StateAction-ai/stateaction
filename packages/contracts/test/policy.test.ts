@@ -7,7 +7,8 @@ import { requestSha256 } from "../src/canonical.js";
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
 // Prior catalog revisions stay published and immutable.
-const catalog = JSON.parse(text("catalog.v21.json"));
+const catalog = JSON.parse(text("catalog.v22.json"));
+const catalogV21 = JSON.parse(text("catalog.v21.json"));
 const catalogV20 = JSON.parse(text("catalog.v20.json"));
 const catalogV19 = JSON.parse(text("catalog.v19.json"));
 const catalogV18 = JSON.parse(text("catalog.v18.json"));
@@ -1146,11 +1147,27 @@ test("catalog v21 adds the stage rerun and result selection commands", () => {
     "http.recording-annotations.v3",
     "http.segment-marks.v2",
   ];
-  assertExactSuperset(catalog, catalogV20, ["v20", "v21"], added);
+  assertExactSuperset(catalogV21, catalogV20, ["v20", "v21"], added);
   for (const path of [
     "catalog.v21.json",
-    ...added.map((id) => catalog.contracts[id].schema),
+    ...added.map((id) => catalogV21.contracts[id].schema),
   ]) {
     assert.equal(lock.files[path], sha256(path), path);
   }
+});
+
+test("catalog v22 adds the clip pipeline contracts", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV21,
+    ["v21", "v22"],
+    [
+      "artifacts.clip-plan.v1",
+      "jobs.recipe.v2",
+      "jobs.task-input.v4",
+      "artifacts.processing-result.v5",
+      "jobs.task-input.v5",
+      "jobs.job-status.v3",
+    ],
+  );
 });

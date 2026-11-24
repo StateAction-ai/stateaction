@@ -27,12 +27,14 @@ type BaseSettings = {
 };
 
 /** The qualified local executor: a detached child on this host, APP_ENV=local only. */
+export type CpuPipeline = "hand_pose_cpu_v1" | "clip_plan_cpu_v1";
+
 export type LocalControllerSettings = BaseSettings & {
   /** Absent means local (the discriminator is optional so existing local callers are unchanged). */
   executor?: "local";
   python: string;
   /** Worker pipeline: an explicit local-only fixture name or the production pipeline. */
-  pipeline: "hand_pose_cpu_v1" | "local_fixture_noop";
+  pipeline: CpuPipeline | "local_fixture_noop";
   /** Local fixture only: bounded hold so recovery cases can be exercised. */
   fixtureHoldSeconds?: number;
 };
@@ -48,7 +50,7 @@ export type ModalControllerSettings = BaseSettings & {
   appName: string;
   functionName: string;
   environmentName?: string;
-  pipeline: "hand_pose_cpu_v1";
+  pipeline: CpuPipeline;
   /**
    * SA-91: deployed function per recipe stage module (`module@version` to function name), from
    * `MODAL_STAGE_FUNCTIONS`. `hand_pose_cpu_v1@1` is always `functionName`. A module without a
@@ -247,7 +249,7 @@ function modalSettings(): ModalControllerSettings {
 }
 
 const MODULE_REF = /^[a-z][a-z0-9_]{0,63}@[1-9][0-9]{0,5}$/;
-const HAND_POSE_MODULE = "hand_pose_cpu_v1@1";
+export const HAND_POSE_MODULE = "hand_pose_cpu_v1@1";
 
 /**
  * `module@version=function,...` or `module@version=app/function,...` (a module whose function lives

@@ -32,6 +32,21 @@ import { loadRecipeProducers } from "../annotations/annotations.js";
 import { s3ObjectReader } from "../admission/object-reader.js";
 import { serverConfig } from "../config.js";
 import { TransportError } from "../transport/errors.js";
+import { S3ReadSigner } from "../datasets/broker.js";
+import { storageClient } from "../storage.js";
+import { persistedClipReads } from "./clip-reads.js";
+
+export function clipReads(get: () => AuthRuntime = authRuntime) {
+  const config = serverConfig();
+  return persistedClipReads({
+    pool: get().pool,
+    reader: s3ObjectReader(config, { timeoutMs: 15_000 }),
+    signer: new S3ReadSigner(
+      storageClient(config, 15_000, config.publicEndpoint),
+      config.bucket,
+    ),
+  });
+}
 
 /** Kinds with a real authenticated mutation: POST /api/v1/jobs/{jobId}/control (reupload is guidance). */
 const WIRED = new Set([

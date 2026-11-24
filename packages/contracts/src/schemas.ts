@@ -1,4 +1,4 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v21.json (checked by tests).
+// Generated listing of the published schema files; keep in sync with api/catalog.v22.json (checked by tests).
 // Catalog v21 adds selective stage rerun and result selection contracts.
 import rerunContract0 from "../api/http/stage-rerun-plan-request.v1.schema.json" with { type: "json" };
 import rerunContract1 from "../api/http/stage-rerun-command.v1.schema.json" with { type: "json" };
@@ -12,7 +12,7 @@ import dagRunV2 from "../api/http/dag-run.v2.schema.json" with { type: "json" };
 import stageRerunPlanV1 from "../api/http/stage-rerun-plan.v1.schema.json" with { type: "json" };
 import recordingAnnotationsV3 from "../api/http/recording-annotations.v3.schema.json" with { type: "json" };
 import segmentMarksV2 from "../api/http/segment-marks.v2.schema.json" with { type: "json" };
-import catalog from "../api/catalog.v21.json" with { type: "json" };
+import catalog from "../api/catalog.v22.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -118,6 +118,18 @@ import cached6 from "../api/http/staff-clip-page.v2.schema.json" with { type: "j
 import cached7 from "../api/http/dataset-page.v2.schema.json" with { type: "json" };
 import cached8 from "../api/http/dataset-clip-page.v2.schema.json" with { type: "json" };
 
+import clipPlan from "../api/artifacts/clip-plan.v1.schema.json" with { type: "json" };
+
+import clipRecipe from "../api/jobs/recipe.v2.schema.json" with { type: "json" };
+
+import clipTask from "../api/jobs/task-input.v4.schema.json" with { type: "json" };
+
+import clipResult from "../api/artifacts/processing-result.v5.schema.json" with { type: "json" };
+
+import clipPlanTask from "../api/jobs/task-input.v5.schema.json" with { type: "json" };
+
+import clipJobStatus from "../api/jobs/job-status.v3.schema.json" with { type: "json" };
+
 export { catalog };
 export const commonSchema: object = common;
 /** Shared definition documents listed in the catalog `shared` key (common.v2 and common.v3). */
@@ -132,6 +144,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.staff-clip-page.v2": cached6,
   "http.dataset-page.v2": cached7,
   "http.dataset-clip-page.v2": cached8,
+  "artifacts.clip-plan.v1": clipPlan,
   "artifacts.frame-map.v1": s0,
   "artifacts.hand-observations.v1": s1,
   "artifacts.processing-result.v1": s2,
@@ -193,6 +206,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.output-closure.v1": s58,
   "jobs.result-ack.v1": s59,
   "jobs.job-status.v1": s18,
+  "jobs.job-status.v3": clipJobStatus,
   "jobs.job-status.v2": s65,
   "jobs.reconcile-result.v1": s42,
   "jobs.result-candidate.v1": s19,
@@ -207,9 +221,13 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "artifacts.segments.v1": s70,
   "artifacts.captions.v1": s71,
   "artifacts.hand-presence.v1": s72,
+  "artifacts.processing-result.v5": clipResult,
   "artifacts.processing-result.v3": s73,
+  "jobs.recipe.v2": clipRecipe,
   "jobs.recipe.v1": s74,
   "jobs.module-manifest.v1": s75,
+  "jobs.task-input.v5": clipPlanTask,
+  "jobs.task-input.v4": clipTask,
   "jobs.task-input.v3": s76,
   "jobs.controller-action.v2": s77,
   "jobs.controller-action.v3": controllerActionV3,

@@ -29,6 +29,8 @@ export type JobStatus = {
   targetId: string;
   /** SA-42: server-recorded identity only. Adoption of a known call; never spawn authority. */
   executionBackend: "local" | "modal" | null;
+  /** Immutable code revision of an admitted clip job. */
+  codeRevision?: string;
   executionRef: string | null;
   /** Immutable worker start deadline; null before the submission intent. */
   startDeadline: string | null;
@@ -130,9 +132,9 @@ export class JobsApi {
     const data = (await this.call(
       `/internal/v1/jobs/${jobId}`,
       "GET",
-      "jobs.job-status.v2",
+      "jobs.job-status.v3",
     )) as Record<string, unknown>;
-    return this.checked<JobStatus>("jobs.job-status.v2", data);
+    return this.checked<JobStatus>("jobs.job-status.v3", data);
   }
 
   /**

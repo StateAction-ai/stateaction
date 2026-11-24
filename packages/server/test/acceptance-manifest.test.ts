@@ -267,3 +267,37 @@ test("acceptance budgets are finite and validated", () => {
     acceptanceConfigFromEnv({ ACCEPTANCE_VERIFY_OBJECT_TIMEOUT_MS: "5" }),
   );
 });
+
+test("clip acceptance binds the plan digest to the admitted task and checks its range", () => {
+  const { facts, manifest } = fixture();
+  const digest = "f".repeat(64);
+  facts.inputs.taskInput = {
+    ...facts.inputs.taskInput,
+    schemaVersion: 4,
+    clip: {
+      id: REC,
+      planSha256: digest,
+      sourceRange: {
+        start_ordinal: 2,
+        end_ordinal: 4,
+        start_ts_ns: "1",
+        end_ts_ns: "3",
+      },
+    },
+  };
+  manifest.schema = "stateaction.processing_result.v5";
+  manifest.review_clip_id = REC;
+  manifest.clip_plan_sha256 = digest;
+  assert.equal(reason(checkManifest(manifest, facts)), "ok");
+  manifest.clip_plan_sha256 = "0".repeat(64);
+  assert.equal(
+    reason(checkManifest(manifest, facts)),
+    "manifest_clip_mismatch",
+  );
+  manifest.clip_plan_sha256 = digest;
+  manifest.clips[0].frame_count = 3;
+  assert.equal(
+    reason(checkManifest(manifest, facts)),
+    "manifest_clip_range_mismatch",
+  );
+});

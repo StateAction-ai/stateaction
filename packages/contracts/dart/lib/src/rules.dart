@@ -197,6 +197,55 @@ Violation? _recordingSource(Json doc) {
   return null;
 }
 
+Violation? _clipPlan(Json doc) {
+  final spans = _list(doc['spans']).map(_obj).toList();
+  if ((doc['mode'] != 'apply' || doc['state'] == 'failed') &&
+      (spans.length != 1 || spans.first['kind'] != 'clip')) {
+    return _v('outcome_mismatch', '/spans');
+  }
+  if (!spans.any((span) => span['kind'] == 'clip')) {
+    return _v('outcome_mismatch', '/spans');
+  }
+
+  var ordinal = 0;
+  var lastTimestamp = -BigInt.one;
+  for (final (index, span) in spans.indexed) {
+    final path = '/spans/$index';
+    final end = (span['end_ordinal']! as num).toInt();
+    if (span['start_ordinal'] != ordinal) {
+      return _v('dimension_mismatch', '$path/start_ordinal');
+    }
+    if (end <= ordinal || end > (doc['frame_count']! as num)) {
+      return _v('dimension_mismatch', '$path/end_ordinal');
+    }
+    final startTime = _big(span['start_ts_ns']);
+    final endTime = _big(span['end_ts_ns']);
+    if (ordinal == 0 && span['start_ts_ns'] != doc['origin_ts_ns']) {
+      return _v('reference_mismatch', '$path/start_ts_ns');
+    }
+    if (startTime <= lastTimestamp) {
+      return _v('ordering_violation', '$path/start_ts_ns');
+    }
+    final single = end == ordinal + 1;
+    if (single ? endTime != startTime : endTime <= startTime) {
+      return _v('ordering_violation', '$path/end_ts_ns');
+    }
+    if (single !=
+        (span['first_source_frame_id'] == span['last_source_frame_id'])) {
+      return _v('reference_mismatch', '$path/last_source_frame_id');
+    }
+    if (span['kind'] == 'excluded' &&
+        span['filter_version'] != doc['filter_version']) {
+      return _v('reference_mismatch', '$path/filter_version');
+    }
+    ordinal = end;
+    lastTimestamp = endTime;
+  }
+  return ordinal == doc['frame_count']
+      ? null
+      : _v('dimension_mismatch', '/spans');
+}
+
 Violation? _frameMap(Json doc) {
   final rows = _list(doc['rows']).map(_obj).toList();
   final dup = _duplicate(rows, 'source_frame_id', '/rows');
@@ -391,6 +440,7 @@ final Map<String, Rule> _baseRules = {
     return null;
   },
   'recording_source': _recordingSource,
+  'clip_plan': _clipPlan,
   'frame_map': _frameMap,
   'hand_observations': _handObservations,
   'processing_result': _processingResult,
@@ -744,6 +794,7 @@ Violation? _moduleManifest(Json doc) {
 }
 
 Violation? _processingResultNodes(Json doc) {
+  final isClip = doc['schema'] == 'stateaction.processing_result.v5';
   final outputs = _list(doc['outputs']).map(_obj).toList();
   final roles = {for (final o in outputs) o['file_id']: o['role']! as String};
   final claimed = <Object?>{};
@@ -762,7 +813,9 @@ Violation? _processingResultNodes(Json doc) {
     final nodeRoles = <String>[];
     for (var j = 0; j < files.length; j++) {
       final role = roles[files[j]];
-      if (role == null || !allowed.contains(role)) {
+      if (role == null ||
+          !allowed.contains(role) ||
+          (isClip && role == 'recording_mp4')) {
         return _v('reference_mismatch', '$p/outputs/$j');
       }
       if (!claimed.add(files[j])) {
@@ -772,7 +825,8 @@ Violation? _processingResultNodes(Json doc) {
     }
     if (node['status'] == 'succeeded') {
       for (final role in _primaryRoles[node['stage']]!) {
-        if (nodeRoles.where((r) => r == role).length != 1) {
+        if (!(isClip && role == 'recording_mp4') &&
+            nodeRoles.where((r) => r == role).length != 1) {
           return _v('inventory_incomplete', '$p/outputs');
         }
       }

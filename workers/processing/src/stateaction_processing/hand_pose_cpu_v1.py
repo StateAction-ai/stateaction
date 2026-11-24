@@ -528,7 +528,7 @@ def _print_stage_receipt(
 ) -> None:
     """`jobs.stage-receipt.v1` as the last stdout line (sorted, compact, flushed).
 
-    Lists only recording.mp4 and hand-presence.json (the receipt caps outputs at 64; a long
+    Lists hand-presence.json and the original MP4 for legacy jobs (a long
     recording has far more clip files, which the hand_pose node lists through the inventory).
     A failed stage lists no output. Nothing may be printed after this line.
     """
@@ -730,7 +730,11 @@ def _process(
             None,
         )
     if "_outcome" in (context or {}):
-        keep = ("recording.mp4", "hand-presence.json")
+        keep = (
+            ("hand-presence.json",)
+            if task["schemaVersion"] == 4
+            else ("recording.mp4", "hand-presence.json")
+        )
         (context or {})["_outcome"].update(
             status="succeeded",
             code=None,

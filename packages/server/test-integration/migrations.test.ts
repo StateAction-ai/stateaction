@@ -18,12 +18,15 @@ import {
   writeArtifact,
 } from "./harness.js";
 import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
+import { queuedJob } from "./jobs-harness.js";
 
 const TABLES = [
   "access",
   "account",
   "cached_processing_imports",
   "clips",
+  "clip_plans",
+  "clip_result_selections",
   "dataset_access",
   "dataset_clips",
   "dataset_sharing_clearances",
@@ -54,6 +57,7 @@ const TABLES = [
   "recording_result_selections",
   "recording_seals",
   "recordings",
+  "review_clips",
   "reviews",
   "rerun_spend_authorizations",
   "rerun_spend_reservations",
@@ -82,7 +86,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-016 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-017 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -103,7 +107,8 @@ test("published migrations 001-005 are byte-identical; 006-016 follow", async ()
     "675c811466586ce3a396ac13c233fd9617415e4171866cb4aad8ab2f58244318",
   );
   assert.equal(files[15]?.name, "016_stage_rerun_guards.sql");
-  assert.equal(files.length, 16);
+  assert.equal(files[16]?.name, "017_review_clips.sql");
+  assert.equal(files.length, 17);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -118,7 +123,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -131,7 +136,9 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      alreadyApplied: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+      ],
       adopted: [],
       appRoleGranted: true,
     });
@@ -162,15 +169,25 @@ test("migrations apply to an empty database with an unprivileged owner", async (
   }
 });
 
-test("015 and 016 preserve a populated v14 recording and its enabled guards", async (t) => {
+test("015–017 preserve a populated v14 recording and backfill its clip pointers", async (t) => {
   const db = await freshDatabase({ migrate: false });
   t.after(() => db.close());
   const migrations = await loadMigrations();
   await migrateDatabase({
     ownerUrl: db.ownerUrl,
-    migrations: migrations.slice(0, 14),
+    migrations: migrations.slice(0, 6),
   });
   const actors = await createActors(db.owner);
+  const pre007 = await queuedJob({ ...db, actors });
+  await db.owner.query(
+    `UPDATE jobs SET state = 'failed', finished_at = now(),
+       invocation_nonce = $2, execution_call_id = 'local-pre-007' WHERE id = $1`,
+    [pre007.jobId, "n".repeat(43)],
+  );
+  await migrateDatabase({
+    ownerUrl: db.ownerUrl,
+    migrations: migrations.slice(0, 14),
+  });
   const result = await processedRecording(db.app, actors, 1);
   const { jobId, recordingId } = result;
   await fixtureAcceptResult(db.owner, db.app, {
@@ -185,10 +202,11 @@ test("015 and 016 preserve a populated v14 recording and its enabled guards", as
     const rows = async () =>
       (
         await client.query(
-          `SELECT to_jsonb(j) - 'derived_from_job_id' AS job, to_jsonb(r) AS recording,
+          `SELECT to_jsonb(j) - ARRAY['derived_from_job_id','clip_id'] AS job, to_jsonb(r) AS recording,
               pg_relation_filenode('public.jobs'::regclass)::text AS filenode
-       FROM jobs j JOIN recordings r ON r.id = j.recording_id WHERE j.id = $1`,
-          [jobId],
+       FROM jobs j JOIN recordings r ON r.id = j.recording_id WHERE j.id = ANY($1::uuid[])
+       ORDER BY j.id`,
+          [[jobId, pre007.jobId]],
         )
       ).rows;
     const guards = async () =>
@@ -198,12 +216,24 @@ test("015 and 016 preserve a populated v14 recording and its enabled guards", as
         )
       ).rows;
     const before = await rows();
-    assert.equal(before[0]?.job.state, "succeeded");
+    const grandfathered = before.find(
+      (row) => row.job.id === pre007.jobId,
+    )?.job;
+    assert.equal(grandfathered.state, "failed");
+    assert.equal(grandfathered.admitted_at, null);
+    assert.equal(grandfathered.claimed_at, null);
+    assert.equal(grandfathered.invocation_nonce, "n".repeat(43));
     const enabled = await guards();
     assert.deepEqual(
-      (await applyMigrations(client, migrations)).applied,
+      (await applyMigrations(client, migrations.slice(0, 16))).applied,
       [15, 16],
     );
+    await client.query(
+      `INSERT INTO recording_result_selections (recording_id, seq, job_id, selected_by, reason, kind)
+       VALUES ($1, 2, $2, $3, 'Manual selection before migration', 'manual')`,
+      [recordingId, jobId, actors.staff],
+    );
+    assert.deepEqual((await applyMigrations(client, migrations)).applied, [17]);
     assert.deepEqual(await rows(), before);
     const after = await guards();
     for (const old of enabled)
@@ -213,11 +243,50 @@ test("015 and 016 preserve a populated v14 recording and its enabled guards", as
     assert.deepEqual(
       (
         await client.query(
-          "SELECT job_id, seq FROM recording_result_selections WHERE recording_id = $1",
+          "SELECT job_id, seq FROM recording_result_selections WHERE recording_id = $1 ORDER BY seq",
           [recordingId],
         )
       ).rows,
-      [{ job_id: jobId, seq: 1 }],
+      [
+        { job_id: jobId, seq: 1 },
+        { job_id: jobId, seq: 2 },
+      ],
+    );
+    const { rows: clipHistory } = await client.query(
+      `SELECT job_id, seq, selected_by, kind FROM clip_result_selections WHERE clip_id = $1 ORDER BY seq`,
+      [recordingId],
+    );
+    assert.deepEqual(clipHistory, [
+      { job_id: jobId, seq: 1, selected_by: null, kind: "auto" },
+      { job_id: jobId, seq: 2, selected_by: actors.staff, kind: "manual" },
+    ]);
+    const { rows: oldClip } = await client.query(
+      "SELECT id, live_job_id, selected_job_id FROM review_clips WHERE recording_id = $1",
+      [pre007.recordingId],
+    );
+    assert.deepEqual(oldClip, [
+      {
+        id: pre007.recordingId,
+        live_job_id: pre007.jobId,
+        selected_job_id: null,
+      },
+    ]);
+    const { rows: restoredChecks } = await client.query(
+      `SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'jobs'::regclass
+       AND conname IN ('jobs_admission_complete', 'jobs_claim_complete') ORDER BY conname`,
+    );
+    assert.deepEqual(restoredChecks, [
+      { conname: "jobs_admission_complete", convalidated: false },
+      { conname: "jobs_claim_complete", convalidated: false },
+    ]);
+    assert.deepEqual(
+      (
+        await client.query(
+          "SELECT id, live_job_id, selected_job_id FROM review_clips WHERE recording_id = $1",
+          [recordingId],
+        )
+      ).rows,
+      [{ id: recordingId, live_job_id: jobId, selected_job_id: jobId }],
     );
   } finally {
     await client.query("ROLLBACK");
@@ -268,7 +337,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -423,6 +492,9 @@ test("the hosted reader can follow rerun lineage and selection without gaining w
       "job_rerun_plans",
       "job_stage_reuse",
       "job_rerun_copies",
+      "clip_plans",
+      "review_clips",
+      "clip_result_selections",
     ];
     for (const relation of allowed) {
       const {
@@ -442,6 +514,28 @@ test("the hosted reader can follow rerun lineage and selection without gaining w
       [reader],
     );
     assert.deepEqual(privateAcl, { spend: false, grant: false });
+    const readSession = await db.owner.connect();
+    try {
+      await readSession.query("BEGIN");
+      await readSession.query(`GRANT USAGE ON SCHEMA public TO ${reader}`);
+      await readSession.query(`GRANT ${reader} TO CURRENT_USER WITH SET TRUE`);
+      await readSession.query(`SET LOCAL ROLE ${reader}`);
+      const {
+        rows: [selection],
+      } = await readSession.query(
+        "SELECT recording_selected_job('00000000-0000-4000-8000-000000000000') AS job",
+      );
+      assert.deepEqual(selection, { job: null });
+      await expectCode(
+        readSession.query(
+          "UPDATE review_clips SET live_job_id = NULL WHERE false",
+        ),
+        "42501",
+      );
+    } finally {
+      await readSession.query("ROLLBACK");
+      readSession.release();
+    }
     await expectCode(
       db.app.query("SELECT public.stateaction_grant_stage_rerun_reads($1)", [
         reader,
@@ -541,8 +635,9 @@ const roleSnapshot = async (pool: pg.Pool): Promise<RoleRow[]> =>
     )
   ).rows;
 
-/** Per-run role names of the other suites that share the cluster (never ours). */
-const OTHER_RUN_ROLE = /^sa_(auth|fresh|hosted)_[0-9a-f_]+$/;
+/** Exact fixture role names that concurrent suites may create or drop. */
+const OTHER_RUN_ROLE =
+  /^sa_(?:auth_[0-9a-f]{12}(?:_[0-9a-f]{12})?|(?:fresh|hosted|repl|brls|memb|nolg)_[0-9a-f]{12})$/;
 
 /**
  * What this test must not cause. By role OID: a role that existed before and still exists
@@ -755,57 +850,56 @@ test("pre-existing privileged or member app roles fail closed without rotation o
 test("the role comparison fails on a created hostile sa_ role and ignores only other runs' roles", async () => {
   const db = await freshDatabase({ migrate: false });
   const tag = db.name.slice(-12);
-  const hostileRole = `sa_evil_${tag.slice(0, 6)}`;
   try {
     const before = await roleSnapshot(db.owner);
-    // Another run's role appears and vanishes: tolerated.
-    const other = `sa_auth_${"0".repeat(12)}_${"a".repeat(12)}`;
-    await db.owner.query(`CREATE ROLE ${other} NOLOGIN`);
+    // Construct both snapshots from the same catalog read so this test creates
+    // no cluster-global roles and cannot race another run's comparison.
+    const row = {
+      ...before[0]!,
+      oid: -1,
+      rolsuper: false,
+      rolcreatedb: false,
+      rolcreaterole: false,
+      rolreplication: false,
+      rolbypassrls: false,
+      rolcanlogin: false,
+    };
+    const other = [
+      `sa_auth_${"0".repeat(12)}_${"a".repeat(12)}`,
+      ...["repl", "brls", "memb", "nolg"].map(
+        (kind) => `sa_${kind}_${"0".repeat(12)}`,
+      ),
+    ].map((rolname, index) => ({ ...row, rolname, oid: -1 - index }));
+    const own = { tag, inputs: [] };
+    assert.deepEqual(roleChanges(before, [...before, ...other], own), []);
+    assert.deepEqual(roleChanges([...before, ...other], before, own), []);
+
+    const hostile = { ...row, rolname: `sa_evil_${tag.slice(0, 6)}` };
+    assert.deepEqual(roleChanges(before, [...before, hostile], own), [
+      `created ${hostile.rolname}`,
+    ]);
+    const sameTag = { ...row, rolname: `sa_repl_${tag}` };
+    assert.deepEqual(roleChanges(before, [...before, sameTag], own), [
+      `created ${sameTag.rolname}`,
+    ]);
+    const fed = other[1]!;
     assert.deepEqual(
-      roleChanges(before, await roleSnapshot(db.owner), { tag, inputs: [] }),
-      [],
-    );
-    await db.owner.query(`DROP ROLE ${other}`);
-    // A hostile role that starts with sa_ is a problem, even among other runs' roles.
-    await db.owner.query(`CREATE ROLE ${hostileRole} NOLOGIN`);
-    try {
-      assert.deepEqual(
-        roleChanges(before, await roleSnapshot(db.owner), {
-          tag,
-          inputs: [],
-        }),
-        [`created ${hostileRole}`],
-      );
-    } finally {
-      await db.owner.query(`DROP ROLE ${hostileRole}`);
-    }
-    // A role whose name this test fed in is never tolerated, even if it looks foreign.
-    const fed = `sa_auth_${"1".repeat(12)}`;
-    await db.owner.query(`CREATE ROLE ${fed} NOLOGIN`);
-    try {
-      assert.deepEqual(
-        roleChanges(before, await roleSnapshot(db.owner), {
-          tag,
-          inputs: [fed],
-        }),
-        [`created ${fed}`],
-      );
-    } finally {
-      await db.owner.query(`DROP ROLE ${fed}`);
-    }
-    // A flag change or a dropped non-foreign role is a problem.
-    const flagged = (await roleSnapshot(db.owner)).map((r) =>
-      r.rolname === "migration_owner" ? { ...r, rolsuper: !r.rolsuper } : r,
-    );
-    assert.deepEqual(
-      roleChanges(await roleSnapshot(db.owner), flagged, { tag, inputs: [] }),
-      ["changed migration_owner"],
+      roleChanges(before, [...before, fed], { tag, inputs: [fed.rolname] }),
+      [`created ${fed.rolname}`],
     );
     assert.deepEqual(
       roleChanges(
-        await roleSnapshot(db.owner),
-        (await roleSnapshot(db.owner)).filter((r) => r.rolname !== "bootstrap"),
-        { tag, inputs: [] },
+        [...before, fed],
+        [...before, { ...fed, rolreplication: true }],
+        own,
+      ),
+      [`changed ${fed.rolname}`],
+    );
+    assert.deepEqual(
+      roleChanges(
+        before,
+        before.filter((r) => r.rolname !== "bootstrap"),
+        own,
       ),
       ["dropped bootstrap"],
     );

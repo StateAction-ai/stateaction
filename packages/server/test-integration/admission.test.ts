@@ -345,7 +345,7 @@ const admissionOf = async (recordingId: string) =>
     )
   ).rows[0];
 
-test("a hosted public-video recipe binds the collector, client id and source bytes", async (t) => {
+test("a hosted public-video CPU plan binds the collector, client id and source bytes", async (t) => {
   const s = await scenario(actors.collector, { publicVideo: true });
   const canary = {
     ownerUserId: s.owner,
@@ -426,13 +426,19 @@ test("a hosted public-video recipe binds the collector, client id and source byt
   assert.equal(started.job.jobId, ready.jobId);
   assert.equal(
     started.job.executionDeadline.getTime() - started.job.admittedAt.getTime(),
-    5_000_000,
+    JOBS_CONFIG.executionDeadlineSeconds * 1000,
   );
   const input = await db.app.query(
     "SELECT task_input FROM job_inputs WHERE job_id = $1",
     [ready.jobId],
   );
-  assert.deepEqual(input.rows[0]?.task_input.recipe, PUBLIC_VIDEO_RECIPE);
+  assert.equal(input.rows[0]?.task_input.kind, "clip_plan");
+  assert.equal(input.rows[0]?.task_input.schemaVersion, 5);
+  assert.deepEqual(input.rows[0]?.task_input.clipFilter, {
+    mode: "passthrough",
+    module: "clip_filter@0",
+    params: {},
+  });
   assert.deepEqual(input.rows[0]?.task_input.simulation, publicVideoSimulation);
   assert.deepEqual(await listPendingDispatches(jobs), [
     { jobId: ready.jobId, dispatchKey: started.job.dispatchKey },
