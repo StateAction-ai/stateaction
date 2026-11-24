@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-annotations.v3.json",
+  "title": "Recording annotations with producer job lineage v3",
+  "description": "The selected results of a run, with producer job IDs for byte-identical retained annotations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "job_id",
+    "segments",
+    "captions",
+    "hand_presence",
+    "dag_run",
+    "producer_jobs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.recording-annotations.v3"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "segments": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/segments.v1.json"
+        }
+      ]
+    },
+    "captions": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/captions.v1.json"
+        }
+      ]
+    },
+    "hand_presence": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/artifacts/hand-presence.v1.json"
+        }
+      ]
+    },
+    "dag_run": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "https://stateaction.ai/schemas/http/dag-run.v2.json"
+        }
+      ]
+    },
+    "producer_jobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segments", "captions", "hand_presence"],
+      "properties": {
+        "segments": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            }
+          ]
+        },
+        "captions": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            }
+          ]
+        },
+        "hand_presence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

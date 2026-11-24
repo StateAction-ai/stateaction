@@ -893,7 +893,7 @@ describe("read broker", () => {
     );
   });
 
-  test("a superseded job's files and a staff-only pending clip", async () => {
+  test("staff history can read superseded clips, while shared reads need the selected result", async () => {
     const p = await accepted(1);
     const clip = p.clips[0]!;
     const { impl, calls } = signer();
@@ -913,18 +913,28 @@ describe("read broker", () => {
       }),
       "not_found",
     );
-    // A superseded result is not readable by anyone.
+    await review(p, clip.clipId, 0);
+    const datasetId = await newDataset("Selected result reads");
+    await add(datasetId, [clip.clipId], 1);
+    await share(datasetId, actors.customer);
+    const sharedRead = {
+      viewerUserId: actors.customer,
+      clipId: clip.clipId,
+      role: "thumbnail_jpeg" as const,
+      datasetId,
+    };
+    await issueRead(deps, sharedRead);
+
     await db.owner.query(
       "UPDATE recordings SET current_job_id = NULL WHERE id = $1",
       [p.recordingId],
     );
-    await expectCode(
-      issueRead(deps, {
-        viewerUserId: actors.staff,
-        clipId: clip.clipId,
-        role: "thumbnail_jpeg",
-      }),
-      "not_found",
-    );
+    await expectCode(issueRead(deps, sharedRead), "not_found");
+    await issueRead(deps, {
+      viewerUserId: actors.staff,
+      clipId: clip.clipId,
+      role: "thumbnail_jpeg",
+    });
+    assert.equal(calls.length, 3);
   });
 });

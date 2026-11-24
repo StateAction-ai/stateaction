@@ -53,6 +53,8 @@ def function_options(
     function: str, env: dict[str, str] | None = None
 ) -> dict[str, object]:
     """The keyword arguments for `app.function` (image and volumes are added by the caller)."""
+    source = os.environ if env is None else env
+    bounded = source.get("FLORA_STAGE_BOUNDED") == "1"
     return {
         "gpu": GPU,
         "retries": 0,
@@ -62,8 +64,9 @@ def function_options(
         "restrict_modal_access": True,
         "secrets": [],
         "timeout": budget_s(function, env),
-        "cpu": CPU,
-        "memory": MEMORY_MIB,
+        "cpu": (CPU, CPU) if bounded else CPU,
+        "memory": (MEMORY_MIB, MEMORY_MIB) if bounded else MEMORY_MIB,
+        **({"startup_timeout": 60, "scaledown_window": 10} if bounded else {}),
         "ephemeral_disk": EPHEMERAL_DISK_MIB,
     }
 

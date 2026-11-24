@@ -10,6 +10,7 @@ import {
 } from "@stateaction/server/pipeline";
 import { StatusBadge } from "../../../../components/pipeline/status-badge";
 import { fixtureEnabled } from "../../../../lib/review/fixture-gate";
+import { SelectResult } from "../../../../components/pipeline/select-result";
 import { requireConsoleSession } from "../../../../lib/server-session";
 import { ReviewPage } from "../../../../components/review/review-page";
 import { reviewLoader } from "../../../../lib/review/loader";
@@ -24,20 +25,26 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function ReviewRecordingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ recordingId: string }>;
+  searchParams: Promise<{ run?: string }>;
 }) {
   const session = await requireConsoleSession(["staff"]);
   const { recordingId } = await params;
   if (!UUID.test(recordingId)) notFound();
+  const { run } = await searchParams;
+  if (run && !UUID.test(run)) notFound();
   const loader = reviewLoader();
   try {
-    const [bundle, recordings, detail] = await Promise.all([
-      loader.load(session.userId, recordingId),
+    const fixture = fixtureEnabled(process.env);
+    const [bundle, recordings, detail, history] = await Promise.all([
+      loader.load(session.userId, recordingId, run),
       loader.listRecordings(session.userId),
-      fixtureEnabled(process.env)
-        ? null
-        : pipeline.detail(session.userId, recordingId),
+      fixture ? null : pipeline.detail(session.userId, recordingId, run),
+      fixture
+        ? { runs: [], selectionSeq: 0 }
+        : pipeline.history(session.userId, recordingId),
     ]);
     if (!bundle) {
       if (!detail?.failedStages.length) notFound();
@@ -92,8 +99,43 @@ export default async function ReviewRecordingPage({
             </Link>
           </p>
         ) : null}
+        {history.runs.length > 1 ? (
+          <details className="mb-4 rounded-lg border border-line px-4 py-2 text-sm">
+            <summary className="font-semibold">Run history</summary>
+            <ul className="m-0 mt-2 grid list-none gap-2 p-0">
+              {history.runs.map((item) => (
+                <li
+                  key={item.jobId}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <Link
+                    className="text-brand underline"
+                    href={
+                      item.state === "succeeded"
+                        ? `/review/${recordingId}?run=${item.jobId}`
+                        : `/pipeline/${recordingId}?run=${item.jobId}`
+                    }
+                  >
+                    Run {item.jobId.slice(0, 8)}
+                  </Link>
+                  <span>{item.state.replaceAll("_", " ")}</span>
+                  {item.selected ? (
+                    <strong>Selected</strong>
+                  ) : item.state === "succeeded" &&
+                    pipeline.selectionEnabled() ? (
+                    <SelectResult
+                      recordingId={recordingId}
+                      jobId={item.jobId}
+                      sequence={history.selectionSeq}
+                    />
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
         <ReviewPage
-          key={recordingId}
+          key={bundle.annotations.job_id}
           bundle={bundle}
           recordings={recordings}
           mediaOrigin={mediaOrigin}

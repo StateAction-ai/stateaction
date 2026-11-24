@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from flora_ext import manifest as M  # noqa: E402
 from flora_ext import parity as P  # noqa: E402
-from flora_ext import pins  # noqa: E402
+from flora_ext import pins, stage_settings  # noqa: E402
 
 H = "a" * 64
 RUNTIME = {
@@ -59,6 +59,24 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(m["base"]["revision"], pins.BASE_REV)
         self.assertEqual(pins.CAPTIONER_REV[:8], "fef0bbfe")
         self.assertEqual(pins.BASE_REV[:8], "c2022362")
+
+    def test_controller_checkpoint_manifest_identity_matches_worker_pins(self):
+        root = Path(__file__).resolve().parents[3]
+        release = json.loads(
+            (root / "packages/contracts/api/flora-checkpoints.v1.json").read_text()
+        )
+        self.assertEqual(release["volumeName"], stage_settings.MODELS_VOLUME)
+        self.assertEqual(release["volumeVersion"], 2)
+        self.assertEqual(release["checkpoints"].keys(), pins.PUBLISHED.keys())
+        for model, pin in pins.PUBLISHED.items():
+            self.assertEqual(
+                release["checkpoints"][model],
+                {
+                    "checkpointId": pin["checkpoint_id"],
+                    "manifestSha256": pin["manifest_sha256"],
+                    "modelRevision": pins.MODELS[model]["revision"],
+                },
+            )
 
     def test_detects_tamper_missing_extra_and_size(self):
         with tempfile.TemporaryDirectory() as d:

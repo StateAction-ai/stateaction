@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json",
+  "title": "Stage rerun preview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "planSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "execute": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "https://stateaction.ai/schemas/jobs/recipe.v1.json#/$defs/segmentStage"
+          },
+          {
+            "$ref": "https://stateaction.ai/schemas/jobs/recipe.v1.json#/$defs/captionStage"
+          },
+          {
+            "$ref": "https://stateaction.ai/schemas/jobs/recipe.v1.json#/$defs/handPoseStage"
+          }
+        ]
+      }
+    },
+    "reuse": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "enum": ["segment", "caption", "hand_pose"]
+          },
+          "state": {
+            "enum": ["succeeded", "failed", "cancelled", "not_run"]
+          },
+          "sourceJobId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "executionJobId": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receiptSha256": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "copyBytes": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]{0,14})$"
+          },
+          "importJobId": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "importManifestSha256": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stage",
+          "state",
+          "sourceJobId",
+          "executionJobId",
+          "receiptSha256",
+          "errorCode",
+          "copyBytes",
+          "importJobId",
+          "importManifestSha256"
+        ]
+      }
+    },
+    "maxGpuCostUsd": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+    },
+    "estimatedSeconds": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 43200
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "maxComputeCostUsd": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+    },
+    "estimatedComputeCostUsd": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "planSha256",
+    "execute",
+    "reuse",
+    "maxGpuCostUsd",
+    "estimatedSeconds",
+    "maxComputeCostUsd",
+    "estimatedComputeCostUsd"
+  ]
+}

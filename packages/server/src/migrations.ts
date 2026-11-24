@@ -177,6 +177,11 @@ export async function grantAppRole(
   );
   if (cachedImports)
     await client.query("SELECT stateaction_grant_cached_imports($1)", [role]);
+  const { rowCount: stageReruns } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_stage_reruns(name)') IS NOT NULL",
+  );
+  if (stageReruns)
+    await client.query("SELECT stateaction_grant_stage_reruns($1)", [role]);
   return true;
 }
 

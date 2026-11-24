@@ -1,0 +1,32 @@
+{
+  "contract": "http.stage-rerun-plan-request.v1",
+  "cases": [
+    {
+      "name": "CPU-only stage",
+      "input": {
+        "document": {
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "stage": "hand_pose",
+          "scope": "only"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "explicit scope",
+      "input": {
+        "document": {
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "stage": "hand_pose",
+          "scope": "all"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/dag-run.v2.json",
+  "title": "DAG run with reuse lineage v2",
+  "description": "Server-rendered view of one job's recipe run (the data of the staff run route), built from the recorded stage runs; it is never an uploaded output file. One node per stage in recipe order. Each node states truthfully what happened: a disabled stage is not_run, failed, cancelled and not_run nodes carry an errorCode, and nothing is shown as succeeded without a recorded receipt (receiptSha256). Cost figures are estimates from recorded container seconds, not billing data. Rule dag_run checks these pairings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "recordingId",
+    "jobState",
+    "recipeId",
+    "recipeSha256",
+    "maxJobCostUsd",
+    "estimatedCostUsd",
+    "stages",
+    "renderedAt",
+    "derivedFromJobId",
+    "execute",
+    "reuse"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "jobState": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/jobState"
+    },
+    "recipeId": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/recipeRef"
+    },
+    "recipeSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "maxJobCostUsd": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/usdAmount"
+    },
+    "estimatedCostUsd": {
+      "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableUsdAmount"
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/node"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "One node per stage in recipe order: segment, caption, hand_pose (rule dag_run)."
+    },
+    "renderedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "derivedFromJobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "execute": {
+      "type": "array",
+      "items": {
+        "enum": ["segment", "caption", "hand_pose"]
+      },
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "reuse": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "enum": ["segment", "caption", "hand_pose"]
+          },
+          "state": {
+            "enum": ["succeeded", "failed", "cancelled", "not_run"]
+          },
+          "sourceJobId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "executionJobId": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receiptSha256": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCode": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipt": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/jobs/stage-receipt.v1.json"
+              },
+              {
+                "$ref": "https://stateaction.ai/schemas/jobs/stage-receipt.v2.json"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "importJobId": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "importManifestSha256": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "importedCounts": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stage",
+          "state",
+          "sourceJobId",
+          "executionJobId",
+          "receiptSha256",
+          "errorCode",
+          "receipt",
+          "importJobId",
+          "importManifestSha256",
+          "importedCounts"
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "nullableInstant": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "enabled",
+        "module",
+        "state",
+        "errorCode",
+        "callId",
+        "gpu",
+        "startedAt",
+        "finishedAt",
+        "counts",
+        "estimatedCostUsd",
+        "receiptSha256"
+      ],
+      "properties": {
+        "stage": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "module": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+        },
+        "state": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stageRunState"
+        },
+        "errorCode": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableErrorCode"
+        },
+        "callId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requestedType", "observedType"],
+          "properties": {
+            "requestedType": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/gpuType"
+            },
+            "observedType": {
+              "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/observedGpu"
+            }
+          }
+        },
+        "startedAt": {
+          "$ref": "#/$defs/nullableInstant"
+        },
+        "finishedAt": {
+          "$ref": "#/$defs/nullableInstant"
+        },
+        "counts": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/countMap"
+        },
+        "estimatedCostUsd": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/nullableUsdAmount"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   validateValue,
   type Stage,
+  type ModalRerunBinding,
   type StageReceiptV1,
 } from "@stateaction/contracts";
 import { CALL_ID } from "./journal.js";
@@ -123,7 +124,14 @@ export interface ModalClient {
    * Spawn one call and resolve its provider call ID. Check authorization immediately
    * before invoking the provider. A rejected spawn never authorizes a retry.
    */
-  spawn(bootstrap: ModalBootstrap, canSubmit: () => boolean): Promise<string>;
+  spawn(
+    bootstrap: ModalBootstrap,
+    canSubmit: () => boolean,
+    binding?: ModalRerunBinding,
+  ): Promise<string>;
+  checkFunction?(module: string, binding: ModalRerunBinding): Promise<boolean>;
+  /** Read-only container identities for this exact GPU call. A denied lookup is an error. */
+  watchGpuCall?(callId: string, binding: ModalRerunBinding): Promise<string[]>;
   /** Bounded observation (never waits longer than the adapter's poll window). */
   poll(callId: string): Promise<CallObservation>;
   /** A cancel REQUEST with container termination. Returning is not proof of anything. */

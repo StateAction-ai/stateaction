@@ -490,7 +490,7 @@ export async function importCachedProcessing(options: {
         },
       },
     },
-    files,
+    files.map((file) => ({ ...file, original_job_id: null })),
     {
       segments: bySlot.get("segments.json")!.id,
       captions: bySlot.get("captions.json")!.id,
@@ -648,6 +648,11 @@ export async function importCachedProcessing(options: {
       clips,
       annotations: manifest.counts,
     });
+    await tx.query(
+      `INSERT INTO recording_result_selections (recording_id, seq, job_id, reason, kind)
+       VALUES ($1, 1, $2, 'First accepted cached result', 'auto')`,
+      [recordingId, jobId],
+    );
     return false;
   });
   if (options.approve) {

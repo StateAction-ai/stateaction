@@ -65,6 +65,19 @@ class SettingsTests(unittest.TestCase):
                     "flora_tempseg", {"FLORA_SEGMENT_BUDGET_S": bad}
                 )
 
+    def test_bounded_deployment_has_hard_container_limits(self):
+        options = stage_settings.function_options(
+            "flora_tempseg", {"FLORA_STAGE_BOUNDED": "1"}
+        )
+        self.assertEqual(options["cpu"], (stage_settings.CPU, stage_settings.CPU))
+        self.assertEqual(
+            options["memory"], (stage_settings.MEMORY_MIB, stage_settings.MEMORY_MIB)
+        )
+        self.assertEqual(options["startup_timeout"], 60)
+        self.assertEqual(options["scaledown_window"], 10)
+        self.assertEqual(options["retries"], 0)
+        self.assertEqual(options["max_containers"], 1)
+
     def test_the_stage_modules_name_the_stage_functions(self):
         self.assertEqual(
             set(stage_settings.STAGE_OF), {"flora_tempseg", "flora_captioner"}
@@ -73,9 +86,9 @@ class SettingsTests(unittest.TestCase):
             {m for m, _ in pins.MODULES.values()}, {"tempseg", "captioner"}
         )
 
-    def test_the_hand_pose_function_is_untouched(self):
+    def test_the_hand_pose_function_keeps_its_default_route(self):
         src = (HERE.parents[2] / "processing" / "modal_app.py").read_text()
-        self.assertIn('APP_NAME = "stateaction-processing"', src)
+        self.assertIn('DEFAULT_APP_NAME = "stateaction-processing"', src)
         self.assertIn('FUNCTION_NAME = "process_recording"', src)
         self.assertNotIn("flora", src.lower())
         self.assertNotEqual(stage_settings.APP_NAME, "stateaction-processing")

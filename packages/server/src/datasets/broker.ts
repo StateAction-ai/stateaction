@@ -156,9 +156,8 @@ export async function issueRead(
     } = await deps.pool.query<{ object_key: string; size_bytes: string }>(
       `SELECT f.object_key, f.size_bytes::text
        FROM clips c
-       JOIN jobs j ON j.id = c.job_id AND j.state = 'succeeded'
-       JOIN recordings rec ON rec.id = c.recording_id
-         AND rec.current_job_id = c.job_id AND rec.deleted_at IS NULL
+       JOIN jobs j ON j.id = c.job_id AND j.recording_id = c.recording_id AND j.state = 'succeeded'
+       JOIN recordings rec ON rec.id = c.recording_id AND rec.deleted_at IS NULL
        LEFT JOIN LATERAL (
          SELECT r.decision FROM reviews r
          WHERE r.clip_id = c.id ORDER BY r.revision DESC LIMIT 1
@@ -168,10 +167,10 @@ export async function issueRead(
          AND f.state IN ('completed', 'verified')
        WHERE c.id = $2 AND (
          ($3::uuid IS NULL AND catalog_has_role($1, 'staff'))
-         OR EXISTS (
+         OR (coalesce(recording_selected_job(rec.id), rec.current_job_id) = c.job_id AND EXISTS (
            SELECT 1 FROM dataset_clips dc
            WHERE dc.clip_id = c.id AND ($3::uuid IS NULL OR dc.dataset_id = $3)
-             AND ${memberGate("dc.dataset_id")}))`,
+             AND ${memberGate("dc.dataset_id")})))`,
       [input.viewerUserId, clipId, datasetId, input.role],
     ));
   } catch (error) {
@@ -199,11 +198,10 @@ export async function issueRead(
 
 /**
  * Authorizes and signs one `recording_mp4` read. Staff only; the object key is
- * the `recording.mp4` slot of the recording's CURRENT accepted job (state
- * succeeded), restricted to a completed or verified output with that role, so
- * a superseded, failed or unaccepted job's file, a source file and any other
- * output have no path through here. Every failure to authorize, including a
- * missing file, is the same "not found".
+ * the `recording.mp4` slot of the selected accepted job by default, or an
+ * explicitly requested succeeded run of the recording. The slot must point
+ * to a completed or verified output with that role. Every failure to
+ * authorize, including a missing file, is the same "not found".
  */
 export async function issueRecordingRead(
   deps: BrokerDeps & { maxBytes?: number | undefined },
@@ -212,6 +210,7 @@ export async function issueRecordingRead(
     recordingId: string;
     role: RecordingReadRole;
     expectedJobId?: string;
+    viewJobId?: string;
   },
 ): Promise<RecordingReadView> {
   if (input.role !== "recording_mp4")
@@ -231,15 +230,21 @@ export async function issueRecordingRead(
     } = await deps.pool.query<{ object_key: string; size_bytes: string }>(
       `SELECT f.object_key, f.size_bytes::text
        FROM recordings rec
-       JOIN jobs j ON j.id = rec.current_job_id AND j.state = 'succeeded'
+       JOIN jobs j ON j.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id)
+         AND j.state = 'succeeded' AND j.recording_id = rec.id
        JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
        JOIN files f ON f.id = s.file_id AND f.job_id = j.id
          AND f.purpose = 'output' AND f.role = 'recording_mp4'
          AND f.state IN ('completed', 'verified')
        WHERE rec.id = $2 AND rec.deleted_at IS NULL
-         AND ($3::uuid IS NULL OR j.id = $3)
+         AND ($4::uuid IS NULL OR j.id = $4)
          AND catalog_has_role($1, 'staff')`,
-      [input.viewerUserId, recordingId, input.expectedJobId ?? null],
+      [
+        input.viewerUserId,
+        recordingId,
+        input.viewJobId ? uuid(input.viewJobId, "run") : null,
+        input.expectedJobId ?? null,
+      ],
     ));
   } catch (error) {
     throw toCatalogError(error);

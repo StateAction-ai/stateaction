@@ -59,6 +59,7 @@ const NONCE = /^[A-Za-z0-9_-]{43}$/;
 const MANIFEST_CONTRACT = "artifacts.processing-result.v2";
 /** SA-88: a recipe job's sealing hand_pose stage posts processing-result.v3. */
 const MANIFEST_CONTRACT_V3 = "artifacts.processing-result.v3";
+const MANIFEST_CONTRACT_V4 = "artifacts.processing-result.v4";
 /**
  * Bounded read of each recording-level annotation document (segments,
  * captions, hand presence) at acceptance. Larger documents are rejected
@@ -408,20 +409,23 @@ async function publishPreparedManifest(
       [jobId, owner, PREPARED_RECIPE_SLOT],
     )
   ).rows[0];
-  if (!draft || Number(draft.size_bytes) > MANIFEST_MAX_BYTES) return;
-
-  const bytes = await deps.reader.read(draft.object_key, MANIFEST_MAX_BYTES);
-  if (
-    bytes.length !== Number(draft.size_bytes) ||
-    sha256Hex(bytes) !== draft.sha256
-  )
-    return;
-  const finalBytes =
-    draft.stage_state === "failed"
-      ? validateBytes(MANIFEST_CONTRACT, bytes).valid
-        ? Buffer.from(bytes)
-        : undefined
-      : await composePreparedManifest(deps, jobId, draft, bytes);
+  let finalBytes: Buffer | undefined;
+  if (draft && Number(draft.size_bytes) <= MANIFEST_MAX_BYTES) {
+    const bytes = await deps.reader.read(draft.object_key, MANIFEST_MAX_BYTES);
+    if (
+      bytes.length !== Number(draft.size_bytes) ||
+      sha256Hex(bytes) !== draft.sha256
+    )
+      return;
+    finalBytes =
+      draft.stage_state === "failed"
+        ? validateBytes(MANIFEST_CONTRACT, bytes).valid
+          ? Buffer.from(bytes)
+          : undefined
+        : await composePreparedManifest(deps, jobId, draft, bytes);
+  } else {
+    finalBytes = await composeReusedHandManifest(deps, jobId, owner);
+  }
   if (!finalBytes) return;
 
   const authority = { kind: "job" as const, jobId, sealLeaseOwner: owner };
@@ -552,6 +556,157 @@ async function composePreparedManifest(
     : undefined;
 }
 
+type HandOrigin = { job_id: string; manifest_sha256: string };
+
+async function composeReusedHandManifest(
+  deps: AcceptanceDeps,
+  jobId: string,
+  owner: string,
+): Promise<Buffer | undefined> {
+  const {
+    rows: [source],
+  } = await deps.pool.query<{
+    parent_job_id: string;
+    original_job_id: string;
+    original_sha256: string;
+    object_key: string;
+    sha256: string;
+    size_bytes: string;
+    nonce: string | null;
+    recipe_sha256: string;
+  }>(
+    `SELECT p.id AS parent_job_id, r.execution_job_id AS original_job_id,
+            o.result_manifest_sha256 AS original_sha256,
+            f.object_key, f.sha256, f.size_bytes::text, job_seal_nonce(j.id) AS nonce, j.recipe_sha256
+     FROM jobs j
+     JOIN job_stage_reuse r ON r.job_id = j.id AND r.stage = 'hand_pose' AND r.state = 'succeeded'
+     JOIN jobs p ON p.id = r.source_job_id AND p.state = 'succeeded'
+     JOIN jobs o ON o.id = r.execution_job_id AND o.state = 'succeeded'
+     JOIN files f ON f.id = p.result_manifest_file_id AND f.job_id = p.id AND f.state = 'verified'
+     WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
+       AND j.controller_lease_owner = $2 AND j.controller_lease_expires_at > now()
+       AND job_recipe_stages_settled(j.id)`,
+    [jobId, owner],
+  );
+  if (!source?.nonce || !source.original_sha256) return;
+  const bytes = await deps.reader.read(source.object_key, MANIFEST_MAX_BYTES);
+  if (
+    bytes.length !== Number(source.size_bytes) ||
+    sha256Hex(bytes) !== source.sha256
+  )
+    return;
+  const parsedV4 = validateBytes(MANIFEST_CONTRACT_V4, bytes);
+  const parsed = parsedV4.valid
+    ? parsedV4
+    : validateBytes(MANIFEST_CONTRACT_V3, bytes);
+  if (!parsed.valid) return;
+  const parent = parsed.value as {
+    job_id: string;
+    attestation: Record<string, unknown>;
+    clips: { clip_id: string; files: Record<string, string> }[];
+    nodes: Record<string, unknown>[];
+    reused_hand?: HandOrigin & {
+      clips: { clip_id: string; original_clip_id: string }[];
+    };
+  };
+  if (parent.job_id !== source.parent_job_id) return;
+  const [recipe, prior, copies] = await Promise.all([
+    getJobRecipe(deps, jobId),
+    getPriorStages(deps, jobId),
+    deps.pool.query<{
+      source_file_id: string;
+      file_id: string;
+      role: string;
+      relative_path: string;
+      size_bytes: string;
+      sha256: string;
+    }>(
+      `SELECT source_file_id, file_id, role, slot AS relative_path, size_bytes::text, sha256
+       FROM job_rerun_copies WHERE job_id = $1 AND stage = 'hand_pose' ORDER BY slot`,
+      [jobId],
+    ),
+  ]);
+  const files = new Map(
+    copies.rows.map((row) => [row.source_file_id, row.file_id]),
+  );
+  const rootClips = new Map(
+    parent.reused_hand?.clips.map((clip) => [
+      clip.clip_id,
+      clip.original_clip_id,
+    ]),
+  );
+  const clipMap: { clip_id: string; original_clip_id: string }[] = [];
+  const clips = parent.clips.map((clip) => {
+    const hash = sha256Hex(Buffer.from(`${jobId}:${clip.clip_id}`));
+    const childId = [
+      hash.slice(0, 8),
+      hash.slice(8, 12),
+      "8" + hash.slice(13, 16),
+      "8" + hash.slice(17, 20),
+      hash.slice(20, 32),
+    ].join("-");
+    clipMap.push({
+      clip_id: childId,
+      original_clip_id: rootClips.get(clip.clip_id) ?? clip.clip_id,
+    });
+    return {
+      ...clip,
+      clip_id: childId,
+      files: Object.fromEntries(
+        Object.entries(clip.files).map(([role, id]) => [role, files.get(id)]),
+      ),
+    };
+  });
+  const upstream = prior.stages.flatMap((row) =>
+    row.outputs.map((file) => ({
+      file_id: file.fileId,
+      role: file.role,
+      relative_path: file.slot,
+      size_bytes: file.sizeBytes,
+      sha256: file.sha256,
+    })),
+  );
+  const outputs = copies.rows.map(({ source_file_id: _id, ...file }) => file);
+  const nodes = prior.stages.map((row) => ({
+    stage: row.stage,
+    status: row.state === "cancelled" ? "failed" : row.state,
+    module: recipe.stages.find((entry) => entry.stage === row.stage)!.module,
+    error_code: row.errorCode,
+    counts: row.counts,
+    outputs: row.outputs.map((file) => file.fileId),
+  }));
+  const final = {
+    ...parent,
+    schema: "stateaction.processing_result.v4",
+    job_id: jobId,
+    attestation: { ...parent.attestation, invocation_nonce: source.nonce },
+    recipe_id: recipe.recipeId,
+    recipe_sha256: source.recipe_sha256,
+    outputs: [...upstream, ...outputs],
+    clips,
+    nodes: [
+      ...nodes,
+      { ...parent.nodes[2], outputs: outputs.map((file) => file.file_id) },
+    ],
+    reused_hand: {
+      job_id: source.original_job_id,
+      manifest_sha256: source.original_sha256,
+      clips: clipMap,
+    },
+  };
+  const finalBytes = Buffer.from(JSON.stringify(final));
+  const valid = validateBytes(MANIFEST_CONTRACT_V4, finalBytes);
+  if (!valid.valid) {
+    console.error(
+      "[jobs] reused hand manifest validation failed",
+      valid.code,
+      valid.errors[0]?.path,
+    );
+    return;
+  }
+  return finalBytes;
+}
+
 /** Close and submit prepared outputs only under a lease and after all stages have settled. */
 export async function sealParallelRecipe(
   deps: AcceptanceDeps,
@@ -571,11 +726,12 @@ export async function sealParallelRecipe(
       invocation_nonce: string;
       state: string;
       error_code: string | null;
+      reused: boolean;
     }>(
-      `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text, c.invocation_nonce, r.state, r.error_code
+      `SELECT f.id, f.object_key, f.sha256, f.size_bytes::text,
+              job_seal_nonce(j.id) AS invocation_nonce, r.state, r.error_code, (r.source_job_id IS NOT NULL) AS reused
        FROM jobs j
-       JOIN job_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose'
-       JOIN job_stage_claims c ON c.job_id = j.id AND c.stage = r.stage
+       JOIN job_effective_stage_runs r ON r.job_id = j.id AND r.stage = 'hand_pose'
        JOIN files f ON f.job_id = j.id AND f.role = 'result_manifest' AND f.state = 'completed'
        WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
          AND j.controller_lease_owner = $2 AND j.controller_lease_expires_at > now()
@@ -596,7 +752,11 @@ export async function sealParallelRecipe(
     const parsed =
       bytes &&
       validateBytes(
-        succeeded ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
+        succeeded
+          ? file.reused
+            ? MANIFEST_CONTRACT_V4
+            : MANIFEST_CONTRACT_V3
+          : MANIFEST_CONTRACT,
         bytes,
       );
     if (
@@ -721,6 +881,7 @@ type OutputRow = {
   object_key: string;
   slot: string;
   verified: boolean;
+  original_job_id: string | null;
 };
 
 type Verification =
@@ -762,10 +923,11 @@ async function verifyCandidate(
   const files = (
     await pool.query<OutputRow>(
       `SELECT f.id, f.role, f.size_bytes::text, f.sha256, f.object_key, s.slot,
-              (v.file_id IS NOT NULL) AS verified
+              (v.file_id IS NOT NULL) AS verified, c.original_job_id
        FROM files f
        JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
        LEFT JOIN job_output_verifications v ON v.file_id = f.id AND v.inventory_sha256 = $2
+       LEFT JOIN job_rerun_copies c ON c.job_id = f.job_id AND c.file_id = f.id AND c.sha256 = f.sha256
        WHERE f.job_id = $1 AND f.purpose = 'output' ORDER BY s.slot`,
       [st.job.id, cand.inventory_sha256],
     )
@@ -818,12 +980,43 @@ async function verifyCandidate(
   // diagnostics-only v2 failure manifest (no clips, no outputs, no nodes to check):
   // a v3 document cannot list the earlier stages' files without listing outputs.
   const sealing = recipe !== null && cand.outcome === "succeeded";
+  const handOrigin = sealing
+    ? (
+        await pool.query<
+          HandOrigin & {
+            code_revision: string;
+            image_spec_sha256: string;
+            model_sha256: string;
+            config_sha256: string;
+          }
+        >(
+          `SELECT j.id AS job_id, j.result_manifest_sha256 AS manifest_sha256,
+            i.code_revision, i.image_spec_sha256, i.model_sha256, i.config_sha256
+     FROM job_stage_reuse r JOIN jobs j ON j.id = r.execution_job_id
+     JOIN job_inputs i ON i.job_id = j.id
+     WHERE r.job_id = $1 AND r.stage = 'hand_pose' AND r.state = 'succeeded'`,
+          [st.job.id],
+        )
+      ).rows[0]
+    : undefined;
   const verdict = validateBytes(
-    sealing ? MANIFEST_CONTRACT_V3 : MANIFEST_CONTRACT,
+    sealing
+      ? handOrigin
+        ? MANIFEST_CONTRACT_V4
+        : MANIFEST_CONTRACT_V3
+      : MANIFEST_CONTRACT,
     bytes,
   );
   if (!verdict.valid) return reject("manifest_contract_invalid", verdict.code);
 
+  if (handOrigin) {
+    const origin = (verdict.value as { reused_hand: HandOrigin }).reused_hand;
+    if (
+      origin.job_id !== handOrigin.job_id ||
+      origin.manifest_sha256 !== handOrigin.manifest_sha256
+    )
+      return reject("manifest_provenance_mismatch");
+  }
   const sources: SourceFile[] = (
     await pool.query<{
       id: string;
@@ -863,10 +1056,11 @@ async function verifyCandidate(
     inputs: {
       sourceManifestSha256: inputs.source_manifest_sha256,
       profileRevision: inputs.profile_revision,
-      codeRevision: inputs.code_revision,
-      imageSpecSha256: inputs.image_spec_sha256,
-      modelSha256: inputs.model_sha256,
-      configSha256: inputs.config_sha256,
+      codeRevision: handOrigin?.code_revision ?? inputs.code_revision,
+      imageSpecSha256:
+        handOrigin?.image_spec_sha256 ?? inputs.image_spec_sha256,
+      modelSha256: handOrigin?.model_sha256 ?? inputs.model_sha256,
+      configSha256: handOrigin?.config_sha256 ?? inputs.config_sha256,
       taskInput: inputs.task_input,
     },
     outputs,
@@ -987,7 +1181,7 @@ async function recipeFacts(
       `SELECT r.stage, r.state,
               coalesce(array_agg(f.id::text ORDER BY f.id) FILTER (WHERE f.id IS NOT NULL),
                        '{}') AS file_ids
-       FROM job_stage_runs r
+       FROM job_effective_stage_runs r
        LEFT JOIN (files f JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id)
          ON f.job_id = r.job_id AND f.purpose = 'output'
          AND f.state IN ('completed', 'verified') AND ${STAGE_SLOT_SQL}
@@ -1089,7 +1283,7 @@ export async function checkAnnotations(
       };
     }
     if (
-      doc.job_id !== ids.jobId ||
+      doc.job_id !== (file.original_job_id ?? ids.jobId) ||
       doc.recording_id !== ids.recordingId ||
       doc.source_manifest_sha256 !== ids.sourceManifestSha256
     )
@@ -1358,6 +1552,42 @@ async function acceptVerified(
     );
     await tx.query(
       "UPDATE job_result_candidates SET status = 'accepted', decided_at = now() WHERE job_id = $1",
+      [jobId],
+    );
+    await tx.query(
+      `INSERT INTO recording_result_selections (recording_id, seq, job_id, reason, kind)
+       SELECT j.recording_id, coalesce(s.seq, 0) + 1, j.id, 'Accepted result', 'auto'
+       FROM jobs j
+       LEFT JOIN job_rerun_plans p ON p.job_id = j.id
+       LEFT JOIN LATERAL (
+         SELECT seq, job_id FROM recording_result_selections
+         WHERE recording_id = j.recording_id ORDER BY seq DESC LIMIT 1
+       ) s ON true
+       LEFT JOIN jobs old ON old.id = s.job_id
+       WHERE j.id = $1 AND (j.derived_from_job_id IS NULL OR (
+         (p.plan ->> 'selectionSeq')::integer = coalesce(s.seq, 0)
+         AND NOT EXISTS (
+           SELECT 1 FROM job_effective_stage_runs child
+           WHERE child.job_id = j.id AND child.state IN ('failed', 'cancelled')
+             AND NOT EXISTS (
+               SELECT 1 FROM job_effective_stage_runs previous
+               WHERE previous.job_id = coalesce(old.id, j.derived_from_job_id)
+                 AND previous.stage = child.stage AND previous.state IN ('failed', 'cancelled')
+             )
+         )
+         AND (old.id IS NULL OR (
+           NOT EXISTS (
+             SELECT 1 FROM job_effective_stage_runs a
+             WHERE a.job_id = old.id AND a.state = 'succeeded'
+               AND NOT EXISTS (
+                 SELECT 1 FROM job_effective_stage_runs b
+                 WHERE b.job_id = j.id AND b.stage = a.stage AND b.state = 'succeeded'
+               )
+           )
+           AND coalesce(j.failed_window_count, 0) <= coalesce(old.failed_window_count, 0)
+           AND coalesce(j.caption_failed_count, 0) <= coalesce(old.caption_failed_count, 0)
+         ))
+       ))`,
       [jobId],
     );
     return "accepted";

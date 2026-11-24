@@ -1013,6 +1013,23 @@ export type OutputFileRoleV2 =
   | "recording_mp4"
   | "diagnostic_blob";
 export type Stage = "segment" | "caption" | "hand_pose";
+export type ModalRerunBinding = {
+  functionId: string;
+  definitionId: string;
+  gpu: string;
+  maxBilledSeconds: number;
+  microUsdPerGpuSecond: number;
+  microUsdPerCpuSecond: number;
+  maxContainers: number;
+  maxCpuMilli: number;
+  maxMemoryMib: number;
+  environment: string;
+  appName: string;
+  codeRevision: string;
+  paramsSha256: Sha256Hex;
+  definitionSha256: Sha256Hex;
+};
+
 export type StageRunState =
   | "pending"
   | "submitting"
@@ -1168,6 +1185,18 @@ export type RecordingAnnotations = {
       hand_presence: ImportedHandPresence;
       dag_run: null;
     }
+  | {
+      schema: "stateaction.recording-annotations.v3";
+      source?: never;
+      segments: SegmentsV1 | null;
+      captions: CaptionsV1 | null;
+      hand_presence: HandPresenceV1 | null;
+      dag_run: (Omit<DagRunV1, "schemaVersion"> & { schemaVersion: 2 }) | null;
+      producer_jobs: Record<
+        "segments" | "captions" | "hand_presence",
+        Uuid | null
+      >;
+    }
 );
 export type StageResources = {
   gpu: GpuType;
@@ -1249,6 +1278,27 @@ export type StageReceiptV1 = {
   startedAt: Rfc3339Utc;
   finishedAt: Rfc3339Utc;
 };
+export type StageProviderEvidence = Pick<
+  ModalRerunBinding,
+  | "appName"
+  | "codeRevision"
+  | "environment"
+  | "functionId"
+  | "definitionId"
+  | "paramsSha256"
+  | "definitionSha256"
+> & { workerReceiptSha256: Sha256Hex };
+export type StageReceiptV2 = Omit<StageReceiptV1, "schemaVersion"> & {
+  schemaVersion: 2;
+  providerBinding: StageProviderEvidence;
+};
+export type StageReceipt = StageReceiptV1 | StageReceiptV2;
+export type ControllerActionV4 =
+  | Exclude<ControllerActionV3, { action: "record_stage_run" }>
+  | (Omit<
+      Extract<ControllerActionV2, { action: "record_stage_run" }>,
+      "receipt"
+    > & { receipt?: StageReceipt });
 export type ControllerActionV2 =
   | ControllerAction
   | { action: "issue_stage_claim"; owner: string; stage: Stage }

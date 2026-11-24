@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-result-selection-command.v1.json",
+  "title": "Recording result selection command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "expectedSelectionSeq", "reason"],
+  "properties": {
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "expectedSelectionSeq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    }
+  }
+}

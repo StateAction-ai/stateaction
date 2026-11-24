@@ -61,7 +61,7 @@ const STAGE_OUTPUT_FAILED_SQL = Object.entries(STAGE_FAILURE_COUNTS)
   )
   .join(" OR ");
 
-const BASE_SQL = `WITH staff AS (
+const baseSql = (jobIdSql = "r.current_job_id") => `WITH staff AS (
   SELECT EXISTS (
     SELECT 1 FROM access WHERE user_id = $1 AND role = 'staff' AND enabled
   ) AS ok
@@ -79,7 +79,7 @@ const BASE_SQL = `WITH staff AS (
     j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count,
     ARRAY(
       SELECT stage FROM (
-        SELECT s.stage FROM job_stage_runs s
+        SELECT s.stage FROM job_effective_stage_runs s
         WHERE s.job_id = j.id AND (s.state = 'failed' OR ${STAGE_OUTPUT_FAILED_SQL})
         UNION SELECT 'segment' WHERE j.failed_window_count > 0
         UNION SELECT 'caption' WHERE j.caption_failed_count > 0
@@ -102,7 +102,7 @@ const BASE_SQL = `WITH staff AS (
       WHERE latest.verdict = 'issue') AS issue_count
   FROM recordings r
   JOIN "user" u ON u.id = r.owner_user_id
-  LEFT JOIN jobs j ON j.id = r.current_job_id AND j.recording_id = r.id
+  LEFT JOIN jobs j ON j.id = ${jobIdSql} AND j.recording_id = r.id
   LEFT JOIN recording_admissions a ON a.recording_id = r.id
   LEFT JOIN cached_processing_imports i ON i.job_id = j.id
   WHERE r.deleted_at IS NULL AND (SELECT ok FROM staff)
@@ -303,7 +303,7 @@ export async function listPipelineRecordings(
   ];
   const [page, counts] = await Promise.all([
     pool.query<Row>(
-      `${BASE_SQL}, page AS (
+      `${baseSql()}, page AS (
          SELECT * FROM classified ${filter}
          ORDER BY started_at DESC, id DESC LIMIT $4 OFFSET $5
        )
@@ -313,7 +313,7 @@ export async function listPipelineRecordings(
       [...params, PIPELINE_PAGE_SIZE + 1, offset],
     ),
     pool.query<{ status: PipelineStatus; n: number }>(
-      `${BASE_SQL} SELECT status, count(*)::int AS n FROM classified GROUP BY status`,
+      `${baseSql()} SELECT status, count(*)::int AS n FROM classified GROUP BY status`,
       [staffUserId],
     ),
   ]);
@@ -361,12 +361,13 @@ export async function getPipelineDetail(
   pool: Queryable,
   staffUserId: string,
   recordingId: string,
+  jobId?: string,
 ): Promise<PipelineDetail | null> {
   const result = await pool.query<Row>(
-    `${BASE_SQL}
+    `${baseSql("coalesce($3::uuid, r.current_job_id)")}
      SELECT c.*, s.file_count, s.total_bytes, s.confirmed_bytes, s.mcap_bytes, k.clip_count
-     FROM classified c ${SOURCE_LATERAL} WHERE c.id = $2`,
-    [staffUserId, recordingId],
+     FROM classified c ${SOURCE_LATERAL} WHERE c.id = $2 AND ($3::uuid IS NULL OR c.job_id = $3)`,
+    [staffUserId, recordingId, jobId ?? null],
   );
   const row = result.rows[0];
   if (!row) return null;

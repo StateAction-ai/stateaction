@@ -3,13 +3,21 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import pg from "pg";
 import {
+  applyMigrations,
   ensureAppRole,
   grantAppRole,
   loadMigrations,
   migrateDatabase,
 } from "../src/migrations.js";
 import { claimRole, expectRole } from "./fixture-ledger.js";
-import { expectCode, freshDatabase, writeArtifact } from "./harness.js";
+import {
+  createActors,
+  expectCode,
+  freshDatabase,
+  processedRecording,
+  writeArtifact,
+} from "./harness.js";
+import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
 
 const TABLES = [
   "access",
@@ -26,22 +34,30 @@ const TABLES = [
   "file_transport_claims",
   "files",
   "ingest_permissions",
+  "job_effective_stage_runs",
   "job_execution_evidence",
   "job_inputs",
   "job_output_closures",
   "job_output_slots",
   "job_output_verifications",
   "job_result_candidates",
+  "job_rerun_copies",
+  "job_rerun_plans",
   "job_stage_claims",
   "job_stage_evidence",
+  "job_stage_reuse",
   "job_stage_runs",
   "jobs",
   "platform_schema_migrations",
   "recording_admissions",
   "recording_registrations",
+  "recording_result_selections",
   "recording_seals",
   "recordings",
   "reviews",
+  "rerun_spend_authorizations",
+  "rerun_spend_reservations",
+  "rerun_spend_reconciliations",
   "segment_marks",
   "service_capabilities",
   "session",
@@ -66,7 +82,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-014 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-016 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -81,7 +97,13 @@ test("published migrations 001-005 are byte-identical; 006-014 follow", async ()
   assert.equal(files[11]?.name, "012_segment_marks.sql");
   assert.equal(files[12]?.name, "013_parallel_recipe.sql");
   assert.equal(files[13]?.name, "014_cached_processing_imports.sql");
-  assert.equal(files.length, 14);
+  assert.equal(files[14]?.name, "015_stage_reruns.sql");
+  assert.equal(
+    files[14]?.sha256,
+    "675c811466586ce3a396ac13c233fd9617415e4171866cb4aad8ab2f58244318",
+  );
+  assert.equal(files[15]?.name, "016_stage_rerun_guards.sql");
+  assert.equal(files.length, 16);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -96,7 +118,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -109,7 +131,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
       adopted: [],
       appRoleGranted: true,
     });
@@ -140,6 +162,69 @@ test("migrations apply to an empty database with an unprivileged owner", async (
   }
 });
 
+test("015 and 016 preserve a populated v14 recording and its enabled guards", async (t) => {
+  const db = await freshDatabase({ migrate: false });
+  t.after(() => db.close());
+  const migrations = await loadMigrations();
+  await migrateDatabase({
+    ownerUrl: db.ownerUrl,
+    migrations: migrations.slice(0, 14),
+  });
+  const actors = await createActors(db.owner);
+  const result = await processedRecording(db.app, actors, 1);
+  const { jobId, recordingId } = result;
+  await fixtureAcceptResult(db.owner, db.app, {
+    jobId,
+    manifestFileId: result.manifestFileId,
+    manifestSha256: result.manifestSha256,
+    clips: result.clips,
+  });
+  const client = await db.owner.connect();
+  try {
+    await client.query("BEGIN");
+    const rows = async () =>
+      (
+        await client.query(
+          `SELECT to_jsonb(j) - 'derived_from_job_id' AS job, to_jsonb(r) AS recording,
+              pg_relation_filenode('public.jobs'::regclass)::text AS filenode
+       FROM jobs j JOIN recordings r ON r.id = j.recording_id WHERE j.id = $1`,
+          [jobId],
+        )
+      ).rows;
+    const guards = async () =>
+      (
+        await client.query(
+          "SELECT tgrelid, tgname, tgenabled FROM pg_trigger WHERE NOT tgisinternal ORDER BY tgrelid, tgname",
+        )
+      ).rows;
+    const before = await rows();
+    assert.equal(before[0]?.job.state, "succeeded");
+    const enabled = await guards();
+    assert.deepEqual(
+      (await applyMigrations(client, migrations)).applied,
+      [15, 16],
+    );
+    assert.deepEqual(await rows(), before);
+    const after = await guards();
+    for (const old of enabled)
+      assert.ok(
+        after.some((guard) => JSON.stringify(guard) === JSON.stringify(old)),
+      );
+    assert.deepEqual(
+      (
+        await client.query(
+          "SELECT job_id, seq FROM recording_result_selections WHERE recording_id = $1",
+          [recordingId],
+        )
+      ).rows,
+      [{ job_id: jobId, seq: 1 }],
+    );
+  } finally {
+    await client.query("ROLLBACK");
+    client.release();
+  }
+});
+
 test("applied migrations are immutable and a failed run changes nothing", async () => {
   const db = await freshDatabase();
   try {
@@ -155,7 +240,7 @@ test("applied migrations are immutable and a failed run changes nothing", async 
       ...files,
       {
         version: files.length + 1,
-        name: "014_broken.sql",
+        name: "016_broken.sql",
         sha256: "f".repeat(64),
         sql: "CREATE TABLE releases (id uuid); SELECT 1/0;",
       },
@@ -183,7 +268,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,
@@ -316,6 +401,53 @@ test("the grant helper resets broad table grants and default ACLs for the app ro
     } finally {
       await app.end();
     }
+  } finally {
+    await db.close();
+  }
+});
+
+test("the hosted reader can follow rerun lineage and selection without gaining writes", async () => {
+  const db = await freshDatabase();
+  const reader = `sa_hosted_${db.name.slice(-12)}`;
+  expectRole(reader);
+  try {
+    await db.owner.query(`CREATE ROLE ${reader} NOLOGIN`);
+    await claimRole(db.owner, reader);
+    await db.owner.query(
+      "SELECT public.stateaction_grant_stage_rerun_reads($1)",
+      [reader],
+    );
+    const allowed = [
+      "job_effective_stage_runs",
+      "recording_result_selections",
+      "job_rerun_plans",
+      "job_stage_reuse",
+      "job_rerun_copies",
+    ];
+    for (const relation of allowed) {
+      const {
+        rows: [acl],
+      } = await db.owner.query(
+        `SELECT has_table_privilege($1::name, $2::text, 'SELECT') AS read,
+                has_table_privilege($1::name, $2::text, 'INSERT,UPDATE,DELETE') AS write`,
+        [reader, relation],
+      );
+      assert.deepEqual(acl, { read: true, write: false }, relation);
+    }
+    const {
+      rows: [privateAcl],
+    } = await db.owner.query(
+      `SELECT has_table_privilege($1::name, 'rerun_spend_authorizations', 'SELECT') AS spend,
+              has_function_privilege($1::name, 'stateaction_grant_stage_rerun_reads(name)', 'EXECUTE') AS grant`,
+      [reader],
+    );
+    assert.deepEqual(privateAcl, { spend: false, grant: false });
+    await expectCode(
+      db.app.query("SELECT public.stateaction_grant_stage_rerun_reads($1)", [
+        reader,
+      ]),
+      "42501",
+    );
   } finally {
     await db.close();
   }

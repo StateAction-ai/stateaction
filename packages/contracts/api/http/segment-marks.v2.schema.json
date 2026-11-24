@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/segment-marks.v2.json",
+  "title": "Segment marks with origin v2",
+  "description": "Marks on one accepted result and inherited marks through byte-identical segment reuse.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "segmentsSha256",
+    "segmentCount",
+    "checkedCount",
+    "issueCount",
+    "marks"
+  ],
+  "properties": {
+    "jobId": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "segmentsSha256": {
+      "oneOf": [
+        {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "segmentCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "checkedCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "issueCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "marks": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segmentId",
+          "revision",
+          "verdict",
+          "issueType",
+          "note",
+          "createdAt",
+          "originJobId",
+          "originRevision"
+        ],
+        "properties": {
+          "segmentId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "verdict": {
+            "enum": ["good", "issue"]
+          },
+          "issueType": {
+            "oneOf": [
+              {
+                "enum": ["boundary", "caption", "hand_pose"]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+          },
+          "originJobId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "originRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        }
+      }
+    }
+  }
+}

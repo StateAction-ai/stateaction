@@ -1,0 +1,31 @@
+{
+  "contract": "http.stage-rerun-result.v1",
+  "cases": [
+    {
+      "name": "exact replay",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "replayed": true
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing replay marker",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

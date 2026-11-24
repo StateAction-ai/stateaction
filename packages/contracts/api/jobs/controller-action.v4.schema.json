@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/controller-action.v4.json",
+  "title": "Workflow controller action v4",
+  "description": "Adds provider evidence to recorded stage receipts while accepting all earlier controller actions.",
+  "oneOf": [
+    {
+      "$ref": "controller-action.v3.json"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "owner",
+        "stage",
+        "state",
+        "module",
+        "receipt",
+        "callId"
+      ],
+      "properties": {
+        "action": {
+          "const": "record_stage_run"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,200}$"
+        },
+        "stage": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stage"
+        },
+        "state": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/stageRunState"
+        },
+        "module": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/moduleRef"
+        },
+        "callId": {
+          "type": "string",
+          "pattern": "^fc-[A-Za-z0-9]{1,77}$"
+        },
+        "errorCode": {
+          "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/errorCode"
+        },
+        "receipt": {
+          "$ref": "https://stateaction.ai/schemas/jobs/stage-receipt.v2.json"
+        }
+      }
+    }
+  ]
+}

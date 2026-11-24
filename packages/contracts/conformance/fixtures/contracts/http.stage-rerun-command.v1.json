@@ -1,0 +1,39 @@
+{
+  "contract": "http.stage-rerun-command.v1",
+  "cases": [
+    {
+      "name": "confirmed plan",
+      "input": {
+        "document": {
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "stage": "hand_pose",
+          "scope": "only",
+          "requestId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedPlanSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedMaxGpuCostUsd": "0.00",
+          "reason": "Verify improved hand pose"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing request identity",
+      "input": {
+        "document": {
+          "parentJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "stage": "hand_pose",
+          "scope": "only",
+          "expectedPlanSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedMaxGpuCostUsd": "0.00",
+          "reason": "Verify improved hand pose"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

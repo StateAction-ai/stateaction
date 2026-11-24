@@ -7,7 +7,8 @@ import {
   type DagRunV1,
   type RecipeV1,
   type Stage,
-  type StageReceiptV1,
+  immutableModalAppName,
+  type StageReceipt,
   type StageRunState,
 } from "@stateaction/contracts";
 import { inTransaction } from "../catalog/catalog.js";
@@ -149,16 +150,23 @@ export async function issueStageClaim(
     const r = rows[0]!;
     if (r.outcome === "already_issued")
       return { state: "already_recorded" } as const;
-    const task = await tx.query<{ task_input: Record<string, unknown> }>(
-      "SELECT task_input FROM job_inputs WHERE job_id = $1",
-      [jobId],
+    const {
+      rows: [facts],
+    } = await tx.query<{
+      task_input: Record<string, unknown>;
+      start_deadline: Date;
+    }>(
+      `SELECT i.task_input, c.start_deadline FROM job_inputs i
+       JOIN job_stage_claims c ON c.job_id = i.job_id AND c.stage = $2
+       WHERE i.job_id = $1`,
+      [jobId, stage],
     );
     return {
       state: "recorded",
       bootstrapToken: token,
-      startDeadline: r.start_deadline!,
+      startDeadline: facts!.start_deadline,
       executionDeadline: r.execution_deadline,
-      taskInput: taskInputV2Projection(task.rows[0]!.task_input),
+      taskInput: taskInputV2Projection(facts!.task_input),
       executionBackend: r.execution_backend,
     } as const;
   });
@@ -344,13 +352,13 @@ export type StageRunInput = {
   module: string;
   callId?: string | undefined;
   errorCode?: string | undefined;
-  receipt?: StageReceiptV1 | undefined;
+  receipt?: StageReceipt | undefined;
 };
 
 /**
  * Records one stage run state (controller, lease-fenced): forward-only, call
  * ID and receipt write-once, enforced by the database. The receipt must be a
- * valid jobs.stage-receipt.v1 for this job; its digest is the sa-cjson-v1
+ * valid stage receipt for this job; its digest is the sa-cjson-v1
  * digest. An identical replay reports `recorded: false`.
  */
 export async function recordStageRun(
@@ -362,10 +370,30 @@ export async function recordStageRun(
   const stage = stageOf(input.stage);
   let receiptSha: string | null = null;
   if (input.receipt !== undefined) {
-    const valid = validateValue("jobs.stage-receipt.v1", input.receipt);
+    const valid = validateValue(
+      input.receipt.schemaVersion === 2
+        ? "jobs.stage-receipt.v2"
+        : "jobs.stage-receipt.v1",
+      input.receipt,
+    );
     if (!valid.valid) throw invalid(`stage receipt rejected: ${valid.code}`);
     if (input.receipt.jobId !== jobId)
       throw invalid("stage receipt names another job");
+    if (input.receipt.schemaVersion === 2) {
+      const { providerBinding, ...worker } = input.receipt;
+      if (
+        !input.callId?.startsWith("fc-") ||
+        providerBinding.appName !==
+          immutableModalAppName(
+            worker.module,
+            providerBinding.codeRevision,
+            providerBinding.paramsSha256,
+          ) ||
+        providerBinding.workerReceiptSha256 !==
+          requestSha256({ ...worker, schemaVersion: 1 })
+      )
+        throw invalid("stage receipt provider evidence rejected");
+    }
     receiptSha = requestSha256(input.receipt);
   }
   return run(deps.pool, async (tx) => {
@@ -398,7 +426,12 @@ export async function recordStageRun(
 export async function readStageOutput(
   deps: Pick<JobsDeps, "pool" | "config" | "presignRead">,
   input: { jobId: string; fileId: string; stage: Stage | null },
-): Promise<{ fileId: string; readUrl: string; expiresAt: string }> {
+): Promise<{
+  fileId: string;
+  readUrl: string;
+  expiresAt: string;
+  producerJobId: string;
+}> {
   const jobId = uuid(input.jobId, "jobId");
   const fileId = uuid(input.fileId, "fileId");
   if (input.stage !== "caption")
@@ -412,10 +445,14 @@ export async function readStageOutput(
     [jobId, null],
   );
   if (!current.rows[0]) throw forbidden("Stage is not current");
-  const { rows } = await deps.pool.query<InputRow>(
-    `SELECT id, role, size_bytes::text, sha256, object_key FROM files
-     WHERE id = $1 AND job_id = $2 AND purpose = 'output' AND role = 'segments_json'
-       AND state IN ('completed', 'verified')`,
+  const { rows } = await deps.pool.query<
+    InputRow & { producer_job_id: string }
+  >(
+    `SELECT f.id, f.role, f.size_bytes::text, f.sha256, f.object_key,
+            coalesce(c.original_job_id, f.job_id) AS producer_job_id
+     FROM files f LEFT JOIN job_rerun_copies c ON c.file_id = f.id AND c.job_id = f.job_id AND c.sha256 = f.sha256
+     WHERE f.id = $1 AND f.job_id = $2 AND f.purpose = 'output' AND f.role = 'segments_json'
+       AND f.state IN ('completed', 'verified')`,
     [fileId, jobId],
   );
   if (!rows[0]) throw new TransportError("not_found", "Output not found");
@@ -425,7 +462,12 @@ export async function readStageOutput(
     current.rows[0].execution_deadline,
     new Date(),
   );
-  return { fileId, readUrl: signed!.readUrl, expiresAt: signed!.expiresAt };
+  return {
+    fileId,
+    readUrl: signed!.readUrl,
+    expiresAt: signed!.expiresAt,
+    producerJobId: rows[0].producer_job_id,
+  };
 }
 
 // ------------------------------------------------------- SA-91 stage files
@@ -480,7 +522,7 @@ export async function getPriorStages(
             coalesce(jsonb_agg(jsonb_build_object('fileId', f.id::text, 'role', f.role,
                        'slot', s.slot, 'sizeBytes', f.size_bytes::text, 'sha256', f.sha256)
                      ORDER BY s.slot) FILTER (WHERE f.id IS NOT NULL), '[]'::jsonb) AS outputs
-     FROM job_stage_runs r
+     FROM job_effective_stage_runs r
      LEFT JOIN (files f JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id)
        ON f.job_id = r.job_id AND f.purpose = 'output'
        AND f.state IN ('completed', 'verified') AND ${STAGE_SLOT_SQL}
@@ -669,4 +711,82 @@ export async function promoteRecipeEvidence(
     [jobId, recordedBy],
   );
   return written.rowCount === 1;
+}
+
+export type DagRunWithLineage = Omit<DagRunV1, "schemaVersion"> & {
+  schemaVersion: 2;
+  derivedFromJobId: string | null;
+  execute: Stage[];
+  reuse: {
+    stage: Stage;
+    state: "succeeded" | "failed" | "cancelled" | "not_run";
+    sourceJobId: string;
+    executionJobId: string | null;
+    importJobId: string | null;
+    importManifestSha256: string | null;
+    importedCounts: Record<string, number> | null;
+    receiptSha256: string | null;
+    receipt: StageReceipt | null;
+    errorCode: string | null;
+  }[];
+};
+
+export async function getDagRunWithLineage(
+  deps: Pick<JobsDeps, "pool">,
+  jobId: string,
+): Promise<DagRunWithLineage> {
+  const run = await getDagRun(deps, jobId);
+  const [
+    {
+      rows: [lineage],
+    },
+    { rows: reuse },
+  ] = await Promise.all([
+    deps.pool.query<{ parent: string | null; execute: Stage[] | null }>(
+      `SELECT j.derived_from_job_id AS parent, p.plan -> 'execute' AS execute
+       FROM jobs j LEFT JOIN job_rerun_plans p ON p.job_id = j.id WHERE j.id = $1`,
+      [jobId],
+    ),
+    deps.pool.query<DagRunWithLineage["reuse"][number]>(
+      `SELECT x.stage, x.state, x.source_job_id AS "sourceJobId", x.execution_job_id AS "executionJobId",
+              x.receipt_sha256 AS "receiptSha256", r.receipt, x.error_code AS "errorCode",
+              x.import_job_id AS "importJobId", i.manifest_sha256 AS "importManifestSha256",
+              x.imported_counts AS "importedCounts"
+       FROM job_stage_reuse x
+       LEFT JOIN job_stage_runs r ON r.job_id = x.execution_job_id AND r.stage = x.stage
+       LEFT JOIN cached_processing_imports i ON i.job_id = x.import_job_id
+       WHERE x.job_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM job_rerun_copies c JOIN files f ON f.id = c.file_id
+           WHERE c.job_id = x.job_id AND c.stage = x.stage AND f.state NOT IN ('completed', 'verified')
+         )
+       ORDER BY job_stage_ord(x.stage)`,
+      [jobId],
+    ),
+  ]);
+  const data: DagRunWithLineage = {
+    ...run,
+    schemaVersion: 2,
+    derivedFromJobId: lineage?.parent ?? null,
+    execute: lineage?.execute ?? [],
+    reuse,
+    stages: run.stages.map((stage) => {
+      const origin = reuse.find((item) => item.stage === stage.stage);
+      if (!origin) return stage;
+      return {
+        ...stage,
+        state: origin.state,
+        errorCode: origin.errorCode,
+        receiptSha256: origin.receiptSha256,
+        startedAt: origin.receipt?.startedAt ?? null,
+        finishedAt: origin.receipt?.finishedAt ?? null,
+        counts: origin.receipt?.counts ?? origin.importedCounts ?? {},
+        gpu: origin.receipt?.gpu ?? stage.gpu,
+        estimatedCostUsd: origin.state === "succeeded" ? "0.00" : null,
+      };
+    }),
+  };
+  if (!validateValue("http.dag-run.v2", data).valid)
+    throw new Error("Invalid DAG lineage");
+  return data;
 }

@@ -70,6 +70,7 @@ export type JobsDeps = {
    */
   acceptance?: Omit<import("../acceptance/service.js").AcceptanceDeps, "pool">;
   sealTransport?: () => import("../transport/service.js").TransportDeps;
+  rerunCopy?: import("./stage-rerun-storage.js").RerunCopy;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -282,9 +283,14 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       owner_user_id: string;
       profile_revision: string;
       source_manifest_sha256: string;
+      derived_from_job_id: string | null;
+      rerun_recipe: RecipeV1 | null;
+      rerun_stages: string[] | null;
     }>(
-      `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256
+      `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256,
+              j.derived_from_job_id, p.plan -> 'recipe' AS rerun_recipe, p.plan -> 'execute' AS rerun_stages
        FROM jobs j JOIN recordings r ON r.id = j.recording_id
+       LEFT JOIN job_rerun_plans p ON p.job_id = j.id
        WHERE j.kind = 'process_recording' AND j.state = 'queued' AND r.current_job_id = j.id AND r.deleted_at IS NULL
          AND r.status IN ('uploaded', 'processing')
          AND (
@@ -293,7 +299,11 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
              AND EXISTS (
                SELECT 1 FROM recording_admissions a
                WHERE a.recording_id = r.id AND a.outcome = 'admitted'
-                 AND a.job_id = j.id
+                 AND (a.job_id = j.id OR (
+                   j.derived_from_job_id = a.job_id
+                   AND p.plan -> 'execute' = '["hand_pose"]'::jsonb
+                   AND p.plan ->> 'maxGpuCostUsd' = '0.00'
+                 ))
                  AND a.source_manifest_sha256 = j.source_manifest_sha256
                  AND a.declared_files @> jsonb_build_array(
                    jsonb_build_object('role', 'source_mcap', 'required', true, 'sha256', $5::text)
@@ -320,9 +330,22 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         [c.recording_id, c.owner_user_id],
       );
       if (!ok.rows[0]?.ok) continue;
+      if (
+        c.derived_from_job_id &&
+        (!c.rerun_recipe || !c.rerun_stages?.length)
+      ) {
+        await rejectQueuedJob(
+          tx,
+          c.id,
+          "rerun_plan_missing",
+          "Derived job has no confirmed execution plan",
+        );
+        rejectedJobIds.push(c.id);
+        continue;
+      }
       let task: Record<string, unknown>;
       try {
-        task = await build(tx, {
+        task = await (c.derived_from_job_id ? defaultTaskInput : build)(tx, {
           jobId: c.id,
           recordingId: c.recording_id,
           profileRevision: c.profile_revision,
@@ -357,6 +380,14 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         rejectedJobIds.push(c.id);
         continue;
       }
+      if (c.rerun_recipe) {
+        task = {
+          ...task,
+          schemaVersion: 3,
+          recipe: c.rerun_recipe,
+          recipeSha256: requestSha256(c.rerun_recipe),
+        };
+      }
       // v3 (SA-88) carries the inline recipe; v1/v2 keep the single-claim path.
       const contract =
         task.schemaVersion === 3
@@ -385,7 +416,16 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         // The v3 task input was validated above, so its recipe has the RecipeV1 shape.
         deadlineSeconds = admissionDeadlineSeconds(
           cfg,
-          task.schemaVersion === 3 ? (task.recipe as RecipeV1) : null,
+          c.rerun_recipe && c.rerun_stages
+            ? {
+                stages: c.rerun_recipe.stages.map((spec) => ({
+                  ...spec,
+                  enabled: c.rerun_stages!.includes(spec.stage),
+                })),
+              }
+            : task.schemaVersion === 3
+              ? (task.recipe as RecipeV1)
+              : null,
         );
       } catch (error) {
         // Reject THIS job (queued -> cancelled with the code) and keep going,

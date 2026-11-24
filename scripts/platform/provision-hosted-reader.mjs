@@ -57,6 +57,12 @@ try {
       public.cached_processing_imports TO stateaction_dev_reader;
     GRANT SELECT (job_id, closed_at, outcome) ON public.job_output_closures
       TO stateaction_dev_reader;
+    DO $$
+    BEGIN
+      IF to_regprocedure('public.stateaction_grant_stage_rerun_reads(name)') IS NOT NULL THEN
+        PERFORM public.stateaction_grant_stage_rerun_reads('stateaction_dev_reader');
+      END IF;
+    END $$;
   `);
   const undesired = (
     await owner.query(`

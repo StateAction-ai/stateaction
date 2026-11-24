@@ -90,6 +90,7 @@ export function reviewReads(get: () => AuthRuntime = authRuntime) {
     load: async (
       staffUserId: string,
       recordingId: string,
+      viewJobId?: string,
     ): Promise<{
       annotations: RecordingAnnotationsDocument;
       extras: ReviewExtras;
@@ -99,6 +100,7 @@ export function reviewReads(get: () => AuthRuntime = authRuntime) {
         { pool, reader: s3ObjectReader(serverConfig(), { timeoutMs: 15_000 }) },
         staffUserId,
         recordingId,
+        viewJobId,
       );
       if (!annotations) return null;
       const extras = await loadReviewExtras(

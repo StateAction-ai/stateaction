@@ -1,0 +1,89 @@
+{
+  "contract": "http.stage-rerun-plan.v1",
+  "cases": [
+    {
+      "name": "imported segmentation and the CPU cap",
+      "input": {
+        "document": {
+          "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "execute": [
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 1100,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ],
+          "reuse": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "executionJobId": null,
+              "receiptSha256": null,
+              "errorCode": null,
+              "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "copyBytes": "4096"
+            }
+          ],
+          "maxGpuCostUsd": "0.00",
+          "maxComputeCostUsd": "0.27",
+          "estimatedComputeCostUsd": null,
+          "estimatedSeconds": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing compute cap",
+      "input": {
+        "document": {
+          "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "execute": [
+            {
+              "stage": "hand_pose",
+              "enabled": true,
+              "module": "hand_pose_cpu_v1@1",
+              "params": {},
+              "resources": {
+                "gpu": "none",
+                "budgetSeconds": 1100,
+                "maxContainers": 1,
+                "retries": 0
+              }
+            }
+          ],
+          "reuse": [
+            {
+              "stage": "segment",
+              "state": "succeeded",
+              "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "executionJobId": null,
+              "receiptSha256": null,
+              "errorCode": null,
+              "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "copyBytes": "4096"
+            }
+          ],
+          "maxGpuCostUsd": "0.00",
+          "estimatedComputeCostUsd": null,
+          "estimatedSeconds": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

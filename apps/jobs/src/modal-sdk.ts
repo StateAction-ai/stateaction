@@ -1,4 +1,12 @@
 import {
+  immutableModalAppName,
+  type ModalRerunBinding,
+} from "@stateaction/contracts";
+import {
+  inspectModalDeployment,
+  type ModalInspectionApi,
+} from "./modal-deployment.js";
+import {
   modalCredentials,
   modalAppFor,
   modalFunctionFor,
@@ -30,14 +38,20 @@ type SdkCall = {
   get(params?: { timeoutMs?: number }): Promise<unknown>;
   cancel(params?: { terminateContainers?: boolean }): Promise<void>;
 };
-type SdkFunction = { spawn(args?: unknown[]): Promise<SdkCall> };
+type SdkFunction = {
+  functionId?: string;
+  spawn(args?: unknown[]): Promise<SdkCall>;
+};
 type SdkClient = {
   close(): void;
+  cpClient?: ModalInspectionApi &
+    Partial<Pick<import("modal").ModalClient["cpClient"], "functionCallFetch">>;
   functions: {
+    fromId?(functionId: string): Promise<SdkFunction>;
     fromName(
       app: string,
       name: string,
-      params?: { environment?: string },
+      params?: { environment?: string; version?: number },
     ): Promise<SdkFunction>;
   };
   functionCalls: { fromId(id: string): Promise<SdkCall> };
@@ -101,6 +115,7 @@ export function createModalSdkClient(
     const specifier = "modal";
     return (await import(specifier)) as SdkModule;
   },
+  inspect = inspectModalDeployment,
 ): ModalClient {
   let cached: Promise<{ mod: SdkModule; client: SdkClient }> | undefined;
   const sdk = () => {
@@ -125,10 +140,80 @@ export function createModalSdkClient(
     });
     return cached;
   };
+  const verify = async (
+    client: SdkClient,
+    module: string,
+    binding: ModalRerunBinding,
+  ) => {
+    const objectTag = modalFunctionFor(settings, module);
+    if (
+      !objectTag ||
+      !client.cpClient ||
+      modalAppFor(settings, module) !== binding.appName ||
+      immutableModalAppName(
+        module,
+        binding.codeRevision,
+        binding.paramsSha256,
+      ) !== binding.appName ||
+      (settings.environmentName &&
+        settings.environmentName !== binding.environment)
+    )
+      return false;
+    const actual = await inspect(client.cpClient, binding, objectTag, module);
+    if (
+      actual?.functionId !== binding.functionId ||
+      actual.definitionId !== binding.definitionId ||
+      actual.definitionSha256 !== binding.definitionSha256
+    )
+      return false;
+    if (binding.gpu !== "none") {
+      // Verify the exact capability the GPU watchdog will need once a call exists.
+      if (!client.cpClient.functionCallFetch) return false;
+      await gpuInputs(client, binding.functionId);
+    }
+    return true;
+  };
+  async function gpuInputs(client: SdkClient, functionId: string) {
+    const api = client.cpClient;
+    if (!api?.functionCallFetch) throw new Error("GPU watchdog unavailable");
+    return (
+      await api.functionCallFetch({
+        functionId,
+        tail: { count: 10 },
+        allVariants: true,
+      })
+    ).functionCallInputs;
+  }
   return {
+    async watchGpuCall(callId: string, binding: ModalRerunBinding) {
+      return bounded(
+        "GPU watchdog",
+        settings.apiTimeoutMs,
+        sdk().then(async ({ client }) => {
+          const inputs = await gpuInputs(client, binding.functionId);
+          return inputs.flatMap((input) =>
+            input.functionCallId === callId && input.containerId
+              ? [input.containerId]
+              : [],
+          );
+        }),
+      );
+    },
+    async checkFunction(module: string, binding: ModalRerunBinding) {
+      try {
+        return await bounded(
+          "inspect immutable function",
+          settings.apiTimeoutMs,
+          sdk().then(({ client }) => verify(client, module, binding)),
+        );
+      } catch {
+        return false;
+      }
+    },
     async spawn(
       bootstrap: ModalBootstrap,
       canSubmit: () => boolean,
+      binding?: ModalRerunBinding,
     ): Promise<string> {
       const deadline = performance.now() + settings.apiTimeoutMs;
       // SA-91: a stage bootstrap names its module; each module has its own deployed function.
@@ -137,7 +222,7 @@ export function createModalSdkClient(
         bootstrap.schemaVersion === 2
           ? modalFunctionFor(settings, bootstrap.module)
           : settings.functionName;
-      if (functionName === undefined) throw new ModalSpawnNotSent();
+      if (functionName === undefined && !binding) throw new ModalSpawnNotSent();
       const appName =
         bootstrap.schemaVersion === 2
           ? modalAppFor(settings, bootstrap.module)
@@ -150,13 +235,28 @@ export function createModalSdkClient(
           settings.apiTimeoutMs,
           (async () => {
             const { client } = await sdk();
-            const fn = await client.functions.fromName(
-              appName,
-              functionName,
-              settings.environmentName === undefined
-                ? undefined
-                : { environment: settings.environmentName },
-            );
+            let fn: SdkFunction | undefined;
+            if (binding) {
+              try {
+                const module =
+                  "module" in bootstrap ? bootstrap.module : undefined;
+                if (!module || !(await verify(client, module, binding)))
+                  throw new ModalSpawnNotSent();
+                fn = await client.functions.fromId?.(binding.functionId);
+              } catch {
+                throw new ModalSpawnNotSent();
+              }
+            } else {
+              fn = await client.functions.fromName(
+                appName,
+                functionName!,
+                settings.environmentName === undefined
+                  ? undefined
+                  : { environment: settings.environmentName },
+              );
+            }
+            if (!fn || (binding && fn.functionId !== binding.functionId))
+              throw new ModalSpawnNotSent();
             // One JSON argument keeps the bootstrap out of argv, env and logs.
             const args = [JSON.stringify(bootstrap)];
             if (expired || performance.now() >= deadline || !canSubmit())

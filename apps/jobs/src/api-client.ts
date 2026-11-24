@@ -1,11 +1,13 @@
+import type { ModalRerunBinding } from "@stateaction/contracts";
 import {
   contractMaxBytes,
   parseContract,
-  type ControllerActionV3,
+  type ControllerActionV4,
   type ControllerResult,
   type DagRunV1,
   type ReconcileResult,
   type RecipeV1,
+  type Stage,
 } from "@stateaction/contracts";
 
 /** The request reached (or may have reached) the server but no usable answer came back. */
@@ -68,6 +70,7 @@ export class JobsApi {
     method: "GET" | "POST",
     contract: string,
     body?: unknown,
+    timeoutMs = this.timeoutMs,
   ): Promise<unknown> {
     const limit = contractMaxBytes(contract) + 4096;
     let response: Response;
@@ -78,7 +81,7 @@ export class JobsApi {
       const init: RequestInit = {
         method,
         headers,
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
         // The machine credential must never follow a redirect to another origin.
         redirect: "error",
       };
@@ -171,12 +174,34 @@ export class JobsApi {
     return this.checked<PriorStages>("jobs.prior-stages.v1", data);
   }
 
+  async prepareRerun(
+    jobId: string,
+    owner: string,
+  ): Promise<{
+    state: "regular" | "copying" | "failed" | "ready";
+    execute?: Stage[];
+    functions?: Partial<
+      Record<"segment" | "caption" | "handPose", ModalRerunBinding>
+    >;
+  }> {
+    const contract = "jobs.rerun-preparation.v1";
+    const data = await this.call(
+      `/internal/v1/jobs/${jobId}/rerun-preparation`,
+      "POST",
+      contract,
+      { owner },
+      // One preparation step may stream-verify a large immutable object.
+      56 * 60_000,
+    );
+    return this.checked(contract, data);
+  }
+
   async act(
     jobId: string,
-    action: ControllerActionV3,
+    action: ControllerActionV4,
   ): Promise<ControllerResult> {
-    // v3 preserves the earlier actions and adds the parallel recipe controls.
-    parseContract("jobs.controller-action.v3", action);
+    // v4 preserves earlier actions and carries verified provider receipt evidence.
+    parseContract("jobs.controller-action.v4", action);
     const data = await this.call(
       `/internal/v1/jobs/${jobId}/controller`,
       "POST",

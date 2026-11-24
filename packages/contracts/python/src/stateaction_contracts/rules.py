@@ -748,12 +748,17 @@ def recording_annotations(doc: Any) -> Violation:
         ("hand_presence", "job_id", "recording_id", hand_presence),
         ("dag_run", "jobId", "recordingId", dag_run),
     )
-    # Every present part names the document's job and recording (dag_run in camelCase).
+    # Artifact parts may retain producer job IDs. The DAG always names this job.
     for key, job_key, recording_key, _ in parts:
         part = doc[key]
+        producers = doc.get("producer_jobs")
+        has_producer = producers is not None and key != "dag_run"
+        expected_job = producers[key] if has_producer else doc["job_id"]
         if part is None:
+            if has_producer and expected_job is not None:
+                return ("reference_mismatch", f"/producer_jobs/{key}")
             continue
-        if part[job_key] != doc["job_id"]:
+        if part[job_key] != expected_job:
             return ("reference_mismatch", f"/{key}/{job_key}")
         if part[recording_key] != doc["recording_id"]:
             return ("reference_mismatch", f"/{key}/{recording_key}")

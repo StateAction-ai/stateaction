@@ -30,7 +30,8 @@ from typing import Any
 
 import modal
 
-APP_NAME = "stateaction-processing"
+DEFAULT_APP_NAME = "stateaction-processing"
+APP_NAME = os.environ.get("STATEACTION_MODAL_APP_NAME", DEFAULT_APP_NAME)
 FUNCTION_NAME = "process_recording"
 
 # Explicit resources (provisional sizing: confirm with the authorized canary before production).
@@ -42,6 +43,12 @@ TIMEOUT_ENV = "STATEACTION_MODAL_HAND_POSE_TIMEOUT_S"
 FUNCTION_TIMEOUT_SECONDS = int(os.environ.get(TIMEOUT_ENV, "21600"))
 if not 600 <= FUNCTION_TIMEOUT_SECONDS <= 21_600:
     raise ValueError(f"{TIMEOUT_ENV} out of range")
+STARTUP_TIMEOUT_ENV = "STATEACTION_MODAL_HAND_POSE_STARTUP_TIMEOUT_S"
+STARTUP_TIMEOUT_SECONDS = (
+    int(os.environ[STARTUP_TIMEOUT_ENV]) if STARTUP_TIMEOUT_ENV in os.environ else None
+)
+if STARTUP_TIMEOUT_SECONDS is not None and not 30 <= STARTUP_TIMEOUT_SECONDS <= 600:
+    raise ValueError(f"{STARTUP_TIMEOUT_ENV} out of range")
 WRAPPER_DEADLINE_SECONDS = FUNCTION_TIMEOUT_SECONDS - 300
 # Bounded proof that the CLI's whole process group/session is gone before a result is returned.
 REAP_GRACE_SECONDS = 15.0
@@ -321,6 +328,7 @@ def _drain_last_line(stream: Any, keep: list[bytes]) -> None:
     memory=(MEMORY_REQUEST_MIB, MEMORY_LIMIT_MIB),
     ephemeral_disk=SCRATCH_DISK_MIB,
     timeout=FUNCTION_TIMEOUT_SECONDS,
+    startup_timeout=STARTUP_TIMEOUT_SECONDS,
     retries=0,
     max_containers=1,  # concurrency 1: one call at a time (default input concurrency is 1)
     min_containers=0,  # warm 0: no idle billing

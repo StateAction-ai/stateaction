@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/rerun-preparation.v1.json",
+  "title": "Rerun preparation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "state": {
+      "enum": ["regular", "copying", "failed", "ready"]
+    },
+    "execute": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["segment", "caption", "hand_pose"]
+      }
+    },
+    "functions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segment": {
+          "$ref": "#/$defs/binding"
+        },
+        "caption": {
+          "$ref": "#/$defs/binding"
+        },
+        "handPose": {
+          "$ref": "#/$defs/binding"
+        }
+      }
+    }
+  },
+  "required": ["state"],
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "required": [
+        "functionId",
+        "definitionId",
+        "environment",
+        "gpu",
+        "maxBilledSeconds",
+        "maxContainers",
+        "maxCpuMilli",
+        "maxMemoryMib",
+        "microUsdPerGpuSecond",
+        "microUsdPerCpuSecond",
+        "appName",
+        "codeRevision",
+        "paramsSha256",
+        "definitionSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "functionId": {
+          "type": "string",
+          "pattern": "^fu-[A-Za-z0-9]{1,77}$"
+        },
+        "definitionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,120}$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,100}$"
+        },
+        "gpu": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "maxBilledSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 43200
+        },
+        "maxContainers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxCpuMilli": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 192000
+        },
+        "maxMemoryMib": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2097152
+        },
+        "microUsdPerGpuSecond": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "microUsdPerCpuSecond": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "appName": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]{1,64}$"
+        },
+        "codeRevision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "paramsSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "definitionSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

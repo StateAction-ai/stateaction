@@ -95,6 +95,7 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
           { pool: deps.pool, reader: deps.reader },
           userId,
           recordingId,
+          new URL(request.url).searchParams.get("run") ?? undefined,
         );
         if (!document)
           throw new TransportError("not_found", "Annotations not found");
@@ -118,12 +119,14 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
     handFrames: (request: Request, recordingId: string): Promise<Response> =>
       guarded(request, recordingId, async (userId, headers, requestId) => {
         const query = new URL(request.url).searchParams;
+        const run = query.get("run");
         const data = await loadClipHandFrames(
           deps,
           userId,
           recordingId,
-          query.get("job") ?? "",
+          run ?? query.get("job") ?? "",
           query.get("clip") ?? "",
+          run !== null,
         );
         headers.set("content-type", "application/json");
         return new Response(JSON.stringify({ data, requestId }), { headers });
@@ -148,8 +151,13 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
             "invalid_request",
             "role must be recording_mp4",
           );
-        const job = new URL(request.url).searchParams.get("job");
-        if (job !== null && !UUID.test(job))
+        const query = new URL(request.url).searchParams;
+        const job = query.get("job");
+        const run = query.get("run");
+        if (
+          (job !== null && !UUID.test(job)) ||
+          (run !== null && !UUID.test(run))
+        )
           throw new TransportError("not_found", "Recording not found");
         const view = await issueRecordingRead(
           {
@@ -165,6 +173,7 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
             recordingId,
             role: "recording_mp4",
             ...(job === null ? {} : { expectedJobId: job }),
+            ...(run === null ? {} : { viewJobId: run }),
           },
         );
         headers.set("content-type", "application/json");

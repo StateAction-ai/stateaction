@@ -39,7 +39,11 @@ export interface ReviewBundle {
 export interface ReviewLoader {
   listRecordings(userId: string): Promise<ReviewRecordingSummary[]>;
   /** null when the recording does not exist or has no accepted job. */
-  load(userId: string, recordingId: string): Promise<ReviewBundle | null>;
+  load(
+    userId: string,
+    recordingId: string,
+    jobId?: string,
+  ): Promise<ReviewBundle | null>;
 }
 
 export class ReviewDataUnavailable extends Error {

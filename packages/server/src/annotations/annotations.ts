@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import type pg from "pg";
 import {
   contractMaxBytes,
+  sha256Hex,
   validateBytes,
   validateValue,
   type DagRunV1,
@@ -14,7 +14,11 @@ import {
   type ObjectReader,
 } from "../admission/recordings.js";
 import { ObjectReadUnavailableError } from "../admission/object-reader.js";
-import { getDagRun } from "../jobs/stages.js";
+import {
+  getDagRun,
+  getDagRunWithLineage,
+  type DagRunWithLineage,
+} from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
 import { formatBytes, recordingTitle } from "../pipeline/model.js";
 
@@ -74,6 +78,8 @@ type Accepted = {
   job_id: string;
   recording_id: string;
   kind: string;
+  derived: boolean;
+  source_manifest_sha256: string;
 };
 
 /** The recording's accepted job, or null (unknown, deleted, not staff or not accepted). */
@@ -81,16 +87,19 @@ async function acceptedJob(
   pool: Pick<pg.Pool, "query">,
   staffUserId: string,
   recordingId: string,
+  viewJobId?: string,
 ): Promise<Accepted | null> {
-  if (!UUID.test(recordingId)) return null;
+  if (!UUID.test(recordingId) || (viewJobId && !UUID.test(viewJobId)))
+    return null;
   const { rows } = await pool.query<Accepted>(
-    `SELECT j.id AS job_id, rec.id AS recording_id, j.kind
+    `SELECT j.id AS job_id, rec.id AS recording_id, j.kind,
+              (j.derived_from_job_id IS NOT NULL) AS derived, j.source_manifest_sha256
      FROM recordings rec
-     JOIN jobs j ON j.id = rec.current_job_id AND j.recording_id = rec.id
+     JOIN jobs j ON j.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id) AND j.recording_id = rec.id
        AND j.state = 'succeeded'
      WHERE rec.id = $2 AND rec.deleted_at IS NULL
        AND catalog_has_role($1, 'staff')`,
-    [staffUserId, recordingId],
+    [staffUserId, recordingId, viewJobId ?? null],
   );
   return rows[0] ?? null;
 }
@@ -98,8 +107,13 @@ async function acceptedJob(
 async function readPart(
   deps: AnnotationDeps,
   part: (typeof PARTS)[number],
-  file: { object_key: string; size_bytes: string; sha256?: string },
-  job: Pick<Accepted, "job_id" | "recording_id"> &
+  file: {
+    object_key: string;
+    size_bytes: string;
+    sha256: string;
+    producer_job_id: string;
+  },
+  job: Pick<Accepted, "recording_id" | "source_manifest_sha256"> &
     Partial<Pick<Accepted, "kind">>,
 ): Promise<unknown> {
   const contract =
@@ -136,9 +150,8 @@ async function readPart(
     throw error;
   }
   if (
-    file.sha256 !== undefined &&
-    (String(bytes.byteLength) !== file.size_bytes ||
-      createHash("sha256").update(bytes).digest("hex") !== file.sha256)
+    sha256Hex(bytes) !== file.sha256 ||
+    String(bytes.byteLength) !== file.size_bytes
   )
     throw new TransportError(
       "conflict",
@@ -150,8 +163,16 @@ async function readPart(
       "conflict",
       `${part.slot} is not a valid ${contract} document (${result.code})`,
     );
-  const doc = result.value as { job_id?: unknown; recording_id?: unknown };
-  if (doc.job_id !== job.job_id || doc.recording_id !== job.recording_id)
+  const doc = result.value as {
+    job_id?: unknown;
+    recording_id?: unknown;
+    source_manifest_sha256?: unknown;
+  };
+  if (
+    doc.job_id !== file.producer_job_id ||
+    doc.recording_id !== job.recording_id ||
+    doc.source_manifest_sha256 !== job.source_manifest_sha256
+  )
     throw new TransportError(
       "conflict",
       `${part.slot} belongs to a different job or recording`,
@@ -164,13 +185,14 @@ async function annotationFiles(pool: AnnotationDeps["pool"], jobId: string) {
     slot: string;
     object_key: string | null;
     size_bytes: string | null;
-    sha256: string | null;
     stage_not_succeeded: boolean;
+    sha256: string | null;
+    producer_job_id: string | null;
   }>(
-    `SELECT s.slot, f.object_key, f.size_bytes::text, f.sha256,
+    `SELECT s.slot, f.object_key, f.size_bytes::text, f.sha256, coalesce(c.original_job_id, f.job_id) AS producer_job_id,
             (r.state IS NOT NULL AND r.state <> 'succeeded') AS stage_not_succeeded
      FROM job_output_slots s
-     LEFT JOIN job_stage_runs r ON r.job_id = s.job_id AND r.stage = CASE s.slot
+     LEFT JOIN job_effective_stage_runs r ON r.job_id = s.job_id AND r.stage = CASE s.slot
        WHEN 'segments.json' THEN 'segment'
        WHEN 'captions.json' THEN 'caption'
        ELSE 'hand_pose' END
@@ -180,6 +202,7 @@ async function annotationFiles(pool: AnnotationDeps["pool"], jobId: string) {
          WHEN 'segments.json' THEN 'segments_json'
          WHEN 'captions.json' THEN 'captions_json'
          WHEN 'hand-presence.json' THEN 'hand_presence_json' END
+     LEFT JOIN job_rerun_copies c ON c.file_id = f.id AND c.job_id = f.job_id AND c.sha256 = f.sha256
      WHERE s.job_id = $1 AND s.slot = ANY($2::text[])`,
     [jobId, PARTS.map((p) => p.slot)],
   );
@@ -189,12 +212,16 @@ async function annotationFiles(pool: AnnotationDeps["pool"], jobId: string) {
 /** Read provenance for the already-authorized exact run, including historical jobs. */
 export async function loadRecipeProducers(
   deps: AnnotationDeps,
-  run: DagRunV1,
+  run: Pick<DagRunV1, "jobId" | "recordingId" | "stages">,
+  sourceSha256: string,
 ): Promise<Partial<Record<Stage, Producer | "unavailable">>> {
   const stages = run.stages.filter((node) => node.state === "succeeded");
   if (!stages.length) return {};
   const files = await annotationFiles(deps.pool, run.jobId);
-  const job = { job_id: run.jobId, recording_id: run.recordingId };
+  const job = {
+    recording_id: run.recordingId,
+    source_manifest_sha256: sourceSha256,
+  };
   const producers: Partial<Record<Stage, Producer | "unavailable">> = {};
   for (const node of stages) {
     const part = PARTS.find((item) => item.stage === node.stage);
@@ -205,7 +232,8 @@ export async function loadRecipeProducers(
       if (
         file.object_key === null ||
         file.size_bytes === null ||
-        file.sha256 === null
+        file.sha256 === null ||
+        file.producer_job_id === null
       ) {
         producers[node.stage] = "unavailable";
         continue;
@@ -217,10 +245,12 @@ export async function loadRecipeProducers(
           object_key: file.object_key,
           size_bytes: file.size_bytes,
           sha256: file.sha256,
+          producer_job_id: file.producer_job_id,
         },
         job,
       )) as { producer: Producer };
       producers[node.stage] =
+        file.producer_job_id !== run.jobId ||
         `${producer.module_id}@${producer.module_version}` === node.module
           ? producer
           : "unavailable";
@@ -240,11 +270,20 @@ export async function loadRecordingAnnotations(
   deps: AnnotationDeps,
   staffUserId: string,
   recordingId: string,
+  viewJobId?: string,
 ): Promise<RecordingAnnotationsDocument | null> {
-  const job = await acceptedJob(deps.pool, staffUserId, recordingId);
+  const job = await acceptedJob(deps.pool, staffUserId, recordingId, viewJobId);
   if (!job) return null;
   const bySlot = await annotationFiles(deps.pool, job.job_id);
   const parts: Record<string, unknown> = {};
+  const producers: Extract<
+    RecordingAnnotationsDocument,
+    { schema: "stateaction.recording-annotations.v3" }
+  >["producer_jobs"] = {
+    segments: null,
+    captions: null,
+    hand_presence: null,
+  };
   for (const part of PARTS) {
     const file = bySlot.get(part.slot);
     // A file left by a stage whose run did not succeed (for example a receipt the server rejected)
@@ -259,33 +298,46 @@ export async function loadRecordingAnnotations(
         "conflict",
         `${part.slot} is reserved but its file is not usable`,
       );
+    producers[part.key] = file?.producer_job_id ?? null;
     parts[part.key] =
-      file && file.object_key !== null && file.size_bytes !== null
+      file &&
+      file.object_key !== null &&
+      file.size_bytes !== null &&
+      file.sha256 &&
+      file.producer_job_id
         ? await readPart(
             deps,
             part,
             {
               object_key: file.object_key,
               size_bytes: file.size_bytes,
-              ...(file.sha256 ? { sha256: file.sha256 } : {}),
+              sha256: file.sha256,
+              producer_job_id: file.producer_job_id,
             },
             job,
           )
         : null;
   }
   const imported = job.kind === "cached_import";
-  let dagRun: DagRunV1 | null = null;
+  let dagRun: DagRunV1 | DagRunWithLineage | null = null;
   try {
-    if (!imported) dagRun = await getDagRun({ pool: deps.pool }, job.job_id);
+    if (!imported)
+      dagRun = await (job.derived ? getDagRunWithLineage : getDagRun)(
+        { pool: deps.pool },
+        job.job_id,
+      );
   } catch (error) {
     // A job without a recipe has no recipe run; anything else is a real failure.
     if (!(error instanceof TransportError && error.code === "not_found"))
       throw error;
   }
   const document = {
-    schema: imported
-      ? "stateaction.recording-annotations.v2"
-      : ANNOTATIONS_SCHEMA,
+    schema: job.derived
+      ? "stateaction.recording-annotations.v3"
+      : imported
+        ? "stateaction.recording-annotations.v2"
+        : ANNOTATIONS_SCHEMA,
+    ...(job.derived ? { producer_jobs: producers } : {}),
     recording_id: job.recording_id,
     job_id: job.job_id,
     ...(imported ? { source: "imported" } : {}),
@@ -293,7 +345,11 @@ export async function loadRecordingAnnotations(
     dag_run: dagRun,
   } as RecordingAnnotationsDocument;
   const valid = validateValue(
-    imported ? "http.recording-annotations.v2" : ANNOTATIONS_CONTRACT,
+    job.derived
+      ? "http.recording-annotations.v3"
+      : imported
+        ? "http.recording-annotations.v2"
+        : ANNOTATIONS_CONTRACT,
     document,
   );
   if (!valid.valid)
@@ -335,7 +391,7 @@ export async function listReviewRecordings(
           AND f.state NOT IN ('cancelled', 'failed', 'expired')) AS size
      FROM recordings rec
      JOIN "user" u ON u.id = rec.owner_user_id
-     JOIN jobs j ON j.id = rec.current_job_id AND j.recording_id = rec.id
+     JOIN jobs j ON j.id = coalesce(recording_selected_job(rec.id), rec.current_job_id) AND j.recording_id = rec.id
        AND j.state = 'succeeded'
      LEFT JOIN cached_processing_imports i ON i.job_id = j.id
      WHERE rec.deleted_at IS NULL AND catalog_has_role($1, 'staff')
@@ -372,7 +428,7 @@ export async function loadReviewExtras(
   /** The job the annotations were read from: extras of any other job are refused. */
   jobId: string,
 ): Promise<ReviewExtras | null> {
-  const job = await acceptedJob(pool, staffUserId, recordingId);
+  const job = await acceptedJob(pool, staffUserId, recordingId, jobId);
   if (!job || job.job_id !== jobId) return null;
   const rec = (
     await pool.query<{

@@ -1,0 +1,59 @@
+{
+  "contract": "http.segment-marks.v2",
+  "cases": [
+    {
+      "name": "inherited mark includes the marking run",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 0,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z",
+              "originJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "originRevision": 2
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing marking run",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "segmentsSha256": "d3690131c737f212505f230d86ea322e788db598fd0162f5500f7e22ab7005bc",
+          "segmentCount": 3,
+          "checkedCount": 1,
+          "issueCount": 1,
+          "marks": [
+            {
+              "segmentId": "5b1c2d3e-4f50-5617-8a9b-0c1d2e3f4a5b",
+              "revision": 0,
+              "verdict": "issue",
+              "issueType": "hand_pose",
+              "note": "Left hand lost",
+              "createdAt": "2026-11-22T10:00:00.000000Z",
+              "originRevision": 2
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

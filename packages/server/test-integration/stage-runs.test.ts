@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { after, afterEach, test } from "node:test";
 import {
+  immutableModalAppName,
   requestSha256,
   segmentId,
   validateValue,
 } from "@stateaction/contracts";
 import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
+import { appendReview } from "../src/catalog/catalog.js";
+import { getClipReviewState } from "../src/datasets/review.js";
 import { CatalogError } from "../src/catalog/errors.js";
 import {
   advanceResult,
@@ -17,6 +21,7 @@ import {
 import { BootstrapCapabilityStore } from "../src/jobs/credentials.js";
 import {
   admitNextJob,
+  claimControllerLease,
   recordExecutionEvidence,
   recordWorkerSubmissionIntent,
   type JobsDeps,
@@ -24,14 +29,23 @@ import {
 import {
   claimStage,
   getDagRun,
+  getDagRunWithLineage,
+  promoteRecipeEvidence,
   getPriorStages,
   issueStageClaim,
   readStageOutput,
   recordStageHeartbeat,
   recordStageRun,
+  startParallelRecipe,
 } from "../src/jobs/stages.js";
 import { hashServiceToken } from "../src/auth/service.js";
 import { TransportError } from "../src/transport/errors.js";
+import { prepareStageRerun } from "../src/jobs/stage-rerun-preparation.js";
+import { s3RerunCopy } from "../src/jobs/stage-rerun-storage.js";
+import { confirmStageRerun, planStageRerun } from "../src/jobs/stage-reruns.js";
+import { realS3, s3Config } from "./transport-harness.js";
+import { retryJob } from "../src/jobs/recovery.js";
+
 import {
   acceptanceDatabase,
   acceptanceDeps,
@@ -72,6 +86,9 @@ const code = (promise: Promise<unknown>) =>
 import {
   MODULES,
   claimed,
+  finish,
+  json,
+  segmentsDoc,
   jobFacts,
   receiptOf,
   recipe,
@@ -80,7 +97,7 @@ import {
   seal,
 } from "./recipe-harness.js";
 
-const recipeJob = (over: { captionEnabled?: boolean } = {}) =>
+const recipeJob = (over: Parameters<typeof recipeJobWith>[0] = {}) =>
   recipeJobWith(over, (db) => open.push(db));
 
 // --------------------------------------------------------------------- tests
@@ -137,6 +154,679 @@ test("an over-12h recipe is rejected at admission and does not block the queue",
     )
   ).rows[0];
   assert.equal(dl.secs, 3 * 600 + 1800);
+});
+
+test("clip review commits and replays on the selected result while a rerun is queued", async () => {
+  const parent = await recipeJob();
+  const result = await runRecipe(parent, undefined, {
+    clip: { sourceStartNs: "0", sourceEndNs: "600000000" },
+  });
+  await seal(parent, result);
+  assert.equal(
+    (await advanceResult(parent.accept, parent.jobId))?.candidateStatus,
+    "accepted",
+  );
+
+  const actor = parent.db.actors.staff;
+  const deps = {
+    pool: parent.db.app,
+    reader: parent.accept.reader,
+    backend: "local" as const,
+  };
+  const request = {
+    parentJobId: parent.jobId,
+    stage: "hand_pose",
+    scope: "only",
+  } as const;
+  const { planSha256, plan } = await planStageRerun(
+    deps,
+    actor,
+    parent.recordingId,
+    request,
+  );
+  const child = randomUUID();
+  await confirmStageRerun(deps, actor, parent.recordingId, {
+    ...request,
+    requestId: child,
+    expectedPlanSha256: planSha256,
+    expectedMaxGpuCostUsd: plan.maxGpuCostUsd,
+    reason: "Queue a new run while the original remains selected",
+  });
+  assert.deepEqual(
+    (
+      await parent.db.app.query(
+        "SELECT current_job_id, recording_selected_job(id) AS selected FROM recordings WHERE id = $1",
+        [parent.recordingId],
+      )
+    ).rows[0],
+    { current_job_id: child, selected: parent.jobId },
+  );
+  const clipId = result.doc.clips[0].clip_id;
+  const before = await getClipReviewState(parent.db.app, {
+    clipId,
+    viewerUserId: actor,
+  });
+  assert.equal(before.capabilities.canReview, true);
+  const review = {
+    reviewId: randomUUID(),
+    clipId,
+    jobId: parent.jobId,
+    reviewerUserId: actor,
+    resultManifestSha256: before.resultManifestSha256,
+    expectedRevision: before.review.revision,
+    decision: "approved",
+    taskLabel: "Inspect the fixture",
+  } as const;
+  assert.equal(
+    (await appendReview(parent.db.app, review)).revision,
+    before.review.revision + 1,
+  );
+  assert.equal((await appendReview(parent.db.app, review)).replayed, true);
+});
+
+test("a confirmed CPU rerun needs live spend authorization at its actual stage claim", async () => {
+  const parent = await recipeJob({ maxJobCostUsd: "1.00" });
+  await seal(parent, await runRecipe(parent));
+  assert.equal(
+    (await advanceResult(parent.accept, parent.jobId))?.candidateStatus,
+    "accepted",
+  );
+
+  const authorization = randomUUID();
+  const bindings = new Map([
+    [
+      MODULES.hand_pose,
+      {
+        functionId: "fu-fixture",
+        definitionId: "fd-fixture",
+        environment: "fixture",
+        appName: immutableModalAppName(
+          MODULES.hand_pose,
+          "a".repeat(40),
+          requestSha256({}),
+        ),
+        codeRevision: "a".repeat(40),
+        paramsSha256: requestSha256({}),
+        definitionSha256: "b".repeat(64),
+        gpu: "none",
+        maxBilledSeconds: 1000,
+        maxContainers: 1,
+        maxCpuMilli: 4000,
+        maxMemoryMib: 8192,
+        microUsdPerGpuSecond: 0,
+        microUsdPerCpuSecond: 211,
+      },
+    ],
+  ]);
+  await parent.db.owner.query(
+    `INSERT INTO rerun_spend_authorizations
+       (id, environment, approval, recording_id, max_compute_cents, max_gpu_cents, expires_at)
+     VALUES ($1, 'fixture', 'test CPU authorization', $2, 100, 0, now() + interval '1 hour')`,
+    [authorization, parent.recordingId],
+  );
+  const actor = parent.db.actors.staff;
+  const planDeps = {
+    pool: parent.db.app,
+    reader: parent.accept.reader,
+    backend: "modal" as const,
+    bindings,
+  };
+  const input = {
+    parentJobId: parent.jobId,
+    stage: "hand_pose",
+    scope: "only",
+  } as const;
+  const { plan, planSha256 } = await planStageRerun(
+    planDeps,
+    actor,
+    parent.recordingId,
+    input,
+  );
+  assert.equal(plan.maxGpuCostUsd, "0.00");
+  const jobId = randomUUID();
+  const command = {
+    ...input,
+    requestId: jobId,
+    expectedPlanSha256: planSha256,
+    expectedMaxGpuCostUsd: plan.maxGpuCostUsd,
+    reason: "Verify a CPU claim expires with its approval",
+  };
+  const excluded = {
+    ...planDeps,
+    production: true,
+    publicVideoCanary: {
+      ownerUserId: parent.db.actors.collector,
+      clientRecordingId: randomUUID(),
+      sourceSha256: "a".repeat(64),
+    },
+  };
+  await assert.rejects(
+    planStageRerun(excluded, actor, parent.recordingId, input),
+    { code: "conflict", message: "rerun_outside_admission_scope" },
+  );
+  await assert.rejects(
+    confirmStageRerun(excluded, actor, parent.recordingId, command),
+    { code: "conflict", message: "rerun_outside_admission_scope" },
+  );
+  assert.deepEqual(
+    (
+      await parent.db.app.query(
+        `SELECT r.current_job_id, recording_selected_job(r.id) AS selected,
+            EXISTS (SELECT 1 FROM jobs WHERE id = $2) AS child,
+            EXISTS (SELECT 1 FROM rerun_spend_reservations WHERE job_id = $2) AS reserved
+     FROM recordings r WHERE r.id = $1`,
+        [parent.recordingId, jobId],
+      )
+    ).rows[0],
+    {
+      current_job_id: parent.jobId,
+      selected: parent.jobId,
+      child: false,
+      reserved: false,
+    },
+  );
+
+  const results = await Promise.allSettled([
+    confirmStageRerun(planDeps, actor, parent.recordingId, command),
+    confirmStageRerun(planDeps, actor, parent.recordingId, {
+      ...command,
+      reason: "Conflicting request",
+    }),
+  ]);
+  assert.equal(
+    results.filter((outcome) => outcome.status === "fulfilled").length,
+    1,
+  );
+  const refused = results.find((outcome) => outcome.status === "rejected");
+  assert.ok(refused && refused.status === "rejected");
+  assert.equal(refused.reason.message, "request_id_in_use");
+
+  await assert.rejects(
+    parent.db.owner.query(
+      `INSERT INTO job_stage_reuse (job_id, stage, source_job_id, execution_job_id,
+          state, receipt_sha256, fingerprint_sha256)
+     VALUES ($1, 'segment', $2, $2, 'succeeded', repeat('a',64), repeat('b',64))`,
+      [jobId, parent.jobId],
+    ),
+    {
+      code: "SAC04",
+      message: "rerun evidence differs from the original stage",
+    },
+  );
+  const deps: JobsDeps = {
+    ...parent.deps,
+    config: { ...parent.deps.config, executionBackend: "modal" },
+    acceptance: parent.accept,
+    rerunCopy: s3RerunCopy(s3Config()),
+  };
+  const admitted = await admitNextJob(deps);
+  assert.equal(admitted.state, "admitted");
+  assert.equal(admitted.state === "admitted" && admitted.job.jobId, jobId);
+  const owner = nonce();
+  assert.equal(
+    (
+      await claimControllerLease(deps, {
+        jobId,
+        owner,
+        runRef: "rerun-fixture",
+      })
+    ).granted,
+    true,
+  );
+  assert.equal(await startParallelRecipe(parent.db.app, jobId, owner), true);
+  let preparation = await prepareStageRerun(deps, jobId, owner);
+  for (
+    let attempt = 0;
+    preparation.state === "copying" && attempt < 20;
+    attempt++
+  )
+    preparation = await prepareStageRerun(deps, jobId, owner);
+  assert.equal(preparation.state, "ready");
+  await assert.rejects(
+    parent.db.owner.query(
+      `INSERT INTO job_rerun_copies (job_id, stage, source_file_id, source_job_id, original_file_id,
+          original_job_id, file_id, slot, role, size_bytes, sha256)
+     SELECT job_id, 'caption', source_file_id, source_job_id, original_file_id, original_job_id,
+            gen_random_uuid(), slot, role, size_bytes, sha256
+     FROM job_rerun_copies WHERE job_id = $1 AND slot = 'segments.json'`,
+      [jobId],
+    ),
+    {
+      code: "SAC04",
+      message: "rerun copy requires a successful origin and its stage slot",
+    },
+  );
+
+  const claim = { jobId, owner, stage: "hand_pose" } as const;
+  await parent.db.owner.query(
+    "UPDATE rerun_spend_authorizations SET expires_at = now() - interval '1 second' WHERE id = $1",
+    [authorization],
+  );
+  assert.equal(await code(issueStageClaim(deps, claim)), "conflict");
+  assert.equal(
+    (
+      await parent.db.owner.query(
+        "SELECT 1 FROM job_stage_claims WHERE job_id = $1",
+        [jobId],
+      )
+    ).rowCount,
+    0,
+  );
+  const {
+    rows: [approval],
+  } = await parent.db.owner.query<{ expires_at: Date }>(
+    "UPDATE rerun_spend_authorizations SET expires_at = now() + interval '1 minute', max_compute_cents = 1 WHERE id = $1 RETURNING expires_at",
+    [authorization],
+  );
+  await assert.rejects(issueStageClaim(deps, claim), { code: "conflict" });
+  assert.equal(
+    (
+      await parent.db.app.query(
+        "SELECT 1 FROM job_stage_claims WHERE job_id = $1",
+        [jobId],
+      )
+    ).rowCount,
+    0,
+  );
+  await parent.db.owner.query(
+    "UPDATE rerun_spend_authorizations SET max_compute_cents = 100 WHERE id = $1",
+    [authorization],
+  );
+  const issued = await issueStageClaim(deps, claim);
+  assert.equal(issued.state, "recorded");
+  if (issued.state !== "recorded") return;
+  assert.equal(issued.startDeadline.getTime(), approval!.expires_at.getTime());
+  assert.deepEqual(
+    (
+      await parent.db.app.query(
+        "SELECT start_deadline FROM jobs WHERE id = $1",
+        [jobId],
+      )
+    ).rows[0],
+    { start_deadline: approval!.expires_at },
+  );
+  await assert.rejects(
+    parent.db.owner.query(
+      "INSERT INTO rerun_spend_reconciliations (job_id, compute_cents, gpu_cents, metering_reference) VALUES ($1, 0, 0, 'premature reference')",
+      [jobId],
+    ),
+    {
+      code: "SAC04",
+      message: "spend reconciliation needs exact terminal provider evidence",
+    },
+  );
+
+  const callId = "fc-FixtureHand142";
+  await claimStage(deps, {
+    jobId,
+    bootstrapToken: issued.bootstrapToken,
+    invocationNonce: nonce(),
+    executor: { kind: "modal", functionCallId: callId },
+  });
+  const stage = { ...claim, module: MODULES.hand_pose, callId };
+  await recordStageRun(deps, { ...stage, state: "running" });
+  await recordExecutionEvidence(deps, {
+    jobId,
+    recordedBy: "bound-receipt-test",
+    evidence: { kind: "provider_call_terminal", executionRef: callId },
+  });
+  const worker = {
+    ...receiptOf(parent, "hand_pose", []),
+    jobId,
+    status: "failed" as const,
+    errorCode: "fixture_hand_failed",
+  };
+  const recorded = {
+    ...stage,
+    state: "failed" as const,
+    errorCode: worker.errorCode,
+  };
+  await assert.rejects(recordStageRun(deps, { ...recorded, receipt: worker }), {
+    code: "conflict",
+    message: "hosted rerun receipt needs its confirmed deployment evidence",
+  });
+  const release = bindings.get(MODULES.hand_pose)!;
+  const receipt = {
+    ...worker,
+    schemaVersion: 2 as const,
+    providerBinding: {
+      appName: release.appName,
+      codeRevision: release.codeRevision,
+      environment: release.environment,
+      definitionId: release.definitionId,
+      functionId: release.functionId,
+      definitionSha256: release.definitionSha256,
+      paramsSha256: release.paramsSha256,
+      workerReceiptSha256: requestSha256(worker),
+    },
+  };
+  await assert.rejects(
+    recordStageRun(deps, {
+      ...recorded,
+      receipt: {
+        ...receipt,
+        providerBinding: {
+          ...receipt.providerBinding,
+          workerReceiptSha256: "0".repeat(64),
+        },
+      },
+    }),
+    {
+      code: "invalid_request",
+      message: "stage receipt provider evidence rejected",
+    },
+  );
+  await assert.rejects(
+    recordStageRun(deps, {
+      ...recorded,
+      receipt: {
+        ...receipt,
+        providerBinding: {
+          ...receipt.providerBinding,
+          definitionSha256: "0".repeat(64),
+        },
+      },
+    }),
+    {
+      code: "conflict",
+      message: "hosted rerun receipt needs its confirmed deployment evidence",
+    },
+  );
+  assert.deepEqual(await recordStageRun(deps, { ...recorded, receipt }), {
+    recorded: true,
+  });
+  assert.deepEqual(
+    (
+      await parent.db.app.query(
+        "SELECT receipt, receipt_sha256 FROM job_stage_runs WHERE job_id = $1",
+        [jobId],
+      )
+    ).rows[0],
+    { receipt, receipt_sha256: requestSha256(receipt) },
+  );
+  await promoteRecipeEvidence(parent.db.app, jobId, "bound-receipt-test");
+  await advanceResult(
+    { ...parent.accept, config: { ...parent.accept.config, graceSeconds: 0 } },
+    jobId,
+  );
+  const reconciliation = `INSERT INTO rerun_spend_reconciliations
+    (job_id, compute_cents, gpu_cents, metering_reference)
+    VALUES ($1, 7, 0, 'fixture:exact-provider-call')`;
+  await assert.rejects(parent.db.app.query(reconciliation, [jobId]), {
+    code: "42501",
+  });
+  await parent.db.owner.query(reconciliation, [jobId]);
+  assert.deepEqual(
+    (
+      await parent.db.app.query(
+        "SELECT gpu_cents::int, compute_cents::int FROM job_rerun_used_spend($1)",
+        [authorization],
+      )
+    ).rows[0],
+    { gpu_cents: 0, compute_cents: 7 },
+  );
+});
+
+async function confirmLocalHandRerun(
+  parent: Awaited<ReturnType<typeof recipeJob>>,
+) {
+  const deps = {
+    pool: parent.db.app,
+    reader: parent.accept.reader,
+    backend: "local" as const,
+  };
+  const actor = parent.db.actors.staff;
+  const input = {
+    parentJobId: parent.jobId,
+    stage: "hand_pose",
+    scope: "only",
+  } as const;
+  const { plan, planSha256 } = await planStageRerun(
+    deps,
+    actor,
+    parent.recordingId,
+    input,
+  );
+  const command = {
+    ...input,
+    requestId: randomUUID(),
+    expectedPlanSha256: planSha256,
+    expectedMaxGpuCostUsd: "0.00",
+    reason: "Verify original stage evidence",
+  };
+  await confirmStageRerun(deps, actor, parent.recordingId, command);
+  return { plan, deps, actor, input, command };
+}
+
+async function startLocalHandRerun(
+  parent: Awaited<ReturnType<typeof recipeJob>>,
+  jobId: string,
+  rerunCopy = s3RerunCopy(s3Config()),
+) {
+  const deps = { ...parent.deps, acceptance: parent.accept, rerunCopy };
+  const admitted = await admitNextJob(deps);
+  assert.equal(admitted.state === "admitted" && admitted.job.jobId, jobId);
+  const owner = nonce();
+  assert.equal(
+    (
+      await claimControllerLease(deps, {
+        jobId,
+        owner,
+        runRef: "rerun-guard-test",
+      })
+    ).granted,
+    true,
+  );
+  assert.equal(await startParallelRecipe(parent.db.app, jobId, owner), true);
+  return { deps, owner };
+}
+
+async function prepareAllCopies(deps: JobsDeps, jobId: string, owner: string) {
+  for (let step = 0; step < 40; step++) {
+    const result = await prepareStageRerun(deps, jobId, owner);
+    if (result.state !== "copying") return result;
+  }
+  throw new Error("Fixture reuse copy did not finish");
+}
+
+for (const location of ["source", "target", "lease"] as const) {
+  test(`rerun copy refuses ${location === "lease" ? "a stale owner" : location + " corruption"}`, async (t) => {
+    const parent = await recipeJob();
+    await seal(parent, await runRecipe(parent));
+    assert.equal(
+      (await advanceResult(parent.accept, parent.jobId))?.candidateStatus,
+      "accepted",
+    );
+    const { deps, actor, input, command } = await confirmLocalHandRerun(parent);
+    const { requestId: jobId } = command;
+    const config = s3Config();
+    const client = realS3();
+    t.after(() => client.destroy());
+    const corrupt = (key: string, size: number) =>
+      client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: Buffer.alloc(size, 0x21),
+        }),
+      );
+    if (location === "source") {
+      const {
+        rows: [source],
+      } = await parent.db.app.query<{ object_key: string; size: string }>(
+        "SELECT object_key, size_bytes::text AS size FROM files WHERE job_id = $1 AND role = 'segments_json'",
+        [parent.jobId],
+      );
+      await corrupt(source!.object_key, Number(source!.size));
+      // The original remains selected, but a fresh plan must find invalid bytes
+      // once the active child's preparation has settled below.
+    }
+    const copy = s3RerunCopy(config);
+    let owner = "";
+    const child = await startLocalHandRerun(
+      parent,
+      jobId,
+      location === "source"
+        ? copy
+        : {
+            ...copy,
+            async advance(request, progress) {
+              const next = await copy.advance(request, progress);
+              if (!next.targetReady) return next;
+              if (location === "target")
+                await corrupt(request.target, request.size);
+              else
+                await parent.db.owner.query(
+                  "UPDATE jobs SET controller_lease_expires_at = now() - interval '1 second' WHERE id = $1 AND controller_lease_owner = $2",
+                  [jobId, owner],
+                );
+              return next;
+            },
+          },
+    );
+    owner = child.owner;
+    if (location === "lease") {
+      await assert.rejects(prepareAllCopies(child.deps, jobId, owner), {
+        code: "conflict",
+        message: "rerun preparation needs a current controller lease",
+      });
+    } else {
+      assert.deepEqual(await prepareAllCopies(child.deps, jobId, owner), {
+        state: "failed",
+      });
+      const {
+        rows: [row],
+      } = await parent.db.app.query(
+        "SELECT state, error_code FROM jobs WHERE id = $1",
+        [jobId],
+      );
+      assert.deepEqual(row, {
+        state: "failed",
+        error_code:
+          location === "source" ? "reuse_unavailable" : "copy_digest_mismatch",
+      });
+      const replay = await confirmStageRerun(
+        deps,
+        actor,
+        parent.recordingId,
+        command,
+      );
+      assert.deepEqual(replay, {
+        jobId,
+        parentJobId: parent.jobId,
+        replayed: true,
+      });
+      await assert.rejects(retryJob(deps, { jobId, expectedState: "failed" }), {
+        message: /^rerun_confirmation_required:/,
+      });
+      if (location === "source") {
+        await assert.rejects(
+          planStageRerun(deps, actor, parent.recordingId, input),
+          {
+            message: "reuse_unavailable",
+          },
+        );
+      }
+    }
+    assert.deepEqual(
+      (
+        await parent.db.app.query(
+          `SELECT recording_selected_job($1) AS selected,
+              (SELECT count(*)::int FROM job_stage_claims WHERE job_id = $2) AS claims
+       ${location === "lease" ? ", (SELECT count(*)::int FROM files WHERE job_id = $2 AND state = 'completed') AS completed" : ""}`,
+          [parent.recordingId, jobId],
+        )
+      ).rows[0],
+      {
+        selected: parent.jobId,
+        claims: 0,
+        ...(location === "lease" ? { completed: 0 } : {}),
+      },
+    );
+  });
+}
+
+test("failed parent caption keeps its original failed receipt in a hand-pose-only child", async () => {
+  const parent = await recipeJob();
+  const segment = await claimed(parent, "segment");
+  const segments = await uploadOutput(
+    parent.transport,
+    segment.job,
+    "segments.json",
+    "segments_json",
+    json(segmentsDoc(parent)),
+    { http: true },
+  );
+  await finish(parent, segment, [segments], { segments: 3, failed_windows: 1 });
+
+  const caption = await claimed(parent, "caption");
+  const facts = {
+    jobId: parent.jobId,
+    owner: parent.ctl,
+    stage: "caption" as const,
+    module: MODULES.caption,
+    callId: caption.callId,
+  };
+  await recordStageRun(parent.deps, { ...facts, state: "running" });
+  await recordExecutionEvidence(parent.deps, {
+    jobId: parent.jobId,
+    recordedBy: "guard-test",
+    evidence: { kind: "local_child_reaped", executionRef: caption.callId },
+  });
+  const receipt = {
+    ...receiptOf(parent, "caption", []),
+    status: "failed" as const,
+    errorCode: "fixture_caption_failed",
+  };
+  await recordStageRun(parent.deps, {
+    ...facts,
+    state: "failed",
+    errorCode: receipt.errorCode,
+    receipt,
+  });
+  await promoteRecipeEvidence(parent.db.app, parent.jobId, "guard-test");
+  await advanceResult(
+    { ...parent.accept, config: { ...parent.accept.config, graceSeconds: 0 } },
+    parent.jobId,
+  );
+  assert.equal(
+    (
+      await parent.db.app.query("SELECT state FROM jobs WHERE id = $1", [
+        parent.jobId,
+      ])
+    ).rows[0].state,
+    "failed",
+  );
+
+  const { command, plan } = await confirmLocalHandRerun(parent);
+  assert.equal(
+    plan.reuse.find((entry) => entry.stage === "caption")?.state,
+    "failed",
+  );
+  const { deps, owner } = await startLocalHandRerun(parent, command.requestId);
+  assert.equal(
+    (await prepareAllCopies(deps, command.requestId, owner)).state,
+    "ready",
+  );
+  const dag = await getDagRunWithLineage(deps, command.requestId);
+  const inherited = dag.reuse.find((entry) => entry.stage === "caption");
+  assert.equal(inherited?.state, "failed");
+  assert.equal(inherited?.errorCode, receipt.errorCode);
+  assert.deepEqual(inherited?.receipt, receipt);
+  assert.equal(inherited?.executionJobId, parent.jobId);
+  assert.equal(
+    dag.stages.find((entry) => entry.stage === "caption")?.callId,
+    null,
+  );
+  assert.equal(
+    (
+      await parent.db.app.query(
+        "SELECT 1 FROM job_stage_runs WHERE job_id = $1 AND stage = 'caption'",
+        [command.requestId],
+      )
+    ).rowCount,
+    0,
+  );
 });
 
 test("an invalid task input is rejected at admission and does not block the queue", async () => {

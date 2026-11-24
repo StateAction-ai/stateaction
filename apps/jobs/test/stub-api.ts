@@ -221,6 +221,8 @@ export async function startStub(options: StubOptions) {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify({ data, requestId: randomUUID() }));
       };
+      if (req.method === "POST" && url.endsWith("/rerun-preparation"))
+        return send({ state: "regular" });
       if (req.method === "GET" && url.endsWith("/recipe"))
         return options.recipe
           ? send(options.recipe)

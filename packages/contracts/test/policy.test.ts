@@ -7,7 +7,8 @@ import { requestSha256 } from "../src/canonical.js";
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
 // Prior catalog revisions stay published and immutable.
-const catalog = JSON.parse(text("catalog.v20.json"));
+const catalog = JSON.parse(text("catalog.v21.json"));
+const catalogV20 = JSON.parse(text("catalog.v20.json"));
 const catalogV19 = JSON.parse(text("catalog.v19.json"));
 const catalogV18 = JSON.parse(text("catalog.v18.json"));
 const catalogV17 = JSON.parse(text("catalog.v17.json"));
@@ -1115,15 +1116,41 @@ test("catalog v20 adds the cached import and catalog provenance contracts", () =
     "http.dataset-page.v2",
     "http.dataset-clip-page.v2",
   ];
-  assertExactSuperset(catalog, catalogV19, ["v19", "v20"], added);
-  assert.deepEqual(catalog.shared, [
+  assertExactSuperset(catalogV20, catalogV19, ["v19", "v20"], added);
+  assert.deepEqual(catalogV20.shared, [
     ...catalogV19.shared,
     "common.v3.schema.json",
   ]);
   for (const file of [
     "catalog.v20.json",
     "common.v3.schema.json",
-    ...added.map((id) => catalog.contracts[id].schema),
+    ...added.map((id) => catalogV20.contracts[id].schema),
   ])
     assert.equal(lock.files[file], sha256(file), `${file}: lock entry`);
+});
+
+test("catalog v21 adds the stage rerun and result selection commands", () => {
+  const added = [
+    "http.stage-rerun-plan-request.v1",
+    "http.stage-rerun-command.v1",
+    "http.stage-rerun-result.v1",
+    "http.recording-result-selection-command.v1",
+    "jobs.rerun-preparation-command.v1",
+    "jobs.rerun-preparation.v1",
+    "artifacts.processing-result.v4",
+    "jobs.stage-input-read.v1",
+    "http.dag-run.v2",
+    "jobs.stage-receipt.v2",
+    "jobs.controller-action.v4",
+    "http.stage-rerun-plan.v1",
+    "http.recording-annotations.v3",
+    "http.segment-marks.v2",
+  ];
+  assertExactSuperset(catalog, catalogV20, ["v20", "v21"], added);
+  for (const path of [
+    "catalog.v21.json",
+    ...added.map((id) => catalog.contracts[id].schema),
+  ]) {
+    assert.equal(lock.files[path], sha256(path), path);
+  }
 });

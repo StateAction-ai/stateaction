@@ -92,9 +92,12 @@ export const TASK_INPUT_BUILD_FAILED_ERROR_CODE = "task_input_build_failed";
  * fixed margin, clamped to [1 h, 12 h]. A sum above the 12 h bound is refused
  * with RECIPE_DEADLINE_ERROR_CODE rather than clamped, so no job runs past it.
  */
-export function recipeExecutionDeadlineSeconds(
-  recipe: Pick<RecipeV1, "stages">,
-): number {
+export function recipeExecutionDeadlineSeconds(recipe: {
+  stages: ReadonlyArray<{
+    enabled: boolean;
+    resources: { budgetSeconds: number };
+  }>;
+}): number {
   const budget = recipe.stages
     .filter((stage) => stage.enabled)
     .reduce((sum, stage) => sum + stage.resources.budgetSeconds, 0);
@@ -109,7 +112,12 @@ export function recipeExecutionDeadlineSeconds(
 /** Deadline written once at admission: the recipe's, else the configured fallback. */
 export function admissionDeadlineSeconds(
   config: Pick<JobsConfig, "executionDeadlineSeconds">,
-  recipe: Pick<RecipeV1, "stages"> | null,
+  recipe: {
+    stages: ReadonlyArray<{
+      enabled: boolean;
+      resources: { budgetSeconds: number };
+    }>;
+  } | null,
 ): number {
   return recipe === null
     ? config.executionDeadlineSeconds

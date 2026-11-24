@@ -1,0 +1,55 @@
+{
+  "contract": "jobs.rerun-preparation.v1",
+  "cases": [
+    {
+      "name": "bound CPU rerun",
+      "input": {
+        "document": {
+          "state": "ready",
+          "execute": [
+            "hand_pose"
+          ],
+          "functions": {
+            "handPose": {
+              "functionId": "fu-verified",
+              "definitionId": "fd-revision",
+              "gpu": "none",
+              "maxBilledSeconds": 1100,
+              "maxContainers": 1,
+              "maxCpuMilli": 4000,
+              "maxMemoryMib": 8192,
+              "microUsdPerGpuSecond": 0,
+              "microUsdPerCpuSecond": 211,
+              "environment": "main",
+              "appName": "stateaction-hand-pose-cpu-v1-36a4b3eadfbc98ad4820eaca",
+              "codeRevision": "1111111111111111111111111111111111111111",
+              "paramsSha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+              "definitionSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+            }
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "function ID only",
+      "input": {
+        "document": {
+          "state": "ready",
+          "execute": [
+            "hand_pose"
+          ],
+          "functions": {
+            "handPose": "fu-verified"
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

@@ -118,7 +118,7 @@ describe("staff list", () => {
 });
 
 describe("recording detail", () => {
-  test("completed: Review clips link, no reviewStatus, no fake controls", async () => {
+  test("completed: review link and only the run history selection action", async () => {
     const res = await navigate(
       `/pipeline/${ids.completed}?status=completed`,
       staff,
@@ -134,7 +134,11 @@ describe("recording detail", () => {
     assert.match(text, /Ready for review/);
     assert.match(text, /2 clips/);
     assert.doesNotMatch(text, UUID);
-    assert.doesNotMatch(main(res.text), /<button/);
+    const buttons = Array.from(
+      main(res.text).matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g),
+      ([, label]) => visible(label).trim(),
+    );
+    assert.deepEqual(buttons, ["Select this result"]);
   });
 
   test("processing: quality checks stay unknown and no Review clips", async () => {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,6 +22,9 @@ import {
 import { outputObjectKey } from "../src/catalog/catalog.js";
 import { seedLocalCatalog, SEED } from "../src/catalog/seed.js";
 import { storageClient } from "../src/storage.js";
+import { admitNextJob } from "../src/jobs/service.js";
+import { confirmStageRerun, planStageRerun } from "../src/jobs/stage-reruns.js";
+import { JOBS_CONFIG } from "./jobs-harness.js";
 import { freshDatabase } from "./harness.js";
 import { freshBucket } from "./storage-harness.js";
 
@@ -216,6 +220,58 @@ test("cached bundles publish and replay without admitting a worker, and refuse a
     const first = await importCachedProcessing(options);
     assert.equal(first.replayed, false);
     assert.equal((await importCachedProcessing(options)).replayed, true);
+    const {
+      rows: [staff],
+    } = await db.app.query<{ id: string }>(
+      'SELECT id FROM "user" WHERE email = $1',
+      [options.staffEmail],
+    );
+    const reruns = {
+      pool: db.app,
+      reader: {
+        async read(): Promise<Uint8Array> {
+          throw new Error("import is display only");
+        },
+      },
+    };
+    const request = {
+      parentJobId: manifest.jobId,
+      stage: "hand_pose",
+      scope: "only",
+    } as const;
+    await assert.rejects(
+      planStageRerun(reruns, staff!.id, manifest.recordingId, request),
+      { code: "conflict", message: "recording_not_processable" },
+    );
+    await assert.rejects(
+      confirmStageRerun(reruns, staff!.id, manifest.recordingId, {
+        ...request,
+        requestId: randomUUID(),
+        expectedPlanSha256: "a".repeat(64),
+        expectedMaxGpuCostUsd: "0.00",
+        reason: "Display-only import cannot be dispatched",
+      }),
+      { code: "conflict", message: "recording_not_processable" },
+    );
+    assert.deepEqual(
+      await admitNextJob({
+        pool: db.app,
+        config: JOBS_CONFIG,
+        presignRead: async () => "",
+      }),
+      { state: "idle" },
+    );
+
+    assert.deepEqual(
+      (
+        await db.app.query(
+          `SELECT job_id, seq, kind FROM recording_result_selections
+           WHERE recording_id = $1`,
+          [manifest.recordingId],
+        )
+      ).rows,
+      [{ job_id: manifest.jobId, seq: 1, kind: "auto" }],
+    );
     assert.equal(
       (
         await db.app.query("SELECT segment_count FROM jobs WHERE id = $1", [

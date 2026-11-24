@@ -21,7 +21,13 @@ export type Outcome =
       evidence: Evidence;
     }
   | { outcome: "submit_unknown"; reason: string }
-  | { outcome: "needs_operator"; reason: string; executionRef?: string }
+  | {
+      outcome: "needs_operator";
+      reason: string;
+      executionRef?: string;
+      conflictingExecutionRef?: string;
+      unconfirmedCancellationRefs?: string[];
+    }
   | { outcome: "lease_lost"; executionRef?: string }
   | {
       /**

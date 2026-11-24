@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   validateBytes,
   validateValue,
-  type ControllerActionV3,
+  type ControllerActionV4,
   type ControllerResult,
   type HeartbeatAck,
   type InputRead,
@@ -26,6 +26,7 @@ import {
   readBoundedJson,
 } from "../transport/http.js";
 import { runRepair } from "./recovery.js";
+import { prepareStageRerun } from "./stage-rerun-preparation.js";
 import {
   admitNextJob,
   claimControllerLease,
@@ -214,13 +215,26 @@ export function jobHandlers(deps: () => JobsDeps) {
         ),
       ),
 
+    prepareRerun: (request: Request, jobId: string) =>
+      respond(async () => {
+        const body = (await readBoundedJson(
+          request,
+          "jobs.rerun-preparation-command.v1",
+          4096,
+        )) as { owner: string };
+        return checked(
+          "jobs.rerun-preparation.v1",
+          await prepareStageRerun(deps(), jobId, body.owner),
+        );
+      }),
+
     controller: (request: Request, jobId: string, principalId: string) =>
       respond(async () => {
         const a = (await readBoundedJson(
           request,
-          "jobs.controller-action.v3",
+          "jobs.controller-action.v4",
           CONTROLLER_BODY_MAX_BYTES,
-        )) as ControllerActionV3;
+        )) as ControllerActionV4;
         const d = deps();
         const out = async (): Promise<unknown> => {
           switch (a.action) {
@@ -506,16 +520,17 @@ export function jobHandlers(deps: () => JobsDeps) {
       fileId: string,
       principalId = "",
     ) =>
-      respond(async () =>
-        checked<InputRead>(
-          "http.input-read.v1",
-          await readStageOutput(deps(), {
-            jobId,
-            fileId,
-            stage: stageOfCredential(principalId),
-          }),
-        ),
-      ),
+      respond(async () => {
+        const body = await readStageOutput(deps(), {
+          jobId,
+          fileId,
+          stage: stageOfCredential(principalId),
+        });
+        if (new URL(_request.url).searchParams.get("version") === "2")
+          return checked("jobs.stage-input-read.v1", body);
+        const { producerJobId: _producer, ...legacy } = body;
+        return checked<InputRead>("http.input-read.v1", legacy);
+      }),
   };
 }
 export type JobHandlers = ReturnType<typeof jobHandlers>;

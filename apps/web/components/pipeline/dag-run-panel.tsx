@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "../ui/button";
 
-/** Renders the server-rendered http.dag-run.v1 document, with Copy and Download. */
+/** Renders the server-rendered stage-run document, with Copy and Download. */
 export function DagRunPanel({
   json,
   filename,
@@ -59,8 +59,7 @@ export function DagRunPanel({
         {json}
       </pre>
       <p className="m-0 border-t border-line px-5 py-3 text-xs text-muted">
-        Rendered by the server from the recorded stage runs (http.dag-run.v1).
-        Cost figures are estimates, not billing.
+        Provider cost estimates use the recorded stage runs.
       </p>
     </div>
   );

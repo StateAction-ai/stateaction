@@ -1,6 +1,18 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v20.json (checked by tests).
-// Catalog v20 adds cached processing import projections. Earlier catalogs are immutable.
-import catalog from "../api/catalog.v20.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v21.json (checked by tests).
+// Catalog v21 adds selective stage rerun and result selection contracts.
+import rerunContract0 from "../api/http/stage-rerun-plan-request.v1.schema.json" with { type: "json" };
+import rerunContract1 from "../api/http/stage-rerun-command.v1.schema.json" with { type: "json" };
+import rerunContract2 from "../api/http/stage-rerun-result.v1.schema.json" with { type: "json" };
+import rerunContract3 from "../api/http/recording-result-selection-command.v1.schema.json" with { type: "json" };
+import rerunPreparationCommandV1 from "../api/jobs/rerun-preparation-command.v1.schema.json" with { type: "json" };
+import rerunPreparationV1 from "../api/jobs/rerun-preparation.v1.schema.json" with { type: "json" };
+import processingResultV4 from "../api/artifacts/processing-result.v4.schema.json" with { type: "json" };
+import stageInputReadV1 from "../api/jobs/stage-input-read.v1.schema.json" with { type: "json" };
+import dagRunV2 from "../api/http/dag-run.v2.schema.json" with { type: "json" };
+import stageRerunPlanV1 from "../api/http/stage-rerun-plan.v1.schema.json" with { type: "json" };
+import recordingAnnotationsV3 from "../api/http/recording-annotations.v3.schema.json" with { type: "json" };
+import segmentMarksV2 from "../api/http/segment-marks.v2.schema.json" with { type: "json" };
+import catalog from "../api/catalog.v21.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -91,6 +103,8 @@ import s84 from "../api/http/recording-annotations.v1.schema.json" with { type: 
 import s85 from "../api/http/segment-mark-command.v1.schema.json" with { type: "json" };
 import s86 from "../api/http/segment-mark.v1.schema.json" with { type: "json" };
 import s87 from "../api/http/segment-marks.v1.schema.json" with { type: "json" };
+import controllerActionV4 from "../api/jobs/controller-action.v4.schema.json" with { type: "json" };
+import stageReceiptV2 from "../api/jobs/stage-receipt.v2.schema.json" with { type: "json" };
 import controllerActionV3 from "../api/jobs/controller-action.v3.schema.json" with { type: "json" };
 
 import commonV3 from "../api/common.v3.schema.json" with { type: "json" };
@@ -199,12 +213,26 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.task-input.v3": s76,
   "jobs.controller-action.v2": s77,
   "jobs.controller-action.v3": controllerActionV3,
+  "jobs.controller-action.v4": controllerActionV4,
   "jobs.heartbeat.v2": s78,
   "jobs.stage-receipt.v1": s79,
+  "jobs.stage-receipt.v2": stageReceiptV2,
   "http.dag-run.v1": s80,
   "jobs.prior-stages.v1": s83,
   "http.recording-annotations.v1": s84,
   "http.segment-mark-command.v1": s85,
   "http.segment-mark.v1": s86,
   "http.segment-marks.v1": s87,
+  "http.stage-rerun-plan-request.v1": rerunContract0,
+  "http.stage-rerun-command.v1": rerunContract1,
+  "http.stage-rerun-result.v1": rerunContract2,
+  "http.recording-result-selection-command.v1": rerunContract3,
+  "jobs.rerun-preparation-command.v1": rerunPreparationCommandV1,
+  "jobs.rerun-preparation.v1": rerunPreparationV1,
+  "artifacts.processing-result.v4": processingResultV4,
+  "jobs.stage-input-read.v1": stageInputReadV1,
+  "http.dag-run.v2": dagRunV2,
+  "http.stage-rerun-plan.v1": stageRerunPlanV1,
+  "http.recording-annotations.v3": recordingAnnotationsV3,
+  "http.segment-marks.v2": segmentMarksV2,
 };

@@ -772,7 +772,7 @@ export const RULES: Readonly<Record<string, Rule>> = {
   },
   ...STAGE_RULES,
   recording_annotations: (doc) => {
-    // Every present part names the document's job and recording (dag_run in camelCase).
+    // Artifact parts may retain producer job IDs. The DAG always names this job.
     const parts: [string, string, string, string][] = [
       ["segments", "job_id", "recording_id", "segments"],
       ["captions", "job_id", "recording_id", "captions"],
@@ -781,8 +781,15 @@ export const RULES: Readonly<Record<string, Rule>> = {
     ];
     for (const [key, jobKey, recordingKey] of parts) {
       const part = doc[key];
-      if (part === null) continue;
-      if (obj(part)[jobKey] !== doc.job_id)
+      const producers = doc.producer_jobs;
+      const hasProducer = producers !== undefined && key !== "dag_run";
+      const expectedJob = hasProducer ? obj(producers)[key] : doc.job_id;
+      if (part === null) {
+        if (hasProducer && expectedJob !== null)
+          return v("reference_mismatch", `/producer_jobs/${key}`);
+        continue;
+      }
+      if (obj(part)[jobKey] !== expectedJob)
         return v("reference_mismatch", `/${key}/${jobKey}`);
       if (obj(part)[recordingKey] !== doc.recording_id)
         return v("reference_mismatch", `/${key}/${recordingKey}`);
