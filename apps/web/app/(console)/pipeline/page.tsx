@@ -7,6 +7,7 @@ import {
   parsePipelineQuery,
   pipelineQueryString,
   pipelineReads,
+  shortRecordingId,
   type PipelineList,
 } from "@stateaction/server/pipeline";
 import { requireConsoleSession } from "../../../lib/server-session";
@@ -57,9 +58,12 @@ export default async function PipelinePage({
           {(
             [
               ["Queued", list.counts.queued],
-              ["In progress", list.counts.uploading + list.counts.processing],
               [
-                "Needs attention",
+                "Uploading or processing",
+                list.counts.uploading + list.counts.processing,
+              ],
+              [
+                "Failed or needs attention",
                 list.counts.needs_attention + list.counts.failed,
               ],
               ["Completed", list.counts.completed],
@@ -99,7 +103,7 @@ export default async function PipelinePage({
               name="q"
               defaultValue={query.q}
               maxLength={PIPELINE_MAX_SEARCH}
-              placeholder="Search recording or collector"
+              placeholder="Search by recording ID, date or collector"
               className="block min-h-11 w-full rounded-lg border border-line bg-white py-2 pr-3 pl-9 text-sm text-ink"
             />
           </label>
@@ -181,6 +185,9 @@ export default async function PipelinePage({
                       className="font-semibold text-ink after:absolute after:inset-0 after:content-['']"
                     >
                       {item.title}
+                      <span className="block font-mono text-xs font-normal text-muted">
+                        {shortRecordingId(item.id)}
+                      </span>
                     </Link>
                   </td>
                   <td
@@ -272,9 +279,22 @@ export default async function PipelinePage({
                     </span>
                   </td>
                   <td className="relative z-10 px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">
-                    <span className="text-muted">
-                      {item.reviewable ? "Review not available yet" : "—"}
-                    </span>
+                    {item.reviewable || item.failedStages.length > 0 ? (
+                      <Link
+                        href={"/review/" + item.id}
+                        aria-label={
+                          "Open review for recording " +
+                          shortRecordingId(item.id)
+                        }
+                        className="font-medium text-brand underline"
+                      >
+                        Open review
+                      </Link>
+                    ) : (
+                      <span className="text-muted">
+                        Review data unavailable
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

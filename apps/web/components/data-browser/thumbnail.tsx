@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { ClipRead } from "@stateaction/contracts";
+import { Spinner } from "../ui/spinner";
 import { browserApi, readBounded } from "./client";
 import { privateSignal, registerPrivateState } from "../../lib/private-state";
 
@@ -92,11 +93,13 @@ export function ClipThumbnail({
           className="h-full w-full object-contain"
           onError={() => setFailed(true)}
         />
+      ) : available && mediaOrigin && !failed ? (
+        <span className="flex items-center gap-2">
+          <Spinner /> Loading preview…
+        </span>
       ) : (
         <span>
-          {available && mediaOrigin && !failed
-            ? "Loading preview…"
-            : "Preview unavailable"}
+          {failed ? "Preview could not load" : "No preview available"}
         </span>
       )}
     </div>

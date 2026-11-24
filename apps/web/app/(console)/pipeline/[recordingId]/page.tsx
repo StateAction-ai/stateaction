@@ -11,6 +11,8 @@ import {
   dagRunJson,
   formatDuration,
   formatUsd,
+  shortRecordingId,
+  PIPELINE_STATUS_LABEL,
   type PipelineDetail,
 } from "@stateaction/server/pipeline";
 import { requireConsoleSession } from "../../../../lib/server-session";
@@ -79,9 +81,10 @@ export default async function PipelineRecordingPage({
         return {};
       })
     : {};
-  const stages = run ? buildRunStages(run, reads.rates(), diagnostics) : [];
+  const stages = run
+    ? buildRunStages(run, reads.rates(), diagnostics, detail.annotations)
+    : [];
   const summary = run ? buildRunSummary(run, detail.annotations) : null;
-  const failedStages = stages.filter((s) => s.state === "failed");
   const count = (n: number | null) => (n === null ? "—" : String(n));
   const guidance =
     actions.control.length > 0
@@ -100,7 +103,10 @@ export default async function PipelineRecordingPage({
         {detail.title}
       </h1>
       <p className="mt-2 mb-6 text-muted">
-        Upload and processing details for this recording.
+        <span className="font-mono">{shortRecordingId(detail.id)}</span>
+        {" · "}
+        {detail.collector}
+        {detail.source.size ? " · " + detail.source.size : ""}
       </p>
 
       {summary ? (
@@ -112,10 +118,8 @@ export default async function PipelineRecordingPage({
             [
               [
                 "Job",
-                summary.jobState.replace(/_/g, " "),
-                failedStages.length > 0
-                  ? `${failedStages.map((s) => s.stage).join(", ")} failed`
-                  : null,
+                PIPELINE_STATUS_LABEL[detail.status],
+                detail.error?.summary ?? null,
               ],
               [
                 "Wall time",
@@ -125,7 +129,7 @@ export default async function PipelineRecordingPage({
               [
                 "Cost (estimate)",
                 formatUsd(summary.costUsd),
-                `cap $${summary.maxJobCostUsd} recorded for this job`,
+                "Job budget cap " + formatUsd(summary.maxJobCostUsd),
               ],
               [
                 "Segments",
@@ -149,7 +153,7 @@ export default async function PipelineRecordingPage({
           ).map(([label, value, note]) => (
             <Card key={label} className="px-5 py-4">
               <dt className="text-[13px] text-muted">{label}</dt>
-              <dd className="m-0 mt-1 text-[26px] font-bold tracking-[-0.02em] capitalize">
+              <dd className="m-0 mt-1 text-[26px] font-bold tracking-[-0.02em]">
                 {value}
               </dd>
               {note ? (
@@ -195,6 +199,11 @@ export default async function PipelineRecordingPage({
               <p className="m-0 text-sm text-muted">{detail.statusNote}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
+              {detail.reviewable || detail.failedStages.length > 0 ? (
+                <Button asChild>
+                  <Link href={"/review/" + detail.id}>Open review</Link>
+                </Button>
+              ) : null}
               {actions.reviewClipsHref ? (
                 <Button asChild>
                   <Link href={actions.reviewClipsHref}>Review clips</Link>

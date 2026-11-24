@@ -15,7 +15,7 @@ import {
 import { ObjectReadUnavailableError } from "../admission/object-reader.js";
 import { getDagRun } from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
-import { recordingTitle } from "../pipeline/model.js";
+import { formatBytes, recordingTitle } from "../pipeline/model.js";
 
 /**
  * SA-98: the annotations document of one recording, read from the recording's
@@ -231,7 +231,12 @@ export async function loadRecordingAnnotations(
   return document;
 }
 
-export type ReviewRecordingRow = { recordingId: string; title: string };
+export type ReviewRecordingRow = {
+  recordingId: string;
+  title: string;
+  collector: string;
+  sourceSize: string | null;
+};
 
 /**
  * Recordings staff can open in Review: the accepted job produced at least one
@@ -242,9 +247,19 @@ export async function listReviewRecordings(
   staffUserId: string,
   limit = 100,
 ): Promise<ReviewRecordingRow[]> {
-  const { rows } = await pool.query<{ id: string; started_at: Date }>(
-    `SELECT rec.id, rec.started_at
+  const { rows } = await pool.query<{
+    id: string;
+    started_at: Date;
+    collector: string;
+    size: string | null;
+  }>(
+    `SELECT rec.id, rec.started_at, u.name AS collector,
+       (SELECT coalesce(sum(f.size_bytes) FILTER (WHERE f.role = 'source_mcap'),
+         sum(f.size_bytes))::text FROM files f
+        WHERE f.recording_id = rec.id AND f.purpose = 'source'
+          AND f.state NOT IN ('cancelled', 'failed', 'expired')) AS size
      FROM recordings rec
+     JOIN "user" u ON u.id = rec.owner_user_id
      JOIN jobs j ON j.id = rec.current_job_id AND j.recording_id = rec.id
        AND j.state = 'succeeded'
      WHERE rec.deleted_at IS NULL AND catalog_has_role($1, 'staff')
@@ -259,6 +274,8 @@ export async function listReviewRecordings(
   return rows.map((r) => ({
     recordingId: r.id,
     title: recordingTitle(r.started_at),
+    collector: r.collector,
+    sourceSize: formatBytes(r.size === null ? null : Number(r.size)),
   }));
 }
 

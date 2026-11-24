@@ -42,6 +42,8 @@ export type VideoSource =
 export interface ReviewRecordingSummary {
   recordingId: string;
   title: string;
+  collector?: string;
+  sourceSize?: string | null;
 }
 
 export interface ReviewBundle {

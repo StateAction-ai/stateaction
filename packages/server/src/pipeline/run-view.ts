@@ -6,6 +6,7 @@
  * and failed counts stay separate from the totals they are not part of.
  */
 import type { DagRunNode, DagRunV1 } from "@stateaction/contracts";
+import { RECIPE_STAGE_LABEL, stageHasFailedOutputs } from "./model.js";
 import type { GpuRateType } from "../ops/cost.js";
 
 /** Accelerator memory by type: hardware facts for display, never prices. */
@@ -22,7 +23,9 @@ export const GPU_VRAM_GB: Record<GpuRateType, number> = {
   B200: 180,
 };
 
-export const RUN_STATE_LABEL: Record<DagRunNode["state"], string> = {
+export type RunStageState = DagRunNode["state"] | "needs_attention";
+
+export const RUN_STATE_LABEL: Record<RunStageState, string> = {
   pending: "Pending",
   submitting: "Starting",
   submit_unknown: "Start unconfirmed",
@@ -31,20 +34,29 @@ export const RUN_STATE_LABEL: Record<DagRunNode["state"], string> = {
   failed: "Failed",
   cancelled: "Cancelled",
   not_run: "Not run",
+  needs_attention: "Needs attention",
 };
 
-export const STAGE_TITLE: Record<DagRunNode["stage"], string> = {
-  segment: "Temporal segmentation",
-  caption: "Captioning",
-  hand_pose: "Hand pose and seal",
-};
+export const STAGE_TITLE = RECIPE_STAGE_LABEL;
 
-/** Curated reasons for the codes a not_run node carries. */
-export const NOT_RUN_REASON: Record<string, string> = {
+const STAGE_REASON: Readonly<Record<string, string>> = {
   stage_disabled: "Disabled in this recipe",
   not_spawned: "The job ended before this stage started",
-  upstream_failed: "An upstream stage failed",
+  upstream_failed: "A stage it depends on failed.",
+  no_segments: "There were no segments to caption.",
+  terminated_before_start: "The worker stopped before starting this stage.",
+  stage_timeout: "The stage exceeded its time limit.",
+  budget_exceeded: "The stage exceeded its time limit.",
+  receipt_missing: "The worker did not return a stage receipt.",
+  receipt_rejected: "The server could not verify the stage receipt.",
+  receipt_invalid:
+    "The worker returned a stage receipt that could not be verified.",
+  worker_failed: "The worker ended with an error.",
 };
+
+export function stageReason(code: string | null): string | null {
+  return code && Object.hasOwn(STAGE_REASON, code) ? STAGE_REASON[code]! : null;
+}
 
 export type GpuView = {
   kind: "gpu";
@@ -70,6 +82,7 @@ export type RunStageView = {
   module: string;
   moduleName: string;
   state: DagRunNode["state"];
+  displayState: RunStageState;
   stateLabel: string;
   enabled: boolean;
   errorCode: string | null;
@@ -98,7 +111,7 @@ export type RunSummary = {
 /** Accepted counts; captions are null when not accepted (never a zero). */
 export type AnnotationCounts = {
   segments: number;
-  failedWindows: number;
+  failedWindows: number | null;
   captions: number | null;
   captionsFailed: number | null;
 } | null;
@@ -108,6 +121,7 @@ const COUNT_LABEL: Record<string, string> = {
   failed_windows: "failed windows",
   captions_complete: "captions ok",
   captions_failed: "captions failed",
+  failed_captions: "captions failed",
   clips: "clips",
 };
 const labelOf = (key: string) => COUNT_LABEL[key] ?? key.replace(/_/g, " ");
@@ -135,7 +149,7 @@ export function formatDuration(seconds: number | null): string {
 }
 
 export function formatUsd(amount: string | null): string {
-  return amount === null ? "Unknown" : `$${amount}`;
+  return amount === null ? "Not recorded" : `$${amount}`;
 }
 
 export function formatRate(usdPerHour: number | null): string {
@@ -158,6 +172,7 @@ export function buildRunStages(
   run: DagRunV1,
   rates?: Partial<Record<string, { amount: number }>>,
   diagnostics: Partial<Record<DagRunNode["stage"], DiagnosticLink[]>> = {},
+  accepted: AnnotationCounts = null,
 ): RunStageView[] {
   return run.stages.map((node) => {
     const gpuType = node.gpu.requestedType;
@@ -177,20 +192,29 @@ export function buildRunStages(
       value,
       failed: key.includes("failed"),
     }));
-    const reason =
-      node.errorCode === null
-        ? null
-        : (NOT_RUN_REASON[node.errorCode] ?? node.errorCode);
+    const acceptedFailure =
+      node.stage === "segment"
+        ? accepted?.failedWindows
+        : node.stage === "caption"
+          ? accepted?.captionsFailed
+          : null;
+    const displayState =
+      node.state === "succeeded" &&
+      (stageHasFailedOutputs(node.stage, node.counts) ||
+        (acceptedFailure ?? 0) > 0)
+        ? "needs_attention"
+        : node.state;
     return {
       stage: node.stage,
       title: STAGE_TITLE[node.stage],
       module: node.module,
       moduleName: parseModule(node.module).name,
       state: node.state,
-      stateLabel: RUN_STATE_LABEL[node.state],
+      displayState,
+      stateLabel: RUN_STATE_LABEL[displayState],
       enabled: node.enabled,
       errorCode: node.errorCode,
-      reason,
+      reason: stageReason(node.errorCode),
       durationSeconds: nodeDurationSeconds(node),
       costUsd: node.estimatedCostUsd,
       gpu,
@@ -242,7 +266,7 @@ export function buildRunSummary(
       : pick(cap?.counts.captions_complete, undefined),
     captionsFailed: accepted
       ? accepted.captionsFailed
-      : pick(cap?.counts.captions_failed, undefined),
+      : pick(cap?.counts.failed_captions, cap?.counts.captions_failed),
   };
 }
 

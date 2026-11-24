@@ -25,6 +25,10 @@
       "types": "./dist/pipeline/next.d.ts",
       "default": "./dist/pipeline/next.js"
     },
+    "./pipeline-model": {
+      "types": "./dist/pipeline/model.d.ts",
+      "default": "./dist/pipeline/model.js"
+    },
     "./recordings": {
       "types": "./dist/admission/next.d.ts",
       "default": "./dist/admission/next.js"

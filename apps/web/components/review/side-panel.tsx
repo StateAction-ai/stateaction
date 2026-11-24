@@ -30,6 +30,7 @@ export const JSON_VIEW_LIMIT = 200_000;
 export function SidePanel({
   model,
   annotations,
+  segmentationFailure,
   tab,
   onTab,
   cards,
@@ -52,6 +53,7 @@ export function SidePanel({
 }: {
   model: ReviewModel;
   annotations: RecordingAnnotations;
+  segmentationFailure: string | null;
   tab: SideTab;
   onTab: (tab: SideTab) => void;
   /** Cards that pass the text filter and chip. */
@@ -165,6 +167,15 @@ export function SidePanel({
           </div>
           <Rail
             cards={cards}
+            emptyText={
+              segmentationFailure
+                ? "Segmentation failed. " + segmentationFailure
+                : !annotations.segments
+                  ? "No segmentation results were recorded."
+                  : total === 0
+                    ? "No segments were found."
+                    : "No segments match."
+            }
             total={total}
             selected={selected}
             activeIndex={activeIndex}
@@ -235,6 +246,7 @@ export function SidePanel({
 
 function Rail({
   cards,
+  emptyText,
   total,
   selected,
   activeIndex,
@@ -244,6 +256,7 @@ function Rail({
   onNextUnchecked,
 }: {
   cards: Card[];
+  emptyText: string;
   total: number;
   selected: number | null;
   activeIndex: number;
@@ -275,7 +288,7 @@ function Rail({
       className="min-h-0 flex-1 overflow-auto px-3 pt-3 pb-5"
     >
       {cards.length === 0 ? (
-        <p className="p-5 text-center text-xs text-muted">No segments match.</p>
+        <p className="p-5 text-center text-xs text-muted">{emptyText}</p>
       ) : (
         cards.map((c) => (
           <RailCard

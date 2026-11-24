@@ -1,9 +1,9 @@
+import { Spinner } from "../ui/spinner";
 import {
   AlertCircle,
   CheckCircle2,
   CircleDashed,
   HelpCircle,
-  Loader2,
   MinusCircle,
   OctagonX,
 } from "lucide-react";
@@ -14,9 +14,9 @@ import {
 } from "@stateaction/server/pipeline";
 import { cn } from "../../lib/utils";
 
-const ICON: Record<StageState, typeof CheckCircle2> = {
+const ICON: Record<StageState, typeof CheckCircle2 | typeof Spinner> = {
   done: CheckCircle2,
-  active: Loader2,
+  active: Spinner,
   failed: AlertCircle,
   cancelled: OctagonX,
   unknown: HelpCircle,

@@ -173,6 +173,8 @@ const detail = (over: Partial<PipelineDetail>): PipelineDetail => ({
   collector: "c",
   status: "completed",
   statusNote: null,
+  failedStages: [],
+  reviewable: false,
   error: null,
   stages: [],
   source: { format: null, size: null, duration: null, hash: null },
@@ -191,6 +193,11 @@ test("actions: review clips only for an accepted result; no fake controls", asyn
     "/data-browser?recordingId=0a1b2c3d-0000-4000-8000-123456789abc",
   );
   assert.deepEqual(ok.control, []);
+  assert.equal(
+    (await pipelineActionsFor(detail({ status: "needs_attention" })))
+      .reviewClipsHref,
+    ok.reviewClipsHref,
+  );
   for (const over of [
     { clipCount: 0 },
     { jobId: null },

@@ -27,7 +27,7 @@ const navigate = (path, jar) =>
       "sec-fetch-dest": "document",
     },
   });
-// Visible text only (hrefs may carry ids; they must never be displayed).
+// Visible text only (full recording IDs are confined to links).
 const visible = (html) =>
   html
     .replace(/<script[\s\S]*?<\/script>/g, "")
@@ -83,14 +83,26 @@ describe("staff list", () => {
     );
     assert.doesNotMatch(text, UUID);
     assert.doesNotMatch(text, /Scenario|\b(Cancel|Retry|Reconcile|Inspect)\b/);
-    for (const id of Object.values(ids))
-      assert.ok(res.text.includes(`href="/pipeline/${id}"`), id);
+    for (const id of Object.values(ids)) {
+      assert.ok(res.text.includes("/pipeline/" + id), id);
+      assert.ok(text.includes(id.slice(0, 8)), id);
+    }
+    assert.match(
+      res.text,
+      /data-status="processing"[^>]*><svg[^>]*animate-spin[^>]*motion-reduce:animate-none/,
+    );
   });
 
   test("status filter and search narrow the rows and links preserve filters", async () => {
     const failed = await navigate("/pipeline?status=failed", staff);
     assert.ok(failed.text.includes(`/pipeline/${ids.failed}?status=failed`));
     assert.ok(!failed.text.includes(`/pipeline/${ids.completed}`));
+    const byId = await navigate(
+      "/pipeline?q=" + ids.completed.slice(0, 8),
+      staff,
+    );
+    assert.ok(byId.text.includes("/pipeline/" + ids.completed));
+    assert.ok(!byId.text.includes("/pipeline/" + ids.processing));
     const none = await navigate("/pipeline?q=zzzz-no-match", staff);
     assert.match(visible(none.text), /No recordings match these filters/);
     // Hostile or malformed parameters never fail the page.
