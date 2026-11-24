@@ -99,13 +99,18 @@ export const ctlEnv = (w, hold, extra = {}) => ({
   CONTROLLER_LEASE_WAIT_MS: "0",
   ...extra,
 });
-export function controllerProcess(w, jobId, runRef, hold = 0) {
+export function controllerProcess(w, jobId, runRef, hold = 0, extraEnv = {}) {
   const child = spawn(
     process.execPath,
     [join(jobsDir, "test-integration/controller-process.mjs")],
     {
       cwd: jobsDir,
-      env: { ...ctlEnv(w, hold), TEST_JOB_ID: jobId, TEST_RUN_REF: runRef },
+      env: {
+        ...ctlEnv(w, hold),
+        ...extraEnv,
+        TEST_JOB_ID: jobId,
+        TEST_RUN_REF: runRef,
+      },
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     },

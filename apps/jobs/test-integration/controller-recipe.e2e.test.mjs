@@ -20,6 +20,18 @@ import {
 
 installTeardown();
 
+// Claims issued for the stage (the controller issues one before the spawn), and how many the
+// child itself won (`claimed_at`: only a child that received its bootstrap can claim).
+const claimCount = async (w, jobId, claimedOnly = false) =>
+  (
+    await w.owner.query(
+      `SELECT count(*)::int AS n FROM job_stage_claims
+       WHERE job_id = $1 AND stage = 'hand_pose'
+         AND ($2::boolean = false OR claimed_at IS NOT NULL)`,
+      [jobId, claimedOnly],
+    )
+  ).rows[0].n;
+
 describe("SA-91 recipe stages through the official local runner, the real API and real stage children", () => {
   const STUB = {
     segment: "stub_segmenter@1",
@@ -245,6 +257,14 @@ describe("SA-91 recipe stages through the official local runner, the real API an
       },
       120_000,
     );
+    // The journal says `running` BEFORE the controller hands the child its bootstrap, and a child
+    // without a bootstrap never prints a receipt. The stage claim is the child's own proof that
+    // it received the bootstrap and is working, so lose the controller only after it (SA-136).
+    await until(
+      "the hand_pose child to claim its stage",
+      async () => (await claimCount(w, job.jobId, true)) > 0,
+      120_000,
+    );
     // Controller loss while the stage runs (the child is its own session and survives).
     process.kill(-first.child.pid, "SIGKILL");
     await first.done;
@@ -268,10 +288,61 @@ describe("SA-91 recipe stages through the official local runner, the real API an
     assert.ok(by.hand_pose.error_code);
     assert.notEqual(by.hand_pose.error_code, "receipt_missing");
     assert.equal(by.hand_pose.proof, seen.executionRef);
-    const claims = await w.owner.query(
-      "SELECT count(*)::int AS n FROM job_stage_claims WHERE job_id = $1 AND stage = 'hand_pose'",
-      [job.jobId],
+    assert.equal(await claimCount(w, job.jobId), 1);
+  });
+
+  test("controller loss after the hand_pose child is journaled running but before it got its bootstrap: the restarted controller adopts it and records receipt_missing (truthful; never a success, never a respawn)", async () => {
+    const w = await world();
+    const job = await w.queuedJob();
+    assert.equal((await w.admitWithRecipe(recipe(false))).state, "admitted");
+    // The controller is held (event loop blocked, as by a scheduling stall) right after it
+    // journals hand_pose `running` and before it writes the bootstrap to the child's stdin.
+    const first = controllerProcess(w, job.jobId, "run-restart", 0, {
+      TEST_STALL_AFTER_RUNNING_MS: "120000",
+      TEST_STALL_STAGE: "hand_pose",
+    });
+    const journal = join(w.state, job.jobId, "hand_pose", "journal.json");
+    const seen = await until(
+      "the hand_pose child to be journaled running",
+      () => {
+        try {
+          const j = JSON.parse(readFileSync(journal, "utf8"));
+          return j.phase === "running" ? j : undefined;
+        } catch {
+          return undefined;
+        }
+      },
+      120_000,
     );
-    assert.equal(claims.rows[0].n, 1);
+    process.kill(-first.child.pid, "SIGKILL");
+    await first.done;
+    await until(
+      "the hand_pose child to exit",
+      () => workers(seen.executionRef).length === 0,
+    );
+    assert.equal(
+      await claimCount(w, job.jobId, true),
+      0,
+      "it never got a bootstrap",
+    );
+    await w.expireLease(job.jobId);
+    const again = await controllerProcess(w, job.jobId, "run-restart").done;
+    assert.equal(again.outcome, "recipe_run", JSON.stringify(again));
+    const by = Object.fromEntries(
+      (await w.stageRows(job.jobId)).map((r) => [r.stage, r]),
+    );
+    assert.equal(
+      by.hand_pose.call_id,
+      seen.executionRef,
+      "adopted, not respawned",
+    );
+    assert.equal(by.hand_pose.state, "failed");
+    assert.equal(by.hand_pose.error_code, "receipt_missing");
+    assert.equal(await claimCount(w, job.jobId, true), 0, "never claimed");
+    assert.equal(
+      await claimCount(w, job.jobId),
+      1,
+      "one issued claim, no respawn",
+    );
   });
 });
