@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { ClipViewer } from "../rerun/clip-viewer";
@@ -14,6 +15,7 @@ import { cn } from "../../lib/utils";
 import type { MarksState } from "../../lib/review/use-marks";
 import type { MarkChoice, SegmentMarkRow } from "../../lib/review/marks";
 import { MarkBadge, MarkBar } from "./mark-bar";
+import { recipeHref } from "../../lib/recipe-view";
 import { HAND_COLORS } from "./palette";
 
 export type SideTab = "segs" | "hand" | "json";
@@ -31,6 +33,7 @@ export function SidePanel({
   model,
   annotations,
   segmentationFailure,
+  linkProvenance,
   tab,
   onTab,
   cards,
@@ -54,6 +57,7 @@ export function SidePanel({
   model: ReviewModel;
   annotations: RecordingAnnotations;
   segmentationFailure: string | null;
+  linkProvenance: boolean;
   tab: SideTab;
   onTab: (tab: SideTab) => void;
   /** Cards that pass the text filter and chip. */
@@ -218,22 +222,37 @@ export function SidePanel({
         data-testid="provenance"
         className="flex flex-wrap gap-1.5 border-t border-line bg-field px-3 py-2.5"
       >
-        {model.provenance.map((b) => (
-          <span
-            key={b.stage}
-            title={b.detail}
-            data-tone={b.tone}
-            className={cn(
+        {model.provenance.map((badge) => {
+          const run = linkProvenance ? annotations.dag_run : null;
+          const chip = {
+            title: badge.detail,
+            "data-tone": badge.tone,
+            className: cn(
               "rounded-md border bg-white px-1.5 py-px font-mono text-[10.5px] font-semibold text-[#4d5a54]",
-              b.tone === "absent"
+              badge.tone === "absent"
                 ? "border-[#edc8cc] text-danger"
                 : "border-line",
-              (b.tone === "replay" || b.tone === "stub") && "text-[#8a5a00]",
-            )}
-          >
-            {b.text}
-          </span>
-        ))}
+              (badge.tone === "replay" || badge.tone === "stub") &&
+                "text-[#8a5a00]",
+              run && "underline underline-offset-2",
+            ),
+          };
+          return run ? (
+            <Link
+              key={badge.stage}
+              {...chip}
+              href={recipeHref(run.recipeId, annotations.job_id, {
+                stage: badge.stage,
+              })}
+            >
+              {badge.text}
+            </Link>
+          ) : (
+            <span key={badge.stage} {...chip}>
+              {badge.text}
+            </span>
+          );
+        })}
         <span className="rounded-md border border-line bg-white px-1.5 py-px font-mono text-[10.5px] font-semibold text-[#4d5a54]">
           {model.derivedRule
             ? `derived: ${model.derivedRule}`

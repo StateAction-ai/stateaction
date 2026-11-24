@@ -1,4 +1,7 @@
 import { Spinner } from "../ui/spinner";
+import Link from "next/link";
+import type { DagRunV1 } from "@stateaction/contracts";
+import { recipeHref } from "../../lib/recipe-view";
 import {
   AlertCircle,
   CheckCircle2,
@@ -57,7 +60,13 @@ const short = (sha: string) => `${sha.slice(0, 8)}…${sha.slice(-4)}`;
  * icon; failed counts are shown as failed and never folded into totals; a
  * stage that was not run states its reason.
  */
-export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
+export function RecipeStageList({
+  stages,
+  recipe,
+}: {
+  stages: RunStageView[];
+  recipe: Pick<DagRunV1, "recipeId" | "jobId">;
+}) {
   return (
     <ol
       data-testid="recipe-stages"
@@ -83,9 +92,14 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
                 <span className="font-mono text-[13px] font-bold">
                   {s.stage}
                 </span>
-                <span className="rounded bg-brand-soft px-1.5 py-0.5 font-mono text-[11px] text-brand-ink">
+                <Link
+                  href={recipeHref(recipe.recipeId, recipe.jobId, {
+                    stage: s.stage,
+                  })}
+                  className="rounded bg-brand-soft px-1.5 py-0.5 font-mono text-[11px] text-brand-ink underline underline-offset-2"
+                >
                   {s.module}
-                </span>
+                </Link>
                 <span className="text-sm">{s.title}</span>
                 <span
                   className={cn(

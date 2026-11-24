@@ -1,6 +1,7 @@
 import "server-only";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
 import {
+  annotationCounts,
   getPipelineDetail,
   listPipelineRecordings,
   pipelineActionsFor,
@@ -14,11 +15,19 @@ import {
 } from "../jobs/recovery.js";
 import type { JobControlCapabilities, PipelineQuery } from "./model.js";
 import { readFileSync } from "node:fs";
-import type { DagRunV1, Stage } from "@stateaction/contracts";
-import type { DiagnosticLink } from "./run-view.js";
+import type {
+  DagRunV1,
+  Producer,
+  RecipeV1,
+  Stage,
+} from "@stateaction/contracts";
+import type { AnnotationCounts, DiagnosticLink } from "./run-view.js";
 import { getDagRun } from "../jobs/stages.js";
 import { listJobDiagnostics } from "../jobs/diagnostics.js";
 import { readRateCard, type RateCard } from "../ops/cost.js";
+import { loadRecipeProducers } from "../annotations/annotations.js";
+import { s3ObjectReader } from "../admission/object-reader.js";
+import { serverConfig } from "../config.js";
 import { TransportError } from "../transport/errors.js";
 
 /** Kinds with a real authenticated mutation: POST /api/v1/jobs/{jobId}/control (reupload is guidance). */
@@ -56,6 +65,19 @@ export function operatorRates(
   }
 }
 
+export type RecipeVisualization = {
+  recipe: RecipeV1;
+  recipeSha256: string;
+  recordingId: string;
+  startedAt: string;
+  run: DagRunV1 | null;
+  acceptedCounts: AnnotationCounts;
+  topology: "parallel" | "serial" | "unselected";
+  closure: { closedAt: string; outcome: "succeeded" | "failed" } | null;
+  producers: Partial<Record<Stage, Producer | "unavailable">>;
+  unknownReasons: Partial<Record<Stage, string>>;
+};
+
 /**
  * Server-rendered Pipeline reads for Server Components. The caller must have
  * passed the staff page guard (`requireConsoleSession(["staff"])`); the
@@ -84,6 +106,85 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
           return null;
         throw error;
       }
+    },
+    recipeVisualization: async (
+      staffUserId: string,
+      recipeId: string,
+      jobId: string,
+      showRun: boolean,
+    ): Promise<RecipeVisualization | null> => {
+      const pool = get().pool;
+      const {
+        rows: [snapshot],
+      } = await pool.query<{
+        recipe: RecipeV1;
+        recipe_sha256: string;
+        recording_id: string;
+        started_at: Date;
+        recipe_parallel: boolean;
+        submitted: boolean;
+        closed_at: Date | null;
+        outcome: "succeeded" | "failed" | null;
+        segment_count: number | null;
+        failed_window_count: number;
+        caption_count: number | null;
+        caption_failed_count: number | null;
+      }>(
+        `SELECT j.recipe, j.recipe_sha256, j.recording_id, r.started_at,
+                j.recipe_parallel, j.submission_intent_at IS NOT NULL AS submitted,
+                c.closed_at, c.outcome, j.segment_count, j.failed_window_count,
+                j.caption_count, j.caption_failed_count
+         FROM jobs j JOIN recordings r ON r.id = j.recording_id
+         LEFT JOIN job_output_closures c ON c.job_id = j.id
+         WHERE j.id = $2 AND j.recipe ->> 'recipeId' = $3
+           AND r.deleted_at IS NULL AND catalog_has_role($1, 'staff')`,
+        [staffUserId, jobId, recipeId],
+      );
+      if (!snapshot) return null;
+      const run = showRun ? await getDagRun({ pool }, jobId) : null;
+      const producers = run?.stages.some((stage) => stage.state === "succeeded")
+        ? await loadRecipeProducers(
+            {
+              pool,
+              reader: s3ObjectReader(serverConfig(), { timeoutMs: 15_000 }),
+            },
+            run,
+          )
+        : {};
+      const unknownReasons: Partial<Record<Stage, string>> = {};
+      if (run?.stages.some((stage) => stage.state === "submit_unknown")) {
+        const { rows } = await pool.query<{
+          stage: Stage;
+          unknown_reason: string;
+        }>(
+          `SELECT stage, unknown_reason FROM job_stage_runs
+           WHERE job_id = $1 AND unknown_reason IS NOT NULL`,
+          [jobId],
+        );
+        for (const row of rows) unknownReasons[row.stage] = row.unknown_reason;
+      }
+      return {
+        recipe: snapshot.recipe,
+        recipeSha256: snapshot.recipe_sha256,
+        recordingId: snapshot.recording_id,
+        startedAt: snapshot.started_at.toISOString(),
+        run,
+        acceptedCounts: annotationCounts(snapshot),
+        topology: snapshot.recipe_parallel
+          ? "parallel"
+          : snapshot.submitted
+            ? "serial"
+            : "unselected",
+        closure:
+          showRun && snapshot.closed_at && snapshot.outcome
+            ? {
+                closedAt: snapshot.closed_at.toISOString(),
+                outcome: snapshot.outcome,
+              }
+            : null,
+        producers,
+        unknownReasons,
+      };
     },
     /**
      * Completed diagnostic_blob files per stage, as links to the staff read

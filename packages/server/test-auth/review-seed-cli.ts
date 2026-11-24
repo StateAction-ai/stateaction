@@ -10,11 +10,16 @@ import { acceptanceConfigFromEnv } from "../src/acceptance/config.js";
 import { advanceResult } from "../src/acceptance/service.js";
 import { s3ObjectHasher } from "../src/acceptance/storage.js";
 import { s3ObjectReader } from "../src/admission/object-reader.js";
+import { recordExecutionEvidence, type JobsDeps } from "../src/jobs/service.js";
+import { recordStageRun, startParallelRecipe } from "../src/jobs/stages.js";
+import { JOBS_CONFIG } from "../test-integration/jobs-harness.js";
 import { storageClient } from "../src/storage.js";
 import { S3MultipartProvider } from "../src/transport/index.js";
 import type { ServerConfig } from "../src/config.js";
 import type { AcceptanceDb } from "../test-integration/acceptance-harness.js";
 import {
+  claimed,
+  MODULES,
   recipeJobOn,
   runRecipe,
   seal,
@@ -114,14 +119,77 @@ async function seed(withClip: boolean) {
     recordingId: s.recordingId,
     jobId: s.jobId,
     mp4Key: await key(run.mp4.fileId),
+    segmentsKey: await key(run.segFile.fileId),
     clipId: clip?.id ?? null,
     clipViewerKey: clip?.viewer ?? null,
   };
 }
 
-const withClip = await seed(true);
-const withoutClip = await seed(false);
-await owner.end();
-await app.end();
-process.stdout.write(JSON.stringify({ withClip, withoutClip }));
+const [mode, jobId] = process.argv.slice(2);
+let output;
+try {
+  if (mode === "--recipe-visualization" && jobId) {
+    const {
+      rows: [row],
+    } = await owner.query<{ controller_lease_owner: string; call_id: string }>(
+      `SELECT j.controller_lease_owner, r.call_id
+       FROM jobs j JOIN job_stage_runs r ON r.job_id = j.id
+       WHERE j.id = $1 AND r.stage = 'segment' AND r.state = 'running'`,
+      [jobId],
+    );
+    if (!row) throw new Error("Fixture stage is not running");
+    const jobs = { pool: app, config: JOBS_CONFIG } satisfies Pick<
+      JobsDeps,
+      "pool" | "config"
+    >;
+    const evidence = await recordExecutionEvidence(jobs, {
+      jobId,
+      recordedBy: "recipe-visualization-fixture",
+      evidence: { kind: "local_child_reaped", executionRef: row.call_id },
+    });
+    if (!evidence.recorded)
+      throw new Error("Fixture terminal evidence rejected");
+    await recordStageRun(jobs, {
+      jobId,
+      owner: row.controller_lease_owner,
+      stage: "segment",
+      state: "failed",
+      module: MODULES.segment,
+      callId: row.call_id,
+      errorCode: "receipt_missing",
+    });
+    output = { jobId };
+  } else if (mode === "--recipe-visualization") {
+    const succeeded = await seed(true);
+    const s = await recipeJobOn(
+      db,
+      deps,
+      { captionEnabled: false },
+      "recipe-visualization",
+    );
+    if (!(await startParallelRecipe(app, s.jobId, s.ctl)))
+      throw new Error("The fixture job did not select parallel execution");
+    for (const stage of ["segment", "hand_pose"] as const) {
+      const c = await claimed(s, stage);
+      await recordStageRun(s.deps, {
+        jobId: s.jobId,
+        owner: s.ctl,
+        stage,
+        state: "running",
+        module: MODULES[stage],
+        callId: c.callId,
+      });
+    }
+    output = {
+      succeeded,
+      active: { jobId: s.jobId, recordingId: s.recordingId },
+    };
+  } else {
+    output = { withClip: await seed(true), withoutClip: await seed(false) };
+  }
+} finally {
+  await owner.end();
+  await app.end();
+}
+process.stdout.write(JSON.stringify(output));
 process.exit(0);
