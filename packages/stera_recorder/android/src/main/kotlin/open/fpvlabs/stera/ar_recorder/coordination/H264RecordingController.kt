@@ -18,12 +18,14 @@ import open.fpvlabs.stera.ar_recorder.data.h264.H264Evidence
 import open.fpvlabs.stera.ar_recorder.finalization.CaptureOutcomePolicy
 import open.fpvlabs.stera.ar_recorder.encoding.CameraTimestampGate
 import open.fpvlabs.stera.ar_recorder.encoding.H264AccessUnit
-import open.fpvlabs.stera.ar_recorder.encoding.CpuImageIdentityPolicy
+import open.fpvlabs.stera.ar_recorder.encoding.CpuImageTimestampGate
 import open.fpvlabs.stera.ar_recorder.encoding.H264EncoderProfile
 import open.fpvlabs.stera.ar_recorder.encoding.H264PreflightException
 import open.fpvlabs.stera.ar_recorder.encoding.H264RgbEncoder
+import open.fpvlabs.stera.ar_recorder.encoding.StageTiming
 import open.fpvlabs.stera.ar_recorder.data.h264.FramePts
 import open.fpvlabs.stera.ar_recorder.geometry.H264Calibration
+import open.fpvlabs.stera.ar_recorder.diagnostics.traceCaptureIdentity
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -39,7 +41,7 @@ class H264RecordingController(
     context: Context,
     val recordingId: String,
     val encoderProfile: H264EncoderProfile,
-    cameraId: String,
+    private val cameraId: String,
     imuRequested: Boolean,
     depthRequested: Boolean,
     depthSupported: Boolean,
@@ -60,15 +62,22 @@ class H264RecordingController(
     private val peakQueuedWrites = AtomicInteger()
     private val anchor: H264Evidence.Anchor
     private val realtimeCameraClock: Boolean
+    private val availableFocalLengthsMm: List<Float>
+    private var observedFocalLengthMm: Float? = null
+    private var checkedFocalLength = false
     private val rgbClock: String
     private val encoder: H264RgbEncoder
     private var originNs: Long? = null
     private var nextSourceId = 0L
-    private var lastImageNs = 0L
+    private val cpuImageTimestamps = CpuImageTimestampGate()
+    private val captureTime = StageTiming("H264 capture")
+    private val cameraImageTime = StageTiming("ARCore CPU image acquisition")
+    private val frameEvidenceWriteTime = StageTiming("MCAP acquired frame and pose")
+    private val videoWriteTime = StageTiming("MCAP video write")
     private var cameraImageUnavailable = 0L
     private var backpressureSkips = 0L
     private var repeatedCpuImages = 0L
-    private var cpuImageFrameMismatches = 0L
+    private var cpuImageTimestampDifferences = 0L
     private var codecInputDrops = 0L
     private var calibrationRejected = 0L
     @Volatile var failure: String? = null; private set
@@ -77,7 +86,10 @@ class H264RecordingController(
 
     init {
         val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        val source = cameraManager.getCameraCharacteristics(cameraId).get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE)
+        val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+        val source = characteristics.get(CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE)
+        availableFocalLengthsMm = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            ?.filter { it.isFinite() && it > 0f }.orEmpty()
         realtimeCameraClock = source == CameraCharacteristics.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME
         if (!realtimeCameraClock && !encoderProfile.simulation) {
             throw H264PreflightException("Camera $cameraId timestamp source is not REALTIME; capture time cannot be mapped")
@@ -110,38 +122,35 @@ class H264RecordingController(
      * Called on the producer thread for every unique ARCore frame while recording. Returns true only when an acquired
      * image was queued into the codec. Tracking state never gates RGB; it is recorded as explicit pose evidence.
      */
-    fun capture(frame: Frame, trackingState: String, pose: FloatArray?, sourceIntrinsics: Map<String, Any>?): Boolean {
-        if (failure != null) return false
-        return try {
+    fun capture(frame: Frame, trackingState: String, pose: FloatArray?, sourceIntrinsics: Map<String, Any>?): Boolean = captureTime.measure {
+        if (failure != null) return@measure false
+        try {
             encoder.drain()
             if (pending.size >= CaptureProtocol.MAX_PENDING || queuedWrites.get() >= MAX_QUEUED_WRITES - 4) {
-                backpressureSkips++; metrics.droppedFrameCount.incrementAndGet(); return false
+                backpressureSkips++; metrics.droppedFrameCount.incrementAndGet(); return@measure false
             }
             val receiptNs = SystemClock.elapsedRealtimeNanos()
             val frameNs = frame.timestamp
             val accessorNs = try { frame.androidCameraTimestamp } catch (_: Exception) { 0L }
-            val metadataNs = try { frame.imageMetadata.getLong(ImageMetadata.SENSOR_TIMESTAMP).takeIf { it > 0 } }
-                catch (_: NotYetAvailableException) { null } catch (_: MetadataNotFoundException) { null }
+            var imageMetadata: ImageMetadata? = null
+            val metadataNs = try {
+                frame.imageMetadata.also { imageMetadata = it }.getLong(ImageMetadata.SENSOR_TIMESTAMP).takeIf { it > 0 }
+            } catch (_: NotYetAvailableException) { null } catch (_: MetadataNotFoundException) { null }
             val decision = if (!realtimeCameraClock) CameraTimestampGate.Decision.Accept(receiptNs, "simulation_host_receipt", null, CameraTimestampGate.MetadataAssociation.ABSENT)
                 else gate.observe(frameNs, accessorNs, receiptNs, metadataNs)
             val accepted = when (decision) {
-                is CameraTimestampGate.Decision.Wait, CameraTimestampGate.Decision.Duplicate -> return false
+                is CameraTimestampGate.Decision.Wait, CameraTimestampGate.Decision.Duplicate -> return@measure false
                 is CameraTimestampGate.Decision.Reject -> error("Camera clock rejected: ${decision.reason}")
                 is CameraTimestampGate.Decision.Accept -> decision
             }
-            val image = try { frame.acquireCameraImage() } catch (_: NotYetAvailableException) { cameraImageUnavailable++; return false }
+            val image = try { cameraImageTime.measure { frame.acquireCameraImage() } } catch (_: NotYetAvailableException) { cameraImageUnavailable++; return@measure false }
             image.use {
-                check(image.timestamp > 0 && image.timestamp >= lastImageNs) { "Missing or regressing camera image timestamp" }
-                // ARCore can hand back the previous CPU image for a newer Frame: it is not a new image.
-                if (image.timestamp == lastImageNs) { repeatedCpuImages++; return false }
-                // Hardware identity: the accepted native camera clock (the value written as the RGB clock) describes this
-                // capture, so the encoded CPU image must carry it. Frame.timestamp has an undefined time base and stays
-                // separate evidence. A different capture is skipped and counted, never relabelled.
-                when (CpuImageIdentityPolicy.evaluate(encoderProfile.simulation, image.timestamp, accepted.cameraNs)) {
-                    CpuImageIdentityPolicy.Verdict.IDENTICAL -> Unit
-                    CpuImageIdentityPolicy.Verdict.MISMATCH_RECORDED_SIMULATION -> cpuImageFrameMismatches++
-                    CpuImageIdentityPolicy.Verdict.MISMATCH_REJECTED -> { cpuImageFrameMismatches++; lastImageNs = image.timestamp; return false }
+                val imageNs = image.timestamp
+                if (!cpuImageTimestamps.accept(imageNs)) {
+                    repeatedCpuImages++
+                    return@measure false
                 }
+                if (imageNs != accepted.cameraNs) cpuImageTimestampDifferences++
                 if (image.width != encoderProfile.width || image.height != encoderProfile.height) {
                     throw H264PreflightException("Camera image ${image.width}x${image.height} differs from ${encoderProfile.width}x${encoderProfile.height}; no resize fallback")
                 }
@@ -150,15 +159,27 @@ class H264RecordingController(
                 calibration.observe(nextSourceId, image.width, image.height, sourceIntrinsics)?.let { reason ->
                     calibrationRejected++
                     if (metrics.firstRgbCaptureError == null) metrics.firstRgbCaptureError = "Calibration rejected: $reason"
-                    return false
+                    return@measure false
                 }
                 val id = nextSourceId++
+                traceCaptureIdentity(id, accepted.cameraNs)
+                if (!checkedFocalLength && accepted.metadataSensorNs != null) {
+                    checkedFocalLength = true
+                    observedFocalLengthMm = runCatching { imageMetadata?.getFloat(ImageMetadata.LENS_FOCAL_LENGTH) }
+                        .getOrNull()?.takeIf { it.isFinite() && it > 0f }
+                }
                 val mappedNs = anchor.map(accepted.cameraNs)
                 val ptsUs = pts.allocate(accepted.cameraNs, originNs ?: accepted.cameraNs.also { originNs = it })
                 val event = H264Evidence.acquired(recordingId, id, accepted.cameraNs, rgbClock, mappedNs, ptsUs,
-                    frameNs, image.timestamp, accepted.metadataSensorNs)
-                queue { evidence -> evidence.frameEvent(event); evidence.pose(event, trackingState, pose) }
+                    frameNs, imageNs, accepted.metadataSensorNs)
+                queue { evidence ->
+                    frameEvidenceWriteTime.measure {
+                        evidence.frameEvent(event)
+                        evidence.pose(event, trackingState, pose)
+                    }
+                }
                 pending[ptsUs] = Pending(id, mappedNs)
+                metrics.rgbEncodeAttemptCount++
                 val queued = encoder.submit(image, ptsUs) {
                     queue { evidence -> evidence.frameEvent(event + ("state" to "submitted")) }
                     metrics.submittedToEncoderFrameCount.incrementAndGet()
@@ -168,13 +189,12 @@ class H264RecordingController(
                     codecInputDrops++
                     queue { evidence -> evidence.frameEvent(event + mapOf("state" to "dropped", "reason" to "codec_input_backpressure")) }
                     metrics.droppedFrameCount.incrementAndGet()
-                    return false
+                    return@measure false
                 }
-                lastImageNs = image.timestamp
-                metrics.lastCapturedRgbTimestampNs = image.timestamp
+                metrics.lastCapturedRgbTimestampNs = imageNs
                 metrics.actualVideoWidth = image.width
                 metrics.actualVideoHeight = image.height
-                metrics.rgbTimestampRange.record(image.timestamp)
+                metrics.rgbTimestampRange.record(imageNs)
                 true
             }
         } catch (error: Throwable) {
@@ -216,14 +236,24 @@ class H264RecordingController(
         "recording_id" to recordingId, "profile" to encoderProfile.name,
         "qualification" to if (encoderProfile.simulation) "simulation_only" else "unqualified",
         "camera_clock" to rgbClock, "camera_clock_source_realtime" to realtimeCameraClock,
+        "camera_optics" to mapOf(
+            "configured_camera_id" to cameraId,
+            "available_focal_lengths_mm" to availableFocalLengthsMm,
+            "first_matched_focal_length_mm" to observedFocalLengthMm,
+        ),
         "encoder" to encoder.identity(), "unresolved_encoder_identities" to pending.size,
         "camera_image_unavailable" to cameraImageUnavailable, "pre_acquisition_backpressure_skips" to backpressureSkips,
         "codec_input_drops" to codecInputDrops, "calibration_rejected_frames" to calibrationRejected, "repeated_cpu_images_skipped" to repeatedCpuImages,
-        "cpu_image_frame_timestamp_mismatches" to cpuImageFrameMismatches,
-        "cpu_image_frame_mismatch_policy" to if (encoderProfile.simulation) "recorded_simulation_only" else "skipped_not_acquired", "clock_waits" to gate.waits, "duplicate_camera_frames" to gate.duplicates,
+        "cpu_image_frame_timestamp_mismatches" to cpuImageTimestampDifferences,
+        "cpu_image_frame_mismatch_policy" to "same_arcore_frame_keep_native_timestamps",
+        "clock_waits" to gate.waits, "duplicate_camera_frames" to gate.duplicates,
         "metadata_timestamp_stale" to gate.staleMetadata, "metadata_timestamp_ahead" to gate.aheadMetadata,
         "peak_queued_encoded_bytes" to peakQueuedVideoBytes.get(), "max_queued_encoded_bytes" to MAX_QUEUED_VIDEO_BYTES,
         "peak_queued_writes" to peakQueuedWrites.get(), "max_queued_writes" to MAX_QUEUED_WRITES,
+        "timing_ns" to mapOf(
+            "frame_thread_capture" to captureTime.report(), "cpu_image_acquisition" to cameraImageTime.report(),
+            "acquired_evidence_write" to frameEvidenceWriteTime.report(), "video_evidence_write" to videoWriteTime.report(),
+        ),
         "first_error" to failure, "interruption_reason" to interruptionReason,
     )
 
@@ -238,7 +268,9 @@ class H264RecordingController(
         peakQueuedVideoBytes.accumulateAndGet(total, ::maxOf)
         try {
             queue({ queuedVideoBytes.addAndGet(-size) }) { evidence ->
-                evidence.accessUnit(identity.id, identity.captureTimeNs, unit.ptsUs, unit.bytes)
+                videoWriteTime.measure {
+                    evidence.accessUnit(identity.id, identity.captureTimeNs, unit.ptsUs, unit.bytes)
+                }
                 metrics.encodedVideoFrameCount.incrementAndGet()
             }
         } catch (error: Throwable) {

@@ -26,6 +26,9 @@ from android_personal_device import PersonalDevice, SafetyError, apk_package, fi
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "open.fpvlabs.stera.ar_recorder.test"
 TEST = "open.fpvlabs.stera.ar_recorder.H264RecorderLifecycleInstrumentedTest"
+THROUGHPUT_TEST = (
+    "open.fpvlabs.stera.ar_recorder.encoding.H264EncoderThroughputInstrumentedTest"
+)
 APK = (
     ROOT
     / "apps/mobile/build/stera_recorder/outputs/apk/androidTest/debug/stera_recorder-debug-androidTest.apk"
@@ -168,6 +171,11 @@ def main() -> None:
     )
     parser.add_argument("--serial", default="emulator-5582")
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument(
+        "--throughput-only",
+        action="store_true",
+        help="feed synthetic 30 fps YUV into the emulator software AVC encoder without opening a camera",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     device = emulator(args.serial)
@@ -202,18 +210,27 @@ def main() -> None:
     install = device.operate(
         "install", PACKAGE, ["install", "--user", "0", "-r", "-t", str(APK)]
     )
-    device.operate(
-        "grant",
-        PACKAGE,
-        ["shell", "pm", "grant", "--user", "0", PACKAGE, "android.permission.CAMERA"],
-    )
-    device.adb(
-        "shell",
-        "rm",
-        "-rf",
-        f"/sdcard/Android/data/{PACKAGE}/files/ar_sessions",
-        operation="Clear prior emulator test sessions",
-    )
+    if not args.throughput_only:
+        device.operate(
+            "grant",
+            PACKAGE,
+            [
+                "shell",
+                "pm",
+                "grant",
+                "--user",
+                "0",
+                PACKAGE,
+                "android.permission.CAMERA",
+            ],
+        )
+        device.adb(
+            "shell",
+            "rm",
+            "-rf",
+            f"/sdcard/Android/data/{PACKAGE}/files/ar_sessions",
+            operation="Clear prior emulator test sessions",
+        )
     device.adb("logcat", "-c", operation="Clear emulator log")
     log = device.adb(
         "shell",
@@ -225,13 +242,28 @@ def main() -> None:
         "-r",
         "-e",
         "class",
-        TEST,
+        THROUGHPUT_TEST if args.throughput_only else TEST,
         PACKAGE + "/androidx.test.runner.AndroidJUnitRunner",
         operation="Scoped emulator instrumentation",
         timeout=420,
     )
     device.scope(PACKAGE)
     (output / "instrumentation.log").write_text(log + "\n")
+    if args.throughput_only:
+        if not re.search(r"OK \(2 tests\)", log) or "FAILURES!!!" in log:
+            raise RuntimeError(
+                f"Software AVC throughput test failed; see {output / 'instrumentation.log'}"
+            )
+        print(
+            json.dumps(
+                {
+                    "status": "passed_software_avc_throughput",
+                    "hardware_qualified": False,
+                    "output": str(output),
+                }
+            )
+        )
+        return
     (output / "recorder.log").write_text(
         device.adb(
             "logcat",

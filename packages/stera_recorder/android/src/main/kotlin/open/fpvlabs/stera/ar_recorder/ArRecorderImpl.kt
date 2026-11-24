@@ -12,6 +12,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import open.fpvlabs.stera.ar_recorder.coordination.H264RecordingController
+import open.fpvlabs.stera.ar_recorder.diagnostics.captureTrace
 import open.fpvlabs.stera.ar_recorder.coordination.FrameProcessingCoordinator
 import open.fpvlabs.stera.ar_recorder.coordination.MetadataAssembler
 import open.fpvlabs.stera.ar_recorder.coordination.PerformanceOptimizer
@@ -437,7 +438,9 @@ class ArRecorderImpl(
                 val displayRotation = (context as? Activity)?.windowManager?.defaultDisplay?.rotation ?: 0
                 session.setDisplayGeometry(displayRotation, previewWidth, previewHeight)
 
-                val frame = session.update()
+                val traceH264 = sessionConfig.isH264 && isRecording.get()
+                val frame = if (traceH264) captureTrace("ARCore session update") { session.update() }
+                    else session.update()
                 val camera = frame.camera
 
                 val loopStartNs = SystemClock.elapsedRealtimeNanos()
@@ -457,7 +460,8 @@ class ArRecorderImpl(
                     println("✅ ARCore session ready for recording")
                 }
 
-                renderFrame(frame, camera)
+                if (traceH264) captureTrace("ARCore preview render") { renderFrame(frame, camera) }
+                else renderFrame(frame, camera)
 
                 isRecording.withActiveRecording {
                     frameOrchestrator.processFrame(

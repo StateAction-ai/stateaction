@@ -324,12 +324,52 @@ def _json_topic(flat: bytes, topic: str) -> list[bytes]:
     return [m["data"] for m in model["messages"] if m["channel"] in ids]
 
 
+def check_completed_sidecar(path: Path, profile: str, video_messages: int) -> None:
+    """Check the recorder sidecar against the independently decoded MCAP count."""
+    require(
+        not path.with_name("recovery_required.json").exists(),
+        "session has a recovery marker",
+    )
+    metadata = json.loads(path.with_name("metadata.json").read_text())
+    terminal = metadata["h264_terminal"]
+    journal = json.loads(path.with_name("finalization_journal.json").read_text())
+    require(
+        journal["phase"] == "FINALIZED" and journal["final"] is True,
+        "session journal did not finalize",
+    )
+    token = metadata["finalization_token"]
+    require(
+        isinstance(token, str)
+        and bool(token)
+        and journal["source_identity"]["finalizationToken"] == token
+        and journal["recording_id"] == terminal["recording_id"],
+        "session journal does not match sidecar",
+    )
+    require(
+        metadata["finalization_complete"] is True, "capture finalization is incomplete"
+    )
+    require(
+        metadata["capture_outcome"] == "completed", "sidecar capture was not completed"
+    )
+    require(metadata["container_state"] == "closed", "sidecar container is not closed")
+    require(metadata["recovery_state"] == "none", "sidecar capture requires recovery")
+    require(terminal["profile"] == profile, "sidecar profile does not match MCAP")
+    if profile == "h264_mcap_v1":
+        require(
+            terminal["encoder"]["hardware"] is True,
+            "sidecar lacks hardware AVC evidence",
+        )
+    for key in ("rgb_encoded_count", "total_video_frames_encoded", "rgb_written_count"):
+        require(metadata[key] == video_messages, f"sidecar {key} disagrees with MCAP")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--profile", required=True, choices=sorted(LEVELS))
-    parser.add_argument(
+    outcome = parser.add_mutually_exclusive_group()
+    outcome.add_argument(
         "--expect-outcome",
         default=None,
         help="require this Close outcome for every file",
@@ -339,17 +379,34 @@ def main() -> int:
         action="store_true",
         help="JVM fixtures built from the public Baseline golden stream: skip only AVC profile/level/raster checks",
     )
+    outcome.add_argument(
+        "--check-sidecar",
+        action="store_true",
+        help="require a completed recording and check adjacent metadata.json against MCAP video",
+    )
     parser.add_argument("mcap", nargs="+", type=Path)
     args = parser.parse_args()
     receipts, failed = [], False
     for path in args.mcap:
         try:
             receipt = validate(path, args.profile, args.synthetic_source)
-            if args.expect_outcome:
+            expected_outcome = (
+                "completed" if args.check_sidecar else args.expect_outcome
+            )
+            if expected_outcome:
                 require(
-                    receipt["close"]["outcome"] == args.expect_outcome,
+                    receipt["close"]["outcome"] == expected_outcome,
                     f"outcome {receipt['close']['outcome']}",
                 )
+            if expected_outcome == "completed":
+                require(receipt["video_messages"] > 0, "no RGB video messages in MCAP")
+            if args.check_sidecar:
+                if args.profile == "h264_mcap_v1":
+                    require(
+                        receipt["encoder"]["hardware"] is True,
+                        "MCAP lacks hardware AVC evidence",
+                    )
+                check_completed_sidecar(path, args.profile, receipt["video_messages"])
             receipts.append({"status": "passed", **receipt})
         except (
             ValidationError,

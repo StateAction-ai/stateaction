@@ -1,8 +1,10 @@
 package open.fpvlabs.stera.ar_recorder.data
 
 import open.fpvlabs.stera.ar_recorder.data.h264.AnnexB
-import open.fpvlabs.stera.ar_recorder.data.H264CaptureWriter
+import open.fpvlabs.stera.ar_recorder.data.h264.FramePts
 import open.fpvlabs.stera.ar_recorder.data.h264.H264Evidence
+import open.fpvlabs.stera.ar_recorder.encoding.CameraTimestampGate
+import open.fpvlabs.stera.ar_recorder.encoding.CpuImageTimestampGate
 import open.fpvlabs.stera.ar_recorder.encoding.ContractFixtures
 import open.fpvlabs.stera.ar_recorder.sensors.MotionSensorKind
 import open.fpvlabs.stera.ar_recorder.sensors.RawMotionEvent
@@ -30,10 +32,13 @@ class H264CaptureWriterTest {
 
     private fun join(from: Int, to: Int) = ByteArrayOutputStream().apply { for (n in nals.subList(from, to)) { write(start); write(n) } }.toByteArray()
 
-    private fun writer(file: File, simulation: Boolean = false): Pair<MCAPWriter, H264CaptureWriter> {
+    private fun writer(
+        file: File,
+        simulation: Boolean = false,
+        anchor: H264Evidence.Anchor = H264Evidence.Anchor(1_000_000_000L, 1_800_000_000_000_000_000L, 1_000_000_100L),
+    ): Pair<MCAPWriter, H264CaptureWriter> {
         val mcap = MCAPWriter()
         assertTrue(mcap.open(file, profile = "", library = "test"))
-        val anchor = H264Evidence.Anchor(1_000_000_000L, 1_800_000_000_000_000_000L, 1_000_000_100L)
         val profile = mutableMapOf<String, Any?>("recording_id" to recordingId,
             "rgb_profile" to if (simulation) "h264_mcap_simulation_v1" else "h264_mcap_v1",
             "qualification" to if (simulation) "simulation_only" else "unqualified",
@@ -120,6 +125,65 @@ class H264CaptureWriterTest {
         assertEquals("unresolved_frames", close["failure_reason"])
         assertEquals("1", (close["frames"] as Map<*, *>)["unresolved"])
         export(file)
+    }
+
+    @Test fun pixelClockTupleReachesHardwareProfileWriterWithOriginalIdentity() {
+        val cameraStart = 1_467_836_019_878_654L
+        val frameStart = 1_467_836_032_984_466L
+        val imageStart = 1_467_836_033_014_624L
+        val intervalNs = 33_333_333L
+        val cameraClock = CameraTimestampGate()
+        val cpuImageTimestamps = CpuImageTimestampGate()
+        val anchor = H264Evidence.Anchor(cameraStart, 1_800_000_000_000_000_000L, cameraStart)
+        val pts = FramePts()
+        val (mcap, capture) = writer(temp.newFile("jvm_pixel_clocks.mcap"), anchor = anchor)
+        assertEquals("h264_mcap_v1", capture.profile["rgb_profile"])
+        val expectedPtsUs = listOf(0L, 33_333L, 66_666L, 99_999L, 133_333L)
+        for ((index, expectedPts) in expectedPtsUs.withIndex()) {
+            // The first tuple was observed on a Pixel. Subsequent tuples use simulated motion at 30 Hz.
+            val delta = index * intervalNs
+            val cameraNs = cameraStart + delta
+            val frameNs = frameStart + delta
+            val imageNs = imageStart + delta
+            val accepted = cameraClock.observe(frameNs, cameraNs, cameraNs, cameraNs)
+                as CameraTimestampGate.Decision.Accept
+            assertNotEquals("The previous hardware equality check rejects this tuple", accepted.cameraNs, imageNs)
+            assertTrue(cpuImageTimestamps.accept(imageNs))
+            assertFalse("A repeated image cannot borrow a new frame identity", cpuImageTimestamps.accept(imageNs))
+            assertEquals(cameraNs, accepted.cameraNs)
+            val encoderPts = pts.allocate(accepted.cameraNs, cameraStart)
+            assertEquals(expectedPts, encoderPts)
+            val mappedNs = anchor.map(accepted.cameraNs)
+            val event = H264Evidence.acquired(
+                recordingId, index.toLong(), accepted.cameraNs, H264Evidence.CAMERA_CLOCK, mappedNs, encoderPts,
+                frameNs, imageNs, accepted.metadataSensorNs,
+            )
+            assertEquals(cameraNs.toString(), event["native_timestamp_ns"])
+            assertEquals(mapOf(
+                "arcore_image_timestamp_ns" to imageNs.toString(),
+                "arcore_frame_timestamp_ns" to frameNs.toString(),
+                "metadata_sensor_timestamp_ns" to cameraNs.toString(),
+            ), event["native_timestamps"])
+            capture.frameEvent(event)
+            capture.frameEvent(event + ("state" to "submitted"))
+            capture.accessUnit(index.toLong(), mappedNs, encoderPts, units[index])
+        }
+        val (sensors, calibrations) = H264Evidence.inventory(plan, capture.acquiredCount())
+        val close = capture.close("completed", null, sensors, calibrations)
+        mcap.finish()
+        assertEquals("completed", close["outcome"])
+        assertEquals("5", close["video_messages"])
+    }
+
+    @Test fun zeroVideoMessagesNeverCloseAsCompleted() {
+        val (mcap, capture) = writer(temp.newFile("jvm_zero_video.mcap"))
+        val (sensors, calibrations) = H264Evidence.inventory(plan, capture.acquiredCount())
+        val close = capture.close("completed", null, sensors, calibrations)
+        mcap.finish()
+        assertEquals("failed", close["outcome"])
+        assertEquals("no_rgb_frames_written", close["failure_reason"])
+        assertEquals("0", close["video_messages"])
+        assertThrows(IllegalStateException::class.java) { capture.sourceManifestEvidence() }
     }
 
     @Test fun identityAndOrderingViolationsAreRejected() {

@@ -34,7 +34,7 @@ frame-rate fallback.
 - **`H264CaptureWriter`** writes exactly the contract channel table (JSON evidence topics, `/camera/rgb/video`,
   `/tracking/pose`) into the existing chunked, indexed `MCAPWriter`, which now writes real chunk and data-section CRCs.
   Legacy CDR/JPEG streams are not written in H.264 mode. Inventory and Close are written once at stop; `completed` is
-  downgraded to `failed` whenever frames are unresolved.
+  downgraded to `failed` if any frames are unresolved or no video was written.
 
 ## Clock and identity rules
 
@@ -43,8 +43,11 @@ frame-rate fallback.
   elapsed-realtime→Unix anchor). `ImageMetadata.SENSOR_TIMESTAMP` is kept only when it equals that value. SA-60 saw it
   one capture behind on about 10 of 110 emulator frames; such frames are no longer aborted, and the stale value is
   excluded from that frame and counted (`metadata_timestamp_stale`/`_ahead`).
-- Hardware profile: the encoded CPU image must carry the accepted native camera clock written as the RGB clock (`Image.timestamp == accepted cameraNs`, i.e. `Frame.androidCameraTimestamp`), decided by `CpuImageIdentityPolicy`. `Frame.timestamp` is separate evidence and never an equality requirement. A mismatch is a counted, skipped drop.
-  A different or repeated CPU image is skipped and counted, never relabelled.
+- [`Frame.acquireCameraImage()`](<https://developers.google.com/ar/reference/java/com/google/ar/core/Frame.html#acquireCameraImage()>)
+  associates the CPU image with the current Frame. The Android camera timestamp supplies the RGB timeline and encoder
+  PTS. The image's source-specific `Image.timestamp` and the original ARCore frame timestamp remain in
+  `native_timestamps`. The sidecar counts differing image and RGB timestamp values for diagnosis.
+  The recorder skips repeated CPU images and rejects missing or regressing image timestamps.
 - When the emulator camera does not report a `REALTIME` source, the simulation profile uses the disclosed host receipt
   clock `android.elapsed_realtime_receipt`. This is not camera timing evidence.
 - Tracking never gates RGB. Every acquired frame gets one `arcore_pose` SensorEvent; non-tracking frames are
@@ -100,14 +103,84 @@ validates it with `scripts/validate_h264_capture.py`. The validator reads each f
 (CRC validation), flattens an in-memory copy for the SA-50 Python reference checker (the source file is never
 rewritten) and decodes the access units with ffprobe/ffmpeg.
 
-A separate development identity keeps test installs away from the existing collector:
+## Before delivering an H.264 collector APK
+
+Run the Flutter smoke on the same source revision as the phone build. Use a clean, isolated worktree with an
+`apps/mobile/.env` that contains only `NO_AUTH_MODE=true`. The smoke uses the phone build's H.264 flag and dev
+package, plus the explicit simulation flag and x86_64 target required by the emulator.
 
 ```sh
-cd apps/mobile
-flutter build apk --debug --dart-define=STATEACTION_RGB_CODEC=h264 \
-  -P stateactionApplicationId=ai.stateaction.collector.dev
+source scripts/env.sh
+agent-resource run --lane android-build -- bash -c '
+  python3 scripts/mobile/run.py mobile prepare &&
+  cd apps/mobile &&
+  flutter build apk --debug --target-platform android-x64 --no-pub \
+    --dart-define=STATEACTION_RGB_CODEC=h264 --dart-define=STATEACTION_H264_SIMULATION=true \
+    --android-project-arg=stateactionApplicationId=ai.stateaction.collector.dev
+'
+agent-resource run --lane emulator -- python3 scripts/test_android_h264_collector.py \
+  apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-Add `--target-platform android-x64 --dart-define=STATEACTION_H264_SIMULATION=true` for the emulator profile. Physical
-installs and Start are root-only, personal-profile-only and require the user's intentional Start; see
-[the personal-device guard](../../scripts/ANDROID_PERSONAL_DEVICE.md).
+The smoke verifies KVM and host GPU rendering, installs on emulator user 0 and records through the actual Flutter
+Start and Stop controls. It requires a completed MCAP with at least one `/camera/rgb/video` message, decodes every
+access unit and checks the saved RGB counts against the file. The receipt is under `artifacts/sa59-collector/`.
+The emulator uses software AVC.
+
+After the smoke passes, build the ARM64 APK from the same sources with `--target-platform android-arm64` and
+`--dart-define=STATEACTION_H264_SIMULATION=false`. Record the source commit and both APK hashes. Verify personal
+profile targeting with [the personal-device guard](../../scripts/ANDROID_PERSONAL_DEVICE.md) before any phone
+operation. Have the user intentionally start a short recording before any sustained capture.
+
+Pull the whole short session directory into a private ignored directory. Keep the MCAP, `metadata.json`,
+`finalization_journal.json` and any `recovery_required.json` marker together. Check the session before using the
+build for longer takes.
+
+```sh
+agent-resource run -- uv run --no-project --with mcap==1.6.0 --with jsonschema==4.25.1 --with protobuf==6.33.0 \
+  python -I scripts/validate_h264_capture.py --profile h264_mcap_v1 --check-sidecar \
+  artifacts/phone-check/session_data.mcap
+```
+
+This check reads the full recording, so use it on the short confirmation take. It exits nonzero for a failed
+or quarantined session, missing video, inconsistent counts or missing hardware AVC evidence.
+
+## Capture performance diagnostics
+
+The recorder reads each source and codec plane's strides once. Packed planes use bulk transfers. Strided planes
+copy rows through reusable scratch buffers and preserve interleaved chroma bytes. The sidecar records the first
+observed plane layouts under `h264_terminal.encoder.yuv_plane_layout`. The terminal `timing_ns` maps report call
+count, total and maximum nanoseconds for ARCore acquisition, frame-thread work, codec submission and drain, and
+writer work. Output drain includes EOS. The frame-thread total overlaps its acquisition and codec subtotals.
+
+```sh
+source scripts/env.sh
+agent-resource run --lane emulator -- python3 scripts/test_android_h264_e2e.py --throughput-only
+```
+
+The synthetic test sends 150 distinct VGA images at nominal 30 Hz to the software AVC encoder. Each input
+may wait for a buffer until its own 33.3 ms slot ends. The test allows one input drop and 100 ms of final scheduling
+slack, and requires an exactly matching ordered PTS for every accepted input. The live preview path limits its input
+poll to 10 ms.
+The independent 1080p strided-copy test caps the 95th-percentile thread CPU cost at 10 ms. The 1080p30 hardware
+cadence, 1% drop limit and preview responsiveness still require a physical Pixel measurement.
+
+When an app-scoped Perfetto trace is active, the collector adds slices for ARCore update and preview, H.264
+capture, YUV copy, codec input and drain, and MCAP chunk flush. The capture trace includes the original camera
+timestamp and source-frame ID, so the MCAP can be joined to the trace at a cadence gap. Without a trace the
+sidecar reports aggregate timings. Aggregate maxima alone cannot identify which frame stalled.
+
+The sidecar's `h264_terminal.camera_optics` records the configured ARCore camera ID, its available focal lengths,
+and the first reported focal length whose metadata timestamp matched the capture. A configured logical camera ID
+or an available focal length does not identify the active physical lens. Use matched focal length, saved-raster
+intrinsics and the handset camera configuration together when qualifying a lens.
+
+## Why earlier tests missed the Pixel failure
+
+SA-51 introduced the hardware timestamp equality requirement in merge commit `e5d578c` (PR #17).
+It was still present in the November 23 development build at `69156c3`. Both Pixel takes reached AVC
+configuration and end of stream, but the check rejected every CPU image before submission. The older
+emulator lifecycle tests already required positive frame counts and decodable MCAP video. They entered
+the native recorder directly and used a simulation-only exception for unequal timestamps. The local CI
+gate runs host checks and builds without starting the emulator. Its JVM identity test enshrined the same
+cross-clock equality assumption.

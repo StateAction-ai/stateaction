@@ -44,6 +44,12 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
     private val codec: MediaCodec
     private val info = MediaCodec.BufferInfo()
     private val assembler = H264AccessUnitAssembler()
+    private val inputWait = StageTiming("AVC input wait")
+    private val yuvCopy = StageTiming("AVC YUV copy")
+    private val planeCopier = YuvPlaneCopier()
+    private var planeLayout: List<Map<String, Int>>? = null
+    private val inputQueue = StageTiming("AVC input queue")
+    private val outputDrain = StageTiming("AVC output drain")
     private var sps: ByteArray? = null
     private var pps: ByteArray? = null
     private var outputFormatSeen = false
@@ -92,7 +98,7 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
     }
 
     /** Copies one native YUV_420_888 image into codec input; false means codec input backpressure (no wait loop). */
-    fun submit(image: Image, ptsUs: Long, onQueued: () -> Unit): Boolean {
+    fun submit(image: Image, ptsUs: Long, inputWaitUs: Long = INPUT_WAIT_US, onQueued: () -> Unit): Boolean {
         check(!eosSeen) { "Encoder already ended" }
         require(image.format == ImageFormat.YUV_420_888) { "Only native YUV_420_888 input is supported" }
         require(image.width == profile.width && image.height == profile.height) {
@@ -101,10 +107,10 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
         val crop = image.cropRect
         require(crop.left == 0 && crop.top == 0 && crop.right == profile.width && crop.bottom == profile.height) { "Cropped camera image; no crop fallback" }
         drain()
-        val index = codec.dequeueInputBuffer(INPUT_WAIT_US)
+        val index = inputWait.measure { codec.dequeueInputBuffer(inputWaitUs) }
         if (index < 0) return false
         val target = checkNotNull(codec.getInputImage(index)) { "Codec has no flexible-YUV input image" }
-        copyYuv(image, target)
+        yuvCopy.measure { copyYuv(image, target) }
         // Request sync frames on the true media timeline: VFR/dropped camera frames make nominal frame counts wrong.
         val lastSync = lastSyncRequestPtsUs
         if (lastSync == null || ptsUs - lastSync >= 1_000_000L) {
@@ -112,14 +118,20 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
             lastSyncRequestPtsUs = ptsUs
             requestedSyncFrames++
         }
-        codec.queueInputBuffer(index, 0, checkNotNull(codec.getInputBuffer(index)).capacity(), ptsUs, 0)
+        inputQueue.measure {
+            codec.queueInputBuffer(index, 0, checkNotNull(codec.getInputBuffer(index)).capacity(), ptsUs, 0)
+        }
         submitted++
         onQueued()
         drain()
         return true
     }
 
-    fun drain(waitUs: Long = 0) {
+    fun drain(waitUs: Long = 0) = outputDrain.measure {
+        drainOutput(waitUs)
+    }
+
+    private fun drainOutput(waitUs: Long) {
         while (!eosSeen) {
             val index = codec.dequeueOutputBuffer(info, waitUs)
             when {
@@ -172,6 +184,11 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
         "input_color_format" to inputColorFormat, "output_format" to outputFormat,
         "sps_profile_idc" to spsProfileIdc, "sps_level_idc" to spsLevelIdc,
         "submitted" to submitted, "access_units" to output, "idr_access_units" to idrCount, "requested_sync_frames" to requestedSyncFrames,
+        "yuv_plane_layout" to planeLayout,
+        "timing_ns" to mapOf(
+            "input_wait" to inputWait.report(), "yuv_copy" to yuvCopy.report(),
+            "input_queue" to inputQueue.report(), "output_drain_including_eos" to outputDrain.report(),
+        ),
         "config_buffers" to assembler.configBuffers, "partial_buffers" to assembler.partialBuffers, "end_of_stream" to eosSeen,
     )
 
@@ -231,25 +248,31 @@ class H264RgbEncoder(val profile: H264EncoderProfile, private val onAccessUnit: 
             } catch (_: Exception) { false }
         }
 
-        /** Copies YUV planes using both images' actual row and pixel strides; never assumes NV12 or I420. */
-        fun copyYuv(source: Image, destination: Image) {
-            require(source.planes.size == 3 && destination.planes.size == 3)
-            for (plane in 0..2) {
-                val w = if (plane == 0) source.width else source.width / 2
-                val h = if (plane == 0) source.height else source.height / 2
-                val src = source.planes[plane]; val dst = destination.planes[plane]
-                val sb = src.buffer.duplicate(); val db = dst.buffer.duplicate()
-                val so = sb.position(); val d = db.position()
-                if (src.pixelStride == 1 && dst.pixelStride == 1) {
-                    val row = ByteArray(w)
-                    for (y in 0 until h) {
-                        sb.position(so + y * src.rowStride); sb.get(row)
-                        db.position(d + y * dst.rowStride); db.put(row)
-                    }
-                } else for (y in 0 until h) for (x in 0 until w) {
-                    db.put(d + y * dst.rowStride + x * dst.pixelStride, sb.get(so + y * src.rowStride + x * src.pixelStride))
-                }
-            }
+    }
+
+    private fun copyYuv(source: Image, destination: Image) {
+        val sourcePlanes = source.planes
+        val destinationPlanes = destination.planes
+        require(sourcePlanes.size == 3 && destinationPlanes.size == 3)
+        val width = source.width
+        val height = source.height
+        val firstLayout = if (planeLayout == null) mutableListOf<Map<String, Int>>() else null
+        for (index in sourcePlanes.indices) {
+            val src = sourcePlanes[index]
+            val dst = destinationPlanes[index]
+            val sourceRowStride = src.rowStride
+            val sourcePixelStride = src.pixelStride
+            val destinationRowStride = dst.rowStride
+            val destinationPixelStride = dst.pixelStride
+            planeCopier.copy(
+                if (index == 0) width else width / 2, if (index == 0) height else height / 2,
+                src.buffer, sourceRowStride, sourcePixelStride, dst.buffer, destinationRowStride, destinationPixelStride,
+            )
+            firstLayout?.add(mapOf(
+                "source_row_stride" to sourceRowStride, "source_pixel_stride" to sourcePixelStride,
+                "codec_row_stride" to destinationRowStride, "codec_pixel_stride" to destinationPixelStride,
+            ))
         }
+        if (firstLayout != null) planeLayout = firstLayout
     }
 }

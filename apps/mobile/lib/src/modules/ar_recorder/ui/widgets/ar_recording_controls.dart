@@ -30,6 +30,12 @@ class ArRecordingControls extends StatelessWidget {
       (arp) => arp.isSessionReady,
     );
 
+    final captureFailure = context.select<ArRecorderProvider, String?>(
+      (arp) => arp.lastFramesRecorded == 0 && arp.outputDirectory == null
+          ? arp.errorMessage
+          : null,
+    );
+
     final accent = context.darkColors.red;
 
     Widget centered(Widget child) {
@@ -60,15 +66,39 @@ class ArRecordingControls extends StatelessWidget {
     }
 
     if (isSessionReady) {
+      final start = _ArCircleControl(
+        icon: Icons.videocam_rounded,
+        label: "Start Recording",
+        accentColor: accent,
+        onTap: () {
+          HapticFeedback.mediumImpact();
+          onStartPressed();
+        },
+      );
+      if (captureFailure == null) return centered(start);
       return centered(
-        _ArCircleControl(
-          icon: Icons.videocam_rounded,
-          label: "Start Recording",
-          accentColor: accent,
-          onTap: () {
-            HapticFeedback.mediumImpact();
-            onStartPressed();
-          },
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Semantics(
+              liveRegion: true,
+              child: ColoredBox(
+                color: context.darkColors.surfaceBlack,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Text(
+                    captureFailure,
+                    textAlign: TextAlign.center,
+                    style: context.darkTextTheme.bodyMd.copyWith(
+                      color: context.darkColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            start,
+          ],
         ),
       );
     }

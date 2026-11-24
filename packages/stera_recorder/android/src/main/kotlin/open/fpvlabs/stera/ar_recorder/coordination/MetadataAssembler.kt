@@ -102,8 +102,9 @@ class MetadataAssembler(
         } else 0.0
 
         val associationCandidateCount = m.depthAttemptCount
+        val rgbEncodedCount = m.encodedVideoFrameCount.get()
         val rgbSamplingRatio = if (m.globalArFrameIndex > 0) {
-            m.rgbEncodedFrameIndices.size.toDouble() / m.globalArFrameIndex.toDouble()
+            rgbEncodedCount.toDouble() / m.globalArFrameIndex.toDouble()
         } else 0.0
 
         val encoderFailureRate = m.encoderFailureRate()
@@ -237,7 +238,7 @@ class MetadataAssembler(
             "total_expected_frame_slots" to m.totalExpectedFrameCount,
             "cumulative_frame_drift" to cumulativeFrameDrift,
             "drift_resync_event_count" to m.driftResyncEventCount,
-            "rgb_encoded_count" to m.rgbEncodedFrameIndices.size,
+            "rgb_encoded_count" to rgbEncodedCount,
             "rgb_sampling_skipped_count" to m.rgbSamplingSkippedCount,
             "rgb_encoder_failure_count" to m.rgbEncoderFailureCount,
             "rgb_encode_attempt_count" to m.rgbEncodeAttemptCount,

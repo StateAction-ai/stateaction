@@ -114,7 +114,6 @@ class RecordingFrameOrchestrator(
         if (activeH264 != null) {
             // RGB follows the native camera cadence even while AR tracking is paused or lost; tracking state is
             // written as explicit per-frame pose evidence instead of gating capture.
-            metrics.rgbEncodeAttemptCount++
             // Saved-pixel calibration follows the exact encoded raster; unavailable intrinsics are an explicit state.
             val sourceIntrinsics = runCatching { frameProcessor.extractIntrinsics(camera) }.getOrNull()
             val poseSnapshot = if (isTracking) frameProcessor.extractPose(camera) else null

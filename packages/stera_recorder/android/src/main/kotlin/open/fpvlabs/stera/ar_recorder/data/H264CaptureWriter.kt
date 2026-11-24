@@ -154,17 +154,21 @@ class H264CaptureWriter(
 
     /**
      * Writes the Inventory and the terminal Close exactly once. `completed` is downgraded to `failed` when frames are
-     * unresolved, so the file never claims a completed take it cannot prove.
+     * unresolved or when no video was written.
      */
     @Synchronized fun close(outcome: String, failureReason: String?, sensors: List<Map<String, Any?>>, calibrations: List<Map<String, Any?>>): Map<String, Any?> {
         checkOpen()
         check(!closed) { "Close already written" }
         require(outcome in setOf("completed", "failed", "aborted")) { "Unsupported outcome" }
         val unresolved = ledger.unresolvedIds().size.toLong()
-        var finalOutcome = outcome
-        var reason = failureReason
-        if (finalOutcome == "completed" && unresolved != 0L) { finalOutcome = "failed"; reason = reason ?: "unresolved_frames" }
-        if (finalOutcome == "failed" && reason == null) reason = "capture_failed"
+        val completionFailure = when {
+            outcome != "completed" -> null
+            unresolved != 0L -> "unresolved_frames"
+            videoMessages == 0L -> "no_rgb_frames_written"
+            else -> null
+        }
+        val finalOutcome = if (completionFailure == null) outcome else "failed"
+        val reason = failureReason ?: completionFailure ?: "capture_failed".takeIf { finalOutcome == "failed" }
         json(CaptureProtocol.INVENTORY, mapOf("recording_id" to recordingId, "sensors" to sensors, "calibrations" to calibrations))
         val stats = ledger.stats()
         val close = mapOf(

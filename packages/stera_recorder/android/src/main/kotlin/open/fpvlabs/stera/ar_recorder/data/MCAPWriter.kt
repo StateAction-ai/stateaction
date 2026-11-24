@@ -2,11 +2,13 @@ package open.fpvlabs.stera.ar_recorder.data
 
 import java.io.File
 import open.fpvlabs.stera.ar_recorder.finalization.AtomicFiles
+import open.fpvlabs.stera.ar_recorder.diagnostics.captureTrace
 import open.fpvlabs.stera.source_integrity.AndroidFdOps
 import java.io.FileOutputStream
 import java.io.BufferedOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.zip.CRC32
 
 /**
  * MCAP file writer with chunked mode for indexed output.
@@ -36,6 +38,9 @@ class MCAPWriter {
 
         /** Flush chunk when buffer exceeds 1 MB. */
         const val CHUNK_FLUSH_THRESHOLD = 1_048_576
+        const val RECORD_HEADER_BYTES = 9
+        const val CHUNK_CONTENT_HEADER_BYTES = 40
+        const val REUSABLE_CHUNK_BYTES = 2 * CHUNK_FLUSH_THRESHOLD
         const val MAX_MESSAGE_BYTES = 16 * 1024 * 1024 - 31
         const val MAX_CHUNK_INDEX_COUNT = 65_536
     }
@@ -92,6 +97,7 @@ class MCAPWriter {
     // Chunk buffering
     private var chunkBuffer = mutableListOf<ByteArray>()
     private var chunkBufferSize = 0
+    private var chunkWriteBuffer: ByteArray? = null
     private var chunkStartTime: Long = Long.MAX_VALUE
     private var chunkEndTime: Long = 0
     private val chunkMessageOffsets = mutableMapOf<Int, MutableList<MessageIndexEntry>>()
@@ -104,7 +110,7 @@ class MCAPWriter {
     private var isFinalized = false
     private var finishFailure: Exception? = null
     /** CRC-32 of every byte before DataEnd (the official readers' data_section_crc definition). */
-    private val dataSectionCrc = java.util.zip.CRC32()
+    private val dataSectionCrc = CRC32()
     private var dataSectionOpen = true
 
     /** Opens an MCAP file for writing. */
@@ -366,6 +372,8 @@ class MCAPWriter {
             try { os.close() } catch (close: Exception) { e.addSuppressed(close) }
             outputStream = null
             throw e
+        } finally {
+            chunkWriteBuffer = null
         }
     }
 
@@ -373,31 +381,37 @@ class MCAPWriter {
 
     private fun flushChunk() {
         if (chunkBufferSize == 0) return
-        check(chunkIndices.size < MAX_CHUNK_INDEX_COUNT) { "MCAP chunk index bound exhausted; stop recording" }
+        captureTrace("MCAP chunk flush") { writeChunk() }
+    }
 
+    private fun writeChunk() {
+        check(chunkIndices.size < MAX_CHUNK_INDEX_COUNT) { "MCAP chunk index bound exhausted; stop recording" }
         val uncompressedSize = chunkBufferSize.toLong()
         val chunkRecordStart = offset
-
-        // Concatenate buffered records
-        val allRecords = ByteArray(chunkBufferSize)
-        var pos = 0
+        val payloadStart = RECORD_HEADER_BYTES + CHUNK_CONTENT_HEADER_BYTES
+        val recordLength = payloadStart + chunkBufferSize
+        val chunk = if (chunkBufferSize <= REUSABLE_CHUNK_BYTES) {
+            chunkWriteBuffer ?: ByteArray(payloadStart + REUSABLE_CHUNK_BYTES).also { chunkWriteBuffer = it }
+        } else {
+            ByteArray(recordLength)
+        }
+        var pos = payloadStart
         for (record in chunkBuffer) {
-            System.arraycopy(record, 0, allRecords, pos, record.size)
+            record.copyInto(chunk, destinationOffset = pos)
             pos += record.size
         }
-
-        // Build Chunk record content
-        val chunkContent = MCAPBuffer()
-        chunkContent.writeUInt64(chunkStartTime)
-        chunkContent.writeUInt64(chunkEndTime)
-        chunkContent.writeUInt64(uncompressedSize) // uncompressed_size
-        chunkContent.writeUInt32(java.util.zip.CRC32().apply { update(allRecords) }.value.toInt()) // uncompressed_crc
-        chunkContent.writeString("") // compression: empty = none
-        // records: length-prefixed bytes
-        chunkContent.writeUInt64(uncompressedSize)
-        chunkContent.writeRawBytes(allRecords)
-
-        writeRecord(OP_CHUNK, chunkContent.toByteArray())
+        val chunkCrc = CRC32().apply { update(chunk, payloadStart, chunkBufferSize) }
+        ByteBuffer.wrap(chunk).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put(OP_CHUNK)
+            putLong(CHUNK_CONTENT_HEADER_BYTES + uncompressedSize)
+            putLong(chunkStartTime)
+            putLong(chunkEndTime)
+            putLong(uncompressedSize)
+            putInt(chunkCrc.value.toInt())
+            putInt(0) // empty compression name
+            putLong(uncompressedSize)
+        }
+        writeRaw(chunk, recordLength)
         val chunkRecordLength = offset - chunkRecordStart
 
         // Write MessageIndex records (one per channel in this chunk)
@@ -407,19 +421,18 @@ class MCAPWriter {
         for ((channelId, entries) in chunkMessageOffsets.toSortedMap()) {
             messageIndexOffsets[channelId] = offset
 
-            val indexContent = MCAPBuffer()
-            indexContent.writeUInt16(channelId)
-            // records: array of (log_time, offset) tuples, length-prefixed
-            val entriesBuf = MCAPBuffer()
+            val entriesLength = entries.size * 16
+            val contentLength = 2 + 4 + entriesLength
+            val indexRecord = ByteBuffer.allocate(RECORD_HEADER_BYTES + contentLength).order(ByteOrder.LITTLE_ENDIAN)
+            indexRecord.put(OP_MESSAGE_INDEX)
+            indexRecord.putLong(contentLength.toLong())
+            indexRecord.putShort(channelId.toShort())
+            indexRecord.putInt(entriesLength)
             for (entry in entries) {
-                entriesBuf.writeUInt64(entry.logTime)
-                entriesBuf.writeUInt64(entry.offset)
+                indexRecord.putLong(entry.logTime)
+                indexRecord.putLong(entry.offset)
             }
-            val entriesBytes = entriesBuf.toByteArray()
-            indexContent.writeUInt32(entriesBytes.size)
-            indexContent.writeRawBytes(entriesBytes)
-
-            writeRecord(OP_MESSAGE_INDEX, indexContent.toByteArray())
+            writeRaw(indexRecord.array())
         }
         val messageIndexLength = offset - messageIndexStart
 
@@ -524,10 +537,10 @@ class MCAPWriter {
         writeRaw(buildRecord(opcode, content))
     }
 
-    private fun writeRaw(data: ByteArray) {
-        checkNotNull(outputStream) { "MCAP writer is closed" }.write(data)
-        if (dataSectionOpen) dataSectionCrc.update(data)
-        offset += data.size
+    private fun writeRaw(data: ByteArray, size: Int = data.size) {
+        checkNotNull(outputStream) { "MCAP writer is closed" }.write(data, 0, size)
+        if (dataSectionOpen) dataSectionCrc.update(data, 0, size)
+        offset += size
     }
 }
 
