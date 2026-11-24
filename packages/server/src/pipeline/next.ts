@@ -134,7 +134,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
      * has no recipe. Stage runs are written by the stage runner (SA-91).
      */
     recipeRun: async (
-      detail: PipelineDetail,
+      detail: Pick<PipelineDetail, "jobId" | "hasRecipe">,
     ): Promise<DagRunWithLineage | null> => {
       if (!detail.jobId || !detail.hasRecipe) return null;
       try {
@@ -245,7 +245,7 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
      */
     diagnostics: async (
       staffUserId: string,
-      detail: PipelineDetail,
+      detail: Pick<PipelineDetail, "jobId">,
     ): Promise<Partial<Record<Stage, DiagnosticLink[]>>> => {
       if (!detail.jobId) return {};
       const out: Partial<Record<Stage, DiagnosticLink[]>> = {};
