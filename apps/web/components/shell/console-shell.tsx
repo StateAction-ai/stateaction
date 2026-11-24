@@ -21,6 +21,7 @@ function sectionTitle(
   items: { href: string; label: string }[],
 ): string {
   if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/recordings/")) return "Recordings";
   return (
     items.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`))
       ?.label ?? ""

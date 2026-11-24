@@ -17,11 +17,13 @@ export function ImportedStages({
   recordingId,
   jobId,
   disabledReason,
+  showReuse = false,
 }: {
   cached: CachedImport;
   recordingId?: string;
   jobId?: string | null;
   disabledReason?: string | undefined;
+  showReuse?: boolean;
 }) {
   const { attribution, counts, evidence } = cached;
   const recordedDuration = (stage: Record<string, unknown>) => {
@@ -68,7 +70,7 @@ export function ImportedStages({
                   {label} · {count}
                 </span>{" "}
                 <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-ink">
-                  Imported
+                  {showReuse ? "Reused" : "Imported"}
                 </span>
               </summary>
               <dl className="mt-3 grid grid-cols-1 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3 text-sm">

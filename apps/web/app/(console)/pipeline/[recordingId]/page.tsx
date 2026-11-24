@@ -142,6 +142,13 @@ export default async function PipelineRecordingPage({
         {detail.source.size ? " · " + detail.source.size : ""}
       </p>
 
+      <Link
+        href={`/recordings/${detail.id}`}
+        className="mb-5 inline-flex min-h-9 items-center font-semibold text-brand-ink underline"
+      >
+        Original video and clips
+      </Link>
+
       {run?.derivedFromJobId ? (
         <p
           className="mb-5 rounded-lg border border-[#d8e4fa] bg-brand-soft px-4 py-2 text-sm text-brand-ink"
