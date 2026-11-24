@@ -18,13 +18,14 @@ data class EnvSnapshot(
     val networkAvailable: Boolean,
     val unmetered: Boolean,
     val charging: Boolean,
+    val wifi: Boolean = unmetered,
 )
 
 /** Why the policy blocks an effect, or null. Reasons are stable wire strings. */
 fun TransferPolicy.blockReason(env: EnvSnapshot): String? = when {
     capturePaused -> "capture_paused"
     !env.networkAvailable -> "no_network"
-    requireUnmetered && !env.unmetered -> "unmetered_required"
+    requireUnmetered && (!env.wifi || !env.unmetered) -> "unmetered_required"
     requireCharging && !env.charging -> "charging_required"
     else -> null
 }
@@ -41,6 +42,12 @@ data class GateState(
     val generation: Long = 0,
     val sessionRevision: Long = 0,
     val policy: TransferPolicy = TransferPolicy(),
+    /**
+     * The owner the persisted relaxed [policy] flags belong to. The flags are honoured only while this equals the
+     * currently bound [ownerId]; otherwise (unbound, fenced, another owner, legacy file without it) the effective
+     * policy is the restrictive default. Never set for a different owner than the one bound when it was written.
+     */
+    val policyOwner: String? = null,
     /**
      * Highest Dart session revision that a logout/sign-in start declared dead. Persisted, never lowered, not reset
      * by unbind: a bind whose revision is <= this is a stale queued push and is refused.
@@ -156,6 +163,10 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
             out = out.copy(ownerId = null, backendOrigin = null, generation = out.generation + 1, sessionRevision = 0)
         }
         if (captureFence.get() > captureCleared.get()) out = out.copy(policy = out.policy.copy(capturePaused = true))
+        // Relaxed flags are owner-scoped: anything but an exact match with the (unfenced) bound owner is restrictive.
+        if (out.ownerId == null || out.policyOwner != out.ownerId) {
+            out = out.copy(policy = out.policy.copy(requireUnmetered = true, requireCharging = true))
+        }
         return out
     }
 
@@ -208,6 +219,9 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
                 ownerId = ownerId, backendOrigin = origin,
                 generation = if (same) cur.generation else cur.generation + 1,
                 sessionRevision = if (same) maxOf(cur.sessionRevision, sessionRevision) else sessionRevision,
+                // A new owner/origin never inherits the previous owner's relaxed choice.
+                policy = if (same) cur.policy else cur.policy.copy(requireUnmetered = true, requireCharging = true),
+                policyOwner = if (same) cur.policyOwner else null,
             ),
         )
     }
@@ -223,6 +237,7 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
         commit(
             cur.copy(
                 ownerId = null, backendOrigin = null, generation = cur.generation + 1, sessionRevision = 0,
+                policy = cur.policy.copy(requireUnmetered = true, requireCharging = true), policyOwner = null,
                 invalidationFloor = maxOf(cur.invalidationFloor, fenceRevision, floorMem.get()),
             ),
         )
@@ -234,9 +249,30 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
         if (ownerFence.get() == seq) dropMarker('u')
     }
 
-    fun setPolicy(requireUnmetered: Boolean, requireCharging: Boolean): GateState = synchronized(lock) {
+    /**
+     * Owner-scoped transfer policy. Accepted only while [expectedOwner] is the currently bound, unfenced owner (and
+     * [expectedGeneration], when given, is still the gate generation); anything else throws [PolicyRejectedException]
+     * and changes nothing, so a stale or queued call can never alter another owner's (or a signed-out) policy.
+     * Returns the effective (overlaid) state.
+     */
+    fun setPolicy(
+        expectedOwner: String,
+        requireUnmetered: Boolean,
+        requireCharging: Boolean,
+        expectedGeneration: Long? = null,
+        expectedFenceSeq: Long = ownerFence.get(),
+    ): GateState = synchronized(lock) {
+        if (expectedFenceSeq != ownerFence.get() || ownerFenced()) throw PolicyRejectedException("owner_changed")
         val cur = current()
-        commit(cur.copy(policy = cur.policy.copy(requireUnmetered = requireUnmetered, requireCharging = requireCharging)))
+        if (cur.ownerId != expectedOwner) throw PolicyRejectedException("owner_changed")
+        if (expectedGeneration != null && expectedGeneration != cur.generation) throw PolicyRejectedException("owner_changed")
+        commit(
+            cur.copy(
+                policy = cur.policy.copy(requireUnmetered = requireUnmetered, requireCharging = requireCharging),
+                policyOwner = expectedOwner,
+            ),
+        )
+        overlay(published!!)
     }
 
     /**
@@ -268,7 +304,8 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
             .put("backendOrigin", s.backendOrigin ?: JSONObject.NULL)
             .put("generation", s.generation).put("sessionRevision", s.sessionRevision)
             .put("requireUnmetered", s.policy.requireUnmetered).put("requireCharging", s.policy.requireCharging)
-            .put("capturePaused", s.policy.capturePaused).put("invalidationFloor", s.invalidationFloor).toString()
+            .put("capturePaused", s.policy.capturePaused).put("invalidationFloor", s.invalidationFloor)
+            .put("policyOwner", s.policyOwner ?: JSONObject.NULL).toString()
 
         fun decode(text: String): GateState = try {
             val o = JSONObject(text)
@@ -279,6 +316,8 @@ class GateStore(private val file: File, private val dirSync: DirectorySync = NoD
                 generation = o.getLong("generation"), sessionRevision = o.getLong("sessionRevision"),
                 policy = TransferPolicy(o.getBoolean("requireUnmetered"), o.getBoolean("requireCharging"), o.getBoolean("capturePaused")),
                 invalidationFloor = o.optLong("invalidationFloor", 0),
+                // Absent in a legacy file: unbound policy, so the restrictive default applies.
+                policyOwner = if (!o.has("policyOwner") || o.isNull("policyOwner")) null else o.getString("policyOwner"),
             )
         } catch (e: JSONException) {
             // Fail closed: an unreadable gate means nothing may transfer. Callers surface this as blocked.
@@ -310,3 +349,6 @@ object Backoff {
 
 /** A normal operation raced an owner invalidation that arrived after it; it must not install anything. */
 class SupersededException : RuntimeException("superseded by owner invalidation")
+
+/** A policy write named an owner/generation that is no longer the bound one; nothing was changed. */
+class PolicyRejectedException(val code: String) : RuntimeException("policy write rejected: $code")

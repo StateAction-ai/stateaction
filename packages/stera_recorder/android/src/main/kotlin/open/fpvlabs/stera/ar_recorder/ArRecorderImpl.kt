@@ -839,16 +839,19 @@ class ArRecorderImpl(
         failure?.let { throw IllegalStateException("Writer finalization barrier failed", it) }
     }
 
-    override fun stopRecording(): Map<String, Any?> {
-        return try {
+    private val stopLock = Any()
+
+    override fun stopRecording(interruption: String?): Map<String, Any?> {
+        val stopReason = synchronized(stopLock) {
             if (!recordingStateManager.canStop(currentState)) {
                 return createErrorResult("Not recording. Current state: ${currentState.name}")
             }
-
-            println("📷 ArRecorderImpl: Stopping recording...")
             currentState = ArRecordingState.STOPPING
+            (pendingStopReason ?: interruption).also { pendingStopReason = it }
+        }
+        return try {
+            println("📷 ArRecorderImpl: Stopping recording...")
             val budget = FinalizationBudget(nowMs = { SystemClock.elapsedRealtime() })
-            val stopReason = pendingStopReason
             // Gate the producers first (this waits for an in-flight producer). The STOPPING journal write below can
             // fail with I/O errors; until the writer barrier completes, any exception must leave the uncertain latch set.
             writerQuiet = false
@@ -1052,7 +1055,11 @@ class ArRecorderImpl(
             val captureOutcome = if (activeRecordingConfig.isH264) {
                 CaptureOutcomePolicy.captureOutcome(evidence?.get("close_outcome") as? String, stopReason,
                     (evidence?.get("unresolved") as? Number)?.toLong() ?: 0L, datasetWriter.getWriteFailure(), captureFailure)
-            } else if (captureFailure == null) "completed" else "failed"
+            } else when {
+                captureFailure != null -> "failed"
+                stopReason != null -> "interrupted"
+                else -> "completed"
+            }
             val recoveryState = CaptureOutcomePolicy.recoveryState(containerState, captureOutcome)
             val finalizationToken = java.util.UUID.randomUUID().toString()
             fun matchesFinalizationToken(bytes: ByteArray): Boolean =
@@ -1236,7 +1243,8 @@ class ArRecorderImpl(
             "lowQualityReason" to lowQualityReason,
             "upscaleApplied" to upscaleApplied,
             "error" to lastErrorMessage,
-            "captureStopReason" to motionCapture.stopReason
+            "captureStopReason" to motionCapture.stopReason,
+            "interruptionReason" to pendingStopReason
         )
     }
 

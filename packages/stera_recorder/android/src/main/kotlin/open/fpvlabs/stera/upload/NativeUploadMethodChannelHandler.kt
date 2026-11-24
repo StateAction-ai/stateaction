@@ -221,8 +221,19 @@ class NativeUploadMethodChannelHandler(
             "verifyOwner" -> { admit(receipt, "owner_changed"); verifyOwner(rt, BridgeArgs.ownerId(m)) }
             "exportSession" -> exportSession(rt)
             "setPolicy" -> {
-                rt.setPolicy(BridgeArgs.bool(m, "requireUnmetered"), BridgeArgs.bool(m, "requireCharging"))
-                ok()
+                // Owner-scoped: a call that arrived before a logout/unbind, or names another owner, is refused.
+                val seq = admit(receipt, "owner_changed")
+                val gen = if (m["ownerGeneration"] == null) null else BridgeArgs.dec(m, "ownerGeneration")
+                val g = try {
+                    rt.setPolicy(BridgeArgs.ownerId(m), BridgeArgs.bool(m, "requireUnmetered"), BridgeArgs.bool(m, "requireCharging"), gen, seq)
+                } catch (e: PolicyRejectedException) {
+                    throw Failure(e.code, "policy write refused")
+                }
+                ok(
+                    "requireUnmetered" to g.policy.requireUnmetered,
+                    "requireCharging" to g.policy.requireCharging,
+                    "ownerGeneration" to g.generation.toString(),
+                )
             }
             "enqueue" -> {
                 val r = rt.enqueue(BridgeArgs.enqueue(m), admit(receipt, "owner_changed"))
@@ -232,7 +243,11 @@ class NativeUploadMethodChannelHandler(
             "resume" -> { admit(receipt, "owner_changed"); resume(rt, BridgeArgs.optStr(m, "taskKey", 64)) }
             "pause" -> { rt.pause(BridgeArgs.optStr(m, "taskKey", 64)); ok() }
             "cancel" -> ok("cancelled" to rt.cancel(BridgeArgs.str(m, "taskKey", 64)))
-            "status" -> statusView(rt.gate.read(), BridgeArgs.ownerId(m)) { rt.tasksFor(it) }
+            "status" -> {
+                val g = rt.gate.read()
+                statusView(g, BridgeArgs.ownerId(m)) { rt.tasksFor(it) } +
+                    ("policyBlockReason" to g.policy.blockReason(AndroidEnvProbe(context) { null }.snapshot()))
+            }
             else -> throw Failure("not_implemented", "unknown method")
         }
     }

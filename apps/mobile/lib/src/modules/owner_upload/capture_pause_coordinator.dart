@@ -99,6 +99,16 @@ class CapturePauseCoordinator implements CapturePauseHook {
     }
   }
 
+  /// A capture may be running or finishing: the pause is held, or the recorder
+  /// is recording/stopping. Fails closed for cleanup.
+  bool get captureMayBeActive {
+    final provider = _provider;
+    return _held ||
+        (provider != null &&
+            (provider.isRecording ||
+                provider.state == ArRecorderState.stopping));
+  }
+
   @visibleForTesting
   bool get holdingPause => _held;
 }

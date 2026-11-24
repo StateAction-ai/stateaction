@@ -22,6 +22,9 @@ class FakeNativeUploadPort implements NativeUploadPort {
   final List<({String owner, int revision, List<String> cookieNames})> binds =
       [];
   bool failPause = false;
+
+  /// Makes pause() itself fail (the capture-active failure above is separate).
+  bool failPauseCall = false;
   final List<int?> fences = [];
 
   /// While set, bindOwner blocks (an in-flight native call).
@@ -30,6 +33,20 @@ class FakeNativeUploadPort implements NativeUploadPort {
   /// The next unbindOwner call fails (unacknowledged invalidation).
   bool failNextUnbind = false;
   bool captureActive = false;
+
+  /// Owner native has bound and the relaxed flags it holds for that owner
+  /// only. Like the real native gate: another owner's bind or an unbind puts
+  /// the defaults back, and a write for any other owner is refused.
+  String? boundOwner;
+  bool requireUnmetered = true;
+  bool requireCharging = true;
+  final List<({String owner, bool unmetered, bool charging})> policies = [];
+
+  /// Scripted gates for delayed-completion races, and one-shot failures.
+  Completer<void>? holdSetPolicy;
+  Completer<void>? holdStatus;
+  int failSetPolicyTimes = 0;
+  int setPolicyAttempts = 0;
 
   @override
   Future<NativeUploadCapabilities> capabilities() async {
@@ -53,6 +70,13 @@ class FakeNativeUploadPort implements NativeUploadPort {
     calls.add("bind:$ownerId");
     final hold = holdBind;
     if (hold != null) await hold.future;
+    if (acceptBind) {
+      if (boundOwner != ownerId) {
+        requireUnmetered = true;
+        requireCharging = true;
+      }
+      boundOwner = ownerId;
+    }
     binds.add((
       owner: ownerId,
       revision: sessionRevision,
@@ -83,6 +107,9 @@ class FakeNativeUploadPort implements NativeUploadPort {
       throw const NativeUploadException("native_error");
     }
     acceptBind = true;
+    boundOwner = null;
+    requireUnmetered = true;
+    requireCharging = true;
   }
 
   @override
@@ -90,6 +117,36 @@ class FakeNativeUploadPort implements NativeUploadPort {
     calls.add("capture:$active");
     if (failPause) throw const NativeUploadException("io_error");
     captureActive = active;
+  }
+
+  @override
+  Future<NativePolicyResult> setPolicy({
+    required String ownerId,
+    required bool requireUnmetered,
+    required bool requireCharging,
+  }) async {
+    setPolicyAttempts++;
+    final hold = holdSetPolicy;
+    if (hold != null) await hold.future;
+    if (failSetPolicyTimes > 0) {
+      failSetPolicyTimes--;
+      throw const NativeUploadException("io_error");
+    }
+    if (boundOwner != ownerId) {
+      throw const NativeUploadException("owner_changed");
+    }
+    this.requireUnmetered = requireUnmetered;
+    this.requireCharging = requireCharging;
+    policies.add((
+      owner: ownerId,
+      unmetered: requireUnmetered,
+      charging: requireCharging,
+    ));
+    return NativePolicyResult(
+      requireUnmetered: requireUnmetered,
+      requireCharging: requireCharging,
+      ownerGeneration: ownerGeneration,
+    );
   }
 
   @override
@@ -136,16 +193,27 @@ class FakeNativeUploadPort implements NativeUploadPort {
   }
 
   @override
-  Future<void> pause({String? taskKey}) async => calls.add("pause");
+  Future<void> pause({String? taskKey}) async {
+    calls.add("pause");
+    if (failPauseCall) throw const NativeUploadException("io_error");
+  }
 
   @override
   Future<NativeStatus> status(String ownerId) async {
     calls.add("status");
+    final hold = holdStatus;
+    // The reply reflects native at the moment it was read, then arrives late.
+    final snapshot = (
+      bound: boundOwner,
+      unmetered: requireUnmetered,
+      charging: requireCharging,
+    );
+    if (hold != null) await hold.future;
     return NativeStatus(
       ownerGeneration: ownerGeneration,
-      boundOwnerId: ownerId,
-      requireUnmetered: false,
-      requireCharging: false,
+      boundOwnerId: snapshot.bound,
+      requireUnmetered: snapshot.bound == null ? true : snapshot.unmetered,
+      requireCharging: snapshot.bound == null ? true : snapshot.charging,
       capturePaused: captureActive,
       tasks: tasks.values.toList(),
     );

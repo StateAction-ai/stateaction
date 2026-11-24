@@ -649,7 +649,7 @@ const UI = {
   resume: /^Resume$/,
   uploading:
     /^Uploading…$|^Retrying shortly…$|^Waiting for a suitable connection\.$/,
-  received: /^Uploaded\. The server is verifying it\.$/,
+  received: /^Upload complete$/,
   otherAccount: /^This recording belongs to another account\.$/,
   startRecording: /^Start Recording$/,
 };

@@ -30,11 +30,11 @@ abstract final class NativeSourceGuard {
 
   /// A user-visible reason the explicit "Delete recording" action must not
   /// remove this session, or null when the legacy path may proceed. Fails
-  /// closed and has NO release path: a transport that reached the server is not
-  /// SHA verification, and even verified files do not establish the original
-  /// owner's plus explicit staff cloud-copy confirmation that local cleanup
-  /// requires (SA-23, not implemented). Originals, journal and manifest of a
-  /// natively owned session therefore stay untouched in every upload state.
+  /// closed and has NO release path: neither the ordinary Delete nor any bulk
+  /// or legacy deletion can lift it, in any upload state. The only removal of a
+  /// natively owned session's sealed originals is the dedicated, explicit,
+  /// proof-bound `SourceCleanupService` operation (SA-23), which does not go
+  /// through this guard and never touches the journal or manifest.
   static String? deleteBlockReason(String sessionDirName) {
     // Deletion-specific guard: with native mode on, EVERY AR capture is
     // protected, including a just-recorded take that has no upload journal yet

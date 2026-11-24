@@ -3,45 +3,29 @@ import "dart:developer" as dev;
 
 import "package:battery_plus/battery_plus.dart";
 
-/// Watches the device battery level while an AR recording is active and fires
-/// callbacks as it crosses key thresholds.
-///
-/// - Plays a low-battery warning the first time the level drops to [30],
-///   again at [25], and a final time at [20] percent (via
-///   [onLowBatteryWarning]).
-/// - Requests an auto-stop the moment the level reaches [criticalThreshold]
-///   (19%) or below (via [onCriticalBattery]).
-///
-/// `battery_plus` exposes the level only as a one-shot future (there is no
-/// level-change stream), so we poll on a fixed cadence. Battery drains slowly,
-/// so a 20 s cadence is responsive enough while staying cheap.
+/// Polls the battery during capture and warns at 30%, 25%, and 20%.
 class BatteryMonitorService {
   BatteryMonitorService({
     required this.onLowBatteryWarning,
-    required this.onCriticalBattery,
+    this.onCriticalBattery,
   });
 
-  /// Invoked once per crossed warning threshold (30%, 25%, then 20%).
+  /// Issues one warning per poll that crosses one or more new thresholds.
   final Future<void> Function() onLowBatteryWarning;
 
-  /// Invoked when the level reaches [criticalThreshold] or below. The monitor
-  /// stops itself after firing so it never fires twice.
-  final Future<void> Function() onCriticalBattery;
+  /// Optional critical-battery stop for the iOS recorder.
+  final Future<void> Function()? onCriticalBattery;
 
   static const List<int> _warningThresholds = [30, 25, 20];
 
-  /// Auto-stop level. All user-facing copy advertises 20% as the cutoff; the
-  /// actual stop fires one point below it so a take still survives at exactly
-  /// 20% and the advertised threshold reads as the hard limit.
+  /// Stop threshold for callers that supply [onCriticalBattery].
   static const int criticalThreshold = 19;
   static const Duration _pollInterval = Duration(seconds: 20);
 
-  /// A recording may not be *started* below this level (the device is too close
-  /// to the [criticalThreshold] auto-stop to be worth beginning).
+  /// Minimum level for the iOS start preflight.
   static const int minStartThreshold = 22;
 
-  /// Starting a recording at or below this level is allowed but warns the user
-  /// audibly (via the "warn about low battery" cue).
+  /// The iOS start preflight plays an audio warning below this level.
   static const int warnStartThreshold = 30;
 
   /// One-shot read of the current battery level (0–100), or null if the
@@ -59,7 +43,6 @@ class BatteryMonitorService {
   final Battery _battery = Battery();
   Timer? _timer;
   bool _running = false;
-  bool _critical = false;
   final Set<int> _firedWarnings = <int>{};
 
   bool get isRunning => _running;
@@ -70,10 +53,8 @@ class BatteryMonitorService {
   void start() {
     if (_running) return;
     _running = true;
-    _critical = false;
     _firedWarnings.clear();
     dev.log("BatteryMonitorService: started");
-    // Check immediately, then on the poll cadence.
     unawaited(_check());
     _timer = Timer.periodic(_pollInterval, (_) => unawaited(_check()));
   }
@@ -98,20 +79,14 @@ class BatteryMonitorService {
     }
     if (!_running) return;
 
-    if (level <= criticalThreshold) {
-      if (_critical) return;
-      _critical = true;
+    final onCritical = onCriticalBattery;
+    if (onCritical != null && level <= criticalThreshold) {
       dev.log("BatteryMonitorService: critical at $level% — requesting stop");
-      // Stop polling before firing so a slow stop can't trigger a second call.
       stop();
-      await onCriticalBattery();
+      await onCritical();
       return;
     }
 
-    // Warn once per zone entry, never once-per-threshold. Starting a recording
-    // already below 25% crosses both 30% and 25% in the same check; firing for
-    // each would play the warning twice back-to-back. Collect every newly
-    // crossed threshold, mark them all fired, but sound the cue a single time.
     final crossed = _warningThresholds
         .where((t) => level <= t && !_firedWarnings.contains(t))
         .toList();

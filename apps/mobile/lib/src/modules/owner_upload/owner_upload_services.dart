@@ -1,5 +1,6 @@
 import "dart:io";
 
+import "package:device_info_plus/device_info_plus.dart";
 import "package:flutter/foundation.dart";
 import "package:path/path.dart" as p;
 import "package:path_provider/path_provider.dart";
@@ -12,9 +13,12 @@ import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "package:stera/src/modules/owner_upload/native_upload_port.dart";
 import "package:stera/src/modules/owner_upload/owner_control_api.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_controller.dart";
+import "package:stera/src/modules/owner_upload/source_cleanup_service.dart";
+import "package:stera/src/modules/owner_upload/transfer_policy_override.dart";
 import "package:stera/src/modules/source_integrity/android_channel_hash_backend.dart";
 import "package:stera/src/modules/source_integrity/source_sealer.dart";
 import "package:stera/src/modules/source_integrity/stable_hasher.dart";
+import "package:stera/src/services/kv_store/kv_store.dart";
 import "package:permission_handler/permission_handler.dart";
 
 /// Composition root for the owner-bound native uploader. Android only, behind
@@ -61,6 +65,29 @@ class OwnerUploadServices {
     NativeSourceGuard.reset();
   }
 
+  /// Storage only this app can modify, or null when cleanup must stay off:
+  /// Android API 30+ app-specific external files (scoped storage) and the
+  /// app-private journal directory. Everything else (iOS, older Android) is
+  /// unsupported.
+  static Future<List<String>?> _trustedCleanupRoots(Directory journals) async {
+    try {
+      if (!Platform.isAndroid) return null;
+      if ((await DeviceInfoPlugin().androidInfo).version.sdkInt < 30) {
+        return null;
+      }
+      final external = await getExternalStorageDirectory();
+      if (external == null) return null;
+      return verifiedStorageRoots(
+        externalBase: external,
+        sessions: Directory(p.join(external.path, "ar_sessions")),
+        supportBase: await getApplicationSupportDirectory(),
+        journals: journals,
+      );
+    } on Object {
+      return null;
+    }
+  }
+
   static bool get _enabled => AppConfig.ownerNativeUpload && _nativeGate;
 
   /// Builds the services after [AuthServices.initialize]. Never throws: a
@@ -96,26 +123,38 @@ class OwnerUploadServices {
         enabled: () => _enabled,
       )..attach();
       final hasher = StableFileHasher(AndroidChannelHashBackend());
+      final pause = CapturePauseCoordinator(
+        native: native,
+        enabled: () => _enabled,
+      );
+      final api = OwnerControlApi(auth.client);
+      final sealer = SourceSealer(
+        registry: PublishedContracts.registry,
+        hasher: hasher,
+      );
       final controller = OwnerUploadController(
         auth: auth.controller,
         client: auth.client,
         ledger: auth.ledger,
-        api: OwnerControlApi(auth.client),
+        api: api,
         native: native,
         binder: binder,
-        sealer: SourceSealer(
-          registry: PublishedContracts.registry,
-          hasher: hasher,
-        ),
+        sealer: sealer,
         hasher: hasher,
         journalDir: dir,
         enabled: () => _enabled,
+        policyStore: KvStore.prefs == null
+            ? null
+            : TransferPolicyStore(KvStore.prefs!),
         requestNotificationPermission: () async =>
             (await Permission.notification.request()).isGranted,
-      );
-      final pause = CapturePauseCoordinator(
-        native: native,
-        enabled: () => _enabled,
+        captureActive: () => pause.captureMayBeActive,
+        cleanup: SourceCleanupService(
+          api: api,
+          hasher: hasher,
+          sealer: sealer,
+          trustedRoots: () => _trustedCleanupRoots(dir),
+        ),
       );
       final created = _instance = OwnerUploadServices._(
         controller: controller,

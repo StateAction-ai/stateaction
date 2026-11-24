@@ -249,8 +249,8 @@ class Rig(val dir: File, size: Long, epoch: Int = 1) {
     val stats = TransferStats()
     val progress = CopyOnWriteArrayList<TaskState>()
 
-    fun deps(j: UploadJournal = journal) = EngineDeps(
-        journal = j, gate = gate, jar = jar, opener = source.opener, chunks = chunks, env = env, clock = clock,
+    fun deps(j: UploadJournal = journal, chunkStore: ChunkStore = chunks) = EngineDeps(
+        journal = j, gate = gate, jar = jar, opener = source.opener, chunks = chunkStore, env = env, clock = clock,
         random = { 0.0 }, sleep = { ms -> clock.advance(ms); Thread.sleep(1) },
         onProgress = { progress += it.state },
     )

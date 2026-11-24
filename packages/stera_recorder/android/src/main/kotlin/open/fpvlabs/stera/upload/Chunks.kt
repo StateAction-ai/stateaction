@@ -57,7 +57,7 @@ class ChunkStore(
         val now = live.incrementAndGet()
         if (now > maxLive) maxLive = now
         val release = { live.decrementAndGet(); permits.release(); Unit }
-        if (!dir.isDirectory && !dir.mkdirs()) {
+        if (!dir.isDirectory && !dir.mkdirs() && !dir.isDirectory) { // a concurrent worker may have created it
             release()
             throw SourceException("scratch_unavailable", "cannot create the chunk directory")
         }

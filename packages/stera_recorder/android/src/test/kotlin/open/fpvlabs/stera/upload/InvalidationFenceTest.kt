@@ -99,18 +99,55 @@ class InvalidationFenceTest {
         val r = rig()
         r.bindOwner()
         val key = r.enqueue()
-        var snapshot = -1
-        r.backend.afterPut = {
-            if (snapshot < 0) {
-                r.gate.fenceOwner()
-                r.jar.fence()
-                snapshot = r.backend.calls.size
+        val snapshot = java.util.concurrent.atomic.AtomicInteger(-1)
+        val copies = java.util.concurrent.atomic.AtomicInteger()
+        val secondAtCopy = CountDownLatch(1)
+        val fenced = CountDownLatch(1)
+        val chunks = ChunkStore(File(r.dir, "fence-test-chunks"), {
+            if (copies.incrementAndGet() > 1) {
+                secondAtCopy.countDown()
+                check(fenced.await(5, TimeUnit.SECONDS)) { "First PUT did not establish the fence" }
             }
+            1L shl 40
+        }, reserveBytes = 0)
+        r.backend.afterPut = {
+            check(secondAtCopy.await(5, TimeUnit.SECONDS)) { "Second worker did not reach the chunk copy" }
+            r.gate.fenceOwner()
+            r.jar.fence()
+            snapshot.set(r.backend.calls.size)
+            fenced.countDown()
         }
-        val out = r.run(key)
-        assertEquals(TaskState.BLOCKED_OWNER, out.state)
-        assertTrue(snapshot >= 0)
-        assertEquals("nothing is requested after the fence", emptyList<String>(), r.backend.calls.drop(snapshot))
+        val out = r.run(key, engine = TransferEngine(r.deps(chunkStore = chunks), TransferStats()))
+        // The observed outcome is part of the message so a failure keeps its values.
+        assertEquals("outcome=${out.state}/${out.reason} calls=${r.backend.calls}", TaskState.BLOCKED_OWNER, out.state)
+        assertTrue(snapshot.get() >= 0)
+        assertEquals("nothing is requested after the fence", emptyList<String>(), r.backend.calls.drop(snapshot.get()))
+    }
+
+    /**
+     * Deterministic boundary: the owner is fenced after every worker's guard at the top of its loop but before any
+     * PUT starts (inside the chunk copy, whose free-space probe is the hook). No PUT may reach the provider.
+     */
+    @Test fun aFenceArrivingDuringTheChunkCopyStartsNoPut() {
+        val r = rig()
+        r.bindOwner()
+        val key = r.enqueue()
+        val fenceOnce = Any()
+        var fenced = false
+        // Created up front so the two workers never race on mkdirs: the only thing under test is the fence.
+        File(r.dir, "chunks2").mkdirs()
+        val chunks = ChunkStore(File(r.dir, "chunks2"), {
+            synchronized(fenceOnce) {
+                if (!fenced) { fenced = true; r.gate.fenceOwner(); r.jar.fence() }
+            }
+            1L shl 40
+        }, reserveBytes = 0)
+        val engine = TransferEngine(r.deps(chunkStore = chunks), TransferStats())
+        val out = r.run(key, engine = engine)
+        assertTrue("the hook ran", fenced)
+        assertEquals("no PUT may start after the fence: outcome=${out.state}/${out.reason} calls=${r.backend.calls}", emptyList<String>(), r.backend.calls.filter { it.startsWith("PUT") })
+        assertEquals("outcome=${out.state}/${out.reason}", TaskState.BLOCKED_OWNER, out.state)
+        assertTrue("the interrupted parts are retried, not lost", r.journal.get(key)!!.parts.none { it.state == PartState.LANDED || it.state == PartState.REPORTED })
     }
 
     @Test fun aLateCookieResponseAfterTheFenceIsDropped() {
@@ -315,5 +352,29 @@ class InvalidationFenceTest {
         gate.finishUnbind(retry)
         assertFalse(gate.ownerFenced())
         assertFalse(markerOf(f).exists())
+    }
+
+    /** Two workers first-touching a missing scratch directory at once must both get a chunk (mkdirs race). */
+    @Test fun concurrentFirstUseOfTheScratchDirectoryNeverFailsAWorker() {
+        repeat(20) { round ->
+            val r = rig()
+            val dir = File(r.dir, "fresh-$round")
+            val store = ChunkStore(dir, { 1L shl 40 }, reserveBytes = 0)
+            val source = r.source.opener.open("/session", "recording.mcap", r.source.baseIdentity)
+            val barrier = java.util.concurrent.CyclicBarrier(2)
+            val cancel = CancelToken()
+            val jobs = (1..2).map { part ->
+                pool.submit<Throwable?> {
+                    barrier.await(5, TimeUnit.SECONDS)
+                    try {
+                        store.extract(source, r.source.baseIdentity, r.plan, part, cancel).close()
+                        null
+                    } catch (t: Throwable) {
+                        t
+                    }
+                }
+            }
+            for (j in jobs) assertNull("round $round: ${j.get(10, TimeUnit.SECONDS)}", j.get(10, TimeUnit.SECONDS))
+        }
     }
 }

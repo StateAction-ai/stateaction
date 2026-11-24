@@ -204,10 +204,11 @@ class NativeUploadOsQualificationTest {
     @Test fun start() {
         val sc = scenario()
         val rt = runtime()
-        bridgeCall("setPolicy", "requireUnmetered" to sc.optBoolean("requireUnmetered"), "requireCharging" to sc.optBoolean("requireCharging"))
         val bound = bind(sc, owner(sc), sc)
         assertEquals("bind: ${bound["reason"]}", true, bound["accepted"])
         assertEquals(true, bridgeCall("verifyOwner", "ownerId" to owner(sc))["verified"])
+        bridgeCall("setPolicy", "ownerId" to owner(sc), "ownerGeneration" to bound["ownerGeneration"],
+            "requireUnmetered" to sc.optBoolean("requireUnmetered"), "requireCharging" to sc.optBoolean("requireCharging"))
         val src = materialize(sc)
         val spec = sc.getJSONObject("source")
         bridgeCall("enqueue", "ownerId" to owner(sc), "ownerGeneration" to bound["ownerGeneration"], "planJson" to sc.getString("planJson"),

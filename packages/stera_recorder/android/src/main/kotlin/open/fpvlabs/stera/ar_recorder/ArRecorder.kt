@@ -56,7 +56,7 @@ interface ArRecorder {
      *         - outputDirectory (String?): Path to the final recording directory
      *         - error (String?): Error message if stop failed
      */
-    fun stopRecording(): Map<String, Any?>
+    fun stopRecording(interruption: String? = null): Map<String, Any?>
 
     /**
      * Gets the current recording state and session information.

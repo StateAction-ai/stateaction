@@ -142,7 +142,15 @@ class AndroidEnvProbe(private val context: Context, private val network: () -> N
         val unmetered = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
         val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         val plugged = battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-        return EnvSnapshot(networkAvailable = up, unmetered = unmetered, charging = plugged != 0)
+        val status = battery?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+        val charging = plugged != 0 &&
+            (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
+        return EnvSnapshot(
+            networkAvailable = up,
+            unmetered = unmetered,
+            charging = charging,
+            wifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true,
+        )
     }
 }
 

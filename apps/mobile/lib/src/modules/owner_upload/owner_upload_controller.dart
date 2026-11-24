@@ -8,11 +8,16 @@ import "package:stera/src/modules/auth/session/auth_http_client.dart";
 import "package:stera/src/modules/auth/session/auth_session_controller.dart";
 import "package:stera/src/modules/capture_ownership/capture_owner_ledger.dart";
 import "package:stera/src/modules/owner_upload/create_request_builder.dart";
+import "package:stera/src/modules/owner_upload/cleanup_proof_identity.dart";
 import "package:stera/src/modules/owner_upload/final_source_evidence.dart";
 import "package:stera/src/modules/owner_upload/native_session_binder.dart";
 import "package:stera/src/modules/owner_upload/native_upload_port.dart";
 import "package:stera/src/modules/owner_upload/owner_control_api.dart";
+import "package:stera/src/modules/owner_upload/source_cleanup_service.dart";
+import "package:stera/src/modules/owner_upload/take_evidence.dart";
 import "package:stera/src/modules/owner_upload/take_upload_view.dart";
+import "package:stera/src/modules/owner_upload/transfer_policy_override.dart";
+import "package:stera/src/modules/owner_upload/upload_wait_reason.dart";
 import "package:stera/src/modules/source_integrity/closed_source_ack.dart";
 import "package:stera/src/modules/source_integrity/session_path.dart";
 import "package:stera/src/modules/source_integrity/source_journal.dart";
@@ -25,6 +30,47 @@ import "package:uuid/uuid.dart";
 class _Stop implements Exception {
   const _Stop(this.view);
   final TakeUploadView view;
+}
+
+/// One owner-checked read of the published recording status.
+class _ServerStatus {
+  const _ServerStatus({
+    required this.owner,
+    required this.recordingId,
+    required this.status,
+    required this.at,
+    this.failures = 0,
+    this.sourceVerified = false,
+    this.uploaded = false,
+  });
+
+  final String owner;
+  final String recordingId;
+  final String? status;
+  final DateTime at;
+  final int failures;
+  final bool sourceVerified;
+  final bool uploaded;
+
+  bool get terminal =>
+      status == "reviewable" || status == "failed" || status == "cancelled";
+}
+
+/// What a take needs to read its server status, captured when its view is
+/// computed (never re-derived from another owner's journal).
+class _StatusTarget {
+  const _StatusTarget(
+    this.owner,
+    this.recordingId,
+    this.clientRecordingId,
+    this.files,
+    this.nativeUploaded,
+  );
+  final String owner;
+  final String recordingId;
+  final String clientRecordingId;
+  final List<ProofFile> files;
+  final bool nativeUploaded;
 }
 
 /// One user-initiated run: everything an awaited step must still match before
@@ -82,8 +128,14 @@ class OwnerUploadController extends ChangeNotifier {
     CreateRequestBuilder builder = const CreateRequestBuilder(),
     DeviceFactsSource device = const PlatformDeviceFactsSource(),
     Future<bool> Function()? requestNotificationPermission,
+    TransferPolicyStore? policyStore,
+    SourceCleanupService? cleanup,
+    bool Function()? captureActive,
     Uuid? uuid,
-  }) : _auth = auth,
+  }) : _cleanup = cleanup,
+       // Unwired means "a capture might be running": cleanup fails closed.
+       _captureActive = captureActive ?? (() => true),
+       _auth = auth,
        _client = client,
        _ledger = ledger,
        _api = api,
@@ -97,6 +149,7 @@ class OwnerUploadController extends ChangeNotifier {
        _builder = builder,
        _device = device,
        _requestNotificationPermission = requestNotificationPermission,
+       _policyStore = policyStore,
        _uuid = uuid ?? const Uuid() {
     binder.addEndingListener(invalidate);
   }
@@ -115,7 +168,10 @@ class OwnerUploadController extends ChangeNotifier {
   final CreateRequestBuilder _builder;
   final DeviceFactsSource _device;
   final Future<bool> Function()? _requestNotificationPermission;
+  final TransferPolicyStore? _policyStore;
   final Uuid _uuid;
+  final SourceCleanupService? _cleanup;
+  final bool Function() _captureActive;
 
   int _epoch = 0;
   HashCancellation _cancel = HashCancellation();
@@ -140,8 +196,406 @@ class OwnerUploadController extends ChangeNotifier {
     _epoch++;
     _cancel.cancel();
     _cancel = HashCancellation();
-    _views.removeWhere((_, v) => v.isBusy);
+    _views.clear();
+    _restartNeeded.clear();
+    // Native drops a relaxed policy by itself on unbind / owner change, so
+    // nothing is "reset" from here (a Dart reset could fail or arrive late).
+    // This only forgets what was confirmed for the previous owner; every
+    // queued policy step re-checks owner and epoch before it mutates native.
+    _policyOwner = null;
+    _policyMessage = null;
+    _serverStatus.clear();
+    _statusTargets.clear();
     notifyListeners();
+  }
+
+  // ----------------------------------------------------------- transfer policy
+
+  Future<void> _policyChain = Future<void>.value();
+  String? _policyOwner;
+  TransferPolicyChoice _confirmed = TransferPolicyChoice.defaults;
+  TransferPolicyChoice? _intent;
+  TransferPolicyPhase _policyPhase = TransferPolicyPhase.loading;
+  String? _policyMessage;
+  int _policyPending = 0;
+  bool _reconcileQueued = false;
+
+  /// Completes when every queued policy step has finished (tests, shutdown).
+  Future<void> get policySettled => _policyChain;
+
+  /// Runs [op] strictly after every earlier policy step: an older slow call
+  /// can never complete after, or overwrite, a newer one.
+  Future<T> _serial<T>(Future<T> Function() op) {
+    final result = _policyChain.then((_) => op());
+    _policyChain = result.then((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  bool _stillCurrent(String owner, int epoch) =>
+      epoch == _epoch && _auth.networkOwnerId == owner;
+
+  /// What the policy controls may show right now: only what native actually
+  /// confirmed for the signed-in owner, never an optimistic guess.
+  TransferPolicyView get policyView {
+    final owner = _auth.networkOwnerId;
+    if (!_enabled() || _policyStore == null || owner == null) {
+      return const TransferPolicyView(
+        phase: TransferPolicyPhase.signedOut,
+        choice: TransferPolicyChoice.defaults,
+      );
+    }
+    if (_policyOwner != owner) {
+      return const TransferPolicyView(
+        phase: TransferPolicyPhase.loading,
+        choice: TransferPolicyChoice.defaults,
+      );
+    }
+    return TransferPolicyView(
+      phase: _policyPending > 0 ? TransferPolicyPhase.loading : _policyPhase,
+      choice: _confirmed,
+      intent: _intent,
+      message: _policyMessage,
+    );
+  }
+
+  /// True while native runs looser than the owner's saved choice (a
+  /// tightening that native did not confirm). Transfers are held, not assumed.
+  bool get _policyBlocksTransfer {
+    final intent = _intent;
+    if (_policyOwner != _auth.networkOwnerId || intent == null) return false;
+    return (_confirmed.requireUnmetered == false && intent.requireUnmetered) ||
+        (_confirmed.requireCharging == false && intent.requireCharging);
+  }
+
+  void _policyState(
+    String owner,
+    int epoch, {
+    required TransferPolicyPhase phase,
+    required TransferPolicyChoice confirmed,
+    TransferPolicyChoice? intent,
+    String? message,
+  }) {
+    if (!_stillCurrent(owner, epoch)) return;
+    _policyOwner = owner;
+    _policyPhase = phase;
+    _confirmed = confirmed;
+    _intent = intent;
+    _policyMessage = message;
+    notifyListeners();
+  }
+
+  /// Makes native run with [want] for [owner]; the single place that mutates
+  /// native policy. Owner and epoch are re-checked immediately before the call.
+  Future<void> _applyNative(
+    String owner,
+    int epoch,
+    TransferPolicyChoice want,
+    NativeStatus? status,
+  ) async {
+    final nativeNow = status != null && status.boundOwnerId == owner
+        ? TransferPolicyChoice(
+            requireUnmetered: status.requireUnmetered,
+            requireCharging: status.requireCharging,
+          )
+        : TransferPolicyChoice.defaults;
+    if (status != null && nativeNow == want) {
+      _policyState(
+        owner,
+        epoch,
+        phase: TransferPolicyPhase.ready,
+        confirmed: want,
+        intent: want,
+      );
+      return;
+    }
+    if (!_stillCurrent(owner, epoch)) return;
+    try {
+      final r = await _native.setPolicy(
+        ownerId: owner,
+        requireUnmetered: want.requireUnmetered,
+        requireCharging: want.requireCharging,
+      );
+      final accepted = TransferPolicyChoice(
+        requireUnmetered: r.requireUnmetered,
+        requireCharging: r.requireCharging,
+      );
+      if (accepted != want) {
+        throw StateError("native accepted a different policy");
+      }
+      _policyState(
+        owner,
+        epoch,
+        phase: TransferPolicyPhase.ready,
+        confirmed: accepted,
+        intent: want,
+      );
+    } on Object {
+      // Native stays on whatever it had: restrictive if it was not bound to
+      // this owner, otherwise the last confirmed value (still shown as the
+      // real state). Retry on the next refresh. If that is looser than the
+      // saved choice, no new upload starts; work already running is only
+      // stopped when the pause call succeeds, so say exactly that.
+      _policyState(
+        owner,
+        epoch,
+        phase: TransferPolicyPhase.unavailable,
+        confirmed: nativeNow,
+        intent: want,
+        message: "Couldn't apply the connection setting yet. Retrying.",
+      );
+      if (_policyBlocksTransfer) {
+        var paused = false;
+        try {
+          await _native.pause();
+          paused = true;
+        } on Object {
+          paused = false;
+        }
+        _policyState(
+          owner,
+          epoch,
+          phase: TransferPolicyPhase.unavailable,
+          confirmed: nativeNow,
+          intent: want,
+          message: paused
+              ? "Couldn't apply the stricter connection setting yet. Uploads "
+                    "are paused until it applies."
+              : "Couldn't apply the stricter connection setting yet. New "
+                    "uploads are held, but transfers already running may "
+                    "continue under your previous setting until it applies.",
+        );
+      }
+    }
+  }
+
+  /// Brings native in line with the owner's saved choice. Everything native
+  /// or stored is read inside the serialized step and owner/epoch are
+  /// re-checked after each await, so a result that arrives after a logout,
+  /// account switch or newer choice is dropped.
+  Future<void> _reconcilePolicy(String owner, int epoch) {
+    final store = _policyStore;
+    if (store == null || _reconcileQueued) return _policyChain;
+    _reconcileQueued = true;
+    return _serial(() async {
+      _reconcileQueued = false;
+      if (!_stillCurrent(owner, epoch)) return;
+      final want = await store.effectiveFor(owner);
+      if (!_stillCurrent(owner, epoch)) return;
+      final NativeStatus status;
+      try {
+        status = await _native.status(owner);
+      } on Object {
+        _policyState(
+          owner,
+          epoch,
+          phase: TransferPolicyPhase.unavailable,
+          confirmed: _policyOwner == owner
+              ? _confirmed
+              : TransferPolicyChoice.defaults,
+          intent: want,
+          message: "Couldn't read the connection setting. Retrying.",
+        );
+        return;
+      }
+      if (!_stillCurrent(owner, epoch)) return;
+      await _applyNative(owner, epoch, want, status);
+    });
+  }
+
+  /// Explicit collector choice for the signed-in owner only. True only when
+  /// it was saved AND native confirmed it; otherwise false and the view says
+  /// why. Nothing is changed for a different owner than the one who asked.
+  Future<bool> setTransferPolicy(TransferPolicyChoice choice) async {
+    final owner = _auth.networkOwnerId;
+    final store = _policyStore;
+    if (owner == null || store == null || !_enabled()) return false;
+    final epoch = _epoch;
+    _policyPending++;
+    notifyListeners();
+    try {
+      return await _serial(() async {
+        if (!_stillCurrent(owner, epoch)) return false;
+        try {
+          await store.save(owner, choice);
+        } on Object {
+          _policyState(
+            owner,
+            epoch,
+            phase: TransferPolicyPhase.unavailable,
+            confirmed: _policyOwner == owner
+                ? _confirmed
+                : TransferPolicyChoice.defaults,
+            intent: _policyOwner == owner ? _intent : null,
+            message: "Couldn't save the connection setting.",
+          );
+          return false;
+        }
+        if (!_stillCurrent(owner, epoch)) return false;
+        NativeStatus? status;
+        try {
+          status = await _native.status(owner);
+        } on Object {
+          status = null;
+        }
+        if (!_stillCurrent(owner, epoch)) return false;
+        await _applyNative(owner, epoch, choice, status);
+        return _stillCurrent(owner, epoch) &&
+            _policyPhase == TransferPolicyPhase.ready &&
+            _confirmed == choice;
+      });
+    } finally {
+      _policyPending--;
+      notifyListeners();
+    }
+  }
+
+  // ------------------------------------------------- server processing status
+
+  static const Set<String> _knownStatuses = {
+    "registered",
+    "uploading",
+    "sealed",
+    "uploaded",
+    "processing",
+    "reviewable",
+    "failed",
+    "cancelled",
+  };
+  static const int _maxStatusReadsPerPump = 3;
+  static const Duration _statusCooldown = Duration(seconds: 15);
+
+  final Map<String, _ServerStatus> _serverStatus = {};
+  final Map<String, _StatusTarget> _statusTargets = {};
+  bool _statusPumping = false;
+
+  TakeEvidence _evidenceFor(String dir, _StatusTarget target) {
+    final entry = _serverStatus[dir];
+    final cached =
+        entry?.owner == target.owner && entry?.recordingId == target.recordingId
+        ? entry
+        : null;
+    final status = cached?.status;
+    return TakeEvidence(
+      uploaded: target.nativeUploaded || cached?.uploaded == true
+          ? Proof.yes
+          : Proof.unknown,
+      sourceVerified: cached?.sourceVerified == true
+          ? Proof.yes
+          : Proof.unknown,
+      processingComplete: status == null
+          ? Proof.unknown
+          : (status == "reviewable" ? Proof.yes : Proof.no),
+      serverStatus: status,
+    );
+  }
+
+  /// Reads the published status of takes whose bytes are all uploaded. One
+  /// pump at a time, a few reads per pump, a cooldown per take (growing after
+  /// a failed read) and no more reads once a terminal status is known.
+  void _pumpServerStatus(int epoch) {
+    if (_statusPumping || _statusTargets.isEmpty) return;
+    _statusPumping = true;
+    _statusPump = (() async {
+      try {
+        var reads = 0;
+        for (final e in _statusTargets.entries.toList()) {
+          if (reads >= _maxStatusReadsPerPump || epoch != _epoch) break;
+          final cached = _serverStatus[e.key];
+          if (cached != null &&
+              cached.owner == e.value.owner &&
+              cached.recordingId == e.value.recordingId &&
+              (cached.terminal ||
+                  DateTime.now().difference(cached.at) <
+                      _statusCooldown * (1 << cached.failures.clamp(0, 4)))) {
+            continue;
+          }
+          reads++;
+          await _readServerStatus(e.key, e.value, epoch);
+        }
+      } finally {
+        _statusPumping = false;
+      }
+    })();
+  }
+
+  Future<void> _statusPump = Future<void>.value();
+
+  /// Completes when the current server-status reads have finished (tests).
+  Future<void> get serverStatusSettled => _statusPump;
+
+  Future<void> _readServerStatus(
+    String dir,
+    _StatusTarget target,
+    int epoch,
+  ) async {
+    bool current(int gen) =>
+        epoch == _epoch &&
+        _auth.networkOwnerId == target.owner &&
+        _client.jar.generation == gen;
+    final gen = _client.jar.generation;
+    if (!current(gen)) return;
+    final failures = _serverStatus[dir]?.failures ?? 0;
+    _ServerStatus failed() => _ServerStatus(
+      owner: target.owner,
+      recordingId: target.recordingId,
+      status: null,
+      at: DateTime.now(),
+      failures: failures + 1,
+    );
+    try {
+      final view = await _api.getRecording(target.recordingId, gen);
+      // A reply that lands after a logout or switch is dropped unseen.
+      if (!current(gen)) return;
+      final status = view["status"];
+      if (view["recordingId"] != target.recordingId ||
+          view["clientRecordingId"] != target.clientRecordingId ||
+          view["ownerUserId"] != target.owner ||
+          status is! String ||
+          !_knownStatuses.contains(status)) {
+        _serverStatus[dir] = failed();
+        return;
+      }
+      final files = view["files"] as List;
+      final byId = {for (final f in files.cast<Map>()) f["fileId"]: f};
+      final transferred = target.files.every((file) {
+        final row = byId[file.fileId];
+        final state = row?["state"];
+        return (state == "completed" || state == "verified") &&
+            file.toWire().entries.every(
+              (field) => row?[field.key] == field.value,
+            );
+      });
+      final verified =
+          transferred &&
+          target.files.every(
+            (file) => byId[file.fileId]?["state"] == "verified",
+          );
+      _serverStatus[dir] = _ServerStatus(
+        sourceVerified: verified,
+        uploaded: transferred,
+        owner: target.owner,
+        recordingId: target.recordingId,
+        status: status,
+        at: DateTime.now(),
+      );
+      final shown = _views[dir];
+      if (shown != null && !_busy.contains(dir)) {
+        final evidence = _evidenceFor(dir, target);
+        if (evidence.uploaded == Proof.yes &&
+            (shown.stage == UploadStage.serverReceived ||
+                shown.stage == UploadStage.needsResume ||
+                shown.stage == UploadStage.ready)) {
+          _views[dir] =
+              (shown.stage == UploadStage.serverReceived
+                      ? shown
+                      : _uploadedView)
+                  .withEvidence(evidence);
+          notifyListeners();
+        }
+      }
+    } on Object {
+      if (current(gen)) _serverStatus[dir] = failed();
+    }
   }
 
   // ---------------------------------------------------------------- status
@@ -151,21 +605,26 @@ class OwnerUploadController extends ChangeNotifier {
   Future<void> refresh(Iterable<RecordingSession> sessions) async {
     if (!_enabled()) return;
     final epoch = _epoch;
-    List<NativeUploadTask>? tasks;
+    NativeStatus? native;
     final owner = _auth.networkOwnerId;
     if (owner != null) {
       try {
-        tasks = (await _native.status(owner)).tasks;
+        native = await _native.status(owner);
+        unawaited(_reconcilePolicy(owner, epoch));
       } on Object {
-        tasks = null;
+        // Status unreadable: show what is known, never invent task state.
       }
     }
     if (epoch != _epoch) return;
     for (final session in sessions) {
       if (_busy.contains(session.directoryName)) continue;
-      _views[session.directoryName] = await _computeView(session, tasks);
-      if (epoch != _epoch) return;
+      final view = await _computeView(session, native, epoch);
+      if (epoch != _epoch || owner != _auth.networkOwnerId) return;
+      if (!_busy.contains(session.directoryName)) {
+        _views[session.directoryName] = view;
+      }
     }
+    _pumpServerStatus(epoch);
     if (kDebugMode) {
       // Debug builds only; counts, stage names and the instance hash only (no
       // ids, paths or credentials).
@@ -178,10 +637,27 @@ class OwnerUploadController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, NativeUploadTask> _currentTasks(
+    Iterable<NativeUploadTask> tasks,
+    String recordingId,
+  ) {
+    final current = <String, NativeUploadTask>{};
+    for (final task in tasks) {
+      if (task.recordingId != recordingId) continue;
+      final previous = current[task.fileId];
+      if (previous == null || task.transportEpoch > previous.transportEpoch) {
+        current[task.fileId] = task;
+      }
+    }
+    return current;
+  }
+
   Future<TakeUploadView> _computeView(
     RecordingSession s,
-    List<NativeUploadTask>? tasks,
+    NativeStatus? native,
+    int epoch,
   ) async {
+    _statusTargets.remove(s.directoryName);
     final ownership = _ledger.ownerOfSession(s.directoryName);
     if (ownership is! OwnedBy) {
       return const TakeUploadView(
@@ -205,7 +681,7 @@ class OwnerUploadController extends ChangeNotifier {
     }
     if (_restartNeeded.contains(s.directoryName)) return _restartView;
     final file = _journalFile(s);
-    if (!await file.exists()) return _ready;
+    if (!await file.exists()) return await _readiness(s) ?? _ready;
     final SourceJournal journal;
     try {
       journal = await SourceJournal.open(file);
@@ -221,19 +697,126 @@ class OwnerUploadController extends ChangeNotifier {
         message: "This recording belongs to another account.",
       );
     }
+    switch (journal.localCleanup) {
+      case LocalCleanupState.complete:
+        return _cleaned;
+      case LocalCleanupState.begun || LocalCleanupState.partial:
+        return _cleanupIncomplete;
+      case LocalCleanupState.none:
+        break;
+    }
     if (journal.hasConflict) return _blocked("changed");
     final reason = journal.lastBlockedReason;
     final recordingId = journal.stateData("registered")?["recordingId"];
     if (recordingId is! String) {
-      return reason == null ? _ready : _blocked(reason);
+      return reason == null
+          ? (await _readiness(s) ?? _ready)
+          : _blocked(reason);
     }
-    final mine = [
-      for (final t in tasks ?? const <NativeUploadTask>[])
-        if (t.recordingId == recordingId) t,
-    ];
-    if (mine.isEmpty) return reason == null ? _ready : _blocked(reason);
-    return _viewFromTasks(mine);
+    final mine = _currentTasks(
+      native?.tasks ?? const <NativeUploadTask>[],
+      recordingId,
+    ).values.toList();
+    final fromTasks = mine.isEmpty
+        ? (reason == null ? (await _readiness(s) ?? _ready) : _blocked(reason))
+        : _viewFromTasks(mine, native?.policyBlockReason);
+    if (journal.state != "seal_ready" ||
+        (mine.isNotEmpty && fromTasks.stage != UploadStage.serverReceived)) {
+      return fromTasks;
+    }
+    final CleanupProofIdentity identity;
+    try {
+      identity = CleanupProofIdentity.fromSealed(
+        journal,
+        _sealer.planFromSealed(journal),
+      );
+    } on Object {
+      return _blocked("inventory_changed");
+    }
+    final uploadedIds = mine.map((task) => task.fileId).toSet();
+    final allNative = identity.files.every(
+      (file) => uploadedIds.contains(file.fileId),
+    );
+    final target = _StatusTarget(
+      net,
+      recordingId,
+      journal.clientRecordingId,
+      identity.files,
+      allNative,
+    );
+    if (epoch == _epoch && net == _auth.networkOwnerId) {
+      _statusTargets[s.directoryName] = target;
+    }
+    final evidence = _evidenceFor(s.directoryName, target);
+    if (evidence.uploaded == Proof.yes) {
+      return _uploadedView.withEvidence(evidence);
+    }
+    if (mine.isEmpty) return fromTasks;
+    return const TakeUploadView(
+      stage: UploadStage.needsResume,
+      message: "Some files still need to be uploaded. Tap Resume to continue.",
+      action: UploadAction.resume,
+    );
   }
+
+  /// Null only when the native recorder's final evidence is complete. An
+  /// unfinished or quarantined take is never offered as ready: it stays on the
+  /// device untouched and is explained instead.
+  Future<TakeUploadView?> _readiness(RecordingSession s) async {
+    try {
+      await _reader.read(s.fullPath);
+      return null;
+    } on NotUploadReady catch (e) {
+      if (const {
+        "not_finalized",
+        "finalization_journal_missing",
+        "metadata_missing",
+      }.contains(e.code)) {
+        return _finalizing;
+      }
+      if (e.code == "session_quarantined" ||
+          e.code == "closure_evidence_incomplete") {
+        return _interrupted;
+      }
+      return _blocked(e.code);
+    } on Object {
+      return _blocked("not_finalized");
+    }
+  }
+
+  static const TakeUploadView _cleaned = TakeUploadView(
+    stage: UploadStage.localCleaned,
+    message:
+        "The original files were removed after verifying the staff-confirmed "
+        "cloud copy. The upload record is kept.",
+    evidence: TakeEvidence(
+      uploaded: Proof.yes,
+      sourceVerified: Proof.yes,
+      processingComplete: Proof.yes,
+      staffConfirmedCloudCopy: Proof.yes,
+      serverStatus: "reviewable",
+    ),
+  );
+  static const TakeUploadView _cleanupIncomplete = TakeUploadView(
+    stage: UploadStage.localCleanupIncomplete,
+    message:
+        "Removing the local originals did not finish. Some files may already "
+        "be gone; the rest are still on this device.",
+  );
+
+  static const TakeUploadView _finalizing = TakeUploadView(
+    stage: UploadStage.finalizing,
+    message:
+        "Still finishing this recording. Keep the files and check again after "
+        "the recorder closes.",
+  );
+
+  static const TakeUploadView _interrupted = TakeUploadView(
+    stage: UploadStage.interrupted,
+    message:
+        "Recording interrupted. Start a new take and keep these files "
+        "if you need help from support.",
+  );
 
   static const TakeUploadView _restartView = TakeUploadView(
     stage: UploadStage.restartRequired,
@@ -272,7 +855,15 @@ class OwnerUploadController extends ChangeNotifier {
     };
   }
 
-  TakeUploadView _viewFromTasks(List<NativeUploadTask> tasks) {
+  static const _uploadedView = TakeUploadView(
+    stage: UploadStage.serverReceived,
+    message: "Upload complete",
+  );
+
+  TakeUploadView _viewFromTasks(
+    List<NativeUploadTask> tasks,
+    String? currentPolicyBlock,
+  ) {
     var landed = 0;
     var total = 0;
     for (final t in tasks) {
@@ -311,11 +902,44 @@ class OwnerUploadController extends ChangeNotifier {
       "owner_changed",
       "owner_not_bound",
     };
-    if (ownerBlocks.any((t) => !resumableOwnerReasons.contains(t.reason))) {
+    if (any((t) => t.reason == "session_required") ||
+        ownerBlocks.any((t) => !resumableOwnerReasons.contains(t.reason))) {
       return v(
         UploadStage.signInRequired,
         "Sign in again to continue this upload.",
         UploadAction.signIn,
+      );
+    }
+    if (ownerBlocks.isEmpty &&
+        any(
+          (t) =>
+              t.state == NativeTaskState.waitingPolicy ||
+              (t.state == NativeTaskState.queued && currentPolicyBlock != null),
+        )) {
+      return v(
+        UploadStage.transferring,
+        WaitReason.of(
+          currentPolicyBlock ??
+              WaitReason.primary([
+                for (final t in tasks)
+                  if (t.state == NativeTaskState.waitingPolicy) t.reason,
+              ]),
+        ).message,
+        UploadAction.resume,
+      );
+    }
+    if (any((t) => t.reason == "transport_expired")) {
+      return v(
+        UploadStage.needsResume,
+        "The upload session expired. Tap Resume to check the server's restart options.",
+        UploadAction.resume,
+      );
+    }
+    if (any((t) => t.reason?.startsWith("provider_rejected_") == true)) {
+      return v(
+        UploadStage.needsResume,
+        "The transfer link was rejected. Tap Resume to request a fresh link.",
+        UploadAction.resume,
       );
     }
     if (ownerBlocks.isNotEmpty ||
@@ -332,17 +956,7 @@ class OwnerUploadController extends ChangeNotifier {
       );
     }
     if (tasks.every((t) => t.state == NativeTaskState.uploaded)) {
-      return v(
-        UploadStage.serverReceived,
-        "Uploaded. The server is verifying it.",
-      );
-    }
-    if (any((t) => t.state == NativeTaskState.waitingPolicy)) {
-      return v(
-        UploadStage.transferring,
-        "Waiting for a suitable connection.",
-        UploadAction.resume,
-      );
+      return _uploadedView;
     }
     if (any((t) => t.state == NativeTaskState.backoff)) {
       return v(UploadStage.transferring, "Retrying shortly…");
@@ -369,6 +983,16 @@ class OwnerUploadController extends ChangeNotifier {
     try {
       run = await _begin(s);
       final journal = await _journalFor(s, run);
+      // A cleaned or half-cleaned take is never uploaded or re-sealed again.
+      if (journal.localCleanup != LocalCleanupState.none) {
+        _setView(
+          s,
+          journal.localCleanup == LocalCleanupState.complete
+              ? _cleaned
+              : _cleanupIncomplete,
+        );
+        return;
+      }
       await _runPipeline(s, run, journal);
       succeeded = true;
     } on Object catch (e) {
@@ -397,12 +1021,13 @@ class OwnerUploadController extends ChangeNotifier {
     try {
       run = await _begin(s);
       final journal = await _journalFor(s, run);
+      if (journal.localCleanup != LocalCleanupState.none) {
+        throw const _Stop(_cleanupIncomplete);
+      }
       final plan = await _sealedPlan(s, run, journal);
       final recordingId = _recordingId(journal);
       final status = await _native.status(run.owner);
-      for (final task in status.tasks.where(
-        (t) => t.recordingId == recordingId,
-      )) {
+      for (final task in _currentTasks(status.tasks, recordingId).values) {
         _guard(run);
         final current = await _api.getUpload(task.fileId, run.jarGeneration);
         _expectPlan(current, plan, task.fileId, recordingId);
@@ -429,7 +1054,7 @@ class OwnerUploadController extends ChangeNotifier {
 
   // -------------------------------------------------------------- pipeline
 
-  Future<_Run> _begin(RecordingSession s) async {
+  Future<_Run> _begin(RecordingSession s, {bool transfer = true}) async {
     final ownership = _ledger.ownerOfSession(s.directoryName);
     if (ownership is! OwnedBy) throw const _Stop(_needsRecovery);
     final net = _auth.networkOwnerId;
@@ -454,6 +1079,7 @@ class OwnerUploadController extends ChangeNotifier {
       case AuthUnavailable():
         throw const _Stop(_offline);
     }
+    if (transfer && _policyBlocksTransfer) throw const _Stop(_policyHeld);
     final run = _Run(
       controllerEpoch: controllerEpoch,
       authEpoch: authEpoch,
@@ -478,11 +1104,13 @@ class OwnerUploadController extends ChangeNotifier {
     stage: UploadStage.otherAccount,
     message: "This recording belongs to another account.",
   );
-  static const TakeUploadView _finishing = TakeUploadView(
-    stage: UploadStage.ready,
-    message: "Still finishing the recording. Try again in a moment.",
-    action: UploadAction.upload,
+  static const TakeUploadView _policyHeld = TakeUploadView(
+    stage: UploadStage.blocked,
+    message:
+        "The saved connection setting could not be applied. Uploads are "
+        "held until it is.",
   );
+  static const TakeUploadView _finishing = _finalizing;
   static const TakeUploadView _offline = TakeUploadView(
     stage: UploadStage.ready,
     message: "Can't reach the server. Try again when you're online.",
@@ -579,10 +1207,10 @@ class OwnerUploadController extends ChangeNotifier {
 
     // Enqueue each exact sealed file with its current server plan. The files
     // were reserved (by stable clientUploadId) while sealing.
-    final existing = {
-      for (final t in (await _native.status(run.owner)).tasks)
-        if (t.recordingId == recordingId) t.fileId: t,
-    };
+    final existing = _currentTasks(
+      (await _native.status(run.owner)).tasks,
+      recordingId,
+    );
     for (final file in (plan.sealBody["files"]! as List).cast<Map>()) {
       final fileId = file["fileId"]! as String;
       final task = existing[fileId];
@@ -592,7 +1220,7 @@ class OwnerUploadController extends ChangeNotifier {
       _guard(run);
       final current = await _api.getUpload(fileId, run.jarGeneration);
       _expectPlan(current, plan, fileId, recordingId);
-      await _handlePlan(s, run, journal, plan, current, task);
+      await _handlePlan(s, run, journal, plan, current);
     }
     await _startOsJob(run);
   }
@@ -605,7 +1233,6 @@ class OwnerUploadController extends ChangeNotifier {
     SourceJournal journal,
     SealPlan sealPlan,
     UploadPlanDocument plan,
-    NativeUploadTask? task,
   ) async {
     var current = plan;
     if (current.state == "completing") {
@@ -665,14 +1292,18 @@ class OwnerUploadController extends ChangeNotifier {
   }
 
   Future<void> _startOsJob(_Run run) async {
-    _guard(run);
-    var result = await _native.resume();
+    Future<NativeResumeResult> schedule() => _serial(() async {
+      _guard(run);
+      if (_policyBlocksTransfer) throw const _Stop(_policyHeld);
+      return _native.resume();
+    });
+
+    var result = await schedule();
     if (!result.scheduled &&
         result.reason == "notification_permission_required" &&
         _requestNotificationPermission != null) {
       if (await _requestNotificationPermission()) {
-        _guard(run);
-        result = await _native.resume();
+        result = await schedule();
       }
     }
     if (!result.scheduled) {
@@ -858,6 +1489,214 @@ class OwnerUploadController extends ChangeNotifier {
         plan.sizeBytes != sealed.single["sizeBytes"] ||
         plan.sha256 != sealed.single["sha256"]) {
       throw const NotUploadReady("plan_mismatch");
+    }
+  }
+
+  // ------------------------------------------------- local original cleanup
+
+  /// True when the dedicated cleanup operation is wired in this build.
+  bool get cleanupAvailable => _enabled() && _cleanup != null;
+
+  CleanupRun _cleanupRun(
+    String owner,
+    int epoch,
+    int authEpoch,
+    int generation,
+  ) => CleanupRun(
+    ownerUserId: owner,
+    jarGeneration: generation,
+    origin: _client.origin.value,
+    isCurrent: () =>
+        epoch == _epoch &&
+        authEpoch == _auth.epoch &&
+        generation == _client.jar.generation &&
+        _auth.networkOwnerId == owner,
+    captureActive: _captureActive,
+    uploadActive: (recordingId) async {
+      try {
+        final status = await _native.status(owner);
+        if (status.boundOwnerId != owner) return true;
+        return _currentTasks(
+          status.tasks,
+          recordingId,
+        ).values.any((task) => task.state != NativeTaskState.uploaded);
+      } on Object {
+        // Transfer state unreadable: assume a transfer may be running.
+        return true;
+      }
+    },
+  );
+
+  /// Describes what the explicit cleanup of [s] would remove, for the
+  /// confirmation dialog. Reads the local journal only: no network, no proof,
+  /// no mutation. Throws [CleanupDenied].
+  Future<LocalCleanupOffer> prepareLocalCleanup(RecordingSession s) async {
+    final service = _cleanup;
+    final owner = _auth.networkOwnerId;
+    final ownership = _ledger.ownerOfSession(s.directoryName);
+    if (!cleanupAvailable ||
+        service == null ||
+        owner == null ||
+        ownership is! OwnedBy ||
+        ownership.authUserId != owner ||
+        !viewFor(s.directoryName).canCleanup) {
+      throw const CleanupDenied(CleanupDenial.ownerChanged);
+    }
+    final run = _cleanupRun(owner, _epoch, _auth.epoch, _client.jar.generation);
+    final offer = await service.prepare(
+      journalFile: _journalFile(s),
+      sessionPath: s.fullPath,
+      sessionDirName: s.directoryName,
+      run: run,
+    );
+    if (!run.isCurrent()) throw const CleanupDenied(CleanupDenial.ownerChanged);
+    return offer;
+  }
+
+  /// The explicit user decision (after the confirmation dialog) to remove the
+  /// sealed local originals. Requests a fresh server proof now; never reuses
+  /// one. Everything is kept unless the proof, the journal, the owner and every
+  /// file agree. The outcome is always reported on the take's view.
+  Future<TakeUploadView> cleanupLocalOriginals(
+    RecordingSession s,
+    LocalCleanupOffer offer,
+  ) async {
+    final service = _cleanup;
+    if (!cleanupAvailable ||
+        service == null ||
+        offer.sessionDirName != s.directoryName ||
+        !_busy.add(s.directoryName)) {
+      return viewFor(s.directoryName);
+    }
+    final prior = viewFor(s.directoryName);
+    final cleanupRun = _cleanupRun(
+      offer.ownerUserId,
+      _epoch,
+      _auth.epoch,
+      offer.jarGeneration,
+    );
+    if (!cleanupRun.isCurrent()) {
+      _busy.remove(s.directoryName);
+      return viewFor(s.directoryName);
+    }
+    _setView(
+      s,
+      const TakeUploadView(
+        stage: UploadStage.working,
+        message: "Checking the cloud copy…",
+      ),
+    );
+    var recompute = false;
+    try {
+      await _begin(s, transfer: false);
+      await service.cleanup(
+        offer: offer,
+        journalFile: _journalFile(s),
+        sessionPath: s.fullPath,
+        run: cleanupRun,
+      );
+      if (cleanupRun.isCurrent()) {
+        _setView(s, _cleaned);
+        recompute = true;
+      }
+    } on CleanupDenied catch (e) {
+      if (cleanupRun.isCurrent()) {
+        final view = cleanupDeniedView(e);
+        _setView(
+          s,
+          view.stage == UploadStage.localCleaned
+              ? view
+              : view.withEvidence(prior.evidence),
+        );
+        recompute = e.reason == CleanupDenial.alreadyCleaned;
+      }
+    } on Object catch (e) {
+      final view = await _mapError(e, null);
+      if (cleanupRun.isCurrent()) _setView(s, view);
+    } finally {
+      _busy.remove(s.directoryName);
+      if (recompute) await refresh([s]);
+    }
+    return viewFor(s.directoryName);
+  }
+
+  /// Plain, actionable text for one refusal. Every non-partial refusal keeps
+  /// the take offerable again; none of them deletes anything.
+  static TakeUploadView cleanupDeniedView(CleanupDenied e) {
+    TakeUploadView again(String message) =>
+        TakeUploadView(stage: UploadStage.serverReceived, message: message);
+    switch (e.reason) {
+      case CleanupDenial.storageUnsupported:
+        return again(
+          "Removing local originals is not supported for this storage. "
+          "Nothing was removed.",
+        );
+      case CleanupDenial.partial:
+        return TakeUploadView(
+          stage: UploadStage.localCleanupIncomplete,
+          message: e.remaining == 0 && e.deleted > 0
+              ? "The originals were removed but the cleanup record could not "
+                    "be completed. Try again to confirm it."
+              : e.deleted == 0
+              ? "No local file was removed. Try again when the problem is "
+                    "fixed."
+              : "Removed ${e.deleted} of ${e.deleted + e.remaining} local "
+                    "files. The rest are still on this device; try again to "
+                    "finish.",
+        );
+      case CleanupDenial.alreadyCleaned:
+        return _cleaned;
+      case CleanupDenial.ownerChanged:
+        return again(
+          "The signed-in account changed. Nothing was removed; sign in as the "
+          "recording's owner and try again.",
+        );
+      case CleanupDenial.captureActive:
+        return again("Finish the recording first. Nothing was removed.");
+      case CleanupDenial.uploadActive:
+        return again(
+          "A transfer for this recording is still active. Nothing was "
+          "removed.",
+        );
+      case CleanupDenial.notSealed:
+        return again(
+          "This recording has no sealed upload record on this device. "
+          "Nothing was removed.",
+        );
+      case CleanupDenial.sourceChanged:
+        return again(
+          "A local file is missing, changed or unsafe, so nothing was "
+          "removed. The files were kept as they are.",
+        );
+      case CleanupDenial.proofMismatch:
+        return again(
+          "The server's answer did not match this device's record. Nothing "
+          "was removed.",
+        );
+      case CleanupDenial.proofExpired:
+        return again(
+          "The server's check ran out before removal could start. Nothing "
+          "was removed; try again.",
+        );
+      case CleanupDenial.unreachable:
+        return again(
+          "Can't reach the server. Nothing was removed; try again online.",
+        );
+      case CleanupDenial.serverDenied:
+        return again(switch (e.code) {
+          "staff_confirmation_required" =>
+            "Staff have not confirmed the cloud copy yet. Nothing was "
+                "removed.",
+          "verifier_busy" =>
+            "The server is busy checking another recording. Try again in a "
+                "moment.",
+          "source_not_eligible" || "permission_revoked" =>
+            "The server does not consider this recording ready for local "
+                "removal. Nothing was removed.",
+          _ =>
+            "The server refused the check (${e.code ?? "denied"}). Nothing "
+                "was removed.",
+        });
     }
   }
 

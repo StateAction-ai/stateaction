@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/services.dart";
 import "package:flutter_test/flutter_test.dart";
 import "package:stera_recorder/stera_recorder.dart";
@@ -114,6 +116,59 @@ void main() {
       expect(provider.outputDirectory, isNull);
       expect(provider.lastFramesRecorded, 0);
       expect(provider.errorMessage, contains("no RGB frames"));
+    } finally {
+      provider.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
+
+  testWidgets("a delayed recording poll cannot undo an interrupted stop", (
+    tester,
+  ) async {
+    const channel = MethodChannel("ar_recorder");
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final previousState = Completer<Map<String, Object>>();
+    var holdPoll = false;
+    var requestedHeldPoll = false;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case "initializeSession":
+          return {"success": true, "textureId": 1};
+        case "getRecordingState":
+          if (holdPoll) {
+            requestedHeldPoll = true;
+            return previousState.future;
+          }
+          return {"state": "READY", "trackingState": "TRACKING"};
+        case "startRecording":
+          return {"success": true, "outputDirectory": "/preserved/session"};
+        case "stopRecording":
+          return {"success": true, "interruptionReason": "backgrounded"};
+        default:
+          return {"success": true};
+      }
+    });
+    final provider = ArRecorderProvider(
+      preferences: InMemoryRecorderPreferences(),
+      permissions: _GrantedPermissions(),
+    );
+    try {
+      await provider.initializeSession();
+      await tester.pump(const Duration(milliseconds: 500));
+      await provider.startRecording();
+      expect(provider.isRecording, isTrue);
+      holdPoll = true;
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(requestedHeldPoll, isTrue);
+
+      await provider.stopRecording(interruption: "backgrounded");
+      previousState.complete({"state": "RECORDING", "isRecording": true});
+      await tester.pump();
+
+      expect(provider.isRecording, isFalse);
+      expect(provider.interruptionReason, "backgrounded");
+      expect(provider.outputDirectory, isNull);
     } finally {
       provider.dispose();
       messenger.setMockMethodCallHandler(channel, null);

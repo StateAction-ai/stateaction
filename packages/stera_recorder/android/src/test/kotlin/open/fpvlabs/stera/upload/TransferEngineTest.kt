@@ -147,7 +147,7 @@ class TransferEngineTest {
     @Test fun policySurvivesProcessRestart() {
         val r = rig()
         r.gate.setCapturePaused(true)
-        r.gate.setPolicy(requireUnmetered = false, requireCharging = false)
+        r.gate.setPolicy(OWNER, requireUnmetered = false, requireCharging = false)
         val reloaded = GateStore(r.gateFile).read()
         assertTrue(reloaded.policy.capturePaused)
         assertFalse(reloaded.policy.requireUnmetered)

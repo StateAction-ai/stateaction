@@ -106,6 +106,28 @@ class OwnerControlApi {
     generation: generation,
   );
 
+  /// Original-owner `POST /recordings/{id}/cleanup-proofs`. Issuing a proof
+  /// deletes nothing and is not deletion intent. The caller owns the explicit
+  /// confirmation, the monotonic stopwatch (started before this call) and the
+  /// comparison with its own journal; nothing is cached here.
+  Future<Map<String, Object?>> requestCleanupProof(
+    String recordingId, {
+    required String sealSha256,
+    required String sourceManifestSha256,
+    required String clientRecordingId,
+    required int generation,
+  }) => _json(
+    "POST",
+    "/api/v1/recordings/$recordingId/cleanup-proofs",
+    contract: "http.cleanup-proof.v1",
+    body: {
+      "sealSha256": sealSha256,
+      "sourceManifestSha256": sourceManifestSha256,
+      "clientRecordingId": clientRecordingId,
+    },
+    generation: generation,
+  );
+
   Future<UploadPlanDocument> createUpload(
     Map<String, Object?> body,
     int generation,

@@ -1,7 +1,9 @@
 import "dart:async";
 import "dart:developer" as dev;
+import "dart:io";
 import "package:stera/src/core/common/widgets/app_toast.dart";
 import "package:stera/src/core/router/app_router.dart";
+import "package:stera/src/core/theme/app_spacing.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_error_overlay.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_low_quality_banner.dart";
 import "package:stera/src/modules/ar_recorder/ui/widgets/ar_preview_area.dart";
@@ -25,29 +27,30 @@ class ArRecorderPage extends StatefulWidget {
   State<ArRecorderPage> createState() => _ArRecorderPageState();
 }
 
-class _ArRecorderPageState extends State<ArRecorderPage> {
+class _ArRecorderPageState extends State<ArRecorderPage>
+    with WidgetsBindingObserver {
   late final ArRecorderProvider _arp;
   final MethodChannel _arChannel = ArRecorderChannel.channel;
 
   VoiceCommandService? _voiceService;
   bool _audioCueInitialized = false;
   bool _voiceDisableToastShown = false;
+  bool _starting = false;
+  bool _backgrounded = false;
 
-  // Battery safeguard: warns at 30%/25%/20% and auto-stops at ≤19% while
-  // recording (copy advertises 20% as the cutoff).
   late final BatteryMonitorService _batteryMonitor;
-  bool _batteryAutoStopFired = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _arp = context.read<ArRecorderProvider>();
     _arChannel.setMethodCallHandler(_handleNativeCall);
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeRight]);
 
     _batteryMonitor = BatteryMonitorService(
       onLowBatteryWarning: _handleLowBatteryWarning,
-      onCriticalBattery: _handleCriticalBattery,
+      onCriticalBattery: Platform.isIOS ? _handleCriticalBattery : null,
     );
     _arp.addListener(_syncBatteryMonitor);
 
@@ -112,6 +115,20 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
     }
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!Platform.isAndroid || state != AppLifecycleState.paused) return;
+    _backgrounded = true;
+    if (_arp.isRecording || _arp.isPaused) {
+      unawaited(_stopForInterruption("backgrounded"));
+    }
+  }
+
+  Future<void> _stopForInterruption(String reason) async {
+    _voiceService?.stopListening();
+    await _arp.stopRecording(source: reason, interruption: reason);
+  }
+
   Future<dynamic> _handleNativeCall(MethodCall call) async {
     if (call.method == ArRecorderMethod.lowStorageWarning.methodName) {
       if (mounted) {
@@ -130,31 +147,28 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
     if (call.method == ArRecorderMethod.storageCritical.methodName) {
       dev.log("ArRecorderPage: Storage critical — auto-stopping recording");
       if (_arp.isRecording || _arp.isPaused) {
-        unawaited(_handleStopRecording(source: "storage_critical"));
+        unawaited(_stopForInterruption("low_storage"));
       }
     }
   }
 
   /// Starts/stops the battery monitor to mirror the active recording state.
-  /// The monitor only runs while recording (or paused) so we never auto-stop
-  /// or nag about battery on the idle preview screen.
   void _syncBatteryMonitor() {
     final active = _arp.isRecording || _arp.isPaused;
     if (active && !_batteryMonitor.isRunning) {
-      _batteryAutoStopFired = false;
       _batteryMonitor.start();
     } else if (!active && _batteryMonitor.isRunning) {
       _batteryMonitor.stop();
     }
   }
 
-  /// Low-battery threshold (30% / 25%) crossed while recording: warn the user
-  /// audibly and visually. Recording continues.
   Future<void> _handleLowBatteryWarning() async {
     if (!mounted) return;
     AppToast.warning(
       title: "Battery low",
-      description: "Recording will stop automatically at 20%.",
+      description: Platform.isIOS
+          ? "Recording will stop automatically at 20%."
+          : "Charge your device soon.",
       holdDuration: 5,
     );
     if (_arp.enableAudioCues) {
@@ -162,12 +176,8 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
     }
   }
 
-  /// Critical battery ([BatteryMonitorService.criticalThreshold] or below)
-  /// reached while recording: auto-stop in every case.
   Future<void> _handleCriticalBattery() async {
-    if (_batteryAutoStopFired) return;
     if (!(_arp.isRecording || _arp.isPaused)) return;
-    _batteryAutoStopFired = true;
     dev.log("ArRecorderPage: Battery critical — auto-stopping recording");
     if (mounted) {
       AppToast.warning(
@@ -205,16 +215,22 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
   Future<void> _startRecordingFromVoice() => _startRecording(source: "voice");
 
   /// Shared start path for the record button and the "start" voice command.
-  /// Runs a battery pre-flight first: hard-block below
-  /// [BatteryMonitorService.minStartThreshold] (22%), and below
-  /// [BatteryMonitorService.warnStartThreshold] (30%) allow the start but chase
-  /// the start cue with an audible low-battery warning. The battery cues are
-  /// spaced 10s apart inside [AudioCueService] so they never overlap.
   Future<void> _startRecording({required String source}) async {
-    if (_arp.state != ArRecorderState.ready) return;
+    if (_arp.state != ArRecorderState.ready || _starting) return;
+    _starting = true;
+    _backgrounded = false;
+    try {
+      await _startWhenReady(source);
+    } finally {
+      _starting = false;
+    }
+  }
 
-    final batteryLevel = await _batteryMonitor.currentLevel();
-    if (!mounted) return;
+  Future<void> _startWhenReady(String source) async {
+    final batteryLevel = Platform.isIOS
+        ? await _batteryMonitor.currentLevel()
+        : null;
+    if (!mounted || _backgrounded) return;
     if (batteryLevel != null &&
         batteryLevel < BatteryMonitorService.minStartThreshold) {
       await _rejectStartForLowBattery(batteryLevel);
@@ -223,6 +239,11 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
 
     _voiceService?.stopListening();
     await _arp.startRecording(source: source);
+    if (_backgrounded && _arp.isRecording) {
+      await _stopForInterruption("backgrounded");
+      return;
+    }
+    if (!mounted) return;
     if (_arp.enableAudioCues && _arp.isRecording) {
       final warnLowBattery =
           batteryLevel != null &&
@@ -268,6 +289,14 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
         description:
             _storageShortfallDescription(raw) ??
             "Free up space on this device and try again.",
+        holdDuration: 5,
+      );
+    } else if (raw != null && raw.contains("H.264 preflight failed")) {
+      AppToast.warning(
+        title: "Capture profile unavailable",
+        description:
+            "This camera or encoder could not start the H.264 profile. "
+            "Close the recorder and try again. If this continues, contact support.",
         holdDuration: 5,
       );
     } else if (raw != null && raw.contains("Tracking not stable")) {
@@ -337,6 +366,7 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _arChannel.setMethodCallHandler(null);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     _arp.removeListener(_syncBatteryMonitor);
@@ -372,10 +402,18 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
       (arp) => arp.state == ArRecorderState.error,
     );
 
+    final state = context.select<ArRecorderProvider, ArRecorderState>(
+      (arp) => arp.state,
+    );
+    final interruption = context.select<ArRecorderProvider, String?>(
+      (arp) => arp.interruptionReason,
+    );
     return PopScope(
-      canPop: !isRecordingActive,
+      canPop: !isRecordingActive && state != ArRecorderState.stopping,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _confirmDiscardAndExit();
+        if (!didPop && isRecordingActive && state != ArRecorderState.stopping) {
+          _confirmDiscardAndExit();
+        }
       },
       child: Scaffold(
         backgroundColor: context.colors.neutralBlack,
@@ -399,6 +437,29 @@ class _ArRecorderPageState extends State<ArRecorderPage> {
                   left: 16,
                   right: 16,
                   child: ArLowQualityBanner(),
+                ),
+              if (state == ArRecorderState.ready && interruption != null)
+                Positioned(
+                  top: 64,
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  child: Center(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        child: Text(switch (interruption) {
+                          "low_storage" =>
+                            "Recording stopped. Free up storage before starting again.",
+                          "low_battery" =>
+                            "Recording stopped. Charge this device before starting again.",
+                          "critical_thermal" =>
+                            "Recording stopped. Let this device cool before starting again.",
+                          _ =>
+                            "Recording interrupted. Keep the app open during the next take.",
+                        }),
+                      ),
+                    ),
+                  ),
                 ),
               Positioned(
                 bottom: 24,
