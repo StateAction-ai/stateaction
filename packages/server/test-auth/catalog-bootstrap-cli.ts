@@ -7,6 +7,8 @@ const ownerUrl = process.env.CATALOG_OWNER_URL;
 const password = process.env.AUTH_TEST_PASSWORD;
 if (!ownerUrl || !password)
   throw new Error("CATALOG_OWNER_URL and AUTH_TEST_PASSWORD are required");
-const { users, appRoleGranted } = await bootstrapCatalog(ownerUrl, password);
+const { users, appRoleGranted } = await bootstrapCatalog(ownerUrl, password, {
+  authOnly: process.argv.includes("--auth-only"),
+});
 if (!appRoleGranted) throw new Error("stateaction_app grants were not applied");
 process.stdout.write(JSON.stringify(users));

@@ -1,5 +1,7 @@
 import "server-only";
+import type { CachedImport } from "../cached-import.js";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
+import { hostedDevProfile } from "../hosted-dev.js";
 import {
   annotationCounts,
   getPipelineDetail,
@@ -39,6 +41,8 @@ const WIRED = new Set([
   "reupload_guidance",
 ] as const);
 
+export type { CachedImport } from "../cached-import.js";
+export const CACHED_IMPORT_EVIDENCE_ID = "cached_import@1";
 export * from "./model.js";
 export * from "./run-view.js";
 export {
@@ -106,6 +110,19 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
           return null;
         throw error;
       }
+    },
+    cachedImportByJob: async (
+      staffUserId: string,
+      jobId: string,
+    ): Promise<CachedImport | null> => {
+      const { rows } = await get().pool.query<{ evidence: CachedImport }>(
+        `SELECT i.evidence FROM cached_processing_imports i
+         JOIN jobs j ON j.id = i.job_id AND j.state = 'succeeded'
+         JOIN recordings r ON r.id = j.recording_id AND r.deleted_at IS NULL
+         WHERE i.job_id = $2 AND catalog_has_role($1, 'staff')`,
+        [staffUserId, jobId],
+      );
+      return rows[0]?.evidence ?? null;
     },
     recipeVisualization: async (
       staffUserId: string,
@@ -219,9 +236,11 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
         : g.instruction;
     },
     actions: (detail: PipelineDetail, controls?: JobControlCapabilities) =>
-      pipelineActionsFor(
-        detail,
-        controls ?? jobControlCapabilities(get().pool, WIRED),
-      ),
+      hostedDevProfile()?.mode === "read-only"
+        ? pipelineActionsFor(detail)
+        : pipelineActionsFor(
+            detail,
+            controls ?? jobControlCapabilities(get().pool, WIRED),
+          ),
   };
 }

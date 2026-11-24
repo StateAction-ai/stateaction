@@ -1,3 +1,4 @@
+import type { CachedImport } from "../cached-import.js";
 import type { Queryable } from "../catalog/catalog.js";
 import type { AnnotationCounts, ListCounts } from "./run-view.js";
 import {
@@ -74,6 +75,7 @@ const BASE_SQL = `WITH staff AS (
     a.outcome AS admission_outcome, a.rejection_code,
     (j.recipe IS NOT NULL) AS has_recipe,
     j.recipe ->> 'recipeId' AS recipe_id,
+    i.evidence AS cached_import,
     j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count,
     ARRAY(
       SELECT stage FROM (
@@ -102,6 +104,7 @@ const BASE_SQL = `WITH staff AS (
   JOIN "user" u ON u.id = r.owner_user_id
   LEFT JOIN jobs j ON j.id = r.current_job_id AND j.recording_id = r.id
   LEFT JOIN recording_admissions a ON a.recording_id = r.id
+  LEFT JOIN cached_processing_imports i ON i.job_id = j.id
   WHERE r.deleted_at IS NULL AND (SELECT ok FROM staff)
 ), classified AS (
   SELECT b.*, ${STATUS_SQL} AS status FROM base b
@@ -140,6 +143,7 @@ type Row = {
   rejection_code: string | null;
   has_recipe: boolean | null;
   recipe_id: string | null;
+  cached_import: CachedImport | null;
   segment_count: number | null;
   failed_window_count: number | null;
   caption_count: number | null;
@@ -162,6 +166,7 @@ export type PipelineListItem = {
   collector: string;
   /** e.g. `482 MB · MCAP`; null when no source file is recorded yet. */
   source: string | null;
+  sourceKind?: "imported";
   status: PipelineStatus;
   /** One truthful line under the status badge, or null. */
   note: string | null;
@@ -250,15 +255,18 @@ function toListItem(row: Row): PipelineListItem {
         ? "Upload progress not reported"
         : `${uploadPercent}% uploaded`;
   else if (row.status === "cancelled") note = "Cancelled";
+  if (row.cached_import) note = [note, "Imported"].filter(Boolean).join(" · ");
   return {
     id: row.id,
     recipe:
       row.recipe_id && row.job_id
         ? { id: row.recipe_id, jobId: row.job_id }
         : null,
-    title: recordingTitle(row.started_at),
+    title:
+      row.cached_import?.attribution.title ?? recordingTitle(row.started_at),
     collector: row.collector_name,
     source: sourceText(row),
+    ...(row.cached_import ? { sourceKind: "imported" as const } : {}),
     status: row.status,
     note,
     uploadPercent,
@@ -336,16 +344,15 @@ export type PipelineDetail = {
   source: {
     format: string | null;
     size: string | null;
-    /** Not stored by the catalog; always unknown here. */
-    duration: null;
-    /** Reported by worker telemetry only; none exists yet. */
-    hash: null;
+    duration: number | null;
+    hash: string | null;
   };
   jobId: string | null;
   jobState: JobState | null;
   clipCount: number | null;
   /** True when the job was admitted with a recipe (stage runs apply). */
   hasRecipe: boolean;
+  cachedImport?: CachedImport;
   /** Accepted annotation counts, or null when not accepted. */
   annotations: AnnotationCounts;
 };
@@ -390,13 +397,14 @@ export async function getPipelineDetail(
     source: {
       format: row.mcap_bytes !== null ? "MCAP" : null,
       size: formatBytes(num(row.mcap_bytes) ?? num(row.total_bytes)),
-      duration: null,
-      hash: null,
+      duration: row.cached_import?.durationSeconds ?? null,
+      hash: row.cached_import?.originals["recording.mp4"] ?? null,
     },
     jobId: row.job_id,
     jobState: row.job_state,
     clipCount: row.clip_count,
     hasRecipe: row.has_recipe === true,
+    ...(row.cached_import ? { cachedImport: row.cached_import } : {}),
     annotations: annotationCounts(row),
   };
 }

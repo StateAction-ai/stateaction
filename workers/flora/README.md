@@ -129,7 +129,7 @@ seconds, list-price cost; counts of failed windows and captions as found; F1 and
 FLORA-native replay store `artifacts/fixtures/flora-canary/homer_33/` (`flora_ext/canary.py`). Review it locally with zero spend:
 
 ```sh
-STATEACTION_SEED_ONLY=replay_canary_homer_33 node apps/web/test-e2e/serve-console.mjs --seed annotations     # keep it running
+STATEACTION_SEED_ONLY=replay_canary_homer_33 node apps/web/test-e2e/serve-console.mjs --seed failure-fixtures     # keep it running
 REVIEW_STACK_JSON='<its output line>' node apps/web/test-e2e/review-canary-browser.mjs                       # screenshots, 16 checks
 ```
 

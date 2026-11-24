@@ -68,6 +68,15 @@ export function assertAllowedOrigin(
   return parsed;
 }
 
+/** The hosted preview's local media endpoint needs the local staff cookie. */
+export function mediaCredentials(url: URL): RequestCredentials {
+  return typeof window !== "undefined" &&
+    url.origin === window.location.origin &&
+    url.pathname.startsWith("/api/v1/development/hosted-media/")
+    ? "same-origin"
+    : "omit";
+}
+
 export async function fetchBoundedRrd(
   url: string,
   options: FetchBoundedOptions,
@@ -79,7 +88,7 @@ export async function fetchBoundedRrd(
   try {
     response = await doFetch(parsed.href, {
       method: "GET",
-      credentials: "omit",
+      credentials: mediaCredentials(parsed),
       cache: "no-store",
       redirect: "error",
       referrerPolicy: "no-referrer",

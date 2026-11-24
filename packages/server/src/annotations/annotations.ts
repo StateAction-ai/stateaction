@@ -4,10 +4,8 @@ import {
   contractMaxBytes,
   validateBytes,
   validateValue,
-  type CaptionsV1,
   type DagRunV1,
-  type HandPresenceV1,
-  type SegmentsV1,
+  type RecordingAnnotations,
   type Producer,
   type Stage,
 } from "@stateaction/contracts";
@@ -36,15 +34,7 @@ import { formatBytes, recordingTitle } from "../pipeline/model.js";
 export const ANNOTATIONS_SCHEMA = "stateaction.recording-annotations.v1";
 export const ANNOTATIONS_CONTRACT = "http.recording-annotations.v1";
 
-export type RecordingAnnotationsDocument = {
-  schema: typeof ANNOTATIONS_SCHEMA;
-  recording_id: string;
-  job_id: string;
-  segments: SegmentsV1 | null;
-  captions: CaptionsV1 | null;
-  hand_presence: HandPresenceV1 | null;
-  dag_run: DagRunV1 | null;
-};
+export type RecordingAnnotationsDocument = RecordingAnnotations;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -55,6 +45,7 @@ const PARTS = [
     slot: "segments.json",
     role: "segments_json",
     contract: "artifacts.segments.v1",
+    importedContract: "artifacts.segments.v2",
   },
   {
     key: "captions",
@@ -62,6 +53,7 @@ const PARTS = [
     slot: "captions.json",
     role: "captions_json",
     contract: "artifacts.captions.v1",
+    importedContract: "artifacts.captions.v2",
   },
   {
     key: "hand_presence",
@@ -69,6 +61,7 @@ const PARTS = [
     slot: "hand-presence.json",
     role: "hand_presence_json",
     contract: "artifacts.hand-presence.v1",
+    importedContract: "artifacts.hand-presence.v2",
   },
 ] as const;
 
@@ -80,6 +73,7 @@ export type AnnotationDeps = {
 type Accepted = {
   job_id: string;
   recording_id: string;
+  kind: string;
 };
 
 /** The recording's accepted job, or null (unknown, deleted, not staff or not accepted). */
@@ -90,7 +84,7 @@ async function acceptedJob(
 ): Promise<Accepted | null> {
   if (!UUID.test(recordingId)) return null;
   const { rows } = await pool.query<Accepted>(
-    `SELECT j.id AS job_id, rec.id AS recording_id
+    `SELECT j.id AS job_id, rec.id AS recording_id, j.kind
      FROM recordings rec
      JOIN jobs j ON j.id = rec.current_job_id AND j.recording_id = rec.id
        AND j.state = 'succeeded'
@@ -105,9 +99,12 @@ async function readPart(
   deps: AnnotationDeps,
   part: (typeof PARTS)[number],
   file: { object_key: string; size_bytes: string; sha256?: string },
-  job: Accepted,
+  job: Pick<Accepted, "job_id" | "recording_id"> &
+    Partial<Pick<Accepted, "kind">>,
 ): Promise<unknown> {
-  const max = contractMaxBytes(part.contract);
+  const contract =
+    job.kind === "cached_import" ? part.importedContract : part.contract;
+  const max = contractMaxBytes(contract);
   if (BigInt(file.size_bytes) > BigInt(max))
     throw new TransportError(
       "conflict",
@@ -147,11 +144,11 @@ async function readPart(
       "conflict",
       `${part.slot} does not match the stored file digest`,
     );
-  const result = validateBytes(part.contract, bytes);
+  const result = validateBytes(contract, bytes);
   if (!result.valid)
     throw new TransportError(
       "conflict",
-      `${part.slot} is not a valid ${part.contract} document (${result.code})`,
+      `${part.slot} is not a valid ${contract} document (${result.code})`,
     );
   const doc = result.value as { job_id?: unknown; recording_id?: unknown };
   if (doc.job_id !== job.job_id || doc.recording_id !== job.recording_id)
@@ -267,27 +264,38 @@ export async function loadRecordingAnnotations(
         ? await readPart(
             deps,
             part,
-            { object_key: file.object_key, size_bytes: file.size_bytes },
+            {
+              object_key: file.object_key,
+              size_bytes: file.size_bytes,
+              ...(file.sha256 ? { sha256: file.sha256 } : {}),
+            },
             job,
           )
         : null;
   }
+  const imported = job.kind === "cached_import";
   let dagRun: DagRunV1 | null = null;
   try {
-    dagRun = await getDagRun({ pool: deps.pool }, job.job_id);
+    if (!imported) dagRun = await getDagRun({ pool: deps.pool }, job.job_id);
   } catch (error) {
     // A job without a recipe has no recipe run; anything else is a real failure.
     if (!(error instanceof TransportError && error.code === "not_found"))
       throw error;
   }
   const document = {
-    schema: ANNOTATIONS_SCHEMA,
+    schema: imported
+      ? "stateaction.recording-annotations.v2"
+      : ANNOTATIONS_SCHEMA,
     recording_id: job.recording_id,
     job_id: job.job_id,
+    ...(imported ? { source: "imported" } : {}),
     ...parts,
     dag_run: dagRun,
   } as RecordingAnnotationsDocument;
-  const valid = validateValue(ANNOTATIONS_CONTRACT, document);
+  const valid = validateValue(
+    imported ? "http.recording-annotations.v2" : ANNOTATIONS_CONTRACT,
+    document,
+  );
   if (!valid.valid)
     throw new TransportError(
       "conflict",
@@ -299,6 +307,7 @@ export async function loadRecordingAnnotations(
 export type ReviewRecordingRow = {
   recordingId: string;
   title: string;
+  source?: "imported";
   collector: string;
   sourceSize: string | null;
 };
@@ -315,10 +324,11 @@ export async function listReviewRecordings(
   const { rows } = await pool.query<{
     id: string;
     started_at: Date;
+    import_title: string | null;
     collector: string;
     size: string | null;
   }>(
-    `SELECT rec.id, rec.started_at, u.name AS collector,
+    `SELECT rec.id, rec.started_at, i.evidence -> 'attribution' ->> 'title' AS import_title, u.name AS collector,
        (SELECT coalesce(sum(f.size_bytes) FILTER (WHERE f.role = 'source_mcap'),
          sum(f.size_bytes))::text FROM files f
         WHERE f.recording_id = rec.id AND f.purpose = 'source'
@@ -327,6 +337,7 @@ export async function listReviewRecordings(
      JOIN "user" u ON u.id = rec.owner_user_id
      JOIN jobs j ON j.id = rec.current_job_id AND j.recording_id = rec.id
        AND j.state = 'succeeded'
+     LEFT JOIN cached_processing_imports i ON i.job_id = j.id
      WHERE rec.deleted_at IS NULL AND catalog_has_role($1, 'staff')
        AND EXISTS (
          SELECT 1 FROM job_output_slots s
@@ -338,7 +349,8 @@ export async function listReviewRecordings(
   );
   return rows.map((r) => ({
     recordingId: r.id,
-    title: recordingTitle(r.started_at),
+    title: r.import_title ?? recordingTitle(r.started_at),
+    ...(r.import_title ? { source: "imported" as const } : {}),
     collector: r.collector,
     sourceSize: formatBytes(r.size === null ? null : Number(r.size)),
   }));
@@ -363,15 +375,19 @@ export async function loadReviewExtras(
   const job = await acceptedJob(pool, staffUserId, recordingId);
   if (!job || job.job_id !== jobId) return null;
   const rec = (
-    await pool.query<{ started_at: Date; has_video: boolean }>(
-      `SELECT rec.started_at,
+    await pool.query<{
+      started_at: Date;
+      has_video: boolean;
+      import_title: string | null;
+    }>(
+      `SELECT rec.started_at, i.evidence -> 'attribution' ->> 'title' AS import_title,
               EXISTS (
                 SELECT 1 FROM job_output_slots s
                 JOIN files f ON f.id = s.file_id AND f.job_id = s.job_id
                   AND f.purpose = 'output' AND f.role = 'recording_mp4'
                   AND f.state IN ('completed', 'verified')
                 WHERE s.job_id = $2 AND s.slot = 'recording.mp4') AS has_video
-       FROM recordings rec WHERE rec.id = $1`,
+       FROM recordings rec LEFT JOIN cached_processing_imports i ON i.job_id = rec.current_job_id WHERE rec.id = $1`,
       [job.recording_id, job.job_id],
     )
   ).rows[0]!;
@@ -383,7 +399,7 @@ export async function loadReviewExtras(
     )
   ).rows;
   return {
-    title: recordingTitle(rec.started_at),
+    title: rec.import_title ?? recordingTitle(rec.started_at),
     hasVideo: rec.has_video,
     clips: clips.map((c) => ({ clipId: c.id, startNs: c.s, endNs: c.e })),
   };

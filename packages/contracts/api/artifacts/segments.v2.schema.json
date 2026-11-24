@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/segments.v2.json",
+  "title": "Temporal action segments v2",
+  "description": "Accepted review projection of cached segments results. The original generator files remain separate, unchanged evidence. Rows follow the source-frame start order and may overlap in the native results.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "recording_id",
+    "source_manifest_sha256",
+    "clock_domain",
+    "producer",
+    "windows",
+    "rows"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.segments.v2"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "source_manifest_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clock_domain": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+    },
+    "producer": {
+      "$ref": "https://stateaction.ai/schemas/common.v3.json#/$defs/producer"
+    },
+    "windows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "ok", "failed", "failed_core_spans"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "ok": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "failed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "window_index",
+              "error_code",
+              "core_start",
+              "core_end"
+            ],
+            "properties": {
+              "window_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 999999
+              },
+              "error_code": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/errorCode"
+              },
+              "core_start": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/frameRef"
+              },
+              "core_end": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/endFrameRef"
+              }
+            }
+          },
+          "minItems": 0,
+          "maxItems": 10000
+        },
+        "failed_core_spans": {
+          "description": "Merged, ordered, non-overlapping spans covered by failed windows' core regions.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start", "end"],
+            "properties": {
+              "start": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/frameRef"
+              },
+              "end": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/endFrameRef"
+              }
+            }
+          },
+          "minItems": 0,
+          "maxItems": 10000
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["segment_id", "ordinal", "start", "end", "status", "ext"],
+        "properties": {
+          "segment_id": {
+            "description": "UUIDv5 (see README).",
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999
+          },
+          "start": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/frameRef"
+          },
+          "end": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/endFrameRef"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["ok", "failed_window"]
+          },
+          "ext": {
+            "description": "Namespaced module extras, for example {\"flora\": {\"provenance\": \"fine\", \"stitched\": false}}. Never read as model-independent fields.",
+            "type": "object",
+            "maxProperties": 8,
+            "propertyNames": {
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "maxProperties": 32,
+              "propertyNames": {
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              "additionalProperties": {
+                "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/scalar"
+              }
+            }
+          }
+        }
+      },
+      "minItems": 0,
+      "maxItems": 100000
+    }
+  }
+}

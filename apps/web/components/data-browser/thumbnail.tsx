@@ -1,5 +1,7 @@
 "use client";
 
+import { mediaCredentials } from "../../lib/rerun/bounded-rrd";
+
 import * as React from "react";
 import type { ClipRead } from "@stateaction/contracts";
 import { Spinner } from "../ui/spinner";
@@ -59,7 +61,7 @@ export function ClipThumbnail({
       )
         throw new Error("Invalid thumbnail grant");
       const response = await fetch(url, {
-        credentials: "omit",
+        credentials: mediaCredentials(url),
         redirect: "error",
         cache: "no-store",
         referrerPolicy: "no-referrer",

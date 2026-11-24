@@ -112,6 +112,17 @@
     "http/segment-mark.v1.schema.json": "aff9d6feef6b74ae83100f4d06f993a5ab7dbf6f436d7aa2ea47fdcf28956b95",
     "http/segment-marks.v1.schema.json": "b9d7b2197388ccb219aa72e39e1058df6fb0d0a1f2dd105c144ce20ec27b48c6",
     "catalog.v19.json": "ba5eb03c47128c13ebd96c233ec659aaad3717bde5b12349a35da3a6839ee128",
-    "jobs/controller-action.v3.schema.json": "4465759001221df912a0c9ae1afcb92d61a8a9c37a322e425b059ea6e26ab95b"
+    "jobs/controller-action.v3.schema.json": "4465759001221df912a0c9ae1afcb92d61a8a9c37a322e425b059ea6e26ab95b",
+    "catalog.v20.json": "ff2770d0b55598a142af110730cf8206c7c9fa594e1d29f216d4045a6429a08a",
+    "common.v3.schema.json": "d682834bf2997a5dc1af72fa43e2299f7904d65d2396aeeb8ac24d1b618bd5dc",
+    "artifacts/segments.v2.schema.json": "d3f52d78d8196b58f793df346673023bf168d0443381de83243b22065fa3b0e5",
+    "artifacts/captions.v2.schema.json": "c6b242d5c8c6474e69ea38703d7b50af5c1158865345bea74adc293bcc75a602",
+    "artifacts/hand-presence.v2.schema.json": "7533a08a04716f370723af2a36d46e4421d23092b53cc6687764524e89af4df0",
+    "http/recording-annotations.v2.schema.json": "397e05c52e42d440a0770646353efe7442eb15b2758eae5e57dba66a96dc06c4",
+    "http/dataset.v2.schema.json": "c0c048cf732b438c6597be4e7e6b0699ff18bbedb9a7cf3d35f3a85b69d75026",
+    "http/dataset-clip.v2.schema.json": "3b5bbb0e6d18068190cfa148ccd83e5fd5a90521af346310c0f2a18ca140c039",
+    "http/staff-clip-page.v2.schema.json": "6c9b7f69ac1d7bf910ab5faae8e7918d4ac676c3b3bed948351392d258256102",
+    "http/dataset-page.v2.schema.json": "da7b726de9a820a6dc2e313eeadcbc4f8d31e6a41fd83046db0bf355184fa89d",
+    "http/dataset-clip-page.v2.schema.json": "c0792219e7c62f69ed553de6214d4b067ee570044c8577c39bb7c0ad3b801b41"
   }
 }

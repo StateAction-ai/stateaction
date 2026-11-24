@@ -1,0 +1,213 @@
+{
+  "contract": "artifacts.hand-presence.v2",
+  "cases": [
+    {
+      "name": "cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "imported_hand_pose",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": null,
+              "version": null
+            },
+            "gpu": {
+              "requested_type": null,
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "live producer cannot produce a cached projection",
+      "input": {
+        "document": {
+          "schema": "stateaction.hand_presence.v2",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+          "source_manifest_sha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+          "clock_domain": "android.elapsed_realtime",
+          "frame_count": 600,
+          "producer": {
+            "stage": "hand_pose",
+            "module_id": "hand_pose_cpu_v1",
+            "module_version": 1,
+            "model_name": "mediapipe_hand_landmarker",
+            "model_revision": null,
+            "weights_sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+            "quant": null,
+            "prompt_sha256": null,
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "decoding_params": {},
+            "engine": {
+              "name": "mediapipe",
+              "version": "0.10.21"
+            },
+            "gpu": {
+              "requested_type": "none",
+              "observed_type": null
+            }
+          },
+          "lanes": {
+            "left": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "frames": 200,
+                "state": "present"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1200",
+                  "timestamp_ns": "11666666600"
+                },
+                "end": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "frames": 250,
+                "state": "no_hand"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1450",
+                  "timestamp_ns": "19999999850"
+                },
+                "end": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "frames": 50,
+                "state": "failed"
+              },
+              {
+                "start": {
+                  "source_frame_id": "1500",
+                  "timestamp_ns": "21666666500"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 100,
+                "state": "present"
+              }
+            ],
+            "right": [
+              {
+                "start": {
+                  "source_frame_id": "1000",
+                  "timestamp_ns": "5000000000"
+                },
+                "end": {
+                  "source_frame_id": null,
+                  "timestamp_ns": null
+                },
+                "frames": 600,
+                "state": "no_hand"
+              }
+            ]
+          }
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "reference_mismatch",
+        "paths": [
+          "/producer/module_id"
+        ]
+      }
+    }
+  ]
+}

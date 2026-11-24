@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { serverConfig } from "@stateaction/server";
+import { mediaReadOrigin } from "@stateaction/server";
 import { authRuntime } from "@stateaction/server/auth";
 import {
   recordingTitle,
@@ -61,7 +61,7 @@ export default async function DataBrowserPage({
   }
   let mediaOrigin: string | null = null;
   try {
-    mediaOrigin = new URL(serverConfig().publicEndpoint).origin;
+    mediaOrigin = mediaReadOrigin();
   } catch {
     /* preview remains unavailable */
   }

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/artifacts/hand-presence.v2.json",
+  "title": "Hand presence lanes v2",
+  "description": "Accepted review projection of cached hand-presence results. The original generator files remain separate, unchanged evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "job_id",
+    "recording_id",
+    "source_manifest_sha256",
+    "clock_domain",
+    "frame_count",
+    "producer",
+    "lanes"
+  ],
+  "properties": {
+    "schema": {
+      "const": "stateaction.hand_presence.v2"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "source_manifest_sha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clock_domain": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/clockDomain"
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000000
+    },
+    "producer": {
+      "$ref": "https://stateaction.ai/schemas/common.v3.json#/$defs/producer"
+    },
+    "lanes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right"],
+      "properties": {
+        "left": {
+          "$ref": "#/$defs/lane"
+        },
+        "right": {
+          "$ref": "#/$defs/lane"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "lane": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "frames", "state"],
+        "properties": {
+          "start": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/frameRef"
+          },
+          "end": {
+            "$ref": "https://stateaction.ai/schemas/common.v2.json#/$defs/endFrameRef"
+          },
+          "frames": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000
+          },
+          "state": {
+            "type": "string",
+            "enum": ["present", "no_hand", "failed"]
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 100000
+    }
+  }
+}

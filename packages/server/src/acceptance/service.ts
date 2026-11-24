@@ -1028,11 +1028,12 @@ type Annotated =
  * source; captions pin the exact segments bytes and caption only accepted
  * segments. Returns the counts acceptance stores.
  */
-async function checkAnnotations(
-  deps: AcceptanceDeps,
+export async function checkAnnotations(
+  deps: Pick<AcceptanceDeps, "reader">,
   files: OutputRow[],
   listed: AnnotationFiles,
   ids: { jobId: string; recordingId: string; sourceManifestSha256: string },
+  source: "execution" | "imported" = "execution",
 ): Promise<Annotated> {
   const byId = new Map(files.map((f) => [f.id, f]));
   type Doc = Record<string, unknown>;
@@ -1075,6 +1076,18 @@ async function checkAnnotations(
         detail: `${file.slot}: ${verdict.code}`,
       };
     const doc = verdict.value as Doc;
+    const producer = doc.producer as { module_id: string; stage: string };
+    if (
+      source === "imported"
+        ? producer.module_id !== `imported_${producer.stage}`
+        : producer.module_id.startsWith("imported_")
+    ) {
+      return {
+        kind: "rejected",
+        code: "annotation_producer_mismatch",
+        detail: file.slot,
+      };
+    }
     if (
       doc.job_id !== ids.jobId ||
       doc.recording_id !== ids.recordingId ||
@@ -1087,11 +1100,15 @@ async function checkAnnotations(
       };
     return { kind: "ok", doc, file };
   };
-  const seg = await load(listed.segments, "artifacts.segments.v1");
+  const version = source === "imported" ? "v2" : "v1";
+  const seg = await load(listed.segments, `artifacts.segments.${version}`);
   if (seg.kind !== "ok") return seg;
-  const cap = await load(listed.captions, "artifacts.captions.v1");
+  const cap = await load(listed.captions, `artifacts.captions.${version}`);
   if (cap.kind !== "ok") return cap;
-  const hand = await load(listed.handPresence, "artifacts.hand-presence.v1");
+  const hand = await load(
+    listed.handPresence,
+    `artifacts.hand-presence.${version}`,
+  );
   if (hand.kind !== "ok") return hand;
   if (!hand.doc) return { kind: "rejected", code: "annotation_missing" };
   const rows = (d: Doc | null) =>

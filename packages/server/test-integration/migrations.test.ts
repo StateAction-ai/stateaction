@@ -14,6 +14,7 @@ import { expectCode, freshDatabase, writeArtifact } from "./harness.js";
 const TABLES = [
   "access",
   "account",
+  "cached_processing_imports",
   "clips",
   "dataset_access",
   "dataset_clips",
@@ -65,7 +66,7 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-013 follow", async () => {
+test("published migrations 001-005 are byte-identical; 006-014 follow", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -79,7 +80,8 @@ test("published migrations 001-005 are byte-identical; 006-013 follow", async ()
   assert.equal(files[10]?.name, "011_stage_runs.sql");
   assert.equal(files[11]?.name, "012_segment_marks.sql");
   assert.equal(files[12]?.name, "013_parallel_recipe.sql");
-  assert.equal(files.length, 13);
+  assert.equal(files[13]?.name, "014_cached_processing_imports.sql");
+  assert.equal(files.length, 14);
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -94,7 +96,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -107,7 +109,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      alreadyApplied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       adopted: [],
       appRoleGranted: true,
     });
@@ -181,7 +183,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,

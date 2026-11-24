@@ -53,13 +53,24 @@ export async function createOperatorIdentity(
 export async function bootstrapCatalog(
   ownerUrl: string,
   password: string,
+  options: { authOnly?: boolean } = {},
 ): Promise<{ users: CatalogUsers; appRoleGranted: boolean }> {
   const report = await migrateDatabase({ ownerUrl });
   const owner = new pg.Pool({ connectionString: ownerUrl, max: 2 });
   try {
-    const seeded = await seedLocalCatalog(owner, { password });
-    if (!seeded.seeded || !seeded.credentialAccounts)
-      throw new Error("Expected a fresh seed with credential accounts");
+    if (options.authOnly) {
+      for (const user of Object.values(SEED.users)) {
+        await createOperatorIdentity(owner, {
+          ...user,
+          password,
+          grants: [{ role: user.role, enabled: true }],
+        });
+      }
+    } else {
+      const seeded = await seedLocalCatalog(owner, { password });
+      if (!seeded.seeded || !seeded.credentialAccounts)
+        throw new Error("Expected a fresh seed with credential accounts");
+    }
     await createOperatorIdentity(owner, {
       id: "sa15-pending-1",
       email: "pending@stateaction.local",

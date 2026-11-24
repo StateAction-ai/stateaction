@@ -5,12 +5,11 @@
 // with their code, never folded into an empty or "no hand" result.
 
 import type {
-  CaptionsV1,
   DagRunV1,
   EndFrameRef,
   FrameRef,
   HandPresenceSpan,
-  Producer,
+  ImportedProducer,
 } from "@stateaction/contracts";
 import { captionStepList, handOf, shortLabel } from "./short-label.ts";
 import type {
@@ -249,9 +248,9 @@ const STAGE_LABEL = {
 } as const;
 
 export function provenanceBadges(a: RecordingAnnotations): ProvenanceBadge[] {
-  const producers: [ProvenanceBadge["stage"], Producer | null][] = [
+  const producers: [ProvenanceBadge["stage"], ImportedProducer | null][] = [
     ["segment", a.segments?.producer ?? null],
-    ["caption", (a.captions as CaptionsV1 | null)?.producer ?? null],
+    ["caption", a.captions?.producer ?? null],
     ["hand_pose", a.hand_presence?.producer ?? null],
   ];
   return producers.map(([stage, p]) => {
@@ -276,10 +275,19 @@ export function provenanceBadges(a: RecordingAnnotations): ProvenanceBadge[] {
           ? "stub"
           : "model";
     const rev = p.model_revision ? p.model_revision.slice(0, 7) : null;
-    const gpu = p.gpu.observed_type ?? "no GPU";
+    const unobservedGpu =
+      a.source === "imported"
+        ? p.gpu.requested_type === "none"
+          ? "CPU"
+          : "GPU not recorded"
+        : "no GPU";
+    const gpu = p.gpu.observed_type ?? unobservedGpu;
+    const engine =
+      [p.engine.name, p.engine.version].filter(Boolean).join(" ") ||
+      "engine not recorded";
     const parts = [
       `${p.module_id}@${p.module_version}${rev ? ` ${rev}` : ""}`,
-      `${p.engine.name} ${p.engine.version}${p.quant ? ` ${p.quant.method}` : ""}`,
+      `${engine}${p.quant ? ` ${p.quant.method}` : ""}`,
       gpu,
     ];
     const label = tone === "model" ? "" : `${tone} · `;
@@ -289,11 +297,11 @@ export function provenanceBadges(a: RecordingAnnotations): ProvenanceBadge[] {
       detail: [
         `${STAGE_LABEL[stage]}: ${p.model_name}${p.model_revision ? ` @ ${p.model_revision}` : ""}`,
         `module ${p.module_id}@${p.module_version}`,
-        `engine ${p.engine.name} ${p.engine.version}${p.quant ? `, quant ${p.quant.method}` : ""}`,
-        `weights ${p.weights_sha256 ?? "none"}`,
-        `prompt ${p.prompt_sha256 ?? "none"}`,
+        `engine ${engine}${p.quant ? `, quant ${p.quant.method}` : ""}`,
+        `weights ${p.weights_sha256 ?? "not recorded"}`,
+        `prompt ${p.prompt_sha256 ?? "not recorded"}`,
         `params ${p.params_sha256}`,
-        `GPU requested ${p.gpu.requested_type}, observed ${p.gpu.observed_type ?? "none"}`,
+        `GPU requested ${p.gpu.requested_type ?? "not recorded"}, observed ${p.gpu.observed_type ?? "not recorded"}`,
       ].join("\n"),
       tone,
     };

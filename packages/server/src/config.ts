@@ -1,3 +1,4 @@
+import { HOSTED_DEV_DATABASE_HOST, hostedDevProfile } from "./hosted-dev.js";
 import { simulatedCaptureInputsEnabled } from "./admission/simulation.js";
 export type AppEnv = "local" | "development" | "production";
 export type ServerConfig = {
@@ -32,6 +33,14 @@ export function applicationDatabaseUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   if (env.DATABASE_URL) {
+    if (
+      env.APP_ENV !== "production" &&
+      new URL(env.DATABASE_URL).hostname === HOSTED_DEV_DATABASE_HOST &&
+      !hostedDevProfile(env)
+    )
+      throw new Error(
+        "Use the hosted data development launcher for the production catalog",
+      );
     // An explicit DSN is accepted outside production. In production it must be
     // the restricted application role: Render's fromDatabase connectionString
     // is the OWNER and must never run the web service.
@@ -70,6 +79,7 @@ export function serverConfig(
   // entry point that loads configuration (health, preflight, storage, routes),
   // not only by the lazily built admission runtime.
   simulatedCaptureInputsEnabled(env);
+  hostedDevProfile(env);
   const required = (key: string): string => {
     const value = env[key];
     if (!value) throw new Error(`Missing server setting: ${key}`);
@@ -150,4 +160,11 @@ export function assertLocalDispatch(
     env.LOCAL_SMOKE_TOKEN === "replace-with-a-local-random-token"
   )
     throw new Error("Set a random local smoke token");
+}
+
+/** Browser media uses the local broker only in the explicit hosted data profile. */
+export function mediaReadOrigin(): string {
+  return (
+    hostedDevProfile()?.origin ?? new URL(serverConfig().publicEndpoint).origin
+  );
 }

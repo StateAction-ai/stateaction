@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { serverConfig } from "@stateaction/server";
+import { mediaReadOrigin } from "@stateaction/server";
 import { requireConsoleSession } from "../../../../lib/server-session";
 import { clipReturnTo } from "../../../../lib/review-draft";
 import { ClipPage } from "../../../../components/clip-review/clip-page";
@@ -27,7 +27,7 @@ export default async function ClipRoute({
   const returnTo = clipReturnTo(raw, session.role);
   let mediaOrigin: string | null = null;
   try {
-    mediaOrigin = new URL(serverConfig().publicEndpoint).origin;
+    mediaOrigin = mediaReadOrigin();
   } catch {
     /* viewer will fail closed */
   }

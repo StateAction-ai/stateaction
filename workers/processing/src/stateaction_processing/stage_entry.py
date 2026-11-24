@@ -425,7 +425,9 @@ def execute(
             if segments_sha != boot["segmentsSha256"]:
                 raise StageFailure("segments_digest_mismatch")
             parsed = validate_bytes(_CONTRACT["segment"], data)
-            if not parsed.valid:
+            if not parsed.valid or parsed.value["producer"]["module_id"].startswith(
+                "imported_"
+            ):
                 raise StageFailure("segments_invalid")
             segments_doc = parsed.value
             assert isinstance(segments_doc, dict)

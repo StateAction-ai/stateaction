@@ -1,6 +1,6 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v19.json (checked by tests).
-// Catalog v19 adds the parallel recipe controller actions. Earlier catalogs are immutable.
-import catalog from "../api/catalog.v19.json" with { type: "json" };
+// Generated listing of the published schema files; keep in sync with api/catalog.v20.json (checked by tests).
+// Catalog v20 adds cached processing import projections. Earlier catalogs are immutable.
+import catalog from "../api/catalog.v20.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -93,11 +93,31 @@ import s86 from "../api/http/segment-mark.v1.schema.json" with { type: "json" };
 import s87 from "../api/http/segment-marks.v1.schema.json" with { type: "json" };
 import controllerActionV3 from "../api/jobs/controller-action.v3.schema.json" with { type: "json" };
 
+import commonV3 from "../api/common.v3.schema.json" with { type: "json" };
+import cached0 from "../api/artifacts/segments.v2.schema.json" with { type: "json" };
+import cached1 from "../api/artifacts/captions.v2.schema.json" with { type: "json" };
+import cached2 from "../api/artifacts/hand-presence.v2.schema.json" with { type: "json" };
+import cached3 from "../api/http/recording-annotations.v2.schema.json" with { type: "json" };
+import cached4 from "../api/http/dataset.v2.schema.json" with { type: "json" };
+import cached5 from "../api/http/dataset-clip.v2.schema.json" with { type: "json" };
+import cached6 from "../api/http/staff-clip-page.v2.schema.json" with { type: "json" };
+import cached7 from "../api/http/dataset-page.v2.schema.json" with { type: "json" };
+import cached8 from "../api/http/dataset-clip-page.v2.schema.json" with { type: "json" };
+
 export { catalog };
 export const commonSchema: object = common;
-/** Shared definition documents listed in the catalog `shared` key (common.v2). */
-export const sharedSchemas: readonly object[] = [commonV2];
+/** Shared definition documents listed in the catalog `shared` key (common.v2 and common.v3). */
+export const sharedSchemas: readonly object[] = [commonV2, commonV3];
 export const contractSchemas: Readonly<Record<string, object>> = {
+  "artifacts.segments.v2": cached0,
+  "artifacts.captions.v2": cached1,
+  "artifacts.hand-presence.v2": cached2,
+  "http.recording-annotations.v2": cached3,
+  "http.dataset.v2": cached4,
+  "http.dataset-clip.v2": cached5,
+  "http.staff-clip-page.v2": cached6,
+  "http.dataset-page.v2": cached7,
+  "http.dataset-clip-page.v2": cached8,
   "artifacts.frame-map.v1": s0,
   "artifacts.hand-observations.v1": s1,
   "artifacts.processing-result.v1": s2,

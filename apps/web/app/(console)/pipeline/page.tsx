@@ -215,6 +215,9 @@ export default async function PipelinePage({
                     className="px-3 py-4 text-muted max-md:block max-md:p-0 max-md:before:mr-2 max-md:before:content-[attr(data-label)]"
                   >
                     {item.source ?? "Unknown"}
+                    {item.sourceKind === "imported" ? (
+                      <span className="ml-1 text-xs text-muted">Imported</span>
+                    ) : null}
                   </td>
                   <td className="px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">
                     <StatusBadge status={item.status} />

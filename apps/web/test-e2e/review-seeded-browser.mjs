@@ -229,7 +229,7 @@ let stopRunner = () => {};
 const receipt = { seedOnly: process.env.STATEACTION_SEED_ONLY, recordings: {} };
 try {
   if (process.env.REVIEW_STACK_JSON) {
-    // Drive an already running seeded stack (serve-console --seed annotations output).
+    // Drive an already running seeded stack (serve-console --seed failure-fixtures output).
     const live = JSON.parse(process.env.REVIEW_STACK_JSON);
     stack = {
       origin: live.origin,

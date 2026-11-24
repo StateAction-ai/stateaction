@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/recording-annotations.v2.json",
+  "title": "Recording annotations v2",
+  "description": "Staff review document for an accepted cached processing import. It includes versioned projections and the imported source marker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recording_id",
+    "job_id",
+    "segments",
+    "captions",
+    "hand_presence",
+    "dag_run",
+    "source"
+  ],
+  "properties": {
+    "source": {
+      "const": "imported"
+    },
+    "schema": {
+      "const": "stateaction.recording-annotations.v2"
+    },
+    "recording_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "job_id": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "segments": {
+      "$ref": "https://stateaction.ai/schemas/artifacts/segments.v2.json"
+    },
+    "captions": {
+      "$ref": "https://stateaction.ai/schemas/artifacts/captions.v2.json"
+    },
+    "hand_presence": {
+      "$ref": "https://stateaction.ai/schemas/artifacts/hand-presence.v2.json"
+    },
+    "dag_run": {
+      "type": "null"
+    }
+  }
+}

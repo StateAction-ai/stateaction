@@ -39,7 +39,7 @@ It reads the recipe from the jobs API, the cached inputs of the job (`source.mca
 
 ```
 pnpm --filter @stateaction/web build && pnpm --filter @stateaction/jobs build
-agent-resource run -- node apps/web/test-e2e/serve-console.mjs --seed annotations
+agent-resource run -- node apps/web/test-e2e/serve-console.mjs --seed failure-fixtures
 ```
 
 Needs the processing venv and the Render CLI (`RENDER_CLI`, `PYTHON_EXECUTABLE` override the defaults). It starts the real stack with storage, uploads simulated recordings through the SA-71 path (a generated test pattern, never a real recording), runs each through the real local controller and prints one JSON line with the origin, users, `recordings` (scenario, recording id, job id, job state, stage rows), the cache and state directories and the workflow token file.

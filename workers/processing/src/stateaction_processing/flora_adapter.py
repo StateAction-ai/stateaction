@@ -61,6 +61,8 @@ def segments_from_flora(
     native: dict[str, Any],
     replayed_from: dict[str, Any] | None,
     covered: list[dict[str, Any]] | None = None,
+    *,
+    preserve_overlaps: bool = False,
 ) -> tuple[list[Span], int, list[FailedWindow]]:
     """Spans, window total and failed windows of a FLORA `segments.json` document.
 
@@ -85,7 +87,7 @@ def segments_from_flora(
         # 1.5 s overlaps at window seams). The later segment starts where the previous one ended;
         # the native span stays in ext. A segment fully covered by its predecessor is an error:
         # dropping it would silently lose a model result.
-        first = max(start, cursor)
+        first = start if preserve_overlaps else max(start, cursor)
         if first >= end:
             if covered is None:
                 raise StageError("replay_segment_overlap_unresolvable")

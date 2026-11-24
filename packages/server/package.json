@@ -78,7 +78,8 @@
     "ops-report": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ops-report-cli.ts",
     "restore-check": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/restore-check-cli.ts",
     "job-recovery": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/job-recovery-cli.ts",
-    "ingest-permission": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ingest-permission-cli.ts"
+    "ingest-permission": "node --conditions=react-server --env-file-if-exists=../../.env --import tsx src/ingest-permission-cli.ts",
+    "cached-import": "node --conditions=react-server --import tsx src/cached-import-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1161.0",

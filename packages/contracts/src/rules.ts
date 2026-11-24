@@ -269,6 +269,10 @@ const sameRef = (a: Json, b: Json) =>
 function producerRule(doc: Json, stage: string): RuleViolation | null {
   const p = obj(doc.producer);
   if (p.stage !== stage) return v("reference_mismatch", "/producer/stage");
+  if (typeof doc.schema === "string" && doc.schema.endsWith(".v2"))
+    return p.module_id === `imported_${stage}` && p.module_version === 1
+      ? null
+      : v("reference_mismatch", "/producer/module_id");
   const module = MODULES.get(`${p.module_id}@${p.module_version}`);
   if (!module || module.stage !== stage)
     return v("reference_mismatch", "/producer/module_id");
@@ -378,7 +382,10 @@ const STAGE_RULES: Readonly<Record<string, Rule>> = {
       const start = obj(row.start);
       const end = obj(row.end);
       if (!before(start, end)) return v("ordering_violation", `${p}/end`);
-      if (i > 0 && !atOrBefore(obj(rows[i - 1]!.end), start))
+      const previous = rows[i - 1];
+      const boundary =
+        doc.schema === "stateaction.segments.v2" ? "start" : "end";
+      if (previous && !atOrBefore(obj(previous[boundary]), start))
         return v("ordering_violation", `${p}/start`);
       const expected = segmentId(
         doc.source_manifest_sha256 as string,

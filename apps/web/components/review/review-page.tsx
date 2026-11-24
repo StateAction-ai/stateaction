@@ -275,7 +275,7 @@ export function ReviewPage({
               {[
                 r.title,
                 shortRecordingId(r.recordingId),
-                r.collector,
+                r.source === "imported" ? "Imported" : r.collector,
                 r.sourceSize,
               ]
                 .filter(Boolean)

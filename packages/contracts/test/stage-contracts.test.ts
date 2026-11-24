@@ -53,3 +53,35 @@ test("a task input pins its inline recipe by sa-cjson-v1 digest", () => {
   assert.equal(task.recipeSha256, requestSha256(task.recipe));
   assert.equal(validateValue("jobs.recipe.v1", task.recipe).valid, true);
 });
+
+test("native overlaps are valid for imported segment projections only", () => {
+  const doc = firstValid("artifacts.segments.v1") as SegmentsV1;
+  const [first, second] = doc.rows;
+  assert.ok(first && second);
+  // Begin a second successful segment on a frame covered by the first.
+  const overlap = structuredClone(first);
+  overlap.end = second.end;
+  overlap.ordinal = 1;
+  const shifted = doc.rows
+    .slice(1)
+    .map((row) => ({ ...row, ordinal: row.ordinal + 1 }));
+  doc.rows = [first, overlap, ...shifted];
+  const id = (segment: SegmentsV1["rows"][number]) =>
+    segmentId(
+      doc.source_manifest_sha256,
+      `${doc.producer.module_id}@${doc.producer.module_version}`,
+      doc.producer.params_sha256,
+      segment.start.source_frame_id,
+      segment.end.source_frame_id,
+    );
+  overlap.segment_id = id(overlap);
+  assert.equal(validateValue("artifacts.segments.v1", doc).valid, false);
+  doc.producer.module_id = "imported_segment";
+  for (const row of doc.rows) row.segment_id = id(row);
+  assert.equal(validateValue("artifacts.segments.v1", doc).valid, false);
+  const imported = { ...doc, schema: "stateaction.segments.v2" };
+  assert.equal(validateValue("artifacts.segments.v2", imported).valid, true);
+  doc.producer.module_version = 2;
+  for (const row of doc.rows) row.segment_id = id(row);
+  assert.equal(validateValue("artifacts.segments.v2", imported).valid, false);
+});
