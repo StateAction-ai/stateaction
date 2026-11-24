@@ -252,16 +252,26 @@ export async function finalizeCancellations(
         never: boolean;
         holds: boolean;
         evidence: boolean;
+        unfinished_stage: boolean;
       }>(
         `SELECT j.state,
            (j.submission_intent_at IS NULL AND j.execution_call_id IS NULL AND j.invocation_nonce IS NULL) AS never,
            EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = j.id) AS holds,
-           EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id) AS evidence
+           EXISTS (SELECT 1 FROM job_execution_evidence e WHERE e.job_id = j.id) AS evidence,
+           EXISTS (
+             SELECT 1 FROM job_stage_claims c
+             LEFT JOIN job_stage_runs r ON r.job_id = c.job_id AND r.stage = c.stage
+             WHERE c.job_id = j.id AND
+               (r.state IS NULL OR r.state NOT IN ('succeeded', 'failed', 'cancelled'))
+           ) AS unfinished_stage
          FROM jobs j WHERE j.id = $1 FOR UPDATE`,
         [id],
       );
       const j = job.rows[0];
       if (!j || j.state !== "cancel_requested") return false;
+      // The controller records stage proof before settling the stage. A lost response
+      // must leave the job available to the original workflow lease for re-entry.
+      if (j.unfinished_stage) return false;
       if (!j.evidence) {
         // Unproven (possibly running): stays cancel_requested and holds capacity.
         if (!j.never || !j.holds) return false;

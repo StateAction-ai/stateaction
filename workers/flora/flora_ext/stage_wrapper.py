@@ -26,6 +26,7 @@ BOOTSTRAP_MAX_BYTES = 8192
 _CALL_ID = re.compile(r"^fc-[A-Za-z0-9]{1,77}$")
 _NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 REAP_GRACE_S = 15.0
+_RECEIPT_MAX_BYTES = 64 * 1024
 
 
 def child_env(
@@ -138,13 +139,43 @@ def run_stage_bootstrap(
         return result
     bootstrap["executionRef"] = call_id
     bootstrap["executorKind"] = "modal"
-    result["exitCode"] = _run(
-        [python, "-m", "stateaction_processing", "run-stage", call_id],
-        json.dumps(bootstrap).encode(),
-        child_env(dict(os.environ if env_source is None else env_source)),
-        deadline_s,
-        reap_grace_s,
-    )
+    from stateaction_processing.modal_result import call_binding
+
+    with tempfile.TemporaryFile() as stdout:
+        result["exitCode"] = max(
+            -255,
+            min(
+                255,
+                _run(
+                    [python, "-m", "stateaction_processing", "run-stage", call_id],
+                    json.dumps(bootstrap).encode(),
+                    child_env(dict(os.environ if env_source is None else env_source)),
+                    deadline_s,
+                    reap_grace_s,
+                    stdout=stdout,
+                ),
+            ),
+        )
+        end = stdout.tell()
+        stdout.seek(max(0, end - _RECEIPT_MAX_BYTES - 2))
+        lines = stdout.read().splitlines()
+    receipt = None
+    if (
+        lines
+        and len(lines[-1]) <= _RECEIPT_MAX_BYTES
+        and (end <= _RECEIPT_MAX_BYTES + 2 or len(lines) > 1)
+    ):
+        try:
+            value = json.loads(lines[-1])
+            if isinstance(value, dict):
+                receipt = value
+        except ValueError:
+            pass
+    result["schemaVersion"] = 2
+    result["receipt"] = receipt
+    binding = call_binding(bootstrap)
+    if binding is not None:
+        result["callBinding"] = binding
     return result
 
 

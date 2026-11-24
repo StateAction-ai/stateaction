@@ -3,9 +3,11 @@ import { parseArgs } from "node:util";
 import {
   operatorGuidance,
   recoverySnapshot,
+  reconcileJob,
   requestJobCancel,
   retryJob,
 } from "./jobs/index.js";
+import { operatorDatabaseUrl } from "./jobs/operator-db.js";
 
 /**
  * Operator-only manual recovery (SA-27): status with exact instructions,
@@ -18,25 +20,19 @@ import {
  *
  *   status <jobId>
  *   cancel <jobId> --expect <state>   (becomes cancelled only after exact termination evidence)
+ *   reconcile <jobId> --expect <state> (use existing evidence without dispatch)
  *   retry  <jobId> --expect <state>   (new job + new output prefix; refused until terminated)
  */
-const env = process.env.APP_ENV ?? "local";
-const url =
-  process.env.MIGRATION_DATABASE_URL ??
-  (env === "local" ? process.env.DATABASE_URL : undefined);
-if (!url) throw new Error("Missing server setting: MIGRATION_DATABASE_URL");
-if (
-  env === "local" &&
-  !["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname)
-)
-  throw new Error("Local operator tooling refuses non-loopback databases");
+const url = operatorDatabaseUrl();
 const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: { expect: { type: "string" } },
 });
 const [command, jobId] = positionals;
 if (!jobId)
-  throw new Error("Usage: status|cancel|retry <jobId> [--expect <state>]");
+  throw new Error(
+    "Usage: status|cancel|reconcile|retry <jobId> [--expect <state>]",
+  );
 const expect = () => {
   if (!values.expect)
     throw new Error("--expect <state> is required (the state you saw)");
@@ -58,13 +54,26 @@ try {
         }),
       ),
     );
+  } else if (command === "reconcile") {
+    console.log(
+      JSON.stringify(
+        await reconcileJob(
+          { pool, config: {} },
+          {
+            jobId,
+            expectedState: expect(),
+            recordedBy: "operator_cli",
+          },
+        ),
+      ),
+    );
   } else if (command === "retry") {
     console.log(
       JSON.stringify(
         await retryJob({ pool }, { jobId, expectedState: expect() }),
       ),
     );
-  } else throw new Error("Expected status, cancel or retry");
+  } else throw new Error("Expected status, cancel, reconcile or retry");
 } finally {
   await pool.end();
 }

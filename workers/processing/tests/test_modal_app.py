@@ -1,5 +1,6 @@
 """The thin Modal wrapper against a fake `modal` module and a fake CLI (SA-42). Nothing is deployed."""
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -81,6 +82,19 @@ BOOTSTRAP = {
     "bootstrapToken": TOKEN,
     "pipeline": "hand_pose_cpu_v1",
 }
+BINDING = hashlib.sha256(
+    (
+        "\n".join(
+            [
+                BOOTSTRAP["apiUrl"],
+                BOOTSTRAP["jobId"],
+                "",
+                "",
+                hashlib.sha256(TOKEN.encode()).hexdigest(),
+            ]
+        )
+    ).encode()
+).hexdigest()
 
 
 def alive(pid):
@@ -138,7 +152,13 @@ class ModalWrapperTests(unittest.TestCase):
             stdin = json.loads((Path(d) / "stdin").read_text())
             env = (Path(d) / "env").read_text()
         self.assertEqual(
-            result, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            result,
+            {
+                "schemaVersion": 1,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "callBinding": BINDING,
+            },
         )
         self.assertEqual(
             argv.split(),
@@ -189,7 +209,7 @@ class ModalWrapperTests(unittest.TestCase):
                 f"echo '{json.dumps(receipt)}'\nexit 0\n"
             )
             script.chmod(0o755)
-            staged = dict(BOOTSTRAP, stage="hand_pose")
+            staged = dict(BOOTSTRAP, stage="hand_pose", module="hand_pose_cpu_v1@1")
             result = module.run_bootstrap(
                 json.dumps(staged),
                 CALL,
@@ -216,11 +236,30 @@ class ModalWrapperTests(unittest.TestCase):
                 "functionCallId": CALL,
                 "exitCode": 0,
                 "receipt": receipt,
+                "callBinding": hashlib.sha256(
+                    (
+                        "\n".join(
+                            [
+                                BOOTSTRAP["apiUrl"],
+                                BOOTSTRAP["jobId"],
+                                "hand_pose",
+                                "hand_pose_cpu_v1@1",
+                                hashlib.sha256(TOKEN.encode()).hexdigest(),
+                            ]
+                        )
+                    ).encode()
+                ).hexdigest(),
             },
         )
         # No `stage`: exactly the v1 return.
         self.assertEqual(
-            plain, {"schemaVersion": 1, "functionCallId": CALL, "exitCode": 0}
+            plain,
+            {
+                "schemaVersion": 1,
+                "functionCallId": CALL,
+                "exitCode": 0,
+                "callBinding": BINDING,
+            },
         )
         self.assertIsNone(garbled["receipt"])
 
