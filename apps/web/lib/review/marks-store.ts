@@ -42,8 +42,19 @@ const fail = (code: FailCode): PostResult => ({
   message: COPY[code],
 });
 
-export function apiMarksStore(recordingId: string, jobId?: string): MarksStore {
-  const base = `/api/v1/recordings/${encodeURIComponent(recordingId)}`;
+export function apiMarksStore(
+  recordingId: string,
+  jobId?: string,
+  selection?: { clipId: string; revision: number },
+): MarksStore {
+  const base = "/api/v1/recordings/" + encodeURIComponent(recordingId);
+  const postQuery = selection
+    ? "?" +
+      new URLSearchParams({
+        clip: selection.clipId,
+        selection: String(selection.revision),
+      })
+    : "";
   return {
     async load() {
       const response = await fetch(
@@ -65,7 +76,7 @@ export function apiMarksStore(recordingId: string, jobId?: string): MarksStore {
     },
     async post(segmentId, command) {
       const response = await fetch(
-        `${base}/segments/${encodeURIComponent(segmentId)}/marks`,
+        `${base}/segments/${encodeURIComponent(segmentId)}/marks${postQuery}`,
         {
           method: "POST",
           credentials: "same-origin",

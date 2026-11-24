@@ -30,6 +30,9 @@ export function usePlayback(
   const expiresAt = useRef(0);
   const wantPlay = useRef(false);
   const readPath = source.kind === "broker" ? source.readPath : null;
+  const range = source.kind === "broker" ? source.range : undefined;
+  const offset = range?.startS ?? 0;
+  const rangeDuration = range?.durationS;
 
   const commit = useCallback((next: number) => {
     tRef.current = next;
@@ -102,21 +105,26 @@ export function usePlayback(
     awaitingMedia.current = false;
     setStatus("ready");
     if (Number.isFinite(el.duration) && el.duration > 0)
-      onMediaDuration(el.duration);
+      onMediaDuration(rangeDuration ?? el.duration);
     el.playbackRate = rateRef.current;
-    const next = Math.min(tRef.current, el.duration);
+    const next = Math.min(offset + tRef.current, el.duration);
     if (el.currentTime !== next) el.currentTime = next;
     else renewals.current = 0;
     if (wantPlay.current) playMedia(el);
-  }, [onMediaDuration, playMedia]);
+  }, [onMediaDuration, playMedia, offset, rangeDuration]);
 
   const onSeeked = useCallback(() => {
     const el = videoRef.current;
     if (el && !awaitingMedia.current) {
-      commit(el.currentTime);
+      commit(
+        Math.min(
+          rangeDuration ?? Infinity,
+          Math.max(0, el.currentTime - offset),
+        ),
+      );
       renewals.current = 0;
     }
-  }, [commit]);
+  }, [commit, offset, rangeDuration]);
 
   useEffect(() => {
     if (!playing) return;
@@ -124,8 +132,18 @@ export function usePlayback(
     let last = performance.now();
     const loop = (now: number) => {
       const el = videoRef.current;
-      if (el && !awaitingMedia.current && !el.seeking && !el.paused)
-        commit(el.currentTime);
+      if (el && !awaitingMedia.current && !el.seeking && !el.paused) {
+        const next = Math.max(0, el.currentTime - offset);
+        if (rangeDuration !== undefined && next >= rangeDuration) {
+          wantPlay.current = false;
+          el.pause();
+          el.currentTime = offset + rangeDuration;
+          commit(rangeDuration);
+          setPlaying(false);
+          return;
+        }
+        commit(next);
+      }
       if (!readPath) {
         const next = Math.min(
           durationS,
@@ -143,12 +161,14 @@ export function usePlayback(
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, readPath, durationS, commit]);
+  }, [playing, readPath, durationS, commit, offset, rangeDuration]);
 
   const seek = useCallback(
     (to: number, startPlaying = false) => {
       const el = videoRef.current;
-      const end = el && Number.isFinite(el.duration) ? el.duration : durationS;
+      const end =
+        rangeDuration ??
+        (el && Number.isFinite(el.duration) ? el.duration : durationS);
       const next = Math.min(Math.max(0, to), end);
       commit(next);
       setSeekCount((count) => count + 1);
@@ -162,10 +182,10 @@ export function usePlayback(
         void renew();
         return;
       }
-      el.currentTime = next;
+      el.currentTime = offset + next;
       if (startPlaying) playMedia(el);
     },
-    [durationS, commit, renew, playMedia],
+    [durationS, commit, renew, playMedia, offset, rangeDuration],
   );
 
   const toggle = useCallback(() => {

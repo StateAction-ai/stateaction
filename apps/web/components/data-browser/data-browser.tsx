@@ -39,11 +39,13 @@ export function DataBrowser({
   role,
   mediaOrigin,
   recordingName,
+  children,
 }: {
   query: BrowserQuery;
   role: ConsoleRole;
   mediaOrigin: string | null;
   recordingName?: string;
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [loaded, setLoaded] = React.useState<Loaded>();
@@ -244,6 +246,7 @@ export function DataBrowser({
           Search
         </Button>
       </form>
+      {children}
       {error ? (
         <div
           role="alert"
@@ -272,14 +275,16 @@ export function DataBrowser({
       ) : query.mode === "datasets" ? (
         <DatasetTable datasets={current.page.datasets ?? []} />
       ) : !clips?.length ? (
-        <div className="rounded-xl border border-line bg-white p-8">
-          <p className="font-semibold">No clips match this view.</p>
-          <p className="text-muted">
-            {query.datasetId
-              ? "This dataset contains only approved clips. Adjust your filters or add an approved clip."
-              : "Adjust your filters, or open a completed recording from Pipeline."}
-          </p>
-        </div>
+        children ? null : (
+          <div className="rounded-xl border border-line bg-white p-8">
+            <p className="font-semibold">No clips match this view.</p>
+            <p className="text-muted">
+              {query.datasetId
+                ? "This dataset contains only approved clips. Adjust your filters or add an approved clip."
+                : "Adjust your filters, or open a completed recording from Pipeline."}
+            </p>
+          </div>
+        )
       ) : (
         <>
           <p className="mb-3 text-xs text-muted">

@@ -8,6 +8,7 @@ export type BrowserQuery = {
   label?: string;
   reviewStatus?: "pending" | "approved" | "rejected";
   cursor?: string;
+  reviewCursor?: string;
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FIELDS = new Set([
@@ -18,6 +19,7 @@ const FIELDS = new Set([
   "label",
   "reviewStatus",
   "cursor",
+  "reviewCursor",
 ]);
 
 /** A malformed or inaccessible context never broadens into an unfiltered catalog. */
@@ -68,6 +70,14 @@ export function parseBrowserQuery(
     (!values.cursor || values.cursor.length > 300)
   )
     throw new Error("Invalid page");
+  if (
+    values.reviewCursor !== undefined &&
+    (!values.datasetId ||
+      role !== "staff" ||
+      !values.reviewCursor ||
+      values.reviewCursor.length > 300)
+  )
+    throw new Error("Invalid review clip page");
   return {
     mode,
     ...(values.datasetId ? { datasetId: values.datasetId } : {}),
@@ -82,6 +92,7 @@ export function parseBrowserQuery(
         }
       : {}),
     ...(values.cursor ? { cursor: values.cursor } : {}),
+    ...(values.reviewCursor ? { reviewCursor: values.reviewCursor } : {}),
   };
 }
 
@@ -96,6 +107,7 @@ export function browserHref(query: BrowserQuery): string {
     "label",
     "reviewStatus",
     "cursor",
+    "reviewCursor",
   ] as const) {
     if (query[key]) params.set(key, query[key]);
   }

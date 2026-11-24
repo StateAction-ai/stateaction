@@ -62,6 +62,9 @@ try {
       IF to_regprocedure('public.stateaction_grant_stage_rerun_reads(name)') IS NOT NULL THEN
         PERFORM public.stateaction_grant_stage_rerun_reads('stateaction_dev_reader');
       END IF;
+      IF to_regprocedure('public.stateaction_grant_clip_review_reads(name)') IS NOT NULL THEN
+        PERFORM public.stateaction_grant_clip_review_reads('stateaction_dev_reader');
+      END IF;
     END $$;
   `);
   const undesired = (

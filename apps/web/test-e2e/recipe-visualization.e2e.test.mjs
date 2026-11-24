@@ -108,13 +108,13 @@ test(
       };
       const ready = (selector) =>
         `document.querySelector(${JSON.stringify(selector)})`;
-      const open = async (path, selector) => {
+      const open = async (path, selector, destination = path) => {
         const { errorText } = await send("Page.navigate", {
           url: stack.origin + path,
         });
         assert.equal(errorText, undefined);
         await until(
-          `document.readyState === "complete" && decodeURIComponent(location.pathname) + location.search + location.hash === ${JSON.stringify(decodeURIComponent(path))} && !!${ready(selector)}`,
+          `document.readyState === "complete" && decodeURIComponent(location.pathname) + location.search + location.hash === ${JSON.stringify(decodeURIComponent(destination))} && !!${ready(selector)}`,
         );
       };
       const click = async (selector, expectedPath) => {
@@ -251,6 +251,7 @@ test(
       await open(
         `/review/${succeeded.recordingId}`,
         '[data-testid="provenance"]',
+        `/review/clips/${succeeded.recordingId}`,
       );
       await click(
         `[data-testid="provenance"] a[href="${path}#stage-segment"]`,

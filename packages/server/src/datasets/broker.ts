@@ -211,6 +211,7 @@ export async function issueRecordingRead(
     role: RecordingReadRole;
     expectedJobId?: string;
     viewJobId?: string;
+    clipSelection?: { clipId: string; revision: number };
   },
 ): Promise<RecordingReadView> {
   if (input.role !== "recording_mp4")
@@ -230,7 +231,8 @@ export async function issueRecordingRead(
     } = await deps.pool.query<{ object_key: string; size_bytes: string }>(
       `SELECT f.object_key, f.size_bytes::text
        FROM recordings rec
-       JOIN jobs view ON view.id = coalesce($3::uuid, recording_selected_job(rec.id), rec.current_job_id)
+       JOIN jobs view ON view.id = coalesce(CASE WHEN $5::uuid IS NOT NULL THEN $4::uuid END,
+                                   $3::uuid, recording_selected_job(rec.id), rec.current_job_id)
          AND view.recording_id = rec.id
          AND (view.state = 'succeeded' OR (view.kind = 'clip_pipeline' AND job_is_current(view.id)))
        LEFT JOIN review_clips c ON c.id = view.clip_id
@@ -244,6 +246,10 @@ export async function issueRecordingRead(
          AND f.state IN ('completed', 'verified')
        WHERE rec.id = $2 AND rec.deleted_at IS NULL
          AND ($4::uuid IS NULL OR view.id = $4)
+         AND ($5::uuid IS NULL OR (
+           c.id = $5 AND c.selected_job_id = view.id AND (
+             SELECT seq FROM clip_result_selections WHERE clip_id = c.id ORDER BY seq DESC LIMIT 1
+           ) = $6::integer))
          AND (p.plan_job_id IS NULL OR
               (j.result_manifest_sha256 = p.manifest_sha256 AND f.id = p.original_mp4_file_id
                AND f.sha256 = p.original_mp4_sha256 AND f.state = 'verified'))
@@ -253,6 +259,8 @@ export async function issueRecordingRead(
         recordingId,
         input.viewJobId ? uuid(input.viewJobId, "run") : null,
         input.expectedJobId ?? null,
+        input.clipSelection?.clipId ?? null,
+        input.clipSelection?.revision ?? null,
       ],
     ));
   } catch (error) {

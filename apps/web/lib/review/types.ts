@@ -14,7 +14,11 @@ export interface ClipSpan {
 /** How the page plays the review video. */
 export type VideoSource =
   /** `recording_mp4` through the broker; the client asks `readPath` for a URL. */
-  | { kind: "broker"; readPath: string }
+  | {
+      kind: "broker";
+      readPath: string;
+      range?: { startS: number; durationS: number };
+    }
   /** No media (fixture data or a recording without recording_mp4). */
   | { kind: "none"; reason: string };
 
@@ -30,6 +34,7 @@ export interface ReviewBundle {
   recording: ReviewRecordingSummary & { durationS: number };
   annotations: RecordingAnnotations;
   clips: ClipSpan[];
+  originNs?: string;
   video: VideoSource;
   /** "fixture" labels the data as synthetic everywhere it is shown. */
   origin: "fixture" | "api";

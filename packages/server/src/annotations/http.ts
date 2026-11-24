@@ -152,10 +152,33 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
             "role must be recording_mp4",
           );
         const query = new URL(request.url).searchParams;
-        const job = query.get("job");
+        const [job, ...duplicates] = query.getAll("job");
         const run = query.get("run");
+        const clips = query.getAll("clip");
+        const revisions = query.getAll("revision");
+        const clip = clips[0];
+        const revision = Number(revisions[0]);
+        if (clips.length || revisions.length) {
+          if (
+            clips.length !== 1 ||
+            revisions.length !== 1 ||
+            !clip ||
+            !UUID.test(clip) ||
+            !job ||
+            run !== null ||
+            !/^[1-9]\d*$/.test(revisions[0]!) ||
+            !Number.isInteger(revision) ||
+            revision > 2147483647
+          )
+            throw new TransportError(
+              "invalid_request",
+              "Invalid clip selection",
+            );
+        }
+        if (duplicates.length)
+          throw new TransportError("invalid_request", "Invalid expected job");
         if (
-          (job !== null && !UUID.test(job)) ||
+          (job !== undefined && !UUID.test(job)) ||
           (run !== null && !UUID.test(run))
         )
           throw new TransportError("not_found", "Recording not found");
@@ -172,8 +195,9 @@ export function recordingAnnotationRoutes(deps: AnnotationRouteDeps) {
             viewerUserId: userId,
             recordingId,
             role: "recording_mp4",
-            ...(job === null ? {} : { expectedJobId: job }),
+            ...(job === undefined ? {} : { expectedJobId: job }),
             ...(run === null ? {} : { viewJobId: run }),
+            ...(clip ? { clipSelection: { clipId: clip, revision } } : {}),
           },
         );
         headers.set("content-type", "application/json");

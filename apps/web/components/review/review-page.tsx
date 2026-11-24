@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import type { ClipReviewState } from "@stateaction/contracts";
+import { ReviewEditor } from "../clip-review/review-editor";
+import { browserApi, BrowserApiError } from "../data-browser/client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
@@ -28,8 +31,8 @@ import type {
 import {
   activeCardIndex,
   filterCards,
-  fmtClock,
   fitView,
+  fmtClock,
   followView,
   neighborStart,
   clampView,
@@ -43,6 +46,16 @@ import { annotationsJson, SidePanel, type SideTab } from "./side-panel";
 import { Tiers } from "./tiers";
 import { usePlayback } from "./use-playback";
 
+export type ClipReviewContext = {
+  id: string;
+  ordinal: number;
+  sourceStartS: number;
+  sourceEndS: number | null;
+  originalHref: string | null;
+  selectionRevision: number;
+  decision: { userId: string; reviewPath: string; state: ClipReviewState };
+};
+
 export function ReviewPage({
   bundle,
   recordings,
@@ -50,6 +63,8 @@ export function ReviewPage({
   status,
   failureNote,
   segmentationFailure,
+  clipReview,
+  readOnly = false,
 }: {
   bundle: ReviewBundle;
   recordings: ReviewRecordingSummary[];
@@ -57,15 +72,39 @@ export function ReviewPage({
   status: PipelineStatus;
   failureNote: string | null;
   segmentationFailure: string | null;
+  clipReview?: ClipReviewContext;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const { annotations, recording } = bundle;
+  const [clipState, setClipState] = useState(clipReview?.decision.state);
+  const refreshClip = useCallback(async () => {
+    const decision = clipReview?.decision;
+    if (!decision) throw new Error("Review unavailable");
+    const result = await browserApi<ClipReviewState>(decision.reviewPath).catch(
+      (error: unknown) => {
+        if (error instanceof BrowserApiError && error.status === 409)
+          router.refresh();
+        throw error;
+      },
+    );
+    if (
+      result.jobId !== decision.state.jobId ||
+      result.resultManifestSha256 !== decision.state.resultManifestSha256
+    ) {
+      router.refresh();
+      throw new Error("The selected result changed.");
+    }
+    setClipState(result);
+    return result;
+  }, [clipReview, router]);
   // The axis is the estimate until the video reports its own length (never shorter than it).
   const [mediaDurationS, setMediaDurationS] = useState(0);
   const durationS = Math.max(recording.durationS, mediaDurationS);
   const model = useMemo(
-    () => buildReviewModel(annotations, bundle.clips, durationS),
-    [annotations, bundle.clips, durationS],
+    () =>
+      buildReviewModel(annotations, bundle.clips, durationS, bundle.originNs),
+    [annotations, bundle.clips, bundle.originNs, durationS],
   );
   const playback = usePlayback(
     model.durationS,
@@ -76,12 +115,21 @@ export function ReviewPage({
   const store = useMemo(
     () =>
       bundle.origin === "api"
-        ? apiMarksStore(recording.recordingId, annotations.job_id)
+        ? apiMarksStore(
+            recording.recordingId,
+            annotations.job_id,
+            clipReview
+              ? {
+                  clipId: clipReview.id,
+                  revision: clipReview.selectionRevision,
+                }
+              : undefined,
+          )
         : memoryMarksStore(
             annotations.job_id,
             annotations.captions?.segments_sha256 ?? "0".repeat(64),
           ),
-    [bundle.origin, recording.recordingId, annotations],
+    [bundle.origin, recording.recordingId, annotations, clipReview],
   );
   const marks = useMarks(store, annotations.job_id);
   const segmentIds = useMemo(
@@ -154,9 +202,9 @@ export function ReviewPage({
 
   const choose = useCallback(
     (card: Card, choice: MarkChoice) => {
-      void marks.choose(card.segmentId, choice);
+      if (!readOnly) void marks.choose(card.segmentId, choice);
     },
-    [marks],
+    [marks, readOnly],
   );
   const gotoNextUnchecked = useCallback(() => {
     const from =
@@ -181,7 +229,7 @@ export function ReviewPage({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const action = markKey(e);
+      const action = readOnly ? null : markKey(e);
       if (action) {
         if (e.repeat) return;
         if (isTextEntryTarget(target)) return;
@@ -218,14 +266,22 @@ export function ReviewPage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [playback, step, selected, model.cards, choose, gotoNextUnchecked]);
+  }, [
+    playback,
+    step,
+    selected,
+    model.cards,
+    choose,
+    gotoNextUnchecked,
+    readOnly,
+  ]);
 
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const download = async () => {
     setDownloadError(null);
     try {
       let blob: Blob;
-      if (bundle.origin === "api") {
+      if (bundle.origin === "api" && !clipReview) {
         const res = await fetch(
           `/api/v1/recordings/${encodeURIComponent(recording.recordingId)}/annotations?download=1`,
           { credentials: "same-origin", cache: "no-store" },
@@ -239,7 +295,9 @@ export function ReviewPage({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `annotations-${recording.recordingId}.json`;
+      a.download = clipReview
+        ? "annotations-" + clipReview.id + ".json"
+        : `annotations-${recording.recordingId}.json`;
       document.body.append(a);
       a.click();
       a.remove();
@@ -263,32 +321,80 @@ export function ReviewPage({
 
   return (
     <div className="min-w-0">
-      <h1 className="mb-3 text-xl font-bold wrap-anywhere">
-        {recording.title}
-      </h1>
+      {clipReview ? (
+        <header className="mb-4">
+          <Link
+            href="/review"
+            className="mb-2 inline-block text-sm text-brand underline underline-offset-2"
+          >
+            ‹ Review queue
+          </Link>
+          <h1 className="mb-2 text-[clamp(1.375rem,3vw,1.75rem)] leading-tight font-bold [overflow-wrap:anywhere]">
+            {recording.title} · Clip {clipReview.ordinal + 1}
+          </h1>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+            <span className="rounded-md bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-ink">
+              {clipState?.review.decision === "approved"
+                ? "Approved"
+                : clipState?.review.decision === "rejected"
+                  ? "Rejected"
+                  : "Pending review"}
+            </span>
+            {annotations.source === "imported" ? (
+              <span>Imported result</span>
+            ) : null}
+            {clipReview.sourceEndS !== null ? (
+              <span>
+                Source {fmtClock(clipReview.sourceStartS)}–
+                {fmtClock(clipReview.sourceEndS)}
+              </span>
+            ) : null}
+            {clipReview.originalHref ? (
+              <Link
+                href={clipReview.originalHref}
+                className="text-brand underline underline-offset-2 sm:ml-auto"
+              >
+                Original video at {fmtClock(clipReview.sourceStartS)}
+              </Link>
+            ) : null}
+          </div>
+        </header>
+      ) : (
+        <h1 className="mb-3 text-xl font-bold wrap-anywhere">
+          {recording.title}
+        </h1>
+      )}
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-paper px-3.5 py-2.5 shadow-[0_6px_25px_#21332a06]">
-        <select
-          aria-label="Recording"
-          value={recording.recordingId}
-          onChange={(e) => router.push(`/review/${e.target.value}`)}
-          className="min-h-11 w-full min-w-0 max-w-full sm:w-auto rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink"
-        >
-          {choices.map((r) => (
-            <option key={r.recordingId} value={r.recordingId}>
-              {[
-                shortRecordingId(r.recordingId),
-                r.title,
-                r.source === "imported" ? "Imported" : r.collector,
-                r.sourceSize,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </option>
-          ))}
-        </select>
-        <span className="font-mono text-xs text-muted">
-          {fmtClock(model.durationS)}
-        </span>
+        {clipReview ? (
+          <span className="font-mono text-xs text-muted">
+            Clip {fmtClock(t)} · Source {fmtClock(clipReview.sourceStartS + t)}
+          </span>
+        ) : (
+          <>
+            <select
+              aria-label="Recording"
+              value={recording.recordingId}
+              onChange={(e) => router.push(`/review/${e.target.value}`)}
+              className="min-h-11 w-full min-w-0 max-w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink sm:w-auto"
+            >
+              {choices.map((r) => (
+                <option key={r.recordingId} value={r.recordingId}>
+                  {[
+                    shortRecordingId(r.recordingId),
+                    r.title,
+                    r.source === "imported" ? "Imported" : r.collector,
+                    r.sourceSize,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </option>
+              ))}
+            </select>
+            <span className="font-mono text-xs text-muted">
+              {fmtClock(model.durationS)}
+            </span>
+          </>
+        )}
         <div
           data-testid="review-state"
           className="flex flex-wrap items-center gap-2"
@@ -370,7 +476,8 @@ export function ReviewPage({
               bundle.video.kind === "none" ? bundle.video.reason : null
             }
             handFramesPath={
-              bundle.video.kind === "broker"
+              bundle.video.kind === "broker" &&
+              (bundle.video.range?.startS ?? 0) === 0
                 ? "/api/v1/recordings/" +
                   recording.recordingId +
                   "/hand-frames?run=" +
@@ -433,8 +540,20 @@ export function ReviewPage({
           marks={marks}
           checkedCount={counts.checked}
           issueCount={counts.issue}
-          onChoose={choose}
+          onChoose={readOnly ? undefined : choose}
           onNextUnchecked={gotoNextUnchecked}
+          decision={
+            clipReview && clipState ? (
+              <ReviewEditor
+                userId={clipReview.decision.userId}
+                state={clipState}
+                reviewPath={clipReview.decision.reviewPath}
+                selectionRevision={clipReview.selectionRevision}
+                mediaReady={playback.status === "ready"}
+                refresh={refreshClip}
+              />
+            ) : undefined
+          }
         />
       </div>
     </div>

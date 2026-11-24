@@ -48,9 +48,12 @@ export function buildReviewModel(
   annotations: RecordingAnnotations,
   clips: readonly ClipSpan[],
   durationS: number,
+  originNs?: string,
 ): ReviewModel {
-  const origin = originOf(annotations);
+  const origin =
+    originNs === undefined ? originOf(annotations) : BigInt(originNs);
   const originKnown =
+    originNs !== undefined ||
     annotations.hand_presence !== null ||
     (annotations.segments?.rows.length ?? 0) > 0;
   const sec = (ref: FrameRef | EndFrameRef | null | undefined): number =>

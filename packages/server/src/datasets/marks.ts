@@ -86,6 +86,7 @@ type Accepted = {
   jobId: string;
   segmentsSha256: string;
   segmentsFileId: string;
+  resultManifestSha256: string | null;
   segmentCount: number;
 };
 
@@ -100,11 +101,12 @@ async function currentAccepted(
 ): Promise<{ found: boolean; accepted: Accepted | null }> {
   const { rows } = await db.query<{
     job_id: string | null;
+    manifest_sha: string | null;
     segment_count: number | null;
     sha: string | null;
     file_id: string | null;
   }>(
-    `SELECT j.id AS job_id, j.segment_count, f.sha256 AS sha, f.id AS file_id
+    `SELECT j.id AS job_id, j.result_manifest_sha256 AS manifest_sha, j.segment_count, f.sha256 AS sha, f.id AS file_id
      FROM recordings r
      LEFT JOIN jobs j ON j.id = coalesce($2::uuid, recording_selected_job(r.id), r.current_job_id) AND j.recording_id = r.id
        AND j.state = 'succeeded' AND j.segment_count IS NOT NULL
@@ -126,6 +128,7 @@ async function currentAccepted(
             jobId: row.job_id,
             segmentsSha256: row.sha,
             segmentsFileId: row.file_id,
+            resultManifestSha256: row.manifest_sha,
             segmentCount: row.segment_count ?? 0,
           }
         : null,
@@ -179,6 +182,7 @@ export async function recordSegmentMark(
     segmentId: string;
     reviewerUserId: string;
     command: SegmentMarkCommand;
+    clipSelection?: { clipId: string; revision: number };
   },
 ): Promise<SegmentMark> {
   const recordingId = uuid(input.recordingId, "recordingId");
@@ -219,7 +223,12 @@ export async function recordSegmentMark(
     // changed (the mark is immutable); a changed body is an idempotency conflict.
     const stored = (await pool.query<MarkRow>(BY_ID, [c.markId])).rows[0];
     if (stored) return replayOf(stored);
-    const { found, accepted } = await currentAccepted(pool, recordingId);
+    const viewJobId = input.clipSelection ? c.jobId : undefined;
+    const { found, accepted } = await currentAccepted(
+      pool,
+      recordingId,
+      viewJobId,
+    );
     if (!found) throw new CatalogError("not_found", "Recording not found");
     if (!accepted)
       throw new CatalogError("conflict", "Recording has no accepted segments");
@@ -242,7 +251,14 @@ export async function recordSegmentMark(
       ]);
       const prior = (await tx.query<MarkRow>(BY_ID, [c.markId])).rows[0];
       if (prior) return replayOf(prior);
-      const current = await currentAccepted(tx, recordingId);
+      if (input.clipSelection)
+        await tx.query("SELECT require_review_clip_result($1, $2, $3, $4)", [
+          input.clipSelection.clipId,
+          c.jobId,
+          accepted.resultManifestSha256,
+          input.clipSelection.revision,
+        ]);
+      const current = await currentAccepted(tx, recordingId, viewJobId);
       if (
         current.accepted?.jobId !== c.jobId ||
         current.accepted?.segmentsSha256 !== c.segmentsSha256
@@ -291,6 +307,26 @@ export async function recordSegmentMark(
   }
 }
 
+/** Active marks, with verified copy lineage taking precedence nearest the selected job. */
+export function effectiveSegmentMarksSql(
+  job: string,
+  digest: string,
+  columns: string,
+  includeOrigins = "true",
+) {
+  return `WITH RECURSIVE ancestors AS (
+    SELECT ${job} AS job_id, 0 AS depth
+    UNION ALL
+    SELECT c.source_job_id, a.depth + 1 FROM ancestors a
+    JOIN job_rerun_copies c ON c.job_id = a.job_id AND c.role = 'segments_json' AND c.sha256 = ${digest}
+    WHERE ${includeOrigins} AND a.depth < 100
+  )
+  SELECT DISTINCT ON (segment_id) ${columns}
+  FROM segment_marks m WHERE m.segments_sha256 = ${digest}
+    AND m.job_id IN (SELECT job_id FROM ancestors)
+  ORDER BY segment_id, (SELECT depth FROM ancestors a WHERE a.job_id = m.job_id), revision DESC`;
+}
+
 /** The newest mark of each marked segment of the recording's accepted result. */
 export async function getSegmentMarks(
   pool: Queryable,
@@ -315,17 +351,7 @@ export async function getSegmentMarks(
     const marks = accepted
       ? (
           await tx.query<MarkRow>(
-            `WITH RECURSIVE ancestors AS (
-               SELECT $1::uuid AS job_id, 0 AS depth
-               UNION ALL
-               SELECT c.source_job_id, a.depth + 1 FROM ancestors a
-               JOIN job_rerun_copies c ON c.job_id = a.job_id AND c.role = 'segments_json' AND c.sha256 = $2
-               WHERE $3::boolean AND a.depth < 100
-             )
-             SELECT DISTINCT ON (segment_id) ${COLUMNS}
-             FROM segment_marks m WHERE m.segments_sha256 = $2
-               AND m.job_id IN (SELECT job_id FROM ancestors)
-             ORDER BY segment_id, (SELECT depth FROM ancestors a WHERE a.job_id = m.job_id), revision DESC`,
+            effectiveSegmentMarksSql("$1::uuid", "$2", COLUMNS, "$3::boolean"),
             [
               accepted.jobId,
               accepted.segmentsSha256,
