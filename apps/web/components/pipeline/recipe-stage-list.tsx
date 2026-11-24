@@ -117,7 +117,13 @@ export function RecipeStageList({
               </div>
               {s.state === "not_run" ? (
                 <p className="m-0 mt-1.5 text-[13px] text-muted">
-                  <span title={s.errorCode ?? undefined}>
+                  <span
+                    tabIndex={s.errorCode ? 0 : undefined}
+                    title={s.errorCode ?? undefined}
+                    aria-description={
+                      s.errorCode ? `Error code: ${s.errorCode}` : undefined
+                    }
+                  >
                     {s.reason ?? "No reason was recorded."}
                   </span>
                 </p>
@@ -169,10 +175,18 @@ export function RecipeStageList({
                   role="alert"
                   className="m-0 mt-2 rounded-lg border border-[#edc8cc] bg-danger-soft px-3 py-2 text-[13px] text-[#7b2b31] break-words"
                 >
-                  <span title={s.errorCode ?? undefined}>
-                    {s.reason ??
+                  <span
+                    tabIndex={s.errorCode ? 0 : undefined}
+                    title={s.errorCode ?? undefined}
+                    aria-description={
+                      s.errorCode ? `Error code: ${s.errorCode}` : undefined
+                    }
+                  >
+                    {(s.errorCode === "stream_message_outside_chunk"
+                      ? "The recording contains a message outside its source chunk’s time range."
+                      : s.reason) ??
                       (s.state === "failed"
-                        ? "The stage failed. No explanation was recorded."
+                        ? "The stage could not finish."
                         : "The stage was cancelled.")}
                   </span>
                 </p>
@@ -184,7 +198,7 @@ export function RecipeStageList({
                 </p>
               ) : null}
 
-              <p className="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <p className="m-0 mt-2 flex empty:hidden flex-wrap gap-x-4 gap-y-1 text-xs">
                 {s.receiptSha256 ? (
                   <span className="text-muted">
                     Stage receipt{" "}
@@ -196,9 +210,9 @@ export function RecipeStageList({
                       {short(s.receiptSha256)}
                     </span>
                   </span>
-                ) : (
+                ) : s.state === "failed" || s.state === "succeeded" ? (
                   <span className="text-muted">No stage receipt recorded</span>
-                )}
+                ) : null}
                 {s.diagnostics.map((d) => (
                   <DiagnosticLink key={d.href} name={d.name} href={d.href} />
                 ))}
@@ -209,7 +223,7 @@ export function RecipeStageList({
                 {formatDuration(s.durationSeconds)}
               </div>
               <div className="text-muted" data-testid="stage-cost">
-                {formatUsd(s.costUsd)}
+                Est. cost: {formatUsd(s.costUsd)}
               </div>
             </div>
           </li>

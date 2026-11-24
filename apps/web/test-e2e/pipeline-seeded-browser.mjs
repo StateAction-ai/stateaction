@@ -187,13 +187,14 @@ try {
         if (s.state === "not_run")
           check(
             `${prefix}: not_run states upstream_failed reason`,
-            /Not run:/.test(s.text) && /upstream_failed/.test(s.text),
+            /Not run/.test(s.text) &&
+              /A stage it depends on failed/.test(s.text),
             s.text.replace(/\s+/g, " "),
           );
         if (s.state === "failed")
           check(
             `${prefix}: failed shows receipt_missing`,
-            /receipt_missing/.test(s.text) && /failed, not empty/.test(s.text),
+            /did not return a stage receipt/.test(s.text),
             s.text.replace(/\s+/g, " "),
           );
         if (s.state === "succeeded")
@@ -204,9 +205,11 @@ try {
           );
         check(
           `${prefix}: stage receipt digest shown`,
-          s.state === "not_run" || s.state === "failed"
-            ? /No stage receipt recorded/.test(s.text)
-            : /^[0-9a-f]{64}$/.test(s.receipt ?? ""),
+          s.state === "not_run"
+            ? !s.receipt && !/No stage receipt recorded/.test(s.text)
+            : s.state === "failed"
+              ? /No stage receipt recorded/.test(s.text)
+              : /^[0-9a-f]{64}$/.test(s.receipt ?? ""),
           s.receipt ?? "none",
         );
         const wantsDiag =

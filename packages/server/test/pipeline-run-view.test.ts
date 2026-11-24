@@ -49,7 +49,7 @@ test("rows: one per recipe stage with GPU object, counts and error code", () => 
     seg.counts.map((c) => [c.label, c.value, c.failed]),
     [
       ["segments", 4, false],
-      ["failed windows", 1, true],
+      ["failed window", 1, true],
     ],
   );
   const cap = rows[1]!;
@@ -146,4 +146,12 @@ test("only recorded costs and known stage failure reasons are formatted", () => 
     "The worker stopped before starting this stage.",
   );
   assert.equal(stageReason("constructor"), null);
+});
+
+test("stage clip count uses the singular for one clip", () => {
+  const run = structuredClone(caseNamed(/failed caption stage/));
+  run.stages[2]!.counts = { clips: 1 };
+  assert.equal(buildRunStages(run)[2]!.counts[0]!.label, "clip");
+  run.stages[2]!.counts.clips = 2;
+  assert.equal(buildRunStages(run)[2]!.counts[0]!.label, "clips");
 });

@@ -155,7 +155,7 @@ export default async function PipelineRecordingPage({
               ],
             ] as const
           ).map(([label, value, note]) => (
-            <Card key={label} className="px-5 py-4">
+            <Card key={label} as="div" className="px-5 py-4">
               <dt className="text-[13px] text-muted">{label}</dt>
               <dd className="m-0 mt-1 text-[26px] font-bold tracking-[-0.02em]">
                 {value}
@@ -197,7 +197,7 @@ export default async function PipelineRecordingPage({
             </h2>
             <StatusBadge status={detail.status} />
           </CardHeader>
-          <CardBody className="grid gap-4">
+          <CardBody className="grid grid-cols-1 gap-4">
             {detail.cachedImport ? (
               <ImportedStages cached={detail.cachedImport} />
             ) : run ? (
@@ -224,7 +224,7 @@ export default async function PipelineRecordingPage({
               <p className="m-0 text-sm text-muted">{detail.statusNote}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
-              {detail.reviewable || detail.failedStages.length > 0 ? (
+              {detail.reviewable ? (
                 <Button asChild>
                   <Link href={"/review/" + detail.id}>Open review</Link>
                 </Button>
@@ -233,11 +233,6 @@ export default async function PipelineRecordingPage({
                 <Button asChild>
                   <Link href={actions.reviewClipsHref}>Review clips</Link>
                 </Button>
-              ) : null}
-              {actions.control.length === 0 ? (
-                <p className="m-0 text-xs text-muted">
-                  No job action is available for this attempt right now.
-                </p>
               ) : null}
             </div>
             {actions.control.length > 0 ? (
@@ -277,10 +272,10 @@ export default async function PipelineRecordingPage({
             ).map(([label, value]) => (
               <div
                 key={label}
-                className="flex justify-between gap-4 border-b border-line pb-2"
+                className="flex min-w-0 flex-col gap-1 border-b border-line pb-2 sm:flex-row sm:justify-between sm:gap-4"
               >
                 <dt className="text-muted">{label}</dt>
-                <dd className="m-0 text-right font-medium break-words">
+                <dd className="m-0 min-w-0 font-medium wrap-anywhere sm:text-right">
                   {value}
                 </dd>
               </div>

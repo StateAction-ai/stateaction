@@ -24,7 +24,11 @@ import {
   type RunStageView,
   type RecipeVisualization,
 } from "@stateaction/server/pipeline";
-import { failedStageNote } from "@stateaction/server/pipeline-model";
+import {
+  failedStageNote,
+  PIPELINE_STATUS_LABEL,
+  shortRecordingId,
+} from "@stateaction/server/pipeline-model";
 import { RECIPE_STAGES, recipeHref } from "../../lib/recipe-view";
 import { cn } from "../../lib/utils";
 import { Card, CardBody, CardHeader } from "../ui/card";
@@ -390,7 +394,8 @@ export function RecipePage({
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <p className="m-0 text-sm text-muted">
-              {recordingTitle(new Date(startedAt))}
+              {recordingTitle(new Date(startedAt))} ·{" "}
+              {shortRecordingId(recordingId)}
             </p>
             <h1 className="m-0 mt-1 text-3xl font-bold tracking-tight break-all sm:text-4xl">
               {recipe.recipeId}
@@ -429,7 +434,12 @@ export function RecipePage({
                       "Job status",
                       run.jobState === "submit_unknown"
                         ? "Start unconfirmed"
-                        : run.jobState.replaceAll("_", " "),
+                        : run.jobState === "succeeded"
+                          ? PIPELINE_STATUS_LABEL[
+                              stageNote ? "needs_attention" : "completed"
+                            ]
+                          : run.jobState.charAt(0).toUpperCase() +
+                            run.jobState.slice(1).replaceAll("_", " "),
                     ],
                     [
                       "Estimated job cost",

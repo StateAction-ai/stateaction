@@ -5,9 +5,9 @@ export const HAND_COLORS: Record<
   Hand,
   { ink: string; bg: string; sat: string }
 > = {
-  left: { ink: "#2f7fd0", bg: "#d6e9fb", sat: "#55b6ff" },
-  right: { ink: "#c23d82", bg: "#fbdcec", sat: "#f472b6" },
-  both: { ink: "#7a4fd6", bg: "#e6dcfb", sat: "#a78bfa" },
+  left: { ink: "#205b96", bg: "#d6e9fb", sat: "#55b6ff" },
+  right: { ink: "#943367", bg: "#fbdcec", sat: "#f472b6" },
+  both: { ink: "#5d38a8", bg: "#e6dcfb", sat: "#a78bfa" },
   none: { ink: "#5f6b65", bg: "#e6eae4", sat: "#9aa39e" },
 };
 

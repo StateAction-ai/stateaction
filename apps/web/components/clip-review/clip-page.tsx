@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMediaDuration } from "../../lib/media-duration";
 import * as React from "react";
 import Link from "next/link";
 import type {
@@ -152,11 +153,7 @@ export function ClipPage({
               </Link>
             ) : null}
             <p className="mt-2 text-sm text-muted">
-              {(Number(BigInt(context.clip.durationNs)) / 1e9).toLocaleString(
-                undefined,
-                { maximumFractionDigits: 1 },
-              )}{" "}
-              seconds{" "}
+              {formatMediaDuration(context.clip.durationNs)}{" "}
               <span className="mx-2" aria-hidden="true">
                 /
               </span>
@@ -459,8 +456,10 @@ function ReviewEditor({
             ? "Rejected"
             : "Not reviewed"}
       </p>
-      <p className="mt-2 text-sm text-muted">
-        Watch the clip, enter its task label, then approve or reject it.
+      <p className="mt-2 mb-3 text-sm text-muted">
+        {state.review.decision === null
+          ? "Watch the clip and enter a task label before submitting your review."
+          : "You can update the task label or review decision."}
       </p>
       <label className="block text-sm font-medium" htmlFor="task-label">
         Task label
@@ -715,6 +714,7 @@ function DatasetSelection({
               Find datasets
               <input
                 name="datasetSearch"
+                aria-label="Find datasets"
                 maxLength={160}
                 className={`${field} mt-1`}
               />

@@ -108,43 +108,45 @@ export function ClipViewer({
   }, [readPath, origins, maxBytes, retry]);
 
   return (
-    <div className={cn("relative", className)}>
-      <div
-        ref={host}
-        data-testid="clip-viewer-host"
-        className={cn(
-          "h-[min(70vh,640px)] min-h-72 w-full overflow-hidden rounded-xl border border-line bg-field",
-          visibleState.phase !== "ready" && "invisible",
-        )}
-      />
-      {visibleState.phase === "loading" || visibleState.phase === "idle" ? (
-        <p
-          role="status"
-          className="absolute inset-0 m-0 flex items-center justify-center gap-2 text-muted"
-        >
-          <Spinner />
-          {visibleState.phase === "loading" && visibleState.attempt > 1
-            ? "Renewing clip link…"
-            : "Loading clip…"}
-        </p>
-      ) : null}
-      {visibleState.phase === "error" ? (
+    <div className={className}>
+      <div className="relative">
         <div
-          role="alert"
-          className="absolute inset-0 grid place-content-center justify-items-center gap-3 rounded-xl bg-paper/90 p-6 text-center"
-        >
-          <p className="m-0 text-danger">
-            {MESSAGES[visibleState.code] ?? MESSAGES.unavailable}
-          </p>
-          <button
-            type="button"
-            onClick={retry}
-            className="rounded-lg border border-line bg-paper px-3 py-1.5 font-medium hover:bg-brand-soft"
+          ref={host}
+          data-testid="clip-viewer-host"
+          className={cn(
+            "h-[min(70vh,640px)] min-h-72 w-full overflow-hidden rounded-xl border border-line bg-field",
+            visibleState.phase !== "ready" && "invisible",
+          )}
+        />
+        {visibleState.phase === "loading" || visibleState.phase === "idle" ? (
+          <p
+            role="status"
+            className="absolute inset-0 m-0 flex items-center justify-center gap-2 text-muted"
           >
-            Try again
-          </button>
-        </div>
-      ) : null}
+            <Spinner />
+            {visibleState.phase === "loading" && visibleState.attempt > 1
+              ? "Renewing clip link…"
+              : "Loading clip…"}
+          </p>
+        ) : null}
+        {visibleState.phase === "error" ? (
+          <div
+            role="alert"
+            className="absolute inset-0 grid place-content-center justify-items-center gap-3 rounded-xl bg-paper/90 p-6 text-center"
+          >
+            <p className="m-0 text-danger">
+              {MESSAGES[visibleState.code] ?? MESSAGES.unavailable}
+            </p>
+            <button
+              type="button"
+              onClick={retry}
+              className="rounded-lg border border-line bg-paper px-3 py-1.5 font-medium hover:bg-brand-soft"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+      </div>
       <p className="mt-2 text-xs text-muted">
         3D hand shapes are model estimates relative to the hand, not measured
         positions.

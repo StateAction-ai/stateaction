@@ -42,6 +42,12 @@ export function ConsoleShell({
     <ProfileProvider session={session}>
       <SignOutProvider revoke={revoke}>
         <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_minmax(0,1fr)]">
+          <a
+            href="#console-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-paper focus:px-4 focus:py-2 focus:font-semibold focus:text-ink"
+          >
+            Skip to main content
+          </a>
           <aside className="border-b border-line bg-sidebar px-4 py-3 md:sticky md:top-0 md:h-screen md:border-r md:border-b-0 md:px-4 md:py-7">
             <div className="md:px-2 md:pb-8">
               <Brand />
@@ -89,7 +95,13 @@ export function ConsoleShell({
               <AccountMenu />
             </header>
             <SignOutStatusBanner />
-            <main className="px-4 py-8 sm:px-6 md:px-10">{children}</main>
+            <main
+              id="console-content"
+              tabIndex={-1}
+              className="px-4 py-8 sm:px-6 md:px-10"
+            >
+              {children}
+            </main>
           </div>
         </div>
       </SignOutProvider>

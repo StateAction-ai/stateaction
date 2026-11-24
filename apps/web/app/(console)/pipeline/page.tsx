@@ -70,7 +70,7 @@ export default async function PipelinePage({
               ["Completed", list.counts.completed],
             ] as const
           ).map(([label, value]) => (
-            <Card key={label} className="px-5 py-4">
+            <Card key={label} as="div" className="px-5 py-4">
               <dt className="text-[13px] text-muted">{label}</dt>
               <dd className="m-0 mt-1 text-[28px] font-bold tracking-[-0.02em]">
                 {value}
@@ -144,179 +144,182 @@ export default async function PipelinePage({
               : "No recordings have been uploaded yet."}
           </CardBody>
         ) : (
-          <table className="w-full border-collapse text-left text-[13px] max-md:block">
-            <caption className="sr-only">Recordings and their status</caption>
-            <thead className="max-md:sr-only">
-              <tr className="bg-field text-[11px] tracking-[0.08em] text-muted uppercase">
-                <th scope="col" className="px-6 py-3 font-semibold">
-                  Recording
-                </th>
-                <th scope="col" className="px-3 py-3 font-semibold">
-                  Collector
-                </th>
-                <th scope="col" className="px-3 py-3 font-semibold">
-                  Source
-                </th>
-                <th scope="col" className="px-6 py-3 font-semibold">
-                  Status
-                </th>
-                <th scope="col" className="px-3 py-3 font-semibold">
-                  Segments
-                </th>
-                <th scope="col" className="px-3 py-3 font-semibold">
-                  Captions
-                </th>
-                <th scope="col" className="px-3 py-3 font-semibold">
-                  Team checks
-                </th>
-                <th scope="col" className="px-6 py-3 font-semibold">
-                  Review state
-                </th>
-              </tr>
-            </thead>
-            <tbody className="max-md:block">
-              {list.items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="relative border-t border-line align-top hover:bg-field max-md:block max-md:px-5 max-md:py-4"
-                >
-                  <td className="px-6 py-4 max-md:block max-md:p-0">
-                    <Link
-                      href={`/pipeline/${item.id}${backQuery ? `?${backQuery}` : ""}`}
-                      className="font-semibold text-ink after:absolute after:inset-0 after:content-['']"
-                    >
-                      {item.title}
-                      <span className="block font-mono text-xs font-normal text-muted">
-                        {shortRecordingId(item.id)}
-                      </span>
-                    </Link>
-                    {item.recipe ? (
-                      <Link
-                        href={recipeHref(item.recipe.id, item.recipe.jobId)}
-                        aria-label={`Recipe ${item.recipe.id} for ${item.title}`}
-                        className="relative z-10 mt-1 block w-fit break-all text-xs text-brand underline underline-offset-2"
-                      >
-                        {item.recipe.id}
-                      </Link>
-                    ) : (
-                      <p className="m-0 mt-1 text-xs text-muted">
-                        Recipe not recorded
-                      </p>
-                    )}
-                  </td>
-                  <td
-                    data-label="Collector"
-                    className="px-3 py-4 max-md:mt-1 max-md:block max-md:p-0 max-md:before:mr-2 max-md:before:text-muted max-md:before:content-[attr(data-label)]"
-                  >
-                    {item.collector}
-                  </td>
-                  <td
-                    data-label="Source"
-                    className="px-3 py-4 text-muted max-md:block max-md:p-0 max-md:before:mr-2 max-md:before:content-[attr(data-label)]"
-                  >
-                    {item.source ?? "Unknown"}
-                    {item.sourceKind === "imported" ? (
-                      <span className="ml-1 text-xs text-muted">Imported</span>
-                    ) : null}
-                  </td>
-                  <td className="px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">
-                    <StatusBadge status={item.status} />
-                    {item.note ? (
-                      <p className="m-0 mt-1 text-xs break-words text-muted">
-                        {item.note}
-                      </p>
-                    ) : null}
-                    {item.uploadPercent !== null ? (
-                      <div
-                        role="progressbar"
-                        aria-label="Confirmed upload"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={item.uploadPercent}
-                        className="mt-1.5 h-1.5 w-32 max-w-full overflow-hidden rounded bg-[#e6eae4]"
-                      >
-                        <div
-                          className="h-full bg-brand"
-                          style={{ width: `${item.uploadPercent}%` }}
-                        />
-                      </div>
-                    ) : null}
-                  </td>
-                  <td
-                    data-label="Segments"
-                    data-testid="count-segments"
-                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
-                  >
-                    {item.counts.segments === null ? (
-                      "—"
-                    ) : (
-                      <>
-                        {item.counts.segments}
-                        {item.counts.failedWindows ? (
-                          <span className="block font-sans text-xs text-danger max-md:inline">
-                            {" "}
-                            {item.counts.failedWindows} failed windows
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </td>
-                  <td
-                    data-label="Captions"
-                    data-testid="count-captions"
-                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
-                  >
-                    {item.counts.captions === null ? (
-                      "—"
-                    ) : (
-                      <>
-                        {item.counts.captions} ok
-                        {item.counts.captionsFailed ? (
-                          <span className="block font-sans text-xs text-danger max-md:inline">
-                            {" "}
-                            {item.counts.captionsFailed} failed
-                          </span>
-                        ) : null}
-                      </>
-                    )}
-                  </td>
-                  <td
-                    data-label="Team checks"
-                    data-testid="count-checks"
-                    className="px-3 py-4 font-mono max-md:inline-block max-md:p-0 max-md:pr-4 max-md:before:mr-2 max-md:before:font-sans max-md:before:text-muted max-md:before:content-[attr(data-label)]"
-                  >
-                    {item.counts.teamChecks === 0
-                      ? "—"
-                      : item.counts.teamChecks}
-                    <span className="block font-sans text-[11px] text-muted max-md:inline">
-                      {" "}
-                      {item.counts.teamChecks === 0
-                        ? "none recorded yet"
-                        : `checked${item.counts.teamIssues ? `, ${item.counts.teamIssues} issue` : ""}`}
-                    </span>
-                  </td>
-                  <td className="relative z-10 px-6 py-4 max-md:mt-2 max-md:block max-md:p-0">
-                    {item.reviewable || item.failedStages.length > 0 ? (
-                      <Link
-                        href={"/review/" + item.id}
-                        aria-label={
-                          "Open review for recording " +
-                          shortRecordingId(item.id)
-                        }
-                        className="font-medium text-brand underline"
-                      >
-                        Open review
-                      </Link>
-                    ) : (
-                      <span className="text-muted">
-                        Review data unavailable
-                      </span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-[13px] max-xl:block">
+              <caption className="sr-only">Recordings and their status</caption>
+              <thead className="max-xl:sr-only">
+                <tr className="bg-field text-[11px] tracking-[0.08em] text-muted uppercase">
+                  <th scope="col" className="px-6 py-3 font-semibold">
+                    Recording
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-semibold">
+                    Collector
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-semibold">
+                    Source
+                  </th>
+                  <th scope="col" className="px-6 py-3 font-semibold">
+                    Status
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-semibold">
+                    Segments
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-semibold">
+                    Captions
+                  </th>
+                  <th scope="col" className="px-3 py-3 font-semibold">
+                    Segment reviews
+                  </th>
+                  <th scope="col" className="px-6 py-3 font-semibold">
+                    Review state
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="max-xl:block">
+                {list.items.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="relative border-t border-line align-top hover:bg-field max-xl:block max-xl:px-5 max-xl:py-4"
+                  >
+                    <td className="px-6 py-4 max-xl:block max-xl:p-0">
+                      <Link
+                        href={`/pipeline/${item.id}${backQuery ? `?${backQuery}` : ""}`}
+                        className="font-semibold text-ink after:absolute after:inset-0 after:content-['']"
+                      >
+                        {item.title}
+                        <span className="block font-mono text-xs font-normal text-muted">
+                          {shortRecordingId(item.id)}
+                        </span>
+                      </Link>
+                      {item.recipe ? (
+                        <Link
+                          href={recipeHref(item.recipe.id, item.recipe.jobId)}
+                          aria-label={`Recipe ${item.recipe.id} for ${item.title}`}
+                          className="relative z-10 mt-1 block w-fit break-all text-xs text-brand underline underline-offset-2"
+                        >
+                          {item.recipe.id}
+                        </Link>
+                      ) : (
+                        <p className="m-0 mt-1 text-xs text-muted">
+                          Recipe not recorded
+                        </p>
+                      )}
+                    </td>
+                    <td
+                      data-label="Collector"
+                      className="px-3 py-4 max-xl:mt-1 max-xl:block max-xl:p-0 max-xl:before:mr-2 max-xl:before:text-muted max-xl:before:content-[attr(data-label)]"
+                    >
+                      {item.collector}
+                    </td>
+                    <td
+                      data-label="Source"
+                      className="px-3 py-4 text-muted max-xl:block max-xl:p-0 max-xl:before:mr-2 max-xl:before:content-[attr(data-label)]"
+                    >
+                      {item.source ?? "Unknown"}
+                      {item.sourceKind === "imported" ? (
+                        <span className="ml-1 text-xs text-muted">
+                          Imported
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="px-6 py-4 max-xl:mt-2 max-xl:block max-xl:p-0">
+                      <StatusBadge status={item.status} />
+                      {item.note ? (
+                        <p className="m-0 mt-1 text-xs break-words text-muted">
+                          {item.note}
+                        </p>
+                      ) : null}
+                      {item.uploadPercent !== null ? (
+                        <div
+                          role="progressbar"
+                          aria-label="Confirmed upload"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={item.uploadPercent}
+                          className="mt-1.5 h-1.5 w-32 max-w-full overflow-hidden rounded bg-[#e6eae4]"
+                        >
+                          <div
+                            className="h-full bg-brand"
+                            style={{ width: `${item.uploadPercent}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </td>
+                    <td
+                      data-label="Segments"
+                      data-testid="count-segments"
+                      className="px-3 py-4 font-mono max-xl:inline-block max-xl:p-0 max-xl:pr-4 max-xl:before:mr-2 max-xl:before:font-sans max-xl:before:text-muted max-xl:before:content-[attr(data-label)]"
+                    >
+                      {item.counts.segments === null ? (
+                        "—"
+                      ) : (
+                        <>
+                          {item.counts.segments}
+                          {item.counts.failedWindows ? (
+                            <span className="block font-sans text-xs text-danger max-xl:inline">
+                              {" "}
+                              {item.counts.failedWindows} failed windows
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </td>
+                    <td
+                      data-label="Captions"
+                      data-testid="count-captions"
+                      className="px-3 py-4 font-mono max-xl:inline-block max-xl:p-0 max-xl:pr-4 max-xl:before:mr-2 max-xl:before:font-sans max-xl:before:text-muted max-xl:before:content-[attr(data-label)]"
+                    >
+                      {item.counts.captions === null ? (
+                        "—"
+                      ) : (
+                        <>
+                          {item.counts.captions} ok
+                          {item.counts.captionsFailed ? (
+                            <span className="block font-sans text-xs text-danger max-xl:inline">
+                              {" "}
+                              {item.counts.captionsFailed} failed
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </td>
+                    <td
+                      data-label="Segment reviews"
+                      data-testid="count-checks"
+                      className="px-3 py-4 font-mono max-xl:inline-block max-xl:p-0 max-xl:pr-4 max-xl:before:mr-2 max-xl:before:font-sans max-xl:before:text-muted max-xl:before:content-[attr(data-label)]"
+                    >
+                      {item.counts.teamChecks === 0
+                        ? "None yet"
+                        : `${item.counts.teamChecks} reviewed`}
+                      {item.counts.teamIssues > 0 ? (
+                        <span className="block font-sans text-xs text-muted">
+                          {item.counts.teamIssues} flagged
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="relative z-10 px-6 py-4 max-xl:mt-2 max-xl:block max-xl:p-0">
+                      {item.reviewable ? (
+                        <Link
+                          href={"/review/" + item.id}
+                          aria-label={
+                            "Open review for recording " +
+                            shortRecordingId(item.id)
+                          }
+                          className="font-medium text-brand underline"
+                        >
+                          Open review
+                        </Link>
+                      ) : (
+                        <span className="text-muted">
+                          Review data unavailable
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {list && (query.page > 1 || list.hasNext) ? (
           <nav
@@ -338,7 +341,8 @@ export default async function PipelinePage({
           </nav>
         ) : null}
         <p className="m-0 border-t border-line px-5 py-3 text-xs text-muted sm:px-6">
-          Processing completion is separate from human review.
+          Segment reviews count segments that someone marked Good or flagged for
+          an issue.
         </p>
       </Card>
     </>

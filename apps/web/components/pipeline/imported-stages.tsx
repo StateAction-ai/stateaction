@@ -39,7 +39,9 @@ export function ImportedStages({ cached }: { cached: CachedImport }) {
         {attribution.dataset} by {attribution.creators}. {attribution.license}.{" "}
         {attribution.changes}
       </p>
-      <p className="m-0 text-xs text-muted">Source: {attribution.sourceUrl}</p>
+      <p className="m-0 text-xs wrap-anywhere text-muted">
+        Source: {attribution.sourceUrl}
+      </p>
       {stages.map(([stage, label, count]) => {
         const producer = evidence[stage] ?? {};
         return (
@@ -47,7 +49,7 @@ export function ImportedStages({ cached }: { cached: CachedImport }) {
             <summary className="cursor-pointer text-sm font-medium">
               {label} · {count}
             </summary>
-            <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+            <dl className="mt-3 grid grid-cols-1 gap-y-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-x-3">
               {[
                 ["Generator", producer.generator],
                 ["Model", producer.model],

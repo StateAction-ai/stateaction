@@ -287,19 +287,20 @@ test("caption_failed: failed captions are shown with their codes, never blank", 
   assert.equal(failedRows.length, 2, "the seed has two failed captions");
   await open(`/review/${seeded.withClip.recordingId}`);
   const failed = await ev(
-    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => e.textContent.trim())`,
+    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.querySelector('[title]')?.title }))`,
   );
   assert.equal(
-    failed.filter((t) => t.startsWith("caption failed: ")).length,
+    failed.filter((t) => t.text === "No caption is available for this segment.")
+      .length,
     2,
     JSON.stringify(failed),
   );
   for (const row of failedRows)
     assert.ok(
-      failed.some((t) => t.includes(row.error_code)),
+      failed.some((t) => t.code === row.error_code),
       `${row.error_code} shown`,
     );
-  assert.ok(failed.every((t) => t.length > 0));
+  assert.ok(failed.every((t) => t.text.length > 0));
   // The Failed chip keeps only failed rows; All restores them.
   await clickUntil(
     `[...document.querySelectorAll('button')].find(b => /^Failed/.test(b.innerText.trim())).click()`,
@@ -338,16 +339,18 @@ test("seeking by a tier block selects the matching card and moves the video", as
     );
   }
   // Clicking a rail card seeks back and selects it.
-  await ev(`document.querySelectorAll('[data-testid=rail-card]')[0].click()`);
+  await ev(
+    `document.querySelectorAll('[data-testid=rail-card]')[0].querySelector('button').click()`,
+  );
   await until(async () => (await selectedIndex()) === 0, "first card");
-  // Zoom in widens the blocks, Fit restores the whole recording.
+  // The overview shows the visible window shrink, even if zoom clips individual blocks.
   const width = () =>
     ev(
-      `document.querySelector('#lSeg [data-testid=block-segment]').getBoundingClientRect().width`,
+      `document.querySelector('[data-testid=overview-window]').getBoundingClientRect().width`,
     );
   const fit = await width();
   await ev(`document.querySelector('[aria-label="Zoom in"]').click()`);
-  await until(async () => (await width()) > fit * 1.5, "zoomed in");
+  await until(async () => Math.abs((await width()) - fit / 2) < 1, "zoomed in");
   await ev(`document.querySelector('[aria-label="Fit"]').click()`);
   await until(async () => Math.abs((await width()) - fit) < 1, "fit again");
 });
@@ -560,10 +563,10 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
     "the marks listing loaded",
   );
   assert.equal(await summary(), "0 checked, 0 issue");
-  assert.equal(await chip("unchecked"), `Unchecked ${total}`);
+  assert.equal(await chip("unchecked"), `Unreviewed ${total}`);
   // G marks the selected segment Good.
   await clickUntil(
-    `document.querySelectorAll('[data-testid=rail-card]')[0].click()`,
+    `document.querySelectorAll('[data-testid=rail-card]')[0].querySelector('button').click()`,
     `document.querySelectorAll('[data-testid=rail-card]')[0].dataset.selected === 'true'`,
     "card 0 selected",
   );
@@ -590,8 +593,8 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
   // N skips the checked segments: the next unchecked one is card 2.
   await press("n");
   await until(async () => (await selectedIndex()) === 2, "N selected card 2");
-  assert.equal(await chip("issue"), "Issue 1");
-  assert.equal(await chip("unchecked"), `Unchecked ${total - 2}`);
+  assert.equal(await chip("issue"), "Flagged 1");
+  assert.equal(await chip("unchecked"), `Unreviewed ${total - 2}`);
   // The server holds the newest revision per segment, pinned to the accepted result.
   const jar = await signIn(stack, "staff");
   const listed = await call(
@@ -649,7 +652,10 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
     },
   });
   assert.equal(pipeline.status, 200);
-  assert.match(pipeline.text, />\s*2<[^>]*>[^<]*<\/?[^>]*>\s*checked, 1 issue/);
+  assert.match(
+    pipeline.text,
+    />\s*2 reviewed<span[^>]*>\s*1(?:<!-- -->)? flagged/,
+  );
   // Customers and collectors can neither read nor append marks.
   const first = data.marks[0].segmentId;
   for (const label of ["customer", "collector"]) {
