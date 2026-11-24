@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { shortRecordingId } from "@stateaction/server/pipeline-model";
 import { useRouter } from "next/navigation";
 import type {
   DatasetClipView,
@@ -294,53 +295,66 @@ export function DataBrowser({
           </p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
             {clips.map((clip) => (
-              <Link
+              <article
                 key={clip.clipId}
-                href={`/clips/${clip.clipId}?returnTo=${encodeURIComponent(href)}`}
-                className="overflow-hidden rounded-xl border border-line bg-white focus-visible:outline-offset-4"
+                className="overflow-hidden rounded-xl border border-line bg-white"
               >
-                <ClipThumbnail
-                  clipId={clip.clipId}
-                  {...(query.datasetId ? { datasetId: query.datasetId } : {})}
-                  available={clip.media.thumbnail}
-                  mediaOrigin={mediaOrigin}
-                />
-                <div className="p-4">
-                  <h2 className="m-0 break-words text-base font-semibold">
-                    {clip.title}
-                  </h2>
-                  <p className="mt-1 break-words text-sm text-muted">
-                    {clip.taskLabel ?? "No task label"}
-                  </p>
-                  <p className="mt-3 text-xs text-muted">
-                    {duration(clip.durationNs)}{" "}
-                    <span className="mx-1" aria-hidden="true">
-                      /
-                    </span>{" "}
-                    {clip.raster.width} × {clip.raster.height}{" "}
-                    <span className="mx-1" aria-hidden="true">
-                      /
-                    </span>{" "}
-                    {clip.frameCount.toLocaleString()} frames
-                  </p>
-                  {role === "staff" ? (
-                    <p
-                      className={`mt-3 text-xs font-medium ${query.datasetId || ("reviewStatus" in clip && clip.reviewStatus === "approved") ? "text-good" : "text-muted"}`}
-                    >
-                      {query.datasetId
-                        ? "Approved"
-                        : "reviewStatus" in clip
-                          ? decision(clip.reviewStatus)
-                          : "Not reviewed"}
+                <Link
+                  aria-label={"Open " + clip.title}
+                  href={`/clips/${clip.clipId}?returnTo=${encodeURIComponent(href)}`}
+                  className="block focus-visible:outline-offset-[-4px]"
+                >
+                  <ClipThumbnail
+                    clipId={clip.clipId}
+                    {...(query.datasetId ? { datasetId: query.datasetId } : {})}
+                    available={clip.media.thumbnail}
+                    mediaOrigin={mediaOrigin}
+                  />
+                  <div className="p-4">
+                    <h2 className="m-0 break-words text-base font-semibold">
+                      {clip.title}
+                    </h2>
+                    <p className="mt-1 break-words text-sm text-muted">
+                      {clip.taskLabel ?? "No task label"}
                     </p>
-                  ) : null}
-                  {clip.simulation ? (
-                    <p className="mt-2 text-xs text-muted">
-                      Simulation recording
+                    <p className="mt-3 text-xs text-muted">
+                      {duration(clip.durationNs)}{" "}
+                      <span className="mx-1" aria-hidden="true">
+                        /
+                      </span>{" "}
+                      {clip.raster.width} × {clip.raster.height}{" "}
+                      <span className="mx-1" aria-hidden="true">
+                        /
+                      </span>{" "}
+                      {clip.frameCount.toLocaleString()} frames
                     </p>
-                  ) : null}
-                </div>
-              </Link>
+                    {role === "staff" ? (
+                      <p
+                        className={`mt-3 text-xs font-medium ${query.datasetId || ("reviewStatus" in clip && clip.reviewStatus === "approved") ? "text-good" : "text-muted"}`}
+                      >
+                        {query.datasetId
+                          ? "Approved"
+                          : "reviewStatus" in clip
+                            ? decision(clip.reviewStatus)
+                            : "Not reviewed"}
+                      </p>
+                    ) : null}
+                    {clip.simulation ? (
+                      <p className="mt-2 text-xs text-muted">
+                        Simulation recording
+                      </p>
+                    ) : null}
+                  </div>
+                </Link>
+                {role === "staff" && clip.recordingId ? (
+                  <Link
+                    href={"/pipeline/" + clip.recordingId}
+                    className="mx-4 mb-4 inline-block text-xs font-medium text-brand underline"
+                  >
+                    Recording {shortRecordingId(clip.recordingId)}
+                  </Link>
+                ) : null}
+              </article>
             ))}
           </div>
         </>

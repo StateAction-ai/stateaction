@@ -22,6 +22,8 @@ import {
 import { browserApi, BrowserApiError } from "../data-browser/client";
 import { ClipViewer } from "../rerun/clip-viewer";
 import { Button } from "../ui/button";
+import { Spinner } from "../ui/spinner";
+import { shortRecordingId } from "@stateaction/server/pipeline-model";
 
 const field =
   "min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm";
@@ -129,7 +131,9 @@ export function ClipPage({
           </Button>
         </div>
       ) : !context ? (
-        <p role="status">Loading clip…</p>
+        <p role="status" className="flex items-center gap-2">
+          <Spinner /> Loading clip…
+        </p>
       ) : (
         <>
           <div className="mb-5">
@@ -139,6 +143,14 @@ export function ClipPage({
             >
               {context.clip.title}
             </h1>
+            {role === "staff" && context.clip.recordingId ? (
+              <Link
+                href={"/pipeline/" + context.clip.recordingId}
+                className="mt-2 inline-block text-sm font-medium text-brand underline"
+              >
+                Recording {shortRecordingId(context.clip.recordingId)}
+              </Link>
+            ) : null}
             <p className="mt-2 text-sm text-muted">
               {(Number(BigInt(context.clip.durationNs)) / 1e9).toLocaleString(
                 undefined,

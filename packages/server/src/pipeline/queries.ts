@@ -3,6 +3,8 @@ import type { AnnotationCounts, ListCounts } from "./run-view.js";
 import {
   PIPELINE_PAGE_SIZE,
   PIPELINE_STATUSES,
+  STAGE_FAILURE_COUNTS,
+  failedStageNote,
   deriveStages,
   formatBytes,
   formatStart,
@@ -15,6 +17,7 @@ import {
   type PipelineActions,
   type PipelineQuery,
   type PipelineStatus,
+  type RecipeStage,
   type Stage,
 } from "./model.js";
 
@@ -36,6 +39,7 @@ const LATEST_SEGMENTS_SHA = `(SELECT x.sha256 FROM files x
 const STATUS_SQL = `CASE
   WHEN b.rec_status = 'cancelled' OR b.job_state = 'cancelled' THEN 'cancelled'
   WHEN b.job_state IN ('submit_unknown', 'needs_attention') THEN 'needs_attention'
+  WHEN cardinality(b.failed_stages) > 0 THEN 'needs_attention'
   WHEN b.rec_status = 'failed' OR b.job_state = 'failed'
     OR b.admission_outcome = 'rejected' THEN 'failed'
   WHEN b.job_state = 'succeeded' THEN 'completed'
@@ -44,6 +48,17 @@ const STATUS_SQL = `CASE
     OR b.rec_status IN ('sealed', 'uploaded') THEN 'queued'
   WHEN b.rec_status IN ('processing', 'reviewable') THEN 'needs_attention'
   ELSE 'uploading' END`;
+
+const STAGE_OUTPUT_FAILED_SQL = Object.entries(STAGE_FAILURE_COUNTS)
+  .flatMap(([stage, keys]) =>
+    keys.map(
+      (
+        key,
+      ) => `(s.stage = '${stage}' AND jsonb_typeof(s.counts -> '${key}') = 'number'
+      AND s.counts -> '${key}' > '0'::jsonb)`,
+    ),
+  )
+  .join(" OR ");
 
 const BASE_SQL = `WITH staff AS (
   SELECT EXISTS (
@@ -59,6 +74,22 @@ const BASE_SQL = `WITH staff AS (
     a.outcome AS admission_outcome, a.rejection_code,
     (j.recipe IS NOT NULL) AS has_recipe,
     j.segment_count, j.failed_window_count, j.caption_count, j.caption_failed_count,
+    ARRAY(
+      SELECT stage FROM (
+        SELECT s.stage FROM job_stage_runs s
+        WHERE s.job_id = j.id AND (s.state = 'failed' OR ${STAGE_OUTPUT_FAILED_SQL})
+        UNION SELECT 'segment' WHERE j.failed_window_count > 0
+        UNION SELECT 'caption' WHERE j.caption_failed_count > 0
+      ) failed
+      ORDER BY CASE stage WHEN 'segment' THEN 1 WHEN 'caption' THEN 2 ELSE 3 END
+    ) AS failed_stages,
+    EXISTS (
+      SELECT 1 FROM job_output_slots o
+      JOIN files f ON f.id = o.file_id AND f.job_id = o.job_id
+        AND f.purpose = 'output' AND f.state IN ('completed', 'verified')
+      WHERE o.job_id = j.id
+        AND o.slot IN ('segments.json', 'captions.json', 'hand-presence.json')
+    ) AS has_review_output,
     (SELECT count(DISTINCT m.segment_id)::int FROM segment_marks m
       WHERE m.job_id = j.id AND m.segments_sha256 = ${LATEST_SEGMENTS_SHA}) AS checked_count,
     (SELECT count(*)::int FROM (
@@ -111,6 +142,8 @@ type Row = {
   failed_window_count: number | null;
   caption_count: number | null;
   caption_failed_count: number | null;
+  failed_stages: RecipeStage[];
+  has_review_output: boolean;
   checked_count: number | null;
   issue_count: number | null;
   file_count: number | null;
@@ -133,11 +166,9 @@ export type PipelineListItem = {
   uploadPercent: number | null;
   /** Accepted annotation counts; null fields = not accepted (unknown). */
   counts: ListCounts;
-  /**
-   * Annotations accepted, so a review is possible. No link is built: the
-   * review route (SA-98) does not exist on main yet.
-   */
+  /** The accepted job has output or a recorded failure that Review can explain. */
   reviewable: boolean;
+  failedStages: RecipeStage[];
 };
 export type PipelineList = {
   items: PipelineListItem[];
@@ -157,6 +188,8 @@ function failureNote(row: Row): string | null {
       pipelineErrorSummary(row.rejection_code) ??
       "Source was rejected during admission"
     );
+  const stages = failedStageNote(row.failed_stages);
+  if (stages) return stages;
   const summary = pipelineErrorSummary(row.error_code);
   if (row.status === "needs_attention")
     return row.job_state === "submit_unknown"
@@ -172,7 +205,7 @@ function annotationCounts(row: Row): AnnotationCounts {
     ? null
     : {
         segments: row.segment_count,
-        failedWindows: row.failed_window_count ?? 0,
+        failedWindows: row.failed_window_count,
         captions: row.caption_count,
         captionsFailed: row.caption_failed_count,
       };
@@ -223,7 +256,10 @@ function toListItem(row: Row): PipelineListItem {
       teamChecks: row.checked_count ?? 0,
       teamIssues: row.issue_count ?? 0,
     },
-    reviewable: row.job_state === "succeeded" && row.segment_count !== null,
+    failedStages: row.failed_stages,
+    reviewable:
+      row.job_state === "succeeded" &&
+      (row.has_review_output || row.failed_stages.length > 0),
   };
 }
 
@@ -234,6 +270,7 @@ export async function listPipelineRecordings(
 ): Promise<PipelineList> {
   const offset = (query.page - 1) * PIPELINE_PAGE_SIZE;
   const filter = `WHERE ($2::text = '' OR collector_name ILIKE $2 ESCAPE '\\'
+      OR id::text ILIKE $2 ESCAPE '\\'
       OR to_char(started_at AT TIME ZONE 'UTC', 'FMDD FMMon YYYY, HH24:MI') ILIKE $2 ESCAPE '\\')
     AND ($3::text IS NULL OR status = $3)`;
   const params = [
@@ -276,6 +313,8 @@ export type PipelineDetail = {
   collector: string;
   status: PipelineStatus;
   statusNote: string | null;
+  failedStages: RecipeStage[];
+  reviewable: boolean;
   /** Staff-readable, curated error summary. */
   error: { summary: string } | null;
   stages: Stage[];
@@ -329,6 +368,8 @@ export async function getPipelineDetail(
     collector: row.collector_name,
     status: row.status,
     statusNote: item.note,
+    failedStages: row.failed_stages,
+    reviewable: item.reviewable,
     error: errorSummary ? { summary: errorSummary } : null,
     stages,
     source: {
@@ -364,7 +405,7 @@ export async function pipelineActionsFor(
       : [];
   return {
     reviewClipsHref:
-      detail.status === "completed" &&
+      (detail.status === "completed" || detail.status === "needs_attention") &&
       detail.jobId !== null &&
       detail.jobState === "succeeded" &&
       (detail.clipCount ?? 0) > 0

@@ -1,5 +1,7 @@
 "use client";
 
+import { Spinner } from "../ui/spinner";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createClipViewer,
@@ -118,8 +120,9 @@ export function ClipViewer({
       {visibleState.phase === "loading" || visibleState.phase === "idle" ? (
         <p
           role="status"
-          className="absolute inset-0 m-0 grid place-items-center text-muted"
+          className="absolute inset-0 m-0 flex items-center justify-center gap-2 text-muted"
         >
+          <Spinner />
           {visibleState.phase === "loading" && visibleState.attempt > 1
             ? "Renewing clip link…"
             : "Loading clip…"}

@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
+import {
+  shortRecordingId,
+  type PipelineStatus,
+} from "@stateaction/server/pipeline-model";
+import { StatusBadge } from "../pipeline/status-badge";
 import { buildReviewModel } from "../../lib/review/model";
 import {
   isTextEntryTarget,
@@ -41,10 +46,16 @@ export function ReviewPage({
   bundle,
   recordings,
   mediaOrigin,
+  status,
+  failureNote,
+  segmentationFailure,
 }: {
   bundle: ReviewBundle;
   recordings: ReviewRecordingSummary[];
   mediaOrigin: string | null;
+  status: PipelineStatus;
+  failureNote: string | null;
+  segmentationFailure: string | null;
 }) {
   const router = useRouter();
   const { annotations, recording } = bundle;
@@ -240,15 +251,14 @@ export function ReviewPage({
   };
 
   const { summary } = model;
-  const jobState = annotations.dag_run?.jobState;
-  const handFailed = (annotations.dag_run?.stages ?? []).some(
-    (s) => s.stage === "hand_pose" && s.state !== "succeeded",
-  );
-  const clean =
-    summary.failedWindows === 0 &&
-    summary.failedCaptions === 0 &&
-    model.presence === "available" &&
-    !handFailed;
+  const recordedCaptionFailures = annotations.captions?.rows.filter(
+    (row) => row.status === "failed",
+  ).length;
+  const choices = recordings.some(
+    (r) => r.recordingId === recording.recordingId,
+  )
+    ? recordings
+    : [recording, ...recordings];
 
   return (
     <div className="min-w-0">
@@ -260,9 +270,16 @@ export function ReviewPage({
           onChange={(e) => router.push(`/review/${e.target.value}`)}
           className="min-h-[34px] max-w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink"
         >
-          {recordings.map((r) => (
+          {choices.map((r) => (
             <option key={r.recordingId} value={r.recordingId}>
-              {r.title} · {r.recordingId.slice(0, 8)}
+              {[
+                r.title,
+                shortRecordingId(r.recordingId),
+                r.collector,
+                r.sourceSize,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </option>
           ))}
         </select>
@@ -270,23 +287,37 @@ export function ReviewPage({
           {Math.floor(model.durationS / 60)}:
           {String(Math.floor(model.durationS % 60)).padStart(2, "0")}
         </span>
-        <span
+        <div
           data-testid="review-state"
-          className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
-            clean ? "bg-[#e9f6ef] text-good" : "bg-[#fff4de] text-[#8a5a00]"
-          }`}
+          className="flex flex-wrap items-center gap-2"
         >
-          {jobState === "succeeded"
-            ? "Processed"
-            : (jobState ?? "No job state")}
-          {summary.failedWindows
-            ? ` · ${summary.failedWindows} failed window${summary.failedWindows === 1 ? "" : "s"}`
-            : ""}
-        </span>
+          <StatusBadge status={status} />
+          {failureNote ? (
+            <Link
+              href={"/pipeline/" + recording.recordingId}
+              className="text-xs font-medium text-danger underline"
+            >
+              {failureNote}
+            </Link>
+          ) : null}
+        </div>
         <span data-testid="review-summary" className="text-xs text-muted">
-          {summary.segments.toLocaleString()} segments · {summary.failedWindows}{" "}
-          failed {summary.failedWindows === 1 ? "window" : "windows"} ·{" "}
-          {summary.failedCaptions} captions failed
+          {annotations.segments
+            ? [
+                summary.segments.toLocaleString() + " segments",
+                summary.failedWindows +
+                  (summary.failedWindows === 1
+                    ? " failed window"
+                    : " failed windows"),
+              ].join(" · ")
+            : "Segment counts not recorded"}
+          {" · "}
+          {recordedCaptionFailures === undefined
+            ? "Caption counts not recorded"
+            : recordedCaptionFailures +
+              (recordedCaptionFailures === 1
+                ? " caption failed"
+                : " captions failed")}
           {model.presence === "absent" ? " · hand pose unavailable" : ""}
         </span>
         <span
@@ -357,6 +388,7 @@ export function ReviewPage({
         <SidePanel
           model={model}
           annotations={annotations}
+          segmentationFailure={segmentationFailure}
           tab={tab}
           onTab={setTab}
           cards={shown}

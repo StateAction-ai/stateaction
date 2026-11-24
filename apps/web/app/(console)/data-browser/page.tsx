@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { serverConfig } from "@stateaction/server";
 import { authRuntime } from "@stateaction/server/auth";
+import {
+  recordingTitle,
+  shortRecordingId,
+} from "@stateaction/server/pipeline-model";
 import { notFound } from "next/navigation";
 import { requireConsoleSession } from "../../../lib/server-session";
 import {
@@ -50,7 +54,10 @@ export default async function DataBrowserPage({
       [query.recordingId, session.userId],
     );
     if (!rows[0]) notFound();
-    recordingName = `Recording ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC", timeZoneName: "short" }).format(rows[0].started_at)}`;
+    recordingName =
+      recordingTitle(rows[0].started_at) +
+      " · " +
+      shortRecordingId(query.recordingId);
   }
   let mediaOrigin: string | null = null;
   try {

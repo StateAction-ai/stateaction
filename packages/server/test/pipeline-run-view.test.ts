@@ -9,6 +9,8 @@ import {
   dagRunJson,
   formatDuration,
   formatRate,
+  formatUsd,
+  stageReason,
   gpuUsdPerHour,
 } from "../src/pipeline/run-view.js";
 
@@ -113,4 +115,35 @@ test("dag-run panel text is the exact document", () => {
   assert.equal(formatDuration(null), "—");
   assert.equal(formatDuration(3661), "1h 01m");
   assert.equal(formatDuration(192.25), "3m 12s");
+});
+
+test("partial stage results remain failures in the display", () => {
+  const run = structuredClone(caseNamed(/failed caption stage/));
+  const seg = run.stages[0]!;
+  assert.equal(seg.state, "succeeded");
+  const rows = buildRunStages(run);
+  assert.equal(rows[0]!.stateLabel, "Needs attention");
+  assert.equal(rows[1]!.reason, "The stage exceeded its time limit.");
+});
+
+test("caption failures in either recorded count format prevent a green stage", () => {
+  for (const key of ["captions_failed", "failed_captions"]) {
+    const run = structuredClone(caseNamed(/failed caption stage/));
+    const cap = run.stages[1]!;
+    cap.state = "succeeded";
+    cap.counts = { [key]: 1 };
+    assert.equal(buildRunStages(run)[1]!.displayState, "needs_attention");
+    cap.counts[key] = 0;
+    assert.equal(buildRunStages(run)[1]!.displayState, "succeeded");
+  }
+});
+
+test("only recorded costs and known stage failure reasons are formatted", () => {
+  assert.equal(formatUsd(null), "Not recorded");
+  assert.equal(formatUsd("0.00"), "$0.00");
+  assert.equal(
+    stageReason("terminated_before_start"),
+    "The worker stopped before starting this stage.",
+  );
+  assert.equal(stageReason("constructor"), null);
 });

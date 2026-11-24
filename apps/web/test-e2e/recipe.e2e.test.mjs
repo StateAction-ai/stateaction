@@ -362,7 +362,7 @@ async function pipelineStages(name) {
     "[data-testid=recipe-stages]",
   );
   return ev(
-    `[...document.querySelectorAll('[data-testid=recipe-stages] > li')].map(li => ({ stage: li.dataset.stage, state: li.dataset.state, text: li.innerText.replace(/\\s+/g, ' ') }))`,
+    `[...document.querySelectorAll('[data-testid=recipe-stages] > li')].map(li => ({ stage: li.dataset.stage, state: li.dataset.state, displayState: li.dataset.displayState, reasonCode: li.querySelector('p[role=alert] [title], p:first-of-type [title]')?.title ?? null, text: li.innerText.replace(/\\s+/g, ' ') }))`,
   );
 }
 
@@ -478,7 +478,24 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       await reviewSummary(),
       /^4 segments · 0 failed windows · 0 captions failed/,
     );
-    assert.equal(await reviewState(), "Processed");
+    assert.equal(await reviewState(), "Completed");
+
+    const reviewPath = "/review/" + f.recordingId;
+    const pipelinePath = "/pipeline/" + f.recordingId;
+    const clipBrowser = "/data-browser?recordingId=" + f.recordingId;
+    const hasLink = (url, root = "main") =>
+      ev(
+        "Boolean(document.querySelector(" +
+          JSON.stringify(root + ' a[href="' + url + '"]') +
+          "))",
+      );
+    await open("/pipeline", "tbody");
+    assert.ok(await hasLink(reviewPath, "tbody"));
+    await open(pipelinePath, "[data-testid=run-summary]");
+    assert.ok(await hasLink(reviewPath));
+    assert.ok(await hasLink(clipBrowser));
+    await open(clipBrowser, "article a[href^='/clips/']");
+    assert.ok(await hasLink(pipelinePath, "article"));
   });
 
   test("caption_failed: two captions fail inside a succeeded stage; the review page shows them failed with their code, never blank", async () => {
@@ -509,6 +526,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       "two failure ticks on the failures lane",
     );
     assert.match(await reviewSummary(), /2 captions failed/);
+    assert.match(await reviewState(), /Needs attention.*Failed in Captioning/);
+    const rows = await pipelineStages("caption_failed");
+    assert.equal(rows[1].displayState, "needs_attention");
+    assert.match(rows[1].text, /Needs attention/);
   });
 
   test("window_failed: a failed window is a failed row in segments and not_captioned in captions, shown as failed on the review page", async () => {
@@ -532,7 +553,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal(notCaptioned[0].segment_id, doc.segments.rows[1].segment_id);
     await reviewAndDownload("window_failed");
     assert.match(await reviewSummary(), /1 failed window/);
-    assert.match(await reviewState(), /1 failed window/);
+    assert.match(
+      await reviewState(),
+      /Needs attention.*Failed in Segmentation/,
+    );
     const cardsShown = await railCards();
     assert.deepEqual(
       cardsShown.map((c) => c.failed),
@@ -580,7 +604,15 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal((await railCards()).length, 0);
     assert.match(
       await reviewSummary(),
-      /^0 segments · 0 failed windows · 0 captions failed/,
+      /^Segment counts not recorded · Caption counts not recorded/,
+    );
+    assert.match(
+      await reviewState(),
+      /Needs attention.*Failed in Segmentation/,
+    );
+    assert.match(
+      await ev("document.querySelector('[data-testid=rail-list]').innerText"),
+      /Segmentation failed.*did not return a stage receipt/,
     );
     const rows = await pipelineStages("segment_failed");
     assert.deepEqual(
@@ -591,8 +623,11 @@ describe("stub recipe through upload, admission, the Render loopback controller,
         ["hand_pose", "succeeded"],
       ],
     );
-    assert.match(rows[0].text, /receipt_missing/);
-    assert.match(rows[1].text, /upstream_failed/);
+    assert.match(rows[0].text, /did not return a stage receipt/);
+    assert.equal(rows[0].reasonCode, "receipt_missing");
+    assert.match(rows[1].text, /A stage it depends on failed/);
+    assert.equal(rows[1].reasonCode, "upstream_failed");
+    assert.ok(rows.every((row) => row.text.includes("Not recorded")));
   });
 
   test("digest_mismatch: files uploaded under a rejected receipt are attributed to the failed segment node, never served as segments", async () => {
@@ -622,7 +657,8 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     await reviewAndDownload("digest_mismatch");
     assert.equal((await railCards()).length, 0);
     const rows = await pipelineStages("digest_mismatch");
-    assert.match(rows[0].text, /receipt_rejected/);
+    assert.match(rows[0].text, /could not verify the stage receipt/);
+    assert.equal(rows[0].reasonCode, "receipt_rejected");
   });
 
   test("zero_segments: a valid empty segments document is a success, caption is not_run(no_segments), and nothing is reported as failed", async () => {
@@ -646,7 +682,7 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal((await railCards()).length, 0);
     assert.match(
       await reviewSummary(),
-      /^0 segments · 0 failed windows · 0 captions failed/,
+      /^0 segments · 0 failed windows · Caption counts not recorded/,
     );
     assert.equal(await count("failure-caption"), 0);
   });
@@ -697,7 +733,13 @@ describe("stub recipe through upload, admission, the Render loopback controller,
         ["hand_pose", "failed"],
       ],
     );
-    assert.ok(rows[0].text.includes(f.stages.segment.error_code));
+    assert.equal(rows[0].reasonCode, f.stages.segment.error_code);
+    assert.equal(rows[2].reasonCode, f.stages.hand_pose.error_code);
+    await open("/review/" + recordingId, "[data-status=needs_attention]");
+    assert.match(
+      await ev("document.querySelector('main').innerText"),
+      /Failed in Segmentation, Hand pose/,
+    );
     assert.ok(jobId && recordingId);
   });
 

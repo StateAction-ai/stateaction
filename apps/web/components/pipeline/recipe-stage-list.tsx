@@ -1,9 +1,9 @@
+import { Spinner } from "../ui/spinner";
 import {
   AlertCircle,
   CheckCircle2,
   CircleDashed,
   HelpCircle,
-  Loader2,
   OctagonX,
 } from "lucide-react";
 import {
@@ -15,13 +15,14 @@ import {
 import { cn } from "../../lib/utils";
 import { DiagnosticLink } from "./diagnostic-link";
 
-type State = RunStageView["state"];
-const ICON: Record<State, typeof CheckCircle2> = {
+type State = RunStageView["displayState"];
+const ICON: Record<State, typeof CheckCircle2 | typeof Spinner> = {
   succeeded: CheckCircle2,
-  running: Loader2,
-  submitting: Loader2,
+  running: Spinner,
+  submitting: Spinner,
   pending: CircleDashed,
   failed: AlertCircle,
+  needs_attention: AlertCircle,
   cancelled: OctagonX,
   submit_unknown: HelpCircle,
   not_run: CircleDashed,
@@ -32,6 +33,7 @@ const TONE: Record<State, string> = {
   submitting: "text-brand",
   pending: "text-muted",
   failed: "text-danger",
+  needs_attention: "text-[#8a5a00]",
   cancelled: "text-muted",
   submit_unknown: "text-[#8a5a00]",
   not_run: "text-muted",
@@ -42,6 +44,7 @@ const BADGE: Record<State, string> = {
   submitting: "bg-brand-soft text-brand-ink",
   pending: "bg-[#eef0ec] text-[#4d5a54]",
   failed: "bg-danger-soft text-danger",
+  needs_attention: "bg-[#fff4de] text-[#8a5a00]",
   cancelled: "bg-[#eef0ec] text-[#4d5a54]",
   submit_unknown: "bg-[#fff4de] text-[#8a5a00]",
   not_run: "bg-[#eef0ec] text-[#4d5a54]",
@@ -62,19 +65,20 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
       aria-label="Recipe stages"
     >
       {stages.map((s) => {
-        const Icon = ICON[s.state];
+        const Icon = ICON[s.displayState];
         return (
           <li
             key={s.stage}
             data-stage={s.stage}
             data-state={s.state}
+            data-display-state={s.displayState}
             className="grid gap-2 border-t border-line px-1 py-4 first:border-t-0 sm:grid-cols-[1fr_auto]"
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <Icon
                   aria-hidden="true"
-                  className={cn("h-4 w-4 shrink-0", TONE[s.state])}
+                  className={cn("h-4 w-4 shrink-0", TONE[s.displayState])}
                 />
                 <span className="font-mono text-[13px] font-bold">
                   {s.stage}
@@ -86,7 +90,7 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
                 <span
                   className={cn(
                     "rounded-md px-2 py-0.5 text-xs font-semibold",
-                    BADGE[s.state],
+                    BADGE[s.displayState],
                   )}
                 >
                   {s.stateLabel}
@@ -99,13 +103,9 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
               </div>
               {s.state === "not_run" ? (
                 <p className="m-0 mt-1.5 text-[13px] text-muted">
-                  Not run: {s.reason ?? "no reason recorded"}
-                  {s.errorCode ? (
-                    <span className="font-mono text-[11px]">
-                      {" "}
-                      ({s.errorCode})
-                    </span>
-                  ) : null}
+                  <span title={s.errorCode ?? undefined}>
+                    {s.reason ?? "No reason was recorded."}
+                  </span>
                 </p>
               ) : null}
 
@@ -155,12 +155,12 @@ export function RecipeStageList({ stages }: { stages: RunStageView[] }) {
                   role="alert"
                   className="m-0 mt-2 rounded-lg border border-[#edc8cc] bg-danger-soft px-3 py-2 text-[13px] text-[#7b2b31] break-words"
                 >
-                  <span className="font-mono font-semibold">
-                    {s.errorCode ?? "unknown_error"}
-                  </span>{" "}
-                  {s.state === "failed"
-                    ? "This stage failed; its output is recorded as failed, not empty."
-                    : "This stage was cancelled."}
+                  <span title={s.errorCode ?? undefined}>
+                    {s.reason ??
+                      (s.state === "failed"
+                        ? "The stage failed. No explanation was recorded."
+                        : "The stage was cancelled.")}
+                  </span>
                 </p>
               ) : null}
               {s.state === "submit_unknown" ? (

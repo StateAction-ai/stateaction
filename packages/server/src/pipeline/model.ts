@@ -1,3 +1,5 @@
+import type { DagRunNode } from "@stateaction/contracts";
+
 /**
  * Pure, dependency-free Pipeline model (SA-34): route-safe query parsing,
  * display classification inputs, stage derivation and the action seam. Nothing
@@ -27,6 +29,43 @@ export const PIPELINE_STATUS_LABEL: Record<PipelineStatus, string> = {
   cancelled: "Cancelled",
   completed: "Completed",
 };
+
+export const RECIPE_STAGE_LABEL = {
+  segment: "Segmentation",
+  caption: "Captioning",
+  hand_pose: "Hand pose",
+} satisfies Record<DagRunNode["stage"], string>;
+
+export type RecipeStage = keyof typeof RECIPE_STAGE_LABEL;
+
+export const STAGE_FAILURE_COUNTS = {
+  segment: ["failed_windows"],
+  caption: ["failed_captions", "captions_failed"],
+  hand_pose: [],
+} satisfies Record<RecipeStage, readonly string[]>;
+
+export function stageHasFailedOutputs(
+  stage: RecipeStage,
+  counts: DagRunNode["counts"],
+): boolean {
+  return STAGE_FAILURE_COUNTS[stage].some((key) => (counts[key] ?? 0) > 0);
+}
+
+export function stageHasFailures(node: DagRunNode): boolean {
+  return (
+    node.state === "failed" || stageHasFailedOutputs(node.stage, node.counts)
+  );
+}
+
+export function failedStageNote(stages: readonly RecipeStage[]): string | null {
+  return stages.length
+    ? "Failed in " + stages.map((stage) => RECIPE_STAGE_LABEL[stage]).join(", ")
+    : null;
+}
+
+export function shortRecordingId(id: string): string {
+  return id.slice(0, 8);
+}
 
 export const PIPELINE_PAGE_SIZE = 25;
 export const PIPELINE_MAX_PAGE = 200;

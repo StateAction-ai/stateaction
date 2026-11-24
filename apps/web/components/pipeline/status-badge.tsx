@@ -1,8 +1,8 @@
+import { Spinner } from "../ui/spinner";
 import {
   AlertTriangle,
   CheckCircle2,
   CircleDashed,
-  Loader2,
   OctagonX,
   UploadCloud,
   XCircle,
@@ -10,7 +10,7 @@ import {
 import {
   PIPELINE_STATUS_LABEL,
   type PipelineStatus,
-} from "@stateaction/server/pipeline";
+} from "@stateaction/server/pipeline-model";
 import { cn } from "../../lib/utils";
 
 const STYLE: Record<PipelineStatus, string> = {
@@ -24,7 +24,7 @@ const STYLE: Record<PipelineStatus, string> = {
 };
 const ICON = {
   completed: CheckCircle2,
-  processing: Loader2,
+  processing: Spinner,
   uploading: UploadCloud,
   failed: XCircle,
   needs_attention: AlertTriangle,
@@ -43,6 +43,7 @@ export function StatusBadge({
   const Icon = ICON[status];
   return (
     <span
+      data-status={status}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold",
         STYLE[status],
