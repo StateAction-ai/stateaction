@@ -10,7 +10,7 @@ Read the linked doc before working in its area.
 - Keep it simple. Geometry/depth/mesh and iOS stay deferred.
 - Segmentation and captioning start with NVIDIA FLORA (non-commercial licence, proof only). Keep it behind a replaceable interface.
 - Record model name, revision, weights hash, prompt, decoding parameters and GPU type with every segment and caption.
-- Never cut hour-scale input into independent short chunks that split segments. Use a downscaled proxy only after it is shown equivalent.
+- The clip is the pipeline and review unit ([design](docs/components/clip-pipeline.md)). Clips are cut only inside detected non-action spans, never inside an action; a short or all-action recording is one clip. Keep the raw source whole, keep source frame IDs and timestamps in every clip output, and record every excluded span with reason, signals, thresholds and filter version. A failed filter is "not filtered" (one whole-recording clip), never a silent skip. Cutting stays off until a certified filter configuration (implementation, parameter digest, signal set) shows at least 99% manipulation recall on labelled recordings. Use a downscaled proxy only after it is shown equivalent.
 - Preserve raw source and frame/timestamp identity. Keep truthful no-hand/failed results: store failed model windows and captions as failed, never empty.
 - Never fabricate detections or silently weaken thresholds.
 - Stay deployable on Render. Create no paid resource (GPU compute, model downloads to paid storage) without authorization and a recorded spend cap.
