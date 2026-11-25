@@ -1,0 +1,18 @@
+[project]
+name = "stateaction-python-plane-spike"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["render==1.7.0", "modal==1.6.4", "aiohttp==3.14.5", "httpx==0.28.1", "stateaction-contracts"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.13.3", "mypy==1.18.2"]
+
+[tool.uv]
+required-version = "==0.13.6"
+
+[tool.uv.sources]
+stateaction-contracts = {path = "../../../packages/contracts/python"}
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true

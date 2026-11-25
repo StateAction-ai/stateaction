@@ -1,0 +1,71 @@
+{
+  "fanOut": { "clip": "clips.plan" },
+  "meta": {
+    "input": "recording_source@2",
+    "limits": {
+      "max_clip_job_cost": "3.00",
+      "max_recording_cost": "60.00",
+      "max_source_seconds": 7200
+    },
+    "title": "Egocentric manipulation (FLORA segments + captions, CPU hand pose)"
+  },
+  "nodes": {
+    "caption": {
+      "inputs": { "segments": "segment.segments", "video": "clip.video" },
+      "module": "flora_captioner_vllm_fp8@1",
+      "outputs": { "captions": "captions@2" },
+      "params": { "prompt": "flora_default@1" },
+      "resources": {
+        "budget": { "fixedSeconds": 300, "perSourceSecond": "0.25" },
+        "gpu": "RTX-PRO-6000"
+      },
+      "scope": "clip"
+    },
+    "clips": {
+      "inputs": { "source": "recording.source" },
+      "module": "clip_filter_passthrough@1",
+      "outputs": { "plan": "clip_plan@1" },
+      "params": {},
+      "resources": {
+        "budget": { "fixedSeconds": 600, "perSourceSecond": "0" },
+        "gpu": null
+      },
+      "scope": "recording"
+    },
+    "hand_pose": {
+      "inputs": { "video": "clip.video" },
+      "module": "hand_pose_cpu@1",
+      "outputs": { "poses": "hand_pose@1" },
+      "params": {},
+      "resources": {
+        "budget": { "fixedSeconds": 120, "perSourceSecond": "0.2" },
+        "gpu": null
+      },
+      "scope": "clip"
+    },
+    "review_video": {
+      "inputs": { "source": "recording.source" },
+      "module": "recording_mp4_remux@1",
+      "outputs": { "video": "recording_mp4@1" },
+      "params": {},
+      "resources": {
+        "budget": { "fixedSeconds": 300, "perSourceSecond": "0.2" },
+        "gpu": null
+      },
+      "scope": "recording"
+    },
+    "segment": {
+      "inputs": { "video": "clip.video" },
+      "module": "flora_tempseg_vllm_fp8@1",
+      "outputs": { "segments": "segments@2" },
+      "params": {},
+      "resources": {
+        "budget": { "fixedSeconds": 240, "perSourceSecond": "0.15" },
+        "gpu": "RTX-PRO-6000"
+      },
+      "scope": "clip"
+    }
+  },
+  "recipe": "egocentric_default@1",
+  "schema": "stateaction.authoring-graph/e6"
+}

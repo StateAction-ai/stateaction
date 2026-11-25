@@ -1,0 +1,53 @@
+{
+  "name": "python-plane-spike",
+  "root": "spikes/python-plane/controller",
+  "projectType": "application",
+  "implicitDependencies": ["contracts-python", "contracts", "server", "web"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "spikes/python-plane/controller",
+        "command": "uv sync --locked --python 3.12"
+      },
+      "cache": false
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "spikes/python-plane/controller",
+        "command": "uv run --locked mypy api.py controller.py executor.py journal.py stub_worker.py workflow.py"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "spikes/python-plane/controller",
+        "command": "uv run --locked python -m pytest -q"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "spikes/python-plane/controller",
+        "commands": [
+          "uv run --locked ruff check .",
+          "uv run --locked ruff format --check ."
+        ],
+        "parallel": false
+      }
+    },
+    "integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "parallelism": false,
+      "dependsOn": [
+        "build",
+        { "projects": ["server", "web"], "target": "build" }
+      ],
+      "options": {
+        "command": "node spikes/python-plane/controller/local-e2e.mjs"
+      }
+    }
+  }
+}
