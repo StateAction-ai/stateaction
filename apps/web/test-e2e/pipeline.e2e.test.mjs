@@ -1,4 +1,4 @@
-// SA-34 REAL-STACK HTTP E2E for /pipeline: production `next start`, real Better
+// SA-34 REAL-STACK HTTP E2E for /recordings: production `next start`, real Better
 // Auth sessions, restricted `stateaction_app` Postgres, operator-managed roles
 // and real catalog rows (processing, completed with clips, failed).
 import assert from "node:assert/strict";
@@ -33,8 +33,6 @@ const visible = (html) =>
     .replace(/<script[\s\S]*?<\/script>/g, "")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ");
-// Page content only (the shell header holds the account-menu button).
-const main = (html) => /<main[\s\S]*<\/main>/.exec(html)?.[0] ?? "";
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 
 before(async () => {
@@ -68,43 +66,37 @@ after(async () => {
 });
 
 describe("staff list", () => {
-  test("four columns, real rows, no row actions or raw ids", async () => {
-    const res = await navigate("/pipeline", staff);
+  test("list shows searchable records with processing statuses", async () => {
+    const res = await navigate("/recordings", staff);
     assert.equal(res.status, 200);
     assert.match(String(res.headers["cache-control"]), /no-store|private/);
     const text = visible(res.text);
-    for (const h of ["Recording", "Collector", "Source", "Status"])
-      assert.match(text, new RegExp(h));
-    for (const s of ["Processing", "Completed", "Failed"])
-      assert.match(text, new RegExp(s));
-    // The three seeded rows plus the SA-13 local seed's own recording.
-    assert.ok(
-      (res.text.match(/href="\/pipeline\/[0-9a-f-]{36}"/g) ?? []).length >= 3,
-    );
+    for (const heading of [
+      "Search recordings",
+      "Status",
+      "Sort",
+      "All recordings",
+    ])
+      assert.match(text, new RegExp(heading));
     assert.doesNotMatch(text, UUID);
-    assert.doesNotMatch(text, /Scenario|\b(Cancel|Retry|Reconcile|Inspect)\b/);
     for (const id of Object.values(ids)) {
-      assert.ok(res.text.includes("/pipeline/" + id), id);
+      assert.ok(res.text.includes(`href="/recordings/${id}"`), id);
       assert.ok(text.includes(id.slice(0, 8)), id);
     }
-    assert.match(
-      res.text,
-      /data-status="processing"[^>]*><svg[^>]*animate-spin[^>]*motion-reduce:animate-none/,
-    );
   });
 
-  test("status filter and search narrow the rows and links preserve filters", async () => {
-    const failed = await navigate("/pipeline?status=failed", staff);
-    assert.ok(failed.text.includes(`/pipeline/${ids.failed}?status=failed`));
-    assert.ok(!failed.text.includes(`/pipeline/${ids.completed}`));
+  test("status filter and search narrow the rows", async () => {
+    const failed = await navigate("/recordings?status=failed", staff);
+    assert.ok(failed.text.includes(`/recordings/${ids.failed}"`));
+    assert.ok(!failed.text.includes(`/recordings/${ids.completed}`));
     const byId = await navigate(
-      "/pipeline?q=" + ids.completed.slice(0, 8),
+      "/recordings?q=" + ids.completed.slice(0, 8),
       staff,
     );
-    assert.ok(byId.text.includes("/pipeline/" + ids.completed));
-    assert.ok(!byId.text.includes("/pipeline/" + ids.processing));
-    const none = await navigate("/pipeline?q=zzzz-no-match", staff);
-    assert.match(visible(none.text), /No recordings match these filters/);
+    assert.ok(byId.text.includes("/recordings/" + ids.completed));
+    assert.ok(!byId.text.includes("/recordings/" + ids.processing));
+    const none = await navigate("/recordings?q=zzzz-no-match", staff);
+    assert.match(visible(none.text), /No recordings match your search/);
     // Hostile or malformed parameters never fail the page.
     for (const qs of [
       "status=bogus",
@@ -113,71 +105,81 @@ describe("staff list", () => {
       "q=%25_%5C",
       `q=${"x".repeat(900)}`,
     ])
-      assert.equal((await navigate(`/pipeline?${qs}`, staff)).status, 200, qs);
+      assert.equal(
+        (await navigate(`/recordings?${qs}`, staff)).status,
+        200,
+        qs,
+      );
   });
 });
 
 describe("recording detail", () => {
-  test("completed: review link and only the run history selection action", async () => {
-    const res = await navigate(
-      `/pipeline/${ids.completed}?status=completed`,
-      staff,
-    );
+  test("completed: recording details link to the clip processing page", async () => {
+    const res = await navigate(`/recordings/${ids.completed}`, staff);
     assert.equal(res.status, 200);
-    assert.ok(
-      res.text.includes(`href="/data-browser?recordingId=${ids.completed}"`),
+    assert.match(visible(res.text), /Clip planning/);
+    assert.match(visible(res.text), /Recording estimated cost/);
+    assert.ok(res.text.includes('href="/recordings"'));
+    assert.match(
+      res.text,
+      new RegExp(
+        `href="/recordings/${ids.completed}/clips/[a-f0-9-]{36}/processing"`,
+      ),
     );
-    assert.doesNotMatch(res.text, /reviewStatus/);
-    assert.ok(res.text.includes('href="/pipeline?status=completed"'));
-    const text = visible(res.text);
-    assert.match(text, /Review clips/);
-    assert.match(text, /Ready for review/);
-    assert.match(text, /2 clips/);
-    assert.doesNotMatch(text, UUID);
-    const buttons = Array.from(
-      main(res.text).matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g),
-      ([, label]) => visible(label).trim(),
-    );
-    assert.deepEqual(buttons, ["Select this result"]);
   });
 
-  test("processing: quality checks stay unknown and no Review clips", async () => {
-    const text = visible(
-      (await navigate(`/pipeline/${ids.processing}`, staff)).text,
-    );
-    assert.match(text, /Quality checks Unknown/);
-    assert.doesNotMatch(text, /Review clips/);
-  });
-
-  test("failed: curated error, no Review clips", async () => {
-    const res = await navigate(`/pipeline/${ids.failed}`, staff);
-    const text = visible(res.text);
-    assert.match(text, /Source checksum mismatch/);
-    assert.doesNotMatch(text, /bad bytes|\/srv\/|Review clips/);
+  test("failed: curated error and no provider payload", async () => {
+    const res = await navigate(`/recordings/${ids.failed}`, staff);
+    assert.equal(res.status, 200);
+    assert.match(visible(res.text), /Source checksum mismatch/);
+    assert.doesNotMatch(res.text, /bad bytes|\/srv\//);
   });
 
   test("malformed and unknown ids are 404", async () => {
     for (const p of ["not-a-uuid", "00000000-0000-4000-8000-000000000000"])
-      assert.equal((await navigate(`/pipeline/${p}`, staff)).status, 404, p);
+      assert.equal((await navigate(`/recordings/${p}`, staff)).status, 404, p);
   });
 });
 
 describe("role denials", () => {
   test("signed out redirects to login", async () => {
-    for (const p of ["/pipeline", `/pipeline/${ids.completed}`]) {
+    for (const p of ["/recordings", `/recordings/${ids.completed}`]) {
       const res = await navigate(p);
       assert.equal(res.status, 307);
       assert.match(res.headers.location, /\/login$/);
     }
   });
-  test("customer gets 404, collector sees no pipeline data", async () => {
+  test("customer gets 404, collector sees no recording data", async () => {
     const customer = await rawSignIn(stack, "customer");
-    for (const p of ["/pipeline", `/pipeline/${ids.completed}`])
+    for (const p of ["/recordings", `/recordings/${ids.completed}`])
       assert.equal((await navigate(p, customer)).status, 404, p);
     const collector = await rawSignIn(stack, "collector");
-    for (const p of ["/pipeline", `/pipeline/${ids.completed}`]) {
+    for (const p of ["/recordings", `/recordings/${ids.completed}`]) {
       const res = await navigate(p, collector);
-      assert.doesNotMatch(res.text, /Recording activity|Processing stages/, p);
+      assert.doesNotMatch(res.text, /All recordings|Clip planning/, p);
     }
   });
+});
+
+test("removed review and pipeline URLs return the generic 404", async () => {
+  const missing = await navigate("/deleted-console-route", staff);
+  assert.equal(missing.status, 404);
+  const heading = missing.text.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1];
+  assert.ok(heading);
+  for (const parent of ["/pipeline", "/review"]) {
+    for (const path of [
+      parent,
+      `${parent}/${ids.completed}`,
+      `${parent}/clips/${ids.completed}`,
+    ]) {
+      const res = await navigate(path, staff);
+      assert.equal(res.status, 404, path);
+      assert.equal(res.headers.location, undefined, path);
+      assert.equal(
+        res.text.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1],
+        heading,
+        path,
+      );
+    }
+  }
 });

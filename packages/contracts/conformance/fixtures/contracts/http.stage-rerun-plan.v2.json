@@ -1,0 +1,194 @@
+{
+  "contract": "http.stage-rerun-plan.v2",
+  "cases": [
+    {
+      "name": "two clip plans and total caps",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "failed_clips",
+          "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "clips": [
+            {
+              "execute": [
+                {
+                  "stage": "hand_pose",
+                  "enabled": true,
+                  "module": "hand_pose_cpu_v1@1",
+                  "params": {},
+                  "resources": {
+                    "gpu": "none",
+                    "budgetSeconds": 1100,
+                    "maxContainers": 1,
+                    "retries": 0
+                  }
+                }
+              ],
+              "reuse": [
+                {
+                  "stage": "segment",
+                  "state": "succeeded",
+                  "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "executionJobId": null,
+                  "receiptSha256": null,
+                  "errorCode": null,
+                  "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "copyBytes": "4096"
+                }
+              ],
+              "maxGpuCostUsd": "0.00",
+              "maxComputeCostUsd": "0.27",
+              "estimatedComputeCostUsd": null,
+              "estimatedSeconds": null,
+              "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+              "ordinal": 0,
+              "startTsNs": "0",
+              "endTsNs": "99000000"
+            },
+            {
+              "execute": [
+                {
+                  "stage": "hand_pose",
+                  "enabled": true,
+                  "module": "hand_pose_cpu_v1@1",
+                  "params": {},
+                  "resources": {
+                    "gpu": "none",
+                    "budgetSeconds": 1100,
+                    "maxContainers": 1,
+                    "retries": 0
+                  }
+                }
+              ],
+              "reuse": [
+                {
+                  "stage": "segment",
+                  "state": "succeeded",
+                  "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "executionJobId": null,
+                  "receiptSha256": null,
+                  "errorCode": null,
+                  "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "copyBytes": "4096"
+                }
+              ],
+              "maxGpuCostUsd": "0.00",
+              "maxComputeCostUsd": "0.27",
+              "estimatedComputeCostUsd": null,
+              "estimatedSeconds": null,
+              "clipId": "019a4b2c-0003-7f50-8a6b-7c8d9e0f1a2b",
+              "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+              "ordinal": 1,
+              "startTsNs": "0",
+              "endTsNs": "99000000"
+            }
+          ],
+          "maxGpuCostUsd": "0.00",
+          "maxComputeCostUsd": "0.54",
+          "estimatedComputeCostUsd": null
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a single clip request cannot preview two clips",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "clip",
+          "planSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "clips": [
+            {
+              "execute": [
+                {
+                  "stage": "hand_pose",
+                  "enabled": true,
+                  "module": "hand_pose_cpu_v1@1",
+                  "params": {},
+                  "resources": {
+                    "gpu": "none",
+                    "budgetSeconds": 1100,
+                    "maxContainers": 1,
+                    "retries": 0
+                  }
+                }
+              ],
+              "reuse": [
+                {
+                  "stage": "segment",
+                  "state": "succeeded",
+                  "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "executionJobId": null,
+                  "receiptSha256": null,
+                  "errorCode": null,
+                  "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "copyBytes": "4096"
+                }
+              ],
+              "maxGpuCostUsd": "0.00",
+              "maxComputeCostUsd": "0.27",
+              "estimatedComputeCostUsd": null,
+              "estimatedSeconds": null,
+              "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+              "ordinal": 0,
+              "startTsNs": "0",
+              "endTsNs": "99000000"
+            },
+            {
+              "execute": [
+                {
+                  "stage": "hand_pose",
+                  "enabled": true,
+                  "module": "hand_pose_cpu_v1@1",
+                  "params": {},
+                  "resources": {
+                    "gpu": "none",
+                    "budgetSeconds": 1100,
+                    "maxContainers": 1,
+                    "retries": 0
+                  }
+                }
+              ],
+              "reuse": [
+                {
+                  "stage": "segment",
+                  "state": "succeeded",
+                  "sourceJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "executionJobId": null,
+                  "receiptSha256": null,
+                  "errorCode": null,
+                  "importJobId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+                  "importManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "copyBytes": "4096"
+                }
+              ],
+              "maxGpuCostUsd": "0.00",
+              "maxComputeCostUsd": "0.27",
+              "estimatedComputeCostUsd": null,
+              "estimatedSeconds": null,
+              "clipId": "019a4b2c-0003-7f50-8a6b-7c8d9e0f1a2b",
+              "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+              "ordinal": 1,
+              "startTsNs": "0",
+              "endTsNs": "99000000"
+            }
+          ],
+          "maxGpuCostUsd": "0.00",
+          "maxComputeCostUsd": "0.54",
+          "estimatedComputeCostUsd": null
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

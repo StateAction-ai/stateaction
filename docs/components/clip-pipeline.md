@@ -291,39 +291,9 @@ A failed attempt needs a new fixture and fresh consent before another window.
   succeeded and some failed, `failed` when the plan and fallback both cannot
   run or every clip failed.
 
-## UI
+## Console
 
-The current recording review page (`/review/[recordingId]`, player, tiers,
-caption rail, hand-pose tab, marks) is the template for clip review. Nothing
-in its layout changes; its data scope becomes one clip.
-
-- **Review queue** (`/review`): staff list of clips pending review, oldest
-  first. Columns: clip (recording title, ordinal, source time range),
-  duration, pipeline state, failures, marks progress. Filters: state, recording,
-  collector. "Pending" means the clip's selected job succeeded or partially
-  failed and no review exists for that exact selected job and result manifest
-  digest. Reviews keep today's binding (`job_id` plus
-  `result_manifest_sha256`): an approval of an earlier result never approves a
-  rerun's output, so a newly selected result returns the clip to the queue,
-  and dataset and customer visibility follow the review of the selected
-  result only. Clips whose job is still running
-  are listed as not ready, never as reviewable.
-- **Clip review** (`/review/clips/[clipId]`): the current review page over the
-  clip's selected job. The time axis shows clip time with source time beside
-  it, a "Original video at 12:34" link opens the recording page at that time,
-  and the approve, reject, task label, notes and dataset controls from today's
-  `/clips/[clipId]` page move into its side panel. Segment marks keep their
-  current semantics, keyed by the clip job.
-- **Recording page** (`/recordings/[recordingId]`): the original
-  `recording.mp4` from the plan job with plain playback (no annotations, for debugging), one
-  timeline lane with clips and excluded spans (reason on hover), and a table
-  of clips with their pipeline state, stage states, cost estimate and links to
-  the clip review and clip pipeline pages. The plan's mode, filter version and
-  state are shown at the top.
-- **Pipeline**: the existing pipeline page becomes per clip job
-  (`/pipeline/clips/[clipId]`), with the recording page as its parent.
-- **Data browser**: the staff "All clips" view lists review clips, not viewer
-  chunks.
+[Recordings, clip processing and dataset review](clip-review-and-datasets.md) describes the current routes, result authorization and review workflow. Recordings link to the clip's stage details. The Data browser lists accepted review clips, and one clip page provides video, timeline tiers and annotations. Staff can add a clip to datasets, reject it or restore it for review.
 
 ### Staff edits
 
@@ -351,9 +321,6 @@ collect labels.
 - Legacy chunk reviews and dataset memberships (`reviews`, `dataset_clips`) do
   not map one to one onto review clips. They stay read-only history. New
   reviews and dataset membership attach to review clips (open question 1).
-- Routes: `/review/[recordingId]` redirects to the recording's clip queue
-  (or its single clip), `/clips/[clipId]` redirects to the review clip that
-  contains the chunk.
 
 ## Open questions for the user
 

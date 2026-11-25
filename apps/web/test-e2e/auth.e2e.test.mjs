@@ -248,7 +248,7 @@ describe("Next.js production server with Better Auth", () => {
 
   test("staff sign-in -> home page shows server roles -> /api/v1/me agrees", async () => {
     const jar = await signIn("staff");
-    const home = await page("/pipeline", jar);
+    const home = await page("/recordings", jar);
     assert.equal(home.status, 200, "staff role opens the staff page");
     assertNoStore(home, "home");
     assert.match(home.text, /Account menu for Seed Staff/);

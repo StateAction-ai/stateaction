@@ -15,6 +15,10 @@ import {
   type ReviewRecordingRow,
 } from "./annotations.js";
 import { recordingAnnotationRoutes } from "./http.js";
+import {
+  loadSharedClipSource,
+  type SharedClipRequest,
+} from "./shared-review.js";
 
 export type {
   RecordingAnnotationsDocument,
@@ -23,6 +27,18 @@ export type {
 } from "./annotations.js";
 
 export type { ClipHandFrames } from "./hand-frames.js";
+
+/** Authorized source for the customer projection in the Server Component. */
+export function sharedReviewReads(get: () => AuthRuntime = authRuntime) {
+  return (input: SharedClipRequest) =>
+    loadSharedClipSource(
+      {
+        pool: get().pool,
+        reader: s3ObjectReader(serverConfig(), { timeoutMs: 15_000 }),
+      },
+      input,
+    );
+}
 
 const KEY = Symbol.for("stateaction.annotations.routes");
 type Routes = ReturnType<typeof recordingAnnotationRoutes>;

@@ -8,7 +8,7 @@ export default async function Home() {
   const access = await consoleAccess();
   redirect(
     access.state === "ok" && access.session.role === "staff"
-      ? "/pipeline"
+      ? "/recordings"
       : "/data-browser",
   );
 }

@@ -3292,6 +3292,203 @@ def digests():
     }
 
 
+def render_sa150(previous):
+    files = {}
+
+    def first_valid(contract):
+        cases = json.loads(previous[OUT / "contracts" / f"{contract}.json"])["cases"]
+        return next(
+            case["input"]["document"] for case in cases if case["expect"]["valid"]
+        )
+
+    def emit(contract, *cases):
+        files[OUT / "contracts" / f"{contract}.json"] = dump(
+            {"contract": contract, "cases": cases}
+        )
+
+    invalid = "schema_violation"
+    digest = "a" * 64
+    recipe_id = "indego_hosted_canary@1"
+    recipe = {"kind": "recipe", "recipe_id": recipe_id, "recipe_sha256": digest}
+    emit(
+        "artifacts.cached-originating-recipe.v1",
+        ok("pinned originating recipe", recipe),
+        mut(
+            "unverified recipe digest", recipe, [("/recipe_sha256", "unknown")], invalid
+        ),
+    )
+    selection = {"recipeId": recipe_id, "sourceManifestSha256": digest}
+    emit(
+        "http.capture-recipe-select.v1",
+        ok("select a recipe for a sealed source", selection),
+        mut(
+            "missing sealed source digest",
+            selection,
+            [("/sourceManifestSha256", DELETE)],
+            invalid,
+        ),
+    )
+
+    parent_job = "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b"
+    rerun_job = "019a4b2c-0002-7f50-8a6b-7c8d9e0f1a2b"
+    second_clip = "019a4b2c-0003-7f50-8a6b-7c8d9e0f1a2b"
+    reused_hand = first_valid("artifacts.processing-result.v4")["reused_hand"]
+    clip_result = {
+        **first_valid("artifacts.processing-result.v5"),
+        "schema": "stateaction.processing_result.v6",
+        "reused_hand": {
+            **reused_hand,
+            "job_id": parent_job,
+            "clips": [
+                {**clip, "original_clip_id": second_clip}
+                for clip in reused_hand["clips"]
+            ],
+        },
+    }
+    emit(
+        "artifacts.processing-result.v6",
+        ok("clip identity and copied hand evidence", clip_result),
+        mut(
+            "copied hand manifest requires a clip digest",
+            clip_result,
+            [("/clip_plan_sha256", DELETE)],
+            invalid,
+        ),
+    )
+
+    command_id = "00000000-0000-4000-8000-000000000001"
+    dataset_id = "00000000-0000-4000-8000-000000000002"
+    selected_result = {
+        "jobId": U["job"],
+        "resultManifestSha256": digest,
+        "selectionRevision": 1,
+    }
+    correction = {
+        **selected_result,
+        "correctionId": command_id,
+        "segmentsSha256": "b" * 64,
+        "expectedRevision": 1,
+        "expectedMarkRevision": 2,
+    }
+    edit = {**correction, "action": "edit", "text": "lift the cup"}
+    omit = {**correction, "action": "omit"}
+    emit(
+        "http.caption-correction-command.v2",
+        ok("edit", edit),
+        ok("omit caption", omit),
+        ok("undo last edit", {**correction, "action": "undo"}),
+        mut("reject empty edit", edit, [("/text", "")], invalid),
+        mut("omit is distinct from an edit", omit, [("/text", "ignored")], invalid),
+    )
+    review = {**selected_result, "commandId": command_id, "expectedReviewRevision": 1}
+    reject = {**review, "action": "reject", "reason": "obstructed"}
+    restore = {**review, "action": "restore"}
+    emit(
+        "http.clip-review-command.v2",
+        ok(
+            "add to a dataset",
+            {
+                **review,
+                "action": "add",
+                "taskLabel": "pick up cup",
+                "datasetRevisions": {dataset_id: 1},
+            },
+        ),
+        ok(
+            "remove a single membership",
+            {
+                **review,
+                "action": "remove",
+                "datasetId": dataset_id,
+                "expectedDatasetRevision": 2,
+            },
+        ),
+        ok("reject with a reason", reject),
+        ok("restore", restore),
+        ok("undo", {**review, "action": "undo", "targetCommandId": dataset_id}),
+        mut("reject needs a reason", reject, [("/reason", DELETE)], invalid),
+        mut(
+            "restore has no membership side arguments",
+            restore,
+            [("/datasetId", dataset_id)],
+            invalid,
+        ),
+    )
+
+    clip_identity = {"clipId": U["prev_job"], "parentJobId": parent_job}
+    failed_clips = {"schemaVersion": 2, "scope": "failed_clips"}
+    request = {
+        "schemaVersion": 2,
+        "scope": "clip",
+        **clip_identity,
+        "stages": ["segment", "hand_pose"],
+    }
+    emit(
+        "http.stage-rerun-plan-request.v2",
+        ok("two stages on one clip", request),
+        ok("all failed clips", failed_clips),
+        mut("duplicate stage", request, [("/stages", ["caption", "caption"])], invalid),
+        mut(
+            "clip planning has a separate command",
+            request,
+            [("/stages", ["clip_plan"])],
+            invalid,
+        ),
+    )
+
+    prior_plan = first_valid("http.stage-rerun-plan.v1")
+    plan_digest = prior_plan.pop("planSha256")
+    clip_plan = {
+        **prior_plan,
+        **clip_identity,
+        "ordinal": 0,
+        "startTsNs": "0",
+        "endTsNs": "99000000",
+    }
+    plan = {
+        **failed_clips,
+        "planSha256": plan_digest,
+        "clips": [clip_plan, {**clip_plan, "clipId": second_clip, "ordinal": 1}],
+        "maxGpuCostUsd": "0.00",
+        "maxComputeCostUsd": "0.54",
+        "estimatedComputeCostUsd": None,
+    }
+    emit(
+        "http.stage-rerun-plan.v2",
+        ok("two clip plans and total caps", plan),
+        mut(
+            "a single clip request cannot preview two clips",
+            plan,
+            [("/scope", "clip")],
+            invalid,
+        ),
+    )
+    confirm = {
+        **failed_clips,
+        "requestId": rerun_job,
+        "expectedPlanSha256": digest,
+        "expectedMaxComputeCostUsd": "2.40",
+        "expectedMaxGpuCostUsd": "2.10",
+        "reason": "Retry failed clips",
+    }
+    emit(
+        "http.stage-rerun-command.v2",
+        ok("confirm total caps", confirm),
+        mut("empty reason", confirm, [("/reason", "")], invalid),
+    )
+    result = {
+        "schemaVersion": 2,
+        "jobs": [{**clip_identity, "jobId": rerun_job}],
+        "replayed": True,
+    }
+    emit(
+        "http.stage-rerun-result.v2",
+        ok("replay exact created jobs", result),
+        mut("empty result", result, [("/jobs", [])], invalid),
+    )
+    return files
+
+
 def render() -> dict[Path, bytes]:
     files: dict[Path, bytes] = {}
     art = OUT / "artifacts"
@@ -3396,6 +3593,7 @@ def render() -> dict[Path, bytes]:
     from generate_sa147_fixtures import render_sa147
 
     files.update(render_sa147())
+    files.update(render_sa150(files))
     return files
 
 

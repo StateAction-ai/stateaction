@@ -8,7 +8,7 @@ import {
 import { ObjectReadUnavailableError } from "../admission/object-reader.js";
 import { ObjectTooLargeError } from "../admission/recordings.js";
 import { TransportError } from "../transport/errors.js";
-import type { AnnotationDeps } from "./annotations.js";
+import type { AnnotationDeps, BoundClipResult } from "./annotations.js";
 
 export type ClipHandFrames = {
   raster: { width: number; height: number };
@@ -142,9 +142,42 @@ export async function loadClipHandFrames(
   clipId: string,
   viewHistorical = false,
 ): Promise<ClipHandFrames> {
+  return readClipHandFrames(deps, recordingId, jobId, clipId, {
+    staffUserId: userId,
+    viewHistorical,
+  });
+}
+
+/** Internal read after authorization of this exact shared dataset result. */
+export function loadBoundClipHandFrames(
+  deps: AnnotationDeps,
+  binding: BoundClipResult,
+  chunkId: string,
+): Promise<ClipHandFrames> {
+  return readClipHandFrames(deps, binding.recordingId, binding.jobId, chunkId, {
+    reviewClipId: binding.clipId,
+    manifestSha256: binding.resultManifestSha256,
+    selectionRevision: binding.selectionRevision,
+  });
+}
+
+async function readClipHandFrames(
+  deps: AnnotationDeps,
+  recordingId: string,
+  jobId: string,
+  clipId: string,
+  access:
+    | { staffUserId: string; viewHistorical: boolean }
+    | {
+        reviewClipId: string;
+        manifestSha256: string;
+        selectionRevision: number;
+      },
+): Promise<ClipHandFrames> {
   const notFound = () =>
     new TransportError("not_found", "Hand frames not found");
   if (!UUID.test(jobId) || !UUID.test(clipId)) throw notFound();
+  const staff = "staffUserId" in access;
   const { rows } = await deps.pool.query<FileRow>(
     `SELECT part.name AS part, part.clip_id, f.object_key, f.size_bytes::text, f.sha256,
             coalesce(copy.original_job_id, f.job_id) AS producer_job_id,
@@ -174,9 +207,24 @@ export async function loadClipHandFrames(
          WHEN 'hand_observations_json' THEN producer.hand_observations_file_id
        END
      WHERE rec.id = $2 AND c.job_id = $3 AND c.id = $4
-       AND ($5::boolean OR c.job_id = coalesce(recording_selected_job(rec.id), rec.current_job_id))
-       AND catalog_has_role($1, 'staff')`,
-    [userId, recordingId, jobId, clipId, viewHistorical],
+       AND ${
+         staff
+           ? `catalog_has_role($1, 'staff') AND
+              ($5::boolean OR c.job_id = coalesce(recording_selected_job(rec.id), rec.current_job_id))`
+           : `j.result_manifest_sha256 = $5 AND j.clip_id = $1::uuid AND EXISTS (
+                SELECT 1 FROM review_clips rc WHERE rc.id = j.clip_id AND rc.selected_job_id = j.id
+                AND $6::integer = (SELECT seq FROM clip_result_selections WHERE clip_id = rc.id
+                                    ORDER BY seq DESC LIMIT 1)
+              )`
+       }`,
+    [
+      staff ? access.staffUserId : access.reviewClipId,
+      recordingId,
+      jobId,
+      clipId,
+      staff ? access.viewHistorical : access.manifestSha256,
+      ...(staff ? [] : [access.selectionRevision]),
+    ],
   );
   const mapFile = rows.find((row) => row.part === "map");
   const handFile = rows.find((row) => row.part === "hands");

@@ -84,13 +84,24 @@ const MEDIA = `
     AND vw.purpose = 'output' AND vw.role = 'viewer_rrd'
     AND vw.state IN ('completed', 'verified')`;
 
-/** Customer grant resting on active evidence, for dataset expression `ds`. */
-export const grantedTo = (ds: string) => `
+/** Active customer grant for a dataset whose review memberships still match current approvals. */
+export const grantedTo = (ds: string, reviewMember?: string) => `
   SELECT 1 FROM dataset_access da
   JOIN dataset_sharing_permissions sp ON sp.id = da.sharing_permission_id
     AND sp.dataset_id = da.dataset_id AND sp.recipient_user_id = da.user_id
     AND sp.status = 'active'
-  WHERE da.dataset_id = ${ds} AND da.user_id = $1 AND da.enabled`;
+  WHERE da.dataset_id = ${ds} AND da.user_id = $1 AND da.enabled
+    AND NOT EXISTS (
+      SELECT 1 FROM datasets_with_stale_review_clips x WHERE x.dataset_id = da.dataset_id)
+    ${
+      reviewMember
+        ? `AND EXISTS (
+          SELECT 1 FROM dataset_review_clip_clearances sc WHERE sc.permission_id = sp.id
+            AND sc.clip_id = ${reviewMember}.clip_id AND sc.job_id = ${reviewMember}.job_id
+            AND sc.result_manifest_sha256 = ${reviewMember}.result_manifest_sha256
+            AND sc.selection_revision = ${reviewMember}.selection_revision)`
+        : ""
+    }`;
 
 /** Member gate for clip alias `c` in dataset expression `ds` (latest approved). */
 export const memberGate = (ds: string) => `
@@ -102,7 +113,9 @@ export const memberGate = (ds: string) => `
           AND sp.dataset_id = da.dataset_id AND sp.recipient_user_id = da.user_id
           AND sp.status = 'active'
         JOIN dataset_sharing_clearances sc ON sc.permission_id = sp.id AND sc.clip_id = c.id
-        WHERE da.dataset_id = ${ds} AND da.user_id = $1 AND da.enabled)))`;
+        WHERE da.dataset_id = ${ds} AND da.user_id = $1 AND da.enabled
+          AND NOT EXISTS (
+            SELECT 1 FROM datasets_with_stale_review_clips x WHERE x.dataset_id = da.dataset_id))))`;
 
 /** Dataset visibility for dataset alias `d`. */
 const DATASET_GATE = `(

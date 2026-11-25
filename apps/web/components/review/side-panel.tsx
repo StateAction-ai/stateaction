@@ -1,37 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { ClipViewer } from "../rerun/clip-viewer";
-import type { ClipViewerState } from "../../lib/rerun/clip-viewer";
 import type {
   Card,
   RecordingAnnotations,
   ReviewModel,
 } from "../../lib/review/types";
-import { clipAt, fmtClock, type CardFilter } from "../../lib/review/timeline";
+import { fmtClock, type CardFilter } from "../../lib/review/timeline";
 import { cn } from "../../lib/utils";
 import type { MarksState } from "../../lib/review/use-marks";
 import type { MarkChoice, SegmentMarkRow } from "../../lib/review/marks";
 import { MarkBadge, MarkBar } from "./mark-bar";
 import { recipeHref } from "../../lib/recipe-view";
-import { HAND_COLORS } from "./palette";
 
-export type SideTab = "segs" | "decision" | "hand" | "json";
-
-const TABS = [
-  { id: "segs", label: "Segments" },
-  { id: "hand", label: "3D / Debug" },
-  { id: "json", label: "JSON" },
-] as const;
-
-/** JSON shown in the tab is capped; the download always carries the full document. */
-export const JSON_VIEW_LIMIT = 200_000;
+export type SideTab = "segs" | "decision";
 
 export function SidePanel({
   model,
-  annotations,
+  staff,
   segmentationFailure,
   linkProvenance,
   tab,
@@ -44,10 +32,8 @@ export function SidePanel({
   onFilter,
   selected,
   activeIndex,
-  t,
   onSelect,
   seekCount,
-  mediaOrigin,
   queryRef,
   marks,
   checkedCount,
@@ -55,9 +41,10 @@ export function SidePanel({
   onChoose,
   onNextUnchecked,
   decision,
+  captionEditor,
 }: {
   model: ReviewModel;
-  annotations: RecordingAnnotations;
+  staff?: RecordingAnnotations | undefined;
   segmentationFailure: string | null;
   linkProvenance: boolean;
   tab: SideTab;
@@ -71,10 +58,8 @@ export function SidePanel({
   onFilter: (f: CardFilter) => void;
   selected: number | null;
   activeIndex: number;
-  t: number;
   onSelect: (index: number) => void;
   seekCount: number;
-  mediaOrigin: string | null;
   queryRef: React.RefObject<HTMLInputElement | null>;
   /** SA-99 team check. */
   marks: MarksState;
@@ -83,6 +68,7 @@ export function SidePanel({
   onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
   decision?: React.ReactNode;
+  captionEditor?: ((card: Card) => React.ReactNode) | undefined;
 }) {
   const [suspendedAtSeek, setSuspendedAtSeek] = useState<number | null>(null);
   const following = suspendedAtSeek !== seekCount;
@@ -90,14 +76,10 @@ export function SidePanel({
     () => setSuspendedAtSeek(seekCount),
     [seekCount],
   );
-  const tabs: readonly { id: SideTab; label: string }[] = decision
-    ? [
-        TABS[0],
-        { id: "decision", label: "Review clip" },
-        { id: "hand", label: "3D / debug" },
-        TABS[2],
-      ]
-    : TABS;
+  const tabs: { id: SideTab; label: string }[] = [
+    { id: "segs", label: "Segments" },
+  ];
+  if (decision) tabs.push({ id: "decision", label: "Review actions" });
   const failedTotal = model.cards.filter(
     (c) => c.caption.state === "failed",
   ).length;
@@ -180,7 +162,10 @@ export function SidePanel({
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-3">
-            {(["all", "failed", "issue", "unchecked"] as const).map((f) => (
+            {(staff
+              ? (["all", "failed", "issue", "unchecked"] as const)
+              : (["all"] as const)
+            ).map((f) => (
               <button
                 key={f}
                 type="button"
@@ -225,7 +210,9 @@ export function SidePanel({
             data-testid="rail-counter"
           >
             {selected === null
-              ? "Select a segment to see details and review controls."
+              ? staff
+                ? "Select a segment to review it."
+                : "Select a segment to play it."
               : `Segment ${selected + 1} of ${total.toLocaleString()} selected`}
           </p>
           <Rail
@@ -233,7 +220,7 @@ export function SidePanel({
             emptyText={
               segmentationFailure
                 ? "Segmentation failed. " + segmentationFailure
-                : !annotations.segments
+                : staff && !staff.segments
                   ? "No segmentation results were recorded."
                   : total === 0
                     ? "No segments were found."
@@ -248,6 +235,8 @@ export function SidePanel({
             marks={marks}
             onChoose={onChoose}
             onNextUnchecked={onNextUnchecked}
+            staff={Boolean(staff)}
+            captionEditor={captionEditor}
           />
         </div>
       ) : null}
@@ -264,74 +253,44 @@ export function SidePanel({
         </div>
       ) : null}
 
-      {tab === "hand" ? (
+      {staff && model.provenance.length ? (
         <div
-          role="tabpanel"
-          id="pane-hand"
-          aria-labelledby="tab-hand"
-          className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
+          data-testid="provenance"
+          className="flex shrink-0 flex-wrap gap-1.5 rounded-b-2xl border-t border-line bg-field px-3 py-2.5"
         >
-          <HandPane
-            model={model}
-            t={t}
-            selected={selected}
-            mediaOrigin={mediaOrigin}
-          />
+          {model.provenance.map((badge) => {
+            const run = linkProvenance ? staff.dag_run : null;
+            const chip = {
+              title: badge.detail,
+              "data-tone": badge.tone,
+              className: cn(
+                "rounded-md border bg-white px-1.5 py-px font-mono text-[10.5px] font-semibold text-[#4d5a54]",
+                badge.tone === "absent"
+                  ? "border-[#edc8cc] text-danger"
+                  : "border-line",
+                (badge.tone === "replay" || badge.tone === "stub") &&
+                  "text-[#8a5a00]",
+                run && "underline underline-offset-2",
+              ),
+            };
+            return run ? (
+              <Link
+                key={badge.stage}
+                {...chip}
+                href={recipeHref(run.recipeId, staff.job_id, {
+                  stage: badge.stage,
+                })}
+              >
+                {badge.text}
+              </Link>
+            ) : (
+              <span key={badge.stage} {...chip}>
+                {badge.text}
+              </span>
+            );
+          })}
         </div>
       ) : null}
-
-      {tab === "json" ? (
-        <div
-          role="tabpanel"
-          id="pane-json"
-          aria-labelledby="tab-json"
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          <JsonPane annotations={annotations} selected={selected} />
-        </div>
-      ) : null}
-
-      <div
-        data-testid="provenance"
-        className="flex shrink-0 flex-wrap gap-1.5 rounded-b-2xl border-t border-line bg-field px-3 py-2.5"
-      >
-        {model.provenance.map((badge) => {
-          const run = linkProvenance ? annotations.dag_run : null;
-          const chip = {
-            title: badge.detail,
-            "data-tone": badge.tone,
-            className: cn(
-              "rounded-md border bg-white px-1.5 py-px font-mono text-[10.5px] font-semibold text-[#4d5a54]",
-              badge.tone === "absent"
-                ? "border-[#edc8cc] text-danger"
-                : "border-line",
-              (badge.tone === "replay" || badge.tone === "stub") &&
-                "text-[#8a5a00]",
-              run && "underline underline-offset-2",
-            ),
-          };
-          return run ? (
-            <Link
-              key={badge.stage}
-              {...chip}
-              href={recipeHref(run.recipeId, annotations.job_id, {
-                stage: badge.stage,
-              })}
-            >
-              {badge.text}
-            </Link>
-          ) : (
-            <span key={badge.stage} {...chip}>
-              {badge.text}
-            </span>
-          );
-        })}
-        <span className="rounded-md border border-line bg-white px-1.5 py-px font-mono text-[10.5px] font-semibold text-[#4d5a54]">
-          {model.derivedRule
-            ? `derived: ${model.derivedRule}`
-            : "no derived fields"}
-        </span>
-      </div>
     </section>
   );
 }
@@ -348,6 +307,8 @@ function Rail({
   marks,
   onChoose,
   onNextUnchecked,
+  staff,
+  captionEditor,
 }: {
   cards: Card[];
   emptyText: string;
@@ -360,6 +321,8 @@ function Rail({
   marks: MarksState;
   onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
+  staff: boolean;
+  captionEditor: ((card: Card) => React.ReactNode) | undefined;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const followPosition = useRef(0);
@@ -433,6 +396,8 @@ function Rail({
             marks={marks}
             onChoose={onChoose}
             onNextUnchecked={onNextUnchecked}
+            staff={staff}
+            captionEditor={captionEditor}
           />
         ))
       )}
@@ -462,6 +427,8 @@ function RailCard({
   marks,
   onChoose,
   onNextUnchecked,
+  staff,
+  captionEditor,
 }: {
   card: Card;
   selected: boolean;
@@ -471,6 +438,8 @@ function RailCard({
   marks: MarksState;
   onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
+  staff: boolean;
+  captionEditor: ((card: Card) => React.ReactNode) | undefined;
 }) {
   const failed = c.caption.state === "failed";
   return (
@@ -497,52 +466,31 @@ function RailCard({
       >
         Segment {c.index + 1} · {fmtClock(c.startS)}
       </button>
-      <div className="font-mono text-xs leading-tight font-semibold">
-        <div className="mt-1">
+      {staff ? (
+        <div className="mt-1 font-mono text-xs leading-tight">
           <MarkBadge mark={mark} />
         </div>
-      </div>
-      <div className="min-w-0">
+      ) : null}
+      <div className={cn("min-w-0", !staff && "col-span-full")}>
         {c.caption.state === "complete" ? (
-          <>
-            <span
-              data-testid="hand-chip"
-              className="inline-flex max-w-full items-center truncate rounded-md px-2 py-px text-xs font-bold whitespace-nowrap"
-              style={{
-                background: HAND_COLORS[c.caption.hand].bg,
-                color: HAND_COLORS[c.caption.hand].ink,
-              }}
-            >
-              {c.caption.label} · {c.caption.hand}
-            </span>
-            {c.derivedLocally ? (
-              <span className="ml-1.5 text-[10.5px] text-muted">
-                derived locally
-              </span>
-            ) : null}
-            <ul className="m-0 mt-1.5 list-disc pl-4 text-[13px] leading-snug text-ink marker:text-muted">
-              {c.caption.steps.map((s, i) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ul>
-          </>
+          <p className="m-0 text-[13px] leading-snug text-ink">
+            {c.caption.text}
+          </p>
+        ) : c.caption.state === "omitted" ? (
+          <p className="m-0 text-xs text-muted">Caption not needed</p>
         ) : (
           <p
             data-testid="rail-failed"
-            className="m-0 inline-flex items-center rounded-md bg-danger-soft px-2 py-0.5 text-[13px] font-semibold text-danger"
+            className="m-0 rounded-md bg-danger-soft px-2 py-1 text-xs font-semibold text-danger"
+            title={staff ? c.caption.code : undefined}
           >
-            <span
-              title={c.caption.code}
-              aria-description={`Error code: ${c.caption.code}`}
-            >
-              {c.kind === "failed_window"
-                ? "No segments could be produced for this time range."
-                : "No caption is available for this segment."}
-            </span>
+            {c.kind === "failed_window"
+              ? "No segments could be produced for this time range."
+              : "No caption is available for this segment."}
           </p>
         )}
       </div>
-      {selected ? (
+      {selected && staff ? (
         <dl
           data-testid="rail-detail"
           className="col-span-full m-0 mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 border-t border-dashed border-line pt-2.5 text-xs"
@@ -568,6 +516,7 @@ function RailCard({
           ) : null}
         </dl>
       ) : null}
+      {selected && c.kind === "segment" ? captionEditor?.(c) : null}
       {selected && onChoose ? (
         <MarkBar
           mark={mark}
@@ -585,171 +534,3 @@ function RailCard({
 /** null is unknown (no hand-pose coverage), never 0 %; * marks failed or uncovered time left out. */
 const pctText = (v: number | null, partial = false) =>
   v === null ? "unknown" : `${v}%${partial ? "*" : ""}`;
-
-function HandPane({
-  model,
-  t,
-  selected,
-  mediaOrigin,
-}: {
-  model: ReviewModel;
-  t: number;
-  selected: number | null;
-  mediaOrigin: string | null;
-}) {
-  // The clip containing the playhead. Only the clip id changes the viewer, so
-  // playback inside one clip never reloads it.
-  const clip = useMemo(() => clipAt(model.clips, t), [model.clips, t]);
-  const card = selected === null ? null : model.cards[selected];
-  const [phase, setPhase] = useState<ClipViewerState["phase"]>("idle");
-  return (
-    <>
-      {clip ? (
-        <>
-          <ClipViewer
-            key={clip.clipId}
-            clipId={clip.clipId}
-            allowedOrigins={mediaOrigin ? [mediaOrigin] : []}
-            onStateChange={(s) => setPhase(s.phase)}
-          />
-          <output
-            data-testid="hand-viewer-phase"
-            data-clip-id={clip.clipId}
-            className="sr-only"
-          >
-            {phase}
-          </output>
-        </>
-      ) : (
-        <div
-          role="status"
-          data-testid="hand-no-clip"
-          className="grid min-h-60 place-items-center rounded-lg border border-line bg-field p-6 text-center text-sm text-muted"
-        >
-          No clip at this time
-        </div>
-      )}
-      <p className="m-0 text-xs leading-normal text-muted">
-        <b className="text-ink">Rerun debug view.</b> Shows 3D and source video
-        for the clip under the playhead.
-      </p>
-      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 text-[13px]">
-        <HandRow k="Clip">
-          <span className="font-mono">
-            {clip ? `${fmtClock(clip.startS)}–${fmtClock(clip.endS)}` : "none"}
-          </span>
-        </HandRow>
-        <HandRow k="Left / right now">
-          {model.presence === "absent"
-            ? `unavailable${model.presenceNote ? ` (${model.presenceNote})` : ""}`
-            : `${state(model.lanes.left, t)} / ${state(model.lanes.right, t)}`}
-        </HandRow>
-        <HandRow k="This segment">
-          <span className="font-mono">
-            {card
-              ? `${pctText(card.handsLR.left, card.handsLR.partial)} / ${pctText(card.handsLR.right, card.handsLR.partial)} left / right`
-              : "select a segment"}
-          </span>
-        </HandRow>
-      </dl>
-    </>
-  );
-}
-
-function state(spans: ReviewModel["lanes"]["left"], t: number) {
-  const s = spans.find((x) => t >= x.startS && t < x.endS);
-  return s ? (s.state === "present" ? "present" : "no result") : "no hand";
-}
-
-function HandRow({ k, children }: { k: string; children: React.ReactNode }) {
-  return (
-    <>
-      <dt className="border-b border-line py-1.5 text-muted">{k}</dt>
-      <dd className="m-0 border-b border-line py-1.5 text-right font-medium">
-        {children}
-      </dd>
-    </>
-  );
-}
-
-export function annotationsJson(
-  annotations: RecordingAnnotations,
-  limit = Infinity,
-): { text: string; truncated: boolean } {
-  const full = JSON.stringify(annotations, null, 2);
-  return full.length > limit
-    ? { text: full.slice(0, limit), truncated: true }
-    : { text: full, truncated: false };
-}
-
-function JsonPane({
-  annotations,
-  selected,
-}: {
-  annotations: RecordingAnnotations;
-  selected: number | null;
-}) {
-  const [mode, setMode] = useState<"segment" | "recording">("recording");
-  const [copied, setCopied] = useState(false);
-  const view = useMemo(() => {
-    if (mode === "segment" && selected !== null) {
-      const row = annotations.segments?.rows[selected];
-      const caption = annotations.captions?.rows.find(
-        (c) => c.segment_id === row?.segment_id,
-      );
-      const text = JSON.stringify(
-        { segment: row ?? null, caption: caption ?? null },
-        null,
-        2,
-      );
-      return { text, truncated: false };
-    }
-    return annotationsJson(annotations, JSON_VIEW_LIMIT);
-  }, [annotations, mode, selected]);
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3 text-[13px] text-muted">
-        <div className="flex gap-0.5 rounded-lg border border-line bg-white p-[3px]">
-          {(["segment", "recording"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={mode === m}
-              onClick={() => setMode(m)}
-              className={cn(
-                "rounded-md border-0 bg-transparent px-3 py-1 text-xs font-semibold text-muted hover:bg-field",
-                mode === m && "bg-brand-soft text-brand-ink",
-              )}
-            >
-              {m === "segment" ? "Segment" : "Recording"}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard
-              ?.writeText(view.text)
-              .then(() => setCopied(true))
-              .catch(() => undefined);
-          }}
-          className="ml-auto min-h-[30px] rounded-lg border border-line bg-white px-2.5 text-xs font-semibold text-ink hover:bg-field"
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      {view.truncated ? (
-        <p className="m-0 border-b border-line bg-[#fff4de] px-5 py-2 text-xs text-[#8a5a00]">
-          Showing the first {JSON_VIEW_LIMIT.toLocaleString()} characters.
-          Download JSON saves the full document.
-        </p>
-      ) : null}
-      <pre
-        data-testid="json-view"
-        className="m-0 min-h-0 flex-1 overflow-auto bg-field px-5 py-4 font-mono text-xs leading-relaxed whitespace-pre text-[#3d4a45]"
-      >
-        {view.text}
-      </pre>
-    </>
-  );
-}

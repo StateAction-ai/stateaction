@@ -13,6 +13,8 @@ import {
   sealRecordingInventory,
   type AdmissionDeps,
 } from "../src/admission/recordings.js";
+import { PUBLIC_VIDEO_RECIPE } from "../src/admission/public-video-canary.js";
+import { verifiedReviewVideoSql } from "../src/datasets/review-playable-media.js";
 import { failUndispatched, retryJob } from "../src/jobs/recovery.js";
 import { stageRerunBlock } from "../src/jobs/stage-reruns.js";
 import { jobHandlers } from "../src/jobs/http.js";
@@ -252,6 +254,28 @@ for (const [index, name] of scenarios.entries())
     assert.deepEqual(detail.sourceRange, plan.spans[0]);
     assert.equal(detail.durationNs, "69000000000");
     assert.equal(detail.selectedResult, null);
+    // Check the playback resolver independently of the selected-result gate.
+    // The planner currently emits only whole-recording spans.
+    const playableSize = async (startOffset: number) =>
+      (
+        await db.app.query<{ size: string }>(
+          `WITH review_clips AS (
+            SELECT id, recording_id, plan_version, ordinal, start_ordinal + $3::integer AS start_ordinal,
+              end_ordinal
+            FROM public.review_clips WHERE id = $1
+          )
+          SELECT video.size_bytes::text AS size
+          FROM (SELECT $1::uuid AS clip_id, $2::uuid AS job_id,
+                  NULL::text AS manifest, false AS imported_from_cache) sel
+          JOIN LATERAL (${verifiedReviewVideoSql("sel")}) video ON true`,
+          [recordingId, clipJob, startOffset],
+        )
+      ).rows[0]?.size;
+    assert.equal(
+      await playableSize(0),
+      original ? String(original.size) : undefined,
+    );
+    assert.equal(await playableSize(1), undefined);
     assert.equal(await reads.getClip(owner, recordingId), null);
     assert.equal(await reads.readSource(owner, recordingId), null);
     assert.equal(
@@ -275,12 +299,10 @@ for (const [index, name] of scenarios.entries())
       childTask.task_input.sourceManifestSha256,
       sha(source.manifest),
     );
-    assert.equal(childTask.task_input.recipe.maxJobCostUsd, "0.00");
-    assert.deepEqual(
-      childTask.task_input.recipe.stages
-        .filter((s: { enabled: boolean }) => s.enabled)
-        .map((s: { stage: string }) => s.stage),
-      ["hand_pose"],
+    assert.deepEqual(childTask.task_input.recipe, PUBLIC_VIDEO_RECIPE);
+    assert.equal(
+      childTask.task_input.recipeSha256,
+      requestSha256(PUBLIC_VIDEO_RECIPE),
     );
     assert.equal(
       (await reads.getClip(db.actors.staff, recordingId))?.currentDag?.jobId,

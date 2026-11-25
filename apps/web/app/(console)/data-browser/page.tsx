@@ -1,18 +1,18 @@
-import Link from "next/link";
-import { datasets, mediaReadOrigin } from "@stateaction/server";
-import { authRuntime } from "@stateaction/server/auth";
-import {
-  recordingTitle,
-  shortRecordingId,
-} from "@stateaction/server/pipeline-model";
+import { CatalogError, mediaReadOrigin } from "@stateaction/server";
+import { reviewDatasetReads } from "@stateaction/server/datasets";
+import { pipelineReads } from "@stateaction/server/pipeline";
 import { notFound } from "next/navigation";
 import { requireConsoleSession } from "../../../lib/server-session";
 import {
   browserHref,
   parseBrowserQuery,
 } from "../../../lib/data-browser-query";
-import { formatMediaDuration } from "../../../lib/media-duration";
-import { DataBrowser } from "../../../components/data-browser/data-browser";
+import { reviewBrowseOptions } from "../../../lib/review-browse-options";
+import {
+  ClipBrowser,
+  DatasetIndex,
+} from "../../../components/data-browser/data-browser";
+import { BrowserLoadError } from "../../../components/data-browser/controls";
 
 export const metadata = { title: "Data browser · StateAction.ai" };
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export default async function DataBrowserPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await requireConsoleSession();
+  const staff = session.role === "staff";
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(await searchParams)) {
     for (const item of typeof value === "string" ? [value] : (value ?? []))
@@ -32,97 +33,162 @@ export default async function DataBrowserPage({
   try {
     query = parseBrowserQuery(params, session.role);
   } catch {
+    notFound();
+  }
+  if (query.cursor || query.reviewCursor || query.reviewStatus) notFound();
+
+  const reads = reviewDatasetReads();
+  const load = async <T,>(pending: Promise<T>): Promise<T | null> => {
+    try {
+      return await pending;
+    } catch (error) {
+      if (error instanceof CatalogError && error.code !== "conflict")
+        notFound();
+      console.error(
+        "[data-browser] catalog unavailable",
+        error instanceof Error ? error.name : "unknown",
+      );
+      return null;
+    }
+  };
+
+  const { userId } = session;
+  if (query.mode === "datasets") {
+    const datasets = await load(reads.list(userId));
+    if (!datasets) return <BrowserLoadError />;
+    const search = query.q?.toLowerCase() ?? "";
     return (
-      <section>
-        <h1 className="text-[32px] font-bold tracking-[-0.03em]">
-          Data browser
-        </h1>
-        <p role="alert">
-          This view is unavailable. Check the link or open your datasets.
-        </p>
-        <Link href="/data-browser" className="text-brand underline">
-          Open datasets
-        </Link>
-      </section>
+      <DatasetIndex
+        datasets={datasets
+          .filter(({ name }) => name.toLowerCase().includes(search))
+          .map(({ datasetId, name, clipCount, shareState }) => ({
+            datasetId,
+            name,
+            clipCount,
+            ...(staff && shareState ? { shareState } : {}),
+          }))}
+        query={query}
+        staff={staff}
+      />
     );
   }
-  let recordingName: string | undefined;
-  if (query.recordingId) {
-    const runtime = authRuntime();
-    await runtime.ready();
-    const { rows } = await runtime.pool.query<{ started_at: Date }>(
-      "SELECT started_at FROM recordings WHERE id=$1 AND deleted_at IS NULL AND catalog_has_role($2, 'staff')",
-      [query.recordingId, session.userId],
+
+  const { filters, selectedSort } = reviewBrowseOptions(query, staff);
+  const { datasetId } = filters;
+  const hasFilters = Boolean(
+    filters.q ||
+      filters.labels?.length ||
+      filters.problems?.length ||
+      filters.minDurationNs ||
+      filters.maxDurationNs,
+  );
+  const result = await load(
+    reads.clips(userId, {
+      ...filters,
+      limit: query.size ?? 12,
+      page: query.page ?? 1,
+    }),
+  );
+  if (!result) return <BrowserLoadError />;
+
+  let name = "All clips";
+  let totalCount = result.totalCount;
+  if (query.datasetId) {
+    const datasets = await load(reads.list(userId));
+    if (!datasets) return <BrowserLoadError />;
+    const dataset = datasets.find((row) => row.datasetId === query.datasetId);
+    if (!dataset) notFound();
+    name = dataset.name;
+  } else if (query.recordingId) {
+    const recording = await pipelineReads().recordingOperations(
+      userId,
+      query.recordingId,
     );
-    if (!rows[0]) notFound();
-    recordingName =
-      recordingTitle(rows[0].started_at) +
-      " · " +
-      shortRecordingId(query.recordingId);
+    if (!recording) notFound();
+    name = recording.title;
+    if (hasFilters) {
+      const unfiltered = await load(
+        reads.clips(userId, {
+          datasetId,
+          recordingIds: [query.recordingId],
+          limit: 1,
+        }),
+      );
+      if (!unfiltered) return <BrowserLoadError />;
+      totalCount = unfiltered.filteredCount;
+    } else {
+      totalCount = result.filteredCount;
+    }
   }
+
   let mediaOrigin: string | null = null;
   try {
     mediaOrigin = mediaReadOrigin();
   } catch {
-    /* preview remains unavailable */
+    // The catalog remains usable when media is unavailable.
   }
-  const reviewClips =
-    session.role === "staff" && query.datasetId
-      ? await datasets.listDatasetReviewClips(authRuntime().pool, {
-          viewerUserId: session.userId,
-          datasetId: query.datasetId,
-          ...(query.reviewCursor ? { cursor: query.reviewCursor } : {}),
-          ...(query.q ? { q: query.q } : {}),
-          ...(query.label ? { label: query.label } : {}),
-        })
-      : null;
+
   return (
-    <DataBrowser
+    <ClipBrowser
       key={browserHref(query)}
+      name={name}
       query={query}
-      role={session.role}
+      selectedSort={selectedSort}
       mediaOrigin={mediaOrigin}
-      {...(recordingName ? { recordingName } : {})}
-    >
-      {reviewClips?.items.length ? (
-        <section aria-labelledby="dataset-review-clips" className="mb-6">
-          <h2 id="dataset-review-clips" className="mb-3 text-lg font-semibold">
-            Review clips
-          </h2>
-          <ul className="divide-y overflow-hidden rounded-xl border border-line bg-white">
-            {reviewClips.items.map((clip) => (
-              <li
-                key={clip.clipId}
-                className="flex flex-wrap items-baseline gap-x-3 p-3 text-sm"
-              >
-                <Link
-                  className="font-semibold text-brand underline"
-                  href={"/review/clips/" + clip.clipId}
-                >
-                  {clip.title}
-                </Link>
-                <span>{clip.taskLabel}</span>
-                {clip.durationNs !== null ? (
-                  <span className="text-muted">
-                    {formatMediaDuration(clip.durationNs)}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-          {reviewClips.nextCursor ? (
-            <Link
-              className="mt-3 inline-block text-sm text-brand underline"
-              href={browserHref({
-                ...query,
-                reviewCursor: reviewClips.nextCursor,
-              })}
-            >
-              More review clips
-            </Link>
-          ) : null}
-        </section>
-      ) : null}
-    </DataBrowser>
+      page={{
+        page: result.page,
+        limit: result.limit,
+        totalCount,
+        filteredCount: result.filteredCount,
+        lastUpdatedAt: result.lastUpdatedAt,
+        labels: result.facets.labels,
+        items: result.items.map((item) => ({
+          clipId: item.clipId,
+          title: item.title,
+          ordinal: item.ordinal,
+          taskLabel: item.taskLabel,
+          capturedAt: item.capturedAt,
+          sortDate: item.sortDate,
+          durationNs: item.durationNs,
+          hasPoster: item.hasPoster,
+          ...(staff ? { hasVideo: item.hasVideo } : {}),
+          captionMatch:
+            item.captionMatch &&
+            (staff || !item.captionMatch.alsoMatchesOriginal)
+              ? {
+                  segmentId: item.captionMatch.segmentId,
+                  offsetNs: item.captionMatch.offsetNs,
+                  highlights:
+                    "highlights" in item.captionMatch
+                      ? item.captionMatch.highlights
+                      : [],
+                  ...(staff && item.captionMatch.alsoMatchesOriginal
+                    ? { alsoMatchesOriginal: true }
+                    : {}),
+                }
+              : null,
+          ...(staff
+            ? {
+                staff: {
+                  reviewStatus: item.reviewStatus,
+                  proposedLabel: item.proposedLabel,
+                  correctedCount: item.correctedCount,
+                  problems: item.problems,
+                  rejection: item.rejection,
+                },
+              }
+            : {}),
+        })),
+      }}
+      {...(staff
+        ? {
+            staff: {
+              recordings: result.facets.recordings ?? [],
+              problems: result.facets.problems ?? [],
+              ...(result.shareState ? { shareState: result.shareState } : {}),
+            },
+          }
+        : {})}
+    />
   );
 }

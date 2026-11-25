@@ -2,6 +2,12 @@ import type pg from "pg";
 import { inTransaction, uuid } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import { randomUUID } from "node:crypto";
+import {
+  requireSelectedResult,
+  resultParams,
+  validateReviewResult,
+  type ReviewResult,
+} from "./review-result.js";
 
 /**
  * Operator-only dataset sharing setup (SA-35). These functions are called with
@@ -11,7 +17,7 @@ import { randomUUID } from "node:crypto";
  *
  * Order of an operator setup for one recipient and dataset:
  *   1. recordSharingPermission  external-inspection cover for that recipient;
- *   2. clearClips               confirm each approved clip for that recipient;
+ *   2. clearClips or clearReviewClips  confirm each approved clip for that recipient;
  *   3. grantDatasetAccess       enable the view grant (needs every current
  *                               approved member cleared by that evidence).
  * Later additions to the shared dataset need staff to add only clips already
@@ -122,6 +128,89 @@ export async function clearClips(
         `INSERT INTO dataset_sharing_clearances (permission_id, clip_id, cleared_by)
          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
         [permission.id, id, text(input.clearedBy, "clearedBy", 200)],
+      );
+      cleared += result.rowCount ?? 0;
+    }
+    return { cleared };
+  });
+}
+
+/** Clears the approved result of each review clip for one recipient permission. */
+export async function clearReviewClips(
+  owner: pg.Pool,
+  input: {
+    permissionRef: string;
+    clearedBy: string;
+  } & (
+    | {
+        results: (ReviewResult & { clipId: string })[];
+        allCurrentMembers?: never;
+      }
+    | { allCurrentMembers: true; results?: never }
+  ),
+): Promise<{ cleared: number }> {
+  const results = input.results;
+  if (Boolean(results?.length) === Boolean(input.allCurrentMembers))
+    throw new CatalogError(
+      "invalid_request",
+      "Pass either results or allCurrentMembers",
+    );
+  if (results && results.length > 500)
+    throw new CatalogError("invalid_request", "At most 500 results per call");
+  for (const result of results ?? []) {
+    uuid(result.clipId, "clipId");
+    validateReviewResult(result);
+  }
+  const permissionRef = ref(input.permissionRef);
+  const clearedBy = text(input.clearedBy, "clearedBy", 200);
+  return inTransaction(owner, async (tx) => {
+    await tx.query("SET LOCAL lock_timeout = '5s'");
+    const {
+      rows: [permission],
+    } = await tx.query<{ id: string; dataset_id: string }>(
+      "SELECT id, dataset_id FROM dataset_sharing_permissions WHERE permission_ref = $1 AND status = 'active'",
+      [permissionRef],
+    );
+    if (!permission)
+      throw new CatalogError(
+        "forbidden",
+        "Active sharing permission is required",
+      );
+    const { rows: targets } = results
+      ? await tx.query<ReviewResult & { clipId: string }>(
+          `SELECT pins.* FROM jsonb_to_recordset($1::jsonb) AS pins(
+              "clipId" uuid, "jobId" uuid, "resultManifestSha256" text, "selectionRevision" integer)
+            LEFT JOIN review_clips c ON c.id = pins."clipId"
+            ORDER BY c.recording_id, pins."clipId"`,
+          [JSON.stringify(results)],
+        )
+      : await tx.query<ReviewResult & { clipId: string }>(
+          `SELECT m.clip_id AS "clipId", m.job_id AS "jobId",
+              m.result_manifest_sha256 AS "resultManifestSha256", m.selection_revision AS "selectionRevision"
+            FROM dataset_review_clips m
+            JOIN selected_dataset_review_clips s USING (dataset_id, clip_id)
+            JOIN review_clips c ON c.id = m.clip_id AND c.selected_job_id = m.job_id
+            WHERE m.dataset_id = $1 AND m.selection_revision = (
+              SELECT max(seq) FROM clip_result_selections WHERE clip_id = m.clip_id
+            )
+            ORDER BY c.recording_id, m.clip_id LIMIT 501`,
+          [permission.dataset_id],
+        );
+    if (targets.length > 500)
+      throw new CatalogError(
+        "invalid_request",
+        "Dataset has more than 500 approved members; clear explicit batches",
+      );
+    // Lock all result pins in recording order before the first evidence lock.
+    for (const target of targets)
+      await requireSelectedResult(tx, target.clipId, target);
+    let cleared = 0;
+    for (const target of targets) {
+      const result = await tx.query(
+        `INSERT INTO dataset_review_clip_clearances
+           (clip_id, job_id, result_manifest_sha256, selection_revision, permission_id, cleared_by)
+         VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+        [...resultParams(target.clipId, target), permission.id, clearedBy],
       );
       cleared += result.rowCount ?? 0;
     }

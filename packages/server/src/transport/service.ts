@@ -8,6 +8,10 @@ import {
 import type { AdmissionDeps } from "../admission/recordings.js";
 import { CatalogError } from "../catalog/errors.js";
 import {
+  REVIEW_VIDEO_MAX_BYTES,
+  REVIEW_VIDEO_SLOT,
+} from "../datasets/review-video-policy.js";
+import {
   assertJobAuthority,
   assertResultSlotAuthority,
   assertOwnerAuthority,
@@ -300,7 +304,12 @@ export async function allocateJobOutput(
       if (
         (planJob &&
           !["recording_mp4", "result_manifest"].includes(request.role)) ||
-        (clipJob && request.role === "recording_mp4")
+        (clipJob && request.role === "recording_mp4") ||
+        (request.slot === REVIEW_VIDEO_SLOT &&
+          (!clipJob ||
+            authority.stage !== "hand_pose" ||
+            request.role !== "clip_mp4" ||
+            size > BigInt(REVIEW_VIDEO_MAX_BYTES)))
       )
         throw invalid("Output role is unavailable for this job");
       if (

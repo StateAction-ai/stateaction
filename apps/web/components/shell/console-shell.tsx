@@ -2,7 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Database, ListChecks, MonitorPlay } from "lucide-react";
+import { Database, ListVideo, Network, Settings } from "lucide-react";
 import { Brand } from "../brand";
 import { AccountMenu } from "./account-menu";
 import { ProfileProvider } from "./profile-context";
@@ -11,9 +11,10 @@ import { navigationFor, type ConsoleSession } from "../../lib/console-session";
 import { cn } from "../../lib/utils";
 
 const ICONS = {
-  pipeline: ListChecks,
+  recordings: ListVideo,
   data: Database,
-  review: MonitorPlay,
+  recipes: Network,
+  settings: Settings,
 } as const;
 
 function sectionTitle(

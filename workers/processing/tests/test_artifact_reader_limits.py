@@ -202,7 +202,9 @@ class ArtifactReaderLimitTests(unittest.TestCase):
                 return nullcontext(
                     SimpleNamespace(
                         streams=SimpleNamespace(video=[stream]),
-                        demux=lambda _: [SimpleNamespace(pts=0, size=1)],
+                        demux=lambda _: [
+                            SimpleNamespace(pts=0, size=1, is_discard=False)
+                        ],
                     )
                 )
 
@@ -215,8 +217,8 @@ class ArtifactReaderLimitTests(unittest.TestCase):
         clip, _ = self._open_result_fixture()
 
         def demux(_stream):
-            yield SimpleNamespace(pts=0, size=1)
-            yield SimpleNamespace(pts=1, size=1)
+            yield SimpleNamespace(pts=0, size=1, is_discard=False)
+            yield SimpleNamespace(pts=-1, size=1, is_discard=True)
             raise AssertionError("Read past the first excess packet")
 
         video = SimpleNamespace(streams=SimpleNamespace(video=[None]), demux=demux)

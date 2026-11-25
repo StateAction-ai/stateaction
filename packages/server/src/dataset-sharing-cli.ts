@@ -2,6 +2,7 @@ import pg from "pg";
 import { parseArgs } from "node:util";
 import {
   clearClips,
+  clearReviewClips,
   disableDatasetAccess,
   grantDatasetAccess,
   listSharingPermissions,
@@ -18,6 +19,7 @@ import {
  *
  *   record  --ref R --dataset D --recipient U --evidence E --by WHO
  *   clear   --ref R (--clips ID,ID | --all-members) --by WHO
+ *   clear-review --ref R (--all-members | --clip ID --job ID --manifest SHA --selection-revision N) --by WHO
  *   grant   --ref R --actor STAFF_USER_ID
  *   revoke  --ref R --by WHO --reason TEXT      (also disables the grant)
  *   disable --dataset D --recipient U --actor STAFF_USER_ID
@@ -44,6 +46,10 @@ const { positionals, values } = parseArgs({
     actor: { type: "string" },
     reason: { type: "string" },
     clips: { type: "string" },
+    clip: { type: "string" },
+    job: { type: "string" },
+    manifest: { type: "string" },
+    "selection-revision": { type: "string" },
     "all-members": { type: "boolean", default: false },
   },
 });
@@ -73,7 +79,35 @@ try {
         : { clipIds: need("clips").split(",") }),
       clearedBy: need("by"),
     });
-  else if (command === "grant")
+  else if (command === "clear-review") {
+    const shared = { permissionRef: need("ref"), clearedBy: need("by") };
+    if (
+      values["all-members"] &&
+      [
+        values.clip,
+        values.job,
+        values.manifest,
+        values["selection-revision"],
+      ].some((value) => value !== undefined)
+    )
+      throw new Error("Use --all-members or an explicit review result");
+    result = await clearReviewClips(
+      pool,
+      values["all-members"]
+        ? { ...shared, allCurrentMembers: true }
+        : {
+            ...shared,
+            results: [
+              {
+                clipId: need("clip"),
+                jobId: need("job"),
+                resultManifestSha256: need("manifest"),
+                selectionRevision: Number(need("selection-revision")),
+              },
+            ],
+          },
+    );
+  } else if (command === "grant")
     result = await grantDatasetAccess(pool, {
       permissionRef: need("ref"),
       actorUserId: need("actor"),
@@ -94,7 +128,9 @@ try {
   } else if (command === "list")
     result = await listSharingPermissions(pool, need("dataset"));
   else
-    throw new Error("Expected record, clear, grant, revoke, disable or list");
+    throw new Error(
+      "Expected record, clear, clear-review, grant, revoke, disable or list",
+    );
   console.log(JSON.stringify(result));
 } finally {
   await pool.end();

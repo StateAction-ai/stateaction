@@ -1,0 +1,29 @@
+{
+  "contract": "http.capture-recipe-select.v1",
+  "cases": [
+    {
+      "name": "select a recipe for a sealed source",
+      "input": {
+        "document": {
+          "recipeId": "indego_hosted_canary@1",
+          "sourceManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "missing sealed source digest",
+      "input": {
+        "document": {
+          "recipeId": "indego_hosted_canary@1"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

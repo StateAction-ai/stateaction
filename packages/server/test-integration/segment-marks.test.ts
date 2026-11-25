@@ -234,11 +234,25 @@ test("marks are append-only for every writer and staff only", async () => {
   for (const sql of [
     "UPDATE segment_marks SET verdict = 'issue', issue_type = 'caption'",
     "DELETE FROM segment_marks",
-    "TRUNCATE segment_marks",
   ]) {
     assert.equal(await code(s.db.owner.query(sql)), "SAC01", sql);
     assert.equal(await code(s.db.app.query(sql)), "42501", sql);
   }
+  // PostgreSQL requires the referencing table in the same statement before
+  // the segment_marks BEFORE TRUNCATE trigger can run.
+  await assert.rejects(
+    s.db.owner.query("TRUNCATE segment_marks, caption_corrections"),
+    { code: "SAC01", message: "segment_marks rows are immutable (TRUNCATE)" },
+  );
+  await assert.rejects(s.db.owner.query("TRUNCATE caption_corrections"), {
+    code: "SAC01",
+    message: "caption_corrections rows are immutable (TRUNCATE)",
+  });
+  const { rows } = await s.db.app.query(
+    `SELECT has_table_privilege('public.segment_marks', 'TRUNCATE') AS marks,
+            has_table_privilege('public.caption_corrections', 'TRUNCATE') AS corrections`,
+  );
+  assert.deepEqual(rows, [{ marks: false, corrections: false }]);
   for (const who of [
     s.db.actors.collector,
     s.db.actors.customer,

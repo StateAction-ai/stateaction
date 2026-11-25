@@ -1,51 +1,72 @@
 "use client";
 
-import { mediaCredentials } from "../../lib/rerun/bounded-rrd";
-
 import * as React from "react";
 import type { ClipRead } from "@stateaction/contracts";
-import { Spinner } from "../ui/spinner";
-import { browserApi, readBounded } from "./client";
+import { mediaCredentials } from "../../lib/rerun/bounded-rrd";
 import { privateSignal, registerPrivateState } from "../../lib/private-state";
+import { browserApi, readBounded } from "./client";
 
-/** A storage request never carries the browser's Better Auth cookie, including on local host aliases. */
 export function ClipThumbnail({
   clipId,
   datasetId,
   available,
   mediaOrigin,
+  duration,
+  compact,
 }: {
   clipId: string;
   datasetId?: string;
   available: boolean;
   mediaOrigin: string | null;
+  duration: string | null;
+  compact: boolean;
 }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = React.useState(false);
   const [src, setSrc] = React.useState<string>();
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => {
+    if (!ref.current || !available || !mediaOrigin) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "160px" },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [available, mediaOrigin]);
+  React.useEffect(() => {
     setSrc(undefined);
     setFailed(false);
-    if (!available || !mediaOrigin) return;
+    if (!visible || !available || !mediaOrigin) return;
     const cancel = new AbortController();
     let objectUrl: string | undefined;
-    let alive = true;
     const cleanup = () => {
-      alive = false;
       cancel.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
     const unregister = registerPrivateState(cleanup);
     void (async () => {
-      const path = datasetId
-        ? `/api/v1/datasets/${datasetId}/clips/${clipId}/reads`
-        : `/api/v1/clips/${clipId}/reads`;
-      const grant = await browserApi<ClipRead>(path, {
-        method: "POST",
-        body: { role: "thumbnail_jpeg" },
-        signal: cancel.signal,
-      });
+      const query = datasetId
+        ? `?dataset=${encodeURIComponent(datasetId)}`
+        : "";
+      const grant = await browserApi<ClipRead>(
+        `/api/v2/review-clips/${clipId}/poster${query}`,
+        {
+          signal: cancel.signal,
+        },
+      );
       const url = new URL(grant.url);
       const size = Number(grant.sizeBytes);
+      const expiry = Date.parse(grant.expiresAt);
       if (
         grant.role !== "thumbnail_jpeg" ||
         grant.contentType !== "image/jpeg" ||
@@ -56,10 +77,10 @@ export function ClipThumbnail({
         !Number.isSafeInteger(size) ||
         size < 1 ||
         size > 5 * 1024 * 1024 ||
-        !Number.isFinite(Date.parse(grant.expiresAt)) ||
-        Date.parse(grant.expiresAt) <= Date.now()
+        !Number.isFinite(expiry) ||
+        expiry <= Date.now()
       )
-        throw new Error("Invalid thumbnail grant");
+        throw new Error("Invalid poster grant");
       const response = await fetch(url, {
         credentials: mediaCredentials(url),
         redirect: "error",
@@ -71,39 +92,48 @@ export function ClipThumbnail({
           AbortSignal.timeout(15_000),
         ]),
       });
-      if (!response.ok) throw new Error("Thumbnail unavailable");
+      if (!response.ok || response.headers.get("content-type") !== "image/jpeg")
+        throw new Error("Poster unavailable");
       const bytes = await readBounded(response, size);
-      if (bytes.length !== size) throw new Error("Thumbnail size changed");
+      if (bytes.length !== size) throw new Error("Poster size changed");
+      if (cancel.signal.aborted) return;
       objectUrl = URL.createObjectURL(
         new Blob([bytes], { type: "image/jpeg" }),
       );
-      if (alive) setSrc(objectUrl);
+      setSrc(objectUrl);
     })().catch(() => {
-      if (alive) setFailed(true);
+      if (!cancel.signal.aborted) setFailed(true);
     });
     return () => {
       unregister();
       cleanup();
     };
-  }, [clipId, datasetId, available, mediaOrigin]);
+  }, [clipId, datasetId, available, mediaOrigin, visible]);
+  const loading = available && mediaOrigin && !failed && !src;
   return (
-    <div className="flex aspect-video items-center justify-center overflow-hidden rounded-t-xl bg-[#e7ece8] text-xs text-muted">
+    <div
+      ref={ref}
+      className={`relative flex aspect-video items-center justify-center overflow-hidden bg-[#e7ece8] text-center text-xs text-muted ${compact ? "rounded-md" : ""}`}
+    >
       {src && !failed ? (
         <img
           src={src}
           alt=""
-          className="h-full w-full object-contain"
+          className="h-full w-full bg-black object-contain"
           onError={() => setFailed(true)}
         />
-      ) : available && mediaOrigin && !failed ? (
-        <span className="flex items-center gap-2">
-          <Spinner /> Loading preview…
+      ) : loading ? (
+        <span role="status" className="motion-safe:animate-pulse px-1">
+          Loading preview…
         </span>
       ) : (
-        <span>
-          {failed ? "Preview could not load" : "No preview available"}
-        </span>
+        <span className="px-1">Preview unavailable</span>
       )}
+      {duration ? (
+        <span className="absolute right-1 bottom-1 rounded bg-black/80 px-1.5 py-0.5 text-[10px] leading-none text-white tabular-nums">
+          {duration}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-command.v2.json",
+  "title": "Stage-set rerun command v2",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "clipId",
+        "parentJobId",
+        "stages",
+        "requestId",
+        "expectedPlanSha256",
+        "expectedMaxComputeCostUsd",
+        "expectedMaxGpuCostUsd",
+        "reason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "scope": {
+          "const": "clip"
+        },
+        "clipId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "parentJobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "stages": {
+          "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan-request.v2.json#/$defs/stages"
+        },
+        "requestId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedPlanSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "expectedMaxComputeCostUsd": {
+          "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v2.json#/properties/maxComputeCostUsd"
+        },
+        "expectedMaxGpuCostUsd": {
+          "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v2.json#/properties/maxComputeCostUsd"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "requestId",
+        "expectedPlanSha256",
+        "expectedMaxComputeCostUsd",
+        "expectedMaxGpuCostUsd",
+        "reason"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "scope": {
+          "const": "failed_clips"
+        },
+        "requestId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedPlanSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "expectedMaxComputeCostUsd": {
+          "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v2.json#/properties/maxComputeCostUsd"
+        },
+        "expectedMaxGpuCostUsd": {
+          "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v2.json#/properties/maxComputeCostUsd"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  ]
+}

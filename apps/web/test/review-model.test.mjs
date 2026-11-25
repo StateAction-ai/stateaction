@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FIXTURE_RECORDINGS, fixtureBundle } from "../lib/review/fixture.ts";
-import { buildReviewModel } from "../lib/review/model.ts";
+import { customerReviewModel } from "../lib/review/effective-captions.ts";
+import {
+  buildReviewModel,
+  withMeasuredVideoDuration,
+} from "../lib/review/model.ts";
 
 const build = (scenario) => {
   const f = FIXTURE_RECORDINGS.find((r) => r.scenario === scenario);
@@ -19,6 +23,26 @@ test("times are seconds from the first decoded frame, not raw timestamps", () =>
   assert.equal(m.cards[1].startS, 9);
   // end-of-stream sentinel resolves to the recording duration.
   assert.equal(m.cards.at(-1).endS, 96);
+});
+
+test("late video metadata extends open ends in both staff and shared playback", () => {
+  const { m } = build("baseline");
+  for (const model of [m, customerReviewModel(m)]) {
+    const measured = withMeasuredVideoDuration(model, 100);
+    assert.equal(measured.durationS, 100);
+    assert.equal(measured.cards.at(-1).endS, 100);
+    assert.equal(measured.cards[0].endS, model.cards[0].endS);
+    assert.equal(model.cards.at(-1).endS, 96);
+
+    const singleFrame = {
+      ...model,
+      durationS: 1,
+      cards: [{ ...model.cards.at(-1), startS: 0, endS: 1 }],
+    };
+    const short = withMeasuredVideoDuration(singleFrame, 0.033333);
+    assert.equal(short.durationS, 0.033333);
+    assert.equal(short.cards[0].endS, short.durationS);
+  }
 });
 
 test("a failed window is a failure span and a card, never an empty segment", () => {

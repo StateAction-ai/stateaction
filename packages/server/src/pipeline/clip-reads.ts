@@ -26,6 +26,7 @@ import {
 import { getDagRunWithLineage } from "../jobs/stages.js";
 import { TransportError } from "../transport/errors.js";
 import { recordingTitle } from "./model.js";
+import { recordingDurationSql, recordingNameSql } from "./recording-display.js";
 
 type ClipRow = {
   id: string;
@@ -40,9 +41,10 @@ type ClipRow = {
   cursor_created_at: string;
   owner_user_id: string;
   collector_name: string;
-  import_title: string | null;
+  recording_title: string;
   source_offset_ns: string | null;
   duration_ns: string | null;
+  source_playback_duration_ns: string | null;
   job_state: JobState | null;
   pipeline_state: ClipPipelineState;
   error_code: string | null;
@@ -63,7 +65,12 @@ const selectClips = `
   SELECT c.id, c.recording_id, c.plan_version, c.ordinal, c.live_job_id, c.selected_job_id,
     c.created_at, c.created_at::text AS cursor_created_at, r.started_at, r.owner_user_id,
     u.name AS collector_name,
-    i.evidence -> 'attribution' ->> 'title' AS import_title,
+    ${recordingNameSql(
+      "r",
+      "i.evidence #>> '{attribution,title}'",
+      "i.evidence #>> '{attribution,dataset}'",
+      recordingDurationSql("p.plan", "i.evidence -> 'durationSeconds'"),
+    )} AS recording_title,
     CASE WHEN c.start_ordinal IS NOT NULL THEN jsonb_build_object(
       'kind', 'clip', 'start_ordinal', c.start_ordinal, 'end_ordinal', c.end_ordinal,
       'first_source_frame_id', c.first_source_frame_id::text, 'last_source_frame_id', c.last_source_frame_id::text,
@@ -75,6 +82,13 @@ const selectClips = `
       WHEN jsonb_typeof(i.evidence -> 'durationSeconds') = 'number'
         THEN round((i.evidence ->> 'durationSeconds')::numeric * 1000000000)::text
     END AS duration_ns,
+    CASE
+      WHEN c.start_ordinal IS NULL OR (c.start_ordinal = 0 AND c.end_ordinal = p.frame_count) THEN NULL
+      WHEN p.plan -> 'spans' -> (c.ordinal + 1) ->> 'start_ordinal' = c.end_ordinal::text
+        AND (p.plan -> 'spans' -> (c.ordinal + 1) ->> 'start_ts_ns')::bigint > c.end_ts_ns
+      THEN ((p.plan -> 'spans' -> (c.ordinal + 1) ->> 'start_ts_ns')::bigint - c.start_ts_ns)::text
+      ELSE (c.end_ts_ns - c.start_ts_ns)::text
+    END AS source_playback_duration_ns,
     live.state AS job_state, live.error_code, live.recipe IS NOT NULL AS has_recipe,
     chosen.recipe IS NOT NULL AS selected_has_recipe,
     chosen.result_manifest_sha256 AS manifest_sha256, selection.seq AS selection_revision,
@@ -92,6 +106,7 @@ const selectClips = `
       'checkedCount', marks.checked_count, 'issueCount', marks.issue_count
     ) END AS marks,
     CASE WHEN chosen.result_manifest_sha256 IS NULL OR selection.seq IS NULL THEN 'not_ready'
+      WHEN review.decision = 'reopened' THEN 'pending'
       ELSE coalesce(review.decision, 'pending') END AS review_status,
     (p.original_mp4_file_id IS NOT NULL OR EXISTS (
       SELECT 1 FROM job_output_slots s
@@ -172,7 +187,7 @@ function item(row: ClipRow, dag: DagRunV1 | null): ClipListItem {
     sourceRange: row.range,
     liveJobId: row.live_job_id,
     selectedJobId: row.selected_job_id,
-    recordingTitle: row.import_title ?? recordingTitle(row.started_at),
+    recordingTitle: row.recording_title,
     collectorId: row.owner_user_id,
     collectorName: row.collector_name,
     createdAt: row.created_at.toISOString(),
@@ -351,6 +366,7 @@ export function persistedClipReads(
         ...ref,
         annotations,
         segmentMarks,
+        sourcePlaybackDurationNs: row.source_playback_duration_ns,
         viewerChunks,
         viewerChunkIds: viewerChunks.map((c) => c.chunkId),
       };

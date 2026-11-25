@@ -1,5 +1,14 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v22.json (checked by tests).
+// Generated listing of the published schema files; keep in sync with api/catalog.v23.json (checked by tests).
 // Catalog v21 adds selective stage rerun and result selection contracts.
+import captureRecipeSelect from "../api/http/capture-recipe-select.v1.schema.json" with { type: "json" };
+import clipReviewCommandV2 from "../api/http/clip-review-command.v2.schema.json" with { type: "json" };
+import captionCorrectionCommandV2 from "../api/http/caption-correction-command.v2.schema.json" with { type: "json" };
+import stageRerunPlanRequestV2 from "../api/http/stage-rerun-plan-request.v2.schema.json" with { type: "json" };
+import stageRerunCommandV2 from "../api/http/stage-rerun-command.v2.schema.json" with { type: "json" };
+import stageRerunPlanV2 from "../api/http/stage-rerun-plan.v2.schema.json" with { type: "json" };
+import stageRerunResultV2 from "../api/http/stage-rerun-result.v2.schema.json" with { type: "json" };
+import cachedOriginatingRecipe from "../api/artifacts/cached-originating-recipe.v1.schema.json" with { type: "json" };
+import processingResultV6 from "../api/artifacts/processing-result.v6.schema.json" with { type: "json" };
 import rerunContract0 from "../api/http/stage-rerun-plan-request.v1.schema.json" with { type: "json" };
 import rerunContract1 from "../api/http/stage-rerun-command.v1.schema.json" with { type: "json" };
 import rerunContract2 from "../api/http/stage-rerun-result.v1.schema.json" with { type: "json" };
@@ -12,7 +21,7 @@ import dagRunV2 from "../api/http/dag-run.v2.schema.json" with { type: "json" };
 import stageRerunPlanV1 from "../api/http/stage-rerun-plan.v1.schema.json" with { type: "json" };
 import recordingAnnotationsV3 from "../api/http/recording-annotations.v3.schema.json" with { type: "json" };
 import segmentMarksV2 from "../api/http/segment-marks.v2.schema.json" with { type: "json" };
-import catalog from "../api/catalog.v22.json" with { type: "json" };
+import catalog from "../api/catalog.v23.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -135,6 +144,15 @@ export const commonSchema: object = common;
 /** Shared definition documents listed in the catalog `shared` key (common.v2 and common.v3). */
 export const sharedSchemas: readonly object[] = [commonV2, commonV3];
 export const contractSchemas: Readonly<Record<string, object>> = {
+  "http.capture-recipe-select.v1": captureRecipeSelect,
+  "http.clip-review-command.v2": clipReviewCommandV2,
+  "http.caption-correction-command.v2": captionCorrectionCommandV2,
+  "http.stage-rerun-plan-request.v2": stageRerunPlanRequestV2,
+  "http.stage-rerun-command.v2": stageRerunCommandV2,
+  "http.stage-rerun-plan.v2": stageRerunPlanV2,
+  "http.stage-rerun-result.v2": stageRerunResultV2,
+  "artifacts.cached-originating-recipe.v1": cachedOriginatingRecipe,
+  "artifacts.processing-result.v6": processingResultV6,
   "artifacts.segments.v2": cached0,
   "artifacts.captions.v2": cached1,
   "artifacts.hand-presence.v2": cached2,

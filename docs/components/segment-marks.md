@@ -50,7 +50,7 @@ failed-caption segment can still be marked: marks never look at captions.
 
 ## Review page
 
-On `/review/{recordingId}` the selected rail card shows **Good** (`G`),
+On `/clips/{clipId}` the selected rail card shows **Good** (`G`),
 **Issue** (`B`) with the issue-type picker and an optional note, and **Next
 unchecked** (`N`). The rail chips are All, Failed, Issue and Unchecked; the
 header reads "n checked, m issue". Every click appends a revision against the

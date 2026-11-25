@@ -398,6 +398,10 @@ export function stageRerunRouteHandlers() {
       routes().plan(request, recordingId),
     confirm: (request: Request, recordingId: string) =>
       routes().confirm(request, recordingId),
+    planV2: (request: Request, recordingId: string) =>
+      routes().planV2(request, recordingId),
+    confirmV2: (request: Request, recordingId: string) =>
+      routes().confirmV2(request, recordingId),
     history: (request: Request, recordingId: string) =>
       routes().history(request, recordingId),
     select: (request: Request, recordingId: string) =>

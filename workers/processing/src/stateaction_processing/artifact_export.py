@@ -155,6 +155,9 @@ def export_artifacts(
     )
     clip = seal.clip if seal else None
     source_range = clip.source_range if clip else None
+    poster_ts_ns = (
+        (int(clip.first[1]) + int(clip.last[1])) // 2 if clip is not None else None
+    )
     stream_limits = stream_limits or StreamLimits()
     own_scratch = scratch_dir is None
     scratch = (
@@ -259,11 +262,17 @@ def export_artifacts(
                     )
                     if preroll is not None:
                         preroll.clear()
+                if (
+                    poster_ts_ns is not None
+                    and int(frame.access_unit.native_timestamp_ns) >= poster_ts_ns
+                ):
+                    writer.set_poster_frame(frame)
+                    poster_ts_ns = None
                 writer.add(frame, obs)
                 if seal is not None:
                     if recording is None:
                         recording = RecordingWriter(
-                            scratch, frame, include_video=clip is None
+                            scratch, frame, clip=clip, limits=limits
                         )
                     recording.add(frame, obs)
                 miss.add(obs)

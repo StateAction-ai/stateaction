@@ -37,6 +37,11 @@ import { TransportError } from "../transport/errors.js";
 import { S3ReadSigner } from "../datasets/broker.js";
 import { storageClient } from "../storage.js";
 import { persistedClipReads } from "./clip-reads.js";
+import {
+  getClipOperations,
+  getRecordingOperations,
+} from "./recording-operations.js";
+import { getRecipeDefinition, listRecipeCatalog } from "./recipe-catalog.js";
 
 export function clipReads(get: () => AuthRuntime = authRuntime) {
   const config = serverConfig();
@@ -63,6 +68,9 @@ export type { CachedImport } from "../cached-import.js";
 export const CACHED_IMPORT_EVIDENCE_ID = "cached_import@1";
 export * from "./model.js";
 export * from "./run-view.js";
+export type * from "./operations-status.js";
+export type * from "./recording-operations.js";
+export type * from "./recipe-catalog.js";
 export {
   pipelineActionsFor,
   type PipelineDetail,
@@ -109,7 +117,28 @@ export type RecipeVisualization = {
 export function pipelineReads(get: () => AuthRuntime = authRuntime) {
   return {
     list: (staffUserId: string, query: PipelineQuery): Promise<PipelineList> =>
-      listPipelineRecordings(get().pool, staffUserId, query),
+      listPipelineRecordings(
+        get().pool,
+        staffUserId,
+        query,
+        hostedDevProfile()?.mode === "read-only",
+      ),
+    recordingOperations: (staffUserId: string, recordingId: string) =>
+      getRecordingOperations(
+        get().pool,
+        staffUserId,
+        recordingId,
+        hostedDevProfile()?.mode === "read-only",
+      ),
+    clipOperations: (
+      staffUserId: string,
+      recordingId: string,
+      clipId: string,
+    ) => getClipOperations(get().pool, staffUserId, recordingId, clipId),
+    recipeCatalog: (staffUserId: string) =>
+      listRecipeCatalog(get().pool, staffUserId),
+    recipeDefinition: (staffUserId: string, recipeId: string) =>
+      getRecipeDefinition(get().pool, staffUserId, recipeId),
     reviewQueueFilters: (userId: string, query: ReviewQueueOptionsQuery) =>
       listReviewQueueFilters(get().pool, userId, query),
     detail: (

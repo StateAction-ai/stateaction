@@ -17,6 +17,7 @@ export type VideoSource =
   | {
       kind: "broker";
       readPath: string;
+      readMethod?: "GET" | "POST";
       range?: { startS: number; durationS: number };
     }
   /** No media (fixture data or a recording without recording_mp4). */
@@ -67,7 +68,8 @@ export type CardCaption =
       hand: Hand;
     }
   /** A failed or missing caption, or a failed window: never blank. */
-  | { state: "failed"; code: string; message: string };
+  | { state: "failed"; code: string; message: string }
+  | { state: "omitted" };
 
 export interface Card {
   index: number;
@@ -77,6 +79,7 @@ export interface Card {
   startFrameId: string;
   /** null: the span runs to the end of the stream. */
   endFrameId: string | null;
+  endsAtVideoEnd?: true;
   kind: "segment" | "failed_window";
   caption: CardCaption;
   /** Share of the span (0..100) in which a hand was detected; null without presence data. */
@@ -93,6 +96,7 @@ export interface Card {
 export interface LaneSpan {
   startS: number;
   endS: number;
+  endsAtVideoEnd?: true;
   state: "present" | "failed";
 }
 
@@ -100,6 +104,7 @@ export interface FailureSpan {
   kind: "window" | "caption";
   startS: number;
   endS: number;
+  endsAtVideoEnd?: true;
   code: string;
   cardIndex: number | null;
 }

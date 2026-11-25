@@ -24,6 +24,7 @@ import { seedLocalCatalog, SEED } from "../src/catalog/seed.js";
 import { storageClient } from "../src/storage.js";
 import { admitNextJob } from "../src/jobs/service.js";
 import { confirmStageRerun, planStageRerun } from "../src/jobs/stage-reruns.js";
+import { getClipOperations } from "../src/pipeline/recording-operations.js";
 import { JOBS_CONFIG } from "./jobs-harness.js";
 import { freshDatabase } from "./harness.js";
 import { freshBucket } from "./storage-harness.js";
@@ -39,7 +40,7 @@ async function valid<T>(contract: string): Promise<T> {
     .input.document as T;
 }
 
-async function fixture(root: string) {
+async function fixture(root: string, failedCaption = false) {
   const write = async (slot: string, data: unknown) => {
     const path = join(root, slot);
     const bytes = Buffer.from(
@@ -144,7 +145,15 @@ async function fixture(root: string) {
   const validCaption = cap.rows.find((row) => row.status === "complete")!;
   cap.rows = seg.rows
     .filter((row) => row.status === "ok")
-    .map((row) => ({ ...validCaption, segment_id: row.segment_id }));
+    .map((row, index) =>
+      index === 0 && failedCaption
+        ? {
+            segment_id: row.segment_id,
+            status: "failed",
+            error_code: "engine_timeout",
+          }
+        : { ...validCaption, segment_id: row.segment_id },
+    );
   const frames = hand.frame_count;
   const manifest: CachedImport = {
     schema: "stateaction.cached-processing-import.v1",
@@ -152,12 +161,12 @@ async function fixture(root: string) {
     jobId,
     recordingId,
     attribution,
-    evidence: {},
+    evidence: failedCaption ? { caption: { model: "Test captioner" } } : {},
     counts: {
       segments: cap.rows.length,
       failedWindows: seg.windows.failed.length,
-      captions: cap.rows.length,
-      failedCaptions: 0,
+      captions: cap.rows.filter((row) => row.status === "complete").length,
+      failedCaptions: cap.rows.filter((row) => row.status === "failed").length,
       handPoseFrames: frames,
     },
     originals,
@@ -220,6 +229,12 @@ test("cached bundles publish and replay without admitting a worker, and refuse a
     const first = await importCachedProcessing(options);
     assert.equal(first.replayed, false);
     assert.equal((await importCachedProcessing(options)).replayed, true);
+    const { rows } = await db.app.query(
+      "SELECT originating_recipe_ref FROM cached_processing_imports WHERE job_id = $1",
+      [manifest.jobId],
+    );
+    assert.deepEqual(rows, [{ originating_recipe_ref: null }]);
+
     const {
       rows: [staff],
     } = await db.app.query<{ id: string }>(
@@ -370,4 +385,93 @@ test("live and import acceptance reject producers from the other path", async ()
     code: "annotation_contract_invalid",
     detail: "segments.json: unsupported_version",
   });
+});
+
+test("cached import v2 pins explicitly declared originating recipe provenance", async () => {
+  const db = await freshDatabase();
+  const bucket = await freshBucket();
+  const client = storageClient(bucket.config, 60_000);
+  const root = await mkdtemp(join(tmpdir(), "stateaction-import-recipe-test-"));
+  try {
+    await seedLocalCatalog(db.owner);
+    const { manifest, write } = await fixture(root, true);
+    const originatingRecipe = {
+      kind: "recipe",
+      recipe_id: "indego_hosted_canary@1",
+      recipe_sha256: "a".repeat(64),
+    };
+    const v2 = {
+      ...manifest,
+      schema: "stateaction.cached-processing-import.v2",
+      originatingRecipe,
+    };
+    const options = {
+      pool: db.owner,
+      config: bucket.config,
+      client,
+      root,
+      staffEmail: SEED.users.staff.email,
+      approve: false,
+      hosted: false,
+    };
+    await write("import.json", {
+      ...v2,
+      originatingRecipe: { ...originatingRecipe, recipe_sha256: "invalid" },
+    });
+    await assert.rejects(importCachedProcessing(options), {
+      code: "schema_violation",
+    });
+    await write("import.json", v2);
+    assert.equal((await importCachedProcessing(options)).replayed, false);
+    assert.equal((await importCachedProcessing(options)).replayed, true);
+    const operations = await getClipOperations(
+      db.app,
+      SEED.users.staff.id,
+      manifest.recordingId,
+      manifest.recordingId,
+    );
+    assert.equal(operations?.status, "partially_complete");
+    const counts = await db.app.query(
+      "SELECT failed_window_count, caption_failed_count FROM jobs WHERE id = $1",
+      [manifest.jobId],
+    );
+    assert.deepEqual(counts.rows, [
+      {
+        failed_window_count: manifest.counts.failedWindows,
+        caption_failed_count: 1,
+      },
+    ]);
+    const caption = operations.stages.find(({ stage }) => stage === "caption");
+    assert.equal(caption?.importedEvidence?.model, "Test captioner");
+    assert.equal(caption.latest, null);
+    assert.deepEqual(caption.attempts, []);
+    const { rows } = await db.app.query(
+      "SELECT originating_recipe_ref FROM cached_processing_imports WHERE job_id = $1",
+      [manifest.jobId],
+    );
+    assert.deepEqual(rows, [
+      {
+        originating_recipe_ref: {
+          kind: originatingRecipe.kind,
+          recipeId: originatingRecipe.recipe_id,
+          recipeSha256: originatingRecipe.recipe_sha256,
+        },
+      },
+    ]);
+    await write("import.json", {
+      ...v2,
+      originatingRecipe: {
+        ...originatingRecipe,
+        recipe_sha256: "b".repeat(64),
+      },
+    });
+    await assert.rejects(importCachedProcessing(options), /different import/);
+  } finally {
+    client.destroy();
+    await Promise.all([
+      db.close(),
+      bucket.remove(),
+      rm(root, { recursive: true, force: true }),
+    ]);
+  }
 });

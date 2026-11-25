@@ -46,11 +46,13 @@ export function HandOverlay({
   videoRef,
   model,
   path,
+  mediaOffsetS,
   enabled,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   model: ReviewModel;
   path: string;
+  mediaOffsetS: number;
   enabled: boolean;
 }) {
   const [pts, setPts] = useState<number | null>(null);
@@ -64,7 +66,7 @@ export function HandOverlay({
     if (!el?.requestVideoFrameCallback) return;
     let request = 0;
     const frame: VideoFrameRequestCallback = (_, metadata) => {
-      setPts(Math.round(metadata.mediaTime * 1e6));
+      setPts(Math.round((metadata.mediaTime - mediaOffsetS) * 1e6));
       request = el.requestVideoFrameCallback(frame);
     };
     const clear = () => setPts(null);
@@ -78,7 +80,7 @@ export function HandOverlay({
       el.removeEventListener("emptied", clear);
       el.removeEventListener("error", clear);
     };
-  }, [videoRef]);
+  }, [videoRef, mediaOffsetS]);
 
   const clip =
     enabled && pts !== null ? clipForFrame(model.clips, ranges, pts) : null;

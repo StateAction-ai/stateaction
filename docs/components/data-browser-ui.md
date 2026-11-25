@@ -1,11 +1,7 @@
-# Shared Data browser (SA-37)
+# Data browser
 
-The page reads the real dataset and clip APIs under the current Better Auth session. It preserves the existing console tokens and shell. The strict URL parser chooses a dataset list, approved dataset grid or staff-only All clips view; malformed or incompatible contexts never broaden to a global catalog. Recording-scoped review has a fixed human-readable backlink to Pipeline. Filter navigation resets pagination and retains the recording or dataset context.
+Staff use `/data-browser` to browse datasets, Pending Review and Recycle Bin. Dataset URLs preserve search, filters, sort, page and view. A clip opens at `/clips/<clipId>` with a validated return link. Results can show a verified poster and a caption match that links to its time.
 
-Search and task-label filters are bounded to 160 characters, executed in parameterized SQL and treat LIKE wildcard characters literally. Customer search uses the same live grant, recipient clearance, approval and current-job predicates as unfiltered reads. A dataset summary keeps the full authorized count and duration while the grid displays the current matching page. Cursor pagination remains bounded.
+A customer opens the dataset they were granted. The server checks approval against every current selected result and returns a customer projection. It serves only the effective caption and access-scoped media.
 
-Thumbnail control requests use the application session. Media requests use only the broker grant, exact configured storage origin, no cookies, no referrer, no redirects, a 5 MiB hard limit, declared-size agreement and short expiry. Object URLs and outstanding private requests are disposed on navigation/sign-out. The app never places signed media URLs in navigation or persisted filter state.
-
-Staff can create a named dataset and explicitly add selected approved clips with the current dataset revision. Shared-recipient clearance is still enforced by the API. Changes to a picker do not write before Add. Multi-dataset approval/assignment and the shared clip review form depend on SA-36/39; this page does not fabricate those mutations or review decisions.
-
-The production Next build and 40 actual Chrome checks passed on desktop and phone-sized viewports: filters and reload/history, cursor navigation, explicit dataset mutations, offline retry, customer denials and real signed-thumbnail decoding. Every observed media GET omitted session cookies. Three URL-parser checks, three restricted-Postgres filter tests and the large-catalog indexed-plan test passed after stacking onto the reviewed acceptance/review API base; the filter fixtures use the explicit synthetic owner-only acceptance helper, with the production DB guards enabled. Synthetic catalog metadata and JPEG fixtures do not qualify processing, R2, a physical phone or the separate clip-review page.
+See [Recordings, clip processing and dataset review](clip-review-and-datasets.md) for supported filters, review actions and access rules.

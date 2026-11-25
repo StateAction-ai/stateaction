@@ -17,6 +17,8 @@ export type MarksState = {
   busy: boolean;
   /** A short, curated message for the last failure, or null. */
   error: string | null;
+  segmentsSha256: string | null;
+  reload: () => Promise<void>;
   /** Append a mark for one segment (the newest mark is what the reviewer saw). */
   choose: (segmentId: string, choice: MarkChoice) => Promise<void>;
 };
@@ -131,5 +133,13 @@ export function useMarks(
     [store, reload, loaded, loadFailed, shownJobId],
   );
 
-  return { marks: rows, loaded, busy, error, choose };
+  return {
+    marks: rows,
+    loaded,
+    busy,
+    error,
+    choose,
+    segmentsSha256: pin.current.segmentsSha256,
+    reload,
+  };
 }

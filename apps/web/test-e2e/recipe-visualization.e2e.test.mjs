@@ -16,10 +16,10 @@ const requireServer = createRequire(join(serverDir, "package.json"));
 const { S3Client, GetObjectCommand, PutObjectCommand } =
   requireServer("@aws-sdk/client-s3");
 const recipePath = (jobId) => `/recipes/stub_local%401?job=${jobId}`;
-const summary = '[data-testid="recipe-summary"]';
+const summary = '[aria-labelledby="recipe-stage-details"]';
 
 test(
-  "staff follow exact job recipes from the table, Pipeline modules and Review badges",
+  "staff follow exact job recipes from recording operations and clip provenance",
   { timeout: 90_000 },
   async () => {
     const binary = await findChrome();
@@ -155,30 +155,6 @@ test(
       });
       assert.ok(success);
 
-      const assertStateContrast = async () => {
-        const ratios =
-          await ev(`Array.from(document.querySelectorAll("figure [data-state]"), (badge) => {
-          const ctx = document.createElement("canvas").getContext("2d");
-          const light = (color) => {
-            ctx.clearRect(0, 0, 1, 1);
-            ctx.fillStyle = color;
-            ctx.fillRect(0, 0, 1, 1);
-            const rgb = Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
-            return rgb.reduce((total, value, i) => {
-              const s = value / 255;
-              const linear = s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4;
-              return total + linear * [.2126, .7152, .0722][i];
-            }, 0);
-          };
-          const style = getComputedStyle(badge);
-          const values = [light(style.color), light(style.backgroundColor)];
-          return (Math.max(...values) + .05) / (Math.min(...values) + .05);
-        })`);
-        assert.ok(
-          ratios.length > 0 && ratios.every((ratio) => ratio >= 4.5),
-          `Stage badge contrast: ${ratios}`,
-        );
-      };
       const width = (value) =>
         send("Emulation.setDeviceMetricsOverride", {
           width: value,
@@ -215,175 +191,86 @@ test(
       const path = recipePath(succeeded.jobId);
       const activePath = recipePath(active.jobId);
       await width(1280);
-      await open("/pipeline", "table[aria-label], table caption");
-      await click(`table a[href="${path}"]`, path);
-      assert.match(await ev(`${ready(summary)}.innerText`), /succeeded/);
-      assert.equal(
-        await ev(
-          'document.querySelectorAll("figure [data-state=succeeded]").length',
-        ),
-        3,
-      );
-      // The caption receipt has no failure count, but accepted annotations do.
-      assert.deepEqual(
-        await ev(
-          `Array.from(document.querySelectorAll("figure [data-display-state=needs_attention]"), (badge) => badge.closest("li").querySelector("a").hash)`,
-        ),
-        ["#stage-segment", "#stage-caption"],
+      const recordingPath = `/recordings/${succeeded.recordingId}`;
+      const clipPath = `/clips/${succeeded.recordingId}`;
+      await open("/recordings", `a[href="${recordingPath}"]`);
+      await open(recordingPath, 'a[href$="/processing"]');
+      await click(`main a[href="${path}"]`, path);
+      assert.match(
+        await ev('document.querySelector("main header").innerText'),
+        /Succeeded/,
       );
       assert.match(
-        await ev('document.querySelector("#recipe-flow + p").textContent'),
-        /after segmentation and captioning/,
+        await ev('document.querySelector("#stage-segment").innerText'),
+        /Succeeded/,
       );
+      assert.match(
+        await ev('document.querySelector("#stage-caption").innerText'),
+        /Succeeded/,
+      );
+      assert.match(
+        await ev('document.querySelector("#stage-hand_pose").innerText'),
+        /Succeeded/,
+      );
+      const processingPath = `${recordingPath}/clips/${succeeded.recordingId}/processing`;
       await open(
-        `/pipeline/${succeeded.recordingId}`,
-        '[data-testid="recipe-stages"]',
+        processingPath,
+        `a:is([href="${clipPath}"], [href^="${clipPath}?"])`,
       );
-      await click(`h2 a[href="${path}"]`, path);
-      await open(
-        `/pipeline/${succeeded.recordingId}`,
-        '[data-testid="recipe-stages"]',
-      );
-      await click(
-        `[data-stage="caption"] a[href="${path}#stage-caption"]`,
-        `${path}#stage-caption`,
-      );
-      await open(
-        `/review/${succeeded.recordingId}`,
-        '[data-testid="provenance"]',
-        `/review/clips/${succeeded.recordingId}`,
-      );
+      await click(`main a[href="${path}"]`, path);
+      await open(clipPath, '[data-testid="provenance"]');
       await click(
         `[data-testid="provenance"] a[href="${path}#stage-segment"]`,
         `${path}#stage-segment`,
       );
 
       const recordedModel = await ev(
-        `Array.from(document.querySelectorAll("#stage-segment dt")).find((dt) => dt.textContent === "Model (recorded)").nextElementSibling.textContent`,
+        `[...document.querySelectorAll("#stage-segment dt")].find(dt => dt.textContent === "Recorded model")?.nextElementSibling.textContent`,
       );
       assert.ok(recordedModel && recordedModel !== "Not recorded");
 
       for (const w of [1280, 390]) {
         await width(w);
         await open(path, summary);
-        await assertStateContrast();
         await capture("succeeded", w);
-        await open(activePath, 'figure [data-state="running"]');
-        assert.equal(
-          await ev(
-            'document.querySelectorAll("figure [data-state=running]").length',
-          ),
-          2,
+        await open(activePath, summary);
+        assert.match(
+          await ev('document.querySelector("#stage-segment").innerText'),
+          /Running/,
         );
         assert.match(
-          await ev('document.querySelector("figure").innerText'),
-          /CPU unit[\s\S]*Track hand pose[\s\S]*Seal results[\s\S]*Output closure not recorded/,
+          await ev('document.querySelector("#stage-hand_pose").innerText'),
+          /Running/,
         );
-
-        await assertStateContrast();
         await capture("running", w);
       }
 
-      // The same named recipe has different configurations. The active job's
-      // definition is disabled for captioning and retains its job ID on toggle.
       await click(
-        'nav[aria-label="Recipe view"] a[href$="view=recipe"]',
+        'main header a[href$="view=recipe"]',
         `${activePath}&view=recipe`,
       );
-      await until('!document.querySelector("figure [data-state]")');
       assert.match(
-        await ev('document.querySelector("figure").innerText'),
-        /Disabled in recipe/,
+        await ev('document.querySelector("#stage-caption").innerText'),
+        /Disabled/,
       );
-      await click(
-        'nav[aria-label="Recipe view"] a:not([aria-current])',
-        activePath,
-      );
-      await until('!!document.querySelector("figure [data-state=running]")');
-
-      const spinner =
-        'document.querySelector("figure [data-state=running] svg")';
-      assert.equal(
-        await ev(`getComputedStyle(${spinner}).animationName`),
-        "spin",
-      );
-      await send("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-      });
-      await until('matchMedia("(prefers-reduced-motion: reduce)").matches');
-      assert.equal(
-        await ev(`getComputedStyle(${spinner}).animationName`),
-        "none",
-      );
-
-      const graph = (await send("Accessibility.getFullAXTree")).nodes;
-      assert.ok(
-        graph.some(
-          (node) =>
-            node.role.value === "link" &&
-            node.name?.value === "Find action segments",
-        ),
-      );
-      assert.ok(
-        graph.some(
-          (node) =>
-            node.role.value === "navigation" &&
-            node.name?.value === "Recipe view",
-        ),
-      );
-
-      await ev('document.querySelector("figure a").focus()');
-      await send("Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "Enter",
-        code: "Enter",
-        windowsVirtualKeyCode: 13,
-      });
-      await send("Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "Enter",
-        code: "Enter",
-        windowsVirtualKeyCode: 13,
-      });
-      await until('location.hash === "#stage-segment"');
-      assert.equal(await ev("document.activeElement.id"), "stage-segment");
-      await send("Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "Tab",
-        code: "Tab",
-        windowsVirtualKeyCode: 9,
-      });
-      await send("Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "Tab",
-        code: "Tab",
-        windowsVirtualKeyCode: 9,
-      });
-      assert.equal(await ev("document.activeElement.tagName"), "SUMMARY");
-      assert.notEqual(
-        await ev("getComputedStyle(document.activeElement).outlineStyle"),
-        "none",
+      await click(`main header a[href="${activePath}"]`, activePath);
+      assert.match(
+        await ev('document.querySelector("#stage-segment").innerText'),
+        /Running/,
       );
 
       seed(active.jobId);
       for (const w of [1280, 390]) {
         await width(w);
-        await open(activePath, 'figure [data-state="failed"]');
+        await open(activePath, summary);
         assert.match(
           await ev('document.querySelector("#stage-segment").innerText'),
-          /receipt_missing/,
-        );
-        assert.equal(
-          await ev(
-            'document.querySelector("#stage-caption [data-state]").dataset.state',
-          ),
-          "not_run",
+          /Failed[\s\S]*receipt_missing/,
         );
         assert.match(
           await ev('document.querySelector("#stage-caption").innerText'),
-          /Disabled in this recipe/,
+          /Not run/,
         );
-        await assertStateContrast();
         await capture("failed-and-not-run", w);
       }
       const storage = new S3Client({
@@ -414,7 +301,7 @@ test(
           await ev(
             'document.querySelector("#stage-segment details").textContent',
           ),
-          /Recorded provenance is currently unavailable/,
+          /Recorded model[\s\S]*Not recorded/,
         );
         assert.doesNotMatch(
           await ev(

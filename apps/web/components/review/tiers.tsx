@@ -125,7 +125,9 @@ export function Tiers({
     body:
       c.caption.state === "complete"
         ? c.caption.text
-        : `Error code: ${c.caption.code}`,
+        : c.caption.state === "failed" && c.caption.code
+          ? `Error code: ${c.caption.code}`
+          : "Caption not needed",
     bad: c.caption.state === "failed",
   });
 
@@ -614,7 +616,8 @@ function Overview({
   onView: (v: View) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pct = (s: number) => `${(s / model.durationS) * 100}%`;
+  const pct = (s: number) =>
+    model.durationS > 0 ? `${(s / model.durationS) * 100}%` : "0%";
   const recentre = (e: React.PointerEvent) => {
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
@@ -642,7 +645,7 @@ function Overview({
           className="absolute inset-y-0 bg-danger"
           style={{
             left: pct(f.startS),
-            width: `max(3px, ${((f.endS - f.startS) / model.durationS) * 100}%)`,
+            width: `max(3px, ${pct(f.endS - f.startS)})`,
           }}
         />
       ))}
@@ -651,7 +654,7 @@ function Overview({
         className="absolute inset-y-0 rounded-[5px] border-[1.5px] border-brand bg-brand-soft opacity-80"
         style={{
           left: pct(view[0]),
-          width: `max(4px, ${((view[1] - view[0]) / model.durationS) * 100}%)`,
+          width: `max(4px, ${pct(view[1] - view[0])})`,
         }}
       />
       <div

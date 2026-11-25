@@ -698,7 +698,10 @@ def task_input_recipe(doc: Any) -> Violation:
 
 
 def processing_result_nodes(doc: Any) -> Violation:
-    is_clip = doc["schema"] == "stateaction.processing_result.v5"
+    is_clip = doc["schema"] in {
+        "stateaction.processing_result.v5",
+        "stateaction.processing_result.v6",
+    }
     outputs = doc["outputs"]
     roles = {o["file_id"]: o["role"] for o in outputs}
     claimed: set[str] = set()

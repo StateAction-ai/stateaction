@@ -12,6 +12,12 @@ import type {
   ClipReviewCommand,
   ClipReviewState,
 } from "@stateaction/contracts";
+import type { ReviewDecisionV2 } from "./review-transaction.js";
+export { commitClipReviewV2 } from "./review-transaction.js";
+export type {
+  ClipReviewCommandV2,
+  ClipReviewReceipt,
+} from "./review-transaction.js";
 import { hostedDevProfile } from "../hosted-dev.js";
 import { CatalogError, toCatalogError } from "../catalog/errors.js";
 
@@ -94,10 +100,48 @@ export function projectQualityChecks(raw: unknown): QualityChecks {
 
 type QualityChecks = ClipReviewState["qualityChecks"];
 
+type ReviewStateV2 = Omit<ClipReviewState, "review" | "history"> & {
+  review: Omit<ClipReviewState["review"], "decision"> & {
+    decision: ReviewDecisionV2 | null;
+    reviewerName: string | null;
+  };
+  history: (Omit<ClipReviewState["history"][number], "decision"> & {
+    decision: ReviewDecisionV2;
+    reviewerName: string;
+  })[];
+};
+export type ClipReviewStateV2 = ReviewStateV2 & { selectionRevision: number };
+
+export async function getClipReviewStateV2(
+  pool: Queryable,
+  input: { viewerUserId: string; clipId: string; selectionRevision: number },
+): Promise<ClipReviewStateV2> {
+  return {
+    ...(await readClipReviewState(pool, input)),
+    selectionRevision: input.selectionRevision,
+  };
+}
+
 export async function getClipReviewState(
   pool: Queryable,
   input: { viewerUserId: string; clipId: string; selectionRevision?: number },
 ): Promise<ClipReviewState> {
+  const state = await readClipReviewState(pool, input);
+  const { reviewerName: _reviewerName, decision, ...review } = state.review;
+  return {
+    ...state,
+    review: { ...review, decision: decision === "reopened" ? null : decision },
+    history: state.history.flatMap(
+      ({ reviewerName: _name, decision, ...row }) =>
+        decision === "reopened" ? [] : [{ ...row, decision }],
+    ),
+  };
+}
+
+async function readClipReviewState(
+  pool: Queryable,
+  input: { viewerUserId: string; clipId: string; selectionRevision?: number },
+): Promise<ReviewStateV2> {
   const clipId = uuid(input.clipId, "clipId");
   const persisted = input.selectionRevision !== undefined;
   const decisions = persisted ? "review_clip_decisions" : "reviews";
@@ -164,13 +208,15 @@ export async function getClipReviewState(
     const history = (
       await tx.query<{
         revision: number;
-        decision: "approved" | "rejected";
+        decision: ReviewDecisionV2;
+        reviewer_name: string;
         task_label: string | null;
         notes: string | null;
         at: string;
       }>(
         `SELECT revision, decision, task_label, notes, ${ts("created_at")} AS at
-         FROM ${decisions} WHERE clip_id = $1 ${sameResult} ORDER BY revision DESC LIMIT $2`,
+          , (SELECT name FROM "user" WHERE id = review.reviewer_user_id) AS reviewer_name
+         FROM ${decisions} review WHERE clip_id = $1 ${sameResult} ORDER BY revision DESC LIMIT $2`,
         [clipId, REVIEW_HISTORY_LIMIT, ...resultParameters],
       )
     ).rows;
@@ -222,6 +268,7 @@ export async function getClipReviewState(
         taskLabel: latest?.task_label ?? null,
         notes: latest?.notes ?? null,
         reviewedAt: latest?.at ?? null,
+        reviewerName: latest?.reviewer_name ?? null,
       },
       history: history.map((r) => ({
         revision: r.revision,
@@ -229,6 +276,7 @@ export async function getClipReviewState(
         taskLabel: r.task_label,
         notes: r.notes,
         reviewedAt: r.at,
+        reviewerName: r.reviewer_name,
       })),
       membershipsTruncated: memberships.length > MAX_BATCH,
       memberships: memberships.slice(0, MAX_BATCH).map((m) => ({

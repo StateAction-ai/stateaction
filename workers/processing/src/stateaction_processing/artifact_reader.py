@@ -468,7 +468,7 @@ class Clip:
         return {"frames": self.frame_count, "scalars_compared": compared}
 
     def verify_mp4(self) -> dict[str, Any]:
-        """Optional (needs PyAV): demux, no decode. PTS must equal the frame map clip_pts exactly."""
+        """Demux with PyAV and compare playback PTS to the frame map."""
         import av
 
         rows = self.frame_map()
@@ -483,8 +483,17 @@ class Clip:
                 for packet in c.demux(s):
                     if not packet.size:
                         continue
+                    # Native clip remuxes can retain decode-only packets before the cut.
+                    if (
+                        packets == 0
+                        and packet.is_discard
+                        and packet.pts is not None
+                        and packet.pts < 0
+                    ):
+                        continue
                     _req(
                         packets < len(rows)
+                        and not packet.is_discard
                         and packet.pts == int(rows[packets]["clip_pts"]),
                         "E_MP4_PTS",
                     )
@@ -529,6 +538,11 @@ class Result:
             "source_manifest_sha256": self.manifest["source_manifest_sha256"],
             "verified_sources": self.manifest["verified_sources"],
             **self.manifest["provenance"],
+            **{
+                key: self.manifest[key]
+                for key in ("review_clip_id", "clip_plan_sha256", "reused_hand")
+                if key in self.manifest
+            },
             "metric_accuracy_validated": self.manifest["metric_accuracy_validated"],
             "limitations": self.manifest["limitations"],
         }
@@ -556,6 +570,8 @@ def open_result(
         manifest_contract = "artifacts.processing-result.v4"
     elif schema == "stateaction.processing_result.v5":
         manifest_contract = "artifacts.processing-result.v5"
+    elif schema == "stateaction.processing_result.v6":
+        manifest_contract = "artifacts.processing-result.v6"
     else:
         raise ArtifactError("E_CONTRACT_VIOLATION", "processing-result schema")
     validated = _contract_check(manifest_contract, data, required=require_contracts)
@@ -603,9 +619,12 @@ def open_result(
             found.add(rel)
     _req(found == set(listed), "E_OUTPUT_SET_MISMATCH", sorted(found ^ set(listed)))
     clips = []
-    reused_hand = manifest.get("reused_hand")
     producers = {}
-    if schema == "stateaction.processing_result.v4":
+    if schema in (
+        "stateaction.processing_result.v4",
+        "stateaction.processing_result.v6",
+    ):
+        reused_hand = manifest["reused_hand"]
         mapping = reused_hand["clips"]
         producers = {
             item["clip_id"]: (reused_hand["job_id"], item["original_clip_id"])

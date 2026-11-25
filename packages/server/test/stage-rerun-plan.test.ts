@@ -6,6 +6,11 @@ import {
   stageFingerprint,
 } from "../src/jobs/stage-rerun-plan.js";
 
+import {
+  retryExecutionStages,
+  retryStagesForOutputs,
+} from "../src/jobs/stage-rerun-v2.js";
+
 const recipe: RecipeV1 = {
   schemaVersion: 1,
   recipeId: "stub",
@@ -49,6 +54,42 @@ const recipe: RecipeV1 = {
     },
   ],
 };
+
+test("recording batch retries jobs that fail after their last stage and partial outputs", () => {
+  const noHand = structuredClone(recipe);
+  noHand.stages[2].enabled = false;
+  const stages = [
+    { stage: "segment", counts: { segments: 2 } },
+    { stage: "caption", counts: { captions: 2 } },
+  ] as const;
+  assert.deepEqual(retryStagesForOutputs(noHand, stages, false, null), [
+    "caption",
+  ]);
+  assert.deepEqual(
+    retryStagesForOutputs(
+      recipe,
+      [...stages, { stage: "hand_pose", counts: {} }],
+      false,
+      null,
+    ),
+    ["hand_pose"],
+  );
+  assert.deepEqual(
+    retryExecutionStages(
+      noHand,
+      retryStagesForOutputs(
+        noHand,
+        [
+          { stage: "segment", counts: { segments: 2, failed_windows: 1 } },
+          stages[1],
+        ],
+        true,
+        null,
+      ),
+    ),
+    ["segment", "caption"],
+  );
+});
 
 test("rerun scopes follow data edges, excluding the independent hand stage", () => {
   assert.deepEqual(executionStages(recipe, "hand_pose", "only"), ["hand_pose"]);
@@ -125,5 +166,29 @@ test("fingerprints bind stage inputs and declared producer, excluding GPU observ
       producer: { ...fingerprintInput.producer, model_revision: "2" },
     }),
     first,
+  );
+});
+
+test("a stage set follows the caption dependency and keeps hand pose independent", () => {
+  assert.deepEqual(retryExecutionStages(recipe, ["segment"]), [
+    "segment",
+    "caption",
+  ]);
+  assert.deepEqual(retryExecutionStages(recipe, ["hand_pose", "segment"]), [
+    "segment",
+    "caption",
+    "hand_pose",
+  ]);
+  assert.deepEqual(retryExecutionStages(recipe, ["hand_pose", "caption"]), [
+    "caption",
+    "hand_pose",
+  ]);
+  assert.deepEqual(retryExecutionStages(recipe, ["hand_pose"]), ["hand_pose"]);
+  const captionOff = structuredClone(recipe);
+  captionOff.stages[1].enabled = false;
+  assert.deepEqual(retryExecutionStages(captionOff, ["segment"]), ["segment"]);
+  assert.throws(
+    () => retryExecutionStages(captionOff, ["caption"]),
+    /stage_disabled/,
   );
 });

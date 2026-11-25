@@ -1,0 +1,38 @@
+{
+  "contract": "http.stage-rerun-result.v2",
+  "cases": [
+    {
+      "name": "replay exact created jobs",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobs": [
+            {
+              "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+              "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+              "jobId": "019a4b2c-0002-7f50-8a6b-7c8d9e0f1a2b"
+            }
+          ],
+          "replayed": true
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "empty result",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "jobs": [],
+          "replayed": true
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

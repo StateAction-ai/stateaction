@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/caption-correction-command.v2.json",
+  "title": "Caption correction command v2",
+  "description": "A staff command bound to the selected result and the accepted segment digest. Edit saves changed text, omit suppresses the caption, and undo restores its previous effective value. The correction and segment mark append together.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "segmentsSha256",
+        "expectedRevision",
+        "expectedMarkRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action",
+        "text"
+      ],
+      "properties": {
+        "correctionId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "segmentsSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "expectedMarkRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "edit"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "segmentsSha256",
+        "expectedRevision",
+        "expectedMarkRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action"
+      ],
+      "properties": {
+        "correctionId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "segmentsSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "expectedMarkRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "omit"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionId",
+        "segmentsSha256",
+        "expectedRevision",
+        "expectedMarkRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action"
+      ],
+      "properties": {
+        "correctionId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "segmentsSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "expectedMarkRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483646
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "undo"
+        }
+      }
+    }
+  ]
+}

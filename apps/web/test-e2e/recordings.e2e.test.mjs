@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { validateValue } from "@stateaction/contracts";
 import { startCatalogPostgres } from "../../../packages/server/test-auth/postgres.mjs";
+import { findChrome, launchChrome } from "./chrome.mjs";
 import { startSeaweedfs } from "./seaweedfs.mjs";
 import {
   waitForGroupExit,
@@ -38,6 +39,9 @@ const { CreateBucketCommand, PutObjectCommand } =
 // Built server modules (no `server-only` entry point): the same code the
 // routes run, used here only for operator and future-transport steps.
 const dist = (p) => import(new URL(`dist/${p}`, `file://${serverDir}`).href);
+const { STATEACTION_MOBILE_CHANNELS } = await dist(
+  "admission/capture-profiles.js",
+);
 const { recordSourceCompletion } = await dist("admission/recordings.js");
 const { s3ObjectReader } = await dist("admission/object-reader.js");
 const { recordIngestPermission, revokeIngestPermission } = await dist(
@@ -164,7 +168,11 @@ const activeRef = async (userId) =>
  * catalog (SA-20 transport stand-in) and stores the exact manifest bytes in
  * S3. The manifest copies the server-returned collectionPermissionRef.
  */
-async function prepared(jar, userId, { oversizeStored = false } = {}) {
+async function prepared(
+  jar,
+  userId,
+  { oversizeStored = false, unmatched = false, manual = false } = {},
+) {
   const clientRecordingId = randomUUID();
   const created = await call(
     "/api/v1/recordings",
@@ -186,7 +194,7 @@ async function prepared(jar, userId, { oversizeStored = false } = {}) {
   }
   const manifest = Buffer.from(
     JSON.stringify({
-      schema: "stateaction.recording_source.v1",
+      schema: "stateaction.recording_source.v2",
       recording_id: recordingId,
       client_recording_id: clientRecordingId,
       owner_user_id: userId,
@@ -201,23 +209,17 @@ async function prepared(jar, userId, { oversizeStored = false } = {}) {
         size_bytes: f.sizeBytes,
         sha256: f.sha256,
       })),
-      clock_domains: ["android.elapsed_realtime", "android.sensor_event"],
-      channels: [
-        {
-          topic: "/camera/rgb",
-          message_encoding: "protobuf",
-          schema_name: "foxglove.CompressedVideo",
-          clock_domain: "android.elapsed_realtime",
-          message_count: "30",
-        },
-        {
-          topic: "/imu",
-          message_encoding: "protobuf",
-          schema_name: "stateaction.Imu",
-          clock_domain: "android.sensor_event",
-          message_count: "200",
-        },
-      ],
+      clock_domains: ["unix"],
+      channels: (unmatched
+        ? STATEACTION_MOBILE_CHANNELS.slice(0, -1)
+        : STATEACTION_MOBILE_CHANNELS
+      ).map(([topic, schema_name, message_encoding]) => ({
+        topic,
+        schema_name,
+        message_encoding,
+        clock_domain: "unix",
+        message_count: topic === "/camera/rgb/video" ? "30" : "1",
+      })),
       counts: {
         video_frames: "30",
         dropped_video_frames: "0",
@@ -260,7 +262,12 @@ async function prepared(jar, userId, { oversizeStored = false } = {}) {
   const complete = (role) => {
     const f = files.find((x) => x.role === role);
     return recordSourceCompletion(
-      deps,
+      manual
+        ? {
+            ...deps,
+            config: { ...deps.config, captureRecipeSelection: "manual" },
+          }
+        : deps,
       { userId },
       {
         recordingId,
@@ -819,4 +826,175 @@ describe("recording routes on Next.js with Better Auth, catalog and S3", () => {
       assert.ok(!bad.text.includes(secret));
     assert.doesNotMatch(logs, new RegExp(env.S3_SECRET_ACCESS_KEY));
   });
+});
+
+test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS pixels", async () => {
+  const collector = await signIn(users.collector.email);
+  const staff = await signIn(users.staff.email);
+  async function sealFixture(options) {
+    const fixture = await prepared(collector, users.collector.id, options);
+    const sealed = await call(
+      "/api/v1/recordings/" + fixture.recordingId + "/seal",
+      nativePost(collector, fixture.seal),
+    );
+    assert.equal(sealed.status, 200, sealed.text);
+    await fixture.complete("source_mcap");
+    await fixture.complete("recorder_metadata");
+    const { admission } = await fixture.complete("source_manifest");
+    return { id: fixture.recordingId, admission };
+  }
+  const unmatched = await sealFixture({ unmatched: true });
+  assert.equal(unmatched.admission.reason, "needs_setup");
+  assert.deepEqual(await jobsOf(unmatched.id), []);
+  const manual = await sealFixture({ manual: true });
+  assert.equal(manual.admission.reason, "choose_recipe");
+  assert.deepEqual(await jobsOf(manual.id), []);
+
+  const binary = await findChrome();
+  assert.ok(binary, "Chromium is required for recording operations");
+  const chrome = await launchChrome(binary);
+  const ev = async (expression) => {
+    const { result, exceptionDetails } = await chrome.send("Runtime.evaluate", {
+      expression,
+      returnByValue: true,
+    });
+    assert.equal(exceptionDetails, undefined, expression);
+    return result.value;
+  };
+  async function waitFor(predicate, label) {
+    const deadline = Date.now() + 15_000;
+    while (!(await predicate())) {
+      assert.ok(Date.now() < deadline, label);
+      await sleep(75);
+    }
+  }
+  const until = (expression) => waitFor(() => ev(expression), expression);
+  const open = async (path, text) => {
+    await ev("window.__previousTestDocument = true");
+    const { errorText } = await chrome.send("Page.navigate", {
+      url: origin + path,
+    });
+    assert.equal(errorText, undefined);
+    await until(`!window.__previousTestDocument && location.pathname + location.search === ${JSON.stringify(path)} &&
+      document.querySelector("main")?.innerText.includes(${JSON.stringify(text)})`);
+    assert.equal(
+      await ev("document.documentElement.scrollWidth"),
+      await ev("document.documentElement.clientWidth"),
+    );
+  };
+  const click = async (name, scope = "main") => {
+    const button = `[...document.querySelectorAll(${JSON.stringify(scope + " button")})].find(b => !b.disabled && b.checkVisibility() && b.textContent.trim() === ${JSON.stringify(name)})`;
+    await until(`!!(${button})`);
+    await ev(`(${button}).click()`);
+  };
+  const defaultRecipe = "indego_hosted_canary@1";
+  try {
+    const { success } = await chrome.send("Network.setCookie", {
+      name: SESSION,
+      value: staff.cookies.get(SESSION),
+      url: origin,
+      httpOnly: true,
+    });
+    assert.ok(success);
+    for (const width of [1280, 390]) {
+      await chrome.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: width < 600,
+      });
+      await open("/recordings?status=needs_setup", "Needs setup");
+      await until(
+        `!!document.querySelector('main a[href="/recordings/${unmatched.id}"]')`,
+      );
+      await open("/recordings/" + unmatched.id, "Copy device report");
+      assert.equal(
+        await ev(
+          'document.querySelector("main").innerText.includes("Start processing")',
+        ),
+        false,
+      );
+      await open("/recipes?tab=devices", "StateAction mobile app");
+      const recipeLink = `document.querySelector('main a[href="/recipes/${encodeURIComponent(defaultRecipe)}"]')`;
+      await until(`!!(${recipeLink})`);
+      assert.equal(
+        await ev(`(${recipeLink}).textContent.trim()`),
+        "IndEgo processing @1",
+      );
+      await open(
+        await ev(`(${recipeLink}).getAttribute("href")`),
+        defaultRecipe,
+      );
+      await open("/recordings/" + manual.id, "Choose a recipe");
+      await click("Choose a recipe");
+      await until(
+        `document.querySelector('dialog[open] select')?.value === "${defaultRecipe}"`,
+      );
+      if (width === 1280) await click("Close", "dialog[open]");
+    }
+    await click("Start processing", "dialog[open]");
+    await waitFor(
+      async () => (await jobsOf(manual.id)).length === 1,
+      "recipe selection queued planning",
+    );
+    const [job] = await jobsOf(manual.id);
+
+    // Walk the fixture through the guarded state machine and record termination.
+    const { fixtureRunJob, fixtureReapJob } = await dist("jobs/fixtures.js");
+    await fixtureRunJob(owner, job.id);
+    await owner.query(
+      "UPDATE jobs SET state = 'failed', error_code = 'dispatch_lost', finished_at = now() WHERE id = $1",
+      [job.id],
+    );
+    await fixtureReapJob(owner, job.id);
+    const diagnostic = await call("/recordings/" + manual.id, {
+      jar: staff,
+      headers: {
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "document",
+      },
+    });
+    assert.equal(diagnostic.status, 200, "the failed recording still renders");
+    assert.ok(
+      diagnostic.text.includes("Retry clip planning"),
+      "the failed recording exposes a retry",
+    );
+    for (const width of [1280, 390]) {
+      await chrome.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 900,
+        deviceScaleFactor: 1,
+        mobile: width < 600,
+      });
+      await open("/recordings/" + manual.id, "Retry clip planning");
+      assert.match(
+        await ev('document.querySelector("main").innerText'),
+        /Clip planning[\s\S]*Failed/,
+      );
+      await click("Retry clip planning");
+      await until(
+        `document.querySelector('dialog[open]')?.innerText.includes("same sealed source")`,
+      );
+      if (width === 1280) await click("Close", "dialog[open]");
+    }
+    await click("Confirm retry", "dialog[open]");
+    await waitFor(
+      async () => (await jobsOf(manual.id)).length === 2,
+      "retry creates one successor",
+    );
+    const successor = (await jobsOf(manual.id)).find(({ id }) => id !== job.id);
+    assert.equal(successor.state, "queued");
+    assert.equal(successor.source_manifest_sha256, job.source_manifest_sha256);
+    assert.equal(
+      (
+        await owner.query("SELECT previous_job_id FROM jobs WHERE id = $1", [
+          successor.id,
+        ])
+      ).rows[0].previous_job_id,
+      job.id,
+    );
+  } finally {
+    await chrome.close();
+  }
 });

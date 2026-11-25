@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { advanceResult } from "../src/acceptance/service.js";
 import {
@@ -9,8 +10,18 @@ import {
 import { recordingAnnotationRoutes } from "../src/annotations/http.js";
 import type { ReadSigner } from "../src/datasets/broker.js";
 import type { DatasetAuthenticate } from "../src/datasets/http.js";
-import { closeOwnerPools } from "./harness.js";
+import { createDatasetRecord } from "../src/datasets/mutations.js";
+import {
+  clearReviewClips,
+  grantDatasetAccess,
+  recordSharingPermission,
+} from "../src/datasets/operator.js";
+import { listReviewDatasetClips } from "../src/datasets/review-queries.js";
+import { materializeReviewClipVideo } from "../src/datasets/review-video-backfill.js";
+import { issueReviewClipVideo } from "../src/datasets/review-video.js";
+import { closeOwnerPools, expectCode } from "./harness.js";
 import { recipeJob, runRecipe, seal, type Scenario } from "./recipe-harness.js";
+import { realS3, s3Config } from "./transport-harness.js";
 
 /**
  * SA-98 annotations reader, staff routes and the recording_mp4 broker role on
@@ -271,6 +282,121 @@ test("recording_mp4 read: staff, video/mp4, 60 s, bounded, accepted job's file o
   ];
   for (const [name, res, status] of bad) assert.equal(res.status, status, name);
   assert.equal(signed.length, before, "nothing was signed for a refused read");
+});
+
+test("an approved legacy whole-recording clip plays the selected verified MP4", async () => {
+  const datasetId = randomUUID();
+  const { pool } = s.accept;
+  const clipId = s.recordingId;
+  const {
+    rows: [selected],
+  } = await pool.query<{
+    manifest: string;
+    seq: number;
+    key: string;
+  }>(
+    `SELECT j.result_manifest_sha256 AS manifest, sel.seq, f.object_key AS key
+       FROM review_clips c
+       JOIN clip_plans p ON p.recording_id = c.recording_id AND p.version = c.plan_version
+       JOIN jobs j ON j.id = c.selected_job_id
+       JOIN clip_result_selections sel ON sel.clip_id = c.id AND sel.job_id = j.id
+       JOIN files f ON f.job_id = j.id AND f.role = 'recording_mp4'
+       WHERE c.id = $1 AND j.id = $2 AND j.kind = 'process_recording'
+         AND c.start_ordinal IS NULL AND p.plan_job_id IS NULL
+         AND f.id = $3 AND f.state = 'verified'`,
+    [clipId, s.jobId, run.mp4.fileId],
+  );
+  assert.ok(selected);
+  await createDatasetRecord(pool, {
+    actorUserId: staff(),
+    datasetId,
+    name: "Legacy playback",
+  });
+  await pool.query(
+    `INSERT INTO review_clip_decisions
+       (id, clip_id, job_id, result_manifest_sha256, selection_revision, revision,
+        reviewer_user_id, decision, task_label)
+     VALUES ($1, $2, $3, $4, $5, 1, $6, 'approved', 'Review test')`,
+    [randomUUID(), clipId, s.jobId, selected.manifest, selected.seq, staff()],
+  );
+  await pool.query(
+    `INSERT INTO dataset_review_clips
+       (dataset_id, clip_id, job_id, result_manifest_sha256, selection_revision, added_by)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [datasetId, clipId, s.jobId, selected.manifest, selected.seq, staff()],
+  );
+
+  const input = {
+    viewerUserId: staff(),
+    datasetId,
+    clipId,
+    expectedSelection: {
+      jobId: s.jobId,
+      resultManifestSha256: selected.manifest,
+      selectionRevision: selected.seq,
+    },
+  };
+  const listed = await listReviewDatasetClips(pool, input);
+  assert.equal(listed.items[0]?.hasVideo, true);
+  signed.length = 0;
+  const broker = { pool, signer };
+  const video = await issueReviewClipVideo(broker, input);
+  assert.equal(video.role, "clip_mp4");
+  assert.equal(video.sizeBytes, String(run.mp4.size));
+  await expectCode(
+    issueReviewClipVideo(broker, {
+      ...input,
+      viewerUserId: s.db.actors.customer,
+    }),
+    "not_found",
+  );
+  await expectCode(
+    issueReviewClipVideo(broker, {
+      ...input,
+      expectedSelection: {
+        ...input.expectedSelection,
+        selectionRevision: selected.seq + 1,
+      },
+    }),
+    "not_found",
+  );
+  const permissionRef = "legacy-playback-test";
+  await recordSharingPermission(s.db.owner, {
+    permissionRef,
+    datasetId,
+    recipientUserId: s.db.actors.customer,
+    evidenceRef: "test:legacy-playback",
+    recordedBy: "test",
+  });
+  await clearReviewClips(s.db.owner, {
+    permissionRef,
+    allCurrentMembers: true,
+    clearedBy: "test",
+  });
+  await grantDatasetAccess(s.db.owner, { permissionRef, actorUserId: staff() });
+  const customer = { ...input, viewerUserId: s.db.actors.customer };
+  assert.equal(
+    (await listReviewDatasetClips(pool, customer)).items[0]?.hasVideo,
+    true,
+  );
+  assert.equal((await issueReviewClipVideo(broker, customer)).url, video.url);
+  assert.deepEqual(signed, [
+    { key: selected.key, expiresInSeconds: 60, contentType: "video/mp4" },
+    { key: selected.key, expiresInSeconds: 60, contentType: "video/mp4" },
+  ]);
+
+  assert.deepEqual(
+    await materializeReviewClipVideo(
+      {
+        pool: s.db.owner,
+        client: realS3(),
+        bucket: s3Config().bucket,
+        python: "/unused/python",
+      },
+      s.jobId,
+    ),
+    { jobId: s.jobId, sha256: run.mp4.sha, alreadyAvailable: true },
+  );
 });
 
 test("a deleted recording disappears from every review read", async () => {

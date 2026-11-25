@@ -292,6 +292,10 @@ class ClipWriter:
         require(len(packets) == 1, "E_THUMBNAIL_ENCODE", len(packets))
         self.thumbnail = bytes(packets[0])
 
+    def set_poster_frame(self, frame: DecodedFrame) -> None:
+        """Use a frame inside this chunk for its review poster."""
+        self._thumb_from(frame)
+
     # ------------------------------------------------------------------ close
     def close(self) -> tuple[dict[str, Any], list[OutputFile]]:
         require(self.frames >= 1, "E_CLIP_EMPTY")

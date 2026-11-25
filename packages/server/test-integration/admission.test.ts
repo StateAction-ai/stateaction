@@ -23,6 +23,7 @@ import {
   recordSourceCompletion,
   registerRecording,
   sealRecordingInventory,
+  selectRecordingCaptureRecipe,
   type AdmissionDeps,
   type AdmissionState,
   type ObjectReader,
@@ -48,6 +49,7 @@ import {
   type Actors,
   type TestDb,
 } from "./harness.js";
+import { mobileSourceChannels } from "./source-scenario.js";
 import { startRecordingServer } from "./http-adapter.js";
 
 const sha = (b: Uint8Array | string) =>
@@ -221,7 +223,7 @@ async function scenario(
     });
   }
   const doc: Record<string, unknown> = {
-    schema: "stateaction.recording_source.v1",
+    schema: "stateaction.recording_source.v2",
     recording_id: recordingId,
     client_recording_id: clientRecordingId,
     owner_user_id: owner,
@@ -236,23 +238,8 @@ async function scenario(
       size_bytes: f.sizeBytes,
       sha256: f.sha256,
     })),
-    clock_domains: ["android.elapsed_realtime", "android.sensor_event"],
-    channels: [
-      {
-        topic: "/camera/rgb",
-        message_encoding: "protobuf",
-        schema_name: "foxglove.CompressedVideo",
-        clock_domain: "android.elapsed_realtime",
-        message_count: "30",
-      },
-      {
-        topic: "/imu",
-        message_encoding: "protobuf",
-        schema_name: "stateaction.Imu",
-        clock_domain: "android.sensor_event",
-        message_count: "200",
-      },
-    ],
+    clock_domains: ["android.elapsed_realtime", "android.sensor_event", "unix"],
+    channels: mobileSourceChannels(),
     counts: {
       video_frames: "30",
       dropped_video_frames: "0",
@@ -708,10 +695,25 @@ describe("seal and eligibility", () => {
     assert.equal(admission.outcome, "admitted");
     assert.equal(admission.job_id, jobs[0].id);
     assert.equal(admission.capture_config_sha256, sha("capture-config"));
+    const profile = (
+      await db.app.query(
+        `SELECT capture_source_id, state, recipe_id, recipe_sha256, selected_by, evidence
+       FROM recording_capture_profiles WHERE recording_id = $1`,
+        [s.recordingId],
+      )
+    ).rows[0]!;
+    assert.equal(profile.state, "selected");
+    assert.equal(profile.capture_source_id, "stateaction_mobile@1");
+    assert.equal(profile.recipe_id, PUBLIC_VIDEO_RECIPE.recipeId);
+    assert.equal(profile.recipe_sha256, requestSha256(PUBLIC_VIDEO_RECIPE));
+    assert.equal(profile.selected_by, null);
+    assert.equal(profile.evidence.device.appVersion, "0.1.0");
+
     assert.equal(admission.close_status, "closed_clean");
     assert.deepEqual(admission.clock_domains, [
       "android.elapsed_realtime",
       "android.sensor_event",
+      "unix",
     ]);
     assert.deepEqual(admission.calibration_file_ids, [
       s.files.find((f) => f.role === "calibration")!.fileId,
@@ -1787,4 +1789,153 @@ describe("HTTP route shapes (test-only adapter, injected auth)", () => {
       /authenticateCollector/,
     );
   });
+});
+
+test("unmatched verified hardware stays sealed with a durable Needs setup decision", async () => {
+  const s = await scenario(actors.collector, {
+    mutate: (doc) => {
+      (doc.channels as unknown[]).pop();
+    },
+  });
+  for (const role of ["source_mcap", "recorder_metadata", "source_manifest"])
+    await complete(s, role);
+  const sealed = await sealRecordingInventory(
+    deps,
+    { userId: s.owner },
+    s.recordingId,
+    s.seal,
+  );
+  assert.equal(sealed.recording.status, "sealed");
+  const held = {
+    state: "held",
+    reason: "needs_setup",
+    code: "capture_source_unmatched",
+  };
+  assert.deepEqual(sealed.admission, held);
+  assert.deepEqual(await admitRecording(deps, s.recordingId), held);
+  assert.deepEqual(await jobsOf(s.recordingId), []);
+  assert.equal(await admissionOf(s.recordingId), undefined);
+  const { rows } = await db.app.query(
+    `SELECT state, reason, code, capture_source_id, source_manifest_sha256
+     FROM recording_capture_profiles WHERE recording_id = $1`,
+    [s.recordingId],
+  );
+  assert.deepEqual(rows, [
+    {
+      ...held,
+      capture_source_id: null,
+      source_manifest_sha256: sha(s.manifest),
+    },
+  ]);
+});
+
+test("staff can resolve a recipe hold once for the exact source", async () => {
+  const s = await scenario();
+  for (const role of ["source_mcap", "recorder_metadata", "source_manifest"])
+    await complete(s, role);
+  const manual: AdmissionDeps = {
+    ...deps,
+    config: { ...deps.config, captureRecipeSelection: "manual" },
+  };
+  const sealed = await sealRecordingInventory(
+    manual,
+    { userId: s.owner },
+    s.recordingId,
+    s.seal,
+  );
+  assert.deepEqual(sealed.admission, {
+    state: "held",
+    reason: "choose_recipe",
+    code: "manual_selection",
+  });
+  assert.deepEqual(await admitRecording(deps, s.recordingId), sealed.admission);
+  const request = {
+    recipeId: PUBLIC_VIDEO_RECIPE.recipeId,
+    sourceManifestSha256: sha(s.manifest),
+  };
+  const staff = { userId: actors.staff };
+  await expectCode(
+    selectRecordingCaptureRecipe(
+      deps,
+      { userId: s.owner },
+      s.recordingId,
+      request,
+    ),
+    "forbidden",
+  );
+  await expectCode(
+    selectRecordingCaptureRecipe(deps, staff, s.recordingId, {
+      ...request,
+      recipeId: "different@1",
+    }),
+    "conflict",
+  );
+  await expectCode(
+    selectRecordingCaptureRecipe(deps, staff, s.recordingId, {
+      ...request,
+      sourceManifestSha256: sha("stale"),
+    }),
+    "conflict",
+  );
+  assert.deepEqual(await jobsOf(s.recordingId), []);
+  const selections = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      selectRecordingCaptureRecipe(deps, staff, s.recordingId, request),
+    ),
+  );
+  assert.equal(selections[0]?.state, "admitted");
+  assert.ok(
+    selections.every(
+      (selection) =>
+        JSON.stringify(selection) === JSON.stringify(selections[0]),
+    ),
+  );
+  assert.equal((await jobsOf(s.recordingId)).length, 1);
+  const { rows } = await db.app.query(
+    "SELECT selected_by, recipe_sha256 FROM recording_capture_profiles WHERE recording_id = $1",
+    [s.recordingId],
+  );
+  assert.deepEqual(rows, [
+    {
+      selected_by: actors.staff,
+      recipe_sha256: requestSha256(PUBLIC_VIDEO_RECIPE),
+    },
+  ]);
+  await assert.rejects(
+    db.app.query(
+      "UPDATE recording_capture_profiles SET selected_by = NULL WHERE recording_id = $1",
+      [s.recordingId],
+    ),
+    { code: "SAC04" },
+  );
+});
+
+test("a public-video-only deployment retains the hardware recipe hold", async () => {
+  const s = await scenario();
+  for (const file of s.files) await complete(s, file.role);
+  const scoped: AdmissionDeps = {
+    ...deps,
+    config: {
+      ...deps.config,
+      publicVideoCanary: {
+        clientRecordingId: randomUUID(),
+        ownerUserId: s.owner,
+        sourceSha256: sha("other source"),
+      },
+    },
+  };
+  const sealed = await sealRecordingInventory(
+    scoped,
+    { userId: s.owner },
+    s.recordingId,
+    s.seal,
+  );
+  assert.deepEqual(sealed.admission, {
+    state: "held",
+    reason: "needs_setup",
+    code: "recipe_unavailable",
+  });
+  assert.deepEqual(await jobsOf(s.recordingId), []);
+  assert.equal((await admitRecording(deps, s.recordingId)).state, "admitted");
+  assert.equal((await jobsOf(s.recordingId)).length, 1);
 });

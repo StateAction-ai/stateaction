@@ -4,11 +4,13 @@ import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
+  parseContract,
   sha256Hex,
   validateBytes,
   type ProcessingResultV1,
 } from "@stateaction/contracts";
 import type pg from "pg";
+import { indexAcceptedReviewAnnotations } from "./acceptance/review-search.js";
 import { checkAnnotations } from "./acceptance/service.js";
 import { ObjectHashError, s3ObjectHasher } from "./acceptance/storage.js";
 import {
@@ -23,6 +25,16 @@ import {
   type ClipInput,
 } from "./catalog/catalog.js";
 import type { ServerConfig } from "./config.js";
+
+type CachedRecipeReference = {
+  kind: "recipe";
+  recipeId: string;
+  recipeSha256: string;
+};
+
+type OriginatingRecipeReference =
+  | CachedRecipeReference
+  | { kind: "workflow"; workflowId: "flora-spike-c" };
 
 export type CachedImport = {
   schema: "stateaction.cached-processing-import.v1";
@@ -50,6 +62,21 @@ export type CachedImport = {
   originals: Record<string, string>;
   projection: Record<string, string>;
 };
+
+type CachedRecipeWireReference = {
+  kind: "recipe";
+  recipe_id: string;
+  recipe_sha256: string;
+};
+
+export type CachedImportV2 = Omit<CachedImport, "schema"> & {
+  schema: "stateaction.cached-processing-import.v2";
+  originatingRecipe: CachedRecipeWireReference;
+};
+
+const SA143_IMPORT_JOB = "74528137-a415-4cce-affc-2f3dfa89e1a8";
+const SA143_IMPORT_SHA256 =
+  "4327070161cb747e775fa7b9fa281855094586290a60c67019cf2c9184e77e24";
 
 // Exact published MP4s cleared for the hosted research console.
 const HOSTED_SOURCE_SHA256 = new Map([
@@ -165,7 +192,7 @@ async function inputFile(
 
 async function prepareFiles(
   root: string,
-  manifest: CachedImport,
+  manifest: CachedImport | CachedImportV2,
   importHash: string,
 ) {
   const { originals, projection, jobId, recordingId } = manifest;
@@ -391,9 +418,12 @@ export async function importCachedProcessing(options: {
   const { pool, config, client, root, staffEmail } = options;
   const importBytes = await readFile(join(root, "import.json"));
   assert(importBytes.length <= 56 * 1024, "Import manifest is too large");
-  const manifest = JSON.parse(importBytes.toString("utf8")) as CachedImport;
+  const manifest = JSON.parse(importBytes.toString("utf8")) as
+    | CachedImport
+    | CachedImportV2;
   assert(
-    manifest.schema === "stateaction.cached-processing-import.v1" &&
+    (manifest.schema === "stateaction.cached-processing-import.v1" ||
+      manifest.schema === "stateaction.cached-processing-import.v2") &&
       manifest.source === "imported",
     "Invalid cached import manifest",
   );
@@ -431,6 +461,23 @@ export async function importCachedProcessing(options: {
     );
   }
   const manifestHash = sha256Hex(importBytes);
+  let originatingRecipe: OriginatingRecipeReference | null = null;
+  if (manifest.schema === "stateaction.cached-processing-import.v2") {
+    const declared = parseContract<CachedRecipeWireReference>(
+      "artifacts.cached-originating-recipe.v1",
+      manifest.originatingRecipe,
+    );
+    originatingRecipe = {
+      kind: declared.kind,
+      recipeId: declared.recipe_id,
+      recipeSha256: declared.recipe_sha256,
+    };
+  } else if (
+    jobId === SA143_IMPORT_JOB &&
+    manifestHash === SA143_IMPORT_SHA256
+  ) {
+    originatingRecipe = { kind: "workflow", workflowId: "flora-spike-c" };
+  }
   const { files, clips } = await prepareFiles(root, manifest, manifestHash);
   const bySlot = new Map(files.map((file) => [file.slot, file]));
   const source = bySlot.get("source-manifest.json")!;
@@ -547,6 +594,12 @@ export async function importCachedProcessing(options: {
           ),
         "Published import inventory differs from the verified bundle",
       );
+      await indexAcceptedReviewAnnotations(
+        tx,
+        jobId,
+        manifestHash,
+        checked.search,
+      );
       return true;
     }
 
@@ -637,9 +690,17 @@ export async function importCachedProcessing(options: {
       await storeRow(file);
     await tx.query(
       `INSERT INTO cached_processing_imports
-         (job_id, manifest_file_id, manifest_sha256, inventory_sha256, clip_count, evidence, imported_by)
-       VALUES ($1,$2,$3,job_output_inventory_digest($1),$4,$5,$6)`,
-      [jobId, result.id, manifestHash, clips.length, manifest, staffId],
+         (job_id, manifest_file_id, manifest_sha256, inventory_sha256, clip_count, evidence, imported_by, originating_recipe_ref)
+       VALUES ($1,$2,$3,job_output_inventory_digest($1),$4,$5,$6,$7)`,
+      [
+        jobId,
+        result.id,
+        manifestHash,
+        clips.length,
+        manifest,
+        staffId,
+        originatingRecipe,
+      ],
     );
     await acceptCatalogResult(tx, {
       jobId,
@@ -648,6 +709,12 @@ export async function importCachedProcessing(options: {
       clips,
       annotations: manifest.counts,
     });
+    await indexAcceptedReviewAnnotations(
+      tx,
+      jobId,
+      manifestHash,
+      checked.search,
+    );
     await tx.query(
       `INSERT INTO recording_result_selections (recording_id, seq, job_id, reason, kind)
        VALUES ($1, 1, $2, 'First accepted cached result', 'auto')`,

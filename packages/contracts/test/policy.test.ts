@@ -7,7 +7,8 @@ import { requestSha256 } from "../src/canonical.js";
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
 // Prior catalog revisions stay published and immutable.
-const catalog = JSON.parse(text("catalog.v22.json"));
+const catalog = JSON.parse(text("catalog.v23.json"));
+const catalogV22 = JSON.parse(text("catalog.v22.json"));
 const catalogV21 = JSON.parse(text("catalog.v21.json"));
 const catalogV20 = JSON.parse(text("catalog.v20.json"));
 const catalogV19 = JSON.parse(text("catalog.v19.json"));
@@ -1158,7 +1159,7 @@ test("catalog v21 adds the stage rerun and result selection commands", () => {
 
 test("catalog v22 adds the clip pipeline contracts", () => {
   assertExactSuperset(
-    catalog,
+    catalogV22,
     catalogV21,
     ["v21", "v22"],
     [
@@ -1170,4 +1171,25 @@ test("catalog v22 adds the clip pipeline contracts", () => {
       "jobs.job-status.v3",
     ],
   );
+});
+
+test("catalog v23 adds the SA-150 contracts while pinning published bytes", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV22,
+    ["v22", "v23"],
+    [
+      "http.capture-recipe-select.v1",
+      "http.clip-review-command.v2",
+      "http.caption-correction-command.v2",
+      "http.stage-rerun-plan-request.v2",
+      "http.stage-rerun-command.v2",
+      "http.stage-rerun-plan.v2",
+      "http.stage-rerun-result.v2",
+      "artifacts.cached-originating-recipe.v1",
+      "artifacts.processing-result.v6",
+    ],
+  );
+  assert.equal(lock.files["catalog.v22.json"], sha256("catalog.v22.json"));
+  assert.equal(lock.files["catalog.v23.json"], sha256("catalog.v23.json"));
 });

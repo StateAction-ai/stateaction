@@ -1,0 +1,128 @@
+{
+  "contract": "http.clip-review-command.v2",
+  "cases": [
+    {
+      "name": "add to a dataset",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "add",
+          "taskLabel": "pick up cup",
+          "datasetRevisions": {
+            "00000000-0000-4000-8000-000000000002": 1
+          }
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "remove a single membership",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "remove",
+          "datasetId": "00000000-0000-4000-8000-000000000002",
+          "expectedDatasetRevision": 2
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "reject with a reason",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "reject",
+          "reason": "obstructed"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "restore",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "restore"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "undo",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "undo",
+          "targetCommandId": "00000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "reject needs a reason",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "reject"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "restore has no membership side arguments",
+      "input": {
+        "document": {
+          "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "resultManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "selectionRevision": 1,
+          "commandId": "00000000-0000-4000-8000-000000000001",
+          "expectedReviewRevision": 1,
+          "action": "restore",
+          "datasetId": "00000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

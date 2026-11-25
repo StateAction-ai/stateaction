@@ -1,38 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import type { ClipReviewState } from "@stateaction/contracts";
-import { ReviewEditor } from "../clip-review/review-editor";
-import { browserApi, BrowserApiError } from "../data-browser/client";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
+import type {
+  CaptionCorrection,
+  ClipReviewStateV2,
+} from "@stateaction/server/datasets";
+import { browserApi } from "../data-browser/client";
 import {
-  shortRecordingId,
-  type PipelineStatus,
-} from "@stateaction/server/pipeline-model";
-import { StatusBadge } from "../pipeline/status-badge";
-import { buildReviewModel } from "../../lib/review/model";
+  applyCaptionOverrides,
+  type CaptionOverride,
+} from "../../lib/review/effective-captions";
 import {
   isTextEntryTarget,
   markCounts,
   markKey,
   markSummary,
   nextUnchecked,
-  type MarkChoice,
 } from "../../lib/review/marks";
 import { apiMarksStore, memoryMarksStore } from "../../lib/review/marks-store";
+import { withMeasuredVideoDuration } from "../../lib/review/model";
 import { useMarks } from "../../lib/review/use-marks";
 import type {
   Card,
-  ReviewBundle,
-  ReviewRecordingSummary,
+  RecordingAnnotations,
+  ReviewModel,
+  VideoSource,
 } from "../../lib/review/types";
 import {
   activeCardIndex,
   filterCards,
   fitView,
   fmtClock,
+  fmtPrecise,
   followView,
   neighborStart,
   clampView,
@@ -41,429 +42,474 @@ import {
   type CardFilter,
   type View,
 } from "../../lib/review/timeline";
+import { CaptionEditor } from "./caption-editor";
 import { Player } from "./player";
-import { annotationsJson, SidePanel, type SideTab } from "./side-panel";
+import { ReviewActions } from "./review-actions";
+import { SidePanel, type SideTab } from "./side-panel";
 import { Tiers } from "./tiers";
 import { usePlayback } from "./use-playback";
 
-export type ClipReviewContext = {
-  id: string;
-  ordinal: number;
+type StaffReview = {
+  userId: string;
+  actorName: string;
+  state: ClipReviewStateV2;
+  annotations: RecordingAnnotations;
+  overrides: CaptionOverride[];
+  labels: string[];
   sourceStartS: number;
   sourceEndS: number | null;
-  originalHref: string | null;
-  selectionRevision: number;
-  decision: { userId: string; reviewPath: string; state: ClipReviewState };
+  processingHref: string;
+  segmentationFailure: string | null;
+  handPoseFailed: boolean;
+  pending: boolean;
+  openActions: boolean;
+  currentHref: string;
+  advanceHref: string | null;
 };
 
-export function ReviewPage({
-  bundle,
-  recordings,
-  mediaOrigin,
-  status,
-  failureNote,
-  segmentationFailure,
-  clipReview,
-  readOnly = false,
-}: {
-  bundle: ReviewBundle;
-  recordings: ReviewRecordingSummary[];
-  mediaOrigin: string | null;
-  status: PipelineStatus;
-  failureNote: string | null;
-  segmentationFailure: string | null;
-  clipReview?: ClipReviewContext;
-  readOnly?: boolean;
-}) {
-  const router = useRouter();
-  const { annotations, recording } = bundle;
-  const [clipState, setClipState] = useState(clipReview?.decision.state);
-  const refreshClip = useCallback(async () => {
-    const decision = clipReview?.decision;
-    if (!decision) throw new Error("Review unavailable");
-    const result = await browserApi<ClipReviewState>(decision.reviewPath).catch(
-      (error: unknown) => {
-        if (error instanceof BrowserApiError && error.status === 409)
-          router.refresh();
-        throw error;
-      },
+export type ReviewPageProps = {
+  model: ReviewModel;
+  title: string;
+  suggested: boolean;
+  backHref: string;
+  backLabel: string;
+  previousHref: string | null;
+  nextHref: string | null;
+  source: VideoSource;
+  posterPath: string | null;
+  handFramesPath: string | null;
+  startAt: number | null;
+  initialSegmentId: string | null;
+  staff?: StaffReview;
+};
+
+const linkClass =
+  "inline-flex min-h-11 items-center rounded-lg border border-line bg-white px-3 text-sm font-semibold hover:bg-field";
+
+export function ReviewPage(props: ReviewPageProps) {
+  const { staff, source } = props;
+  const state = staff?.state;
+  const [localOverride, setLocalOverride] = useState<
+    Map<string, string | null | undefined>
+  >(() => new Map());
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const [clipState, setClipState] = useState(state?.review ?? null);
+  useEffect(() => {
+    setClipState(state?.review ?? null);
+  }, [state?.review]);
+
+  const model = useMemo(() => {
+    const corrected = new Map(
+      staff?.overrides.map(({ segmentId, text }) => [segmentId, text]),
     );
-    if (
-      result.jobId !== decision.state.jobId ||
-      result.resultManifestSha256 !== decision.state.resultManifestSha256
-    ) {
-      router.refresh();
-      throw new Error("The selected result changed.");
+    for (const [id, text] of localOverride) {
+      if (text === undefined) corrected.delete(id);
+      else corrected.set(id, text);
     }
-    setClipState(result);
-    return result;
-  }, [clipReview, router]);
-  // The axis is the estimate until the video reports its own length (never shorter than it).
-  const [mediaDurationS, setMediaDurationS] = useState(0);
-  const durationS = Math.max(recording.durationS, mediaDurationS);
-  const model = useMemo(
-    () =>
-      buildReviewModel(annotations, bundle.clips, durationS, bundle.originNs),
-    [annotations, bundle.clips, bundle.originNs, durationS],
-  );
-  const playback = usePlayback(
-    model.durationS,
-    bundle.video,
-    setMediaDurationS,
-  );
-  // Team marks: the API for real results, memory for labelled fixture data.
+    return applyCaptionOverrides(
+      withMeasuredVideoDuration(props.model, mediaDuration),
+      [...corrected].map(([segmentId, text]) => ({ segmentId, text })),
+    );
+  }, [localOverride, props.model, mediaDuration, staff?.overrides]);
+
+  const playback = usePlayback(model.durationS, source, setMediaDuration);
+  const { t } = playback;
+  const [poster, setPoster] = useState<string>();
+  useEffect(() => {
+    if (!props.posterPath) return;
+    const controller = new AbortController();
+    browserApi<{ url: string }>(props.posterPath, { signal: controller.signal })
+      .then(({ url }) => {
+        if (!controller.signal.aborted) setPoster(url);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [props.posterPath]);
+
   const store = useMemo(
     () =>
-      bundle.origin === "api"
-        ? apiMarksStore(
-            recording.recordingId,
-            annotations.job_id,
-            clipReview
-              ? {
-                  clipId: clipReview.id,
-                  revision: clipReview.selectionRevision,
-                }
-              : undefined,
-          )
-        : memoryMarksStore(
-            annotations.job_id,
-            annotations.captions?.segments_sha256 ?? "0".repeat(64),
-          ),
-    [bundle.origin, recording.recordingId, annotations, clipReview],
+      state
+        ? apiMarksStore(state.recordingId, state.jobId, {
+            clipId: state.clipId,
+            revision: state.selectionRevision,
+          })
+        : memoryMarksStore("", ""),
+    [state?.recordingId, state?.jobId, state?.clipId, state?.selectionRevision],
   );
-  const marks = useMarks(store, annotations.job_id);
-  const segmentIds = useMemo(
-    () => model.cards.map((c) => c.segmentId),
+  const marks = useMarks(store, state?.jobId ?? null);
+  const writable = Boolean(state?.capabilities.canReview);
+  const ids = useMemo(
+    () => model.cards.map((card) => card.segmentId),
     [model.cards],
   );
   const counts = useMemo(
-    () => markCounts(segmentIds, marks.marks),
-    [segmentIds, marks.marks],
+    () => markCounts(ids, marks.marks),
+    [ids, marks.marks],
   );
-  const { t } = playback;
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(() => {
+    const match = props.model.cards.find(
+      (card) => card.segmentId === props.initialSegmentId,
+    );
+    return match?.index ?? null;
+  });
   const [view, setView] = useState<View>(() => fitView(model.durationS));
-  const [tab, setTab] = useState<SideTab>("segs");
+  const [tab, setTab] = useState<SideTab>(
+    staff?.openActions ? "decision" : "segs",
+  );
   const [filter, setFilter] = useState<CardFilter>("all");
   const [query, setQuery] = useState("");
   const queryRef = useRef<HTMLInputElement>(null);
-
+  const dirtyCaption = useRef(false);
+  const captionDirty = useCallback((dirty: boolean) => {
+    dirtyCaption.current = dirty;
+  }, []);
+  const keepEditing = () =>
+    dirtyCaption.current &&
+    !window.confirm("Discard the unsaved caption changes?");
+  const changeTab = (next: SideTab) => {
+    if (next !== tab && !keepEditing()) setTab(next);
+  };
   const activeIndex = activeCardIndex(model.cards, t);
-  const active = activeIndex >= 0 ? (model.cards[activeIndex] ?? null) : null;
+  const active = model.cards[activeIndex] ?? null;
   const shown = useMemo(
     () => filterCards(model.cards, query, filter, marks.marks),
     [model.cards, query, filter, marks.marks],
   );
   const dimmed = useMemo(() => {
-    const keep = new Set(shown.map((c) => c.index));
+    const keep = new Set(shown.map((card) => card.index));
     return new Set(
-      model.cards.filter((c) => !keep.has(c.index)).map((c) => c.index),
+      model.cards
+        .filter((card) => !keep.has(card.index))
+        .map((card) => card.index),
     );
   }, [shown, model.cards]);
+  const correctedCount = useMemo(() => {
+    const corrected = new Set(
+      staff?.overrides.map(({ segmentId }) => segmentId),
+    );
+    for (const [id, text] of localOverride) {
+      if (text === undefined) corrected.delete(id);
+      else corrected.add(id);
+    }
+    return corrected.size;
+  }, [localOverride, staff?.overrides]);
 
-  // The axis grows when the video reports a longer length: a full-width view follows it.
+  const initial = useRef(false);
+  useEffect(() => {
+    if (initial.current || playback.status === "loading") return;
+    initial.current = true;
+    const start =
+      props.startAt ??
+      (selected === null ? null : (model.cards[selected]?.startS ?? null));
+    if (start !== null) playback.seek(start);
+  }, [playback, model.cards, props.startAt, selected]);
   const lastDuration = useRef(model.durationS);
   useEffect(() => {
-    const was = lastDuration.current;
+    const previous = lastDuration.current;
     lastDuration.current = model.durationS;
-    if (model.durationS === was) return;
-    setView((v) =>
-      v[0] <= 0 && v[1] >= was - 1e-6
-        ? fitView(model.durationS)
-        : clampView(v[0], v[1], model.durationS),
-    );
+    if (model.durationS !== previous)
+      setView((v) =>
+        v[0] <= 0 && v[1] >= previous - 1e-6
+          ? fitView(model.durationS)
+          : clampView(v[0], v[1], model.durationS),
+      );
   }, [model.durationS]);
-
-  // Keep the playhead inside a zoomed window.
   useEffect(() => {
     setView((v) => followView(v, t, model.durationS));
   }, [t, model.durationS]);
 
   const selectCard = useCallback(
-    (index: number, startPlaying = false) => {
+    (index: number, play = false) => {
       const card = model.cards[index];
       if (!card) return;
+      if (
+        selected !== index &&
+        dirtyCaption.current &&
+        !window.confirm("Discard the unsaved caption changes?")
+      )
+        return;
       setSelected(index);
-      playback.seek(card.startS, startPlaying);
-      setTab((current) => (current === "hand" ? current : "segs"));
+      setTab("segs");
+      playback.seek(card.startS, play);
     },
-    [model.cards, playback],
+    [model.cards, playback, selected],
   );
 
   const step = useCallback(
-    (dir: -1 | 1) => {
-      const to = neighborStart(model.cards, playback.t, dir);
-      if (to === null) return;
-      playback.seek(to);
-      setSelected(activeCardIndex(model.cards, to));
+    (direction: -1 | 1) => {
+      const position = neighborStart(model.cards, playback.t, direction);
+      if (position === null) return;
+      if (
+        dirtyCaption.current &&
+        !window.confirm("Discard the unsaved caption changes?")
+      )
+        return;
+      playback.seek(position);
+      setSelected(activeCardIndex(model.cards, position));
     },
     [model.cards, playback],
   );
 
-  const choose = useCallback(
-    (card: Card, choice: MarkChoice) => {
-      if (!readOnly) void marks.choose(card.segmentId, choice);
-    },
-    [marks, readOnly],
-  );
   const gotoNextUnchecked = useCallback(() => {
-    const from =
-      selected ?? Math.max(0, activeCardIndex(model.cards, playback.t));
-    const shownSet = new Set(shown.map((c) => c.index));
-    const to = nextUnchecked(segmentIds, marks.marks, from, (i) =>
-      shownSet.has(i),
+    const start = selected ?? Math.max(0, activeIndex);
+    const shownSet = new Set(shown.map((card) => card.index));
+    const index = nextUnchecked(ids, marks.marks, start, (candidate) =>
+      shownSet.has(candidate),
     );
-    if (to !== null) selectCard(to);
-  }, [
-    selected,
-    model.cards,
-    playback.t,
-    shown,
-    segmentIds,
-    marks.marks,
-    selectCard,
-  ]);
+    if (index !== null) selectCard(index);
+  }, [selected, activeIndex, shown, ids, marks.marks, selectCard]);
 
-  // Keyboard: Space play/pause, arrows previous/next segment, "/" focuses the filter,
-  // G Good, B Issue and N next unchecked (SA-99).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const action = readOnly ? null : markKey(e);
+    function handle(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const action = writable ? markKey(event) : null;
       if (action) {
-        if (e.repeat) return;
-        if (isTextEntryTarget(target)) return;
+        if (event.repeat || isTextEntryTarget(target)) return;
         if (action === "next") {
-          e.preventDefault();
+          event.preventDefault();
           gotoNextUnchecked();
-        } else {
-          const card = selected === null ? null : model.cards[selected];
+        } else if (selected !== null) {
+          const card = model.cards[selected];
           if (!card) return;
-          e.preventDefault();
-          choose(card, { verdict: action });
+          event.preventDefault();
+          void marks.choose(card.segmentId, { verdict: action });
         }
         return;
       }
       if (
-        e.metaKey ||
-        e.ctrlKey ||
-        e.altKey ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
         target?.closest(
           "input, textarea, select, [role=slider], [role=button], button, a, [data-testid=rail-list]",
         )
       )
         return;
-      if (e.key === " ") {
-        e.preventDefault();
+      if (event.key === " ") {
+        event.preventDefault();
         playback.toggle();
-      } else if (e.key === "ArrowLeft") step(-1);
-      else if (e.key === "ArrowRight") step(1);
-      else if (e.key === "/") {
-        e.preventDefault();
+      } else if (event.key === "ArrowLeft") step(-1);
+      else if (event.key === "ArrowRight") step(1);
+      else if (event.key === "/") {
+        event.preventDefault();
         setTab("segs");
-        queryRef.current?.focus();
+        requestAnimationFrame(() => queryRef.current?.focus());
       }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    }
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
   }, [
     playback,
     step,
     selected,
     model.cards,
-    choose,
+    marks,
     gotoNextUnchecked,
-    readOnly,
+    writable,
   ]);
 
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const download = async () => {
-    setDownloadError(null);
-    try {
-      let blob: Blob;
-      if (bundle.origin === "api" && !clipReview) {
-        const res = await fetch(
-          `/api/v1/recordings/${encodeURIComponent(recording.recordingId)}/annotations?download=1`,
-          { credentials: "same-origin", cache: "no-store" },
-        );
-        if (!res.ok) throw new Error(`The server answered ${res.status}.`);
-        blob = await res.blob();
-      } else
-        blob = new Blob([annotationsJson(annotations).text], {
-          type: "application/json",
-        });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = clipReview
-        ? "annotations-" + clipReview.id + ".json"
-        : `annotations-${recording.recordingId}.json`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      setDownloadError(
-        error instanceof Error ? error.message : "The download failed.",
-      );
-    }
-  };
+  function captionSaved(row: CaptionCorrection) {
+    setLocalOverride((previous) =>
+      new Map(previous).set(
+        row.segmentId,
+        row.text ?? (row.notNeeded ? null : undefined),
+      ),
+    );
+    void marks.reload().catch(() => undefined);
+  }
+
+  function download() {
+    const captions = model.cards
+      .filter((card) => card.kind === "segment")
+      .map((card) => ({
+        startSeconds: card.startS,
+        endSeconds:
+          card.endsAtVideoEnd && card.endS <= card.startS ? null : card.endS,
+        ...(staff
+          ? {
+              segmentId: card.segmentId,
+              sourceStartFrameId: card.startFrameId,
+              sourceEndFrameId: card.endFrameId,
+            }
+          : {}),
+        status: card.caption.state,
+        caption: card.caption.state === "complete" ? card.caption.text : null,
+      }));
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify({ title: props.title, captions }, null, 2)], {
+        type: "application/json",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "clip-captions.json";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function editCaption(card: Card) {
+    if (!staff || !state) return null;
+    const original = props.model.cards[card.index]?.caption;
+    const corrected = localOverride.has(card.segmentId)
+      ? localOverride.get(card.segmentId) !== undefined
+      : staff.overrides.some(({ segmentId }) => segmentId === card.segmentId);
+    return (
+      <CaptionEditor
+        state={state}
+        card={card}
+        original={original?.state === "complete" ? original.text : null}
+        provenance={
+          model.provenance.find((badge) => badge.stage === "caption")?.text ??
+          null
+        }
+        corrected={corrected}
+        markRevision={marks.marks.get(card.segmentId)?.revision ?? 0}
+        segmentsSha256={marks.loaded ? marks.segmentsSha256 : null}
+        onCorrect={() => void marks.choose(card.segmentId, { verdict: "good" })}
+        onSaved={captionSaved}
+        onDirty={captionDirty}
+      />
+    );
+  }
 
   const { summary } = model;
-  const recordedCaptionFailures = annotations.captions?.rows.filter(
-    (row) => row.status === "failed",
-  ).length;
-  const choices = recordings.some(
-    (r) => r.recordingId === recording.recordingId,
-  )
-    ? recordings
-    : [recording, ...recordings];
-
   return (
-    <div className="min-w-0">
-      {clipReview ? (
-        <header className="mb-4">
-          <Link
-            href="/review"
-            className="mb-2 inline-block text-sm text-brand underline underline-offset-2"
-          >
-            ‹ Review queue
-          </Link>
-          <h1 className="mb-2 text-[clamp(1.375rem,3vw,1.75rem)] leading-tight font-bold [overflow-wrap:anywhere]">
-            {recording.title} · Clip {clipReview.ordinal + 1}
+    <div
+      className="min-w-0"
+      onClickCapture={(event) => {
+        if (
+          event.target instanceof HTMLElement &&
+          event.target.closest("a[href^='/']") &&
+          keepEditing()
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
+      <header className="mb-4 space-y-2">
+        <Link
+          href={props.backHref}
+          className="inline-flex min-h-11 items-center text-sm text-brand-ink underline"
+        >
+          ‹ {props.backLabel}
+        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h1 className="min-w-0 text-[clamp(1.375rem,3vw,1.75rem)] leading-tight font-bold [overflow-wrap:anywhere]">
+            {props.title}
           </h1>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
-            <span className="rounded-md bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-ink">
-              {clipState?.review.decision === "approved"
-                ? "Approved"
-                : clipState?.review.decision === "rejected"
-                  ? "Rejected"
-                  : "Pending review"}
-            </span>
-            {annotations.source === "imported" ? (
-              <span>Imported result</span>
+          <div className="flex gap-2">
+            {props.previousHref ? (
+              <Link href={props.previousHref} className={linkClass}>
+                Previous clip
+              </Link>
             ) : null}
-            {clipReview.sourceEndS !== null ? (
-              <span>
-                Source {fmtClock(clipReview.sourceStartS)}–
-                {fmtClock(clipReview.sourceEndS)}
-              </span>
-            ) : null}
-            {clipReview.originalHref ? (
-              <Link
-                href={clipReview.originalHref}
-                className="text-brand underline underline-offset-2 sm:ml-auto"
-              >
-                Original video at {fmtClock(clipReview.sourceStartS)}
+            {props.nextHref ? (
+              <Link href={props.nextHref} className={linkClass}>
+                Next clip
               </Link>
             ) : null}
           </div>
-        </header>
-      ) : (
-        <h1 className="mb-3 text-xl font-bold wrap-anywhere">
-          {recording.title}
-        </h1>
-      )}
-      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-xl border border-line bg-paper px-3.5 py-2.5 shadow-[0_6px_25px_#21332a06]">
-        {clipReview ? (
-          <span className="font-mono text-xs text-muted">
-            Clip {fmtClock(t)} · Source {fmtClock(clipReview.sourceStartS + t)}
-          </span>
-        ) : (
-          <>
-            <select
-              aria-label="Recording"
-              value={recording.recordingId}
-              onChange={(e) => router.push(`/review/${e.target.value}`)}
-              className="min-h-11 w-full min-w-0 max-w-full rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink sm:w-auto"
-            >
-              {choices.map((r) => (
-                <option key={r.recordingId} value={r.recordingId}>
-                  {[
-                    shortRecordingId(r.recordingId),
-                    r.title,
-                    r.source === "imported" ? "Imported" : r.collector,
-                    r.sourceSize,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </option>
-              ))}
-            </select>
-            <span className="font-mono text-xs text-muted">
-              {fmtClock(model.durationS)}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+          {staff && staff.sourceEndS !== null ? (
+            <span>
+              {fmtPrecise(staff.sourceStartS)}–{fmtPrecise(staff.sourceEndS)} ·
             </span>
-          </>
-        )}
-        <div
-          data-testid="review-state"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <StatusBadge status={status} />
-          {failureNote ? (
-            <Link
-              href={"/pipeline/" + recording.recordingId}
-              className="text-xs font-medium text-danger underline"
+          ) : null}
+          <span>{fmtClock(model.durationS)}</span>
+          {props.suggested ? (
+            <span
+              title="From the model caption"
+              className="rounded bg-field px-2 py-1 text-xs"
             >
-              {failureNote}
-            </Link>
+              Suggested
+            </span>
+          ) : null}
+          {staff && clipState?.decision !== "approved" ? (
+            <span className="rounded bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
+              {clipState?.decision === "rejected" ? "Rejected" : "Not reviewed"}
+            </span>
+          ) : null}
+          {staff && correctedCount > 0 ? (
+            <span className="rounded bg-field px-2 py-1 text-xs">
+              {correctedCount}{" "}
+              {correctedCount === 1
+                ? "caption corrected"
+                : "captions corrected"}
+            </span>
+          ) : null}
+          {staff &&
+          clipState?.reviewerName &&
+          clipState?.reviewedAt &&
+          (clipState.decision === "approved" ||
+            clipState.decision === "rejected") ? (
+            <span className="text-xs">
+              {clipState.decision === "approved" ? "Approved" : "Rejected"} by{" "}
+              {clipState.reviewerName}
+              {" · "}
+              {new Date(clipState.reviewedAt).toISOString().slice(0, 10)}
+            </span>
           ) : null}
         </div>
+      </header>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper px-3.5 py-2">
         <span data-testid="review-summary" className="text-xs text-muted">
-          {annotations.segments
-            ? [
-                summary.segments.toLocaleString() +
-                  (summary.segments === 1 ? " segment" : " segments"),
-                summary.failedWindows +
-                  (summary.failedWindows === 1
-                    ? " failed window"
-                    : " failed windows"),
-              ].join(" · ")
-            : "Segment counts not recorded"}
-          {" · "}
-          {recordedCaptionFailures === undefined
-            ? "Caption counts not recorded"
-            : recordedCaptionFailures +
-              (recordedCaptionFailures === 1
-                ? " caption failed"
-                : " captions failed")}
-          {model.presence === "absent" ? " · hand pose unavailable" : ""}
+          {summary.segments.toLocaleString()}{" "}
+          {summary.segments === 1 ? "segment" : "segments"}
+          {staff && summary.failedWindows > 0
+            ? " · " +
+              summary.failedWindows +
+              " failed window" +
+              (summary.failedWindows === 1 ? "" : "s")
+            : ""}
+          {staff && summary.failedCaptions > 0
+            ? " · " +
+              summary.failedCaptions +
+              " caption failure" +
+              (summary.failedCaptions === 1 ? "" : "s")
+            : ""}
         </span>
-        <span
-          data-testid="mark-summary"
-          data-marks-loaded={marks.loaded ? "true" : "false"}
-          className="rounded-md bg-[#eef0ec] px-2 py-0.5 text-xs font-semibold text-[#4d5a54]"
-        >
-          {markSummary(counts)}
-          {bundle.origin === "fixture" ? " · not saved" : ""}
-        </span>
-        {bundle.origin === "fixture" ? (
-          <span className="inline-flex items-center rounded-md bg-[#fff4de] px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-[#8a5a00]">
-            Fixture data
+        {staff ? (
+          <span
+            data-testid="mark-summary"
+            data-marks-loaded={marks.loaded}
+            className="rounded-md bg-field px-2 py-0.5 text-xs"
+          >
+            {markSummary(counts)}
           </span>
         ) : null}
         <span className="flex-1" />
-        <Link
-          href={`/pipeline/${recording.recordingId}`}
-          className="inline-flex min-h-11 items-center rounded-lg border border-line bg-white px-2.5 text-xs font-semibold hover:bg-field"
-        >
-          Pipeline run
-        </Link>
+        {staff ? (
+          <Link href={staff.processingHref} className={linkClass}>
+            Clip processing
+          </Link>
+        ) : null}
+        {staff && state ? (
+          <button
+            type="button"
+            className={linkClass}
+            onClick={() => {
+              changeTab("decision");
+              requestAnimationFrame(() =>
+                document.getElementById("tab-decision")?.focus(),
+              );
+            }}
+          >
+            {clipState?.decision === "rejected"
+              ? "Review actions"
+              : "Add to dataset"}
+          </button>
+        ) : null}
         <button
           type="button"
-          id="dlBtn"
           data-testid="download-json"
           onClick={download}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-brand bg-brand px-2.5 text-xs font-semibold text-white hover:bg-brand-strong"
+          className={linkClass + " gap-2"}
         >
           <Download aria-hidden="true" size={14} />
-          Download JSON
+          Download captions
         </button>
-        {downloadError ? (
-          <span role="alert" className="text-xs text-danger">
-            Download failed: {downloadError}
-          </span>
-        ) : null}
       </div>
 
       <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,72fr)_minmax(340px,28fr)]">
@@ -472,24 +518,13 @@ export function ReviewPage({
             model={model}
             playback={playback}
             active={active}
-            videoMessage={
-              bundle.video.kind === "none" ? bundle.video.reason : null
+            videoMessage={source.kind === "none" ? source.reason : null}
+            handFramesPath={props.handFramesPath}
+            handPoseFailed={staff?.handPoseFailed ?? false}
+            mediaOffsetS={
+              source.kind === "broker" ? (source.range?.startS ?? 0) : 0
             }
-            handFramesPath={
-              bundle.video.kind === "broker" &&
-              (bundle.video.range?.startS ?? 0) === 0
-                ? "/api/v1/recordings/" +
-                  recording.recordingId +
-                  "/hand-frames?run=" +
-                  annotations.job_id
-                : null
-            }
-            handPoseFailed={
-              annotations.dag_run?.stages.some(
-                (stage) =>
-                  stage.stage === "hand_pose" && stage.state === "failed",
-              ) ?? false
-            }
+            poster={poster}
             onPrev={() => step(-1)}
             onNext={() => step(1)}
           />
@@ -504,13 +539,15 @@ export function ReviewPage({
             onZoom={(factor, center) =>
               setView((v) => zoomView(v, factor, center, model.durationS))
             }
-            onPan={(d) => setView((v) => panView(v, d, model.durationS))}
+            onPan={(distance) =>
+              setView((v) => panView(v, distance, model.durationS))
+            }
             onFit={() => setView(fitView(model.durationS))}
             onView={(v) => setView(clampView(v[0], v[1], model.durationS))}
           />
           {tab === "segs" && selected !== null && !dimmed.has(selected) ? (
             <a
-              href={`#review-segment-${selected}`}
+              href={"#review-segment-" + selected}
               className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-brand underline xl:hidden"
             >
               Jump to segment {selected + 1} details
@@ -519,11 +556,11 @@ export function ReviewPage({
         </div>
         <SidePanel
           model={model}
-          annotations={annotations}
-          segmentationFailure={segmentationFailure}
-          linkProvenance={bundle.origin === "api"}
+          staff={staff?.annotations}
+          segmentationFailure={staff?.segmentationFailure ?? null}
+          linkProvenance={Boolean(staff)}
           tab={tab}
-          onTab={setTab}
+          onTab={changeTab}
           cards={shown}
           total={model.cards.length}
           query={query}
@@ -532,25 +569,43 @@ export function ReviewPage({
           onFilter={setFilter}
           selected={selected}
           activeIndex={activeIndex}
-          t={t}
-          onSelect={(index) => selectCard(index, true)}
+          onSelect={selectCard}
           seekCount={playback.seekCount}
-          mediaOrigin={mediaOrigin}
           queryRef={queryRef}
           marks={marks}
           checkedCount={counts.checked}
           issueCount={counts.issue}
-          onChoose={readOnly ? undefined : choose}
+          onChoose={
+            writable
+              ? (card, choice) => void marks.choose(card.segmentId, choice)
+              : undefined
+          }
           onNextUnchecked={gotoNextUnchecked}
+          captionEditor={writable ? editCaption : undefined}
           decision={
-            clipReview && clipState ? (
-              <ReviewEditor
-                userId={clipReview.decision.userId}
-                state={clipState}
-                reviewPath={clipReview.decision.reviewPath}
-                selectionRevision={clipReview.selectionRevision}
-                mediaReady={playback.status === "ready"}
-                refresh={refreshClip}
+            staff && state ? (
+              <ReviewActions
+                userId={staff.userId}
+                state={state}
+                labels={staff.labels}
+                suggested={
+                  props.suggested ? props.title.replace(/^.*#\d+\s*/, "") : ""
+                }
+                pending={
+                  staff.pending &&
+                  clipState?.decision !== "approved" &&
+                  clipState?.decision !== "rejected"
+                }
+                focusPicker={staff.openActions}
+                currentHref={staff.currentHref}
+                advanceHref={staff.advanceHref}
+                onUpdated={(receipt) => {
+                  if (receipt.review)
+                    setClipState({
+                      ...receipt.review,
+                      reviewerName: staff.actorName,
+                    });
+                }}
               />
             ) : undefined
           }

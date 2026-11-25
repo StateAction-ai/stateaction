@@ -9,6 +9,7 @@ import {
   type SimulationProvenance,
   type SimulationProvenanceArtifact,
 } from "@stateaction/contracts";
+import type { CaptureChannel } from "./capture-profiles.js";
 
 /** Bound for the source manifest control document (contract maxBytes). */
 export const SOURCE_MANIFEST_MAX_BYTES = 1048576;
@@ -75,6 +76,7 @@ export type DeclarationEvidence = {
     motion_events: string;
   };
   channelCount: number;
+  channels: CaptureChannel[];
 };
 
 export type DeclarationCheck =
@@ -100,7 +102,7 @@ type Declaration = {
     sha256: string;
   }[];
   clock_domains: string[];
-  channels: { clock_domain: string }[];
+  channels: CaptureChannel[];
   counts: DeclarationEvidence["counts"];
   collection_permission_ref: string;
 };
@@ -186,6 +188,7 @@ export function checkSourceDeclaration(
         .map((f) => f.fileId),
       counts: { ...doc.counts },
       channelCount: doc.channels.length,
+      channels: doc.channels,
     },
   };
 }

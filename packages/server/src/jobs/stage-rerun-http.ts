@@ -15,6 +15,13 @@ import {
   type StageRerunRequest,
 } from "./stage-reruns.js";
 
+import {
+  confirmStageRerunV2,
+  planStageRerunV2,
+  type StageRerunCommandV2,
+  type StageRerunRequestV2,
+} from "./stage-rerun-v2.js";
+
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function stageRerunRoutes(
@@ -23,10 +30,20 @@ export function stageRerunRoutes(
   async function handle(
     request: Request,
     recordingId: string,
-    mode: "plan" | "confirm" | "history" | "select",
+    mode: "plan" | "confirm" | "planV2" | "confirmV2" | "history" | "select",
   ) {
     const auth = await deps.authenticate(request, "staff");
-    if (!auth.ok) return auth.response;
+    if (!auth.ok) {
+      if (
+        (mode === "planV2" || mode === "confirmV2") &&
+        auth.response.status === 403
+      )
+        return errorResponse(
+          new TransportError("not_found", "Not found"),
+          randomUUID(),
+        );
+      return auth.response;
+    }
     const requestId = auth.requestId ?? randomUUID();
     try {
       if (!uuid.test(recordingId))
@@ -60,6 +77,39 @@ export function stageRerunRoutes(
           input,
         );
         return Response.json({ data, requestId }, { headers, status: 201 });
+      }
+      if (mode === "planV2") {
+        const body = (await readBoundedJson(
+          request,
+          "http.stage-rerun-plan-request.v2",
+        )) as StageRerunRequestV2;
+        const data = await planStageRerunV2(
+          deps,
+          auth.principal.userId,
+          recordingId,
+          body,
+        );
+        if (!validateValue("http.stage-rerun-plan.v2", data).valid)
+          throw new Error("Invalid stage-set rerun preview");
+        return Response.json({ data, requestId }, { headers });
+      }
+      if (mode === "confirmV2") {
+        const body = (await readBoundedJson(
+          request,
+          "http.stage-rerun-command.v2",
+        )) as StageRerunCommandV2;
+        const data = await confirmStageRerunV2(
+          deps,
+          auth.principal.userId,
+          recordingId,
+          body,
+        );
+        if (!validateValue("http.stage-rerun-result.v2", data).valid)
+          throw new Error("Invalid stage-set rerun result");
+        return Response.json(
+          { data, requestId },
+          { headers, status: data.replayed ? 200 : 201 },
+        );
       }
       if (mode === "plan") {
         const body = (await readBoundedJson(
@@ -133,6 +183,10 @@ export function stageRerunRoutes(
       handle(request, recordingId, "plan"),
     confirm: (request: Request, recordingId: string) =>
       handle(request, recordingId, "confirm"),
+    planV2: (request: Request, recordingId: string) =>
+      handle(request, recordingId, "planV2"),
+    confirmV2: (request: Request, recordingId: string) =>
+      handle(request, recordingId, "confirmV2"),
     history: (request: Request, recordingId: string) =>
       handle(request, recordingId, "history"),
     select: (request: Request, recordingId: string) =>

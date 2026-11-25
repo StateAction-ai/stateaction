@@ -5,6 +5,7 @@
 // harness), uploaded with real multipart transfers. Prints the recording, job and
 // clip ids and the object keys the test overwrites with media (recording.mp4, the
 // golden clip RRD).
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { acceptanceConfigFromEnv } from "../src/acceptance/config.js";
 import { advanceResult } from "../src/acceptance/service.js";
@@ -78,9 +79,15 @@ const deps = {
 };
 
 // The clip covers 8-16 s of the first decoded frame's clock (origin 5 s).
+const seedRun = randomUUID();
 const CLIP = { sourceStartNs: "13000000000", sourceEndNs: "21000000000" };
 async function seed(withClip: boolean) {
-  const s = await recipeJobOn(db, deps, {}, `review-seed-${withClip ? 1 : 2}`);
+  const s = await recipeJobOn(
+    db,
+    deps,
+    {},
+    `review-seed-${seedRun}-${withClip ? 1 : 2}`,
+  );
   // The first recording also has a second failed caption (a model failure, not a missing row).
   const run = await runRecipe(
     s,

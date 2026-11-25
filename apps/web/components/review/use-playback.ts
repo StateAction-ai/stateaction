@@ -30,9 +30,16 @@ export function usePlayback(
   const expiresAt = useRef(0);
   const wantPlay = useRef(false);
   const readPath = source.kind === "broker" ? source.readPath : null;
+  const readMethod =
+    source.kind === "broker" ? (source.readMethod ?? "POST") : "POST";
   const range = source.kind === "broker" ? source.range : undefined;
   const offset = range?.startS ?? 0;
   const rangeDuration = range?.durationS;
+  const lastSourceTime =
+    offset +
+    (rangeDuration === undefined
+      ? Infinity
+      : Math.max(0, rangeDuration - 1e-6));
 
   const commit = useCallback((next: number) => {
     tRef.current = next;
@@ -57,6 +64,7 @@ export function usePlayback(
     try {
       const grant = await fetchVideoUrl(readPath, {
         signal: controller.signal,
+        method: readMethod,
       });
       if (controller.signal.aborted) return;
       expiresAt.current = grant.expiresAt;
@@ -72,7 +80,7 @@ export function usePlayback(
     } finally {
       if (request.current === controller) request.current = null;
     }
-  }, [readPath]);
+  }, [readPath, readMethod]);
 
   useEffect(() => {
     renewals.current = 0;
@@ -107,11 +115,11 @@ export function usePlayback(
     if (Number.isFinite(el.duration) && el.duration > 0)
       onMediaDuration(rangeDuration ?? el.duration);
     el.playbackRate = rateRef.current;
-    const next = Math.min(offset + tRef.current, el.duration);
+    const next = Math.min(offset + tRef.current, el.duration, lastSourceTime);
     if (el.currentTime !== next) el.currentTime = next;
     else renewals.current = 0;
     if (wantPlay.current) playMedia(el);
-  }, [onMediaDuration, playMedia, offset, rangeDuration]);
+  }, [onMediaDuration, playMedia, offset, rangeDuration, lastSourceTime]);
 
   const onSeeked = useCallback(() => {
     const el = videoRef.current;
@@ -137,7 +145,7 @@ export function usePlayback(
         if (rangeDuration !== undefined && next >= rangeDuration) {
           wantPlay.current = false;
           el.pause();
-          el.currentTime = offset + rangeDuration;
+          el.currentTime = lastSourceTime;
           commit(rangeDuration);
           setPlaying(false);
           return;
@@ -161,7 +169,15 @@ export function usePlayback(
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [playing, readPath, durationS, commit, offset, rangeDuration]);
+  }, [
+    playing,
+    readPath,
+    durationS,
+    commit,
+    offset,
+    rangeDuration,
+    lastSourceTime,
+  ]);
 
   const seek = useCallback(
     (to: number, startPlaying = false) => {
@@ -172,7 +188,8 @@ export function usePlayback(
       const next = Math.min(Math.max(0, to), end);
       commit(next);
       setSeekCount((count) => count + 1);
-      if (startPlaying) {
+      const play = startPlaying && rangeDuration !== 0;
+      if (play) {
         wantPlay.current = true;
         setPlaying(true);
       }
@@ -182,13 +199,22 @@ export function usePlayback(
         void renew();
         return;
       }
-      el.currentTime = offset + next;
-      if (startPlaying) playMedia(el);
+      el.currentTime = Math.min(offset + next, lastSourceTime);
+      if (play) playMedia(el);
     },
-    [durationS, commit, renew, playMedia, offset, rangeDuration],
+    [
+      durationS,
+      commit,
+      renew,
+      playMedia,
+      offset,
+      rangeDuration,
+      lastSourceTime,
+    ],
   );
 
   const toggle = useCallback(() => {
+    if (rangeDuration === 0) return;
     const el = videoRef.current;
     if (wantPlay.current) {
       wantPlay.current = false;
@@ -206,7 +232,7 @@ export function usePlayback(
       if (expiresAt.current <= Date.now()) void renew();
       else playMedia(el);
     }
-  }, [durationS, renew, seek, playMedia]);
+  }, [durationS, renew, seek, playMedia, rangeDuration]);
 
   const setRate = useCallback((next: number) => {
     rateRef.current = next;
@@ -223,6 +249,7 @@ export function usePlayback(
     srcKey,
     seekCount,
     status,
+    singleFrame: rangeDuration === 0,
     seek,
     toggle,
     setRate,

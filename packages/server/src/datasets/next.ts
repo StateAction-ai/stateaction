@@ -6,8 +6,59 @@ import { serverConfig } from "../config.js";
 import { s3ObjectReader } from "../admission/object-reader.js";
 import { storageClient } from "../storage.js";
 import { S3ReadSigner } from "./broker.js";
-import { datasetRoutes, type DatasetAuthenticate } from "./http.js";
+import {
+  datasetRoutes,
+  reviewClipRoutes,
+  type DatasetAuthenticate,
+} from "./http.js";
 import { storedSegmentIds } from "./marks.js";
+import {
+  getAuthorizedReviewClip,
+  getDatasetReviewClip,
+  listReviewDatasetClips,
+  listReviewDatasets,
+  type ReviewDatasetSearchOptions,
+} from "./review-queries.js";
+import { getClipReviewStateV2 } from "./review.js";
+import { listEffectiveCaptionOverrides } from "./corrections.js";
+
+export type { ReviewDatasetSearchOptions } from "./review-queries.js";
+export type { ClipReviewStateV2 } from "./review.js";
+export type {
+  ClipReviewCommandV2,
+  ClipReviewReceipt,
+} from "./review-transaction.js";
+export type {
+  CaptionCorrection,
+  CaptionCorrectionCommandV2,
+} from "./corrections.js";
+
+export function reviewDatasetReads(get: () => AuthRuntime = authRuntime) {
+  return {
+    list: (viewerUserId: string) =>
+      listReviewDatasets(get().pool, { viewerUserId }),
+    clips: (
+      viewerUserId: string,
+      query: Omit<ReviewDatasetSearchOptions, "viewerUserId">,
+    ) => listReviewDatasetClips(get().pool, { ...query, viewerUserId }),
+    clip: (viewerUserId: string, clipId: string, datasetId: string) =>
+      getDatasetReviewClip(get().pool, { viewerUserId, clipId, datasetId }),
+    state: (viewerUserId: string, clipId: string, selectionRevision: number) =>
+      getClipReviewStateV2(get().pool, {
+        viewerUserId,
+        clipId,
+        selectionRevision,
+      }),
+    effectiveCaptions: async (viewerUserId: string, clipId: string) => {
+      const pool = get().pool;
+      const binding = await getAuthorizedReviewClip(pool, {
+        viewerUserId,
+        clipId,
+      });
+      return binding ? listEffectiveCaptionOverrides(pool, binding) : [];
+    },
+  };
+}
 
 /**
  * The Better Auth boundary for dataset routes. Every request re-reads the
@@ -45,6 +96,19 @@ export function datasetAuthenticator(
       headers: result.headers,
     };
   };
+}
+
+export function reviewClipRouteHandlers(get: () => AuthRuntime = authRuntime) {
+  const config = serverConfig();
+  return reviewClipRoutes({
+    pool: get().pool,
+    reader: s3ObjectReader(config, { timeoutMs: 15_000 }),
+    signer: new S3ReadSigner(
+      storageClient(config, 15_000, config.publicEndpoint),
+      config.bucket,
+    ),
+    authenticate: datasetAuthenticator(get),
+  });
 }
 
 function unavailable(): Response {
