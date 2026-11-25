@@ -192,6 +192,23 @@ export async function grantAppRole(
   );
   if (clipReview)
     await client.query("SELECT stateaction_grant_clip_review($1)", [role]);
+  const { rowCount: reviewSearch } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_review_search(name)') IS NOT NULL",
+  );
+  if (reviewSearch)
+    await client.query("SELECT stateaction_grant_review_search($1)", [role]);
+  const { rowCount: captureProfiles } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_capture_profiles(name)') IS NOT NULL",
+  );
+  if (captureProfiles)
+    await client.query("SELECT stateaction_grant_capture_profiles($1)", [role]);
+  const { rowCount: reviewVideo } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_review_clip_video(name)') IS NOT NULL",
+  );
+  if (reviewVideo)
+    await client.query("SELECT stateaction_grant_review_clip_video($1)", [
+      role,
+    ]);
   return true;
 }
 

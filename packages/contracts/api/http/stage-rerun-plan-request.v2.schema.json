@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-plan-request.v2.json",
+  "title": "Stage-set rerun plan request v2",
+  "$defs": {
+    "stages": {
+      "type": "array",
+      "items": {
+        "enum": ["segment", "caption", "hand_pose"]
+      },
+      "uniqueItems": true,
+      "minItems": 1,
+      "maxItems": 3
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "scope", "clipId", "parentJobId", "stages"],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "scope": {
+          "const": "clip"
+        },
+        "clipId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "parentJobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "enum": ["segment", "caption", "hand_pose"]
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 3
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "scope"],
+      "properties": {
+        "schemaVersion": {
+          "const": 2
+        },
+        "scope": {
+          "const": "failed_clips"
+        }
+      }
+    }
+  ]
+}

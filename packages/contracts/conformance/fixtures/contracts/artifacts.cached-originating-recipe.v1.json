@@ -1,0 +1,32 @@
+{
+  "contract": "artifacts.cached-originating-recipe.v1",
+  "cases": [
+    {
+      "name": "pinned originating recipe",
+      "input": {
+        "document": {
+          "kind": "recipe",
+          "recipe_id": "indego_hosted_canary@1",
+          "recipe_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unverified recipe digest",
+      "input": {
+        "document": {
+          "kind": "recipe",
+          "recipe_id": "indego_hosted_canary@1",
+          "recipe_sha256": "unknown"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

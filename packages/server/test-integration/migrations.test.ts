@@ -24,15 +24,18 @@ const TABLES = [
   "access",
   "account",
   "cached_processing_imports",
+  "caption_corrections",
   "clips",
   "clip_plans",
   "clip_result_selections",
   "dataset_access",
   "dataset_clips",
+  "dataset_review_clip_clearances",
   "dataset_review_clips",
   "dataset_sharing_clearances",
   "dataset_sharing_permissions",
   "datasets",
+  "datasets_with_stale_review_clips",
   "dispatch_admission",
   "file_part_receipts",
   "file_transport_claims",
@@ -54,12 +57,17 @@ const TABLES = [
   "jobs",
   "platform_schema_migrations",
   "recording_admissions",
+  "recording_capture_profiles",
   "recording_registrations",
   "recording_result_selections",
   "recording_seals",
   "recordings",
   "review_clips",
+  "review_caption_search",
+  "review_clip_commands",
   "review_clip_decisions",
+  "review_clip_video_backfills",
+  "review_result_search",
   "selected_dataset_review_clips",
   "reviews",
   "rerun_spend_authorizations",
@@ -89,7 +97,30 @@ const PUBLISHED = {
     "658c6bb2b445f9519634ce7088c37dbbe9eed3aabf89e2441c4709f9ab737080",
 } as const;
 
-test("published migrations 001-005 are byte-identical; 006-018 follow", async () => {
+const SA150 = [19, 20, 21, 22, 23, 24];
+const VERSIONS = [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  ...SA150,
+];
+
+test("published migrations preserve pinned bytes and SA-150 is additive", async () => {
   const files = await loadMigrations();
   assert.deepEqual(
     files.slice(0, 5).map((m) => [m.name, m.sha256]),
@@ -112,7 +143,24 @@ test("published migrations 001-005 are byte-identical; 006-018 follow", async ()
   assert.equal(files[15]?.name, "016_stage_rerun_guards.sql");
   assert.equal(files[16]?.name, "017_review_clips.sql");
   assert.equal(files[17]?.name, "018_review_clip_decisions.sql");
-  assert.equal(files.length, 18);
+  assert.deepEqual(
+    files.slice(16, 18).map(({ sha256 }) => sha256),
+    [
+      "e76a2c70cb7f8b0948e672f1d5f54f69512215bcbaeb8d570777939ef717951d",
+      "9e3cb72f384aaf144d49133813850d59035b513cd3e96aefa00f6a6b2dc0031e",
+    ],
+  );
+  assert.deepEqual(
+    files.slice(18).map(({ name }) => name),
+    [
+      "019_review_clip_commands.sql",
+      "020_review_search.sql",
+      "021_clip_stage_reruns.sql",
+      "022_capture_profiles.sql",
+      "023_review_clip_video.sql",
+      "024_hosted_console_reads.sql",
+    ],
+  );
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -127,7 +175,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     assert.deepEqual(owner.rows[0], { rolsuper: false, rolcreatedb: false });
     const first = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(first, {
-      applied: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      applied: VERSIONS,
       alreadyApplied: [],
       adopted: [],
       appRoleGranted: true,
@@ -140,9 +188,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
     const second = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(second, {
       applied: [],
-      alreadyApplied: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-      ],
+      alreadyApplied: VERSIONS,
       adopted: [],
       appRoleGranted: true,
     });
@@ -173,7 +219,7 @@ test("migrations apply to an empty database with an unprivileged owner", async (
   }
 });
 
-test("015–018 preserve a populated v14 recording and backfill its clip pointers", async (t) => {
+test("015–024 preserve a populated v14 recording and backfill its clip pointers", async (t) => {
   const db = await freshDatabase({ migrate: false });
   t.after(() => db.close());
   const migrations = await loadMigrations();
@@ -237,10 +283,11 @@ test("015–018 preserve a populated v14 recording and backfill its clip pointer
        VALUES ($1, 2, $2, $3, 'Manual selection before migration', 'manual')`,
       [recordingId, jobId, actors.staff],
     );
-    assert.deepEqual(
-      (await applyMigrations(client, migrations)).applied,
-      [17, 18],
-    );
+    assert.deepEqual((await applyMigrations(client, migrations)).applied, [
+      17,
+      18,
+      ...SA150,
+    ]);
     assert.deepEqual(await rows(), before);
     const after = await guards();
     for (const old of enabled)
@@ -344,7 +391,7 @@ test("a database bootstrapped by the original 001-only migrate adopts its checks
     await db.owner.query(legacy);
     const report = await migrateDatabase({ ownerUrl: db.ownerUrl });
     assert.deepEqual(report, {
-      applied: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      applied: VERSIONS.slice(1),
       alreadyApplied: [1],
       adopted: [1],
       appRoleGranted: true,

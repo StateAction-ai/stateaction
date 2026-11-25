@@ -102,7 +102,7 @@ try {
     ab("set", "viewport", String(w), String(h));
     await loginAs(stack, "staff");
     for (const [scenario, rec] of Object.entries(recs)) {
-      ab("open", `${stack.origin}/review/${rec.recordingId}`);
+      ab("open", `${stack.origin}/clips/${rec.clipId ?? rec.recordingId}`);
       try {
         ab("wait", "[data-testid=review-summary]");
       } catch (error) {
@@ -138,7 +138,7 @@ try {
       );
       const failedCaps = capRows.filter((r) => r.status === "failed").length;
       const failedShown = ev(
-        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.querySelector('[title]')?.title)).length",
+        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.title)).length",
       );
       check(
         `${pre}: failed captions shown as found (never forced to 0)`,
@@ -196,13 +196,6 @@ try {
         "--full",
         join(shots, `review-${scenario}-${label}.png`),
       );
-      ab("click", "#tab-json");
-      await sleep(500);
-      ab("screenshot", join(shots, `json-${label}.png`));
-      ab("click", "#tab-hand");
-      await sleep(2500);
-      ab("screenshot", join(shots, `hand-${label}.png`));
-      ab("click", "#tab-segs");
     }
   }
 } catch (error) {

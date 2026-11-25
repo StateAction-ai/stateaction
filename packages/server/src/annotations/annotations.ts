@@ -274,6 +274,52 @@ export async function loadRecordingAnnotations(
 ): Promise<RecordingAnnotationsDocument | null> {
   const job = await acceptedJob(deps.pool, staffUserId, recordingId, viewJobId);
   if (!job) return null;
+  return loadAcceptedAnnotations(deps, job);
+}
+
+export type BoundClipResult = {
+  clipId: string;
+  recordingId: string;
+  jobId: string;
+  resultManifestSha256: string;
+  selectionRevision: number;
+};
+
+/** Internal read after the caller has authorized the exact dataset and result. */
+export async function loadBoundClipAnnotations(
+  deps: AnnotationDeps,
+  binding: BoundClipResult,
+): Promise<RecordingAnnotationsDocument | null> {
+  const {
+    rows: [job],
+  } = await deps.pool.query<Accepted>(
+    `SELECT j.id AS job_id, j.recording_id, j.kind,
+            (j.derived_from_job_id IS NOT NULL) AS derived, j.source_manifest_sha256
+       FROM jobs j
+       JOIN review_clips c ON c.id = j.clip_id AND c.selected_job_id = j.id
+       JOIN recordings r ON r.id = c.recording_id AND r.id = j.recording_id
+         AND r.deleted_at IS NULL
+       WHERE j.clip_id = $1 AND j.id = $2 AND j.result_manifest_sha256 = $3
+         AND r.id = $4 AND $5::integer = (
+           SELECT seq FROM clip_result_selections WHERE clip_id = c.id
+           ORDER BY seq DESC LIMIT 1
+         )
+         AND j.state = 'succeeded' AND j.kind <> 'clip_plan'`,
+    [
+      binding.clipId,
+      binding.jobId,
+      binding.resultManifestSha256,
+      binding.recordingId,
+      binding.selectionRevision,
+    ],
+  );
+  return job ? loadAcceptedAnnotations(deps, job) : null;
+}
+
+async function loadAcceptedAnnotations(
+  deps: AnnotationDeps,
+  job: Accepted,
+): Promise<RecordingAnnotationsDocument> {
   const bySlot = await annotationFiles(deps.pool, job.job_id);
   const parts: Record<string, unknown> = {};
   const producers: Extract<

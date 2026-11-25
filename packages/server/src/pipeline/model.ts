@@ -14,6 +14,10 @@ export const PIPELINE_STATUSES = [
   "queued",
   "processing",
   "needs_attention",
+  "needs_setup",
+  "choose_recipe",
+  "partially_complete",
+  "timed_out",
   "failed",
   "cancelled",
   "completed",
@@ -25,6 +29,10 @@ export const PIPELINE_STATUS_LABEL: Record<PipelineStatus, string> = {
   queued: "Queued",
   processing: "Processing",
   needs_attention: "Needs attention",
+  needs_setup: "Needs setup",
+  choose_recipe: "Choose a recipe",
+  partially_complete: "Partially complete",
+  timed_out: "Timed out",
   failed: "Failed",
   cancelled: "Cancelled",
   completed: "Completed",
@@ -75,6 +83,7 @@ export type PipelineQuery = {
   q: string;
   status: PipelineStatus | null;
   page: number;
+  sort?: "newest" | "oldest" | "name";
 };
 export type SearchParamsLike = Record<string, string | string[] | undefined>;
 
@@ -104,7 +113,15 @@ export function parsePipelineQuery(params: SearchParamsLike): PipelineQuery {
     rawPage !== undefined && /^[0-9]{1,4}$/.test(rawPage)
       ? Math.min(Math.max(Number(rawPage), 1), PIPELINE_MAX_PAGE)
       : 1;
-  return { q, status, page };
+  const sort = first(params.sort);
+  return {
+    q,
+    status,
+    page,
+    ...(sort === "name" || sort === "oldest" || sort === "newest"
+      ? { sort }
+      : {}),
+  };
 }
 
 /** Canonical query string (defaults omitted) used by list links and Back. */
@@ -112,6 +129,7 @@ export function pipelineQueryString(query: PipelineQuery): string {
   const out = new URLSearchParams();
   if (query.q) out.set("q", query.q);
   if (query.status) out.set("status", query.status);
+  if (query.sort && query.sort !== "newest") out.set("sort", query.sort);
   if (query.page > 1) out.set("page", String(query.page));
   return out.toString();
 }

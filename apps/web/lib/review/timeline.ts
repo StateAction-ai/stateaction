@@ -148,7 +148,9 @@ export type CardFilter = "all" | "failed" | "issue" | "unchecked";
 export function cardText(card: Card): string {
   return card.caption.state === "complete"
     ? `${card.caption.label} ${card.caption.hand} ${card.caption.text}`
-    : card.caption.message;
+    : card.caption.state === "failed"
+      ? card.caption.message
+      : "Caption not needed";
 }
 
 export function filterCards(

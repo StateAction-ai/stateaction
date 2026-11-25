@@ -470,25 +470,32 @@ describe("concurrency", () => {
 
   test("opposed dataset order across clips never deadlocks", async () => {
     const p = await accepted(2);
-    const [c1, c2] = [p.clips[0]!.clipId, p.clips[1]!.clipId];
+    const clips = [p.clips[0]!.clipId, p.clips[1]!.clipId];
     const [a, b] = [await newDataset(), await newDataset()];
-    const results = await Promise.all([
-      appendReview(
-        db.app,
-        command(p, c1, {
-          datasetSelection: select({ [a]: 1, [b]: 1 }, [a, b]),
-        }),
+    const attempts = await Promise.allSettled(
+      clips.map((clip, index) =>
+        appendReview(
+          db.app,
+          command(p, clip, {
+            datasetSelection: select(
+              { [a]: 1, [b]: 1 },
+              index === 0 ? [a, b] : [b, a],
+            ),
+          }),
+        ),
       ),
-      appendReview(
-        db.app,
-        command(p, c2, {
-          datasetSelection: select({ [a]: 1, [b]: 1 }, [b, a]),
-        }),
-      ).catch((e: { code?: string }) => e),
-    ]);
-    assert.ok(results[0]);
-    const revisions = (await snapshot(c1, [a, b])).revisions;
-    assert.ok((revisions[a] ?? 0) >= 2);
+    );
+    assert.equal(attempts.filter((r) => r.status === "fulfilled").length, 1);
+    const loser = attempts.find((r) => r.status === "rejected");
+    assert.equal(loser?.reason.code, "conflict");
+    assert.equal(loser?.reason.message, "Stale dataset revision");
+    for (const [index, clip] of clips.entries()) {
+      const winner = attempts[index]?.status === "fulfilled";
+      const state = await snapshot(clip, [a, b]);
+      assert.equal(state.reviews, winner ? 1 : 0);
+      assert.deepEqual(state.members, winner ? [a, b].sort() : []);
+      assert.deepEqual(state.revisions, { [a]: 2, [b]: 2 });
+    }
   });
 
   test("a held dataset lock fails fast with a retryable conflict and changes nothing", async () => {

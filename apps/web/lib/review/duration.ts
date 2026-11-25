@@ -4,11 +4,33 @@
 // hand pose reports the frame count and a bounded span gives the frame rate.
 // It is an estimate for the axis only; no annotation time is derived from it.
 
-import type { EndFrameRef, FrameRef } from "@stateaction/contracts";
+import type { ClipDetail, EndFrameRef, FrameRef } from "@stateaction/contracts";
+import { originOf } from "./model.ts";
 import type { RecordingAnnotations } from "./types.ts";
 
 const NS = 1e9;
 export const FALLBACK_DURATION_S = 1;
+
+export function reviewDurationS(
+  annotations: RecordingAnnotations,
+  range: ClipDetail["sourceRange"],
+  durationNs: string | null,
+): number {
+  if (range) {
+    const frames = range.end_ordinal - range.start_ordinal;
+    if (frames > 1) {
+      // The sealed end timestamp belongs to the last frame. Estimate the end
+      // of that frame from the range cadence for open-ended annotations.
+      const elapsed =
+        Number(BigInt(range.end_ts_ns) - BigInt(range.start_ts_ns)) / NS;
+      return elapsed + elapsed / (frames - 1);
+    }
+    return 0;
+  }
+  return durationNs === null
+    ? estimateDurationS(annotations, originOf(annotations))
+    : Number(BigInt(durationNs)) / NS;
+}
 
 export function estimateDurationS(
   a: RecordingAnnotations,

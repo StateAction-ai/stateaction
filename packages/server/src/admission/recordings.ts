@@ -15,7 +15,11 @@ import {
   type SimulationProvenance,
 } from "@stateaction/contracts";
 import type pg from "pg";
-import { inTransaction, type Queryable } from "../catalog/catalog.js";
+import {
+  inTransaction,
+  requireRole,
+  type Queryable,
+} from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
 import {
   checkSourceDeclaration,
@@ -23,6 +27,10 @@ import {
   sealRequestSha256,
   SOURCE_MANIFEST_MAX_BYTES,
 } from "./inventory.js";
+import {
+  captureRecipeDefinition,
+  matchCaptureSource,
+} from "./capture-profiles.js";
 import { simulatedCaptureInputsEnabled } from "./simulation.js";
 import {
   isPublicVideoProvenance,
@@ -60,6 +68,7 @@ export type AdmissionConfig = {
   /** SA-71: development-only acceptance of h264_mcap_simulation_v1. Default false. */
   simulatedCaptureInputs?: boolean;
   publicVideoCanary?: PublicVideoCanary;
+  captureRecipeSelection?: "automatic" | "manual";
 };
 
 export type AdmissionDeps = {
@@ -90,6 +99,15 @@ export function admissionConfigFromEnv(
     );
   const simulated = simulatedCaptureInputsEnabled(env);
   const publicVideoCanary = publicVideoCanaryFromEnv(env);
+  const captureRecipeSelection = env.STATEACTION_CAPTURE_RECIPE_SELECTION;
+  if (
+    captureRecipeSelection !== undefined &&
+    captureRecipeSelection !== "automatic" &&
+    captureRecipeSelection !== "manual"
+  )
+    throw new Error(
+      "Invalid server setting: STATEACTION_CAPTURE_RECIPE_SELECTION",
+    );
   return {
     processingProfileRevision: revision,
     supportedRgbProfiles: simulated
@@ -97,10 +115,23 @@ export function admissionConfigFromEnv(
       : profiles,
     ...(simulated ? { simulatedCaptureInputs: true } : {}),
     ...(publicVideoCanary ? { publicVideoCanary } : {}),
+    ...(captureRecipeSelection ? { captureRecipeSelection } : {}),
   };
 }
 
+type HeldAdmission =
+  | {
+      state: "held";
+      reason: "needs_setup";
+      code: "capture_source_unmatched" | "recipe_unavailable";
+    }
+  | { state: "held"; reason: "choose_recipe"; code: "manual_selection" };
+
+type SelectRecipeRequest = { recipeId: string; sourceManifestSha256: string };
+type RecipeSelection = { request: SelectRecipeRequest; staffUserId: string };
+
 export type AdmissionState =
+  | HeldAdmission
   | { state: "awaiting_seal" }
   | { state: "awaiting_uploads"; pendingFileIds: string[] }
   | { state: "awaiting_manifest_bytes" }
@@ -456,11 +487,13 @@ export async function admitInTransaction(
   deps: AdmissionDeps,
   recordingId: string,
   manifest: ManifestBytes | undefined,
+  selection?: RecipeSelection,
 ): Promise<AdmissionState> {
   const { rows } = await tx.query<{
     owner_user_id: string;
     client_recording_id: string;
     capture_format: string;
+    device: Record<string, unknown>;
     rgb_profile: string;
     simulation: SimulationProvenance | null;
     manifest_file_id: string | null;
@@ -472,16 +505,21 @@ export async function admitInTransaction(
     outcome: "admitted" | "rejected" | null;
     rejection_code: string | null;
     job_id: string | null;
+    capture_hold: HeldAdmission["reason"] | null;
+    selected_recipe_id: string | null;
+    selected_by: string | null;
   }>(
-    `SELECT r.owner_user_id, r.client_recording_id, r.capture_format, r.rgb_profile, r.simulation,
+    `SELECT r.owner_user_id, r.client_recording_id, r.capture_format, r.device, r.rgb_profile, r.simulation,
             r.source_manifest_file_id AS manifest_file_id, r.source_manifest_sha256 AS manifest_sha,
             g.ingest_permission_id, g.permission_ref, s.recording_id IS NOT NULL AS sealed, s.inventory,
-            a.outcome, a.rejection_code, a.job_id
+            a.outcome, a.rejection_code, a.job_id, cp.reason AS capture_hold,
+            cp.recipe_id AS selected_recipe_id, cp.selected_by
      FROM recordings r
      JOIN recording_registrations g ON g.recording_id = r.id
      LEFT JOIN recording_seals s ON s.recording_id = r.id
      LEFT JOIN recording_admissions a ON a.recording_id = r.id
-     WHERE r.id = $1`,
+     LEFT JOIN recording_capture_profiles cp ON cp.recording_id = r.id
+     WHERE r.id = $1 AND r.deleted_at IS NULL`,
     [recordingId],
   );
   const r = rows[0];
@@ -489,6 +527,20 @@ export async function admitInTransaction(
     throw new CatalogError(
       "conflict",
       "Recording was not registered for v1 admission",
+    );
+  if (
+    selection &&
+    (selection.request.sourceManifestSha256 !== r.manifest_sha ||
+      (r.capture_hold !== "choose_recipe" &&
+        !(
+          r.outcome === "admitted" &&
+          r.selected_by === selection.staffUserId &&
+          r.selected_recipe_id === selection.request.recipeId
+        )))
+  )
+    throw new CatalogError(
+      "conflict",
+      "The recording is no longer awaiting this recipe selection",
     );
   if (r.outcome === "admitted")
     return {
@@ -583,6 +635,86 @@ export async function admitInTransaction(
   const e = check.evidence;
   if (canarySource && !isPublicVideoProvenance(e.simulation))
     return { state: "deferred", code: "profile_unsupported" };
+  if (e.rgbProfile === HARDWARE_RGB_PROFILE) {
+    const source = matchCaptureSource(e);
+    const recipeId = selection?.request.recipeId ?? source?.defaultRecipeId;
+    const recipe =
+      recipeId === undefined ? undefined : captureRecipeDefinition(recipeId);
+    let held: HeldAdmission | undefined;
+    if (!source) {
+      held = {
+        state: "held",
+        reason: "needs_setup",
+        code: "capture_source_unmatched",
+      };
+    } else if (
+      deps.config.publicVideoCanary ||
+      !recipe ||
+      !source.allowedRecipeIds.includes(recipe.recipeId)
+    ) {
+      if (selection)
+        throw new CatalogError(
+          "conflict",
+          "This recipe is unavailable for the recording",
+        );
+      held = {
+        state: "held",
+        reason: "needs_setup",
+        code: "recipe_unavailable",
+      };
+    } else if (
+      !selection &&
+      (r.capture_hold === "choose_recipe" ||
+        deps.config.captureRecipeSelection === "manual")
+    ) {
+      held = {
+        state: "held",
+        reason: "choose_recipe",
+        code: "manual_selection",
+      };
+    }
+    if (selection && held)
+      throw new CatalogError(
+        "conflict",
+        "The capture source no longer supports recipe selection",
+      );
+    const selectedRecipe = held ? undefined : recipe;
+    await tx.query(
+      `INSERT INTO recording_capture_profiles (recording_id, source_manifest_sha256, state, reason,
+         code, capture_source_id, allowed_recipe_ids, recipe_id, recipe_sha256, recipe, selected_by, evidence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (recording_id) DO UPDATE SET
+         state = EXCLUDED.state, reason = EXCLUDED.reason, code = EXCLUDED.code,
+         capture_source_id = EXCLUDED.capture_source_id, allowed_recipe_ids = EXCLUDED.allowed_recipe_ids,
+         recipe_id = EXCLUDED.recipe_id, recipe_sha256 = EXCLUDED.recipe_sha256,
+         recipe = EXCLUDED.recipe, selected_by = EXCLUDED.selected_by, evidence = EXCLUDED.evidence, matched_at = now()
+       WHERE recording_capture_profiles.state = 'held'
+         AND (recording_capture_profiles.reason, recording_capture_profiles.code, recording_capture_profiles.capture_source_id,
+              recording_capture_profiles.allowed_recipe_ids)
+          IS DISTINCT FROM (EXCLUDED.reason, EXCLUDED.code, EXCLUDED.capture_source_id, EXCLUDED.allowed_recipe_ids)`,
+      [
+        recordingId,
+        r.manifest_sha,
+        held ? "held" : "selected",
+        held?.reason ?? null,
+        held?.code ?? null,
+        source?.id ?? null,
+        source?.allowedRecipeIds ?? [],
+        selectedRecipe?.recipeId ?? null,
+        selectedRecipe ? requestSha256(selectedRecipe) : null,
+        selectedRecipe ?? null,
+        selection?.staffUserId ?? null,
+        {
+          captureFormat: e.captureFormat,
+          rgbProfile: e.rgbProfile,
+          captureConfigSha256: e.captureConfigSha256,
+          device: r.device,
+          channels: e.channels,
+        },
+      ],
+    );
+    if (held) return held;
+  }
   const jobId = (deps.newId ?? randomUUID)();
   // Evidence first: the jobs trigger requires the admitted row naming this job.
   await tx.query(
@@ -642,6 +774,7 @@ async function withAdmission<T>(
   manifestFileId: string | undefined,
   mutate: (tx: Tx) => Promise<T>,
   completingFileId?: string,
+  selection?: RecipeSelection,
 ): Promise<{ result: T; admission: AdmissionState }> {
   for (let attempt = 0; ; attempt++) {
     const manifest = await prereadManifest(
@@ -657,6 +790,7 @@ async function withAdmission<T>(
         deps,
         recordingId,
         manifest,
+        selection,
       );
       return { result, admission };
     });
@@ -865,5 +999,38 @@ export async function admitRecording(
     );
     if (!rowCount) throw new CatalogError("not_found", "Recording not found");
   });
+  return admission;
+}
+
+/** Staff selection for a held recording, fenced by the sealed source and recording lock. */
+export async function selectRecordingCaptureRecipe(
+  deps: AdmissionDeps,
+  principal: CollectorPrincipal,
+  recordingId: string,
+  body: unknown,
+): Promise<AdmissionState> {
+  const staffUserId = principalId(principal);
+  const id = recordingUuid(recordingId);
+  await requireRole(deps.pool, staffUserId, "staff");
+  const request = contract<SelectRecipeRequest>(
+    "http.capture-recipe-select.v1",
+    body,
+  );
+  const { admission } = await withAdmission(
+    deps,
+    id,
+    undefined,
+    async (tx) => {
+      await requireRole(tx, staffUserId, "staff");
+      const result = await tx.query(
+        "SELECT 1 FROM recordings WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+        [id],
+      );
+      if (!result.rowCount)
+        throw new CatalogError("not_found", "Recording not found");
+    },
+    undefined,
+    { request, staffUserId },
+  );
   return admission;
 }

@@ -146,6 +146,16 @@
     "jobs/task-input.v4.schema.json": "60f2c88a4be40f7b08ab8daef52744e5ac3dc17626cde098b4bb5644b25443ae",
     "artifacts/processing-result.v5.schema.json": "8910f29ddd75547b1003519fa51a5c0933238471f8f2d7af6ed06e51e8e9721c",
     "jobs/task-input.v5.schema.json": "b2e2476715be6c1292e3a05b5e3ee615e47bcedf6b1c7609b9093a24d26c4286",
-    "jobs/job-status.v3.schema.json": "c44fece3e1f0808abff3e201b1e3531a480ffa8596405d3c448fdd979a3480fb"
+    "jobs/job-status.v3.schema.json": "c44fece3e1f0808abff3e201b1e3531a480ffa8596405d3c448fdd979a3480fb",
+    "catalog.v23.json": "799469e529a0a987ed5255cb2c422e950538b644e9adeb2005403fc20bb034fa",
+    "http/capture-recipe-select.v1.schema.json": "31605c0ae747b50ff77a21ec60620beef228b3108ccd0a95c94aa20f29adb077",
+    "http/clip-review-command.v2.schema.json": "54583d4621c7ba0072ca3680271688af781feb7ab4ea790fb23c1c17aacccd36",
+    "http/caption-correction-command.v2.schema.json": "0628400f780789ed051c66aa788e90fa259697de87def0bb2224d53b7650f3a1",
+    "http/stage-rerun-plan-request.v2.schema.json": "b20b84cb2c9085563a34f0c998d7238ddc1b4b494f170185ac18964eb8d1d731",
+    "http/stage-rerun-command.v2.schema.json": "80328cefffab28db0a4a04bb9c41d1099594c560f1b4b89617bb35b281debe77",
+    "http/stage-rerun-plan.v2.schema.json": "0221d285a868f8423733f674f82d6d518ff9660830fc073a5e1abd0df9bcc73d",
+    "http/stage-rerun-result.v2.schema.json": "8c780d2448e017cf0dcf0480545fc5d858ca4598e80fa609d770cb96a9c971b2",
+    "artifacts/cached-originating-recipe.v1.schema.json": "3c60bd9a88408e2a7020149970240c6402827738bd6d5901848286028343eb32",
+    "artifacts/processing-result.v6.schema.json": "7cb302b81d508d9143c443d33fdefa5033a5c5c31c7f610876a268a010c92f3e"
   }
 }

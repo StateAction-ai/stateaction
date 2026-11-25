@@ -794,7 +794,10 @@ Violation? _moduleManifest(Json doc) {
 }
 
 Violation? _processingResultNodes(Json doc) {
-  final isClip = doc['schema'] == 'stateaction.processing_result.v5';
+  final isClip = const {
+    'stateaction.processing_result.v5',
+    'stateaction.processing_result.v6',
+  }.contains(doc['schema']);
   final outputs = _list(doc['outputs']).map(_obj).toList();
   final roles = {for (final o in outputs) o['file_id']: o['role']! as String};
   final claimed = <Object?>{};

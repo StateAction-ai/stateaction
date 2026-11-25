@@ -2,7 +2,7 @@
 // resource-guarded job, e.g. `agent-resource run -- node test-e2e/pipeline-seeded-browser.mjs`
 // (needs the built web and jobs apps, the processing venv and the Render CLI; see
 // serve-console.mjs). Seeds only ok, caption_failed and segment_failed (STATEACTION_SEED_ONLY
-// overrides), signs in as staff, checks /pipeline and each /pipeline/<recordingId> at desktop and
+// overrides), signs in as staff, checks /recordings and each /recordings/<recordingId> at desktop and
 // 390 px, clicks the per-stage diagnostics links, checks a customer is denied from the
 // diagnostics route, then writes screenshots and a JSON receipt to SHOTS_DIR. Always closes the
 // browser session, stops the job runner and the stack (exact pids only). Zero model spend.
@@ -71,32 +71,13 @@ const loginAs = async (stack, label) => {
   throw new Error(`could not sign in as ${label}`);
 };
 
-const STAGES = ["segment", "caption", "hand_pose"];
-const MODULE = {
-  segment: "stub_segmenter",
-  caption: "stub_captioner",
-  hand_pose: "hand_pose_cpu_v1",
-};
-const EXPECT = {
-  ok: { segment: "succeeded", caption: "succeeded", hand_pose: "succeeded" },
-  caption_failed: {
-    segment: "succeeded",
-    caption: "succeeded",
-    hand_pose: "succeeded",
-  },
-  segment_failed: {
-    segment: "failed",
-    caption: "not_run",
-    hand_pose: "succeeded",
-  },
-};
+const STAGES = ["Segmentation", "Captioning", "Hand pose"];
 const dumpStages = () =>
-  ev(`[...document.querySelectorAll('[data-testid=recipe-stages] > li')].map(li => ({
-    stage: li.dataset.stage, state: li.dataset.state, text: li.innerText,
-    receipt: li.querySelector('[data-testid=receipt-sha]')?.getAttribute('title') ?? null,
-    diag: [...li.querySelectorAll('[data-testid=diagnostic-link]')].map(b => b.innerText.trim()),
-  }))`);
-
+  ev(`[...document.querySelectorAll('main section:has(h3)')].map(section => ({
+    stage: section.querySelector("h2")?.innerText,
+    text: section.innerText,
+    diag: [...section.querySelectorAll('[data-testid=diagnostic-link]')].map(button => button.innerText.trim()),
+  })).filter(row => ${JSON.stringify(STAGES)}.includes(row.stage))`);
 const stackEnv = seedMod.jobsEnv(python);
 const dirs = seedMod.newSeedDirs();
 let stack;
@@ -146,24 +127,28 @@ try {
     ab("set", "viewport", String(w), String(h));
     await loginAs(stack, "staff");
 
-    ab("open", `${stack.origin}/pipeline`);
+    ab("open", `${stack.origin}/recordings`);
     ab("wait", "h1");
     const listText = text();
     for (const [scenario, rec] of Object.entries(recs))
       check(
         `${label}: list links the ${scenario} recording`,
         ev(
-          `!!document.querySelector('a[href^="/pipeline/${rec.recordingId}"]')`,
+          `!!document.querySelector('a[href^="/recordings/${rec.recordingId}"]')`,
         ),
       );
-    check(`${label}: list renders`, /Recording activity/.test(listText));
+    check(`${label}: list renders`, /All recordings/.test(listText));
     if (mobile) check(`${label}: no horizontal overflow on list`, noOverflow());
     ab("screenshot", "--full", join(shots, `list-${label}.png`));
 
     for (const scenario of ["ok", "caption_failed", "segment_failed"]) {
       const rec = recs[scenario];
-      ab("open", `${stack.origin}/pipeline/${rec.recordingId}`);
-      ab("wait", "[data-testid=recipe-stages]");
+      const clipId = rec.clipId ?? rec.recordingId;
+      ab(
+        "open",
+        `${stack.origin}/recordings/${rec.recordingId}/clips/${clipId}/processing`,
+      );
+      ab("wait", "main section h3");
       const stages = dumpStages();
       const pageText = text();
       receipt.recordings[scenario] ??= {
@@ -177,57 +162,21 @@ try {
         stages.map((s) => s.stage).join(),
       );
       for (const s of stages) {
-        const exp = EXPECT[scenario][s.stage];
         const prefix = `${label}/${scenario}/${s.stage}`;
-        check(`${prefix}: state ${exp}`, s.state === exp, s.state);
-        check(
-          `${prefix}: module badge ${MODULE[s.stage]}`,
-          s.text.includes(MODULE[s.stage]),
-        );
-        if (s.state === "not_run")
-          check(
-            `${prefix}: not_run states upstream_failed reason`,
-            /Not run/.test(s.text) &&
-              /A stage it depends on failed/.test(s.text),
-            s.text.replace(/\s+/g, " "),
-          );
-        if (s.state === "failed")
-          check(
-            `${prefix}: failed shows receipt_missing`,
-            /did not return a stage receipt/.test(s.text),
-            s.text.replace(/\s+/g, " "),
-          );
-        if (s.state === "succeeded")
-          check(
-            `${prefix}: succeeded has counts`,
-            /\d+\s+\S/.test(s.text.split("Stage receipt")[0]),
-            s.text.replace(/\s+/g, " "),
-          );
-        check(
-          `${prefix}: stage receipt digest shown`,
-          s.state === "not_run"
-            ? !s.receipt && !/No stage receipt recorded/.test(s.text)
-            : s.state === "failed"
-              ? /No stage receipt recorded/.test(s.text)
-              : /^[0-9a-f]{64}$/.test(s.receipt ?? ""),
-          s.receipt ?? "none",
-        );
-        const wantsDiag =
-          (s.stage === "segment" || s.stage === "caption") &&
-          s.state === "succeeded";
-        check(
-          `${prefix}: diagnostics links ${wantsDiag ? "present" : "absent (none expected)"}`,
-          wantsDiag ? s.diag.length > 0 : s.diag.length === 0,
-          s.diag.join(","),
-        );
-        receipt.recordings[scenario].stages[`${label}:${s.stage}`] = {
-          state: s.state,
-          text: s.text.replace(/\s+/g, " "),
-          diagnostics: s.diag,
-        };
+        const failed = scenario === "segment_failed";
+        const expected =
+          failed && s.stage === "Segmentation"
+            ? /Failed.*receipt_missing/s
+            : failed && s.stage === "Captioning"
+              ? /Not run/
+              : scenario === "caption_failed" && s.stage === "Captioning"
+                ? /Failed captions: 2/
+                : /Succeeded/;
+        check(`${prefix}: recorded stage outcome`, expected.test(s.text));
+        receipt.recordings[scenario].stages[`${label}:${s.stage}`] = s;
       }
       if (scenario === "caption_failed") {
-        const cap = stages.find((s) => s.stage === "caption");
+        const cap = stages.find((s) => s.stage === "Captioning");
         check(
           `${label}/caption_failed: caption shows 2 failed captions`,
           /(^|\s)2\s+(failed|captions? failed)/i.test(cap.text) ||
@@ -242,10 +191,6 @@ try {
       );
       if (mobile) {
         check(`${label}/${scenario}: no horizontal overflow`, noOverflow());
-        const stacked =
-          ev(`[...document.querySelectorAll('[data-testid=recipe-stages] > li')].every(li => {
-          const [a, b] = li.children; return b.getBoundingClientRect().top >= a.getBoundingClientRect().bottom - 1; })`);
-        check(`${label}/${scenario}: stage rows stack`, stacked);
         const small =
           ev(`[...document.querySelectorAll('[data-testid=diagnostic-link]')].map(b => {
           const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })`);
@@ -257,7 +202,10 @@ try {
       }
       ab("screenshot", "--full", join(shots, `${scenario}-${label}.png`));
 
-      // Click every diagnostics link; window.open and fetch are captured, not followed.
+      // Open the recorded run details before exercising diagnostic read links.
+      ev(
+        `document.querySelectorAll("main details").forEach(details => { details.open = true; }); true`,
+      );
       if (scenario !== "ok" || label === "desktop") {
         const n = stages.reduce((a, s) => a + s.diag.length, 0);
         for (let i = 0; i < n; i++) {
@@ -322,13 +270,13 @@ try {
 
   // Customer denial from the diagnostics route.
   const route = diagnosticsRoutes.ok ?? Object.values(diagnosticsRoutes)[0];
+  if (!route) throw new Error("No recorded diagnostic link was exercised");
   await loginAs(stack, "customer");
-  ab("open", `${stack.origin}/pipeline`);
+  ab("open", `${stack.origin}/recordings`);
   ab("wait", "1000");
   check(
-    "customer: /pipeline not found",
-    /404|could not be found/i.test(text()) &&
-      !/Recording activity/.test(text()),
+    "customer: /recordings not found",
+    /404|could not be found/i.test(text()) && !/All recordings/.test(text()),
   );
   const denied = await (async () => {
     ev(`(async () => { const r = await fetch(${JSON.stringify(route)}, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-stateaction-client": "web" }, body: "{}" });

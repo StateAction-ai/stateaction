@@ -1,30 +1,32 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  formatUsd,
+  formatDuration,
   parseRecordingId,
+  pipelineReads,
   RECIPE_STAGE_LABEL,
-  clipReads,
 } from "@stateaction/server/pipeline";
-import { requireConsoleSession } from "../../../../lib/server-session";
+import { CaptureHold } from "../../../../components/recordings/capture-hold";
+import { ClipPoster } from "../../../../components/recordings/clip-poster";
 import {
-  elapsedSeconds,
-  planTimeline,
-  sourceTime,
-} from "../../../../lib/recording-timeline";
-import { isCurrentImport } from "../../../../lib/clip-pipeline";
-import { fmtClock, fmtPrecise } from "../../../../lib/review/timeline";
+  EstimatedCost,
+  ProcessingStage,
+  ProcessingStatus,
+  processingReason,
+} from "../../../../components/recordings/processing-stage";
 import {
-  ClipState,
-  stageDisplayState,
-} from "../../../../components/recordings/clip-states";
-import { OriginalVideo } from "../../../../components/recordings/original-video";
+  RecordingPreview,
+  rangeLabel,
+} from "../../../../components/recordings/recording-preview";
+import { RetryAction } from "../../../../components/recordings/retry-actions";
+import { Button } from "../../../../components/ui/button";
 import { Card } from "../../../../components/ui/card";
+import { planTimeline, sourceTime } from "../../../../lib/recording-timeline";
+import { recipeHref, recipeLabel } from "../../../../lib/recipe-view";
+import { requireConsoleSession } from "../../../../lib/server-session";
 
 export const metadata = { title: "Recording · StateAction.ai" };
 export const dynamic = "force-dynamic";
-
-const headings = ["Clip", "Pipeline state", "Stages", "Est. cost", "Open"];
 
 export default async function RecordingPage({
   params,
@@ -33,267 +35,220 @@ export default async function RecordingPage({
   params: Promise<{ recordingId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const session = await requireConsoleSession(["staff"]);
-  const id = parseRecordingId((await params).recordingId);
-  if (!id) notFound();
-  const recording = await clipReads().getRecording(session.userId, id);
+  const staff = await requireConsoleSession(["staff"]);
+  const recordingId = parseRecordingId((await params).recordingId);
+  if (!recordingId) notFound();
+  const reads = pipelineReads();
+  const recording = await reads.recordingOperations(staff.userId, recordingId);
   if (!recording) notFound();
-  const { plan, clips } = recording;
-  const legacy =
-    plan === null && clips.length === 1 && clips[0]?.sourceRange === null;
-  const imported =
-    clips.length === 1 && clips[0]?.selectedResult?.source === "imported";
-  const importedRun =
-    clips.length === 1 && clips[0] && isCurrentImport(clips[0]);
-  const [title, ...sourceLabel] = imported
-    ? recording.title.split(" · ")
-    : [recording.title];
-  const whole = clips.length === 1 && (!plan || plan.mode !== "apply");
-  const duration =
-    whole && clips[0]?.durationNs ? elapsedSeconds(clips[0].durationNs) : null;
-  const spans = planTimeline(plan);
-  if (legacy)
-    spans.push({
-      kind: "clip",
-      label: "Clip 1 · Whole recording",
-      start: 0,
-      end: null,
-    });
+
+  const { clipPlanning, clips, recipe, captureProfile, retryTarget } =
+    recording;
+  const pathname = `/recordings/${recordingId}`;
+  const query = await searchParams;
+  const selectedRun = parseRecordingId(
+    typeof query.run === "string" ? query.run : undefined,
+  );
+  const ranges = Object.fromEntries(
+    clips.map((clip) => [
+      clip.id,
+      rangeLabel(clip.startSeconds, clip.endSeconds),
+    ]),
+  );
+  const planningJob = clipPlanning.latest;
+  const alternateRecipes =
+    captureProfile?.allowedRecipeIds.filter((id) => id !== recipe?.id) ?? [];
+  const noAlternateRecipe =
+    recipe?.kind === "recipe" && alternateRecipes.length === 0;
 
   return (
-    <>
-      <nav
-        aria-label="Breadcrumb"
-        className="mb-2 flex items-center gap-2 text-sm text-muted"
-      >
-        <Link href="/pipeline" className="text-brand-ink underline">
-          Recordings
-        </Link>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">Recording</span>
-      </nav>
-      <header className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[clamp(1.55rem,3vw,2.125rem)] leading-tight font-bold tracking-tight wrap-break-word">
-            {title}
-          </h1>
-          {imported && (
-            <p className="mt-1 text-muted wrap-break-word">
-              {[...sourceLabel, "Cached import"].join(" · ")}
+    <div className="grid gap-4">
+      <Link href="/recordings" className="w-fit text-sm text-brand underline">
+        ← Recordings
+      </Link>
+      <header>
+        <h1 className="text-3xl leading-tight font-bold tracking-tight wrap-anywhere">
+          {recording.title}
+        </h1>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <ProcessingStatus state={recording.status} />
+          <EstimatedCost cost={recording.cost} scope="Recording" />
+          {recipe && (
+            <Link
+              href={recipeHref(recipe.id, recipe.jobId ?? undefined)}
+              className="min-w-0 text-sm font-semibold text-brand underline wrap-anywhere"
+            >
+              {recipeLabel(recipe.id)}
+              {captureProfile?.defaultRecipeId === recipe.id &&
+              recording.metadata.sourceLabel
+                ? " · Default for " + recording.metadata.sourceLabel
+                : ""}
+            </Link>
+          )}
+        </div>
+        {noAlternateRecipe && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              disabled
+              aria-describedby="reprocess-recipe-reason"
+            >
+              Reprocess with another recipe
+            </Button>
+            <span id="reprocess-recipe-reason" className="text-sm text-muted">
+              No alternate recipe is configured for this capture source.
+            </span>
+          </div>
+        )}
+        {recording.error &&
+          recording.error.stage !== "clip_plan" &&
+          captureProfile?.state !== "held" && (
+            <p className="mt-2 text-sm text-muted">
+              {recording.error.stage && (
+                <strong>{RECIPE_STAGE_LABEL[recording.error.stage]} · </strong>
+              )}
+              {processingReason(recording.error.code) ??
+                recording.error.summary}
             </p>
           )}
-        </div>
-        <ClipState state={importedRun ? "imported" : recording.state} />
+        {retryTarget?.kind === "failed_clips" && (
+          <div className="mt-3">
+            <RetryAction
+              key={retryTarget.clips.map(({ jobId }) => jobId).join(",")}
+              recordingId={recordingId}
+              label="Retry failed clips"
+              action={{ request: { schemaVersion: 2, scope: "failed_clips" } }}
+              ranges={ranges}
+              disabledReason={
+                reads.selectionEnabled()
+                  ? null
+                  : "This environment is read-only."
+              }
+            />
+          </div>
+        )}
       </header>
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] xl:grid-cols-[minmax(0,1fr)_15.75rem] sm:items-start">
-        <Card
-          aria-labelledby="clip-plan-heading"
-          className="min-w-0 p-3 sm:col-start-2 sm:row-start-1 sm:p-4"
-        >
-          <h2 id="clip-plan-heading" className="mb-2 text-lg font-bold">
-            Clip plan
-          </h2>
-          {plan || legacy ? (
-            <>
-              <dl className="grid grid-cols-3 gap-2 text-sm sm:grid-cols-1">
-                <div className="sm:border-b sm:border-line sm:pb-2">
-                  <dt className="text-xs text-muted">Mode</dt>
-                  <dd className="font-semibold capitalize">
-                    {plan?.mode ?? "passthrough"}
-                  </dd>
-                </div>
-                <div className="sm:border-b sm:border-line sm:pb-2">
-                  <dt className="text-xs text-muted">Filter version</dt>
-                  <dd className="text-xs font-semibold wrap-break-word">
-                    <code>{plan?.filter_version ?? "clip_filter@0"}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted">Plan state</dt>
-                  <dd className="font-semibold">
-                    {plan?.state === "failed" ? "Failed" : "Completed"}
-                  </dd>
-                </div>
-              </dl>
-              {plan?.state === "failed" ? (
-                <p className="mt-3 border-t border-line pt-2 text-danger">
-                  Clip planning failed. The clip covers the whole recording.{" "}
-                  {plan.error_code && <code>{plan.error_code}</code>}
-                </p>
-              ) : (
-                (legacy || plan?.mode === "passthrough") && (
-                  <p className="mt-3 border-t border-line pt-2 text-sm">
-                    Cutting is off. The clip covers the whole recording.
-                  </p>
-                )
-              )}
-            </>
-          ) : (
-            <p className="text-muted">Waiting for the clip plan.</p>
-          )}
-        </Card>
-        <div className="min-w-0 sm:col-start-1 sm:row-start-1">
-          <OriginalVideo
-            key={`${id}:${recording.canReadOriginal}`}
-            readPath={
-              recording.canReadOriginal
-                ? `/api/v1/recordings/${id}/reads`
-                : null
-            }
-            initialTime={sourceTime((await searchParams).t)}
-            expectedDuration={duration}
-            spans={spans}
-          />
-        </div>
-      </div>
 
-      <Card aria-labelledby="recording-clips-heading" className="mt-4 min-w-0">
-        <div className="flex justify-between gap-3 p-3 sm:p-4">
+      {captureProfile?.state === "held" && captureProfile.reason && (
+        <CaptureHold
+          recordingId={recordingId}
+          sourceManifestSha256={captureProfile.sourceManifestSha256}
+          reason={captureProfile.reason}
+          description={
+            recording.error?.summary ??
+            (captureProfile.reason === "needs_setup"
+              ? "This recording needs a supported capture source and recipe before processing can start."
+              : "Processing is paused until a recipe is selected.")
+          }
+          report={`Recording ${recordingId}\n${JSON.stringify(captureProfile.evidence, null, 2)}`}
+          allowedRecipeIds={captureProfile.allowedRecipeIds}
+          defaultRecipeId={captureProfile.defaultRecipeId}
+          readOnly={!reads.selectionEnabled()}
+        />
+      )}
+
+      <RecordingPreview
+        recordingId={recordingId}
+        initialTime={sourceTime(query.t)}
+        spans={planTimeline(recording.plan)}
+        capturedAt={recording.startedAt}
+        metadata={recording.metadata}
+      />
+
+      <ProcessingStage
+        title="Clip planning"
+        pathname={pathname}
+        current={planningJob}
+        runs={clipPlanning.attempts}
+        selectedRun={selectedRun}
+        recipeId={recipe?.id}
+        note={
+          recording.plan ? (
+            <div className="grid gap-1 text-sm text-muted">
+              {recording.plan.state === "failed" ? (
+                <p>
+                  Clip planning failed. The plan covers the whole recording.{" "}
+                  {recording.plan.error_code && (
+                    <code>{recording.plan.error_code}</code>
+                  )}
+                </p>
+              ) : recording.plan.mode === "passthrough" ? (
+                <p>The clip covers the whole recording.</p>
+              ) : null}
+              <p>
+                Filter <code>{recording.plan.filter_version}</code> ·{" "}
+                {recording.plan.mode}
+              </p>
+            </div>
+          ) : (
+            !planningJob && (
+              <p className="text-sm text-muted">No clip plan recorded.</p>
+            )
+          )
+        }
+        action={
+          retryTarget?.kind === "clip_plan" && (
+            <RetryAction
+              key={retryTarget.jobId}
+              recordingId={recordingId}
+              label="Retry clip planning"
+              action={{
+                planning: {
+                  jobId: retryTarget.jobId,
+                  expectedState: retryTarget.expectedState,
+                  estimate: planningJob?.costUsd,
+                },
+              }}
+              disabledReason={
+                retryTarget.available
+                  ? null
+                  : (retryTarget.reason ?? "Clip planning cannot be retried.")
+              }
+            />
+          )
+        }
+      />
+
+      <Card aria-labelledby="recording-clips-heading">
+        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
           <h2 id="recording-clips-heading" className="text-lg font-bold">
             Clips
           </h2>
-          <span className="text-muted">
-            {clips.length} {clips.length === 1 ? "clip" : "clips"}
-          </span>
+          <span className="text-sm text-muted">{clips.length}</span>
         </div>
-        {clips.length > 0 && (
-          <div role="table" aria-label="Clips and pipeline status">
-            <div
-              role="row"
-              className="sr-only lg:not-sr-only lg:grid lg:grid-cols-[0.85fr_1fr_1.45fr_0.85fr_0.85fr] lg:gap-3 lg:border-y lg:border-line lg:bg-field lg:px-4 lg:py-2 lg:text-xs lg:text-muted"
-            >
-              {headings.map((heading) => (
-                <span key={heading} role="columnheader">
-                  {heading}
-                </span>
-              ))}
-            </div>
-            {clips.map((clip) => {
-              const from =
-                clip.sourceOffsetNs === null
-                  ? null
-                  : elapsedSeconds(clip.sourceOffsetNs);
-              const length =
-                clip.durationNs === null
-                  ? null
-                  : elapsedSeconds(clip.durationNs);
-              const cached = isCurrentImport(clip);
-              const format =
-                length !== null && length < 5 ? fmtPrecise : fmtClock;
-              return (
-                <div
-                  key={clip.id}
-                  role="row"
-                  className="grid grid-cols-2 items-start gap-3 border-t border-line p-3 text-sm lg:grid-cols-[0.85fr_1fr_1.45fr_0.85fr_0.85fr] lg:px-4"
+        {clips.length ? (
+          <ul className="divide-y divide-line">
+            {clips.map((clip) => (
+              <li key={clip.id}>
+                <Link
+                  href={`${pathname}/clips/${clip.id}/processing`}
+                  className="flex min-w-0 items-center gap-3 p-3 hover:bg-field sm:p-4"
                 >
-                  <div role="cell">
-                    <strong>Clip {clip.ordinal + 1}</strong>
-                    <p className="text-xs text-muted tabular-nums">
-                      {from !== null && length !== null
-                        ? `${format(from)}–${format(from + length)}`
-                        : whole
-                          ? "Whole recording"
-                          : "Source time unavailable"}
-                    </p>
-                  </div>
-                  <div role="cell" className="grid gap-1">
-                    <span
-                      aria-hidden="true"
-                      className="text-xs text-muted lg:hidden"
-                    >
-                      Pipeline state
+                  <ClipPoster
+                    clipId={clip.id}
+                    duration={
+                      clip.startSeconds !== null && clip.endSeconds !== null
+                        ? formatDuration(clip.endSeconds - clip.startSeconds)
+                        : null
+                    }
+                  />
+                  <div className="grid min-w-0 flex-1 gap-1">
+                    <strong className="text-sm text-brand underline underline-offset-2">
+                      Clip {clip.ordinal + 1}
+                    </strong>
+                    <span className="text-xs text-muted tabular-nums">
+                      {ranges[clip.id]}
                     </span>
-                    <ClipState
-                      state={cached ? "imported" : clip.pipeline.state}
-                    />
-                    {clip.pipeline.errorCode && (
-                      <code className="text-xs text-danger wrap-break-word">
-                        {clip.pipeline.errorCode}
-                      </code>
-                    )}
                   </div>
-                  <div role="cell" className="col-span-2 lg:col-span-1">
-                    <span
-                      aria-hidden="true"
-                      className="text-xs text-muted lg:hidden"
-                    >
-                      Stages
-                    </span>
-                    {cached || clip.pipeline.stages.length ? (
-                      <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
-                        {(cached
-                          ? (Object.keys(RECIPE_STAGE_LABEL) as Array<
-                              keyof typeof RECIPE_STAGE_LABEL
-                            >)
-                          : clip.pipeline.stages.map((stage) => stage.stage)
-                        ).map((key) => {
-                          const stage = clip.pipeline.stages.find(
-                            (item) => item.stage === key,
-                          );
-                          return (
-                            <li key={key} className="flex items-center gap-1">
-                              {RECIPE_STAGE_LABEL[key]}{" "}
-                              <ClipState
-                                state={
-                                  cached
-                                    ? "reused"
-                                    : stage
-                                      ? stageDisplayState(stage)
-                                      : "pending"
-                                }
-                              />
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-muted">
-                        Stage records unavailable
-                      </p>
-                    )}
-                  </div>
-                  <div role="cell">
-                    <span
-                      aria-hidden="true"
-                      className="block text-xs text-muted lg:hidden"
-                    >
-                      Est. cost
-                    </span>
-                    {cached
-                      ? "Cached import"
-                      : clip.pipeline.estimatedCostUsd === null
-                        ? "Unavailable"
-                        : formatUsd(clip.pipeline.estimatedCostUsd)}
-                  </div>
-                  <div
-                    role="cell"
-                    className="col-span-2 flex flex-wrap items-center gap-x-4 lg:col-span-1 lg:items-start"
-                  >
-                    <Link
-                      href={`/pipeline/clips/${clip.id}`}
-                      className="inline-flex min-h-9 items-center font-semibold text-brand-ink underline lg:min-h-7"
-                    >
-                      View pipeline
-                    </Link>
-                    {clip.reviewStatus === "not_ready" ? (
-                      <span className="text-xs text-muted">
-                        Review unavailable
-                      </span>
-                    ) : (
-                      <Link
-                        href={`/review/${clip.recordingId}`}
-                        className="inline-flex min-h-9 items-center font-semibold text-brand-ink underline lg:min-h-7"
-                      >
-                        Review clip
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  <ProcessingStatus state={clip.status} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="p-4 text-sm text-muted">Clips appear after planning.</p>
         )}
       </Card>
-    </>
+    </div>
   );
 }

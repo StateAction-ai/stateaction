@@ -821,9 +821,9 @@ export async function appendReview(
     for (const id of additions) {
       const ok = await tx.query<{ ok: boolean }>(
         persisted
-          ? "SELECT NOT EXISTS (SELECT 1 FROM dataset_access WHERE dataset_id = $1 AND enabled) AS ok"
+          ? "SELECT public.dataset_review_sharing_ok($1, $2, $3, $4, $5) AS ok"
           : "SELECT public.dataset_sharing_ok($1, $2) AS ok",
-        persisted ? [id] : [id, clipId],
+        [id, ...memberIdentity],
       );
       if (!ok.rows[0]?.ok)
         throw new CatalogError(

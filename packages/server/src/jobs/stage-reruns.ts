@@ -45,10 +45,13 @@ export type StageRerunCommand = StageRerunRequest & {
 };
 
 type ConfirmResult = { jobId: string; parentJobId: string; replayed: boolean };
-type Read = Pick<pg.Pool, "query">;
-type Parent = {
+export type RerunRead = Pick<pg.Pool, "query">;
+export type RerunParent = {
   id: string;
   kind: string;
+  is_current: boolean;
+  clip_selection_seq: number;
+  error_code: string | null;
   recipe: RecipeV1 | null;
   state: string;
   admitted_at: Date | null;
@@ -106,6 +109,8 @@ export type StageRerunPlan = {
   estimatedSeconds: number | null;
 };
 
+export type StageRerunWork = Awaited<ReturnType<typeof resolveRerunWork>>;
+
 export type StageRerunDeps = {
   pool: pg.Pool;
   reader: ObjectReader;
@@ -118,19 +123,23 @@ export type StageRerunDeps = {
 const terminal = new Set(["succeeded", "failed", "cancelled"]);
 const refused = (code: string) => new TransportError("conflict", code);
 
-async function loadParent(
-  db: Read,
+export async function loadRerunParent(
+  db: RerunRead,
   actorId: string,
   recordingId: string,
   parentJobId: string,
   policy: Pick<StageRerunDeps, "publicVideoCanary" | "production"> = {},
-): Promise<Parent> {
+  clipId?: string,
+): Promise<RerunParent> {
   const {
     rows: [parent],
-  } = await db.query<Parent>(
-    `SELECT j.id, j.kind, j.recipe, j.state, j.admitted_at, j.source_manifest_sha256, j.profile_revision,
+  } = await db.query<RerunParent>(
+    `SELECT j.id, j.kind, j.recipe, j.state, j.error_code, j.admitted_at, j.source_manifest_sha256, j.profile_revision,
+            job_is_current(j.id) AS is_current,
+            coalesce((SELECT max(s.seq) FROM clip_result_selections s WHERE s.clip_id = j.clip_id), 0) AS clip_selection_seq,
             r.deleted_at,
-            j.kind = 'process_recording' AND r.source_manifest_sha256 = j.source_manifest_sha256
+            (j.kind = 'process_recording' OR ($9::uuid IS NOT NULL AND j.kind = 'clip_pipeline'))
+              AND r.source_manifest_sha256 = j.source_manifest_sha256
               AND r.status IN ('uploaded', 'processing', 'reviewable', 'failed', 'cancelled')
               AND catalog_source_inventory_ok(r.id, true)
               AND catalog_has_role(r.owner_user_id, 'collector')
@@ -141,6 +150,7 @@ async function loadParent(
               ) AS processable,
             EXISTS (
               SELECT 1 FROM jobs x WHERE x.recording_id = r.id
+                AND ($9::uuid IS NULL OR x.kind <> 'clip_pipeline' OR x.clip_id = $9)
                 AND x.state NOT IN ('succeeded', 'failed', 'cancelled')
             ) AS busy,
             CASE WHEN $4::uuid IS NULL THEN NOT $6::boolean OR r.rgb_profile <> $7
@@ -158,7 +168,8 @@ async function loadParent(
               AND NOT EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.job_id = j.id) AS settled,
             coalesce((SELECT max(s.seq) FROM recording_result_selections s WHERE s.recording_id = r.id), 0) AS selection_seq
      FROM recordings r JOIN jobs j ON j.id = $3 AND j.recording_id = r.id
-     WHERE r.id = $2 AND catalog_has_role($1, 'staff')`,
+     WHERE r.id = $2 AND catalog_has_role($1, 'staff')
+       AND ($9::uuid IS NULL OR j.clip_id = $9)`,
     [
       actorId,
       recordingId,
@@ -168,11 +179,15 @@ async function loadParent(
       policy.production === true,
       SIMULATION_RGB_PROFILE,
       policy.publicVideoCanary?.sourceSha256 ?? null,
+      clipId ?? null,
     ],
   );
   if (!parent || parent.deleted_at)
     throw new TransportError("not_found", "Run not found");
-  if (parent.kind === "clip_pipeline" || parent.kind === "clip_plan")
+  if (
+    (parent.kind === "clip_pipeline" && !clipId) ||
+    parent.kind === "clip_plan"
+  )
     throw refused("clip_rerun_unavailable");
   if (!terminal.has(parent.state)) throw refused("parent_not_terminal");
   if (parent.admitted_at && !parent.settled)
@@ -186,14 +201,14 @@ async function loadParent(
 
 /** Cheap eligibility check for a run page. Planning validates the actual output bytes. */
 export async function stageRerunBlock(
-  pool: Read,
+  pool: RerunRead,
   actorId: string,
   recordingId: string,
   jobId: string,
   policy?: Pick<StageRerunDeps, "publicVideoCanary" | "production">,
 ): Promise<string | null> {
   try {
-    await loadParent(pool, actorId, recordingId, jobId, policy);
+    await loadRerunParent(pool, actorId, recordingId, jobId, policy);
     return null;
   } catch (error) {
     if (error instanceof TransportError) {
@@ -211,8 +226,8 @@ const primaryRoles = {
 } as const;
 
 async function loadCatalogFiles(
-  db: Read,
-  parent: Parent,
+  db: RerunRead,
+  parent: RerunParent,
   stage: Stage,
 ): Promise<CatalogFile[]> {
   const { rows } = await db.query<CatalogFile>(
@@ -238,10 +253,11 @@ async function loadCatalogFiles(
 
 async function loadReuse(
   deps: StageRerunDeps,
-  parent: Parent,
+  parent: RerunParent,
   recordingId: string,
   stage: Stage,
   segmentsSha256: string | undefined,
+  requireAcceptedHand = false,
 ): Promise<ReuseStage> {
   const {
     rows: [run],
@@ -287,8 +303,40 @@ async function loadReuse(
       files: [],
     };
   }
-  if (stage === "hand_pose" && parent.state !== "succeeded") {
-    throw refused("reuse_unavailable");
+  if (stage === "hand_pose") {
+    if (parent.state !== "succeeded") throw refused("reuse_unavailable");
+    if (requireAcceptedHand) {
+      const {
+        rows: [manifest],
+      } = await deps.pool.query<{
+        object_key: string;
+        size_bytes: string;
+        sha256: string;
+      }>(
+        `SELECT f.object_key, f.size_bytes::text, f.sha256
+         FROM jobs p JOIN files f ON f.id = p.result_manifest_file_id
+         JOIN jobs origin ON origin.id = $2 AND origin.state = 'succeeded'
+         JOIN job_result_candidates c ON c.job_id = p.id AND c.status = 'accepted'
+           AND c.outcome = 'succeeded' AND c.manifest_sha256 = p.result_manifest_sha256
+         WHERE p.id = $1 AND f.state = 'verified' AND origin.clip_id = p.clip_id
+           AND f.sha256 = p.result_manifest_sha256`,
+        [parent.id, run.execution_job_id],
+      );
+      if (!manifest) throw refused("reuse_unavailable");
+      const bytes = await deps.reader
+        .read(
+          manifest.object_key,
+          contractMaxBytes("artifacts.processing-result.v5"),
+        )
+        .catch(() => {
+          throw refused("reuse_unavailable");
+        });
+      if (
+        String(bytes.byteLength) !== manifest.size_bytes ||
+        sha256Hex(bytes) !== manifest.sha256
+      )
+        throw refused("reuse_unavailable");
+    }
   }
   const receipt = run.receipt;
   if (
@@ -414,7 +462,7 @@ export async function planStageRerun(
   recordingId: string,
   request: StageRerunRequest,
 ): Promise<{ plan: StageRerunPlan; planSha256: string }> {
-  const parent = await loadParent(
+  const parent = await loadRerunParent(
     deps.pool,
     actorId,
     recordingId,
@@ -423,14 +471,42 @@ export async function planStageRerun(
   );
   const recipe = structuredClone(parent.recipe!);
   const execute = executionStages(recipe, request.stage, request.scope);
+  const stage = recipe.stages.find((entry) => entry.stage === request.stage)!;
+  stage.module = request.module ?? stage.module;
+  stage.params = request.params ?? stage.params;
+  const work = await resolveRerunWork(
+    deps,
+    parent,
+    recordingId,
+    recipe,
+    execute,
+  );
+  const plan: StageRerunPlan = {
+    schemaVersion: 1,
+    recordingId,
+    parentJobId: parent.id,
+    sourceManifestSha256: parent.source_manifest_sha256,
+    requestedStage: request.stage,
+    scope: request.scope,
+    selectionSeq: parent.selection_seq,
+    ...work,
+  };
+  return { plan, planSha256: requestSha256(plan) };
+}
+
+export async function resolveRerunWork(
+  deps: StageRerunDeps,
+  parent: RerunParent,
+  recordingId: string,
+  recipe: RecipeV1,
+  execute: Stage[],
+  clipRetry = false,
+) {
   if (
     deps.publicVideoCanary &&
     (execute.length !== 1 || execute[0] !== "hand_pose")
   )
     throw refused("rerun_outside_admission_scope");
-  const stage = recipe.stages.find((entry) => entry.stage === request.stage)!;
-  stage.module = request.module ?? stage.module;
-  stage.params = request.params ?? stage.params;
   if (!validateValue("jobs.recipe.v1", recipe).valid)
     throw refused("stage_configuration_invalid");
   const bindings: StageRerunPlan["bindings"] = {};
@@ -487,6 +563,7 @@ export async function planStageRerun(
       recordingId,
       spec.stage,
       reusedSegmentsSha256,
+      clipRetry,
     );
     reuse.push(evidence);
     if (spec.stage === "segment") {
@@ -557,14 +634,7 @@ export async function planStageRerun(
       }
     }
   }
-  const plan: StageRerunPlan = {
-    schemaVersion: 1,
-    recordingId,
-    parentJobId: parent.id,
-    sourceManifestSha256: parent.source_manifest_sha256,
-    requestedStage: request.stage,
-    scope: request.scope,
-    selectionSeq: parent.selection_seq,
+  return {
     recipe,
     execute,
     reuse,
@@ -574,11 +644,10 @@ export async function planStageRerun(
     bindings,
     estimatedSeconds,
   };
-  return { plan, planSha256: requestSha256(plan) };
 }
 
 async function replay(
-  db: Read,
+  db: RerunRead,
   actorId: string,
   recordingId: string,
   input: StageRerunCommand,
@@ -668,7 +737,7 @@ export async function confirmStageRerun(
       requestHash,
     );
     if (concurrent) return concurrent;
-    const parent = await loadParent(
+    const parent = await loadRerunParent(
       tx,
       actorId,
       recordingId,

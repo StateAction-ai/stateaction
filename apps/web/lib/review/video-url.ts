@@ -11,13 +11,18 @@ export class VideoUrlError extends Error {
 
 export async function fetchVideoUrl(
   readPath: string,
-  options: { signal?: AbortSignal; fetchImpl?: typeof fetch } = {},
+  options: {
+    signal?: AbortSignal;
+    fetchImpl?: typeof fetch;
+    method?: "GET" | "POST";
+  } = {},
 ): Promise<{ url: string; expiresAt: number }> {
   const doFetch = options.fetchImpl ?? fetch;
+  const method = options.method ?? "POST";
   let response: Response;
   try {
     response = await doFetch(readPath, {
-      method: "POST",
+      method,
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
@@ -25,7 +30,9 @@ export async function fetchVideoUrl(
         "content-type": "application/json",
         "x-stateaction-client": "web",
       },
-      body: JSON.stringify({ role: "recording_mp4" }),
+      ...(method === "POST"
+        ? { body: JSON.stringify({ role: "recording_mp4" }) }
+        : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch {

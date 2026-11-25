@@ -8,6 +8,7 @@ import {
   getRecording,
   registerRecording,
   sealRecordingInventory,
+  selectRecordingCaptureRecipe,
   toRecordingV1,
   toRecordingV2,
   type AdmissionDeps,
@@ -60,6 +61,52 @@ const PRIVATE: Record<string, string> = {
   Pragma: "no-cache",
   Vary: "Cookie, Authorization",
 };
+
+export async function captureRecipeSelectionRoute(
+  deps: AdmissionDeps,
+  authenticate: AuthenticateCollector,
+  request: Request,
+  recordingId: string,
+) {
+  const auth = await authenticate(request);
+  if (!auth.ok) {
+    return auth.response.status === 403
+      ? failure(
+          "not_found",
+          "Not found",
+          randomUUID(),
+          new Headers(auth.response.headers),
+        )
+      : auth.response;
+  }
+  const requestId = auth.requestId ?? randomUUID();
+  try {
+    const body = await readContractBody(
+      request,
+      "http.capture-recipe-select.v1",
+    );
+    const data = await selectRecordingCaptureRecipe(
+      deps,
+      auth.principal,
+      recordingId,
+      body,
+    );
+    return respond({ data, requestId }, 200, auth.headers);
+  } catch (error) {
+    if (error instanceof BodyError)
+      return failure(error.code, error.message, requestId, auth.headers);
+    if (error instanceof CatalogError)
+      return error.code === "forbidden" || error.code === "not_found"
+        ? failure("not_found", "Not found", requestId, auth.headers)
+        : failure(error.code, safeMessage(error), requestId, auth.headers);
+    return failure(
+      "internal",
+      "Recipe selection is unavailable",
+      requestId,
+      auth.headers,
+    );
+  }
+}
 
 /**
  * Media type of the additive recording representation (http.recording.v2 and

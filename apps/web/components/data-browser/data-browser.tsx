@@ -1,710 +1,733 @@
-"use client";
-
-import { formatMediaDuration } from "../../lib/media-duration";
-import * as React from "react";
 import Link from "next/link";
-import { shortRecordingId } from "@stateaction/server/pipeline-model";
-import { useRouter } from "next/navigation";
-import type {
-  DatasetClipView,
-  DatasetView,
-  StaffClipView,
-} from "@stateaction/contracts";
-import type { ConsoleRole } from "../../lib/console-session";
+import { LayoutGrid, List } from "lucide-react";
 import {
-  browserApiPath,
   browserHref,
+  browserPageSizes,
+  browserProblems,
+  durationPresets,
+  isBuiltInDataset,
   type BrowserQuery,
+  type BrowserSort,
 } from "../../lib/data-browser-query";
-import { registerPrivateState } from "../../lib/private-state";
+import { formatMediaDuration } from "../../lib/media-duration";
+import { fmtPrecise } from "../../lib/review/timeline";
 import { Button } from "../ui/button";
+import {
+  CatalogFilters,
+  CatalogSelect,
+  DatasetEditor,
+  PrivateBrowser,
+  SearchForm,
+  type Facet,
+} from "./controls";
+import { CaptionDownload } from "./caption-download";
 import { ClipThumbnail } from "./thumbnail";
-import { browserApi, BrowserApiError } from "./client";
 
-type Page = {
-  datasets?: DatasetView[];
-  clips?: (DatasetClipView | StaffClipView)[];
-  nextCursor: string | null;
+type ShareState = "shared" | "private" | "blocked";
+type Dataset = {
+  datasetId: string;
+  name: string;
+  clipCount: number;
+  shareState?: ShareState;
 };
-type Loaded = { href: string; page: Page; dataset?: DatasetView };
-const field =
-  "min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm";
-const decision = (value: string) =>
-  ({ pending: "Not reviewed", approved: "Approved", rejected: "Rejected" })[
-    value
-  ] ?? "Not reviewed";
+const problemValues = {
+  failed_window: "window",
+  caption_failed: "caption",
+  no_hand: "hand",
+} as const;
+type Problem = keyof typeof problemValues;
+type Clip = {
+  clipId: string;
+  title: string | null;
+  ordinal: number;
+  taskLabel: string | null;
+  capturedAt: string | null;
+  sortDate: string;
+  durationNs: string | null;
+  hasPoster: boolean;
+  hasVideo?: boolean;
+  captionMatch: {
+    segmentId: string;
+    offsetNs?: string | null;
+    highlights: { text: string; highlighted: boolean }[];
+    alsoMatchesOriginal?: true;
+  } | null;
+  staff?: {
+    reviewStatus?: "pending" | "approved" | "rejected" | undefined;
+    proposedLabel?: string | null | undefined;
+    correctedCount?: number | undefined;
+    problems?: Problem[] | undefined;
+    rejection?:
+      | { reason: string | null; reviewerUserId: string; rejectedAt: string }
+      | undefined;
+  };
+};
+type ClipPage = {
+  page: number;
+  limit: number;
+  totalCount: number;
+  filteredCount: number;
+  lastUpdatedAt: string | null;
+  labels: Facet[];
+  items: Clip[];
+};
 
-export function DataBrowser({
-  query,
-  role,
-  mediaOrigin,
-  recordingName,
-  children,
+const count = (value: number) => value.toLocaleString("en-US");
+const date = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+const shareLabels = {
+  shared: "Shared · all clips approved",
+  private: "Private",
+  blocked:
+    "Every clip needs approval on its current result before this dataset can be shared.",
+};
+const heading = "m-0 break-words text-[32px] font-bold tracking-[-0.03em]";
+const panel = "rounded-lg border border-line bg-white";
+const textLink = "font-semibold text-brand hover:underline";
+
+function DatasetGroup({
+  title,
+  datasets,
+  staff,
 }: {
-  query: BrowserQuery;
-  role: ConsoleRole;
-  mediaOrigin: string | null;
-  recordingName?: string;
-  children?: React.ReactNode;
+  title: string;
+  datasets: Dataset[];
+  staff: boolean;
 }) {
-  const router = useRouter();
-  const [loaded, setLoaded] = React.useState<Loaded>();
-  const [error, setError] = React.useState<string>();
-  const [signedOut, setSignedOut] = React.useState(false);
-  const [needsSignIn, setNeedsSignIn] = React.useState(false);
-  const [reload, setReload] = React.useState(0);
-  const [dialog, setDialog] = React.useState<"new" | "add">();
-  const href = browserHref(query);
-  React.useEffect(
-    () =>
-      registerPrivateState(() => {
-        setLoaded(undefined);
-        setDialog(undefined);
-        setSignedOut(true);
-      }),
-    [],
-  );
-  React.useEffect(() => {
-    const controller = new AbortController();
-    void (async () => {
-      const page = await browserApi<Page>(browserApiPath(query), {
-        signal: controller.signal,
-      });
-      const dataset = query.datasetId
-        ? await browserApi<DatasetView>(`/api/v1/datasets/${query.datasetId}`, {
-            signal: controller.signal,
-          })
-        : undefined;
-      if (!controller.signal.aborted) {
-        setLoaded({ href, page, ...(dataset ? { dataset } : {}) });
-        setError(undefined);
-      }
-    })().catch((failure: unknown) => {
-      if (controller.signal.aborted) return;
-      setLoaded(undefined);
-      setNeedsSignIn(
-        failure instanceof BrowserApiError && failure.status === 401,
-      );
-      setError(
-        failure instanceof BrowserApiError
-          ? failure.message
-          : "This view could not be loaded. Try again.",
-      );
-    });
-    return () => controller.abort();
-  }, [href, reload]);
-  if (signedOut) return null;
-  const current = loaded?.href === href ? loaded : undefined;
-  const dataset = current?.dataset;
-  const clips = current?.page.clips;
+  if (!datasets.length) return null;
   return (
-    <section aria-labelledby="browser-heading">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          {query.datasetId ? (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {datasets.map(({ datasetId, name, clipCount, shareState }) => (
+          <li key={datasetId} className="min-w-0">
             <Link
-              href="/data-browser"
-              className="mb-2 inline-block text-sm text-brand underline"
+              href={browserHref({ mode: "clips", datasetId })}
+              prefetch={false}
+              className={`${panel} grid min-h-20 content-center gap-1.5 break-words px-3.5 py-3 hover:border-brand`}
             >
-              Datasets
+              <strong>{name}</strong>
+              <span className="text-sm text-muted">
+                {staff && isBuiltInDataset(datasetId)
+                  ? "Built in · "
+                  : staff && shareState
+                    ? `${shareState === "blocked" ? "Sharing blocked" : shareLabels[shareState]} · `
+                    : ""}
+                {count(clipCount)} {clipCount === 1 ? "clip" : "clips"}
+              </span>
             </Link>
-          ) : null}
-          <h1
-            id="browser-heading"
-            className="m-0 text-[32px] font-bold tracking-[-0.03em]"
-          >
-            {query.datasetId
-              ? (dataset?.name ?? "Dataset")
-              : query.recordingId
-                ? "Recording clips"
-                : "Data browser"}
-          </h1>
-          {query.recordingId ? (
-            <p className="mt-2 text-muted">
-              <Link
-                href={`/pipeline/${query.recordingId}`}
-                className="font-medium text-brand underline"
-              >
-                {recordingName ?? "Recording"}
-              </Link>
-            </p>
-          ) : dataset ? (
-            <p className="mt-2 text-muted">
-              {dataset.clipCount.toLocaleString()} approved{" "}
-              {dataset.clipCount === 1 ? "clip" : "clips"}{" "}
-              <span className="mx-2" aria-hidden="true">
-                /
-              </span>{" "}
-              {formatMediaDuration(dataset.durationNs)} total
-            </p>
-          ) : null}
-        </div>
-        {role === "staff" && !query.recordingId ? (
-          <Button
-            onClick={() => setDialog(query.datasetId ? "add" : "new")}
-            disabled={Boolean(query.datasetId && !dataset)}
-          >
-            {query.datasetId ? "Add clips" : "New dataset"}
-          </Button>
-        ) : null}
-      </div>
-      {role === "staff" && !query.datasetId && !query.recordingId ? (
-        <nav
-          aria-label="Data views"
-          className="mb-5 flex gap-5 border-b border-line"
-        >
-          {(
-            [
-              ["datasets", "Datasets"],
-              ["clips", "All clips"],
-            ] as const
-          ).map(([mode, label]) => (
-            <Link
-              key={mode}
-              href={browserHref({ mode })}
-              aria-current={query.mode === mode ? "page" : undefined}
-              className={`border-b-2 px-1 pb-3 text-sm font-semibold ${query.mode === mode ? "border-brand text-brand" : "border-transparent text-muted"}`}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-      ) : null}
-      <form
-        key={href}
-        role="search"
-        className="mb-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const form = new FormData(event.currentTarget);
-          const q = String(form.get("q") ?? "").trim();
-          const label = String(form.get("label") ?? "").trim();
-          const status = String(form.get("reviewStatus") ?? "");
-          router.push(
-            browserHref({
-              mode: query.mode,
-              ...(query.datasetId ? { datasetId: query.datasetId } : {}),
-              ...(query.recordingId ? { recordingId: query.recordingId } : {}),
-              ...(q ? { q } : {}),
-              ...(label ? { label } : {}),
-              ...(status
-                ? {
-                    reviewStatus: status as NonNullable<
-                      BrowserQuery["reviewStatus"]
-                    >,
-                  }
-                : {}),
-            }),
-          );
-        }}
-      >
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-          <label className="min-w-0 text-xs font-medium">
-            Search {query.mode === "datasets" ? "datasets" : "clips"}
-            <input
-              className={`${field} mt-1`}
-              name="q"
-              type="search"
-              defaultValue={query.q}
-              maxLength={160}
-              placeholder={
-                query.mode === "datasets"
-                  ? "Dataset name"
-                  : "Title or task label"
-              }
-            />
-          </label>
-          {query.mode === "clips" ? (
-            <label className="min-w-0 text-xs font-medium">
-              Exact task label
-              <input
-                name="label"
-                placeholder="e.g. Pick up part"
-                defaultValue={query.label}
-                maxLength={160}
-                className={`${field} mt-1`}
-              />
-            </label>
-          ) : null}
-          {role === "staff" && query.mode === "clips" && !query.datasetId ? (
-            <label className="text-xs font-medium">
-              Review status
-              <select
-                name="reviewStatus"
-                defaultValue={query.reviewStatus ?? ""}
-                className={`${field} mt-1`}
-              >
-                <option value="">All review statuses</option>
-                <option value="pending">Not reviewed</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </label>
-          ) : null}
-        </div>
-        <Button variant="outline" type="submit" className="self-end">
-          Search
-        </Button>
-      </form>
-      {children}
-      {error ? (
-        <div
-          role="alert"
-          className="rounded-xl border border-line bg-white p-6"
-        >
-          <p>{error}</p>
-          {needsSignIn ? (
-            <Link href="/login" className="mr-4 text-brand underline">
-              Sign in
-            </Link>
-          ) : null}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setError(undefined);
-              setReload((n) => n + 1);
-            }}
-          >
-            Try again
-          </Button>
-        </div>
-      ) : !current ? (
-        <p role="status" className="py-12 text-muted">
-          Loading {query.mode === "datasets" ? "datasets" : "clips"}…
-        </p>
-      ) : query.mode === "datasets" ? (
-        <DatasetTable datasets={current.page.datasets ?? []} />
-      ) : !clips?.length ? (
-        children ? null : (
-          <div className="rounded-xl border border-line bg-white p-8">
-            <p className="font-semibold">No clips match this view.</p>
-            <p className="text-muted">
-              {query.datasetId
-                ? "This dataset contains only approved clips. Adjust your filters or add an approved clip."
-                : "Adjust your filters, or open a completed recording from Pipeline."}
-            </p>
-          </div>
-        )
-      ) : (
-        <>
-          <p className="mb-3 text-xs text-muted">
-            {clips.length}{" "}
-            {query.q || query.label || query.reviewStatus ? "matching " : ""}
-            {clips.length === 1 ? "clip" : "clips"} on this page
-          </p>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {clips.map((clip) => (
-              <article
-                key={clip.clipId}
-                className="overflow-hidden rounded-xl border border-line bg-white"
-              >
-                <Link
-                  aria-label={"Open " + clip.title}
-                  href={`/clips/${clip.clipId}?returnTo=${encodeURIComponent(href)}`}
-                  className="block focus-visible:outline-offset-[-4px]"
-                >
-                  <ClipThumbnail
-                    clipId={clip.clipId}
-                    {...(query.datasetId ? { datasetId: query.datasetId } : {})}
-                    available={clip.media.thumbnail}
-                    mediaOrigin={mediaOrigin}
-                  />
-                  <div className="p-4">
-                    <h2 className="m-0 break-words text-base font-semibold">
-                      {clip.title}
-                      {clip.source === "imported" ? (
-                        <span className="ml-2 text-xs text-muted">
-                          Imported
-                        </span>
-                      ) : null}
-                    </h2>
-                    <p className="mt-1 break-words text-sm text-muted">
-                      {clip.taskLabel ?? "No task label"}
-                    </p>
-                    <p className="mt-3 text-xs text-muted">
-                      {formatMediaDuration(clip.durationNs)}{" "}
-                      <span className="mx-1" aria-hidden="true">
-                        /
-                      </span>{" "}
-                      {clip.raster.width} × {clip.raster.height}{" "}
-                      <span className="mx-1" aria-hidden="true">
-                        /
-                      </span>{" "}
-                      {clip.frameCount.toLocaleString()} frames
-                    </p>
-                    {role === "staff" ? (
-                      <p
-                        className={`mt-3 text-xs font-medium ${query.datasetId || ("reviewStatus" in clip && clip.reviewStatus === "approved") ? "text-good" : "text-muted"}`}
-                      >
-                        {query.datasetId
-                          ? "Approved"
-                          : "reviewStatus" in clip
-                            ? decision(clip.reviewStatus)
-                            : "Not reviewed"}
-                      </p>
-                    ) : null}
-                    {clip.simulation ? (
-                      <p className="mt-2 text-xs text-muted">
-                        Simulation recording
-                      </p>
-                    ) : null}
-                  </div>
-                </Link>
-                {role === "staff" && clip.recordingId ? (
-                  <Link
-                    href={"/pipeline/" + clip.recordingId}
-                    className="mx-4 mb-4 inline-block text-xs font-medium text-brand underline"
-                  >
-                    Recording {shortRecordingId(clip.recordingId)}
-                  </Link>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-      {current?.page.nextCursor ? (
-        <div className="mt-6">
-          <Link
-            href={browserHref({ ...query, cursor: current.page.nextCursor })}
-            className="inline-flex min-h-11 items-center rounded-lg border border-line bg-white px-4 font-semibold"
-          >
-            Next page
-          </Link>
-        </div>
-      ) : null}
-      {dialog === "new" ? (
-        <NewDataset
-          onClose={() => setDialog(undefined)}
-          onCreated={(datasetId) => {
-            setDialog(undefined);
-            router.push(browserHref({ mode: "clips", datasetId }));
-          }}
-        />
-      ) : null}
-      {dialog === "add" && dataset ? (
-        <AddClips
-          dataset={dataset}
-          onClose={() => setDialog(undefined)}
-          onSaved={() => {
-            setDialog(undefined);
-            setLoaded(undefined);
-            setReload((n) => n + 1);
-          }}
-        />
-      ) : null}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
 
-function DatasetTable({ datasets }: { datasets: DatasetView[] }) {
+export function DatasetIndex({
+  datasets,
+  query,
+  staff,
+}: {
+  datasets: Dataset[];
+  query: BrowserQuery;
+  staff: boolean;
+}) {
+  const builtIn = datasets.filter(({ datasetId }) =>
+    isBuiltInDataset(datasetId),
+  );
+  const userDatasets = datasets.filter(
+    ({ datasetId }) => !isBuiltInDataset(datasetId),
+  );
   return (
-    <div className="overflow-hidden rounded-xl border border-line bg-white">
-      <table className="w-full table-fixed border-collapse text-left">
-        <thead className="bg-topbar text-xs text-muted">
-          <tr>
-            <th scope="col" className="w-1/2 px-4 py-3 font-medium sm:px-5">
-              Dataset
-            </th>
-            <th scope="col" className="px-3 py-3 font-medium">
-              Clips
-            </th>
-            <th scope="col" className="px-3 py-3 font-medium">
-              Total duration
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {datasets.map((dataset) => (
-            <tr key={dataset.datasetId} className="border-t border-line">
-              <td className="break-words px-4 py-4 sm:px-5">
-                <Link
-                  className="inline-flex min-h-11 items-center font-semibold text-brand hover:underline"
-                  href={browserHref({
-                    mode: "clips",
-                    datasetId: dataset.datasetId,
-                  })}
-                >
-                  {dataset.name}
-                  {dataset.containsImported ? (
-                    <span className="ml-2 text-xs text-muted">
-                      Contains imported clips
-                    </span>
-                  ) : null}
-                </Link>
-              </td>
-              <td className="px-3 py-4 tabular-nums">
-                {dataset.clipCount.toLocaleString()}
-              </td>
-              <td className="px-3 py-4 tabular-nums">
-                {formatMediaDuration(dataset.durationNs)}
-              </td>
-            </tr>
-          ))}
-          {!datasets.length ? (
-            <tr>
-              <td colSpan={3} className="px-5 py-10 text-muted">
-                No datasets match this view.
-              </td>
-            </tr>
+    <PrivateBrowser>
+      <section className="space-y-4" aria-labelledby="browser-heading">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 id="browser-heading" className={heading}>
+              Data browser
+            </h1>
+            <p className="text-sm text-muted">
+              {staff
+                ? "Open a dataset to browse or review its clips."
+                : "Open a shared dataset to browse its clips."}
+            </p>
+          </div>
+          {staff ? <DatasetEditor /> : null}
+        </header>
+        <SearchForm key={query.q ?? ""} query={query}>
+          {staff ? (
+            <Link
+              href="/data-browser?view=clips"
+              prefetch={false}
+              className={`${textLink} inline-flex min-h-10 items-center px-2 text-sm underline`}
+            >
+              All clips
+            </Link>
           ) : null}
-        </tbody>
-      </table>
+        </SearchForm>
+        {staff ? (
+          <DatasetGroup title="Review queues" datasets={builtIn} staff />
+        ) : null}
+        <DatasetGroup
+          title={staff ? "Your datasets" : "Shared datasets"}
+          datasets={userDatasets}
+          staff={staff}
+        />
+        {!datasets.length ? (
+          <p className={`${panel} p-4 text-sm text-muted`}>
+            {query.q
+              ? "No datasets match this search."
+              : "No datasets are available."}
+          </p>
+        ) : null}
+      </section>
+    </PrivateBrowser>
+  );
+}
+
+function clipHref(clip: Clip, query: BrowserQuery, match = false) {
+  const params = new URLSearchParams({ returnTo: browserHref(query) });
+  if (query.datasetId) params.set("datasetId", query.datasetId);
+  if (match && clip.captionMatch) {
+    const { offsetNs, segmentId } = clip.captionMatch;
+    params.set("segment", segmentId);
+    if (offsetNs != null) params.set("at", String(Number(offsetNs) / 1e9));
+  }
+  return `/clips/${clip.clipId}?${params}`;
+}
+
+function ClipCard({
+  clip,
+  query,
+  mediaOrigin,
+  sort,
+}: {
+  clip: Clip;
+  query: BrowserQuery;
+  mediaOrigin: string | null;
+  sort: BrowserSort;
+}) {
+  const list = query.layout === "list";
+  const duration =
+    clip.durationNs === null ? null : formatMediaDuration(clip.durationNs);
+  const title = `${clip.title ? clip.title + " · " : ""}Clip ${clip.ordinal + 1}`;
+  const staff = clip.staff;
+  const label = clip.taskLabel ?? staff?.proposedLabel;
+  const match = clip.captionMatch;
+  const matchTime =
+    match?.offsetNs == null
+      ? "Caption match"
+      : fmtPrecise(Number(match.offsetNs) / 1e9);
+  const href = clipHref(clip, query);
+  return (
+    <article
+      className={`${panel} min-w-0 overflow-hidden ${list ? "grid grid-cols-[112px_minmax(0,1fr)] items-start gap-2 p-2 sm:grid-cols-[128px_minmax(0,1fr)]" : ""}`}
+    >
+      <Link href={href} prefetch={false} tabIndex={-1} aria-hidden="true">
+        <ClipThumbnail
+          clipId={clip.clipId}
+          {...(query.datasetId ? { datasetId: query.datasetId } : {})}
+          available={clip.hasPoster}
+          mediaOrigin={mediaOrigin}
+          duration={duration}
+          compact={list}
+        />
+      </Link>
+      <div
+        className={`grid min-w-0 gap-1.5 break-words ${list ? "py-0.5 pr-1" : "p-3"}`}
+      >
+        <h2 className="text-sm font-semibold">
+          <Link
+            href={href}
+            prefetch={false}
+            className="hover:underline"
+            title={title}
+          >
+            {title}
+            {label ? ` · ${label}` : ""}
+          </Link>
+          {duration ? (
+            <span className="sr-only">, duration {duration}</span>
+          ) : null}
+        </h2>
+        {staff && label && !clip.taskLabel ? (
+          <span className="text-xs text-muted">Suggested label</span>
+        ) : null}
+        <p className="text-xs text-muted">
+          {query.datasetId === "recycle-bin"
+            ? "Rejected"
+            : sort === "added" || !clip.capturedAt
+              ? "Added"
+              : "Captured"}{" "}
+          <time dateTime={clip.sortDate}>
+            {date.format(new Date(clip.sortDate))}
+          </time>
+        </p>
+        {staff ? (
+          <>
+            <div className="flex flex-wrap gap-1">
+              {staff.reviewStatus === "pending" ? (
+                <Badge>Not reviewed</Badge>
+              ) : null}
+              {staff.reviewStatus === "rejected" ? (
+                <Badge>Rejected</Badge>
+              ) : null}
+              {staff.reviewStatus === "approved" ? (
+                <Badge>Approved</Badge>
+              ) : null}
+              {staff.problems?.map((problem) => (
+                <Badge key={problem}>
+                  {browserProblems[problemValues[problem]]}
+                </Badge>
+              ))}
+              {staff.correctedCount ? (
+                <Badge>
+                  {count(staff.correctedCount)} caption{" "}
+                  {staff.correctedCount === 1 ? "edit" : "edits"}
+                </Badge>
+              ) : null}
+            </div>
+            {staff.rejection ? (
+              <p className="text-xs text-muted">
+                {staff.rejection.reason ? (
+                  <>{staff.rejection.reason} · </>
+                ) : null}
+                Reviewer {staff.rejection.reviewerUserId}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {match ? (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-md bg-field px-2 py-1.5 text-xs">
+            <Link
+              href={clipHref(clip, query, true)}
+              prefetch={false}
+              className={`${textLink} underline`}
+            >
+              {matchTime}
+            </Link>
+            {match.highlights.length ? (
+              <p>
+                {match.highlights.map((part, index) =>
+                  part.highlighted ? (
+                    <mark key={index} className="bg-[#fff0a6] px-px text-ink">
+                      {part.text}
+                    </mark>
+                  ) : (
+                    part.text
+                  ),
+                )}
+              </p>
+            ) : null}
+            {staff && match.alsoMatchesOriginal ? (
+              <span className="text-muted">Also matches original</span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function Badge({ children }: { children: string[] | string }) {
+  return (
+    <span className="rounded border border-line bg-field px-1.5 py-0.5 text-[11px] font-medium">
+      {children}
+    </span>
+  );
+}
+
+function Pagination({
+  query,
+  page,
+  limit,
+  filteredCount,
+}: { query: BrowserQuery } & Pick<
+  ClipPage,
+  "page" | "limit" | "filteredCount"
+>) {
+  const last = Math.max(1, Math.ceil(filteredCount / limit));
+  const pages = [...new Set([1, page - 1, page, page + 1, last])]
+    .filter((number) => number >= 1 && number <= last)
+    .sort((a, b) => a - b);
+  const pageLink = (number: number, label: string) => (
+    <Link
+      href={browserHref({ ...query, page: number })}
+      prefetch={false}
+      aria-current={page === number ? "page" : undefined}
+      className={`${panel} inline-flex min-h-9 min-w-9 items-center justify-center px-2 text-sm aria-[current=page]:border-brand aria-[current=page]:bg-brand-soft`}
+    >
+      {label}
+    </Link>
+  );
+  return (
+    <nav
+      aria-label="Results pages"
+      className="flex flex-wrap items-center gap-2"
+    >
+      {page > 1 && page <= last ? pageLink(page - 1, "Previous") : null}
+      {pages.map((number, index) => (
+        <span key={number} className="inline-flex items-center gap-2">
+          {number - (pages[index - 1] ?? 0) > 1 ? (
+            <span aria-hidden="true">…</span>
+          ) : null}
+          {pageLink(number, String(number))}
+        </span>
+      ))}
+      {page < last ? pageLink(page + 1, "Next") : null}
+      <CatalogSelect
+        label="Per page"
+        value={String(limit)}
+        options={browserPageSizes.map((size) => ({
+          value: String(size),
+          label: String(size),
+          href: browserHref({ ...query, page: undefined, size }),
+        }))}
+      />
+    </nav>
+  );
+}
+
+function FilterChips({
+  query,
+  labels,
+  recordings,
+}: {
+  query: BrowserQuery;
+  labels: Facet[];
+  recordings?: Facet[] | undefined;
+}) {
+  const { label, ...queryWithoutLabel } = query;
+  const tasks = query.task ?? (label ? [label] : []);
+  const base = { ...queryWithoutLabel, page: undefined, task: tasks };
+  const chips: { text: string; query: BrowserQuery }[] = [];
+  if (query.q) {
+    const next = { ...base };
+    delete next.q;
+    if (next.sort === "match") delete next.sort;
+    chips.push({ text: `Search ${query.q}`, query: next });
+  }
+  for (const value of tasks)
+    chips.push({
+      text: labels.find((item) => item.value === value)?.label ?? value,
+      query: { ...base, task: tasks.filter((item) => item !== value) },
+    });
+  for (const value of query.recording ?? [])
+    chips.push({
+      text: recordings?.find((item) => item.value === value)?.label ?? value,
+      query: {
+        ...base,
+        recording: query.recording?.filter((item) => item !== value),
+      },
+    });
+  for (const value of query.problem ?? [])
+    chips.push({
+      text: browserProblems[value],
+      query: {
+        ...base,
+        problem: query.problem?.filter((item) => item !== value),
+      },
+    });
+  if (query.duration)
+    chips.push({
+      text: durationPresets[query.duration].label,
+      query: { ...base, duration: undefined },
+    });
+  if (query.minDuration)
+    chips.push({
+      text: `Min ${query.minDuration} s`,
+      query: { ...base, minDuration: undefined },
+    });
+  if (query.maxDuration)
+    chips.push({
+      text: `Max ${query.maxDuration} s`,
+      query: { ...base, maxDuration: undefined },
+    });
+  if (!chips.length) return null;
+  const clear: BrowserQuery = {
+    mode: "clips",
+    ...(query.datasetId ? { datasetId: query.datasetId } : {}),
+    ...(query.recordingId ? { recordingId: query.recordingId } : {}),
+    ...(query.sort !== "match" ? { sort: query.sort } : {}),
+    layout: query.layout,
+    size: query.size,
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((chip) => (
+        <Link
+          key={browserHref(chip.query)}
+          href={browserHref(chip.query)}
+          prefetch={false}
+          aria-label={`Remove ${chip.text}`}
+          className="max-w-full break-words rounded-md bg-brand-soft px-2 py-1.5 text-xs text-ink hover:underline"
+        >
+          {chip.text} ×
+        </Link>
+      ))}
+      <Link
+        href={browserHref(clear)}
+        prefetch={false}
+        className={`${textLink} px-1 text-xs underline`}
+      >
+        Clear all
+      </Link>
     </div>
   );
 }
 
-function Modal({
-  title,
-  onClose,
-  children,
+export function ClipBrowser({
+  name,
+  query,
+  selectedSort,
+  mediaOrigin,
+  page,
+  staff,
 }: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
+  name: string;
+  query: BrowserQuery;
+  selectedSort: BrowserSort;
+  mediaOrigin: string | null;
+  page: ClipPage;
+  staff?: { recordings: Facet[]; problems: Facet[]; shareState?: ShareState };
 }) {
-  const ref = React.useRef<HTMLDialogElement>(null);
-  const titleId = React.useId();
-  React.useEffect(() => {
-    const dialog = ref.current;
-    const opener = document.activeElement;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[name="name"]')?.focus();
-    return () => {
-      dialog?.close();
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      style={{ width: "min(36rem, calc(100% - 2rem))" }}
-      aria-labelledby={titleId}
-      onCancel={onClose}
-      className="fixed inset-0 m-auto max-h-[85dvh]  overflow-auto rounded-xl border border-line bg-paper p-5 text-ink shadow-lg backdrop:bg-black/25"
-    >
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <h2 id={titleId} className="m-0 text-xl font-semibold">
-          {title}
-        </h2>
-        <Button variant="ghost" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-      {children}
-    </dialog>
-  );
-}
+  const pending = query.datasetId === "pending-review";
+  const recycle = query.datasetId === "recycle-bin";
+  const editableDatasetId =
+    staff && query.datasetId && !isBuiltInDataset(query.datasetId)
+      ? query.datasetId
+      : undefined;
+  const sortLabels: Record<BrowserSort, string> = {
+    match: "Best match",
+    newest: staff ? "Newest capture first" : "Newest",
+    oldest: staff ? "Oldest capture first" : "Oldest",
+    added: "Recently added",
+  };
+  const sorts: BrowserSort[] = [
+    ...(staff && query.q ? ["match" as const] : []),
+    "newest",
+    "oldest",
+    ...(staff ? ["added" as const] : []),
+  ];
+  const next = pending
+    ? (page.items.find((clip) => clip.hasVideo) ?? page.items[0])
+    : undefined;
+  const list = query.layout === "list";
+  const problemOptions = Object.entries(problemValues).map(([value, key]) => ({
+    value: key,
+    label: browserProblems[key],
+    count: staff?.problems.find((facet) => facet.value === value)?.count ?? 0,
+  }));
 
-function NewDataset({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const id = React.useRef(crypto.randomUUID());
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string>();
   return (
-    <Modal title="New dataset" onClose={onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (busy) return;
-          const name = String(
-            new FormData(event.currentTarget).get("name") ?? "",
-          ).trim();
-          if (!name) {
-            setError("Enter a dataset name.");
-            return;
-          }
-          setBusy(true);
-          setError(undefined);
-          void browserApi<{ datasetId: string }>("/api/v1/datasets", {
-            method: "POST",
-            body: { datasetId: id.current, name },
-          })
-            .then((data) => onCreated(data.datasetId))
-            .catch((e: unknown) => {
-              setError(
-                e instanceof Error
-                  ? e.message
-                  : "Could not create the dataset.",
-              );
-              setBusy(false);
-            });
-        }}
-      >
-        <label className="text-sm font-medium">
-          Dataset name
-          <input
-            name="name"
-            maxLength={120}
-            required
-            autoFocus
-            className={`${field} mt-2`}
-          />
-        </label>
-        <p className="mt-2 text-xs text-muted">
-          Recipients can see this name when the dataset is shared.
-        </p>
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
+    <PrivateBrowser>
+      <section className="space-y-3" aria-labelledby="browser-heading">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            {staff ? (
+              <Link
+                href="/data-browser"
+                className={`${textLink} mb-1 inline-block text-sm underline`}
+              >
+                ‹ Datasets
+              </Link>
+            ) : null}
+            <h1 id="browser-heading" className={heading}>
+              {name}
+            </h1>
+            {pending || recycle ? (
+              <p className="text-sm text-muted">
+                {pending
+                  ? "Clips whose selected result needs a decision."
+                  : "Rejected clips. Open a clip to restore it."}
+              </p>
+            ) : null}
+            {query.recordingId ? (
+              <Link
+                href={`/recordings/${query.recordingId}`}
+                className={`${textLink} text-sm underline`}
+              >
+                Open recording
+              </Link>
+            ) : null}
+            {query.datasetId ? (
+              <p className="mt-1 text-xs text-muted">
+                Last updated{" "}
+                {page.lastUpdatedAt ? (
+                  <time dateTime={page.lastUpdatedAt}>
+                    {date.format(new Date(page.lastUpdatedAt))}
+                  </time>
+                ) : (
+                  "—"
+                )}
+              </p>
+            ) : null}
+          </div>
+          {editableDatasetId ? (
+            <DatasetEditor dataset={{ datasetId: editableDatasetId, name }} />
+          ) : null}
+        </header>
+        {editableDatasetId && staff?.shareState ? (
+          <div
+            className={`${panel} flex flex-wrap justify-between gap-2 px-3.5 py-2.5 text-sm`}
+          >
+            <span>{shareLabels[staff.shareState]}</span>
+            {staff.shareState === "shared" ? (
+              <Link
+                href={browserHref({
+                  mode: "clips",
+                  datasetId: editableDatasetId,
+                })}
+                prefetch={false}
+                className={`${textLink} underline`}
+              >
+                Open customer link
+              </Link>
+            ) : null}
+          </div>
         ) : null}
-        <Button className="mt-4" type="submit" disabled={busy}>
-          {busy ? "Creating…" : "Create dataset"}
-        </Button>
-      </form>
-    </Modal>
-  );
-}
-
-function AddClips({
-  dataset,
-  onClose,
-  onSaved,
-}: {
-  dataset: DatasetView;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [search, setSearch] = React.useState("");
-  const [cursor, setCursor] = React.useState<string>();
-  const [page, setPage] = React.useState<Page>();
-  const [reload, setReload] = React.useState(0);
-  const [selection, setSelection] = React.useState<Set<string>>(new Set());
-  const [error, setError] = React.useState<string>();
-  const [busy, setBusy] = React.useState(false);
-  React.useEffect(() => {
-    const controller = new AbortController();
-    setPage(undefined);
-    setError(undefined);
-    const query: BrowserQuery = {
-      mode: "clips",
-      reviewStatus: "approved",
-      ...(search ? { q: search } : {}),
-      ...(cursor ? { cursor } : {}),
-    };
-    void browserApi<Page>(browserApiPath(query), { signal: controller.signal })
-      .then((data) => {
-        if (!controller.signal.aborted) setPage(data);
-      })
-      .catch((e: unknown) => {
-        if (!controller.signal.aborted)
-          setError(e instanceof Error ? e.message : "Could not load clips.");
-      });
-    return () => controller.abort();
-  }, [search, cursor, reload]);
-  return (
-    <Modal title={`Add clips to ${dataset.name}`} onClose={onClose}>
-      <p className="text-sm text-muted">
-        Choose approved clips. Shared datasets also require clearance for their
-        recipients.
-      </p>
-      <form
-        className="mb-4 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setSearch(
-            String(new FormData(event.currentTarget).get("q") ?? "").trim(),
-          );
-          setCursor(undefined);
-          setError(undefined);
-        }}
-      >
-        <label className="min-w-0 flex-1 text-xs font-medium">
-          Search approved clips
-          <input
-            name="q"
-            type="search"
-            maxLength={160}
-            className={`${field} mt-1`}
+        <SearchForm query={query} />
+        <div className="grid items-start gap-3 lg:grid-cols-[200px_minmax(0,1fr)]">
+          <CatalogFilters
+            query={query}
+            {...(!pending ? { labels: page.labels } : {})}
+            {...(staff
+              ? {
+                  staff: {
+                    ...(!query.recordingId
+                      ? { recordings: staff.recordings }
+                      : {}),
+                    problems: problemOptions,
+                  },
+                }
+              : {})}
           />
-        </label>
-        <Button type="submit" variant="outline" className="self-end">
-          Search
-        </Button>
-      </form>
-      {error ? (
-        <div role="alert">
-          <p className="text-sm text-danger">{error}</p>
-          <Button variant="outline" onClick={() => setReload((n) => n + 1)}>
-            Try again
-          </Button>
-        </div>
-      ) : null}
-      {!page && !error ? (
-        <p role="status">Loading approved clips…</p>
-      ) : !page?.clips?.length ? (
-        <p className="text-muted">No approved clips match.</p>
-      ) : (
-        <ul className="m-0 list-none divide-y divide-line p-0">
-          {page.clips.map((clip) => (
-            <li key={clip.clipId}>
-              <label className="flex min-h-14 items-center gap-3 py-3">
-                <input
-                  type="checkbox"
-                  checked={selection.has(clip.clipId)}
-                  onChange={(event) =>
-                    setSelection((prior) => {
-                      const next = new Set(prior);
-                      if (event.target.checked && next.size < 100)
-                        next.add(clip.clipId);
-                      else next.delete(clip.clipId);
-                      return next;
-                    })
+          <div className="min-w-0 space-y-2.5">
+            <FilterChips
+              query={query}
+              labels={page.labels}
+              recordings={staff?.recordings}
+            />
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-field p-2">
+              {next ? (
+                <Button asChild>
+                  <Link href={clipHref(next, query)} prefetch={false}>
+                    Review next
+                  </Link>
+                </Button>
+              ) : null}
+              <strong role="status" className="text-sm">
+                {count(page.filteredCount)}
+                {page.filteredCount !== page.totalCount
+                  ? ` of ${count(page.totalCount)}`
+                  : ""}{" "}
+                {page.totalCount === 1 ? "clip" : "clips"}
+              </strong>
+              {recycle ? (
+                <span className="text-xs text-muted">
+                  Most recently rejected
+                </span>
+              ) : (
+                <CatalogSelect
+                  label="Sort"
+                  value={selectedSort}
+                  options={sorts.map((sort) => ({
+                    value: sort,
+                    label: sortLabels[sort],
+                    href: browserHref({ ...query, sort, page: undefined }),
+                  }))}
+                />
+              )}
+              {query.datasetId && !isBuiltInDataset(query.datasetId) ? (
+                <CaptionDownload
+                  href={
+                    "/api/v2/review-datasets/captions" +
+                    browserHref({
+                      ...query,
+                      page: undefined,
+                      size: undefined,
+                      layout: undefined,
+                    }).slice("/data-browser".length)
                   }
                 />
-                <span className="min-w-0">
-                  <span className="block break-words text-sm font-semibold">
-                    {clip.title}
-                  </span>
-                  <span className="block text-xs text-muted">
-                    {clip.taskLabel ?? "No task label"} /{" "}
-                    {formatMediaDuration(clip.durationNs)}
-                  </span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
-      {page?.nextCursor ? (
-        <Button variant="ghost" onClick={() => setCursor(page.nextCursor!)}>
-          More approved clips
-        </Button>
-      ) : null}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted">
-          {selection.size} selected (up to 100)
-        </p>
-        <Button
-          disabled={busy || !selection.size || dataset.revision === undefined}
-          onClick={() => {
-            setBusy(true);
-            setError(undefined);
-            void browserApi(`/api/v1/datasets/${dataset.datasetId}/clips`, {
-              method: "POST",
-              body: {
-                clipIds: [...selection],
-                expectedRevision: dataset.revision,
-              },
-            })
-              .then(onSaved)
-              .catch((e: unknown) => {
-                setError(
-                  e instanceof Error ? e.message : "Could not add clips.",
-                );
-                setBusy(false);
-              });
-          }}
-        >
-          {busy ? "Adding…" : "Add selected clips"}
-        </Button>
-      </div>
-    </Modal>
+              ) : null}
+              <nav aria-label="Clip layout" className="ml-auto flex gap-1">
+                {(["grid", "list"] as const).map((layout) => (
+                  <Link
+                    key={layout}
+                    href={browserHref({ ...query, layout })}
+                    prefetch={false}
+                    aria-current={
+                      (query.layout ?? "grid") === layout ? "page" : undefined
+                    }
+                    className={`${panel} inline-flex min-h-9 items-center gap-1 px-2 text-xs font-medium aria-[current=page]:border-brand aria-[current=page]:bg-brand-soft`}
+                  >
+                    {layout === "grid" ? (
+                      <LayoutGrid size={13} aria-hidden="true" />
+                    ) : (
+                      <List size={13} aria-hidden="true" />
+                    )}
+                    {layout === "grid" ? "Grid" : "List"}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+            {page.items.length ? (
+              <>
+                {page.filteredCount > page.limit ? (
+                  <p className="text-xs text-muted">
+                    Showing {count((page.page - 1) * page.limit + 1)}–
+                    {count((page.page - 1) * page.limit + page.items.length)}
+                  </p>
+                ) : null}
+                <div className={`grid gap-3 ${list ? "" : "sm:grid-cols-2"}`}>
+                  {page.items.map((clip) => (
+                    <ClipCard
+                      key={clip.clipId}
+                      clip={clip}
+                      query={query}
+                      sort={selectedSort}
+                      mediaOrigin={mediaOrigin}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className={`${panel} p-4 text-sm text-muted`}>
+                <p>
+                  {!page.totalCount
+                    ? query.datasetId
+                      ? "This dataset has no clips yet."
+                      : "No clips are available."
+                    : page.filteredCount
+                      ? "This page has no clips."
+                      : "No clips match. Try a broader search or clear the filters."}
+                </p>
+                {!page.totalCount && editableDatasetId ? (
+                  <Link
+                    href="/data-browser?datasetId=pending-review"
+                    className={`${textLink} mt-2 inline-block underline`}
+                  >
+                    Find clips in Pending Review
+                  </Link>
+                ) : null}
+              </div>
+            )}
+            <Pagination
+              query={query}
+              page={page.page}
+              limit={page.limit}
+              filteredCount={page.filteredCount}
+            />
+          </div>
+        </div>
+      </section>
+    </PrivateBrowser>
   );
 }

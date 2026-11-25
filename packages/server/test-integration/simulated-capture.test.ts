@@ -22,6 +22,7 @@ import {
   type TestDb,
 } from "./harness.js";
 import { startRecordingServer } from "./http-adapter.js";
+import { mobileSourceChannels } from "./source-scenario.js";
 
 // SA-71: explicitly labelled simulated capture over the real restricted-role
 // database, the real v1/v2 route handlers and real sockets. Storage is the
@@ -441,7 +442,12 @@ describe("admission", () => {
   });
 
   test("hardware v2 manifest (with a ROS slash schema name) admits without any marker", async () => {
-    const p = await prepare("h264_mcap_v1");
+    const p = await prepare("h264_mcap_v1", {
+      mutate: (doc) => {
+        doc.clock_domains = ["android.elapsed_realtime", "unix"];
+        doc.channels = mobileSourceChannels();
+      },
+    });
     await completeAll(enabled, p);
     const sealed = await sealRecordingInventory(
       disabled,
@@ -455,6 +461,29 @@ describe("admission", () => {
     assert.equal(validateValue("jobs.task-input.v2", input).valid, true);
     assert.equal((input as { rgbProfile: string }).rgbProfile, "h264_mcap_v1");
     assert.equal("simulation" in input, false);
+  });
+
+  test("older two-channel hardware remains held until its capture source is supported", async () => {
+    const p = await prepare("h264_mcap_v1");
+    await completeAll(enabled, p);
+    const sealed = await sealRecordingInventory(
+      disabled,
+      { userId: actors.collector },
+      p.recordingId,
+      p.seal,
+    );
+    const held = {
+      state: "held",
+      reason: "needs_setup",
+      code: "capture_source_unmatched",
+    };
+    assert.deepEqual(sealed.admission, held);
+    const { rows } = await db.owner.query(
+      "SELECT state, reason, code FROM recording_capture_profiles WHERE recording_id = $1",
+      [p.recordingId],
+    );
+    assert.deepEqual(rows, [held]);
+    assert.deepEqual(await jobsOf(p.recordingId), []);
   });
 
   test("a server that does not enable simulation defers a simulated recording and creates no job", async () => {

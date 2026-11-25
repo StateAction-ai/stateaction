@@ -181,6 +181,9 @@ export async function seedAnnotations(
   const pg = serverRequire("pg");
   const { PutObjectCommand, GetObjectCommand } =
     serverRequire("@aws-sdk/client-s3");
+  const { STATEACTION_MOBILE_CHANNELS } = await dist(
+    "admission/capture-profiles.js",
+  );
   const { recordSourceCompletion } = await dist("admission/recordings.js");
   const { s3ObjectReader } = await dist("admission/object-reader.js");
   const {
@@ -421,16 +424,28 @@ export async function seedAnnotations(
             size_bytes: String(f.body.byteLength),
             sha256: sha(f.body),
           })),
-          clock_domains: [timeline.clock],
-          channels: [
-            {
-              topic: "/camera/rgb",
-              message_encoding: "protobuf",
-              schema_name: "foxglove.CompressedVideo",
-              clock_domain: timeline.clock,
-              message_count: timeline.count,
-            },
-          ],
+          clock_domains: [rgbProfile === SIM ? timeline.clock : "unix"],
+          channels:
+            rgbProfile === SIM
+              ? [
+                  {
+                    topic: "/camera/rgb",
+                    message_encoding: "protobuf",
+                    schema_name: "foxglove.CompressedVideo",
+                    clock_domain: timeline.clock,
+                    message_count: timeline.count,
+                  },
+                ]
+              : STATEACTION_MOBILE_CHANNELS.map(
+                  ([topic, schema_name, message_encoding]) => ({
+                    topic,
+                    schema_name,
+                    message_encoding,
+                    clock_domain: "unix",
+                    message_count:
+                      topic === "/camera/rgb/video" ? timeline.count : "1",
+                  }),
+                ),
           counts: {
             video_frames: timeline.count,
             dropped_video_frames: "0",

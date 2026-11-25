@@ -47,6 +47,12 @@ import {
   type SourceFile,
 } from "./manifest.js";
 import { ObjectHashError, type ObjectHasher } from "./storage.js";
+import {
+  hasNoHandInterval,
+  indexAcceptedReviewAnnotations,
+  type PresenceSpan,
+  type VerifiedReviewSearch,
+} from "./review-search.js";
 
 type Tx = pg.PoolClient;
 
@@ -66,6 +72,9 @@ const MANIFEST_CONTRACT = "artifacts.processing-result.v2";
 const MANIFEST_CONTRACT_V3 = "artifacts.processing-result.v3";
 const MANIFEST_CONTRACT_V4 = "artifacts.processing-result.v4";
 const MANIFEST_CONTRACT_V5 = "artifacts.processing-result.v5";
+const MANIFEST_CONTRACT_V6 = "artifacts.processing-result.v6";
+const reusedHandManifestContract = (clipTask: boolean) =>
+  clipTask ? MANIFEST_CONTRACT_V6 : MANIFEST_CONTRACT_V4;
 
 const recipeManifestContract = (clipTask: boolean) =>
   clipTask ? MANIFEST_CONTRACT_V5 : MANIFEST_CONTRACT_V3;
@@ -264,6 +273,7 @@ type CandidateRow = {
   clip_plan: unknown[] | null;
   verified_clip_plan: ClipPlanV1 | null;
   verified_counts: AnnotationCounts | null;
+  verified_review_search: VerifiedReviewSearch | null;
   reason_code: string | null;
   received_at: Date;
 };
@@ -278,7 +288,7 @@ export type AnnotationCounts = {
 
 const CANDIDATE_COLUMNS = `job_id, invocation_nonce, manifest_file_id, manifest_sha256, inventory_sha256,
   outcome, clip_count, error_code, summary, status, clip_plan, verified_clip_plan,
-  verified_counts, reason_code, received_at`;
+  verified_counts, verified_review_search, reason_code, received_at`;
 
 function ackOf(jobId: string, cand: CandidateRow, jobState: string): ResultAck {
   return {
@@ -590,14 +600,18 @@ async function composeReusedHandManifest(
     size_bytes: string;
     nonce: string | null;
     recipe_sha256: string;
+    clip_task: boolean;
   }>(
     `SELECT p.id AS parent_job_id, r.execution_job_id AS original_job_id,
             o.result_manifest_sha256 AS original_sha256,
-            f.object_key, f.sha256, f.size_bytes::text, job_seal_nonce(j.id) AS nonce, j.recipe_sha256
+            f.object_key, f.sha256, f.size_bytes::text, job_seal_nonce(j.id) AS nonce, j.recipe_sha256,
+            j.kind = 'clip_pipeline' AS clip_task
      FROM jobs j
      JOIN job_stage_reuse r ON r.job_id = j.id AND r.stage = 'hand_pose' AND r.state = 'succeeded'
      JOIN jobs p ON p.id = r.source_job_id AND p.state = 'succeeded'
+       AND p.kind = j.kind AND p.clip_id IS NOT DISTINCT FROM j.clip_id
      JOIN jobs o ON o.id = r.execution_job_id AND o.state = 'succeeded'
+       AND o.kind = j.kind AND o.clip_id IS NOT DISTINCT FROM j.clip_id
      JOIN files f ON f.id = p.result_manifest_file_id AND f.job_id = p.id AND f.state = 'verified'
      WHERE j.id = $1 AND j.recipe_parallel AND j.state = 'running'
        AND j.controller_lease_owner = $2 AND j.controller_lease_expires_at > now()
@@ -611,10 +625,11 @@ async function composeReusedHandManifest(
     sha256Hex(bytes) !== source.sha256
   )
     return;
-  const parsedV4 = validateBytes(MANIFEST_CONTRACT_V4, bytes);
-  const parsed = parsedV4.valid
-    ? parsedV4
-    : validateBytes(MANIFEST_CONTRACT_V3, bytes);
+  const contract = reusedHandManifestContract(source.clip_task);
+  const parsedReuse = validateBytes(contract, bytes);
+  const parsed = parsedReuse.valid
+    ? parsedReuse
+    : validateBytes(recipeManifestContract(source.clip_task), bytes);
   if (!parsed.valid) return;
   const parent = parsed.value as {
     job_id: string;
@@ -693,7 +708,9 @@ async function composeReusedHandManifest(
   }));
   const final = {
     ...parent,
-    schema: "stateaction.processing_result.v4",
+    schema: source.clip_task
+      ? "stateaction.processing_result.v6"
+      : "stateaction.processing_result.v4",
     job_id: jobId,
     attestation: { ...parent.attestation, invocation_nonce: source.nonce },
     recipe_id: recipe.recipeId,
@@ -711,7 +728,7 @@ async function composeReusedHandManifest(
     },
   };
   const finalBytes = Buffer.from(JSON.stringify(final));
-  const valid = validateBytes(MANIFEST_CONTRACT_V4, finalBytes);
+  const valid = validateBytes(contract, finalBytes);
   if (!valid.valid) {
     console.error(
       "[jobs] reused hand manifest validation failed",
@@ -773,7 +790,7 @@ export async function sealParallelRecipe(
       validateBytes(
         succeeded
           ? file.reused
-            ? MANIFEST_CONTRACT_V4
+            ? reusedHandManifestContract(file.clip_task)
             : recipeManifestContract(file.clip_task)
           : MANIFEST_CONTRACT,
         bytes,
@@ -1029,7 +1046,7 @@ async function verifyCandidate(
       ? "artifacts.clip-plan.v1"
       : sealing
         ? handOrigin
-          ? MANIFEST_CONTRACT_V4
+          ? reusedHandManifestContract(inputs.task_input.schemaVersion === 4)
           : recipeManifestContract(inputs.task_input.schemaVersion === 4)
         : MANIFEST_CONTRACT,
     bytes,
@@ -1142,6 +1159,7 @@ async function verifyCandidate(
       });
   if (!checked.ok) return reject(checked.code, checked.detail);
   let counts: AnnotationCounts | null = null;
+  let search: VerifiedReviewSearch | null = null;
   if (recipe && cand.outcome === "succeeded") {
     const annotated = await checkAnnotations(
       deps,
@@ -1157,6 +1175,7 @@ async function verifyCandidate(
     if (annotated.kind === "rejected")
       return reject(annotated.code, annotated.detail);
     counts = annotated.counts;
+    search = annotated.search;
   } else if (recipe) {
     counts = {
       segmentCount: null,
@@ -1208,7 +1227,8 @@ async function verifyCandidate(
   await run(pool, async (tx) => {
     await tx.query(
       `UPDATE job_result_candidates SET status = 'verified', clip_plan = $2, verified_checks = $3,
-         verified_counts = $4::jsonb, verified_clip_plan = $5::jsonb, verified_at = now()
+         verified_counts = $4::jsonb, verified_clip_plan = $5::jsonb, verified_at = now(),
+         verified_review_search = $6::jsonb
        WHERE job_id = $1 AND status = 'provisional'`,
       [
         st.job.id,
@@ -1219,6 +1239,7 @@ async function verifyCandidate(
         ),
         counts === null ? null : JSON.stringify(counts),
         verifiedClipPlan === null ? null : JSON.stringify(verifiedClipPlan),
+        search === null ? null : JSON.stringify(search),
       ],
     );
   });
@@ -1285,7 +1306,7 @@ async function recipeFacts(
 }
 
 type Annotated =
-  | { kind: "ok"; counts: AnnotationCounts }
+  | { kind: "ok"; counts: AnnotationCounts; search: VerifiedReviewSearch }
   | { kind: "incomplete" }
   | { kind: "rejected"; code: string; detail?: string };
 
@@ -1413,7 +1434,31 @@ export async function checkAnnotations(
         .length,
     };
   }
-  return { kind: "ok", counts };
+  const captions = new Map(
+    rows(cap.doc).map((caption) => [caption.segment_id, caption]),
+  );
+  const lanes = hand.doc.lanes as {
+    left: PresenceSpan[];
+    right: PresenceSpan[];
+  };
+  const search: VerifiedReviewSearch = {
+    segmentsSha256: seg.file?.sha256 ?? null,
+    clockDomain: (seg.doc?.clock_domain as string | undefined) ?? null,
+    noHandDetected: hasNoHandInterval(lanes.left, lanes.right),
+    segments: rows(seg.doc)
+      .filter((row) => row.status === "ok")
+      .map((row) => {
+        const caption = captions.get(row.segment_id);
+        const derived = caption?.derived as { short_label: string } | undefined;
+        return {
+          segmentId: row.segment_id as string,
+          startTsNs: (row.start as { timestamp_ns: string }).timestamp_ns,
+          text: (caption?.text as string | undefined) ?? null,
+          label: derived?.short_label ?? null,
+        };
+      }),
+  };
+  return { kind: "ok", counts, search };
 }
 
 // ----------------------------------------------------------------- disposition
@@ -1621,9 +1666,16 @@ async function acceptVerified(
       ],
     );
     await tx.query(
-      "UPDATE job_result_candidates SET status = 'accepted', decided_at = now() WHERE job_id = $1",
+      "UPDATE job_result_candidates SET status = 'accepted', decided_at = now(), verified_review_search = NULL WHERE job_id = $1",
       [jobId],
     );
+    if (cand.verified_review_search)
+      await indexAcceptedReviewAnnotations(
+        tx,
+        jobId,
+        cand.manifest_sha256,
+        cand.verified_review_search,
+      );
     if (job.kind === "clip_plan") {
       const plan = cand.verified_clip_plan!;
       // The admitted passthrough filter allows exactly one whole-source span.

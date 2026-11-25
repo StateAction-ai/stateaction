@@ -1,10 +1,23 @@
 import type { CachedImport } from "../cached-import.js";
+import { CAPTURE_SOURCES } from "../admission/capture-profiles.js";
+import { recordingDurationSql, recordingNameSql } from "./recording-display.js";
+import {
+  recordingOperationsLaterals,
+  recordingOperationColumns,
+  STAGE_OUTPUT_FAILED_SQL,
+  recordingOperationFields,
+  operationError,
+  recordingStatusSql,
+  type ClipProgress,
+  type OperationError,
+  type RecordingOperationRow,
+  type RetryTarget,
+} from "./operations-status.js";
 import type { Queryable } from "../catalog/catalog.js";
 import type { AnnotationCounts, ListCounts } from "./run-view.js";
 import {
   PIPELINE_PAGE_SIZE,
   PIPELINE_STATUSES,
-  STAGE_FAILURE_COUNTS,
   failedStageNote,
   deriveStages,
   formatBytes,
@@ -49,17 +62,6 @@ const STATUS_SQL = `CASE
     OR b.rec_status IN ('sealed', 'uploaded') THEN 'queued'
   WHEN b.rec_status IN ('processing', 'reviewable') THEN 'needs_attention'
   ELSE 'uploading' END`;
-
-const STAGE_OUTPUT_FAILED_SQL = Object.entries(STAGE_FAILURE_COUNTS)
-  .flatMap(([stage, keys]) =>
-    keys.map(
-      (
-        key,
-      ) => `(s.stage = '${stage}' AND jsonb_typeof(s.counts -> '${key}') = 'number'
-      AND s.counts -> '${key}' > '0'::jsonb)`,
-    ),
-  )
-  .join(" OR ");
 
 const baseSql = (jobIdSql = "r.current_job_id") => `WITH staff AS (
   SELECT EXISTS (
@@ -177,6 +179,11 @@ export type PipelineListItem = {
   /** The accepted job has output or a recorded failure that Review can explain. */
   reviewable: boolean;
   failedStages: RecipeStage[];
+  captureSourceId?: string | null;
+  device?: string | null;
+  clipProgress?: ClipProgress;
+  retryTarget?: RetryTarget | null;
+  error?: OperationError | null;
 };
 export type PipelineList = {
   items: PipelineListItem[];
@@ -286,34 +293,102 @@ function toListItem(row: Row): PipelineListItem {
   };
 }
 
+type StaffListRow = Row &
+  RecordingOperationRow & {
+    operations_status: PipelineStatus;
+    capture_source_id: string | null;
+    capture_format: string;
+    rgb_profile: string;
+    device_model: string | null;
+    import_title: string | null;
+    import_source: string | null;
+    display_title: string;
+  };
+
+export const RECORDING_IMPORT_LATERAL = `LEFT JOIN LATERAL (
+  SELECT i.evidence #>> '{attribution,title}' AS title,
+    i.evidence #>> '{attribution,dataset}' AS dataset,
+    i.evidence -> 'durationSeconds' AS duration,
+    i.originating_recipe_ref
+  FROM cached_processing_imports i JOIN jobs j ON j.id = i.job_id
+  WHERE j.recording_id = r.id AND j.state = 'succeeded'
+    AND i.manifest_sha256 = j.result_manifest_sha256
+  ORDER BY j.created_at DESC, j.id DESC LIMIT 1
+) imported ON true`;
+
+export const staffRecordingsSql = (
+  readOnly: boolean,
+) => `${baseSql()}, operations AS (
+  SELECT c.*, r.created_at AS added_at, profile.capture_source_id,
+    r.device ->> 'model' AS device_model, imported.title AS import_title,
+    ${recordingNameSql("r", "imported.title", "imported.dataset", recordingDurationSql("plan.plan", "imported.duration"))} AS display_title,
+    imported.dataset AS import_source, ${recordingOperationColumns(readOnly)},
+    COALESCE(current_clip_recipe.recipe_id, profile.recipe_id, c.recipe_id) AS active_recipe_id,
+    COALESCE(current_clip_recipe.id, CASE WHEN c.recipe_id IS NOT NULL THEN c.job_id END) AS active_recipe_job_id,
+    plan.plan AS latest_clip_plan, plan.plan_job_id AS latest_clip_plan_job_id,
+    ${recordingStatusSql("c.status")} AS operations_status
+  FROM classified c JOIN recordings r ON r.id = c.id
+  ${recordingOperationsLaterals(readOnly)}
+  ${RECORDING_IMPORT_LATERAL}
+  LEFT JOIN LATERAL (
+    SELECT j.id, j.recipe ->> 'recipeId' AS recipe_id
+    FROM review_clips k JOIN jobs j ON j.id = coalesce(k.live_job_id, k.selected_job_id)
+    WHERE k.recording_id = r.id AND k.plan_version = plan.version AND j.recipe IS NOT NULL
+    ORDER BY j.created_at DESC, j.id DESC LIMIT 1
+  ) current_clip_recipe ON true
+)`;
+
 export async function listPipelineRecordings(
   pool: Queryable,
   staffUserId: string,
   query: PipelineQuery,
+  readOnly = false,
 ): Promise<PipelineList> {
   const offset = (query.page - 1) * PIPELINE_PAGE_SIZE;
+  const orderBy =
+    query.sort === "name"
+      ? "lower(display_title), id"
+      : query.sort === "oldest"
+        ? "added_at, id"
+        : "added_at DESC, id DESC";
+  const sourceLabels = Object.fromEntries(
+    CAPTURE_SOURCES.map((source) => [source.id, source.label]),
+  );
   const filter = `WHERE ($2::text = '' OR collector_name ILIKE $2 ESCAPE '\\'
       OR id::text ILIKE $2 ESCAPE '\\'
-      OR to_char(started_at AT TIME ZONE 'UTC', 'FMDD FMMon YYYY, HH24:MI') ILIKE $2 ESCAPE '\\')
-    AND ($3::text IS NULL OR status = $3)`;
+      OR display_title ILIKE $2 ESCAPE '\\' OR import_source ILIKE $2 ESCAPE '\\'
+      OR device_model ILIKE $2 ESCAPE '\\' OR capture_source_id ILIKE $2 ESCAPE '\\'
+      OR ($6::jsonb ->> capture_source_id) ILIKE $2 ESCAPE '\\'
+      OR ('Recording ' || to_char(started_at AT TIME ZONE 'UTC', 'FMDD FMMon YYYY, HH24:MI') || ' UTC') ILIKE $2 ESCAPE '\\'
+      OR ('MCAP' ILIKE $2 ESCAPE '\\' AND EXISTS (
+        SELECT 1 FROM files f WHERE f.recording_id = operations.id AND f.role = 'source_mcap'
+          AND f.state NOT IN ('cancelled', 'failed', 'expired'))))
+    AND ($3::text IS NULL OR operations_status = $3)`;
   const params = [
     staffUserId,
     query.q ? likePattern(query.q) : "",
     query.status,
   ];
+  const staffSql = staffRecordingsSql(readOnly);
   const [page, counts] = await Promise.all([
-    pool.query<Row>(
-      `${baseSql()}, page AS (
-         SELECT * FROM classified ${filter}
-         ORDER BY started_at DESC, id DESC LIMIT $4 OFFSET $5
+    pool.query<
+      StaffListRow & {
+        active_recipe_id: string | null;
+        active_recipe_job_id: string | null;
+      }
+    >(
+      `${staffSql}, page AS (
+         SELECT * FROM operations ${filter}
+         ORDER BY ${orderBy} LIMIT $4 OFFSET $5
        )
        SELECT c.*, s.file_count, s.total_bytes, s.confirmed_bytes, s.mcap_bytes, k.clip_count
        FROM page c ${SOURCE_LATERAL}
-       ORDER BY c.started_at DESC, c.id DESC`,
-      [...params, PIPELINE_PAGE_SIZE + 1, offset],
+       ORDER BY ${orderBy}`,
+      [...params, PIPELINE_PAGE_SIZE + 1, offset, JSON.stringify(sourceLabels)],
     ),
     pool.query<{ status: PipelineStatus; n: number }>(
-      `${baseSql()} SELECT status, count(*)::int AS n FROM classified GROUP BY status`,
+      `${staffSql}
+       SELECT operations_status AS status, count(*)::int AS n FROM operations GROUP BY operations_status`,
       [staffUserId],
     ),
   ]);
@@ -322,7 +397,34 @@ export async function listPipelineRecordings(
   ) as Record<PipelineStatus, number>;
   for (const row of counts.rows) countMap[row.status] = row.n;
   return {
-    items: page.rows.slice(0, PIPELINE_PAGE_SIZE).map(toListItem),
+    items: page.rows.slice(0, PIPELINE_PAGE_SIZE).map((row) => {
+      const item = toListItem(row);
+      const fields = recordingOperationFields(row, readOnly);
+      const error =
+        fields.error ??
+        operationError(
+          null,
+          row.rejection_code ?? row.error_code,
+          row.operations_status,
+        );
+      return {
+        ...item,
+        ...fields,
+        error,
+        recipe:
+          row.active_recipe_id && row.active_recipe_job_id
+            ? { id: row.active_recipe_id, jobId: row.active_recipe_job_id }
+            : item.recipe,
+        title: row.display_title,
+        status: row.operations_status,
+        note:
+          fields.error?.summary ??
+          (row.status === row.operations_status ? item.note : null),
+        ...(row.import_title ? { sourceKind: "imported" as const } : {}),
+        captureSourceId: row.capture_source_id,
+        device: row.device_model,
+      };
+    }),
     hasNext: page.rows.length > PIPELINE_PAGE_SIZE,
     counts: countMap,
   };

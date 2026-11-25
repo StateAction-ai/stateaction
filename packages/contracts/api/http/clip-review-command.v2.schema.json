@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/clip-review-command.v2.json",
+  "title": "Clip review command v2",
+  "description": "A staff command bound to the selected result. Add appends approval and adds the listed dataset memberships. Remove changes one membership. Reject removes all current memberships and restore reopens the rejected clip. Undo reverses the latest add or reject when its changes are still current.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "expectedReviewRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action",
+        "taskLabel",
+        "datasetRevisions"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedReviewRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "add"
+        },
+        "taskLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "datasetRevisions": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 100,
+          "propertyNames": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "expectedReviewRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action",
+        "datasetId",
+        "expectedDatasetRevision"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedReviewRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "remove"
+        },
+        "datasetId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedDatasetRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "expectedReviewRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action",
+        "reason"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedReviewRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "reject"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "expectedReviewRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedReviewRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "restore"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commandId",
+        "expectedReviewRevision",
+        "jobId",
+        "resultManifestSha256",
+        "selectionRevision",
+        "action",
+        "targetCommandId"
+      ],
+      "properties": {
+        "commandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "expectedReviewRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "jobId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "resultManifestSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "selectionRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "action": {
+          "const": "undo"
+        },
+        "targetCommandId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        }
+      }
+    }
+  ]
+}

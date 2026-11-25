@@ -6,6 +6,38 @@ import type { Queryable } from "../src/catalog/catalog.js";
 export const sha = (b: Uint8Array | string) =>
   createHash("sha256").update(b).digest("hex");
 
+export const mobileSourceChannels = () =>
+  [
+    {
+      topic: "/camera/rgb/video",
+      schema_name: "foxglove.CompressedVideo",
+      message_encoding: "protobuf",
+    },
+    {
+      topic: "/tracking/pose",
+      schema_name: "geometry_msgs/msg/PoseStamped",
+      message_encoding: "cdr",
+    },
+    ...Object.entries({
+      capture_profile: "Profile",
+      clocks: "Clocks",
+      inventory: "Inventory",
+      frame_events: "FrameEvent",
+      sensor_events: "SensorEvent",
+      "imu/accel": "MotionEvent",
+      "imu/gyro": "MotionEvent",
+      close: "Close",
+    }).map(([topic, type]) => ({
+      topic: `/stateaction/${topic}`,
+      schema_name: `stateaction.capture.${type}.v1`,
+      message_encoding: "json",
+    })),
+  ].map((channel) => ({
+    ...channel,
+    clock_domain: "unix",
+    message_count: "1",
+  }));
+
 export const createBody = (clientRecordingId = randomUUID()) => ({
   clientRecordingId,
   captureFormat: "stateaction.capture.v1",
@@ -58,7 +90,7 @@ export async function reserveSourceScenario(
     });
   }
   const doc: Record<string, unknown> = {
-    schema: "stateaction.recording_source.v1",
+    schema: "stateaction.recording_source.v2",
     recording_id: recordingId,
     client_recording_id: clientRecordingId,
     owner_user_id: owner,
@@ -73,23 +105,8 @@ export async function reserveSourceScenario(
       size_bytes: f.sizeBytes,
       sha256: f.sha256,
     })),
-    clock_domains: ["android.elapsed_realtime", "android.sensor_event"],
-    channels: [
-      {
-        topic: "/camera/rgb",
-        message_encoding: "protobuf",
-        schema_name: "foxglove.CompressedVideo",
-        clock_domain: "android.elapsed_realtime",
-        message_count: "30",
-      },
-      {
-        topic: "/imu",
-        message_encoding: "protobuf",
-        schema_name: "stateaction.Imu",
-        clock_domain: "android.sensor_event",
-        message_count: "200",
-      },
-    ],
+    clock_domains: ["android.elapsed_realtime", "android.sensor_event", "unix"],
+    channels: mobileSourceChannels(),
     counts: {
       video_frames: "30",
       dropped_video_frames: "0",

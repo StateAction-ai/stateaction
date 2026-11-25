@@ -3,7 +3,7 @@ import { authenticateHuman } from "../auth/guard.js";
 import { errorResponse, newRequestId } from "../auth/http.js";
 import { authRuntime, type AuthRuntime } from "../auth/runtime.js";
 import type { AuthenticateCollector } from "./http.js";
-import { recordingRoutes } from "./http.js";
+import { captureRecipeSelectionRoute, recordingRoutes } from "./http.js";
 import { admissionDepsFromEnv } from "./runtime.js";
 
 /**
@@ -16,6 +16,7 @@ import { admissionDepsFromEnv } from "./runtime.js";
  */
 export function collectorAuthenticator(
   get: () => AuthRuntime = authRuntime,
+  role: "collector" | "staff" = "collector",
 ): AuthenticateCollector {
   return async (request) => {
     let runtime: AuthRuntime;
@@ -27,7 +28,7 @@ export function collectorAuthenticator(
       return { ok: false, response: unavailable() };
     }
     const result = await authenticateHuman(request, runtime.guard, {
-      anyRole: ["collector"],
+      anyRole: [role],
     });
     if (!result.ok) return result;
     return {
@@ -36,6 +37,21 @@ export function collectorAuthenticator(
       requestId: result.requestId,
       headers: result.headers,
     };
+  };
+}
+
+export function selectCaptureRecipe(get: () => AuthRuntime = authRuntime) {
+  return async (request: Request, recordingId: string) => {
+    try {
+      return await captureRecipeSelectionRoute(
+        admissionDepsFromEnv(get().pool),
+        collectorAuthenticator(get, "staff"),
+        request,
+        recordingId,
+      );
+    } catch {
+      return unavailable();
+    }
   };
 }
 

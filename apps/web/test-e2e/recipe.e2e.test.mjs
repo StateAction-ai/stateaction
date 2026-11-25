@@ -311,17 +311,13 @@ const reviewSummary = () =>
   ev(
     `document.querySelector('[data-testid=review-summary]').innerText.replace(/\\s+/g, ' ')`,
   );
-const reviewState = () =>
-  ev(
-    `document.querySelector('[data-testid=review-state]').innerText.replace(/\\s+/g, ' ')`,
-  );
 const railCards = () =>
   ev(
     `[...document.querySelectorAll('[data-testid=rail-card]')].map(c => ({ failed: c.dataset.failed === 'true', text: c.innerText.replace(/\\s+/g, ' ') }))`,
   );
 const railFailed = () =>
   ev(
-    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.querySelector('[title]')?.title }))`,
+    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.title }))`,
   );
 const count = (testid) =>
   ev(`document.querySelectorAll('[data-testid=${testid}]').length`);
@@ -329,41 +325,67 @@ const count = (testid) =>
 /** Opens the review page, downloads the JSON through the page and returns the saved document. */
 async function reviewAndDownload(name) {
   const { recordingId } = rec(name);
-  await open(`/review/${recordingId}`, "[data-testid=review-summary]");
-  await hydrated("#dlBtn");
+  await open(`/clips/${recordingId}`, "[data-testid=review-summary]");
+  const doc = await annotationsDoc(name);
+  if (
+    doc.segments?.rows.some(
+      (row) => row.status === "ok" && row.end.timestamp_ns === null,
+    )
+  ) {
+    await until(
+      () =>
+        ev(
+          'document.querySelector("[data-testid=review-video]")?.readyState >= 1',
+        ),
+      `${name} video metadata for the final caption boundary`,
+    );
+  }
+  const downloadButton = '[data-testid="download-json"]';
+  await hydrated(downloadButton);
   const downloads = await mkdtemp(join(scratch, "dl-"));
   await chrome.send("Page.setDownloadBehavior", {
     behavior: "allow",
     downloadPath: downloads,
   });
-  await ev(`document.getElementById('dlBtn').click()`);
+  await ev(`document.querySelector(${JSON.stringify(downloadButton)}).click()`);
   const file = await until(
     async () =>
       (await readdir(downloads)).find((n) => !n.endsWith(".crdownload")),
     `${name} download`,
   );
-  assert.equal(file, `annotations-${recordingId}.json`);
+  assert.equal(file, "clip-captions.json");
   const saved = JSON.parse(await readFile(join(downloads, file), "utf8"));
-  assertAnnotationsValid(saved);
-  // dag_run.renderedAt is the time of each read: everything else is the same document.
-  const strip = (d) => ({ ...d, dag_run: { ...d.dag_run, renderedAt: null } });
-  assert.deepEqual(
-    strip(saved),
-    strip(await annotationsDoc(name)),
-    "the download is the API document",
+  const expected = new Map(
+    doc.captions?.rows.map((row) => [
+      row.segment_id,
+      row.status === "complete" ? row.text : null,
+    ]),
   );
-  return saved;
+  assert.equal(
+    saved.captions.length,
+    doc.segments?.rows.filter((row) => row.status === "ok").length ?? 0,
+  );
+  for (const row of saved.captions) {
+    assert.equal(row.caption, expected.get(row.segmentId) ?? null);
+    assert.ok(
+      row.startSeconds >= 0 && row.endSeconds > row.startSeconds,
+      `${name} clip-relative caption ${row.segmentId}: ${row.startSeconds}–${row.endSeconds}`,
+    );
+  }
 }
 
-/** The recipe stage rows the Pipeline page shows. */
+/** The run links and recorded failure codes on the clip processing page. */
 async function pipelineStages(name) {
+  const { recordingId, jobId } = rec(name);
   await open(
-    `/pipeline/${rec(name).recordingId}`,
-    "[data-testid=recipe-stages]",
+    `/recordings/${recordingId}/clips/${recordingId}/processing`,
+    "main section h3",
   );
-  return ev(
-    `[...document.querySelectorAll('[data-testid=recipe-stages] > li')].map(li => ({ stage: li.dataset.stage, state: li.dataset.state, displayState: li.dataset.displayState, reasonCode: li.querySelector('p[role=alert] [title], p:first-of-type [title]')?.title ?? null, text: li.innerText.replace(/\\s+/g, ' ') }))`,
-  );
+  return ev(`[...document.querySelectorAll('main section:has(h3)')].filter(s => s.querySelector('h2')).map(s => ({
+    text: s.innerText.replace(/\\s+/g, ' '),
+    code: s.querySelector(':scope > code')?.textContent.trim() ?? null,
+    hasRun: !!s.querySelector('a[title="${jobId}"]'),
+  }))`);
 }
 
 before(async () => {
@@ -470,32 +492,26 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       doc.dag_run.stages.map((s) => [s.stage, s.state]),
       STAGES.map((s) => [s, "succeeded"]),
     );
-    const saved = await reviewAndDownload("ok");
-    assert.equal(saved.job_id, f.jobId);
+    await reviewAndDownload("ok");
     assert.equal((await railCards()).length, 4);
     assert.equal((await railFailed()).length, 0);
-    assert.match(
-      await reviewSummary(),
-      /^4 segments · 0 failed windows · 0 captions failed/,
-    );
-    assert.equal(await reviewState(), "Completed");
-
-    const reviewPath = "/review/" + f.recordingId;
-    const pipelinePath = "/pipeline/" + f.recordingId;
-    const clipBrowser = "/data-browser?recordingId=" + f.recordingId;
-    const hasLink = (url, root = "main") =>
+    assert.match(await reviewSummary(), /^4 segments$/);
+    const recordingPath = "/recordings/" + f.recordingId;
+    const reviewPath = "/clips/" + f.recordingId;
+    const processingPath =
+      recordingPath + "/clips/" + f.recordingId + "/processing";
+    const hasLink = (url) =>
       ev(
-        "Boolean(document.querySelector(" +
-          JSON.stringify(root + ' a[href="' + url + '"]') +
-          "))",
+        `Boolean(document.querySelector(${JSON.stringify('main a[href="' + url + '"]')}))`,
       );
-    await open("/pipeline", "tbody");
-    assert.ok(await hasLink(reviewPath, "tbody"));
-    await open(pipelinePath, "[data-testid=run-summary]");
-    assert.ok(await hasLink(reviewPath));
-    assert.ok(await hasLink(clipBrowser));
-    await open(clipBrowser, "article a[href^='/clips/']");
-    assert.ok(await hasLink(pipelinePath, "article"));
+    await open("/recordings", `main a[href="${recordingPath}"]`);
+    await open(recordingPath, `main a[href="${processingPath}"]`);
+    await open(
+      processingPath,
+      `main a:is([href="${reviewPath}"], [href^="${reviewPath}?"])`,
+    );
+    await open(reviewPath, "[data-testid=review-summary]");
+    assert.ok(await hasLink(processingPath));
   });
 
   test("caption_failed: two captions fail inside a succeeded stage; the review page shows them failed with their code, never blank", async () => {
@@ -528,11 +544,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       2,
       "two failure ticks on the failures lane",
     );
-    assert.match(await reviewSummary(), /2 captions failed/);
-    assert.match(await reviewState(), /Needs attention.*Failed in Captioning/);
+    assert.match(await reviewSummary(), /2 caption failures/);
     const rows = await pipelineStages("caption_failed");
-    assert.equal(rows[1].displayState, "needs_attention");
-    assert.match(rows[1].text, /Needs attention/);
+    assert.match(rows[1].text, /Captioning.*Failed captions: 2/);
+    assert.ok(rows[1].hasRun);
   });
 
   test("window_failed: a failed window is a failed row in segments and not_captioned in captions, shown as failed on the review page", async () => {
@@ -556,10 +571,6 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal(notCaptioned[0].segment_id, doc.segments.rows[1].segment_id);
     await reviewAndDownload("window_failed");
     assert.match(await reviewSummary(), /1 failed window/);
-    assert.match(
-      await reviewState(),
-      /Needs attention.*Failed in Segmentation/,
-    );
     const cardsShown = await railCards();
     assert.deepEqual(
       cardsShown.map((c) => c.failed),
@@ -608,32 +619,16 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     );
     await reviewAndDownload("segment_failed");
     assert.equal((await railCards()).length, 0);
-    assert.match(
-      await reviewSummary(),
-      /^Segment counts not recorded · Caption counts not recorded/,
-    );
-    assert.match(
-      await reviewState(),
-      /Needs attention.*Failed in Segmentation/,
-    );
+    assert.match(await reviewSummary(), /^0 segments/);
     assert.match(
       await ev("document.querySelector('[data-testid=rail-list]').innerText"),
       /Segmentation failed.*did not return a stage receipt/,
     );
     const rows = await pipelineStages("segment_failed");
-    assert.deepEqual(
-      rows.map((r) => [r.stage, r.state]),
-      [
-        ["segment", "failed"],
-        ["caption", "not_run"],
-        ["hand_pose", "succeeded"],
-      ],
-    );
-    assert.match(rows[0].text, /did not return a stage receipt/);
-    assert.equal(rows[0].reasonCode, "receipt_missing");
-    assert.match(rows[1].text, /A stage it depends on failed/);
-    assert.equal(rows[1].reasonCode, "upstream_failed");
-    assert.ok(rows.every((row) => row.text.includes("Not recorded")));
+    assert.match(rows[0].text, /Segmentation.*Failed/);
+    assert.equal(rows[0].code, "receipt_missing");
+    assert.match(rows[1].text, /Captioning.*Not run/);
+    assert.match(rows[2].text, /Hand pose.*Succeeded/);
   });
 
   test("digest_mismatch: files uploaded under a rejected receipt are attributed to the failed segment node, never served as segments", async () => {
@@ -664,7 +659,7 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal((await railCards()).length, 0);
     const rows = await pipelineStages("digest_mismatch");
     assert.match(rows[0].text, /could not verify the stage receipt/);
-    assert.equal(rows[0].reasonCode, "receipt_rejected");
+    assert.equal(rows[0].code, "receipt_rejected");
   });
 
   test("zero_segments: a valid empty segments document is a success, caption is not_run(no_segments), and nothing is reported as failed", async () => {
@@ -686,10 +681,7 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     assert.equal(doc.captions, null);
     await reviewAndDownload("zero_segments");
     assert.equal((await railCards()).length, 0);
-    assert.match(
-      await reviewSummary(),
-      /^0 segments · 0 failed windows · Caption counts not recorded/,
-    );
+    assert.match(await reviewSummary(), /^0 segments$/);
     assert.equal(await count("failure-caption"), 0);
   });
 
@@ -730,21 +722,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       404,
       "no accepted job, no annotations",
     );
-    const rows = await pipelineStages("source_unreadable");
-    assert.deepEqual(
-      rows.map((r) => [r.stage, r.state]),
-      [
-        ["segment", "failed"],
-        ["caption", "not_run"],
-        ["hand_pose", "failed"],
-      ],
-    );
-    assert.equal(rows[0].reasonCode, f.stages.segment.error_code);
-    assert.equal(rows[2].reasonCode, f.stages.hand_pose.error_code);
-    await open("/review/" + recordingId, "[data-status=needs_attention]");
+    await open("/recordings/" + recordingId, "main h1");
     assert.match(
       await ev("document.querySelector('main').innerText"),
-      /Failed in Segmentation, Hand pose/,
+      /Failed/,
     );
     assert.ok(jobId && recordingId);
   });

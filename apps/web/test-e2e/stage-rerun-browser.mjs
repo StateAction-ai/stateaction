@@ -1,200 +1,74 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 const command = promisify(execFile);
 
+// The frozen stage-rerun API test supplies the persisted parent and child.
 export async function checkStageRerunBrowser({
   stack,
   parent,
   childJobId,
   out,
 }) {
-  mkdirSync(out, { recursive: true });
+  await mkdir(out, { recursive: true });
   const session = `sa142-${process.pid}`;
-  let operation = "";
-  const ab = async (...args) => {
-    operation = args[0] === "wait" ? args.join(" ") : args[0];
-    const { stdout } = await command(
-      "agent-browser",
-      ["--session", session, ...args],
-      {
+  const ab = async (...args) =>
+    (
+      await command("agent-browser", ["--session", session, ...args], {
         encoding: "utf8",
         timeout: 45_000,
-      },
-    );
-    return stdout.trim();
-  };
+      })
+    ).stdout.trim();
   const evaluate = async (script) => JSON.parse(await ab("eval", script));
-  const clickInView = async (locator, label) => {
-    const clicked = await evaluate(`(() => {
-      const button = ${locator};
-      if (!button || button.disabled) return false;
-      button.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
-      const box = button.getBoundingClientRect();
-      const x = Math.round(box.x + box.width / 2);
-      const y = Math.round(box.y + box.height / 2);
-      if (!button.contains(document.elementFromPoint(x, y))) return false;
-      button.click();
-      return true;
-    })()`);
-    assert.ok(clicked, `${label} must be reachable at its displayed position`);
-  };
-  const clickDialog = (label) =>
-    clickInView(
-      `[...document.querySelectorAll('dialog[open] button')].find((node) => node.textContent.trim() === ${JSON.stringify(label)})`,
-      label,
-    );
-  const capture = [];
+  const clipId = parent.clipId ?? parent.recordingId;
+  const processing = `/recordings/${parent.recordingId}/clips/${clipId}/processing`;
+  const evidence = [];
   try {
     await ab("open", `${stack.origin}/login`);
     await ab("wait", "input[name=email]");
     await ab("fill", "input[name=email]", stack.users.staff.email);
     await ab("fill", "input[name=password]", stack.password);
     await ab("click", "button[type=submit]");
-    await ab("wait", "--fn", "location.pathname === '/pipeline'");
+    await ab("wait", "--fn", "location.pathname === '/recordings'");
     for (const width of [1280, 390]) {
       await ab("set", "viewport", String(width), "900");
-      const base = `${stack.origin}/pipeline/${parent.recordingId}`;
-      await ab("open", `${base}?run=${parent.jobId}`);
-      await ab("wait", '[data-stage="hand_pose"]');
-      await ab("wait", "--load", "networkidle");
-      for (const [index, label] of [
-        "Re-run this stage",
-        "Re-run from here",
-      ].entries()) {
-        const selector = '[data-stage="hand_pose"] button';
-        assert.equal(
-          await evaluate(
-            `document.querySelectorAll(${JSON.stringify(selector)})[${index}]?.textContent.trim()`,
-          ),
-          label,
-        );
-        await clickInView(
-          `document.querySelectorAll(${JSON.stringify(selector)})[${index}]`,
-          label,
-        );
-        await ab(
-          "wait",
-          "--fn",
-          "Boolean(document.querySelector('dialog[open] [data-testid=rerun-plan]'))",
-        );
-        const preview = await evaluate(
-          "document.querySelector('dialog[open]').innerText",
-        );
-        assert.match(preview, /hand_pose_cpu_v1@1/);
-        assert.match(preview, /Segment|segment/);
-        assert.match(preview, /Caption|caption/);
-        assert.match(preview, /\$0\.00/);
-        if (label === "Re-run this stage") {
-          await ab("screenshot", join(out, `confirm-${width}.png`));
-          const rejectOnce = `(() => {
-            const send = window.fetch;
-            window.fetch = (url, init) => {
-              if (typeof url === "string" && url.endsWith("/stage-reruns") && init?.method === "POST") {
-                window.fetch = send;
-                const request = JSON.parse(init.body);
-                return send(url, { ...init, body: JSON.stringify({ ...request, expectedPlanSha256: "0".repeat(64) }) });
-              }
-              return send(url, init);
-            };
-          })()`;
-          await ab("eval", rejectOnce);
-          await ab(
-            "fill",
-            'dialog[open] input[maxlength="512"]',
-            "Exercise rejected confirmation",
-          );
-          await clickDialog("Confirm rerun");
-          await ab(
-            "wait",
-            "--text",
-            "The plan changed. Preview it again before confirming.",
-          );
-          await clickDialog("Preview plan");
-          await ab(
-            "wait",
-            "--fn",
-            "Boolean(document.querySelector('dialog[open] [data-testid=rerun-plan]'))",
-          );
-        }
-        await ab("press", "Escape");
+      await ab("open", `${stack.origin}${processing}?run=${childJobId}`);
+      await ab("wait", "main section h3");
+      const earlier = `a[title="${parent.jobId}"]`;
+      const child = `a[title="${childJobId}"]`;
+      const sections =
+        await evaluate(`[...document.querySelectorAll("main section:has(h3)")].map(section => ({
+        title: section.querySelector("h2")?.textContent,
+        containsChild: !!section.querySelector(${JSON.stringify(child)}),
+        retainsEarlier: !!section.querySelector(${JSON.stringify(earlier)}),
+        text: section.innerText,
+      }))`);
+      for (const name of ["Segmentation", "Captioning"]) {
+        const stage = sections.find(({ title }) => title === name);
+        assert.ok(stage?.retainsEarlier, name);
+        assert.match(stage.text, /Used output from run|did not run again/);
       }
-      await ab("open", `${base}?run=${childJobId}`);
-      await ab("wait", '[data-testid="rerun-lineage"]');
-      const lineage = await evaluate(
-        "document.querySelector('[data-testid=rerun-lineage]').innerText",
-      );
-      assert.match(lineage, new RegExp(parent.jobId.slice(0, 8)));
-      assert.match(lineage, /Reused Segmentation, Captioning/);
-      assert.equal(
-        await evaluate(
-          `[...document.querySelectorAll('[data-stage]')].filter((row) =>
-          row.querySelector('summary')?.textContent === 'Original receipt').length`,
-        ),
-        2,
-      );
-      assert.equal(
+      const hand = sections.find(({ title }) => title === "Hand pose");
+      assert.ok(hand?.containsChild);
+      assert.match(hand.text, /Stage rerun/);
+      assert.match(hand.text, /Parent/);
+      assert.ok(
         await evaluate("document.documentElement.scrollWidth <= innerWidth"),
-        true,
       );
-      const row = (jobId) =>
-        `document.querySelector('[data-run-id="${jobId}"]')`;
-      await clickInView(
-        `${row(parent.jobId)}?.querySelector('button')`,
-        "Select parent result",
-      );
-      await ab(
-        "wait",
-        "--fn",
-        `${row(parent.jobId)}?.innerText.includes('Selected')`,
-      );
-      await ab("eval", "window.scrollTo(0, 0)");
       await ab("screenshot", "--full", join(out, `lineage-${width}.png`));
-      await clickInView(
-        `${row(childJobId)}?.querySelector('button')`,
-        "Restore selected rerun",
-      );
-      await ab(
-        "wait",
-        "--fn",
-        `${row(childJobId)}?.innerText.includes('Selected')`,
-      );
-      capture.push({
-        width,
-        bothActions: true,
-        definitiveRejectionReplanned: true,
-        lineage: true,
-        selectedResultSwitch: true,
-        originalReceipts: 2,
-      });
+      evidence.push({ width, parentAndChildVisible: true, reusedStages: 2 });
     }
-    writeFileSync(
+    await writeFile(
       join(out, "browser-evidence.json"),
-      JSON.stringify(capture, null, 2) + "\n",
+      JSON.stringify(evidence, null, 2) + "\n",
     );
   } catch (error) {
-    // Browser CLI errors can include the subprocess command line. Avoid printing fixture cookies.
     if (error instanceof assert.AssertionError) throw error;
-    const failedOperation = operation;
-    let pathname = "";
-    try {
-      pathname = await evaluate("location.pathname");
-    } catch {}
-    let dialogFeedback = "";
-    try {
-      dialogFeedback = await evaluate(
-        "document.querySelector('dialog[open] [role=alert]')?.textContent ?? (document.querySelector('dialog[open]') ? 'dialog open' : 'dialog closed')",
-      );
-    } catch {}
-    throw new Error(
-      `Seeded rerun browser check failed during ${failedOperation} at ${pathname} (${dialogFeedback})`,
-    );
+    throw new Error("Seeded clip processing history did not render");
   } finally {
-    try {
-      await ab("close");
-    } catch {}
+    await ab("close").catch(() => {});
   }
 }

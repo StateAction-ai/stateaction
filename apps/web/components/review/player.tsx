@@ -28,6 +28,8 @@ export function Player({
   videoMessage,
   handFramesPath,
   handPoseFailed,
+  mediaOffsetS,
+  poster,
   onPrev,
   onNext,
 }: {
@@ -37,6 +39,8 @@ export function Player({
   videoMessage: string | null;
   handFramesPath: string | null;
   handPoseFailed: boolean;
+  mediaOffsetS: number;
+  poster: string | undefined;
   onPrev: () => void;
   onNext: () => void;
 }) {
@@ -58,6 +62,7 @@ export function Player({
             key={playback.srcKey}
             ref={playback.videoRef}
             src={playback.src}
+            poster={poster}
             data-testid="review-video"
             className="h-full w-full bg-black object-contain"
             playsInline
@@ -68,6 +73,8 @@ export function Player({
             onSeeked={playback.onSeeked}
             onPlaying={playback.onPlaying}
           />
+        ) : poster ? (
+          <img src={poster} alt="" className="h-full w-full object-contain" />
         ) : (
           <div
             data-testid="review-video-placeholder"
@@ -84,6 +91,7 @@ export function Player({
             videoRef={playback.videoRef}
             model={model}
             path={handFramesPath}
+            mediaOffsetS={mediaOffsetS}
             enabled={overlay}
           />
         ) : null}
@@ -121,6 +129,8 @@ export function Player({
             </small>
             {active.caption.state === "complete" ? (
               active.caption.text
+            ) : active.caption.state === "omitted" ? (
+              "Caption not needed"
             ) : (
               <span title={active.caption.code}>
                 {active.kind === "failed_window"
@@ -138,10 +148,14 @@ export function Player({
         <button
           type="button"
           onClick={playback.toggle}
-          disabled={status === "unavailable"}
+          disabled={status === "unavailable" || playback.singleFrame}
           aria-label={playing ? "Pause" : "Play"}
-          title="Play / pause (space)"
-          className="grid h-11 w-11 flex-none place-items-center rounded-full border-0 bg-brand text-white hover:bg-brand-strong"
+          title={
+            playback.singleFrame
+              ? "This clip contains one frame."
+              : "Play / pause (space)"
+          }
+          className="grid h-11 w-11 flex-none place-items-center rounded-full border-0 bg-brand text-white hover:bg-brand-strong disabled:opacity-50"
         >
           {playing ? (
             <Pause aria-hidden="true" size={16} fill="currentColor" />
@@ -243,7 +257,8 @@ function Scrubber({
   onSeek: (t: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const pct = (s: number) => `${(s / model.durationS) * 100}%`;
+  const pct = (s: number) =>
+    model.durationS > 0 ? `${(s / model.durationS) * 100}%` : "0%";
   const seekFromEvent = useCallback(
     (e: React.PointerEvent) => {
       const rect = ref.current?.getBoundingClientRect();

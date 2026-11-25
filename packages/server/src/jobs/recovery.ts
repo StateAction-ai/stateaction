@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SIMULATION_RGB_PROFILE } from "@stateaction/contracts";
 import type pg from "pg";
 import {
   PUBLIC_VIDEO_LABEL,
@@ -467,10 +468,12 @@ export async function retryJob(
     const rec = (
       await tx.query<{
         deleted_at: Date | null;
+        rgb_profile: string;
         status: string;
-      }>("SELECT deleted_at, status FROM recordings WHERE id = $1", [
-        recordingId,
-      ])
+      }>(
+        "SELECT deleted_at, rgb_profile, status FROM recordings WHERE id = $1",
+        [recordingId],
+      )
     ).rows[0]!;
     // Prior canary jobs keep the same identity after their approved budgets change.
     const job = (
@@ -489,12 +492,17 @@ export async function retryJob(
                 state, error_code, admitted_at, profile_revision, source_manifest_sha256,
                 EXISTS (
                   SELECT 1 FROM job_inputs i
-                  WHERE i.job_id = $1 AND (i.task_input->'recipe'->>'recipeId' = $2
+                  WHERE i.job_id = $1 AND (($4::boolean AND i.task_input->'recipe'->>'recipeId' = $2)
                     OR (jobs.kind IN ('clip_plan', 'clip_pipeline') AND
                         i.task_input #>> '{simulation,provenance,camera,label}' = $3))
                 ) AS public_video_canary
          FROM jobs WHERE id = $1 FOR UPDATE`,
-        [input.jobId, PUBLIC_VIDEO_RECIPE.recipeId, PUBLIC_VIDEO_LABEL],
+        [
+          input.jobId,
+          PUBLIC_VIDEO_RECIPE.recipeId,
+          PUBLIC_VIDEO_LABEL,
+          rec.rgb_profile === SIMULATION_RGB_PROFILE,
+        ],
       )
     ).rows[0]!;
     // Bind the request to the exact prior job AND the terminal state the operator

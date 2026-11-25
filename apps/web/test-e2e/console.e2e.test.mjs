@@ -83,7 +83,13 @@ describe("no fixture identity path exists", () => {
 
   test("setting a fixture variable on the server grants nothing", async () => {
     // The running server never had it; assert the pages deny without a session.
-    for (const path of ["/", "/pipeline", "/data-browser", "/settings"]) {
+    for (const path of [
+      "/",
+      "/recordings",
+      "/data-browser",
+      "/recipes",
+      "/settings",
+    ]) {
       const res = await navigate(path);
       assert.equal(res.status, 307, path);
       assert.match(res.headers.location, /\/login$/);
@@ -93,28 +99,28 @@ describe("no fixture identity path exists", () => {
 });
 
 describe("role-protected console pages (real session, live roles)", () => {
-  test("staff sees Pipeline and Data browser", async () => {
+  test("staff sees Recordings, Data browser and Recipes", async () => {
     const jar = await signIn("staff");
-    const pipeline = await navigate("/pipeline", jar);
-    assert.equal(pipeline.status, 200);
-    assertPrivate(pipeline, "pipeline");
-    assert.match(pipeline.text, /href="\/pipeline"/);
-    assert.match(pipeline.text, /href="\/data-browser"/);
-    assert.match(pipeline.text, /href="\/review"/);
-    assert.doesNotMatch(pipeline.text, />(Releases|Projects?)</);
+    const recordings = await navigate("/recordings", jar);
+    assert.equal(recordings.status, 200);
+    assertPrivate(recordings, "recordings");
+    assert.match(recordings.text, /href="\/recordings"/);
+    assert.match(recordings.text, /href="\/data-browser"/);
+    assert.match(recordings.text, /href="\/recipes"/);
+    assert.doesNotMatch(recordings.text, />(Releases|Projects?)</);
     const data = await navigate("/data-browser", jar);
     assert.equal(data.status, 200);
     const home = await navigate("/", jar);
     assert.equal(home.status, 307);
-    assert.match(home.headers.location, /\/pipeline$/);
+    assert.match(home.headers.location, /\/recordings$/);
   });
 
   test("customer sees Data only; staff routes are 404", async () => {
     const jar = await signIn("customer");
     const data = await navigate("/data-browser", jar);
     assert.equal(data.status, 200);
-    assert.doesNotMatch(data.text, /href="\/pipeline"/);
-    assert.equal((await navigate("/pipeline", jar)).status, 404);
+    assert.doesNotMatch(data.text, /href="\/recordings"/);
+    assert.equal((await navigate("/recordings", jar)).status, 404);
     const home = await navigate("/", jar);
     assert.match(home.headers.location, /\/data-browser$/);
   });
@@ -124,12 +130,12 @@ describe("role-protected console pages (real session, live roles)", () => {
     for (const path of ["/data-browser", "/settings"]) {
       const res = await navigate(path, jar);
       assert.match(res.text, /Capture accounts use the Android app/);
-      assert.doesNotMatch(res.text, /href="\/pipeline"/);
+      assert.doesNotMatch(res.text, /href="\/recordings"/);
       assert.doesNotMatch(res.text, /aria-label="Primary"/);
     }
-    const pipeline = await navigate("/pipeline", jar);
-    assert.doesNotMatch(pipeline.text, /aria-label="Primary"/);
-    assert.doesNotMatch(pipeline.text, /No recordings are shown yet/);
+    const recordings = await navigate("/recordings", jar);
+    assert.doesNotMatch(recordings.text, /aria-label="Primary"/);
+    assert.doesNotMatch(recordings.text, /No recordings are shown yet/);
   });
 
   test("pending and disabled accounts see only a notice with sign-out", async () => {
@@ -141,20 +147,20 @@ describe("role-protected console pages (real session, live roles)", () => {
       const res = await navigate("/data-browser", jar);
       assert.match(res.text, text);
       assert.doesNotMatch(res.text, /aria-label="Primary"/);
-      const pipeline = await navigate("/pipeline", jar);
-      assert.doesNotMatch(pipeline.text, /No recordings are shown yet/);
+      const recordings = await navigate("/recordings", jar);
+      assert.doesNotMatch(recordings.text, /No recordings are shown yet/);
     }
   });
 
   test("an operator role change applies on the very next request", async () => {
     const jar = await signIn("staff");
-    assert.equal((await navigate("/pipeline", jar)).status, 200);
+    assert.equal((await navigate("/recordings", jar)).status, 200);
     const id = stack.users.staff.id;
     owner(
       `UPDATE access SET enabled = false WHERE user_id = ${quote(id)} AND role = 'staff'`,
     );
     try {
-      const res = await navigate("/pipeline", jar);
+      const res = await navigate("/recordings", jar);
       assert.match(res.text, /Access disabled/);
       assert.doesNotMatch(res.text, /aria-label="Primary"/);
       assert.doesNotMatch(res.text, /No recordings are shown yet/);
@@ -389,7 +395,12 @@ describe("server-confirmed sign-out", () => {
     );
     // A browser Back/direct request replaying the old cookie stays protected.
     const replay = { cookie: saved };
-    for (const path of ["/pipeline", "/data-browser", "/settings"]) {
+    for (const path of [
+      "/recordings",
+      "/data-browser",
+      "/recipes",
+      "/settings",
+    ]) {
       const res = await call(path, {
         headers: { ...replay, "sec-fetch-mode": "navigate" },
       });

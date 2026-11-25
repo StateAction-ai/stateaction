@@ -488,7 +488,9 @@ const STAGE_RULES: Readonly<Record<string, Rule>> = {
       : v("reference_mismatch", "/recipeSha256");
   },
   processing_result_nodes: (doc) => {
-    const isClip = doc.schema === "stateaction.processing_result.v5";
+    const isClip =
+      doc.schema === "stateaction.processing_result.v5" ||
+      doc.schema === "stateaction.processing_result.v6";
     const outputs = list(doc.outputs).map(obj);
     const roles = new Map(outputs.map((o) => [o.file_id, o.role as string]));
     const claimed = new Set<unknown>();

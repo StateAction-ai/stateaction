@@ -8,7 +8,10 @@ import {
   ObjectTooLargeError,
   type ObjectReader,
 } from "../src/admission/recordings.js";
-import { loadRecordingAnnotations } from "../src/annotations/annotations.js";
+import {
+  loadBoundClipAnnotations,
+  loadRecordingAnnotations,
+} from "../src/annotations/annotations.js";
 import { recordingMp4MaxBytes } from "../src/datasets/broker.js";
 
 /**
@@ -19,6 +22,7 @@ import { recordingMp4MaxBytes } from "../src/datasets/broker.js";
  */
 const JOB = "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b";
 const REC = "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11";
+const CLIP = "fd554698-81f3-46a2-8acb-b895ab394ae9";
 const doc = (name: string) =>
   JSON.parse(
     readFileSync(
@@ -77,6 +81,33 @@ function fixture(files: Files, accepted = true, notSucceeded: string[] = []) {
 }
 const load = (f: ReturnType<typeof fixture>) =>
   loadRecordingAnnotations(f, "staff-user", REC);
+
+test("the bound reader checks the current exact result before loading artifacts", async () => {
+  const inputs = [CLIP, JOB, "b".repeat(64), REC, 2];
+  const pool = {
+    async query(sql: string, args: unknown[]) {
+      assert.deepEqual(args, inputs);
+      assert.match(sql, /c\.selected_job_id = j\.id/);
+      assert.match(sql, /j\.result_manifest_sha256 = \$3/);
+      assert.match(sql, /ORDER BY seq DESC LIMIT 1/);
+      return { rows: [] };
+    },
+  } as unknown as pg.Pool;
+  const reader: ObjectReader = {
+    read: async () => assert.fail("an unbound result cannot read storage"),
+  };
+  const result = await loadBoundClipAnnotations(
+    { pool, reader },
+    {
+      clipId: CLIP,
+      jobId: JOB,
+      resultManifestSha256: "b".repeat(64),
+      recordingId: REC,
+      selectionRevision: 2,
+    },
+  );
+  assert.equal(result, null);
+});
 
 test("a stage without a file is null, never an empty document; unaccepted is null", async () => {
   assert.equal(await load(fixture({}, false)), null);

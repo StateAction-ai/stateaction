@@ -289,10 +289,13 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       kind: "process_recording" | "clip_plan" | "clip_pipeline";
       clip: ClipTaskInputV4["clip"] | null;
       derived_from_job_id: string | null;
+      capture_recipe: RecipeV1 | null;
+      capture_recipe_sha256: string | null;
       rerun_recipe: RecipeV1 | null;
       rerun_stages: string[] | null;
     }>(
       `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256,
+              cp.recipe AS capture_recipe, cp.recipe_sha256 AS capture_recipe_sha256,
               j.derived_from_job_id, p.plan -> 'recipe' AS rerun_recipe, p.plan -> 'execute' AS rerun_stages,
          j.kind,
          CASE WHEN j.kind = 'clip_pipeline' THEN jsonb_build_object(
@@ -303,6 +306,8 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
              'last_source_frame_id', c.last_source_frame_id::text,
              'start_ts_ns', c.start_ts_ns::text, 'end_ts_ns', c.end_ts_ns::text)) END AS clip
        FROM jobs j JOIN recordings r ON r.id = j.recording_id
+       LEFT JOIN recording_capture_profiles cp ON cp.recording_id = r.id AND cp.state = 'selected'
+         AND cp.source_manifest_sha256 = j.source_manifest_sha256
        LEFT JOIN job_rerun_plans p ON p.job_id = j.id
        LEFT JOIN review_clips c ON c.id = j.clip_id
        LEFT JOIN clip_plans plan ON plan.recording_id = c.recording_id AND plan.version = c.plan_version
@@ -402,6 +407,21 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         rejectedJobIds.push(c.id);
         continue;
       }
+      const selectedCaptureRecipe =
+        c.capture_recipe &&
+        !c.rerun_recipe &&
+        c.kind !== "clip_plan" &&
+        task.schemaVersion === 2
+          ? c.capture_recipe
+          : undefined;
+      if (selectedCaptureRecipe) {
+        task = {
+          ...task,
+          schemaVersion: 3,
+          recipe: selectedCaptureRecipe,
+          recipeSha256: c.capture_recipe_sha256,
+        };
+      }
       if (c.rerun_recipe) {
         task = {
           ...task,
@@ -438,7 +458,9 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           ...task,
           schemaVersion: 4,
           recipe,
-          recipeSha256: requestSha256(recipe),
+          recipeSha256: selectedCaptureRecipe
+            ? c.capture_recipe_sha256
+            : requestSha256(recipe),
           clip: c.clip,
         };
       }

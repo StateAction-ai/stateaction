@@ -127,7 +127,7 @@ export function MarkBar({
           aria-label="What is wrong?"
         >
           <span className="text-xs text-muted">What is wrong?</span>
-          {ISSUE_TYPES.map((t) => (
+          {ISSUE_TYPES.filter((type) => type.id !== "caption").map((t) => (
             <button
               key={t.id}
               type="button"

@@ -653,20 +653,25 @@ async function main() {
     (await q("SELECT revision FROM datasets WHERE id=$1", [id]))[0].revision;
   const post = (body) => send(staff, reviewPath, body);
 
-  async function browserPass(label, jar, isStaff) {
+  async function browserPass(label, jar, isStaff, datasetId) {
     const b = new Browser(label, jar);
-    const clipPath = `/clips/${clipId}`;
-    const canvases =
-      "document.querySelectorAll('[data-testid=clip-viewer-host]:not(.invisible) canvas').length";
+    const reviewRows = await q(
+      "SELECT id FROM review_clips WHERE recording_id = $1 AND selected_job_id = $2",
+      [cfg.recordingId, cfg.jobId],
+    );
+    check(
+      "recording has one selected canonical review clip",
+      reviewRows.length === 1,
+    );
+    const clipPath = `/clips/${reviewRows[0].id}`;
     const recordingGrid = `/data-browser?recordingId=${cfg.recordingId}`;
-    const clipSelector = `a[href*="/clips/${clipId}"]`;
-    const loaded = () =>
-      !/Loading (Rerun|clip)/.test(b.ev("document.body.innerText"));
+    const clipSelector = `main a[href^="${clipPath}?"]:not([aria-hidden=true])`;
+    const player = "document.querySelector('[data-testid=review-video]')";
+    const loaded = () => b.ev(`Boolean(${player}?.readyState >= 1)`);
     const shoot = async (name) => {
-      for (const w of [1280, 375]) {
+      for (const w of [1280, 390]) {
         b.ab("set", "viewport", String(w), "900");
-        await sleep(1500);
-        await until(loaded, `${name} viewer finished loading`, 120);
+        await until(loaded, `${name} video loaded`, 120);
         const file = `${outDir}browser/${name}-${w}.png`;
         b.ab("screenshot", file, "--full");
         screenshots.push(file.split("/").pop());
@@ -674,92 +679,46 @@ async function main() {
     };
     b.ab("set", "viewport", "1280", "900");
     if (isStaff) {
-      b.ab("open", `${origin}/pipeline/${cfg.recordingId}`);
-      await until(
-        () =>
-          b.ev("(document.querySelector('main')?.innerText.length ?? 0) > 0"),
-        "pipeline detail",
-      );
-      check(
-        "staff Pipeline detail loads for the recording",
-        b.ev("location.pathname") === `/pipeline/${cfg.recordingId}`,
-        {
-          pathname: b.ev("location.pathname"),
-          title: b.ev("document.title"),
-          mainChars: b.ev(
-            "document.querySelector('main')?.innerText.length ?? 0",
-          ),
-        },
-      );
-      await until(
-        () =>
-          b.ev(
-            "Boolean(document.querySelector('a[href^=\"/data-browser?recordingId=\"]'))",
-          ),
-        "Pipeline links to the recording clips",
-      );
-      b.ab("click", 'a[href^="/data-browser?recordingId="]');
-      await until(
-        () => b.ev("location.pathname + location.search") === recordingGrid,
-        "recording filter in the Data browser URL",
-      );
-      await until(
-        () =>
-          b.ev(
-            `Boolean(document.querySelector('a[href*="/clips/${clipId}"]'))`,
-          ),
-        "recording-filtered grid shows the clip",
-      );
-      check("recording grid links to the discovered clip", true);
-      await shoot(`${label}-grid`);
-      b.ab("click", clipSelector);
+      const processing = `/recordings/${cfg.recordingId}/clips/${reviewRows[0].id}/processing`;
+      b.ab("open", `${origin}/recordings/${cfg.recordingId}`);
+      b.ab("wait", `main a[href="${processing}"]`);
+      b.ab("click", `main a[href="${processing}"]`);
+      b.ab("wait", `main a:is([href="${clipPath}"], [href^="${clipPath}?"])`);
+      b.ab("click", `main a:is([href="${clipPath}"], [href^="${clipPath}?"])`);
       await until(
         () => b.ev("location.pathname") === clipPath,
-        "grid click opens the clip",
+        "processing opens the accepted clip",
       );
+      b.ab("open", origin + recordingGrid);
+      b.ab("wait", clipSelector);
+      await shootGrid();
+      b.ab("click", clipSelector);
+      b.ab("wait", `main a[href="${recordingGrid}"]`);
       b.ab("click", `main a[href="${recordingGrid}"]`);
       await until(
-        () =>
-          b.ev("location.pathname + location.search") === recordingGrid &&
-          b.ev(
-            `Boolean(document.querySelector(${JSON.stringify(clipSelector)}))`,
-          ),
+        () => b.ev("location.pathname + location.search") === recordingGrid,
         "Back to Data browser restores the recording filter and clip",
-      );
-      check(
-        "Back to Data browser restores the recording-filtered clip grid",
-        true,
       );
       b.ab("click", clipSelector);
     } else {
-      b.ab("open", origin + clipPath);
+      b.ab("open", `${origin}${clipPath}?datasetId=${datasetId}`);
     }
-    await until(() => b.ev(canvases) > 0, `${label} Rerun canvas`, 120);
     check(
-      `${label}: opens the SAME clip URL`,
+      `${label}: opens the canonical clip URL`,
       b.ev("location.pathname") === clipPath,
     );
-    if (isStaff) {
-      await until(
-        () => b.ev("Boolean(document.querySelector('#task-label'))"),
-        "staff review editor",
-      );
-      check("staff: review editor present beside the real viewer", true);
-    } else {
-      check(
-        "customer: no review editor or notes",
-        b.ev(
-          "!document.querySelector('#task-label') && !document.querySelector('#review-notes')",
-        ),
-      );
-    }
+    await until(loaded, `${label} video loaded`, 120);
     check(
-      `${label}: no release/export action`,
-      !b.ev(
-        "[...document.querySelectorAll('button,a')].some(e=>/\\b(export|release)\\b/i.test(e.textContent))",
-      ),
+      `${label}: review actions visibility matches role`,
+      b.ev("Boolean(document.getElementById('tab-decision'))") === isStaff,
     );
-    return { b, shoot, canvases };
+    return { b, shoot };
+
+    async function shootGrid() {
+      const file = `${outDir}browser/${label}-grid-1280.png`;
+      b.ab("screenshot", file, "--full");
+      screenshots.push(file.split("/").pop());
+    }
   }
 
   // ============================================================ probe
@@ -1359,11 +1318,13 @@ async function main() {
   const s = await browserPass("staff", staff, true);
   check(
     "staff sees the latest approved label",
-    s.b.ev("document.querySelector('#task-label').value") === latestLabel,
+    s.b
+      .ev("document.querySelector('main h1').textContent")
+      .includes(latestLabel),
   );
   await s.shoot("staff-clip");
   s.b.close(); // two live Chromes exceed the guard's pids limit
-  const c = await browserPass("customer", customer, false);
+  const c = await browserPass("customer", customer, false, D1);
   check(
     "customer sees the latest approved label",
     c.b.ev("document.body.innerText").includes(latestLabel),
@@ -1376,7 +1337,7 @@ async function main() {
   );
   evidence.screenshots = screenshots;
   evidence.finishedAt = new Date().toISOString();
-  evidence.outcome = "all checks passed (simulation-only, software WebGL)";
+  evidence.outcome = "all checks passed (simulation only)";
   flush();
   console.log(`SA-40 qualification checks passed: ${evidence.checks.length}`);
 }

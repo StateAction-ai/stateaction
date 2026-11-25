@@ -194,7 +194,10 @@ export function checkManifest(
   }
 
   const clipTask = facts.inputs.taskInput.schemaVersion === 4;
-  if (clipTask !== (manifest.schema === "stateaction.processing_result.v5")) {
+  const clipManifest =
+    manifest.schema === "stateaction.processing_result.v5" ||
+    manifest.schema === "stateaction.processing_result.v6";
+  if (clipTask !== clipManifest) {
     return bad("manifest_clip_mismatch");
   }
   if (clipTask) {

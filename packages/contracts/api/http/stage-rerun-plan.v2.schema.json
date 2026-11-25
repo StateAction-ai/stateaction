@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/stage-rerun-plan.v2.json",
+  "title": "Stage-set rerun preview v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "scope",
+    "planSha256",
+    "maxGpuCostUsd",
+    "maxComputeCostUsd",
+    "estimatedComputeCostUsd",
+    "clips"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "scope": {
+      "enum": ["clip", "failed_clips"]
+    },
+    "planSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "maxGpuCostUsd": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,8})\\.[0-9]{2}$"
+    },
+    "maxComputeCostUsd": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,8})\\.[0-9]{2}$"
+    },
+    "estimatedComputeCostUsd": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,8})\\.[0-9]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clipId",
+          "parentJobId",
+          "ordinal",
+          "startTsNs",
+          "endTsNs",
+          "execute",
+          "reuse",
+          "maxGpuCostUsd",
+          "maxComputeCostUsd",
+          "estimatedComputeCostUsd",
+          "estimatedSeconds"
+        ],
+        "properties": {
+          "clipId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "parentJobId": {
+            "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "startTsNs": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endTsNs": {
+            "oneOf": [
+              {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/timestampNs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "execute": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/execute"
+          },
+          "reuse": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/reuse"
+          },
+          "maxGpuCostUsd": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/maxGpuCostUsd"
+          },
+          "maxComputeCostUsd": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/maxComputeCostUsd"
+          },
+          "estimatedComputeCostUsd": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/estimatedComputeCostUsd"
+          },
+          "estimatedSeconds": {
+            "$ref": "https://stateaction.ai/schemas/http/stage-rerun-plan.v1.json#/properties/estimatedSeconds"
+          }
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "scope": {
+        "const": "clip"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "clips": {
+        "maxItems": 1,
+        "type": "array"
+      }
+    }
+  }
+}

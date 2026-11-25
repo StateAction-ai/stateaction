@@ -12,10 +12,10 @@ export interface ConsoleSession {
 export interface NavItem {
   href: string;
   label: string;
-  icon: "pipeline" | "data" | "review";
+  icon: "recordings" | "data" | "recipes" | "settings";
 }
 
-/** Role-specific navigation. No project selector or Releases entry; Review is staff only. */
+/** Staff operations are excluded from the customer navigation. */
 export function navigationFor(role: ConsoleRole): NavItem[] {
   const data: NavItem = {
     href: "/data-browser",
@@ -24,9 +24,10 @@ export function navigationFor(role: ConsoleRole): NavItem[] {
   };
   return role === "staff"
     ? [
-        { href: "/pipeline", label: "Pipeline", icon: "pipeline" },
-        { href: "/review", label: "Review", icon: "review" },
+        { href: "/recordings", label: "Recordings", icon: "recordings" },
         data,
+        { href: "/recipes", label: "Recipes", icon: "recipes" },
+        { href: "/settings", label: "Settings", icon: "settings" },
       ]
     : [data];
 }

@@ -240,18 +240,17 @@ describe("staff job control API", () => {
     const res = await send(jars.staff, j.id, cmd(j.id, "retry", "failed"));
     assert.equal(res.status, 409);
     assert.match(json(res).error.message, /^source_reupload_required/);
-    const page = await navigate(`/pipeline/${ids.failed}`, jars.staff);
-    assert.match(page.text, /corrected source/);
+    const page = await navigate(`/recordings/${ids.failed}`, jars.staff);
+    assert.equal(page.status, 200);
+    assert.match(page.text, /Source checksum mismatch/);
     assert.doesNotMatch(page.text, /Retry as new job/);
   });
 });
 
 describe("retry of a failed job with proven termination", () => {
-  test("the page offers Retry and the API retries once, idempotently", async () => {
+  test("the frozen API retries once, idempotently", async () => {
     const j = await job(ids.processing);
     assert.equal(j.state, "failed");
-    const page = await navigate(`/pipeline/${ids.processing}`, jars.staff);
-    assert.match(page.text, /Retry as new job/);
     const requestId = randomUUID();
     const first = await send(
       jars.staff,
@@ -267,15 +266,5 @@ describe("retry of a failed job with proven termination", () => {
     assert.equal(again.status, 200);
     assert.equal(json(again).data.replayed, true);
     assert.equal((await job(ids.processing)).id, requestId);
-  });
-});
-
-describe("server-rendered controls", () => {
-  test("the queued retry attempt shows a Cancel control; stale pages stay fenced by the API", async () => {
-    const page = await navigate(`/pipeline/${ids.live}`, jars.staff);
-    assert.equal(page.status, 200);
-    assert.match(page.text, /data-testid="job-controls"/);
-    assert.match(page.text, /Cancel job/);
-    assert.doesNotMatch(page.text, /Retry as new job/);
   });
 });

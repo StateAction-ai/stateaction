@@ -1,0 +1,72 @@
+{
+  "contract": "http.stage-rerun-plan-request.v2",
+  "cases": [
+    {
+      "name": "two stages on one clip",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "clip",
+          "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            "segment",
+            "hand_pose"
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "all failed clips",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "failed_clips"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "duplicate stage",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "clip",
+          "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            "caption",
+            "caption"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "clip planning has a separate command",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "clip",
+          "clipId": "019a4b2c-0000-7f50-8a6b-7c8d9e0f1a2b",
+          "parentJobId": "019a4b2c-0001-7f50-8a6b-7c8d9e0f1a2b",
+          "stages": [
+            "clip_plan"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

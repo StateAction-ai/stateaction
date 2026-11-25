@@ -136,7 +136,9 @@ export function parseModule(ref: string): { name: string; version: string } {
     : { name: ref.slice(0, at), version: ref.slice(at + 1) };
 }
 
-export function nodeDurationSeconds(node: DagRunNode): number | null {
+export function nodeDurationSeconds(
+  node: Pick<DagRunNode, "startedAt" | "finishedAt">,
+): number | null {
   if (!node.startedAt || !node.finishedAt) return null;
   const ms = Date.parse(node.finishedAt) - Date.parse(node.startedAt);
   return Number.isFinite(ms) && ms >= 0 ? ms / 1000 : null;

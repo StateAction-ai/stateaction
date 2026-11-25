@@ -31,10 +31,12 @@ from .artifact_clip import _vcl_hashes_annexb, _vcl_hashes_avcc
 from .artifact_types import (
     RULE_REVISION,
     ExportError,
+    ExportLimits,
     OutputFile,
     make_output,
     require,
 )
+from .review_video import REVIEW_VIDEO_SLOT, ReviewVideo
 from .source_range import ClipBinding
 
 TIME_BASE = Fraction(1, 1_000_000)
@@ -317,11 +319,17 @@ class RecordingWriter:
     """Build presence lanes and, for legacy jobs, also remux the recording."""
 
     def __init__(
-        self, scratch: Path, first: Any, *, include_video: bool = True
+        self,
+        scratch: Path,
+        first: Any,
+        *,
+        clip: ClipBinding | None = None,
+        limits: ExportLimits = ExportLimits(),
     ) -> None:
         import av
 
         au = first.access_unit
+        include_video = clip is None
         require(
             not include_video or au.is_idr, "E_RECORDING_START_NOT_IDR", au.sequence
         )
@@ -337,6 +345,11 @@ class RecordingWriter:
         self._mp4 = (
             av.open(str(self.path), "w", format="mp4") if include_video else None
         )
+        self._review_video = (
+            ReviewVideo(scratch / REVIEW_VIDEO_SLOT, clip, first, limits)
+            if clip is not None
+            else None
+        )
         self._stream = None
         if self._mp4 is not None:
             self._stream = self._mp4.add_stream("h264")
@@ -351,6 +364,8 @@ class RecordingWriter:
         pts = au.encoder_pts_us - self.origin
         require(pts > self.last_pts, "E_RECORDING_PTS_ORDER", pts)
         self.last_pts = pts
+        if self._review_video is not None:
+            self._review_video.add(frame)
         if self._mp4 is not None:
             packet = self._av.Packet(au.data)
             packet.pts = packet.dts = pts
@@ -405,6 +420,13 @@ class RecordingWriter:
             outputs.append(
                 make_output("recording_mp4", RECORDING_NAME, self.path, None)
             )
+        if self._review_video is not None:
+            self._review_video.close()
+            outputs.append(
+                make_output(
+                    "clip_mp4", REVIEW_VIDEO_SLOT, self._review_video.path, None
+                )
+            )
         provenance = hand_model.PINS
         doc = {
             "schema": "stateaction.hand_presence.v1",
@@ -454,6 +476,8 @@ class RecordingWriter:
 
     def abort(self) -> None:
         try:
+            if self._review_video is not None:
+                self._review_video.abort()
             if self._mp4 is not None:
                 self._mp4.close()
         except Exception:  # best effort during failure cleanup

@@ -81,6 +81,7 @@ export function buildReviewModel(
     (spans ?? []).map((s) => ({
       startS: sec(s.start),
       endS: sec(s.end),
+      ...openEnd(s.end),
       state: s.state,
     }));
   const leftSpans = presence(annotations.hand_presence?.lanes.left);
@@ -157,6 +158,7 @@ export function buildReviewModel(
       endS,
       startFrameId: row.start.source_frame_id,
       endFrameId: row.end.source_frame_id,
+      ...openEnd(row.end),
       kind: row.status === "failed_window" ? "failed_window" : "segment",
       caption,
       handsLR: (() => {
@@ -176,6 +178,7 @@ export function buildReviewModel(
       kind: "window",
       startS,
       endS,
+      ...openEnd(w.core_end),
       code: w.error_code,
       cardIndex:
         cards.find((c) => c.kind === "failed_window" && c.startS === startS)
@@ -188,6 +191,7 @@ export function buildReviewModel(
         kind: "caption",
         startS: c.startS,
         endS: c.endS,
+        ...(c.endsAtVideoEnd ? { endsAtVideoEnd: c.endsAtVideoEnd } : {}),
         code: c.caption.code,
         cardIndex: c.index,
       });
@@ -208,6 +212,7 @@ export function buildReviewModel(
       .map((s) => ({
         startS: s.startS,
         endS: s.endS,
+        ...(s.endsAtVideoEnd ? { endsAtVideoEnd: s.endsAtVideoEnd } : {}),
         state: s.state === "failed" ? "failed" : "present",
       }));
 
@@ -240,6 +245,36 @@ export function buildReviewModel(
       failedCaptions: cards.filter(
         (c) => c.kind === "segment" && c.caption.state === "failed",
       ).length,
+    },
+  };
+}
+
+function openEnd(ref: EndFrameRef): { endsAtVideoEnd?: true } {
+  return ref.timestamp_ns === null ? { endsAtVideoEnd: true } : {};
+}
+
+export function withMeasuredVideoDuration(
+  model: ReviewModel,
+  seconds: number,
+): ReviewModel {
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds === model.durationS)
+    return model;
+  const extendOpenEnd = <
+    T extends { startS: number; endS: number; endsAtVideoEnd?: true },
+  >(
+    span: T,
+  ): T =>
+    span.endsAtVideoEnd
+      ? { ...span, endS: Math.max(span.startS, seconds) }
+      : span;
+  return {
+    ...model,
+    durationS: seconds,
+    cards: model.cards.map(extendOpenEnd),
+    failures: model.failures.map(extendOpenEnd),
+    lanes: {
+      left: model.lanes.left.map(extendOpenEnd),
+      right: model.lanes.right.map(extendOpenEnd),
     },
   };
 }

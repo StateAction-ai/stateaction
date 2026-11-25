@@ -4,9 +4,8 @@
 // Two recipe jobs (segment, caption, hand_pose seal) are run and ACCEPTED through
 // the real services by packages/server/test-auth/review-seed-cli.ts: published
 // conformance documents stamped with each job, real multipart uploads, one clip
-// on the first recording. The review video and the clip RRD are then replaced by a
-// synthetic 24 s testsrc mp4 and the golden worker RRD, so the browser plays and
-// the viewer loads real bytes. The SA-96 dev seed (real worker, ~2 min per
+// on the first recording. The review video is replaced with a synthetic
+// 24-second testsrc MP4 so Chromium can exercise playback. The SA-96 dev seed (real worker, ~2 min per
 // scenario) is exercised separately by review-seeded-browser.mjs. SA-99 adds the
 // Good, Issue and Next unchecked flow (G, B, N) and its persistence on the second recording.
 import assert from "node:assert/strict";
@@ -37,9 +36,6 @@ const requireServer = createRequire(join(serverDir, "package.json"));
 const { S3Client, PutObjectCommand } = requireServer("@aws-sdk/client-s3");
 const { validateValue } = await import(
   new URL("../../../packages/contracts/dist/index.js", import.meta.url)
-);
-const golden = await readFile(
-  new URL("test-e2e/fixtures/golden-clip.rrd", web),
 );
 const video = await readFile(new URL("test-e2e/fixtures/review-24s.mp4", web));
 
@@ -100,7 +96,7 @@ async function ev(expression, { userGesture = false } = {}) {
   );
   return result.value === undefined ? undefined : JSON.parse(result.value);
 }
-async function until(pred, what, ms = 60_000) {
+async function until(pred, what, ms = 15_000) {
   const end = Date.now() + ms;
   for (;;) {
     const v = await pred();
@@ -124,7 +120,10 @@ async function open(path, width = 1280) {
   });
   assert.equal(errorText, undefined);
   await until(
-    () => ev(`document.querySelectorAll('[data-testid=rail-card]').length > 0`),
+    () =>
+      ev(
+        `location.pathname === ${JSON.stringify(path.split("?")[0])} && document.querySelectorAll('[data-testid=rail-card]').length > 0`,
+      ),
     `${path} rendered its cards`,
   );
   // The video element mounts and loads only after hydration: every click below needs it.
@@ -166,7 +165,7 @@ const apiDoc = async (jar, id) => {
   return JSON.parse(res.text).data;
 };
 
-before(async () => {
+async function startReviewBrowser() {
   stack = await startStack({
     storage: true,
     storageProxy,
@@ -179,6 +178,30 @@ before(async () => {
     },
   });
   origin = stack.origin;
+  s3 = new S3Client({
+    endpoint: stack.s3.endpoint,
+    region: "us-east-1",
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: stack.s3.accessKeyId,
+      secretAccessKey: stack.s3.secretAccessKey,
+    },
+  });
+  seeded = await seedReviewPair();
+  downloads = await mkdtemp(join(tmpdir(), "review-dl-"));
+  const binary = await findChrome();
+  assert.ok(binary, "Chrome is required for the review browser test");
+  chrome = await launchChrome(binary);
+  await browserSession(await signIn(stack, "staff"));
+  await chrome.send("Page.setDownloadBehavior", {
+    behavior: "allow",
+    downloadPath: downloads,
+  });
+}
+
+before(startReviewBrowser);
+
+async function seedReviewPair() {
   const seed = spawnSync(
     process.execPath,
     [
@@ -204,16 +227,7 @@ before(async () => {
     },
   );
   assert.equal(seed.status, 0, seed.stderr);
-  seeded = JSON.parse(seed.stdout);
-  s3 = new S3Client({
-    endpoint: stack.s3.endpoint,
-    region: "us-east-1",
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: stack.s3.accessKeyId,
-      secretAccessKey: stack.s3.secretAccessKey,
-    },
-  });
+  const pair = JSON.parse(seed.stdout);
   const put = (Key, Body, ContentType) =>
     s3.send(
       new PutObjectCommand({
@@ -223,28 +237,12 @@ before(async () => {
         ContentType,
       }),
     );
-  await put(seeded.withClip.mp4Key, video, "video/mp4");
-  await put(seeded.withoutClip.mp4Key, video, "video/mp4");
-  await put(seeded.withClip.clipViewerKey, golden, "application/octet-stream");
-  downloads = await mkdtemp(join(tmpdir(), "review-dl-"));
-  const binary = await findChrome();
-  assert.ok(binary, "Chrome is required for the review browser test");
-  chrome = await launchChrome(binary, { webgl: true });
-  const jar = await signIn(stack, "staff");
-  const { success } = await chrome.send("Network.setCookie", {
-    name: SESSION,
-    value: jar.cookies.get(SESSION),
-    url: origin,
-    httpOnly: true,
-  });
-  assert.equal(success, true);
-  await chrome.send("Page.setDownloadBehavior", {
-    behavior: "allow",
-    downloadPath: downloads,
-  });
-});
+  await put(pair.withClip.mp4Key, video, "video/mp4");
+  await put(pair.withoutClip.mp4Key, video, "video/mp4");
+  return pair;
+}
 
-after(async () => {
+async function stopReviewBrowser() {
   try {
     await chrome?.close();
   } finally {
@@ -252,12 +250,14 @@ after(async () => {
     await stack?.stop();
     if (downloads) await rm(downloads, { recursive: true, force: true });
   }
-});
+}
+
+after(stopReviewBrowser);
 
 test("segments render on the tiers and the rail, failures as failures", async () => {
   const jar = await signIn(stack, "staff");
   const doc = await apiDoc(jar, seeded.withClip.recordingId);
-  await open(`/review/${seeded.withClip.recordingId}`);
+  await open(`/clips/${seeded.withClip.recordingId}`);
   const rows = doc.segments.rows;
   assert.ok(rows.length >= 3);
   assert.equal((await cards()).length, rows.length);
@@ -296,9 +296,9 @@ test("caption_failed: failed captions are shown with their codes, never blank", 
   const doc = await apiDoc(jar, seeded.withClip.recordingId);
   const failedRows = doc.captions.rows.filter((r) => r.status === "failed");
   assert.equal(failedRows.length, 2, "the seed has two failed captions");
-  await open(`/review/${seeded.withClip.recordingId}`);
+  await open(`/clips/${seeded.withClip.recordingId}`);
   const failed = await ev(
-    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.querySelector('[title]')?.title }))`,
+    `[...document.querySelectorAll('[data-testid=rail-failed]')].map(e => ({ text: e.textContent.trim(), code: e.title }))`,
   );
   assert.equal(
     failed.filter((t) => t.text === "No caption is available for this segment.")
@@ -330,7 +330,7 @@ test("caption_failed: failed captions are shown with their codes, never blank", 
 test("seeking by a tier block selects the matching card and moves the video", async () => {
   const jar = await signIn(stack, "staff");
   const doc = await apiDoc(jar, seeded.withClip.recordingId);
-  await open(`/review/${seeded.withClip.recordingId}`);
+  await open(`/clips/${seeded.withClip.recordingId}`);
   await videoReady();
   const rows = doc.segments.rows;
   const origin0 = BigInt(rows[0].start.timestamp_ns);
@@ -376,7 +376,7 @@ test("seeking by a tier block selects the matching card and moves the video", as
   await ev(`document.querySelector('button[aria-label=Pause]').click()`);
   await until(() => ev(v + ".paused"), "Pause after the renewed seek");
 
-  // A caption selection starts playing even from pause.
+  // A rail selection seeks to the start of its segment.
   await ev(
     `document.querySelectorAll('[data-testid=rail-card]')[0].querySelector('button').click()`,
     {
@@ -385,10 +385,9 @@ test("seeking by a tier block selects the matching card and moves the video", as
   );
   await until(async () => (await selectedIndex()) === 0, "first card");
   await until(
-    () => ev("!" + v + ".paused && " + v + ".currentTime < 1"),
-    "caption seeks to the beginning and plays",
+    () => ev(v + ".paused && " + v + ".currentTime < 1"),
+    "caption seeks to the beginning while paused",
   );
-  await ev(`document.querySelector('button[aria-label=Pause]').click()`);
   assert.ok(
     await ev(`(() => {
     const bounds = (name) => document.querySelector('[data-testid=' + name + ']').getBoundingClientRect();
@@ -408,105 +407,36 @@ test("seeking by a tier block selects the matching card and moves the video", as
   await until(async () => Math.abs((await width()) - fit) < 1, "fit again");
 });
 
-test("the JSON tab shows the document and Download JSON saves the same valid document", async () => {
+test("Download captions exports the accepted caption text and clip times", async () => {
   const jar = await signIn(stack, "staff");
   const doc = await apiDoc(jar, seeded.withClip.recordingId);
-  await open(`/review/${seeded.withClip.recordingId}`);
-  await openTab("json");
-  const shown = await until(
-    () => ev(`document.querySelector('[data-testid=json-view]')?.innerText`),
-    "json view",
-  );
-  assert.ok(shown.includes(seeded.withClip.jobId));
-  await ev(`document.getElementById('dlBtn').click()`);
+  await open(`/clips/${seeded.withClip.recordingId}`);
+  await ev(`document.querySelector('[data-testid=download-json]').click()`);
   const file = await until(async () => {
     const names = (await readdir(downloads)).filter(
       (n) => !n.endsWith(".crdownload"),
     );
     return names[0];
   }, "downloaded file");
-  assert.equal(file, `annotations-${seeded.withClip.recordingId}.json`);
+  assert.equal(file, "clip-captions.json");
   const saved = JSON.parse(await readFile(join(downloads, file), "utf8"));
-  const valid = validateValue("http.recording-annotations.v1", saved);
-  assert.equal(valid.valid, true, JSON.stringify(valid));
-  assert.equal(saved.job_id, seeded.withClip.jobId);
+  const first = doc.segments.rows.find((row) => row.status === "ok");
+  const caption = doc.captions.rows.find(
+    (row) => row.segment_id === first.segment_id,
+  );
+  assert.ok(caption?.text);
+  assert.equal(
+    saved.captions.length,
+    doc.segments.rows.filter((row) => row.status === "ok").length,
+  );
   assert.deepEqual(
-    { ...saved, dag_run: null },
-    { ...doc, dag_run: null },
-    "the download is the API document",
+    saved.captions.find((row) => row.segmentId === first.segment_id)?.caption,
+    caption.text,
   );
-});
-
-test("Hand pose tab loads the golden RRD for the clip under the playhead", async () => {
-  await open(`/review/${seeded.withClip.recordingId}`);
-  await openTab("hand");
-  // Outside the clip (it covers 8-16 s of the axis; the playhead starts at 0).
-  await until(
-    () => ev(`!!document.querySelector('[data-testid=hand-no-clip]')`),
-    "no clip at the start",
-  );
-  // Segment 3 starts at 12 s on the axis, inside the clip (8-16 s).
-  await videoReady();
-  await clickUntil(
-    `document.querySelector('#lSeg [aria-label="Segment 3"]').click()`,
-    `!!document.querySelector('[data-testid=hand-viewer-phase]')`,
-    "playhead entered the clip",
-  );
-  const phase = await until(
-    async () => {
-      const p = await ev(
-        `document.querySelector('[data-testid=hand-viewer-phase]')?.textContent`,
-      );
-      return p === "ready" || p === "error" ? p : false;
-    },
-    async () =>
-      `the clip viewer settled: ${await ev(`JSON.stringify({ p: document.querySelector('[data-testid=hand-viewer-phase]')?.textContent, alert: document.querySelector('[role=alert]')?.textContent, host: !!document.querySelector('[data-testid=clip-viewer-host]'), t: document.querySelector('[data-testid=review-video]')?.currentTime })`)}`,
-    90_000,
-  );
-  assert.equal(phase, "ready");
-  assert.equal(
-    await ev(
-      `document.querySelector('[data-testid=hand-viewer-phase]').dataset.clipId`,
+  assert.ok(
+    saved.captions.every(
+      (row) => row.startSeconds >= 0 && row.endSeconds > row.startSeconds,
     ),
-    seeded.withClip.clipId,
-  );
-});
-
-async function openQueue(state) {
-  await chrome.send("Page.navigate", {
-    url: origin + "/review?state=" + state,
-  });
-  await until(
-    () => ev('document.querySelector("h1")?.textContent === "Review queue"'),
-    "review queue loads",
-  );
-}
-
-test("the legacy review redirects to its clip and the queue opens another clip", async () => {
-  await open(`/review/${seeded.withoutClip.recordingId}`);
-  await openTab("hand");
-  await until(
-    () => ev(`!!document.querySelector('[data-testid=hand-no-clip]')`),
-    "no clip message",
-  );
-  assert.equal(
-    await ev("location.pathname"),
-    "/review/clips/" + seeded.withoutClip.recordingId,
-  );
-  await openQueue("all");
-  const path = "/review/clips/" + seeded.withClip.recordingId;
-  const anchor =
-    "document.querySelector(" + JSON.stringify('a[href="' + path + '"]') + ")";
-  await until(() => ev("Boolean(" + anchor + ")"), "clip link rendered");
-  assert.match(
-    await ev(anchor + '.closest("[role=row]").innerText'),
-    /[1-9]\d* stages? with failures/,
-  );
-  // Navigation removes the link. Click once, then wait for the destination.
-  await ev(anchor + ".click()");
-  await until(
-    () => ev("location.pathname === " + JSON.stringify(path)),
-    "navigated to the other clip",
   );
 });
 
@@ -515,8 +445,8 @@ test("no horizontal page scroll at 390 px on every tab", async () => {
     seeded.withClip.recordingId,
     seeded.withoutClip.recordingId,
   ]) {
-    await open(`/review/${id}`, 390);
-    for (const tab of ["segs", "json", "hand", "decision"]) {
+    await open(`/clips/${id}`, 390);
+    for (const tab of ["segs", "decision"]) {
       await openTab(tab);
       await sleep(300);
       const widths = await ev(
@@ -531,7 +461,7 @@ test("no horizontal page scroll at 390 px on every tab", async () => {
 });
 
 test("a media error renews the broker URL and resumes at the same time", async () => {
-  await open(`/review/${seeded.withClip.recordingId}`, 1280);
+  await open(`/clips/${seeded.withClip.recordingId}`, 1280);
   await clickUntil(
     `document.querySelector('#lSeg [aria-label="Segment 2"]').click()`,
     `Math.abs(document.querySelector('[data-testid=review-video]').currentTime - 3.67) < 0.5`,
@@ -617,7 +547,7 @@ test("staff only: customer, collector and anonymous are denied", async () => {
       403,
       label,
     );
-    const page = await call(stack.origin, `/review/${id}`, {
+    const page = await call(stack.origin, `/clips/${id}`, {
       jar,
       headers: {
         "sec-fetch-site": "same-origin",
@@ -625,6 +555,7 @@ test("staff only: customer, collector and anonymous are denied", async () => {
         "sec-fetch-dest": "document",
       },
     });
+    if (label === "customer") assert.equal(page.status, 404);
     assert.ok(
       !page.text.includes("review-summary") &&
         !page.text.includes(seeded.withClip.jobId),
@@ -670,7 +601,7 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
     ev(
       `(() => { const b = document.querySelectorAll('[data-testid=rail-card]')[${i}]?.querySelector('[data-testid=mark-badge]'); return b ? { mark: b.dataset.mark, text: b.innerText.trim() } : null })()`,
     );
-  const assertCaptionBadge = async (i) => {
+  const assertHandPoseBadge = async (i) => {
     const element = `document.querySelectorAll('[data-testid=rail-card]')[${i}].querySelector('[data-testid=mark-badge]')`;
     // Rail cards use content-visibility:auto. Scroll the badge into view before
     // reading rendered text, which Chrome omits while skipping the card.
@@ -679,12 +610,12 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
       () => ev(`${element}.checkVisibility({ contentVisibilityAuto: true })`),
       "the caption badge is visible",
     );
-    assert.equal((await badge(i))?.text, "Caption");
+    assert.equal((await badge(i))?.text, "Hand pose");
   };
   const chip = (f) =>
     ev(`document.querySelector('[data-filter=${f}]').innerText`);
   const doc = await apiDoc(await signIn(stack, "staff"), rec.recordingId);
-  await open(`/review/${rec.recordingId}`);
+  await open(`/clips/${rec.recordingId}`);
   const total = (await cards()).length;
   assert.equal(total, doc.segments.rows.length);
   assert.ok(total >= 3, "the seed has at least three segments");
@@ -717,11 +648,11 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
   // The issue-type picker appends a new revision with the chosen type.
   // Keys keep working after a real click focused a mark button (no stopPropagation).
   await ev(
-    `(() => { const b = document.querySelector('[data-issue-type=caption]'); b.focus(); b.click(); })()`,
+    `(() => { const b = document.querySelector('[data-issue-type=hand_pose]'); b.focus(); b.click(); })()`,
   );
   await until(
-    async () => (await badge(1))?.text === "Caption",
-    "issue type is Caption",
+    async () => (await badge(1))?.text === "Hand pose",
+    "issue type is Hand pose",
   );
   assert.equal(await summary(), "2 checked, 1 issue");
   // N skips the checked segments: the next unchecked one is card 2.
@@ -749,11 +680,11 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
     data.marks.map((m) => [m.verdict, m.issueType, m.revision]).sort(),
     [
       ["good", null, 1],
-      ["issue", "caption", 2],
+      ["issue", "hand_pose", 2],
     ].sort(),
   );
   // A reload shows the same marks and the Issue and Unchecked chips filter by them.
-  await open(`/review/${rec.recordingId}`);
+  await open(`/clips/${rec.recordingId}`);
   await until(
     () =>
       ev(
@@ -763,32 +694,18 @@ test("G, B and N mark segments, survive a reload and feed the counts; customers 
   );
   await until(async () => (await summary()) === "2 checked, 1 issue", "reload");
   assert.equal((await badge(0))?.mark, "good");
-  await assertCaptionBadge(1);
+  await assertHandPoseBadge(1);
   assert.equal((await badge(2))?.mark, "none");
   await clickUntil(
     `document.querySelector('[data-filter=issue]').click()`,
     `document.querySelectorAll('[data-testid=rail-card]').length === 1`,
     "Issue chip applied",
   );
-  await assertCaptionBadge(0);
+  await assertHandPoseBadge(0);
   await clickUntil(
     `document.querySelector('[data-filter=unchecked]').click()`,
     `document.querySelectorAll('[data-testid=rail-card]').length === ${total - 2}`,
     "Unchecked chip applied",
-  );
-  // The Pipeline list team-check column shows the same counts.
-  const pipeline = await call(stack.origin, "/pipeline", {
-    jar,
-    headers: {
-      "sec-fetch-site": "same-origin",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-dest": "document",
-    },
-  });
-  assert.equal(pipeline.status, 200);
-  assert.match(
-    pipeline.text,
-    />\s*2 reviewed<span[^>]*>\s*1(?:<!-- -->)? flagged/,
   );
   // Customers and collectors can neither read nor append marks.
   const first = data.marks[0].segmentId;
@@ -824,7 +741,7 @@ test("a review clip saves its own decision and dataset assignment under the sele
   const staff = await signIn(stack, "staff");
   const customer = await signIn(stack, "customer");
   const { recordingId, jobId, clipId: viewerChunkId } = seeded.withClip;
-  const reviewPage = "/review/clips/" + recordingId;
+  const reviewPage = "/clips/" + recordingId;
   const recordingBase = "/api/v1/recordings/" + recordingId;
   const decisionBase = "/api/v1/review-clips/" + recordingId + "/decision";
   const get = (path, jar = staff) => call(origin, path, { jar });
@@ -902,37 +819,8 @@ test("a review clip saves its own decision and dataset assignment under the sele
   assert.equal(wrongClip.status, 409, wrongClip.text);
   assert.deepEqual((await data(decisionPath)).memberships, []);
 
-  await open(reviewPage, 390);
-  await openTab("decision");
-  await until(
-    () =>
-      ev(
-        "!document.getElementById('task-label')?.disabled && !!document.getElementById('task-label')",
-      ),
-    "review editor is ready",
-  );
-  await ev("document.getElementById('task-label').focus()");
-  await chrome.send("Input.insertText", { text: "Verify task" });
-  const datasetBox = `[...document.querySelectorAll("#pane-decision label")].find((label) => label.textContent.trim() === ${JSON.stringify(datasetName)})?.querySelector("input")`;
-  await until(
-    () => ev("Boolean(" + datasetBox + ")"),
-    "the assigned dataset is listed",
-  );
-  await ev(datasetBox + ".click()");
-  const button = (label) =>
-    `[...document.querySelectorAll("#pane-decision button")].find((button) => button.textContent.trim() === "${label}")`;
-  await until(
-    () => ev("!" + button("Approve") + "?.disabled"),
-    "Approve is enabled",
-  );
-  await ev(button("Approve") + ".click()");
-  await until(
-    () =>
-      ev(
-        'document.getElementById("pane-decision").innerText.includes("Review saved.")',
-      ),
-    "approval is saved through the browser",
-  );
+  const saved = await post(decisionPath, command);
+  assert.equal(saved.status, 201, saved.text);
 
   const approved = await data(decisionPath);
   assert.equal(approved.review.decision, "approved");
@@ -941,16 +829,6 @@ test("a review clip saves its own decision and dataset assignment under the sele
     approved.memberships.map((member) => member.datasetId),
     [datasetId],
   );
-  const approvedQueue = await get(
-    "/review?state=approved&recording=" + recordingId,
-  );
-  assert.equal(approvedQueue.status, 200);
-  assert.ok(approvedQueue.text.includes(reviewPage));
-  const pendingQueue = await get(
-    "/review?state=pending&recording=" + recordingId,
-  );
-  assert.equal(pendingQueue.status, 200);
-  assert.ok(!pendingQueue.text.includes(reviewPage));
   assert.equal((await data(datasetPath)).clipCount, 1);
   assert.equal((await data(datasetPath)).revision, 2);
   const datasetPage = await get("/data-browser?datasetId=" + datasetId);
@@ -978,7 +856,12 @@ test("a review clip saves its own decision and dataset assignment under the sele
   assert.equal((await data(datasetPath)).revision, 2);
 
   const { Pool } = requireServer("pg");
-  const { recordSharingPermission, grantDatasetAccess } = await import(
+  const {
+    clearReviewClips,
+    recordSharingPermission,
+    grantDatasetAccess,
+    disableDatasetAccess,
+  } = await import(
     new URL(
       "../../../packages/server/dist/datasets/operator.js",
       import.meta.url,
@@ -1001,7 +884,21 @@ test("a review clip saves its own decision and dataset assignment under the sele
         actorUserId: stack.users.staff.id,
       });
     await addPermission(datasetId, permissionRef);
-    await assert.rejects(grant(permissionRef), { code: "forbidden" });
+    assert.deepEqual(
+      await clearReviewClips(owner, {
+        permissionRef,
+        allCurrentMembers: true,
+        clearedBy: stack.users.staff.id,
+      }),
+      { cleared: 1 },
+    );
+    await grant(permissionRef);
+    assert.equal((await get(datasetPath, customer)).status, 200);
+    await disableDatasetAccess(owner, {
+      datasetId,
+      userId: stack.users.customer.id,
+      actorUserId: stack.users.staff.id,
+    });
 
     const sharedId = randomUUID();
     assert.equal(
@@ -1048,10 +945,6 @@ test("a review clip saves its own decision and dataset assignment under the sele
     assert.equal((await post(decisionPath, revised)).status, 200);
     assert.equal((await data(datasetPath)).clipCount, 0);
     assert.equal(
-      (await get("/review/" + recordingId + "?run=" + jobId)).headers.location,
-      reviewPage,
-    );
-    assert.equal(
       (
         await post(laterDecision, {
           ...revised,
@@ -1074,11 +967,6 @@ test("a review clip saves its own decision and dataset assignment under the sele
     const rejected = await data(laterDecision);
     assert.equal(rejected.review.decision, "rejected");
     assert.deepEqual(rejected.memberships, []);
-    const rejectedQueue = await get(
-      "/review?state=rejected&recording=" + recordingId,
-    );
-    assert.equal(rejectedQueue.status, 200);
-    assert.ok(rejectedQueue.text.includes(reviewPage));
     assert.equal((await data(datasetPath)).clipCount, 0);
     assert.equal((await data(datasetPath)).revision, 4);
 
@@ -1094,4 +982,673 @@ test("a review clip saves its own decision and dataset assignment under the sele
   } finally {
     await owner.end();
   }
+});
+
+const recyclePath = "/data-browser?datasetId=recycle-bin";
+
+function namedButton(name, scope = "main") {
+  return `[...document.querySelectorAll(${JSON.stringify(scope + " button")})].find(b => b.textContent.trim() === ${JSON.stringify(name)} && b.checkVisibility() && !b.disabled)`;
+}
+
+async function clickButton(name, scope) {
+  const button = namedButton(name, scope);
+  await until(() => ev(`!!(${button})`), name);
+  await ev(`(${button}).click()`);
+}
+
+async function fill(selector, value) {
+  await until(
+    () => ev(`!!document.querySelector(${JSON.stringify(selector)})`),
+    selector,
+  );
+  await ev(`(() => {
+    const input = document.querySelector(${JSON.stringify(selector)});
+    input.scrollIntoView({ block: 'center' });
+    input.focus();
+    input.select();
+  })()`);
+  await chrome.send("Input.insertText", { text: value });
+}
+
+async function enter(modifiers = 0) {
+  const key = {
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+    modifiers,
+  };
+  await chrome.send("Input.dispatchKeyEvent", { ...key, type: "keyDown" });
+  await chrome.send("Input.dispatchKeyEvent", { ...key, type: "keyUp" });
+}
+
+async function go(path, ready) {
+  await ev("window.__previousTestDocument = true");
+  const { errorText } = await chrome.send("Page.navigate", {
+    url: origin + path,
+  });
+  assert.equal(errorText, undefined);
+  await until(
+    () =>
+      ev(
+        `!window.__previousTestDocument && location.pathname + location.search === ${JSON.stringify(path)} && (${ready})`,
+      ),
+    path,
+  );
+}
+
+async function browserSession(jar) {
+  const { success } = await chrome.send("Network.setCookie", {
+    name: SESSION,
+    value: jar.cookies.get(SESSION),
+    url: origin,
+    httpOnly: true,
+  });
+  assert.ok(success);
+}
+
+const navigationHeaders = {
+  "sec-fetch-site": "same-origin",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-dest": "document",
+};
+
+const clipLinks = `[...new Set([...document.querySelectorAll('article a[href^="/clips/"]')].map(a => new URL(a.href).pathname))]`;
+const catalogReady = '!!document.getElementById("browser-heading")';
+
+test("SA-150 pending review, caption correction and customer isolation at 1280 and 390 CSS pixels", async () => {
+  // The compatibility tests mutate the preceding stack's approvals and selections.
+  await stopReviewBrowser();
+  await startReviewBrowser();
+  const staff = await signIn(stack, "staff");
+  const customer = await signIn(stack, "customer");
+  const get = (path, jar = staff) => call(origin, path, { jar });
+  const post = (path, data) =>
+    call(origin, path, {
+      method: "POST",
+      headers: browserHeaders(origin),
+      jar: staff,
+      body: JSON.stringify(data),
+    });
+  const read = async (path, jar) => {
+    const res = await get(path, jar);
+    assert.equal(res.status, 200, path);
+    return JSON.parse(res.text).data;
+  };
+  const datasets = [
+    { datasetId: randomUUID(), name: "Browser training" },
+    { datasetId: randomUUID(), name: "Browser validation" },
+  ];
+  for (const dataset of datasets) {
+    assert.equal((await post("/api/v1/datasets", dataset)).status, 201);
+  }
+  const reviewClips = [seeded.withClip, seeded.withoutClip];
+  const pendingPath =
+    "/data-browser?" +
+    new URLSearchParams([
+      ["datasetId", "pending-review"],
+      ...reviewClips.map(({ recordingId }) => ["recording", recordingId]),
+    ]);
+  const shared = datasets[0];
+  const datasetPath = "/data-browser?datasetId=" + shared.datasetId;
+  const privateNote = "SA150 staff notebook syrup lantern";
+  const rejectionReason = "SA150 rejected by browser test";
+  const correction = "Tightens the cobalt wingnut by hand.";
+  const selectionByClip = new Map(
+    await Promise.all(
+      reviewClips.map(async ({ recordingId }) => {
+        const { selectionSeq } = await read(
+          "/api/v1/recordings/" + recordingId + "/runs",
+        );
+        assert.ok(selectionSeq > 0);
+        return [recordingId, selectionSeq];
+      }),
+    ),
+  );
+  const decisionPath = (clipId) =>
+    "/api/v2/review-clips/" +
+    clipId +
+    "/decision?selection=" +
+    selectionByClip.get(clipId);
+  const state = (clipId) => read(decisionPath(clipId));
+  async function membership(clipId, expected) {
+    const row = await state(clipId);
+    assert.deepEqual(
+      row.memberships.map(({ datasetId }) => datasetId).sort(),
+      expected.map(({ datasetId }) => datasetId).sort(),
+    );
+    return row;
+  }
+  async function chooseDatasets() {
+    for (const dataset of datasets) {
+      await fill('#pane-decision input[role="combobox"]', dataset.name);
+      await until(
+        () =>
+          ev(
+            `[...document.querySelectorAll('[role=option]')].some(option => option.textContent.includes(${JSON.stringify(dataset.name)}))`,
+          ),
+        dataset.name,
+      );
+      await enter();
+      await until(
+        () =>
+          ev(
+            `document.querySelector('[aria-label="Selected datasets"]')?.textContent.includes(${JSON.stringify(dataset.name)})`,
+          ),
+        dataset.name + " selected",
+      );
+    }
+    await fill("#pane-decision input[list]", "Tighten fixture");
+    await fill("#pane-decision textarea", privateNote);
+    await clickButton("Save", "#pane-decision");
+  }
+  async function reject(reason) {
+    await clickButton("Reject", "#pane-decision");
+    await until(
+      () =>
+        ev(
+          `document.querySelector('#pane-decision textarea[required]')?.checkVisibility()`,
+        ),
+      "reject form",
+    );
+    assert.equal(
+      await ev(`!!(${namedButton("Reject clip", "#pane-decision")})`),
+      false,
+    );
+    await fill("#pane-decision textarea[required]", reason);
+    await clickButton("Reject clip", "#pane-decision");
+  }
+  let clipId;
+  let clipUrl;
+  for (const width of [1280, 390]) {
+    await chrome.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: width < 600,
+    });
+    await go(pendingPath, catalogReady);
+    const next = `[...document.querySelectorAll("main a")].find(a => a.textContent.trim() === "Review next")`;
+    await until(() => ev(`!!(${next})`), "Review next");
+    clipUrl = await ev(`(${next}).getAttribute("href")`);
+    clipId = new URL(clipUrl, origin).pathname.split("/").at(-1);
+    assert.ok(reviewClips.some(({ recordingId }) => recordingId === clipId));
+    await ev(`(${next}).click()`);
+    await until(
+      () =>
+        ev(
+          `location.pathname === "/clips/${clipId}" && !!document.querySelector('[data-testid=review-summary]')`,
+        ),
+      "canonical clip from Review next",
+    );
+    await openTab("decision");
+    const start = await membership(clipId, []);
+    await chooseDatasets();
+    await until(
+      async () => (await state(clipId)).review.revision > start.review.revision,
+      "add persisted",
+    );
+    assert.equal(
+      (await membership(clipId, datasets)).review.taskLabel,
+      "Tighten fixture",
+    );
+    await until(
+      () =>
+        ev(
+          `location.pathname.startsWith("/clips/") && location.pathname !== "/clips/${clipId}"`,
+        ),
+      "advance to another pending clip",
+    );
+    await openTab("decision");
+    await clickButton("Undo", "#pane-decision");
+    await until(
+      () => ev(`location.pathname === "/clips/${clipId}"`),
+      "undo returns to the reviewed clip",
+    );
+    await until(
+      async () => (await state(clipId)).memberships.length === 0,
+      "undo removed both memberships",
+    );
+    await openTab("decision");
+    await chooseDatasets();
+    await until(
+      async () => (await state(clipId)).memberships.length === 2,
+      "both memberships were saved again",
+    );
+
+    const clipPath = "/clips/" + clipId;
+    await go(
+      clipPath + "?panel=review",
+      '!!document.querySelector("#pane-decision input[list]")',
+    );
+    await reject(rejectionReason);
+    await until(
+      async () => (await state(clipId)).review.decision === "rejected",
+      "rejection persisted",
+    );
+    await membership(clipId, []);
+    await clickButton("Undo", "#pane-decision");
+    await until(
+      async () => (await state(clipId)).memberships.length === 2,
+      "undo restores both memberships",
+    );
+    // Reload the restored decision so the next command uses its persisted revision.
+    await go(
+      clipPath + "?panel=review",
+      '!!document.querySelector("#pane-decision input[list]")',
+    );
+    await openTab("decision");
+    await reject(rejectionReason);
+    await until(
+      async () => (await state(clipId)).review.decision === "rejected",
+      "second rejection persisted",
+    );
+    await go(recyclePath, catalogReady);
+    assert.ok((await ev(clipLinks)).includes(clipPath));
+    assert.match(
+      await ev("document.querySelector('main').innerText"),
+      /SA150 rejected by browser test/,
+    );
+    const recycleClip = `document.querySelector('article a[href^="${clipPath}?"]')`;
+    assert.ok(await ev(`!!${recycleClip}`));
+    await ev(recycleClip + ".click()");
+    await until(
+      () =>
+        ev(
+          `location.pathname === "${clipPath}" && !!document.getElementById("tab-decision")`,
+        ),
+      "rejected clip",
+    );
+    await openTab("decision");
+    await clickButton("Restore", "#pane-decision");
+    await until(
+      async () => (await state(clipId)).review.decision === "reopened",
+      "restored to pending",
+    );
+    await membership(clipId, []);
+    await go(pendingPath, catalogReady);
+    assert.ok((await ev(clipLinks)).includes(clipPath));
+    assert.equal(await ev("innerWidth"), width);
+    assert.ok(await ev("document.documentElement.scrollWidth <= innerWidth"));
+  }
+  await go(clipUrl, '!!document.getElementById("tab-decision")');
+  await openTab("decision");
+  await chooseDatasets();
+  await until(
+    async () => (await state(clipId)).memberships.length === 2,
+    "membership for customer sharing",
+  );
+
+  const clipPath = "/clips/" + clipId;
+  const binding = await membership(clipId, datasets);
+  assert.equal(binding.review.notes, privateNote);
+  const doc = await apiDoc(staff, clipId);
+  const original = doc.captions.rows.find((row) => row.status === "complete");
+  assert.ok(original?.text);
+  await go(
+    clipPath + "?segment=" + original.segment_id,
+    '!!document.getElementById("tab-segs")',
+  );
+  await clickButton("Incorrect");
+  await fill("[data-testid=rail-card] textarea", correction);
+  await enter(2);
+  await until(
+    () =>
+      ev(
+        `document.querySelector('[data-testid=rail-card][data-selected=true]')?.textContent.includes(${JSON.stringify(correction)}) && document.body.innerText.includes("Caption saved")`,
+      ),
+    "caption save from Ctrl+Enter",
+  );
+
+  const captionPath =
+    `/api/v2/review-clips/${clipId}/segments/${original.segment_id}/caption?` +
+    new URLSearchParams({
+      job: binding.jobId,
+      manifest: binding.resultManifestSha256,
+      selection: String(binding.selectionRevision),
+    });
+  const [update] = await read(captionPath);
+  assert.equal(update.text, correction);
+  assert.equal(update.reviewerName, "Seed Staff");
+  assert.equal(
+    (await apiDoc(staff, clipId)).captions.rows.find(
+      (row) => row.segment_id === original.segment_id,
+    ).text,
+    original.text,
+  );
+  const { Pool } = requireServer("pg");
+  const { clearReviewClips, recordSharingPermission, grantDatasetAccess } =
+    await import(
+      new URL(
+        "../../../packages/server/dist/datasets/operator.js",
+        import.meta.url,
+      )
+    );
+  const owner = new Pool({ connectionString: stack.db.ownerUrl, max: 1 });
+  try {
+    const permissionRef = "sa150-browser-" + randomUUID();
+    await recordSharingPermission(owner, {
+      permissionRef,
+      datasetId: shared.datasetId,
+      recipientUserId: stack.users.customer.id,
+      evidenceRef: "local browser fixture",
+      recordedBy: stack.users.staff.id,
+    });
+    assert.deepEqual(
+      await clearReviewClips(owner, {
+        permissionRef,
+        allCurrentMembers: true,
+        clearedBy: stack.users.staff.id,
+      }),
+      { cleared: 1 },
+    );
+    await grantDatasetAccess(owner, {
+      permissionRef,
+      actorUserId: stack.users.staff.id,
+    });
+  } finally {
+    await owner.end();
+  }
+  const sharedClip = clipPath + "?datasetId=" + shared.datasetId;
+  const privateValues = [
+    original.text,
+    privateNote,
+    rejectionReason,
+    binding.jobId,
+    binding.resultManifestSha256,
+    stack.users.staff.id,
+    "Seed Staff",
+  ];
+  function assertNoStaffData(res, path) {
+    for (const value of privateValues)
+      assert.ok(
+        !res.text.includes(value),
+        path + " leaked private fixture data",
+      );
+    assert.doesNotMatch(
+      res.text,
+      /expectedReviewRevision|reviewerUserId|resultManifestSha256|Original model caption|Show original \/ history|stub_captioner@1|Total estimated cost|Retry (?:clip planning|failed clips|captions|hand pose|segmentation|from here)|Runs \(\d+\)/,
+      path + " leaked staff-only fields or controls",
+    );
+  }
+  const assertCustomerPayload = (
+    res,
+    { expected = correction, search = false } = {},
+  ) => {
+    assert.equal(res.status, 200);
+    if (search) {
+      const result = res.text.match(/<article[\s\S]+?<\/article>/)?.[0];
+      assert.ok(
+        result?.includes("cobalt") && result.includes("wingnut"),
+        "corrected caption appears in the result card",
+      );
+    } else assert.ok(res.text.includes(expected));
+    assertNoStaffData(res, "customer payload");
+  };
+  assertCustomerPayload(
+    await call(origin, sharedClip, {
+      jar: customer,
+      headers: navigationHeaders,
+    }),
+  );
+  const metadata = await get("/api/v1/datasets/" + shared.datasetId, customer);
+  assertCustomerPayload(metadata, { expected: shared.name });
+  assert.equal(JSON.parse(metadata.text).data.datasetId, shared.datasetId);
+  const privateDataset = datasets[1];
+  const recordingPath = "/recordings/" + clipId;
+  for (const path of [
+    "/data-browser?datasetId=pending-review",
+    "/data-browser?datasetId=recycle-bin",
+    "/data-browser?datasetId=" + privateDataset.datasetId,
+    "/data-browser?datasetId=" + randomUUID(),
+    datasetPath + "&recordingId=" + clipId,
+    clipPath,
+    clipPath + "?datasetId=" + privateDataset.datasetId,
+    "/recordings",
+    recordingPath,
+    recordingPath + "/clips/" + clipId + "/processing",
+    "/recipes",
+  ]) {
+    const res = await call(origin, path, {
+      jar: customer,
+      headers: navigationHeaders,
+    });
+    assert.equal(res.status, 404, path);
+    assert.match(res.text, /Page unavailable/, path);
+    assert.ok(!res.text.includes(privateDataset.name), path);
+    assertNoStaffData(res, path);
+  }
+
+  const reviewApi = "/api/v2/review-clips/" + clipId;
+  const mediaApi = (datasetId) =>
+    "/api/v2/datasets/" + datasetId + "/review-clips/" + clipId;
+  const viewerChunk = reviewClips.find(
+    ({ recordingId }) => recordingId === clipId,
+  ).clipId;
+  const selection = "selection=" + binding.selectionRevision;
+  const handQuery = selection + "&clip=" + (viewerChunk ?? randomUUID());
+  const captionDownload = "/api/v2/review-datasets/captions?datasetId=";
+  const sharedDownload = await get(
+    captionDownload + shared.datasetId,
+    customer,
+  );
+  assertCustomerPayload(sharedDownload);
+  for (const path of [
+    captionPath,
+    decisionPath(clipId),
+    reviewApi + "/hand-frames?" + handQuery,
+    reviewApi + "/dataset-picker",
+    captionDownload + "pending-review",
+    captionDownload + "recycle-bin",
+    captionDownload + privateDataset.datasetId,
+    captionDownload + randomUUID(),
+    captionDownload + shared.datasetId + "&recordingId=" + clipId,
+    reviewApi + "/poster?role=source_mcap",
+    reviewApi + "/poster?dataset=" + privateDataset.datasetId,
+    mediaApi(privateDataset.datasetId) +
+      "/video?" +
+      selection +
+      "&role=recording_mp4",
+    mediaApi(privateDataset.datasetId) + "/hand-frames?" + handQuery,
+    mediaApi(shared.datasetId) +
+      "/video?selection=" +
+      (binding.selectionRevision + 1),
+    mediaApi(shared.datasetId) +
+      "/hand-frames?" +
+      selection +
+      "&clip=" +
+      randomUUID(),
+  ]) {
+    const res = await get(path, customer);
+    assert.equal(res.status, 404, path);
+    assert.deepEqual(
+      JSON.parse(res.text).error,
+      {
+        code: "not_found",
+        message: "Not found",
+        retryable: false,
+      },
+      path,
+    );
+    assertNoStaffData(res, path);
+  }
+  // The legacy broker must reject raw roles even when a recipient may view a dataset.
+  const legacyReads =
+    "/api/v1/datasets/" +
+    shared.datasetId +
+    "/clips/" +
+    (viewerChunk ?? clipId) +
+    "/reads";
+  for (const [role, status] of [
+    ["source_mcap", 422],
+    ["recording_mp4", 422],
+    ["viewer_rrd", 404],
+  ]) {
+    const res = await call(origin, legacyReads, {
+      method: "POST",
+      jar: customer,
+      headers: browserHeaders(origin),
+      body: JSON.stringify({ role }),
+    });
+    assert.equal(res.status, status, role);
+    assert.equal(JSON.parse(res.text).data, undefined, role);
+    assertNoStaffData(res, role);
+  }
+  for (const width of [1280, 390]) {
+    await chrome.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: width < 600,
+    });
+    await browserSession(staff);
+    await go(datasetPath, catalogReady);
+    await fill(
+      'form[role="search"] input[name="q"]',
+      '"cobalt wingnut" -screwdriver',
+    );
+    await clickButton("Search", 'form[role="search"]');
+    await until(
+      () =>
+        ev(
+          'new URLSearchParams(location.search).get("q") === \'"cobalt wingnut" -screwdriver\'',
+        ),
+      "search URL",
+    );
+    assert.deepEqual(await ev(clipLinks), [clipPath]);
+    const searchPath = await ev("location.pathname + location.search");
+    await ev(`(() => {
+      const select = [...document.querySelectorAll("main label select")].find(el => el.parentElement.textContent.startsWith("Sort"));
+      select.value = "oldest";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    })()`);
+    await until(
+      () => ev('new URLSearchParams(location.search).get("sort") === "oldest"'),
+      "sort control applied",
+    );
+    assert.deepEqual(await ev(clipLinks), [clipPath]);
+
+    if (width === 390)
+      await clickButton("Filters", 'aside[aria-label="Clip filters"]');
+    await ev(
+      `[...document.querySelectorAll("aside summary")].find(el => el.textContent.trim() === "Task label").click()`,
+    );
+    const taskCheckbox = `[...document.querySelectorAll('aside label input[type="checkbox"]')].find(el => el.parentElement.textContent.includes("Tighten fixture"))`;
+    await until(
+      () =>
+        ev(`(() => {
+        const checkbox = ${taskCheckbox};
+        return checkbox?.checkVisibility() && !checkbox.matches(":disabled") && !checkbox.checked;
+      })()`),
+      "task label filter visible and enabled",
+    );
+    await ev(`(${taskCheckbox}).focus()`);
+    for (const type of ["keyDown", "keyUp"]) {
+      await chrome.send("Input.dispatchKeyEvent", {
+        type,
+        key: " ",
+        code: "Space",
+        windowsVirtualKeyCode: 32,
+      });
+    }
+    await until(
+      () =>
+        ev(
+          'new URLSearchParams(location.search).get("task") === "tighten fixture"',
+        ),
+      "task label filter applied",
+    );
+    assert.deepEqual(await ev(clipLinks), [clipPath]);
+    const filteredPath = await ev("location.pathname + location.search");
+    await go(filteredPath + "&page=2&size=12", catalogReady);
+    assert.deepEqual(await ev(clipLinks), []);
+    assert.match(
+      await ev("document.querySelector('main').innerText"),
+      /This page has no clips/,
+    );
+
+    await browserSession(customer);
+    try {
+      await go(
+        sharedClip,
+        '!!document.querySelector("[data-testid=rail-list]")',
+      );
+      assert.match(
+        await ev("document.querySelector('main').textContent"),
+        /Tightens the cobalt wingnut by hand/,
+      );
+      assert.doesNotMatch(
+        await ev("document.querySelector('main').textContent"),
+        /Caption edited|Review actions|Add to dataset|Clip processing/,
+      );
+      assert.equal(await ev("innerWidth"), width);
+      assert.ok(await ev("document.documentElement.scrollWidth <= innerWidth"));
+      assertCustomerPayload(
+        await call(origin, searchPath, {
+          jar: customer,
+          headers: navigationHeaders,
+        }),
+        { search: true },
+      );
+    } finally {
+      await browserSession(staff);
+    }
+  }
+});
+
+test("SA-150 Previous and Next follow a populated result page boundary", async () => {
+  const recordingIds = [];
+  while (recordingIds.length < 13) {
+    const pair = await seedReviewPair();
+    recordingIds.push(pair.withClip.recordingId);
+    if (recordingIds.length < 13)
+      recordingIds.push(pair.withoutClip.recordingId);
+  }
+  await browserSession(await signIn(stack, "staff"));
+  const browse = new URLSearchParams([
+    ["datasetId", "pending-review"],
+    ...recordingIds.map((id) => ["recording", id]),
+  ]);
+  const firstPage = "/data-browser?" + browse;
+  const secondPage = firstPage + "&page=2";
+  await go(firstPage, catalogReady);
+  const first = await ev(clipLinks);
+  assert.equal(first.length, 12);
+  const last = first.at(-1);
+  await go(secondPage, catalogReady);
+  const second = await ev(clipLinks);
+  assert.equal(second.length, 1);
+  assert.deepEqual(
+    [...first, ...second].sort(),
+    recordingIds.map((id) => "/clips/" + id).sort(),
+  );
+  await go(firstPage, catalogReady);
+  const lastLink =
+    "document.querySelector(" +
+    JSON.stringify('article a[href^="' + last + '?"]') +
+    ")";
+  const lastHref = await ev(lastLink + '?.getAttribute("href")');
+  const clipReady = '!!document.querySelector("[data-testid=review-summary]")';
+  await go(lastHref, clipReady);
+
+  const clipLink = (name) =>
+    '[...document.querySelectorAll("main header a")].find(a => a.textContent.trim() === ' +
+    JSON.stringify(name) +
+    ")";
+  const next = await ev(clipLink("Next clip") + '?.getAttribute("href")');
+  const nextUrl = new URL(next, origin);
+  assert.equal(nextUrl.pathname, second[0]);
+  const nextReturnTo = new URL(nextUrl.searchParams.get("returnTo"), origin);
+  assert.equal(nextReturnTo.searchParams.get("page"), "2");
+  assert.deepEqual(nextReturnTo.searchParams.getAll("recording"), recordingIds);
+  await go(next, clipReady);
+  assert.equal(await ev("Boolean(" + clipLink("Next clip") + ")"), false);
+  const previous = await ev(
+    clipLink("Previous clip") + '?.getAttribute("href")',
+  );
+  assert.equal(new URL(previous, origin).pathname, last);
+  await go(previous, clipReady);
+  assert.equal(
+    new URL(await ev(clipLink("Next clip") + ".href")).pathname,
+    second[0],
+  );
 });

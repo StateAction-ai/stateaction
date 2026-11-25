@@ -1,10 +1,9 @@
 // SA-98/SA-99 real-browser evidence driver for the Review page on the SA-96 SEEDED stack. Run inside ONE
-// resource-guarded job, e.g. `agent-resource run -- node test-e2e/pipeline-seeded-browser.mjs`
+// resource-guarded job, e.g. `agent-resource run -- node test-e2e/review-seeded-browser.mjs`
 // (needs the built web and jobs apps, the processing venv and the Render CLI; see
 // serve-console.mjs). Seeds only ok, caption_failed and segment_failed (STATEACTION_SEED_ONLY
-// overrides), signs in as staff, checks /pipeline and each /pipeline/<recordingId> at desktop and
-// 390 px, clicks the per-stage diagnostics links, checks a customer is denied from the
-// diagnostics route, then writes screenshots and a JSON receipt to SHOTS_DIR. Always closes the
+// overrides), signs in as staff, checks selected clips and team marks at desktop and
+// 390 px, then writes screenshots and a JSON receipt to SHOTS_DIR. Always closes the
 // browser session, stops the job runner and the stack (exact pids only). Zero model spend.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -113,11 +112,6 @@ async function marksFlow({ label, pre, rec, rows }) {
       `${pre}: B marks the failed-caption segment Issue (boundary)`,
       await until(async () => (await badgeOf(fi))?.text === "Boundary"),
     );
-    ab("click", "[data-issue-type=caption]");
-    check(
-      `${pre}: the issue-type picker changes the type`,
-      await until(async () => (await badgeOf(fi))?.text === "Caption"),
-    );
     const gi = fi === 0 ? 1 : 0;
     await clickCard(gi);
     ab("press", "g");
@@ -194,31 +188,6 @@ async function marksFlow({ label, pre, rec, rows }) {
     `${pre}: no horizontal overflow with marks`,
     ev("document.documentElement.scrollWidth <= window.innerWidth"),
   );
-  if (label === "desktop") {
-    // The Pipeline list team-check column shows the real counts.
-    ab("open", `${stack.origin}/pipeline`);
-    ab("wait", "table, [data-testid=pipeline-list], main");
-    await sleep(1500);
-    const t = text();
-    check(
-      `${pre}: Pipeline team checks show the counts`,
-      /3 reviewed\s+2 flagged/.test(t),
-      t.slice(0, 200),
-    );
-  } else {
-    ab("open", `${stack.origin}/pipeline`);
-    await sleep(1500);
-    ab("screenshot", "--full", join(shots, `pipeline-marks-${label}.png`));
-    ab("open", `${stack.origin}/review/${rec.recordingId}`);
-    ab("wait", "[data-testid=review-summary]");
-    await sleep(1000);
-  }
-  if (label === "desktop") {
-    ab("screenshot", "--full", join(shots, `pipeline-marks-${label}.png`));
-    ab("open", `${stack.origin}/review/${rec.recordingId}`);
-    ab("wait", "[data-testid=review-summary]");
-    await sleep(1000);
-  }
 }
 const scenarioShot = "caption_failed";
 
@@ -270,7 +239,7 @@ try {
     ab("set", "viewport", String(w), String(h));
     await loginAs(stack, "staff");
     for (const [scenario, rec] of Object.entries(recs)) {
-      ab("open", `${stack.origin}/review/${rec.recordingId}`);
+      ab("open", `${stack.origin}/clips/${rec.clipId ?? rec.recordingId}`);
       try {
         ab("wait", "[data-testid=review-summary]");
       } catch (error) {
@@ -302,7 +271,7 @@ try {
         (r) => r.status === "failed",
       ).length;
       const failedShown = ev(
-        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.querySelector('[title]')?.title)).length",
+        "[...document.querySelectorAll('[data-testid=rail-failed]')].filter(e => e.textContent.includes('No caption is available') && Boolean(e.title)).length",
       );
       check(
         `${pre}: failed captions shown with codes`,
@@ -329,8 +298,7 @@ try {
           ? `${pre}: failed segment stage shown with its code, caption not run`
           : `${pre}: stub provenance labelled`,
         scenario === "segment_failed"
-          ? /segment: failed: receipt_missing/.test(prov) &&
-              /caption: not_run: upstream_failed/.test(prov)
+          ? /Segmentation failed/.test(text())
           : /stub/i.test(prov),
         prov.slice(0, 200),
       );
@@ -355,21 +323,6 @@ try {
         join(shots, `review-${scenario}-${label}.png`),
       );
       if (scenario === "caption_failed") {
-        ab("click", "#tab-json");
-        await sleep(500);
-        ab("screenshot", join(shots, `json-${label}.png`));
-        ab("click", "#tab-hand");
-        await sleep(2500);
-        ab("screenshot", join(shots, `hand-${label}.png`));
-        const handNote = ev(
-          "document.querySelector('[data-testid=hand-no-clip]')?.textContent ?? document.querySelector('[data-testid=hand-viewer-phase]')?.textContent ?? ''",
-        );
-        check(
-          `${pre}: hand pose tab renders (viewer or no-clip notice)`,
-          handNote.length > 0,
-          handNote,
-        );
-        ab("click", "#tab-segs");
         await marksFlow({ label, pre, rec, rows });
       }
     }

@@ -9,8 +9,17 @@ import {
 } from "@stateaction/contracts";
 import type { Queryable } from "../catalog/catalog.js";
 import { CatalogError, type CatalogErrorCode } from "../catalog/errors.js";
+import type { AnnotationDeps } from "../annotations/annotations.js";
+import { loadSharedClipHandFrames } from "../annotations/shared-review.js";
 import { hostedDevProfile } from "../hosted-dev.js";
-import { issueRead, type ReadSigner } from "./broker.js";
+import { TransportError } from "../transport/errors.js";
+import { issueRead, type BrokerDeps, type ReadSigner } from "./broker.js";
+import {
+  commitCaptionCorrection,
+  getCaptionCorrectionHistory,
+  storedCaptionSegments,
+  type CaptionCorrectionCommandV2,
+} from "./corrections.js";
 import {
   addDatasetMembers,
   createDatasetRecord,
@@ -19,9 +28,18 @@ import {
 } from "./mutations.js";
 import {
   commitClipReview,
+  commitClipReviewV2,
   getClipReviewState,
+  getClipReviewStateV2,
   type ClipReviewCommand,
 } from "./review.js";
+import {
+  getAuthorizedReviewClip,
+  issueReviewClipPoster,
+} from "./review-queries.js";
+import { issueReviewClipVideo } from "./review-video.js";
+import type { ClipReviewCommandV2 } from "./review-transaction.js";
+import { selectReviewClipResult } from "./select-review-result.js";
 import {
   getSegmentMarks,
   recordSegmentMark,
@@ -126,6 +144,180 @@ function failure(
     STATUS[code],
     headers,
   );
+}
+
+/** Versioned actions and scoped reads for the canonical review clip. */
+export function reviewClipRoutes(
+  deps: AnnotationDeps & BrokerDeps & { authenticate: DatasetAuthenticate },
+) {
+  async function run(
+    request: Request,
+    clipId: string,
+    access: "staff" | "member",
+    action: (viewerUserId: string, query: URLSearchParams) => Promise<unknown>,
+  ) {
+    const auth = await deps.authenticate(request, access);
+    if (!auth.ok) {
+      if (auth.response.status === 403)
+        return failure(
+          "not_found",
+          "Not found",
+          randomUUID(),
+          new Headers(auth.response.headers),
+        );
+      return auth.response;
+    }
+    const requestId = auth.requestId ?? randomUUID();
+    const headers = new Headers(auth.headers);
+    try {
+      if (!isUuid(clipId))
+        throw new CatalogError("not_found", "Clip not found");
+      const data = await action(
+        auth.principal.userId,
+        new URL(request.url).searchParams,
+      );
+      return respond({ data, requestId }, 200, headers);
+    } catch (error) {
+      if (error instanceof CatalogError || error instanceof RequestError) {
+        const code = error.code === "forbidden" ? "not_found" : error.code;
+        return failure(
+          code,
+          access === "staff" && code !== "not_found"
+            ? error.message
+            : GENERIC[code],
+          requestId,
+          headers,
+        );
+      }
+      if (error instanceof TransportError && error.code === "not_found")
+        return failure("not_found", "Not found", requestId, headers);
+      return failure(
+        "internal",
+        "Review data could not be read",
+        requestId,
+        headers,
+      );
+    }
+  }
+
+  function selection(query: URLSearchParams) {
+    const values = query.getAll("selection");
+    const value = values[0];
+    if (
+      values.length !== 1 ||
+      !value ||
+      !/^[1-9][0-9]{0,9}$/.test(value) ||
+      Number(value) > 2147483647
+    )
+      throw invalid("A current result selection is required");
+    return Number(value);
+  }
+
+  return {
+    select: (request: Request, clipId: string) =>
+      run(request, clipId, "staff", async (viewerUserId) => {
+        const command = await readContract<{
+          jobId: string;
+          expectedSelectionSeq: number;
+          reason: string;
+        }>(request, "http.recording-result-selection-command.v1");
+        return selectReviewClipResult(deps.pool, {
+          clipId,
+          viewerUserId,
+          ...command,
+        });
+      }),
+    decision: (request: Request, clipId: string) =>
+      run(request, clipId, "staff", async (viewerUserId, query) => {
+        if (request.method === "GET")
+          return getClipReviewStateV2(deps.pool, {
+            clipId,
+            viewerUserId,
+            selectionRevision: selection(query),
+          });
+        const command = await readContract<ClipReviewCommandV2>(
+          request,
+          "http.clip-review-command.v2",
+        );
+        return commitClipReviewV2(deps.pool, {
+          clipId,
+          reviewerUserId: viewerUserId,
+          command,
+        });
+      }),
+    caption: (request: Request, clipId: string, segmentId: string) =>
+      run(request, clipId, "staff", async (viewerUserId, query) => {
+        if (!isUuid(segmentId))
+          throw new CatalogError("not_found", "Caption not found");
+        if (request.method === "GET") {
+          const before = query.get("before");
+          if (
+            before !== null &&
+            (!/^[1-9][0-9]{0,9}$/.test(before) || Number(before) > 2147483647)
+          )
+            throw invalid("Invalid caption history revision");
+          return getCaptionCorrectionHistory(deps.pool, {
+            clipId,
+            segmentId,
+            viewerUserId,
+            jobId: query.get("job") ?? "",
+            resultManifestSha256: query.get("manifest") ?? "",
+            selectionRevision: selection(query),
+            ...(before === null ? {} : { beforeRevision: Number(before) }),
+          });
+        }
+        const command = await readContract<CaptionCorrectionCommandV2>(
+          request,
+          "http.caption-correction-command.v2",
+        );
+        return commitCaptionCorrection(deps.pool, storedCaptionSegments(deps), {
+          clipId,
+          segmentId,
+          reviewerUserId: viewerUserId,
+          command,
+        });
+      }),
+    poster: (request: Request, clipId: string) =>
+      run(request, clipId, "member", (viewerUserId, query) => {
+        const datasetId = query.get("dataset") ?? undefined;
+        return issueReviewClipPoster(deps, { viewerUserId, clipId, datasetId });
+      }),
+    handFrames: (request: Request, clipId: string, datasetId: string) =>
+      run(request, clipId, "member", (viewerUserId, query) =>
+        loadSharedClipHandFrames(deps, {
+          viewerUserId,
+          clipId,
+          datasetId,
+          selectionRevision: selection(query),
+          chunkId: query.get("clip") ?? "",
+        }),
+      ),
+    staffHandFrames: (request: Request, clipId: string) =>
+      run(request, clipId, "staff", (viewerUserId, query) =>
+        loadSharedClipHandFrames(deps, {
+          viewerUserId,
+          clipId,
+          selectionRevision: selection(query),
+          chunkId: query.get("clip") ?? "",
+        }),
+      ),
+    video: (request: Request, clipId: string, datasetId: string) =>
+      run(request, clipId, "member", async (viewerUserId, query) => {
+        const binding = await getAuthorizedReviewClip(deps.pool, {
+          viewerUserId,
+          clipId,
+          datasetId,
+        });
+        if (!binding || binding.selectionRevision !== selection(query))
+          throw new CatalogError("not_found", "Clip video not found");
+        return issueReviewClipVideo(deps, {
+          viewerUserId,
+          clipId,
+          datasetId,
+          expectedSelection: binding,
+        });
+      }),
+  };
 }
 
 class RequestError extends Error {

@@ -86,6 +86,8 @@ export type ClipSelectedResult = ClipSelectedResultRef & {
   viewerChunkIds: Uuid[];
   /** Checked spans in viewer-chunk ordinal order. Projection adapters may omit this field. */
   viewerChunks?: ClipViewerChunk[];
+  /** Staff playback bound within the original. Null when it is the whole clip. */
+  sourcePlaybackDurationNs?: TimestampNs | null;
 };
 
 export type ClipDetail = ClipListItem & {

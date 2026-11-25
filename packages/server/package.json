@@ -41,6 +41,10 @@
       "types": "./dist/datasets/next.d.ts",
       "default": "./dist/datasets/next.js"
     },
+    "./review-browse": {
+      "types": "./dist/datasets/review-browse-next.d.ts",
+      "default": "./dist/datasets/review-browse-next.js"
+    },
     "./uploads": {
       "types": "./dist/transport/next.d.ts",
       "default": "./dist/transport/next.js"

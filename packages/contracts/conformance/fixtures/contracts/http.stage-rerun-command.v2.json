@@ -1,0 +1,40 @@
+{
+  "contract": "http.stage-rerun-command.v2",
+  "cases": [
+    {
+      "name": "confirm total caps",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "failed_clips",
+          "requestId": "019a4b2c-0002-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedPlanSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedMaxComputeCostUsd": "2.40",
+          "expectedMaxGpuCostUsd": "2.10",
+          "reason": "Retry failed clips"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "empty reason",
+      "input": {
+        "document": {
+          "schemaVersion": 2,
+          "scope": "failed_clips",
+          "requestId": "019a4b2c-0002-7f50-8a6b-7c8d9e0f1a2b",
+          "expectedPlanSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expectedMaxComputeCostUsd": "2.40",
+          "expectedMaxGpuCostUsd": "2.10",
+          "reason": ""
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}
