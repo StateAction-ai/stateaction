@@ -160,12 +160,20 @@ def run_segment(ctx: StageContext) -> ModuleOutput:
     )
 
 
-def run_caption(ctx: StageContext) -> ModuleOutput:
+def run_caption(
+    ctx: StageContext, *, expected_native_segments_sha256: str | None = None
+) -> ModuleOutput:
     flora, expected, native_segments_raw, _native_segments = _checked_segments(ctx)
+    segments_sha256 = hashlib.sha256(native_segments_raw).hexdigest()
+    if (
+        expected_native_segments_sha256 is not None
+        and segments_sha256 != expected_native_segments_sha256
+    ):
+        raise StageError("replay_segments_changed")
     raw, native = _read(flora / "captions.json")
     if native.get("source_sha256") != expected:
         raise StageError("replay_source_mismatch")
-    if native.get("segments_sha256") != hashlib.sha256(native_segments_raw).hexdigest():
+    if native.get("segments_sha256") != segments_sha256:
         raise StageError("replay_flora_inconsistent")
     env_sha, env = _env(flora)
     model = _sub(env, "model")

@@ -55,6 +55,37 @@ the Python source and run `sync` to refresh generated files before committing.
 Keep the Python source and its compiled JSON together in the PR. When you
 change published recipe semantics, increment the version.
 
+## Execution eligibility
+
+The compiler accepts modules from the catalog for local authoring. The first
+hosted release additionally requires a published recipe, approved bindings for
+every node and the following versioned modules.
+
+| Scope     | Module                       | Output                                                |
+| --------- | ---------------------------- | ----------------------------------------------------- |
+| Recording | `clip_filter_passthrough@1`  | Whole-recording clip plan                             |
+| Recording | `recording_mp4_remux@1`      | Source playback MP4                                   |
+| Clip      | `hand_pose_cpu@1`            | Hand observations, frame maps, arrays and Rerun files |
+| Clip      | `flora_tempseg_vllm_fp8@1`   | FLORA segments                                        |
+| Clip      | `flora_captioner_vllm_fp8@1` | FLORA captions using `flora_default@1`                |
+
+Clip nodes use the verified passthrough plan for fan-out. A binding must match
+the compiled module lock, pinned definition and image. FLORA also requires
+the approved model, prompt and read-only checkpoint volume. Node IDs belong
+to the recipe and can differ from the module or artifact names. Every required
+input port must have a verified source or producer output, including when the
+producer was reused. A failed producer blocks its dependants. An independent
+CPU node can run alongside one GPU node in the same job. The compiled resource
+request determines which slot a node uses. An unresolved
+submission holds its resource slot until it settles. Staff can retry failed
+work after termination through the review UI. Nodes have zero automatic retries.
+
+The Python subprocess can exercise CPU nodes locally. Its explicit FLORA
+replay mode uses fixture evidence and labels the artifacts as replay. The
+`core/recipe.py run-local` command and the recipes in `examples/` are
+rehearsals with stub outputs. The deployed controller continues to use its
+current stage recipes until the separate cutover.
+
 ## SDK reference
 
 | API                                                                                      | Use                                                                                                      |

@@ -14,6 +14,8 @@ defines the serialized format and generates Python and TypeScript types. Recipe
 schemas live under `packages/contracts/recipe/`. The published API catalog
 covers the active wire contracts.
 
-In SA-151 the compiled graphs are local authoring artifacts. The deployed
-pipeline runs its current controller. See the [architecture proposal](../components/recipe-architecture.md)
-for the wider migration.
+The Python worker can run the supported CPU nodes on local files and replay
+FLORA evidence. See [execution eligibility](AUTHORING.md#execution-eligibility)
+for the supported module versions and binding requirements. The deployed
+controller still uses stage recipes pending the cutover. See the
+[architecture proposal](../components/recipe-architecture.md) for the migration.
