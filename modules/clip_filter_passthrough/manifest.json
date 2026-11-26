@@ -1,0 +1,17 @@
+{
+  "commercialUse": true,
+  "gpus": [],
+  "id": "clip_filter_passthrough",
+  "inputs": {
+    "source": "recording_source@2"
+  },
+  "license": "Apache-2.0",
+  "maxBudgetSeconds": 7200,
+  "outputs": {
+    "plan": "clip_plan@1"
+  },
+  "params": {},
+  "passthroughPlan": true,
+  "scope": "recording",
+  "version": 1
+}

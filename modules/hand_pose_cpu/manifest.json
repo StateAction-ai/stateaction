@@ -1,0 +1,17 @@
+{
+  "commercialUse": true,
+  "gpus": [],
+  "id": "hand_pose_cpu",
+  "inputs": {
+    "video": "video_range@1"
+  },
+  "license": "Apache-2.0",
+  "maxBudgetSeconds": 7200,
+  "outputs": {
+    "poses": "hand_pose@2"
+  },
+  "params": {},
+  "passthroughPlan": false,
+  "scope": "clip",
+  "version": 1
+}

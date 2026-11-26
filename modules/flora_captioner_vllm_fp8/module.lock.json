@@ -1,0 +1,34 @@
+{
+  "implementationSha256": "9fbafcb86aafdfd6f68741df9a87f18c5258d3f16ce0901399294eb748081287",
+  "manifest": {
+    "commercialUse": false,
+    "gpus": [
+      "H100",
+      "RTX-PRO-6000"
+    ],
+    "id": "flora_captioner_vllm_fp8",
+    "inputs": {
+      "segments": "segments@2",
+      "video": "video_range@1"
+    },
+    "license": "LicenseRef-NVIDIA-Flora-NC",
+    "maxBudgetSeconds": 7200,
+    "outputs": {
+      "captions": "captions@2"
+    },
+    "params": {
+      "prompt": {
+        "default": "flora_default@1",
+        "enum": [
+          "flora_default@1",
+          "flora_detailed@1"
+        ],
+        "type": "string"
+      }
+    },
+    "passthroughPlan": false,
+    "scope": "clip",
+    "version": 1
+  },
+  "schema": "stateaction.module-lock/v1"
+}

@@ -1,0 +1,17 @@
+{
+  "commercialUse": false,
+  "gpus": ["H100", "RTX-PRO-6000"],
+  "id": "flora_tempseg_vllm_fp8",
+  "inputs": {
+    "video": "video_range@1"
+  },
+  "license": "LicenseRef-NVIDIA-Flora-NC",
+  "maxBudgetSeconds": 7200,
+  "outputs": {
+    "segments": "segments@2"
+  },
+  "params": {},
+  "passthroughPlan": false,
+  "scope": "clip",
+  "version": 1
+}

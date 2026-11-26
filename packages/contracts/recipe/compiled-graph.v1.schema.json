@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/recipe/compiled-graph.v1.json",
+  "title": "CompiledGraph",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "stateaction.compiled-recipe/v1"
+    },
+    "recipe": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+    },
+    "recipeSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "meta": {
+      "$ref": "#/$defs/Meta"
+    },
+    "fanOut": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FanOut"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "topoOrder": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "nodes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Node"
+      },
+      "minProperties": 1,
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      }
+    },
+    "license": {
+      "$ref": "#/$defs/License"
+    },
+    "estimate": {
+      "$ref": "#/$defs/Estimate"
+    },
+    "compiler": {
+      "$ref": "#/$defs/Compiler"
+    },
+    "authoring": {
+      "$ref": "#/$defs/Authoring"
+    }
+  },
+  "required": [
+    "schema",
+    "recipe",
+    "recipeSha256",
+    "meta",
+    "fanOut",
+    "topoOrder",
+    "nodes",
+    "license",
+    "estimate",
+    "compiler",
+    "authoring"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Limits": {
+      "type": "object",
+      "properties": {
+        "maxClipJobCostUsd": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,6})\\.[0-9]{2}$"
+        },
+        "maxRecordingCostUsd": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,6})\\.[0-9]{2}$"
+        },
+        "maxSourceSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        }
+      },
+      "required": [
+        "maxClipJobCostUsd",
+        "maxRecordingCostUsd",
+        "maxSourceSeconds"
+      ],
+      "additionalProperties": false
+    },
+    "Meta": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "input": {
+          "const": "recording_source@2"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        }
+      },
+      "required": ["title", "input", "limits"],
+      "additionalProperties": false
+    },
+    "FanOut": {
+      "type": "object",
+      "properties": {
+        "clip": {
+          "type": "string"
+        }
+      },
+      "required": ["clip"],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "fixedSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "perSourceSecond": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,4})(\\.[0-9]{1,6})?$"
+        }
+      },
+      "required": ["fixedSeconds", "perSourceSecond"],
+      "additionalProperties": false
+    },
+    "Resources": {
+      "type": "object",
+      "properties": {
+        "gpu": {
+          "enum": ["RTX-PRO-6000", "H100", null]
+        },
+        "budget": {
+          "$ref": "#/$defs/Budget"
+        }
+      },
+      "required": ["gpu", "budget"],
+      "additionalProperties": false
+    },
+    "Input": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+        }
+      },
+      "required": ["from", "type"],
+      "additionalProperties": false
+    },
+    "Node": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": ["recording", "clip"]
+        },
+        "module": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+        },
+        "moduleLockSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Input"
+          }
+        },
+        "producers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}$"
+          }
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "integer", "boolean"]
+          }
+        },
+        "resources": {
+          "$ref": "#/$defs/Resources"
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+          }
+        }
+      },
+      "required": [
+        "scope",
+        "module",
+        "moduleLockSha256",
+        "inputs",
+        "producers",
+        "params",
+        "resources",
+        "outputs"
+      ],
+      "additionalProperties": false
+    },
+    "License": {
+      "type": "object",
+      "properties": {
+        "commercialUse": {
+          "type": "boolean"
+        },
+        "nonCommercialModules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+          }
+        }
+      },
+      "required": ["commercialUse", "nonCommercialModules"],
+      "additionalProperties": false
+    },
+    "Estimate": {
+      "type": "object",
+      "properties": {
+        "perClipJobUsdAtMax": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,6})\\.[0-9]{2}$"
+        },
+        "recordingNodesUsdAtMax": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,6})\\.[0-9]{2}$"
+        },
+        "criticalPathSecondsAtMax": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 43200
+        }
+      },
+      "required": [
+        "perClipJobUsdAtMax",
+        "recordingNodesUsdAtMax",
+        "criticalPathSecondsAtMax"
+      ],
+      "additionalProperties": false
+    },
+    "Source": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": ["path", "sha256"],
+      "additionalProperties": false
+    },
+    "Authoring": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "code"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
+        },
+        "nodeSources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["kind", "files", "nodeSources"],
+      "additionalProperties": false
+    },
+    "Compiler": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": "1.0.0"
+        },
+        "sdkVersion": {
+          "const": "1.0.0"
+        }
+      },
+      "required": ["version", "sdkVersion"],
+      "additionalProperties": false
+    }
+  }
+}

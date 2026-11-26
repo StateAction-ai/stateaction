@@ -1,0 +1,24 @@
+{
+  "commercialUse": true,
+  "gpus": [],
+  "id": "frame_motion_energy",
+  "inputs": {
+    "video": "video_range@1"
+  },
+  "license": "Apache-2.0",
+  "maxBudgetSeconds": 7200,
+  "outputs": {
+    "energy": "motion_energy@1"
+  },
+  "params": {
+    "scale": {
+      "default": 1,
+      "maximum": 10,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "passthroughPlan": false,
+  "scope": "clip",
+  "version": 1
+}
