@@ -28,7 +28,7 @@ agent-resource run -- pnpm --filter @stateaction/web... build
 agent-resource run -- node apps/web/test-e2e/serve-console.mjs --seed cached PATH_TO_BUNDLE
 ```
 
-Pass more bundle paths to load more recordings. The command reports the local origin and the recording and job IDs. Use the ephemeral staff account to open Review and Pipeline. Data browser contains approved clips in the import's staff dataset. `--seed failure-fixtures` starts the separate synthetic debugging scenarios. See [stage debugging](stage-debugging.md).
+Pass more bundle paths to load more recordings. The command reports the local origin and the recording and job IDs. Use the ephemeral staff account to open the import in Recordings (`/recordings/<recordingId>`) and inspect each clip’s Processing page. In Data browser (`/data-browser`), open the import’s staff dataset to find its approved clips. `--seed failure-fixtures` starts the separate synthetic debugging scenarios. See [stage debugging](stage-debugging.md).
 
 ## Publish to hosted staff
 
@@ -40,4 +40,4 @@ agent-resource run -- pnpm --filter @stateaction/server cached-import publish PA
 
 Hosted import is limited to the approved public IndEgo data. Its license is CC BY 4.0. HomER and its derived results stay on the local fixture stack. Restore the previous database allowlist and verify the read-back after publishing. [IndEgo dataset and attribution](https://huggingface.co/datasets/FraunhoferIPK/IndEgo)
 
-The Render session wrapper can provide the owner DSN without putting it in a command line or file. Apply the reviewed migrations through the owner migrator without rotating the web role password. Deploy the corresponding web release and confirm `/api/v1/health` before publishing the first import so its labels are available when the rows appear. In a temporary database session, map the production credential file's `R2_*` settings to the `S3_*` names in [Render deployment](render-deployment.md) and run the publish command. Check staff Review, Pipeline, and Data browser. [Render Postgres networking](https://render.com/docs/postgresql-creating-connecting#restricting-external-access)
+The Render session wrapper can provide the owner DSN without putting it in a command line or file. Apply the reviewed migrations through the owner migrator without rotating the web role password. Deploy the corresponding web release and confirm `/api/v1/health` before publishing the first import so its labels are available when the rows appear. In a temporary database session, map the production credential file's `R2_*` settings to the `S3_*` names in [Render deployment](render-deployment.md) and run the publish command. Check the import in Recordings, open its clip Processing page, and verify the clip in Data browser. [Render Postgres networking](https://render.com/docs/postgresql-creating-connecting#restricting-external-access)

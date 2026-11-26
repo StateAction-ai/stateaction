@@ -5,13 +5,13 @@ Use the TypeScript `ClipReadModel` port from `@stateaction/contracts` and
 plans, live jobs and exact result selections stored by migration 017. The
 existing recording reads route serves the original MP4.
 
-| Method                                              | Caller                          | Result                                                                                                                                                         |
-| --------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `listClips(viewerUserId, query)`                    | Review queue                    | Clip rows, oldest first with an ID tie-break and an opaque next cursor. Can filter by recording, collector, pipeline state and review status.                  |
-| `getClip(viewerUserId, clipId)`                     | Clip review and pipeline routes | One review clip with its current pipeline state, selected result identity, and current and selected DAGs where available.                                      |
-| `getSelectedResult(viewerUserId, clipId, selected)` | Clip review                     | Annotations, marks, and viewer chunks from the exact selected job and result manifest digest. A stale identity returns null so the caller can reload the clip. |
-| `getRecording(viewerUserId, recordingId)`           | Recording page                  | Recording state, current clip plan and its clip rows in plan order.                                                                                            |
-| `readSource(viewerUserId, recordingId)`             | Original player and clip player | A short-lived read for the authorized original MP4.                                                                                                            |
+| Method                                              | Caller                           | Result                                                                                                                                                         |
+| --------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listClips(viewerUserId, query)`                    | Staff clip listing               | Clip rows, oldest first with an ID tie-break and an opaque next cursor. Can filter by recording, collector, pipeline state and review status.                  |
+| `getClip(viewerUserId, clipId)`                     | Clip review and processing reads | One review clip with its current pipeline state, selected result identity, and current and selected DAGs where available.                                      |
+| `getSelectedResult(viewerUserId, clipId, selected)` | Clip review                      | Annotations, marks, and viewer chunks from the exact selected job and result manifest digest. A stale identity returns null so the caller can reload the clip. |
+| `getRecording(viewerUserId, recordingId)`           | Recording page                   | Recording state, current clip plan and its clip rows in plan order.                                                                                            |
+| `readSource(viewerUserId, recordingId)`             | Original player and clip player  | A short-lived read for the authorized original MP4.                                                                                                            |
 
 Queue filters use recording and collector IDs. Each row carries the recording
 title and collector name. The pipeline summary reads the job's accepted
@@ -33,7 +33,7 @@ omit `viewerChunks` when their read supplies only IDs.
 Use the recording ID as the review clip ID for an initial passthrough projection.
 The migration preserves that ID for the initial clip. The live job pointer
 names the current execution, including its terminal state until replaced.
-Use its DAG on the pipeline page. Both DAG reads show the effective stage
+Staff inspect clip processing at `/recordings/<recordingId>/clips/<clipId>/processing` and review the selected result at `/clips/<clipId>`. Both DAG reads show the effective stage
 outcomes, including verified reused stages, in the existing V1 shape. A review or marks
 summary is valid only for the selected result. With no review for that
 result, a succeeded or partially failed selection is pending. A clip whose

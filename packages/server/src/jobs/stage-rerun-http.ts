@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { validateValue } from "@stateaction/contracts";
 import type { DatasetAuthenticate } from "../datasets/http.js";
 import {
+  hostedDevProfile,
+  HOSTED_DEV_READ_ONLY_MESSAGE,
+} from "../hosted-dev.js";
+import {
   recordingRunHistory,
   selectRecordingResult,
 } from "./result-selection.js";
@@ -25,14 +29,15 @@ import {
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function stageRerunRoutes(
-  deps: StageRerunDeps & { authenticate: DatasetAuthenticate },
+  authenticate: DatasetAuthenticate,
+  getDeps: () => StageRerunDeps,
 ) {
   async function handle(
     request: Request,
     recordingId: string,
     mode: "plan" | "confirm" | "planV2" | "confirmV2" | "history" | "select",
   ) {
-    const auth = await deps.authenticate(request, "staff");
+    const auth = await authenticate(request, "staff");
     if (!auth.ok) {
       if (
         (mode === "planV2" || mode === "confirmV2") &&
@@ -46,8 +51,11 @@ export function stageRerunRoutes(
     }
     const requestId = auth.requestId ?? randomUUID();
     try {
+      if (mode !== "history" && hostedDevProfile()?.mode === "read-only")
+        throw new TransportError("forbidden", HOSTED_DEV_READ_ONLY_MESSAGE);
       if (!uuid.test(recordingId))
         throw new TransportError("not_found", "Recording not found");
+      const deps = getDeps();
       const headers = new Headers(auth.headers);
       headers.set("cache-control", "private, no-store");
       if (mode === "history") {
@@ -172,6 +180,11 @@ export function stageRerunRoutes(
         { headers, status: data.replayed ? 200 : 201 },
       );
     } catch (error) {
+      if (!(error instanceof TransportError))
+        console.error(
+          "[jobs] stage rerun error",
+          error instanceof Error ? error.name : "error",
+        );
       const res = errorResponse(error, requestId);
       const headers = new Headers(auth.headers);
       for (const [key, value] of res.headers) headers.set(key, value);

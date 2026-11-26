@@ -138,8 +138,8 @@ These are separate facts. Never infer a later one from an earlier one.
 | **Finalized (on device)**      | Container closed, sidecar read back. Original is on the phone.                   | Upload readiness, owner, permission            | Phone, [android-finalization](android-finalization.md)                |
 | **Uploaded**                   | The server received and completed the bytes by the transport rules.              | The content hash matches. ETags are not hashes | Recording/file record on the server                                   |
 | **Actual source-SHA verified** | A separate full-read check matched the declared SHA-256 of the original          | Processing, quality, approval                  | The server's verification record; `source_sha_mismatch` means failure |
-| **Processing completed**       | The recording's current job reached `succeeded` with an accepted result          | A human has approved the clips                 | `job-recovery status <jobId>`; pipeline page                          |
-| **Human approved**             | A staff reviewer's latest review of that clip is `approved`                      | Customer sharing, cleanup                      | Clip review page                                                      |
+| **Processing completed**       | The recording's current job reached `succeeded` with an accepted result          | A human has approved the clips                 | `job-recovery status <jobId>`; Recordings and clip Processing         |
+| **Human approved**             | A staff reviewer's latest review of that clip is `approved`                      | Customer sharing, cleanup                      | Clip page from Data browser                                           |
 | **Explicit cleanup**           | A deliberate, separately authorized action removing one recording from one phone | Anything else                                  | See [Cleanup](#6-local-cleanup)                                       |
 
 Missing evidence is "not yet". If the server record for a stage cannot be read, treat the stage as unconfirmed and escalate; do not assume it is done. The upload and verification path may not be qualified on a given build; check the build's remaining-gates list rather than the absence of an error.
@@ -157,7 +157,7 @@ These are proposed pilot defaults for the project-owner to approve. No retention
 
 ## 5. Support actions
 
-Every action names the exact references. Without them, do not act. Use the recording reference the app showed, the job ID from the pipeline page, the file/slot name, and the owner's user ID.
+Every action names the exact references. Without them, do not act. Use the recording reference the app showed, the job ID from the relevant stage attempt in Recordings or clip Processing, the file/slot name, and the owner's user ID.
 
 | Situation                                                                            | Operator does                                                                                                                                                                                                                                                                                                       | Does not                                                                                       |
 | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |

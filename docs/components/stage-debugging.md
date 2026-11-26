@@ -4,13 +4,13 @@ For engineers working on recipe stages (segment, caption, hand*pose). Everything
 
 ## Where stage artifacts live
 
-- **Server rows:** `job_stage_runs` (state, module, `error_code`, call id), `job_stage_claims`, `job_stage_evidence`. Read them as `GET /internal/v1/jobs/{id}/dag-run` (workflow credential) or the Pipeline pages.
+- **Server rows:** `job_stage_runs` (state, module, `error_code`, call id), `job_stage_claims`, `job_stage_evidence`. Read them as `GET /internal/v1/jobs/{id}/dag-run` (workflow credential) or inspect the stage attempts in Recordings and clip Processing.
 - **Stage outputs:** `segments.json`, `captions.json` and `diagnostics/<stage>/*` are job output files with a slot (`job_output_slots`). `GET /internal/v1/jobs/{id}/prior-stages` lists them for segment and caption.
 - **Controller journals (this host):** `$JOBS_STATE_DIR/<jobId>/<stage>/{journal.json|modal-journal.json,child.log}`. The bootstrap token file is deleted once handed to the child.
 
-## Stage diagnostics in the Pipeline page
+## Stage diagnostics in Recordings
 
-Each recipe stage row lists its completed `diagnostics/<stage>/<name>` files (role `diagnostic_blob`, e.g. `log.txt`) by file name. Clicking one calls `POST /api/v1/jobs/{jobId}/diagnostics/{fileId}/read` (staff session, same mutation checks as the other staff POSTs; customers, collectors, outsiders and no session are refused as on the dag-run route). The route signs one GET for that single object key, valid 60 s (the dataset read maximum), `Cache-Control: no-store`, content type `text/plain`, files over 64 MiB refused. The file must belong to that job, be a completed or verified `output` with role `diagnostic_blob` and a `diagnostics/` slot; any other id answers 404 without revealing whether it exists. The URL is returned only to the caller: it is not in the page HTML, not logged and not stored. The stage receipt row still shows only the receipt digest, since the run document records nothing else about it.
+Open a recording at `/recordings/<recordingId>` for clip planning, or follow its clip link to `/recordings/<recordingId>/clips/<clipId>/processing` for recipe stages. Expand a stage attempt to see its details. Each stage attempt lists its completed `diagnostics/<stage>/<name>` files (role `diagnostic_blob`, e.g. `log.txt`) by file name. Clicking one calls `POST /api/v1/jobs/{jobId}/diagnostics/{fileId}/read` (staff session, same mutation checks as the other staff POSTs; customers, collectors, outsiders and no session are refused as on the dag-run route). The route signs one GET for that single object key, valid 60 s (the dataset read maximum), `Cache-Control: no-store`, content type `text/plain`, files over 64 MiB refused. The file must belong to that job, be a completed or verified `output` with role `diagnostic_blob` and a `diagnostics/` slot; any other id answers 404 without revealing whether it exists. The URL is returned only to the caller: it is not in the page HTML, not logged and not stored. The stage receipt row still shows only the receipt digest, since the run document records nothing else about it.
 
 ## Reading a `submit_unknown` row
 

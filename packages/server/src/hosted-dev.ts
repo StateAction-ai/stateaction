@@ -2,6 +2,7 @@
 export const HOSTED_DEV_DATABASE_HOST =
   "dpg-dc2bek3rjlhs73ae5qg0-a.ohio-postgres.render.com";
 export const HOSTED_DEV_READER = "stateaction_dev_reader";
+export const HOSTED_DEV_READ_ONLY_MESSAGE = "This environment is read-only";
 const LOOPBACK = ["127.0.0.1", "localhost", "[::1]"];
 
 export function hostedDevProfile(env: NodeJS.ProcessEnv = process.env) {

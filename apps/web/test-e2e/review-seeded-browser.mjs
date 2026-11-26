@@ -1,4 +1,4 @@
-// SA-98/SA-99 real-browser evidence driver for the Review page on the SA-96 SEEDED stack. Run inside ONE
+// SA-98/SA-99 real-browser evidence driver for the processed clip page (/clips/<clipId>) on the SA-96 seeded stack. Run inside ONE
 // resource-guarded job, e.g. `agent-resource run -- node test-e2e/review-seeded-browser.mjs`
 // (needs the built web and jobs apps, the processing venv and the Render CLI; see
 // serve-console.mjs). Seeds only ok, caption_failed and segment_failed (STATEACTION_SEED_ONLY

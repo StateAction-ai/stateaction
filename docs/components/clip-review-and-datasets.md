@@ -117,6 +117,13 @@ Caption edits update the dataset in place. Its existing link serves the latest e
 
 ## Sharing and access
 
+In hosted development read-only mode, authenticated staff review and dataset
+writes, result selection, capture recipe selection, job control, and both rerun
+planning and confirmation return HTTP 403 with code `forbidden`, message
+`This environment is read-only` and `retryable: false`. The error envelope has a
+request ID and no data. The mode check runs before the handler accesses the
+catalog or loads processing settings. Authorized callers can still read review data.
+
 A customer receives a link to a specific shared dataset. Provide access only when every member has an approved decision on its current selected result. Built-in, private and unrelated datasets are staff-only. Customer clip pages have playback and annotations with read-only access. Keep internal notes, processing details and run history staff-only.
 
 An operator records the recipient's sharing permission and clears the exact approved result for that recipient. The clearance is bound to the clip, job, manifest digest and selection revision. Approval and membership alone do not grant media access. When staff approve a new selected result into the same dataset, the membership points to the new result and the earlier review remains in history.
