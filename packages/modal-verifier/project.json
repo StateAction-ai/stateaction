@@ -1,0 +1,41 @@
+{
+  "name": "modal-verifier-python",
+  "projectType": "library",
+  "implicitDependencies": ["contracts-python"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "cwd": "packages/modal-verifier",
+        "command": "uv build --wheel --out-dir dist"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/modal-verifier",
+        "commands": [
+          "uv run --locked ruff check .",
+          "uv run --locked ruff format --check ."
+        ],
+        "parallel": false
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/pnpm-lock.yaml",
+        "{workspaceRoot}/apps/jobs/package.json",
+        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-wire.json",
+        "{workspaceRoot}/packages/contracts/api/flora-checkpoints.v1.json"
+      ],
+      "options": {
+        "cwd": "packages/modal-verifier",
+        "command": "uv run --locked python -m unittest discover -s tests"
+      }
+    }
+  }
+}

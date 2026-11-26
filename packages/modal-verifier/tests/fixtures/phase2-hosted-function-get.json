@@ -1,0 +1,5 @@
+{
+  "source": "Allowlisted fields from the hosted Phase 2 FunctionGet response, with synthetic IDs and name",
+  "appName": "hosted-cpu-fixture",
+  "FunctionGet": "ChBmdS1Ib3N0ZWRGaXh0dXJlEjgSDmlkZW50aXR5X3Byb2JlQAKiAxBhcC1Ib3N0ZWRGaXh0dXJlsgMQZnUtSG9zdGVkRml4dHVyZSqkAQoOaG9zdGVkX2ZpeHR1cmUSDmlkZW50aXR5X3Byb2JlGAIwBUAKkgF7EnkSDmlkZW50aXR5X3Byb2JlIhBpbS1Ib3N0ZWRGaXh0dXJlOAJAAkoOEIACGPQDIgAogAI49AOSAQwNAACAPxDoBxjg1AOYAQGoAQrIAQX6ARJob3N0ZWQtY3B1LWZpeHR1cmXwAgGSAwIwAfoECAgAEAEYACgFsAU8"
+}
