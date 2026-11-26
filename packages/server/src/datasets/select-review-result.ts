@@ -1,6 +1,5 @@
 import { inTransaction, type Queryable } from "../catalog/catalog.js";
 import { CatalogError } from "../catalog/errors.js";
-import { hostedDevProfile } from "../hosted-dev.js";
 import { lockStaffReview } from "./review-result.js";
 
 export async function selectReviewClipResult(
@@ -16,8 +15,6 @@ export async function selectReviewClipResult(
   const reason = input.reason.trim();
   if (!reason)
     throw new CatalogError("invalid_request", "A reason is required");
-  if (hostedDevProfile()?.mode === "read-only")
-    throw new CatalogError("forbidden", "This environment is read-only");
 
   return inTransaction(pool, async (tx) => {
     await lockStaffReview(tx, input.viewerUserId, input.clipId);

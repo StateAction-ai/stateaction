@@ -5,6 +5,10 @@ import {
 } from "@stateaction/contracts";
 import { CatalogError, type CatalogErrorCode } from "../catalog/errors.js";
 import {
+  hostedDevProfile,
+  HOSTED_DEV_READ_ONLY_MESSAGE,
+} from "../hosted-dev.js";
+import {
   getRecording,
   registerRecording,
   sealRecordingInventory,
@@ -63,7 +67,7 @@ const PRIVATE: Record<string, string> = {
 };
 
 export async function captureRecipeSelectionRoute(
-  deps: AdmissionDeps,
+  getDeps: () => AdmissionDeps,
   authenticate: AuthenticateCollector,
   request: Request,
   recordingId: string,
@@ -80,6 +84,14 @@ export async function captureRecipeSelectionRoute(
       : auth.response;
   }
   const requestId = auth.requestId ?? randomUUID();
+  if (hostedDevProfile()?.mode === "read-only")
+    return failure(
+      "forbidden",
+      HOSTED_DEV_READ_ONLY_MESSAGE,
+      requestId,
+      auth.headers,
+    );
+  const deps = getDeps();
   try {
     const body = await readContractBody(
       request,

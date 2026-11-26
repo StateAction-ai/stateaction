@@ -393,25 +393,10 @@ export function jobDiagnosticRouteHandlers(
 }
 
 export function stageRerunRouteHandlers() {
-  return {
-    plan: (request: Request, recordingId: string) =>
-      routes().plan(request, recordingId),
-    confirm: (request: Request, recordingId: string) =>
-      routes().confirm(request, recordingId),
-    planV2: (request: Request, recordingId: string) =>
-      routes().planV2(request, recordingId),
-    confirmV2: (request: Request, recordingId: string) =>
-      routes().confirmV2(request, recordingId),
-    history: (request: Request, recordingId: string) =>
-      routes().history(request, recordingId),
-    select: (request: Request, recordingId: string) =>
-      routes().select(request, recordingId),
-  };
-
-  function routes() {
+  return stageRerunRoutes(datasetAuthenticator(), () => {
     const runtime = authRuntime();
     const config = jobsConfigFromEnv();
-    return stageRerunRoutes({
+    return {
       pool: runtime.pool,
       reader: s3ObjectReader(serverConfig(), { timeoutMs: 8000 }),
       backend: config.executionBackend,
@@ -420,7 +405,6 @@ export function stageRerunRouteHandlers() {
         ? { publicVideoCanary: config.publicVideoCanary }
         : {}),
       bindings: configuredRerunBindings(process.env.STATEACTION_RERUN_BINDINGS),
-      authenticate: datasetAuthenticator(),
-    });
-  }
+    };
+  });
 }

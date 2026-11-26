@@ -61,8 +61,9 @@ disable`, owner credential only) then, after each of grant disable, evidence
    revocation is fetched once afterwards and its outcome **recorded** (it may
    succeed until expiry); the TTL is read from the response (`ttlSeconds`,
    hard maximum 60 s). No immediate-revocation claim is made.
-5. **Browser**: staff open Pipeline detail, then the recording-filtered grid,
-   then the clip. The clip's Back to Data browser link restores the recording
+5. **Browser**: staff open the clip Processing page at
+   `/recordings/{recordingId}/clips/{clipId}/processing`, then follow the processed
+   clip link with a return path to the recording-filtered Data browser. The clip's Back to Data browser link restores the recording
    filter and clip. The customer opens the same `/clips/{id}` URL. Both show
    the latest approved label, the Rerun canvas renders, no release/export is
    created or needed, customers get no review editor. Screenshots at 1280 and
@@ -95,8 +96,9 @@ inspected: real Rerun renders the real clip, "Software rasterizer" shown).
    lifetime passed; the customer browser then failed to launch because two
    Chromes exceeded the guard's pids limit. The staff browser is now closed
    before the customer one starts.
-4. `browser` (same recovery, browser stage only): staff Pipeline -> recording
-   grid -> clip and the customer's same `/clips/{id}` passed.
+4. `browser` (same recovery, browser stage only): staff navigated from the
+   former Pipeline page to the recording grid and clip. The customer's visit
+   to the same clip URL passed.
 
 Not one end-to-end invocation: the review matrix, access/revocation stage and
 browser stage were each observed once on the real clip, in that order, with one

@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import type pg from "pg";
 import { validateValue } from "@stateaction/contracts";
 import type { DatasetAuthenticate } from "../datasets/http.js";
+import {
+  hostedDevProfile,
+  HOSTED_DEV_READ_ONLY_MESSAGE,
+} from "../hosted-dev.js";
 import { TransportError } from "../transport/errors.js";
 import { errorResponse, readBoundedJson } from "../transport/http.js";
 import {
@@ -16,7 +20,7 @@ import { getDagRun, getDagRunWithLineage } from "./stages.js";
 
 /**
  * POST /api/v1/jobs/{jobId}/control (staff only): the real authenticated
- * mutation behind the Pipeline cancel/retry/reconcile controls. Authentication
+ * mutation for cancelling, retrying or reconciling a processing job. Authentication
  * is injected (production: the Better Auth staff guard with origin,
  * Fetch-Metadata and client-header checks on this mutation; bearer credentials
  * refused). Every action reuses the recovery functions the repair pass and the
@@ -56,6 +60,8 @@ export function jobControlRoutes(deps: JobControlDeps) {
         return new Response(JSON.stringify(body), { status, headers });
       };
       try {
+        if (hostedDevProfile()?.mode === "read-only")
+          throw new TransportError("forbidden", HOSTED_DEV_READ_ONLY_MESSAGE);
         if (!UUID.test(jobId))
           throw new TransportError("not_found", "Job not found");
         const body = (await readBoundedJson(

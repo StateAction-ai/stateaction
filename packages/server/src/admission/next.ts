@@ -44,7 +44,7 @@ export function selectCaptureRecipe(get: () => AuthRuntime = authRuntime) {
   return async (request: Request, recordingId: string) => {
     try {
       return await captureRecipeSelectionRoute(
-        admissionDepsFromEnv(get().pool),
+        () => admissionDepsFromEnv(get().pool),
         collectorAuthenticator(get, "staff"),
         request,
         recordingId,

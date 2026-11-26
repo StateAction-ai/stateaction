@@ -11,7 +11,10 @@ import type { Queryable } from "../catalog/catalog.js";
 import { CatalogError, type CatalogErrorCode } from "../catalog/errors.js";
 import type { AnnotationDeps } from "../annotations/annotations.js";
 import { loadSharedClipHandFrames } from "../annotations/shared-review.js";
-import { hostedDevProfile } from "../hosted-dev.js";
+import {
+  hostedDevProfile,
+  HOSTED_DEV_READ_ONLY_MESSAGE,
+} from "../hosted-dev.js";
 import { TransportError } from "../transport/errors.js";
 import { issueRead, type BrokerDeps, type ReadSigner } from "./broker.js";
 import {
@@ -170,6 +173,13 @@ export function reviewClipRoutes(
     const requestId = auth.requestId ?? randomUUID();
     const headers = new Headers(auth.headers);
     try {
+      if (request.method === "POST" && hostedDevProfile()?.mode === "read-only")
+        return failure(
+          "forbidden",
+          HOSTED_DEV_READ_ONLY_MESSAGE,
+          requestId,
+          headers,
+        );
       if (!isUuid(clipId))
         throw new CatalogError("not_found", "Clip not found");
       const data = await action(
@@ -466,11 +476,19 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
     handler: (
       principal: DatasetPrincipal,
     ) => Promise<{ data: unknown; status?: number }>,
+    write = false,
   ): Promise<Response> => {
     const auth = await deps.authenticate(request, need);
     if (!auth.ok) return auth.response;
     const requestId = auth.requestId ?? randomUUID();
     try {
+      if (write && hostedDevProfile()?.mode === "read-only")
+        return failure(
+          "forbidden",
+          HOSTED_DEV_READ_ONLY_MESSAGE,
+          requestId,
+          auth.headers,
+        );
       const { data, status } = await handler(auth.principal);
       return respond({ data, requestId }, status ?? 200, auth.headers);
     } catch (error) {
@@ -495,6 +513,13 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
       return failure("internal", GENERIC.internal, requestId, auth.headers);
     }
   };
+
+  const write = (
+    request: Request,
+    handler: (
+      principal: DatasetPrincipal,
+    ) => Promise<{ data: unknown; status?: number }>,
+  ) => run(request, "staff", handler, true);
 
   const read = async (
     principal: DatasetPrincipal,
@@ -527,7 +552,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
         return { data: { datasets: page.items, nextCursor: page.nextCursor } };
       }),
     createDataset: (request: Request) =>
-      run(request, "staff", async (p) => {
+      write(request, async (p) => {
         const body = await readContract<DatasetCreateRequest>(
           request,
           "http.dataset-create.v1",
@@ -551,7 +576,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
         }),
       })),
     renameDataset: (request: Request, datasetId: string) =>
-      run(request, "staff", async (p) => {
+      write(request, async (p) => {
         const id = pathId(datasetId, "datasetId");
         const body = await readContract<DatasetUpdateRequest>(
           request,
@@ -579,7 +604,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
         return { data: { clips: page.items, nextCursor: page.nextCursor } };
       }),
     addDatasetClips: (request: Request, datasetId: string) =>
-      run(request, "staff", async (p) => {
+      write(request, async (p) => {
         const id = pathId(datasetId, "datasetId");
         const body = await readContract<DatasetMembersAddRequest>(
           request,
@@ -595,7 +620,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
         };
       }),
     removeDatasetClip: (request: Request, datasetId: string, clipId: string) =>
-      run(request, "staff", async (p) => {
+      write(request, async (p) => {
         const q = readQuery(request, ["expectedRevision"]);
         if (q.expectedRevision === undefined || q.expectedRevision < 1)
           throw invalid("expectedRevision is required");
@@ -663,9 +688,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
         };
       }),
     commitClipReview: (request: Request, clipId: string, persisted = false) =>
-      run(request, "staff", async (p) => {
-        if (persisted && hostedDevProfile()?.mode === "read-only")
-          throw new CatalogError("forbidden", "Clip review is read-only");
+      write(request, async (p) => {
         const id = pathId(clipId, "clipId");
         const selectionRevision = persisted
           ? clipSelectionRevision(request)
@@ -702,7 +725,7 @@ export function datasetRoutes(deps: DatasetRoutesDeps) {
       recordingId: string,
       segmentId: string,
     ) =>
-      run(request, "staff", async (p) => {
+      write(request, async (p) => {
         const rid = pathId(recordingId, "recordingId");
         const sid = pathId(segmentId, "segmentId");
         const { clip, selection } = readQuery(request, ["clip", "selection"]);

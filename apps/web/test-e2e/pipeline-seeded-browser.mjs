@@ -1,9 +1,10 @@
-// SA-96 real-browser evidence driver for the Pipeline pages on the SEEDED stack. Run inside ONE
+// SA-96 real-browser evidence driver for Recordings on the seeded stack. Run inside ONE
 // resource-guarded job, e.g. `agent-resource run -- node test-e2e/pipeline-seeded-browser.mjs`
 // (needs the built web and jobs apps, the processing venv and the Render CLI; see
 // serve-console.mjs). Seeds only ok, caption_failed and segment_failed (STATEACTION_SEED_ONLY
-// overrides), signs in as staff, checks /recordings and each /recordings/<recordingId> at desktop and
-// 390 px, clicks the per-stage diagnostics links, checks a customer is denied from the
+// overrides), signs in as staff and checks /recordings and each clip's Processing page at
+// /recordings/<recordingId>/clips/<clipId>/processing at desktop and 390 px. It opens the stage
+// diagnostics links, checks a customer is denied from the
 // diagnostics route, then writes screenshots and a JSON receipt to SHOTS_DIR. Always closes the
 // browser session, stops the job runner and the stack (exact pids only). Zero model spend.
 import { execFileSync } from "node:child_process";

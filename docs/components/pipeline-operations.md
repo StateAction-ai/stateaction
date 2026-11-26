@@ -92,9 +92,8 @@ is a lower bound while any charge is unknown.
 (for example `gpu_second:RTX-PRO-6000`), unit `GPU-second`. The rate comes only
 from the operator card; no rate is defined in code, and without one the line
 is `unknown`. `estimateRun(receipt, card, gpuStages)` prices the recorded
-container seconds of each GPU stage run; CPU-only runs add no GPU line. The
-Pipeline detail page shows the rate per hour (card rate x 3600) from the file
-named by `STATEACTION_OPS_RATE_CARD`, or "Rate unknown".
+container seconds of each GPU stage run; CPU-only runs add no GPU line. The recording and clip Processing pages show estimated costs from recorded
+attempts.
 
 ## Alerts
 
