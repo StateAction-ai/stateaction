@@ -15,10 +15,10 @@ test("Next route parameters may retain the encoded recipe separator", () => {
   }
 });
 
-test("recipe only and stage links stay pinned to the exact job", () => {
+test("recipe stage links stay pinned to the exact job", () => {
   assert.equal(
-    recipeHref("stub_local@1", "job-a", { recipeOnly: true, stage: "segment" }),
-    "/recipes/stub_local%401?job=job-a&view=recipe#stage-segment",
+    recipeHref("stub_local@1", "job-a", { stage: "segment" }),
+    "/recipes/stub_local%401?job=job-a&step=segment",
   );
   assert.notEqual(
     recipeHref("stub_local@1", "job-a"),

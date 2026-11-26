@@ -923,7 +923,7 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
       );
       await open(
         await ev(`(${recipeLink}).getAttribute("href")`),
-        defaultRecipe,
+        "IndEgo processing · v1",
       );
       await open("/recordings/" + manual.id, "Choose a recipe");
       await click("Choose a recipe");
@@ -957,7 +957,7 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
     });
     assert.equal(diagnostic.status, 200, "the failed recording still renders");
     assert.ok(
-      diagnostic.text.includes("Retry clip planning"),
+      diagnostic.text.includes("Retry failed steps"),
       "the failed recording exposes a retry",
     );
     for (const width of [1280, 390]) {
@@ -967,18 +967,18 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
         deviceScaleFactor: 1,
         mobile: width < 600,
       });
-      await open("/recordings/" + manual.id, "Retry clip planning");
+      await open("/recordings/" + manual.id, "Retry failed steps");
       assert.match(
         await ev('document.querySelector("main").innerText'),
         /Clip planning[\s\S]*Failed/,
       );
-      await click("Retry clip planning");
+      await click("Retry failed steps");
       await until(
         `document.querySelector('dialog[open]')?.innerText.includes("same sealed source")`,
       );
       if (width === 1280) await click("Close", "dialog[open]");
     }
-    await click("Confirm retry", "dialog[open]");
+    await click("Start retry", "dialog[open]");
     await waitFor(
       async () => (await jobsOf(manual.id)).length === 2,
       "retry creates one successor",

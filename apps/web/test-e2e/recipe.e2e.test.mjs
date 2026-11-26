@@ -379,13 +379,27 @@ async function pipelineStages(name) {
   const { recordingId, jobId } = rec(name);
   await open(
     `/recordings/${recordingId}/clips/${recordingId}/processing`,
-    "main section h3",
+    '[aria-label="Recipe graph"]',
   );
-  return ev(`[...document.querySelectorAll('main section:has(h3)')].filter(s => s.querySelector('h2')).map(s => ({
-    text: s.innerText.replace(/\\s+/g, ' '),
-    code: s.querySelector(':scope > code')?.textContent.trim() ?? null,
-    hasRun: !!s.querySelector('a[title="${jobId}"]'),
-  }))`);
+  const rows = [];
+  for (const step of ["segment", "caption", "hand_pose"]) {
+    const button = `button[data-step="${step}"]`;
+    const panel = `[data-step-details="${step}"]`;
+    await hydrated(button);
+    await ev(`document.querySelector(${JSON.stringify(button)}).click()`);
+    await until(
+      () => ev(`!!document.querySelector(${JSON.stringify(panel)})`),
+      step,
+    );
+    rows.push(
+      await ev(`(section => ({
+      text: section.innerText.replace(/\\s+/g, " "),
+      code: section.querySelector("code")?.textContent.trim() ?? null,
+      hasRun: [...section.querySelectorAll("a")].some(link => new URL(link.href).searchParams.get("run") === "${jobId}"),
+    }))(document.querySelector(${JSON.stringify(panel)}))`),
+    );
+  }
+  return rows;
 }
 
 before(async () => {
@@ -505,7 +519,14 @@ describe("stub recipe through upload, admission, the Render loopback controller,
         `Boolean(document.querySelector(${JSON.stringify('main a[href="' + url + '"]')}))`,
       );
     await open("/recordings", `main a[href="${recordingPath}"]`);
-    await open(recordingPath, `main a[href="${processingPath}"]`);
+    const clipsNode = 'button[data-step="$clips"]';
+    await open(recordingPath, clipsNode);
+    await hydrated(clipsNode);
+    await ev(`document.querySelector(${JSON.stringify(clipsNode)}).click()`);
+    await until(
+      () => hasLink(processingPath),
+      "expanded Clips links to processing",
+    );
     await open(
       processingPath,
       `main a:is([href="${reviewPath}"], [href^="${reviewPath}?"])`,
@@ -546,7 +567,7 @@ describe("stub recipe through upload, admission, the Render loopback controller,
     );
     assert.match(await reviewSummary(), /2 caption failures/);
     const rows = await pipelineStages("caption_failed");
-    assert.match(rows[1].text, /Captioning.*Failed captions: 2/);
+    assert.match(rows[1].text, /Write captions.*Failed captions: 2/);
     assert.ok(rows[1].hasRun);
   });
 
@@ -625,10 +646,10 @@ describe("stub recipe through upload, admission, the Render loopback controller,
       /Segmentation failed.*did not return a stage receipt/,
     );
     const rows = await pipelineStages("segment_failed");
-    assert.match(rows[0].text, /Segmentation.*Failed/);
+    assert.match(rows[0].text, /Find actions.*Failed/);
     assert.equal(rows[0].code, "receipt_missing");
-    assert.match(rows[1].text, /Captioning.*Not run/);
-    assert.match(rows[2].text, /Hand pose.*Succeeded/);
+    assert.match(rows[1].text, /Write captions.*Not run/);
+    assert.match(rows[2].text, /Track hands.*Succeeded/);
   });
 
   test("digest_mismatch: files uploaded under a rejected receipt are attributed to the failed segment node, never served as segments", async () => {

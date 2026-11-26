@@ -3,7 +3,8 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Stage } from "@stateaction/contracts";
-import { RECIPE_STAGE_LABEL } from "@stateaction/server/pipeline-model";
+import Link from "next/link";
+import { RECIPE_STEP_LABEL } from "@stateaction/server/pipeline-model";
 import { submitJobControl } from "../../lib/client-api";
 import { Button } from "../ui/button";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -56,18 +57,16 @@ export function RetryAction({
   action,
   ranges,
   disabledReason,
-  hint,
 }: {
   recordingId: string;
   label: string;
-  action: RetryAction;
+  action: RetryAction | null;
   ranges?: Readonly<Record<string, string>> | undefined;
   disabledReason?: string | null;
-  hint?: string;
 }) {
   const router = useRouter();
   const descriptionId = useId();
-  const description = disabledReason ?? hint;
+  const description = disabledReason ?? undefined;
   const endpoint = `/api/v2/recordings/${recordingId}/stage-reruns`;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,6 +77,7 @@ export function RetryAction({
   const plan = prepared?.plan;
 
   async function prepare() {
+    if (!action) return;
     setOpen(true);
     setError("");
     if (prepared) return;
@@ -100,7 +100,7 @@ export function RetryAction({
   }
 
   async function confirm() {
-    if (!prepared || busy) return;
+    if (!action || !prepared || busy) return;
     setSubmitted(true);
     setBusy(true);
     setError("");
@@ -136,8 +136,12 @@ export function RetryAction({
   return (
     <div className="grid justify-items-start gap-1">
       <Button
-        variant="outline"
-        disabled={Boolean(disabledReason || outcome)}
+        variant={
+          label === "Retry failed steps" && !disabledReason && action
+            ? "default"
+            : "outline"
+        }
+        disabled={Boolean(!action || disabledReason || outcome)}
         aria-describedby={description ? descriptionId : undefined}
         onClick={() => void prepare()}
       >
@@ -163,12 +167,9 @@ export function RetryAction({
           }}
         >
           {busy && !prepared && <p role="status">Checking the retry plan…</p>}
-          {action.planning && (
+          {action?.planning && (
             <div className="mb-4 grid gap-2 text-sm">
               <p>Start a new clip planning run from the same sealed source.</p>
-              <p className="text-muted">
-                Earlier run <code>{action.planning.jobId.slice(0, 8)}</code>
-              </p>
               <p>New run estimate unavailable.</p>
               {action.planning.estimate != null && (
                 <p>
@@ -188,12 +189,14 @@ export function RetryAction({
                   >
                     <strong>
                       Clip {clip.ordinal + 1}
-                      {ranges?.[clip.clipId] ? ` · ${ranges[clip.clipId]}` : ""}
+                      {ranges?.[clip.clipId]
+                        ? ` · ${ranges[clip.clipId]}`
+                        : " · Source time unavailable"}
                     </strong>
                     <p>
                       Runs{" "}
                       {clip.execute
-                        .map(({ stage }) => RECIPE_STAGE_LABEL[stage])
+                        .map(({ stage }) => RECIPE_STEP_LABEL[stage])
                         .join(", ")}
                     </p>
                     {clip.execute.some(({ stage }) => stage === "segment") &&
@@ -207,8 +210,13 @@ export function RetryAction({
                         {output.state === "succeeded"
                           ? "Keeps"
                           : "Carries forward"}{" "}
-                        {RECIPE_STAGE_LABEL[output.stage]} from{" "}
-                        <code>{output.sourceJobId.slice(0, 8)}</code>
+                        {RECIPE_STEP_LABEL[output.stage]} from{" "}
+                        <Link
+                          className="text-brand underline"
+                          href={`/recordings/${recordingId}/clips/${clip.clipId}/processing?${new URLSearchParams({ step: output.stage, run: output.sourceJobId })}`}
+                        >
+                          source run
+                        </Link>
                         {output.state !== "succeeded" &&
                           ` (${output.state.replaceAll("_", " ")})`}
                       </p>
@@ -231,7 +239,7 @@ export function RetryAction({
           )}
           {prepared && (
             <Button disabled={busy} onClick={() => void confirm()}>
-              {busy ? "Queuing retry…" : "Confirm retry"}
+              {busy ? "Queuing retry…" : "Start retry"}
             </Button>
           )}
         </ConfirmDialog>

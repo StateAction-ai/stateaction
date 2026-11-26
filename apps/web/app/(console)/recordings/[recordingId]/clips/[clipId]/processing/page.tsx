@@ -1,21 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Stage } from "@stateaction/contracts";
-import {
-  parseRecordingId,
-  pipelineReads,
-  RECIPE_STAGE_LABEL,
-} from "@stateaction/server/pipeline";
+import { parseRecordingId, pipelineReads } from "@stateaction/server/pipeline";
 import {
   EstimatedCost,
-  ProcessingStage,
+  ProcessingStepDetails,
   ProcessingStatus,
   processingReason,
 } from "../../../../../../../components/recordings/processing-stage";
 import {
+  exactRangeLabel,
   RecordingPreview,
   rangeLabel,
 } from "../../../../../../../components/recordings/recording-preview";
+import { RecipeFlow } from "../../../../../../../components/recipes/recipe-flow";
 import { RetryAction } from "../../../../../../../components/recordings/retry-actions";
 import { SelectClipResult } from "../../../../../../../components/recordings/select-clip-result";
 import { Button } from "../../../../../../../components/ui/button";
@@ -25,18 +23,12 @@ import { requireConsoleSession } from "../../../../../../../lib/server-session";
 export const metadata = { title: "Clip processing · StateAction.ai" };
 export const dynamic = "force-dynamic";
 
-const retryLabel: Record<Stage, string> = {
-  segment: "Retry segmentation and captions",
-  caption: "Retry captions",
-  hand_pose: "Retry hand pose",
-};
-
 export default async function ClipProcessingPage({
   params,
   searchParams,
 }: {
   params: Promise<{ recordingId: string; clipId: string }>;
-  searchParams: Promise<{ run?: string | string[] }>;
+  searchParams: Promise<{ run?: string | string[]; step?: string | string[] }>;
 }) {
   const staff = await requireConsoleSession(["staff"]);
   const ids = await params;
@@ -49,7 +41,7 @@ export default async function ClipProcessingPage({
   if (!result) notFound();
   const { clip, recording, stages, recipe } = result;
   const pathname = `/recordings/${recordingId}/clips/${clipId}/processing`;
-  const run = (await searchParams).run;
+  const { run, step } = await searchParams;
   const selectedRun = parseRecordingId(
     typeof run === "string" ? run : undefined,
   );
@@ -88,36 +80,51 @@ export default async function ClipProcessingPage({
       ? "The source needs to be uploaded again."
       : null;
 
-  function action(
-    stage: Stage,
-    stages: Stage[],
-    label: string,
-    blocked: string | null,
-    hint: string,
-  ) {
-    if (!clip.latestJobId) return null;
+  const retryable = stages.flatMap(
+    ({ stage, latest, enabled, reusableOutput }): Stage[] =>
+      stage !== "clip_plan" &&
+      result.retryStages.includes(stage) &&
+      enabled === true &&
+      !reusableOutput &&
+      (latest?.error ||
+        latest?.state === "partially_complete" ||
+        result.error?.stage === stage ||
+        job?.state === "cancelled")
+        ? [stage]
+        : [],
+  );
+  function action(requested: Stage[], label: string) {
     return (
       <RetryAction
-        key={`${clip.latestJobId}:${stage}:${label}`}
+        key={`${clip.latestJobId}:${requested.join(",")}:${label}`}
         recordingId={recording.id}
         label={label}
-        action={{
-          request: {
-            schemaVersion: 2,
-            scope: "clip",
-            clipId: clip.id,
-            parentJobId: clip.latestJobId,
-            stages,
-          },
+        ranges={{
+          [clip.id]: exactRangeLabel(clip.startSeconds, clip.endSeconds),
         }}
-        ranges={ranges}
-        hint={hint}
+        action={
+          clip.latestJobId && requested.length
+            ? {
+                request: {
+                  schemaVersion: 2,
+                  scope: "clip",
+                  clipId: clip.id,
+                  parentJobId: clip.latestJobId,
+                  stages: requested,
+                },
+              }
+            : null
+        }
         disabledReason={
           !canRetry
             ? "This environment is read-only."
-            : handOnly && stages.some((candidate) => candidate !== "hand_pose")
-              ? "This canary allows hand pose retries only."
-              : blocked
+            : (blocked ??
+              (handOnly &&
+              requested.some((candidate) => candidate !== "hand_pose")
+                ? "This canary allows hand pose retries only."
+                : !terminal || !requested.length
+                  ? "No failed steps."
+                  : null))
         }
       />
     );
@@ -143,7 +150,7 @@ export default async function ClipProcessingPage({
           <EstimatedCost cost={result.cost} scope="Clip" />
           {recipe && (
             <Link
-              href={recipeHref(recipe.id, recipe.jobId ?? undefined)}
+              href={recipeHref(recipe.id)}
               className="text-sm font-semibold text-brand underline wrap-anywhere"
             >
               {recipeLabel(recipe.id)}
@@ -192,87 +199,58 @@ export default async function ClipProcessingPage({
         />
       ) : null}
 
-      <RecordingPreview
-        recordingId={recordingId}
-        range={range}
-        capturedAt={recording.startedAt}
-        metadata={recording.metadata}
-        clipId={clipId}
+      <RecipeFlow
+        nodes={result.graph}
+        initialStep={typeof step === "string" ? step : undefined}
+        retry={action(result.retryStages, "Retry failed steps")}
+        details={{
+          $input: (
+            <div className="grid gap-3">
+              <RecordingPreview
+                recordingId={recordingId}
+                range={range}
+                capturedAt={recording.startedAt}
+                metadata={recording.metadata}
+              />
+              <ProcessingStepDetails
+                stepId="$input"
+                pathname={pathname}
+                current={null}
+                runs={[]}
+              />
+            </div>
+          ),
+          ...Object.fromEntries(
+            stages.map(
+              ({
+                stage,
+                latest,
+                attempts,
+                reusedFromJobId,
+                importedEvidence,
+              }) => [
+                stage,
+                <ProcessingStepDetails
+                  key={stage}
+                  stepId={stage}
+                  current={latest}
+                  runs={attempts}
+                  reusedFromJobId={reusedFromJobId}
+                  pathname={pathname}
+                  selectedRun={selectedRun}
+                  recipeId={recipe?.id}
+                  importedEvidence={importedEvidence}
+                  action={
+                    stage !== "clip_plan" &&
+                    retryable.includes(stage) &&
+                    action([stage], "Retry this step")
+                  }
+                />,
+              ],
+            ),
+          ),
+        }}
       />
-
-      {stages.map(
-        (
-          {
-            stage,
-            latest,
-            attempts,
-            reusedFromJobId,
-            reusableOutput,
-            enabled,
-            importedEvidence,
-          },
-          index,
-        ) => {
-          if (stage === "clip_plan") return null;
-          const needsRetry =
-            enabled === true &&
-            !reusableOutput &&
-            Boolean(
-              latest?.error ||
-                latest?.state === "partially_complete" ||
-                result.error?.stage === stage ||
-                job?.state === "cancelled",
-            );
-          const fromHere = stages
-            .slice(index)
-            .flatMap(({ stage, enabled }) =>
-              stage !== "clip_plan" && enabled ? [stage] : [],
-            );
-          const label =
-            stage === "segment" &&
-            !stages.some((entry) => entry.stage === "caption" && entry.enabled)
-              ? "Retry segmentation"
-              : retryLabel[stage];
-          return (
-            <ProcessingStage
-              key={stage}
-              title={RECIPE_STAGE_LABEL[stage]}
-              current={latest}
-              runs={attempts}
-              reusedFromJobId={reusedFromJobId}
-              pathname={pathname}
-              selectedRun={selectedRun}
-              recipeId={recipe?.id}
-              hasEarlierOutput={importedEvidence !== null}
-              action={
-                needsRetry &&
-                (terminal || active) &&
-                clip.latestJobId && (
-                  <div className="flex flex-wrap items-start gap-2">
-                    {action(
-                      stage,
-                      [stage],
-                      label,
-                      blocked,
-                      label === retryLabel.segment
-                        ? "Captions must follow segmentation."
-                        : "Retry this stage only.",
-                    )}
-                    {fromHere.length > 1 &&
-                      action(
-                        stage,
-                        fromHere,
-                        "Retry from here",
-                        blocked,
-                        "Retry this stage and everything after it.",
-                      )}
-                  </div>
-                )
-              }
-            />
-          );
-        },
-      )}
     </div>
   );
 }

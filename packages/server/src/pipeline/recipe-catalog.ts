@@ -1,4 +1,13 @@
-import type { RecipeV1 } from "@stateaction/contracts";
+import type { CompiledGraph, RecipeV1 } from "@stateaction/contracts";
+import defaultGraph from "../../../../recipes/compiled/egocentric_default.json" with { type: "json" };
+import minimalGraph from "../../../../examples/compiled/minimal_stub.json" with { type: "json" };
+import motionGraph from "../../../../examples/compiled/with_motion_energy.json" with { type: "json" };
+import detailedGraph from "../../../../examples/compiled/caption_detailed.json" with { type: "json" };
+import {
+  compiledRecipeGraph,
+  v1RecipeGraph,
+  type RecipeGraphNode,
+} from "./recipe-graph.js";
 import {
   CAPTURE_SOURCES,
   captureRecipeDefinition,
@@ -10,10 +19,18 @@ import { recordingDurationSql, recordingNameSql } from "./recording-display.js";
 import { RECORDING_IMPORT_LATERAL } from "./queries.js";
 import { JOB_COST_LATERAL } from "./recording-operations.js";
 
+const compiled = [
+  defaultGraph,
+  minimalGraph,
+  motionGraph,
+  detailedGraph,
+] as CompiledGraph[];
+
 const DOCUMENTED_WORKFLOW = "flora-spike-c";
 const CATALOG_IDS = [
   ...new Set(CAPTURE_SOURCES.flatMap((source) => source.allowedRecipeIds)),
   DOCUMENTED_WORKFLOW,
+  ...compiled.map(({ recipe }) => recipe),
 ];
 export type CaptureSourceDefinition = (typeof CAPTURE_SOURCES)[number];
 
@@ -22,6 +39,8 @@ export type RecipeCatalogEntry = {
   label: string;
   kind: "recipe" | "workflow";
   recipe: RecipeV1 | null;
+  graph: RecipeGraphNode[];
+  preview: boolean;
   captureSources: CaptureSourceDefinition[];
   recordingCount: number;
   estimatedUsdPerVideoHour: string | null;
@@ -87,15 +106,21 @@ function catalogEntry(
   snapshot: RecipeV1 | null = null,
 ): RecipeCatalogEntry {
   const workflow = id === DOCUMENTED_WORKFLOW;
+  const definition = compiled.find(({ recipe }) => recipe === id);
+  const recipe = captureRecipeDefinition(id) ?? snapshot;
   return {
     id,
     label: workflow
       ? "FLORA Spike C + CPU hand tracking"
       : id === PUBLIC_VIDEO_RECIPE.recipeId
         ? "IndEgo processing"
-        : id,
+        : (definition?.meta.title ?? id.split("@")[0]!.replaceAll("_", " ")),
     kind: workflow ? "workflow" : "recipe",
-    recipe: captureRecipeDefinition(id) ?? snapshot,
+    recipe,
+    graph: definition
+      ? compiledRecipeGraph(definition)
+      : v1RecipeGraph(recipe, "definition"),
+    preview: definition !== undefined,
     captureSources: CAPTURE_SOURCES.filter((source) =>
       source.allowedRecipeIds.some((allowed) => allowed === id),
     ),
@@ -162,7 +187,7 @@ export async function getRecipeDefinition(
     [staff, id],
   );
   const first = rows[0];
-  if (!first || (!first.recipe_id && !captureRecipeDefinition(id))) return null;
+  if (!first || (!first.recipe_id && !CATALOG_IDS.includes(id))) return null;
   return {
     ...catalogEntry(
       id,

@@ -1,19 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  formatUsd,
   parseRecordingId,
   pipelineReads,
   type RecipeDefinition,
+  v1RecipeGraph,
 } from "@stateaction/server/pipeline";
-import { parseRecipeId, recipeHref } from "../../../../lib/recipe-view";
+import { parseRecipeId } from "../../../../lib/recipe-view";
 import { requireConsoleSession } from "../../../../lib/server-session";
 import { RecipeFlow } from "../../../../components/recipes/recipe-flow";
-import {
-  CachedRecipeEvidence,
-  RecipeEvidence,
-} from "../../../../components/recipes/recipe-evidence";
-import { ProcessingStatus } from "../../../../components/recordings/processing-stage";
+import { RecipeEvidence } from "../../../../components/recipes/recipe-evidence";
 import { Card } from "../../../../components/ui/card";
 
 export const metadata = { title: "Processing recipe · StateAction.ai" };
@@ -38,14 +34,6 @@ function RecipeRecordings({ definition }: { definition: RecipeDefinition }) {
               >
                 {recording.title}
               </Link>
-              {recording.jobId && (
-                <Link
-                  href={recipeHref(definition.id, recording.jobId)}
-                  className="text-brand underline"
-                >
-                  View run <code>{recording.jobId.slice(0, 8)}</code>
-                </Link>
-              )}
             </li>
           ))}
         </ul>
@@ -61,58 +49,47 @@ export default async function RecipePage({
   searchParams,
 }: {
   params: Promise<{ recipeId: string }>;
-  searchParams: Promise<{ job?: string | string[]; view?: string | string[] }>;
+  searchParams: Promise<{
+    job?: string | string[];
+    step?: string | string[];
+  }>;
 }) {
   const staff = await requireConsoleSession(["staff"]);
   const recipeId = parseRecipeId((await params).recipeId);
-  const { job, view } = await searchParams;
+  const { job, step } = await searchParams;
   const jobId = typeof job === "string" ? parseRecordingId(job) : null;
   if (!recipeId || (job !== undefined && !jobId)) notFound();
 
   const reads = pipelineReads();
   const definition = await reads.recipeDefinition(staff.userId, recipeId);
-  if (definition?.kind === "workflow") {
-    const evidenceJobId = jobId ?? definition.recordings[0]?.jobId;
-    const linked = definition.recordings.find(
-      (recording) => recording.jobId === evidenceJobId,
-    );
-    if (!evidenceJobId || !linked) notFound();
-    const cached = await reads.cachedImportByJob(staff.userId, evidenceJobId);
-    if (!cached) notFound();
-    return (
-      <div className="grid gap-4">
-        <Link href="/recipes" className="w-fit text-sm text-brand underline">
-          ← Recipes
-        </Link>
-        <header>
-          <h1 className="text-3xl font-bold tracking-tight">
-            {definition.label}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Historical workflow. Recipe version was not recorded.
-          </p>
-        </header>
-        <Card className="grid gap-3 p-4 sm:p-5">
-          <h2 className="text-lg font-bold">Processing flow</h2>
-          <RecipeFlow recipe={null} />
-        </Card>
-        <CachedRecipeEvidence cached={cached} />
-        <RecipeRecordings definition={definition} />
-      </div>
-    );
-  }
-
-  const exact = jobId
-    ? await reads.recipeVisualization(
-        staff.userId,
-        recipeId,
-        jobId,
-        view !== "recipe",
-      )
+  const workflow = definition?.kind === "workflow";
+  const exact =
+    !workflow && jobId
+      ? await reads.recipeVisualization(staff.userId, recipeId, jobId, true)
+      : null;
+  if ((!definition && !exact) || (jobId && !exact && !workflow)) notFound();
+  const historicalJob = workflow
+    ? (jobId ?? definition.recordings[0]?.jobId)
     : null;
-  if ((jobId && !exact) || (!definition && !exact)) notFound();
+  if (
+    workflow &&
+    jobId &&
+    !definition.recordings.some((entry) => entry.jobId === jobId)
+  )
+    notFound();
+  const cached = historicalJob
+    ? await reads.cachedImportByJob(staff.userId, historicalJob)
+    : null;
   const recipe = exact?.recipe ?? definition?.recipe;
-  if (!recipe) notFound();
+  const nodes = exact
+    ? v1RecipeGraph(exact.recipe, "definition").map((node) => {
+        const run = exact.run?.stages.find(({ stage }) => stage === node.id);
+        return run ? { ...node, status: run.state } : node;
+      })
+    : (definition?.graph ?? []);
+  const label =
+    definition?.label ?? recipeId.split("@")[0]!.replaceAll("_", " ");
+  const version = recipeId.split("@")[1];
 
   return (
     <div className="grid gap-4">
@@ -121,75 +98,59 @@ export default async function RecipePage({
       </Link>
       <header>
         <h1 className="text-3xl font-bold tracking-tight wrap-anywhere">
-          {definition?.label && definition.label !== recipeId
-            ? definition.label + " · " + recipeId
-            : recipeId}
+          {label}
+          {version ? ` · v${version}` : ""}
         </h1>
-        {jobId && exact ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-            <Link
-              href={`/recordings/${exact.recordingId}`}
-              className="text-brand underline"
-            >
-              Recording
-            </Link>
-            <span>
-              Run <code title={jobId}>{jobId.slice(0, 8)}</code>
-            </span>
-            {exact.run && <ProcessingStatus state={exact.run.jobState} />}
-            {exact.run && (
-              <span>
-                Estimated cost {formatUsd(exact.run.estimatedCostUsd)}
-              </span>
-            )}
-            <Link
-              href={recipeHref(recipeId, jobId, {
-                recipeOnly: view !== "recipe",
-              })}
-              className="text-brand underline"
-            >
-              {view === "recipe" ? "View exact run" : "View recipe definition"}
-            </Link>
-          </div>
-        ) : (
+        {definition?.preview && (
           <p className="mt-1 text-sm text-muted">
-            Recipes and capture sources are defined in code.
+            Read-only preview · Unavailable for capture
+          </p>
+        )}
+        {workflow && (
+          <p className="mt-1 text-sm text-muted">
+            Historical workflow. Recipe version was not recorded.
           </p>
         )}
       </header>
-
-      <Card className="grid gap-3 p-4 sm:p-5">
-        <h2 className="text-lg font-bold">Processing flow</h2>
-        <RecipeFlow recipe={recipe} />
-        {exact?.topology !== undefined && exact.topology !== "unselected" && (
-          <p className="text-sm text-muted">
-            Recorded execution: {exact.topology}.
-          </p>
-        )}
-        {definition && (
-          <div className="grid gap-1 text-sm text-muted">
-            <p>
-              {definition.estimatedUsdPerVideoHour === null
-                ? "Cost per video-hour unavailable"
-                : `Estimated $${definition.estimatedUsdPerVideoHour} USD per video-hour`}
-            </p>
-            {definition.captureSources.map((source) => (
-              <p key={source.id}>
-                <Link
-                  href="/recipes?tab=devices"
-                  className="text-brand underline"
-                >
-                  {source.label}
-                </Link>
-                {source.defaultRecipeId === recipeId ? " · Default" : ""}
+      <RecipeFlow
+        nodes={nodes}
+        initialStep={typeof step === "string" ? step : undefined}
+        details={
+          recipe
+            ? Object.fromEntries(
+                recipe.stages.map((spec) => [
+                  spec.stage,
+                  <RecipeEvidence key={spec.stage} spec={spec} exact={exact} />,
+                ]),
+              )
+            : undefined
+        }
+      />
+      {(definition || cached) && (
+        <Card className="grid gap-1 p-4 text-sm text-muted sm:p-5">
+          {definition && (
+            <>
+              <p>
+                {definition.estimatedUsdPerVideoHour === null
+                  ? "Cost per video-hour unavailable"
+                  : `Estimated ${definition.estimatedUsdPerVideoHour} USD per video-hour`}
               </p>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <RecipeEvidence recipe={recipe} exact={exact} />
-
+              {definition.captureSources.map((source) => (
+                <p key={source.id}>
+                  {source.label}
+                  {source.defaultRecipeId === recipeId ? " · Default" : ""}
+                </p>
+              ))}
+            </>
+          )}
+          {cached && (
+            <p>
+              {cached.attribution.dataset} by {cached.attribution.creators}.{" "}
+              {cached.attribution.license}. {cached.attribution.changes}
+            </p>
+          )}
+        </Card>
+      )}
       {definition && <RecipeRecordings definition={definition} />}
     </div>
   );

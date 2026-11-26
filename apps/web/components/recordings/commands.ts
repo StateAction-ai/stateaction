@@ -2,6 +2,15 @@ import { privateSignal } from "../../lib/private-state";
 
 const refusal: Record<string, string> = {
   active_job: "A processing attempt is already in progress.",
+  recording_busy: "A processing attempt is already in progress.",
+  parent_not_terminal: "The earlier run is still in progress.",
+  parent_recipe_unavailable: "The earlier run has no recorded recipe.",
+  reuse_unavailable:
+    "The earlier run is missing verified output required by this plan.",
+  segments_unavailable: "This retry needs verified action segments.",
+  hand_result_unavailable: "This retry needs a verified hand tracking result.",
+  clip_rerun_unavailable: "The clip has no eligible earlier run.",
+  recording_not_processable: "The recording is unavailable for processing.",
   no_failed_clips: "There are no eligible failed clips.",
   stale_current_job:
     "The current run changed. Refresh and review the new plan.",

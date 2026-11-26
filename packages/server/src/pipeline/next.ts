@@ -72,6 +72,11 @@ export type * from "./operations-status.js";
 export type * from "./recording-operations.js";
 export type * from "./recipe-catalog.js";
 export {
+  v1RecipeGraph,
+  attemptStatus,
+  type RecipeGraphNode,
+} from "./recipe-graph.js";
+export {
   pipelineActionsFor,
   type PipelineDetail,
   type PipelineList,
