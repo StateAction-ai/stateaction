@@ -1,0 +1,21 @@
+{
+  "implementationSha256": "02fbfb03b2c64d277d884250aa5fb68de5ba28b232bd69ddd415c8b83ceef581",
+  "manifest": {
+    "commercialUse": true,
+    "gpus": [],
+    "id": "recording_mp4_remux",
+    "inputs": {
+      "source": "recording_source@2"
+    },
+    "license": "Apache-2.0",
+    "maxBudgetSeconds": 7200,
+    "outputs": {
+      "video": "review_video@1"
+    },
+    "params": {},
+    "passthroughPlan": false,
+    "scope": "recording",
+    "version": 1
+  },
+  "schema": "stateaction.module-lock/v1"
+}

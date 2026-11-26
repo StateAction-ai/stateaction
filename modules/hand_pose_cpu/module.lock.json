@@ -1,0 +1,21 @@
+{
+  "implementationSha256": "26b2f4c0abf3ee858d2abdb5fa2e83eb41c602bbdf55c5ef2907c48107098dc3",
+  "manifest": {
+    "commercialUse": true,
+    "gpus": [],
+    "id": "hand_pose_cpu",
+    "inputs": {
+      "video": "video_range@1"
+    },
+    "license": "Apache-2.0",
+    "maxBudgetSeconds": 7200,
+    "outputs": {
+      "poses": "hand_pose@2"
+    },
+    "params": {},
+    "passthroughPlan": false,
+    "scope": "clip",
+    "version": 1
+  },
+  "schema": "stateaction.module-lock/v1"
+}

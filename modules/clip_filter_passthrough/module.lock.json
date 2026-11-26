@@ -1,0 +1,21 @@
+{
+  "implementationSha256": "0c3829db5e53c31ec8a31ce187e428934cc43df94314a8e274089e642c52d30d",
+  "manifest": {
+    "commercialUse": true,
+    "gpus": [],
+    "id": "clip_filter_passthrough",
+    "inputs": {
+      "source": "recording_source@2"
+    },
+    "license": "Apache-2.0",
+    "maxBudgetSeconds": 7200,
+    "outputs": {
+      "plan": "clip_plan@1"
+    },
+    "params": {},
+    "passthroughPlan": true,
+    "scope": "recording",
+    "version": 1
+  },
+  "schema": "stateaction.module-lock/v1"
+}

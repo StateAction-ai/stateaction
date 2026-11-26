@@ -1,0 +1,24 @@
+{
+  "implementationSha256": "a12be90015e6c756abbc8ac57d4853512245a47ece385883cf16b37ccb3027a5",
+  "manifest": {
+    "commercialUse": false,
+    "gpus": [
+      "H100",
+      "RTX-PRO-6000"
+    ],
+    "id": "flora_tempseg_vllm_fp8",
+    "inputs": {
+      "video": "video_range@1"
+    },
+    "license": "LicenseRef-NVIDIA-Flora-NC",
+    "maxBudgetSeconds": 7200,
+    "outputs": {
+      "segments": "segments@2"
+    },
+    "params": {},
+    "passthroughPlan": false,
+    "scope": "clip",
+    "version": 1
+  },
+  "schema": "stateaction.module-lock/v1"
+}

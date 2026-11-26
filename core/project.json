@@ -1,0 +1,46 @@
+{
+  "name": "recipes",
+  "root": "core",
+  "projectType": "library",
+  "namedInputs": {
+    "recipeSources": [
+      "{workspaceRoot}/recipes/**/*",
+      "{workspaceRoot}/examples/**/*",
+      "{workspaceRoot}/modules/**/*",
+      "{workspaceRoot}/docs/recipes/**/*",
+      "{workspaceRoot}/docs/components/recipe-architecture.md",
+      "{workspaceRoot}/packages/contracts/recipe/**/*",
+      "{workspaceRoot}/packages/contracts/src/compiled-graph.generated.ts"
+    ]
+  },
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": ["default", "recipeSources"],
+      "options": {
+        "command": "uv run --locked python -m unittest discover -s tests -v",
+        "cwd": "core"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "recipeSources"],
+      "options": {
+        "command": "uv run --project core --locked mypy --config-file core/pyproject.toml core/stateaction_recipes recipes examples"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "inputs": ["default", "recipeSources", "prettier"],
+      "options": {
+        "parallel": false,
+        "commands": [
+          "uv run --project core --locked ruff check --config core/pyproject.toml core examples recipes modules",
+          "uv run --project core --locked ruff format --check --config core/pyproject.toml core examples recipes modules",
+          "pnpm exec prettier --check 'core/*.json' 'modules/**/*.{json,md}' 'packages/contracts/recipe/*.json' 'docs/recipes/*.md' docs/components/recipe-architecture.md"
+        ]
+      }
+    }
+  }
+}

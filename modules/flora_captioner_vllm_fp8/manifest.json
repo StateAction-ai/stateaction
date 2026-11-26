@@ -1,0 +1,24 @@
+{
+  "commercialUse": false,
+  "gpus": ["H100", "RTX-PRO-6000"],
+  "id": "flora_captioner_vllm_fp8",
+  "inputs": {
+    "segments": "segments@2",
+    "video": "video_range@1"
+  },
+  "license": "LicenseRef-NVIDIA-Flora-NC",
+  "maxBudgetSeconds": 7200,
+  "outputs": {
+    "captions": "captions@2"
+  },
+  "params": {
+    "prompt": {
+      "default": "flora_default@1",
+      "enum": ["flora_default@1", "flora_detailed@1"],
+      "type": "string"
+    }
+  },
+  "passthroughPlan": false,
+  "scope": "clip",
+  "version": 1
+}

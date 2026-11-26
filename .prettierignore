@@ -9,3 +9,8 @@ workers/processing/tests/fixtures/flora_native/
 # Binary recording fixtures for the Rerun browser test.
 apps/web/test-e2e/fixtures/*.rrd
 apps/web/test-e2e/fixtures/*.mp4
+
+# The recipe compiler emits canonical JSON; verify compares the exact bytes.
+recipes/compiled/
+examples/compiled/
+modules/*/module.lock.json
