@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/recipe/node-receipt.v1.json",
+  "title": "RecipeNodeReceipt",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "stateaction.recipe-node-receipt/v1"
+    },
+    "recipeSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nodeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+    },
+    "recordingId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+    },
+    "sourceFileId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+    },
+    "sourceManifestSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sourceSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claimRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "executionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "binding": {
+      "$ref": "#/$defs/Binding"
+    },
+    "clipId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+    },
+    "requestSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "const": "succeeded"
+    },
+    "outputs": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/Ports"
+        },
+        {
+          "minProperties": 1
+        }
+      ]
+    },
+    "counts": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "recipeSha256",
+    "nodeId",
+    "module",
+    "recordingId",
+    "sourceFileId",
+    "sourceManifestSha256",
+    "sourceSha256",
+    "claimRef",
+    "executionRef",
+    "binding",
+    "requestSha256",
+    "status",
+    "outputs",
+    "counts"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Binding": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["local_cpu", "local_replay"]
+        },
+        "moduleLockSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "definitionSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "imageSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "codeRevision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "functionId": {
+          "type": "string",
+          "pattern": "^fu-[A-Za-z0-9]+$"
+        },
+        "definitionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "imageId": {
+          "type": "string",
+          "pattern": "^im-[A-Za-z0-9]+$"
+        },
+        "volumeManifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "modelSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "promptSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "modelRevision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "volumeName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "volumeVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "mode",
+        "moduleLockSha256",
+        "definitionSha256",
+        "imageSha256",
+        "codeRevision"
+      ],
+      "additionalProperties": false
+    },
+    "File": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 34359738368
+        }
+      },
+      "required": ["name", "sha256", "sizeBytes"],
+      "additionalProperties": false
+    },
+    "Port": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+        },
+        "files": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 1024,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/File"
+          }
+        }
+      },
+      "required": ["kind", "files"],
+      "additionalProperties": false
+    },
+    "Ports": {
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Port"
+      }
+    }
+  }
+}

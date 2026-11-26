@@ -24,7 +24,14 @@
       "options": {
         "command": "uv run --locked python -m unittest discover -s tests -v",
         "cwd": "workers/processing"
-      }
+      },
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/recipes/compiled/**",
+        "{workspaceRoot}/modules/*/module.lock.json",
+        "{workspaceRoot}/packages/contracts/recipe/**"
+      ]
     },
     "format": {
       "executor": "nx:run-commands",
