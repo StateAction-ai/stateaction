@@ -39,6 +39,7 @@ UNCACHED = [
     ("web", "auth-e2e"),
     ("mobile-backend-e2e", "e2e"),
     ("infra", "integration"),
+    ("controller-python", "integration"),
     ("jobs", "integration"),
 ]
 # Each affected stage of stages.json maps to a file whose change must select one of its tasks.
