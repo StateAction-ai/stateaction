@@ -23,12 +23,14 @@ import {
   ControllerCapabilityStore,
   RUNNING_WORKER_SCOPES,
 } from "./credentials.js";
+import { configuredGraphBindings } from "./graph-admission.js";
 import { jobsConfigFromEnv } from "./config.js";
 import { renderTaskStarterFromEnv } from "./dispatch.js";
 import { datasetAuthenticator } from "../datasets/next.js";
 import { jobControlRoutes, jobDagRunRoutes } from "./control.js";
 import { jobDiagnosticRoutes } from "./diagnostics.js";
 import { stageRerunRoutes } from "./stage-rerun-http.js";
+import { graphRetryRoutes } from "./graph-retry-http.js";
 import { jobHandlers, type JobHandlers } from "./http.js";
 import type { JobsDeps } from "./service.js";
 import { configuredRerunBindings } from "./stage-rerun-bindings.js";
@@ -72,6 +74,7 @@ export function jobsDepsFromEnv(
   return {
     pool,
     config: jobsConfig,
+    graphBindings: configuredGraphBindings(env.STATEACTION_GRAPH_BINDINGS),
     taskStarter: jobsConfig.publicVideoCanary ? null : starterFromEnv(env),
     presignRead: (key, expiresInSeconds) =>
       presignObject(config, { method: "GET", key, expiresInSeconds }),
@@ -197,6 +200,26 @@ export function jobRouteHandlers(
         { kinds: ["workflow"], scope: "jobs:reconcile" },
         (h) => h.prepareRerun(request, jobId),
       ),
+    graphRun: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:status" },
+        (h) => h.graphRun(request, jobId),
+      ),
+    graphControl: (request: Request, jobId: string) =>
+      guarded(
+        request,
+        jobId,
+        controller,
+        { kinds: ["workflow"], scope: "jobs:reconcile" },
+        (h) => h.graphControl(request, jobId),
+      ),
+    graphClaim: (request: Request, jobId: string) =>
+      UUID.test(jobId)
+        ? handlers().graphClaim(request, jobId)
+        : Promise.resolve(notFound()),
     controller: (request: Request, jobId: string) =>
       guarded(
         request,
@@ -407,4 +430,10 @@ export function stageRerunRouteHandlers() {
       bindings: configuredRerunBindings(process.env.STATEACTION_RERUN_BINDINGS),
     };
   });
+}
+
+export function graphRetryRouteHandlers() {
+  return graphRetryRoutes(datasetAuthenticator(), () =>
+    jobsDepsFromEnv(authRuntime().pool),
+  );
 }

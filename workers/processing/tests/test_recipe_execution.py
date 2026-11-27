@@ -14,6 +14,13 @@ from unittest.mock import patch
 from indexed_fixture import chunked
 from stage_helpers import GOLDEN_MCAP, JOB, MANIFEST_SHA, RECORDING
 from stateaction_contracts import request_sha256
+from stateaction_contracts.recipe_graph import (
+    MODULES,
+    NodeState,
+    RecipeRefused,
+    VerifiedGraph,
+    VerifiedPort,
+)
 
 from stateaction_processing.hand_model import PINS
 from stateaction_processing.node_entry import (
@@ -21,13 +28,6 @@ from stateaction_processing.node_entry import (
     deadline,
     describe_outputs,
     schema,
-)
-from stateaction_processing.recipe_graph import (
-    MODULES,
-    NodeState,
-    RecipeRefused,
-    VerifiedGraph,
-    VerifiedPort,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -234,7 +234,8 @@ class SubprocessTests(unittest.TestCase):
         node = self.graph["nodes"][node_id]
         clip = node["scope"] == "clip"
         data = {
-            "schema": "stateaction.recipe-node-input/v1",
+            "schema": "stateaction.recipe-node-input/v2",
+            "recipeRef": self.graph["recipe"],
             "recipeSha256": self.graph["recipeSha256"],
             "nodeId": node_id,
             "module": node["module"],
@@ -315,13 +316,15 @@ class SubprocessTests(unittest.TestCase):
         return receipt, paths
 
     def test_plan_review_video_and_pinned_cpu_hand_pose(self):
-        _, outputs = self.run_node(self.request("clips"), "planner")
+        self.graph = read(ROOT / "recipes/compiled/cpu_hand_canary.json")
+        write(self.graph_path, self.graph)
+        _, outputs = self.run_node(self.request("source_span"), "planner")
         plan = read(outputs["plan"])
         self.assertEqual(plan["spans"][0]["last_source_frame_id"], "5")
-        _, review = self.run_node(self.request("review_video"), "player")
+        _, review = self.run_node(self.request("original_video"), "player")
         self.assertGreater(review["video"].stat().st_size, 0)
         receipt, hand = self.run_node(
-            self.request("hand_pose", outputs["plan"]), "hands"
+            self.request("track_hands", outputs["plan"]), "hands"
         )
         self.assertEqual(receipt["clipId"], CLIP)
         self.assertEqual(receipt["counts"]["frames"], 5)

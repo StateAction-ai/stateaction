@@ -67,7 +67,8 @@ export class BootstrapCapabilityStore
     }>(
       `SELECT id, start_deadline FROM jobs
        WHERE bootstrap_token_sha256 = $1 AND state IN ('submitting', 'submit_unknown')
-         AND claimed_at IS NULL AND recipe IS NULL`,
+         AND claimed_at IS NULL AND recipe IS NULL
+         AND NOT EXISTS (SELECT 1 FROM job_recipe_graphs g WHERE g.job_id = jobs.id)`,
       [sha256],
     );
     const job = rows[0];

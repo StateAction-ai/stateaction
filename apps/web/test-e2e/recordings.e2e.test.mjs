@@ -846,6 +846,8 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
   const unmatched = await sealFixture({ unmatched: true });
   assert.equal(unmatched.admission.reason, "needs_setup");
   assert.deepEqual(await jobsOf(unmatched.id), []);
+  const automatic = await sealFixture({});
+  assert.equal(automatic.admission.state, "admitted");
   const manual = await sealFixture({ manual: true });
   assert.equal(manual.admission.reason, "choose_recipe");
   assert.deepEqual(await jobsOf(manual.id), []);
@@ -870,12 +872,16 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
   }
   const until = (expression) => waitFor(() => ev(expression), expression);
   const open = async (path, text) => {
-    await ev("window.__previousTestDocument = true");
-    const { errorText } = await chrome.send("Page.navigate", {
+    const { errorText, loaderId } = await chrome.send("Page.navigate", {
       url: origin + path,
     });
     assert.equal(errorText, undefined);
-    await until(`!window.__previousTestDocument && location.pathname + location.search === ${JSON.stringify(path)} &&
+    assert.ok(loaderId, "Expected a new document for " + path);
+    await waitFor(async () => {
+      const { frameTree } = await chrome.send("Page.getFrameTree");
+      return frameTree.frame.loaderId === loaderId;
+    }, "Chrome did not commit " + path);
+    await until(`decodeURIComponent(location.pathname + location.search) === ${JSON.stringify(decodeURIComponent(path))} &&
       document.querySelector("main")?.innerText.includes(${JSON.stringify(text)})`);
     assert.equal(
       await ev("document.documentElement.scrollWidth"),
@@ -887,7 +893,7 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
     await until(`!!(${button})`);
     await ev(`(${button}).click()`);
   };
-  const defaultRecipe = "indego_hosted_canary@1";
+  const defaultRecipe = "indego_hosted_canary@2";
   try {
     const { success } = await chrome.send("Network.setCookie", {
       name: SESSION,
@@ -919,11 +925,21 @@ test("SA-150 recording holds, recipe and clip planning retry at 1280 and 390 CSS
       await until(`!!(${recipeLink})`);
       assert.equal(
         await ev(`(${recipeLink}).textContent.trim()`),
-        "IndEgo processing @1",
+        "IndEgo processing @2",
       );
-      await open(
-        await ev(`(${recipeLink}).getAttribute("href")`),
-        "IndEgo processing · v1",
+      const definitionPath = await ev(`(${recipeLink}).getAttribute("href")`);
+      const definition = await call(definitionPath, {
+        jar: staff,
+        headers: { "sec-fetch-site": "same-origin" },
+      });
+      assert.equal(
+        definition.status,
+        200,
+        "The default recipe definition must load",
+      );
+      await open(definitionPath, "IndEgo processing · v2");
+      await until(
+        `!!document.querySelector('main a[href="/recordings/${automatic.id}"]')`,
       );
       await open("/recordings/" + manual.id, "Choose a recipe");
       await click("Choose a recipe");

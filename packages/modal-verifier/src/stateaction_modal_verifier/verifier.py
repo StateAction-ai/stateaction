@@ -104,6 +104,7 @@ class Inspection:
     billed_seconds: int
     app_id: str
     scheduling: "Scheduling"
+    runtime_definition_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -538,6 +539,7 @@ async def _inspect(client, bounds, pins, *, reader=read_manifest, policy=ReadPol
             billed_seconds,
             handle.app_id,
             scheduling,
+            hashlib.sha256(variant.SerializeToString(deterministic=True)).hexdigest(),
         )
 
 

@@ -1,0 +1,35 @@
+{
+  "contract": "jobs.graph-claim.v1",
+  "cases": [
+    {
+      "name": "worker claims exactly one node and call",
+      "input": {
+        "document": {
+          "nodeId": "source_span",
+          "invocationNonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "executionRef": "local-recipe-call",
+          "backend": "local",
+          "bindingSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "claim nonce is required",
+      "input": {
+        "document": {
+          "nodeId": "source_span",
+          "executionRef": "local-recipe-call",
+          "backend": "local",
+          "bindingSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

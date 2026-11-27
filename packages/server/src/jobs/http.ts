@@ -12,6 +12,7 @@ import {
   advanceResult,
   closeOutputs,
   repairResults,
+  sealGraphRecipe,
   sealParallelRecipe,
   submitCandidate,
   type AcceptanceDeps,
@@ -25,6 +26,7 @@ import {
   readBoundedBytes,
   readBoundedJson,
 } from "../transport/http.js";
+import { applyGraphAction, claimGraphNode, readGraphRun } from "./graph-run.js";
 import { runRepair } from "./recovery.js";
 import { prepareStageRerun } from "./stage-rerun-preparation.js";
 import {
@@ -182,7 +184,9 @@ export function jobHandlers(deps: () => JobsDeps) {
                   dispatchKey: admission.job.dispatchKey,
                   executionDeadline: iso(admission.job.executionDeadline),
                 }
-              : admission,
+              : admission.state === "idle"
+                ? { state: "idle" }
+                : admission,
           pendingDispatches: pending,
         });
       }),
@@ -229,6 +233,65 @@ export function jobHandlers(deps: () => JobsDeps) {
         );
       }),
 
+    graphRun: (_request: Request, jobId: string) =>
+      respond(async () =>
+        checked("jobs.graph-run.v1", await readGraphRun(deps(), jobId)),
+      ),
+    graphControl: (request: Request, jobId: string) =>
+      respond(async () => {
+        const action = (await readBoundedJson(
+          request,
+          "jobs.graph-control.v1",
+          1048576,
+        )) as
+          | Parameters<typeof applyGraphAction>[2]
+          | { action: "prepare_graph"; owner: string }
+          | { action: "seal_graph"; owner: string };
+        if (action.action === "prepare_graph") {
+          const { state } = await prepareStageRerun(
+            deps(),
+            jobId,
+            action.owner,
+          );
+          return checked("jobs.graph-control-result.v1", { state });
+        }
+        if (action.action === "seal_graph") {
+          const d = deps();
+          if (!d.sealTransport)
+            throw new TransportError(
+              "provider_unavailable",
+              "Graph assembly transport is unavailable",
+            );
+          const sealed = await sealGraphRecipe(
+            acceptanceOf(d),
+            d.sealTransport(),
+            jobId,
+            action.owner,
+          );
+          if (!sealed)
+            throw new TransportError("conflict", "Graph seal was rejected");
+          return checked("jobs.graph-control-result.v1", { state: "recorded" });
+        }
+        return checked(
+          "jobs.graph-control-result.v1",
+          await applyGraphAction(deps(), jobId, action),
+        );
+      }),
+    graphClaim: (request: Request, jobId: string) =>
+      respond(async () => {
+        const token = bearer(request);
+        if (!/^sa_svc_[A-Za-z0-9_-]{43}$/.test(token))
+          throw bad("Invalid node bootstrap");
+        const claim = (await readBoundedJson(
+          request,
+          "jobs.graph-claim.v1",
+          8192,
+        )) as Parameters<typeof claimGraphNode>[2];
+        return checked(
+          "jobs.graph-grant.v1",
+          await claimGraphNode(deps(), jobId, claim, token),
+        );
+      }),
     controller: (request: Request, jobId: string, principalId: string) =>
       respond(async () => {
         const a = (await readBoundedJson(

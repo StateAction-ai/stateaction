@@ -14,7 +14,7 @@ from .journal import (
     iso,
     terminal_result,
 )
-from .results import call_id_valid, parse_result
+from .results import call_id_valid, parse_graph_result, parse_result
 
 API_ERRORS = (AmbiguousApiError, ApiRejection)
 GPU_WATCH_INTERVAL_SECONDS = 15
@@ -22,6 +22,10 @@ GPU_WATCH_INTERVAL_SECONDS = 15
 
 class SpawnNotSent(Exception):
     """The adapter proved no provider submission was attempted."""
+
+
+class SpawnCancelled(SpawnNotSent):
+    """The catalog recorded cancellation before the submission boundary."""
 
 
 def outcome(kind, reason, **details):
@@ -57,6 +61,7 @@ class ModalStage:
     binding: object = None
     gpu: bool = False
     refusal: str | None = None
+    graph: bool = False
 
 
 @dataclass
@@ -86,6 +91,17 @@ class ModalExecution:
 
     async def act(self, action, **facts):
         return await self.api.act(self.job_id, action, **facts)
+
+    async def spawn_provider(self, bootstrap, authorized, binding):
+        return await self.modal.spawn(bootstrap, authorized, binding)
+
+    async def record_terminal(self, result, termination, recovery):
+        await record_modal_evidence(
+            self.api, self.job_id, self.run_ref, result, termination, recovery
+        )
+
+    async def start_confirmed(self, status):
+        return status["state"] != "submitting"
 
     def save(self, journal):
         self.store.write_modal(journal, self.stage.module if self.stage else None)
@@ -137,6 +153,8 @@ class ModalExecution:
         }
         if self.stage:
             result["stage"] = self.stage.stage
+            if self.stage.graph:
+                result["graph"] = True
         return result
 
     def budget(self, started):
@@ -384,7 +402,10 @@ class ModalExecution:
             }
         )
         try:
-            call_id = await self.modal.spawn(bootstrap, authorized, binding)
+            call_id = await self.spawn_provider(bootstrap, authorized, binding)
+        except SpawnCancelled:
+            self.store.discard_token(self.job_id, self.stage_name)
+            return outcome("no_effect", "never_submitted")
         except SpawnNotSent:
             self.store.discard_token(self.job_id, self.stage_name)
             return await self.unknown("spawn_not_sent")
@@ -500,9 +521,9 @@ class ModalExecution:
                     current = await self.api.status(self.job_id)
                     if current["state"] == "cancel_requested":
                         termination = "cancel_requested"
-                    elif current["state"] == "submitting" and self.clock() >= instant(
+                    elif self.clock() >= instant(
                         journal["startDeadline"]
-                    ):
+                    ) and not await self.start_confirmed(current):
                         termination = "start_deadline"
             if termination == "natural_exit":
                 termination = check_bounds()
@@ -539,7 +560,11 @@ class ModalExecution:
             if self.stage and self.stage.gpu and termination == "natural_exit":
                 termination = check_bounds()
             if observation["kind"] == "returned":
-                result = parse_result(observation["value"], call_id, stage_id)
+                result = (
+                    parse_graph_result(observation["value"], call_id)
+                    if self.stage and self.stage.graph
+                    else parse_result(observation["value"], call_id, stage_id)
+                )
             if result is None:
                 await self.sleep(self.poll_seconds)
 
@@ -562,9 +587,7 @@ class ModalExecution:
                     journal = await self.confirm_call_record(journal, call_id)
             # The route checks that the exact call belongs to this job.
             try:
-                await record_modal_evidence(
-                    self.api, self.job_id, self.run_ref, result, termination, recovery
-                )
+                await self.record_terminal(result, termination, recovery)
             except API_ERRORS:
                 pass
             else:

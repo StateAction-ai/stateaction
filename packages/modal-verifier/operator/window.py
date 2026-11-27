@@ -1,9 +1,7 @@
-"""Compare the two Modal SDKs on one temporary function without invoking it."""
+"""Verify and re-read scheduling for a temporary function without invoking it."""
 
 import asyncio
 import json
-import math
-import os
 import re
 import sys
 import warnings
@@ -32,9 +30,8 @@ from stateaction_modal_verifier.verifier import (
 ENVIRONMENT = "main"
 TAG = "scheduling_probe"
 OWNER_TAG = "stateaction-sa152"
-CUTOFF = Decimal("22")
+CUTOFF = Decimal(22)
 ALLOWANCE = Decimal("0.25")
-OPERATOR = Path(__file__).resolve().parent
 
 
 class WindowFailed(RuntimeError):
@@ -46,24 +43,6 @@ def require(condition, reason):
         raise WindowFailed(reason)
 
 
-async def command(argv, timeout, env=None):
-    process = await asyncio.create_subprocess_exec(
-        *argv,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-        env=env,
-    )
-    try:
-        async with asyncio.timeout(timeout):
-            output, _ = await process.communicate()
-    finally:
-        if process.returncode is None:
-            process.kill()
-            await process.wait()
-    require(len(output) <= 8192, "operator_output_size")
-    return process.returncode, json.loads(output)
-
-
 async def _lifecycle_read(client, method, request):
     check_client(client)
     async with asyncio.timeout(5):
@@ -71,6 +50,19 @@ async def _lifecycle_read(client, method, request):
 
 
 lifecycle_read = synchronize_api(_lifecycle_read)
+
+
+async def _read_scheduling(client, policy, function_id):
+    check_client(client)
+    reply = await policy.call(
+        client,
+        "FunctionGetSchedulingParams",
+        wire.FunctionGetSchedulingParamsRequest(function_id=function_id),
+    )
+    return Scheduling.from_wire(reply.autoscaler_configuration)
+
+
+read_scheduling = synchronize_api(_read_scheduling)
 
 
 async def _deploy(client, app, name, owner, record):
@@ -141,14 +133,11 @@ deploy_once = synchronize_api(_deploy)
 
 
 class ModalWindow:
-    def __init__(self, client, name, policy, endpoint, node_env, owner, node):
+    def __init__(self, client, name, policy, owner):
         self.client = client
         self.name = name
         self.policy = policy
-        self.endpoint = endpoint
-        self.node_env = node_env
         self.owner = owner
-        self.node = node
         self.cycle = datetime.now(UTC).replace(
             day=1, hour=0, minute=0, second=0, microsecond=0
         )
@@ -230,18 +219,8 @@ class ModalWindow:
             policy=self.policy,
         )
 
-    async def typescript_read(self, function_id):
-        return await command(
-            [
-                self.node,
-                OPERATOR / "schedule.mjs",
-                function_id,
-                ENVIRONMENT,
-                self.endpoint,
-            ],
-            12,
-            env=self.node_env,
-        )
+    async def read_scheduling(self, function_id):
+        return await read_scheduling.aio(self.client, self.policy, function_id)
 
     async def restore(self, state, persist):
         if not state.get("createAttempted"):
@@ -305,51 +284,6 @@ class ModalWindow:
             persist()
 
 
-def project_control(control):
-    require(isinstance(control, dict), "typescript_projection")
-    rpc = control.get("rpc")
-    scheduling = control.get("scheduling")
-    if rpc is not None:
-        require(isinstance(rpc, dict), "typescript_projection")
-        status, elapsed = rpc.get("status"), rpc.get("elapsed_ms")
-        require(
-            (
-                status in ("OK", "CLIENT_ERROR")
-                or type(status) is int
-                and 0 <= status <= 16
-            )
-            and type(elapsed) in (int, float)
-            and math.isfinite(elapsed)
-            and elapsed >= 0,
-            "typescript_projection",
-        )
-        rpc = {
-            "method": "FunctionGetSchedulingParams",
-            "status": status,
-            "elapsed_ms": elapsed,
-        }
-    if scheduling is not None:
-        require(isinstance(scheduling, dict), "typescript_projection")
-        integers = (
-            "max_containers",
-            "min_containers",
-            "buffer_containers",
-            "scaledown_window",
-        )
-        flags = ("override_settings_present", "override_events_present")
-        require(
-            all(
-                key in scheduling
-                and (scheduling[key] is None or type(scheduling[key]) is int)
-                for key in integers
-            )
-            and all(type(scheduling.get(key)) is bool for key in flags),
-            "typescript_projection",
-        )
-        scheduling = {key: scheduling[key] for key in (*integers, *flags)}
-    return rpc, scheduling
-
-
 async def run_window(provider, state, persist, meter):
     await provider.preflight()
     baseline = await meter()
@@ -364,22 +298,10 @@ async def run_window(provider, state, persist, meter):
         state["functionId"] = proof.function_id
         state["pythonSchedule"] = asdict(proof.scheduling)
         persist()
-        code, control = await provider.typescript_read(proof.function_id)
-        rpc, scheduling = project_control(control)
-        state.update(typescriptRpc=rpc, typescriptSchedule=scheduling)
+        scheduling = await provider.read_scheduling(proof.function_id)
+        state["recheckedSchedule"] = asdict(scheduling)
         persist()
-        require(
-            code == 0
-            and rpc is not None
-            and rpc["status"] == "OK"
-            and scheduling is not None
-            and control.get("functionId") == proof.function_id,
-            "typescript_read",
-        )
-        require(
-            proof.scheduling == Scheduling(**scheduling),
-            "schedule_disagreement",
-        )
+        require(proof.scheduling == scheduling, "schedule_disagreement")
     finally:
         try:
             await provider.restore(state, persist)
@@ -396,13 +318,12 @@ async def run_window(provider, state, persist, meter):
     persist()
 
 
-async def main(receipt, manifest_digest, name, workspace, node, cleanup):
+async def main(receipt, manifest_digest, name, workspace, cleanup):
     endpoints = config["server_url"].split(",")
     require(
         all(re.fullmatch(r"https://api\.modal2?\.com/?", url) for url in endpoints),
         "modal_endpoint",
     )
-    endpoint = endpoints[0]
     token_id, token_secret = config["token_id"], config["token_secret"]
     require(token_id and token_secret, "modal_token_pair")
     require(re.fullmatch(r"sa-152-probe-[a-f0-9]{16}", name), "probe_name")
@@ -433,19 +354,7 @@ async def main(receipt, manifest_digest, name, workspace, node, cleanup):
 
     client = await modal.Client.from_credentials.aio(token_id, token_secret)
     provider = ModalWindow(
-        client,
-        name,
-        ReadPolicy(report=report),
-        endpoint,
-        {
-            "HOME": os.environ["HOME"],
-            "PATH": os.environ["PATH"],
-            "MODAL_TOKEN_ID": token_id,
-            "MODAL_TOKEN_SECRET": token_secret,
-            "MODAL_CONFIG_PATH": "/dev/null",
-        },
-        manifest_digest[:32],
-        node,
+        client, name, ReadPolicy(report=report), manifest_digest[:32]
     )
     try:
         started = monotonic()
@@ -475,7 +384,7 @@ if __name__ == "__main__":
         category=InternalAPIWarning,
     )
     try:
-        receipt_path, digest, app_name, workspace, node, mode = sys.argv[1:]
+        receipt_path, digest, app_name, workspace, mode = sys.argv[1:]
         require(mode in ("run", "cleanup"), "operator_mode")
         sys.exit(
             asyncio.run(
@@ -484,11 +393,10 @@ if __name__ == "__main__":
                     digest,
                     app_name,
                     workspace,
-                    node,
                     mode == "cleanup",
                 )
             )
         )
     except Exception as error:
-        # Errors from the provider and child processes may contain private payloads.
+        # Provider errors may include private payloads.
         sys.exit(type(error).__name__)

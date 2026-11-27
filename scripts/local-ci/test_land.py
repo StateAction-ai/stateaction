@@ -610,6 +610,24 @@ class LandTests(unittest.TestCase):
         self.assertEqual((code, res["reason"]), (2, "head_mismatch"))
         self.assertEqual(b.events, [])
 
+    def test_expected_head_refuses_a_rebase_before_gate(self):
+        b = Bench(self)
+        head = b.remote_head()
+        b.advance_main()
+        code, res = b.run(expected_head=head)
+        self.assertEqual((code, res["reason"]), (2, "base_moved"))
+        self.assertEqual(b.events, ["policy", "fetch"])
+        self.assertEqual(b.remote_head(), head)
+
+    def test_expected_head_refuses_a_rebase_after_gate(self):
+        b = Bench(self)
+        head = b.remote_head()
+        b.on_gate = b.advance_main
+        code, res = b.run(expected_head=head)
+        self.assertEqual((code, res["reason"]), (2, "base_moved"))
+        self.assertEqual(b.events, ["policy", "fetch", "gate", "lock", "fetch"])
+        self.assertEqual(b.remote_head(), head)
+
     def test_attempts_are_bounded_across_reexecs(self):
         b = Bench(self)
         os.environ[land.STATE_ENV] = json.dumps(

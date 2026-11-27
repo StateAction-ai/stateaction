@@ -17,6 +17,7 @@ file exposes only the two production functions. The app name and the module-to-f
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -47,6 +48,13 @@ ENV = {
     "VLLM_LOGGING_LEVEL": "INFO",
     "PYTHONNOUSERSITE": "1",
     "STATEACTION_CAPTURE_CONTRACT_DIR": f"{APP_ROOT}/packages/contracts/capture",
+    "STATEACTION_CODE_REVISION": os.environ.get("STATEACTION_CODE_REVISION", ""),
+    "STATEACTION_IMAGE_SPEC_SHA256": os.environ.get(
+        "STATEACTION_IMAGE_SPEC_SHA256", ""
+    ),
+    "STATEACTION_GRAPH_PARAMS_SHA256": os.environ.get(
+        "STATEACTION_GRAPH_PARAMS_SHA256", ""
+    ),
     "PYTHONPATH": f"/root:{APP_ROOT}/workers/processing/src:{APP_ROOT}/packages/contracts/python/src",
     **{
         env_key: str(stage_settings.budget_s(name))
@@ -107,6 +115,14 @@ image = (
         f"{APP_ROOT}/packages/contracts/capture",
         copy=True,
     )
+    .add_local_dir(
+        str(REPO / "packages/contracts/recipe"),
+        f"{APP_ROOT}/packages/contracts/recipe",
+        copy=True,
+    )
+    .add_local_dir(
+        str(REPO / "modules"), f"{APP_ROOT}/modules", copy=True, ignore=_ignore
+    )
 )
 
 
@@ -123,22 +139,24 @@ def _deadline(name: str) -> float:
 @app.function(**_options("flora_tempseg"))
 def flora_tempseg(bootstrap_json: str) -> dict[str, Any]:
     """Run the `segment` stage for one job (production entry; the module comes from the bootstrap)."""
-    from flora_ext.stage_wrapper import run_stage_bootstrap
+    from stateaction_processing.graph_container import run_graph_bootstrap
 
-    return run_stage_bootstrap(
+    return run_graph_bootstrap(
         bootstrap_json,
         modal.current_function_call_id(),
-        deadline_s=_deadline("flora_tempseg"),
+        module="flora_tempseg_vllm_fp8@1",
+        budget_seconds=_deadline("flora_tempseg"),
     )
 
 
 @app.function(**_options("flora_captioner"))
 def flora_captioner(bootstrap_json: str) -> dict[str, Any]:
     """Run the `caption` stage for one job (production entry; the module comes from the bootstrap)."""
-    from flora_ext.stage_wrapper import run_stage_bootstrap
+    from stateaction_processing.graph_container import run_graph_bootstrap
 
-    return run_stage_bootstrap(
+    return run_graph_bootstrap(
         bootstrap_json,
         modal.current_function_call_id(),
-        deadline_s=_deadline("flora_captioner"),
+        module="flora_captioner_vllm_fp8@1",
+        budget_seconds=_deadline("flora_captioner"),
     )

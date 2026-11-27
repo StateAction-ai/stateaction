@@ -1,10 +1,8 @@
 import "server-only";
 export { platformHealth } from "./health.js";
-export { requestPlatformVerification } from "./dispatch.js";
 export {
   serverConfig,
   applicationDatabaseUrl,
-  assertLocalDispatch,
   appEnv,
   mediaReadOrigin,
 } from "./config.js";

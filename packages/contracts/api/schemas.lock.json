@@ -156,6 +156,16 @@
     "http/stage-rerun-plan.v2.schema.json": "0221d285a868f8423733f674f82d6d518ff9660830fc073a5e1abd0df9bcc73d",
     "http/stage-rerun-result.v2.schema.json": "8c780d2448e017cf0dcf0480545fc5d858ca4598e80fa609d770cb96a9c971b2",
     "artifacts/cached-originating-recipe.v1.schema.json": "3c60bd9a88408e2a7020149970240c6402827738bd6d5901848286028343eb32",
-    "artifacts/processing-result.v6.schema.json": "7cb302b81d508d9143c443d33fdefa5033a5c5c31c7f610876a268a010c92f3e"
+    "artifacts/processing-result.v6.schema.json": "7cb302b81d508d9143c443d33fdefa5033a5c5c31c7f610876a268a010c92f3e",
+    "catalog.v24.json": "6465f205c9bd25a3294885d7642dacec313ccbf1eb469a5bc456387eac9687b6",
+    "jobs/task-input.v6.schema.json": "9145102cc6e10b49fec37937b8fa022679285e173f4b21aca97b1c5837574c3e",
+    "jobs/graph-control-result.v1.schema.json": "69b3cf4ba0e1ddf695f14319126b1e5570c8c01b15b4c5eb0d1bf91517059260",
+    "jobs/graph-control.v1.schema.json": "95df30e994c8fe6b9327238cf5afb68b0736f2b9d9264230ecd19035c0f32e81",
+    "jobs/graph-run.v1.schema.json": "e7b3015249758b7ae4fa6596c7a29403730332bf483791c240a410d7c588e2f0",
+    "jobs/graph-claim.v1.schema.json": "d141ce991ed1a242e2297a4105e538acc3eb89d40173c4f1e079d79eb0e0a527",
+    "jobs/graph-grant.v1.schema.json": "f63c33aa2fdb7597fa0969e367f3396f2573f0be11e296c32d664adeea614de4",
+    "artifacts/processing-result.v7.schema.json": "75de2c7229f07dd79a99c70f2107dcbadc82f142bd81a5611c4b5f1eb84dd599",
+    "http/graph-retry-request.v1.schema.json": "29214b74b3bc01b6c71dcc574362cba763fab8665e7f0303b3165b00dcca0ed6",
+    "http/graph-retry-command.v1.schema.json": "4dea6545d286bf105c37aee9a2c4b9f34a2365aa59d4f5e5e46a9f7751e103c2"
   }
 }

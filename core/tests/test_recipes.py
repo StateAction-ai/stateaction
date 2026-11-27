@@ -1,6 +1,7 @@
 """Exercise the real recipe compiler, sandbox and local authoring commands."""
 
 import errno
+import io
 import json
 import shutil
 import subprocess
@@ -341,10 +342,50 @@ class RecipesTest(unittest.TestCase):
                 root / "recipes",
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-            with patch("sys.stdout") as stdout:
+            with patch("sys.stdout", new_callable=io.StringIO) as stdout:
                 diff(root, "HEAD")
-            lines = stdout.writelines.call_args.args[0]
-            self.assertIn("+++ recipes/compiled/egocentric_default.json\n", lines)
+            self.assertIn(
+                "+++ recipes/compiled/egocentric_default.json\n", stdout.getvalue()
+            )
+
+    def test_verify_keeps_the_published_ref_digest(self):
+        with tempfile.TemporaryDirectory(prefix="recipe-history-") as scratch:
+            root = Path(scratch)
+            schema = root / SCHEMA
+            schema.parent.mkdir(parents=True)
+            shutil.copy(ROOT / SCHEMA, schema)
+            shutil.copytree(ROOT / "modules", root / "modules")
+            (root / "recipes").mkdir()
+            published = root / "recipes" / self.default.name
+            published.write_bytes(self.default.read_bytes())
+            sync(root, check=False)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "recipes"], cwd=root, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "-c",
+                    "user.name=Fixture",
+                    "commit",
+                    "-qm",
+                    "publish",
+                ],
+                cwd=root,
+                check=True,
+            )
+            with patch("recipe.ROOT", root), patch("sys.stderr") as errors:
+                self.assertEqual(main(["verify", "--base", "HEAD"]), 0)
+                published.write_text(
+                    published.read_text().replace("Egocentric manipulation", "Changed")
+                )
+                sync(root, check=False)
+                self.assertEqual(main(["verify", "--base", "HEAD"]), 1)
+                self.assertIn(
+                    "egocentric_default@1",
+                    "".join(call.args[0] for call in errors.write.call_args_list),
+                )
 
     def test_each_module_fixture(self):
         from runpy import run_path

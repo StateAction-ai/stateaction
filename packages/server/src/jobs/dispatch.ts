@@ -39,6 +39,7 @@ export function renderTaskStarterFromEnv(
   const local =
     env.APP_ENV === "local" &&
     (env.RENDER_USE_LOCAL_DEV === "true" || !!env.RENDER_LOCAL_DEV_URL);
+  if (env.APP_ENV === "local" && !local) return null;
   let slug: string;
   if (!configured) {
     if (!local) return null;
@@ -52,11 +53,20 @@ export function renderTaskStarterFromEnv(
   }
   let render: Render;
   if (local) {
+    const target = new URL(env.RENDER_LOCAL_DEV_URL ?? "http://127.0.0.1:8120");
+    if (
+      target.protocol !== "http:" ||
+      !["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) ||
+      target.username ||
+      target.password ||
+      target.pathname !== "/" ||
+      target.search ||
+      target.hash
+    )
+      throw new Error("Local workflow endpoint must be loopback HTTP");
     render = new Render({
       useLocalDev: true,
-      ...(env.RENDER_LOCAL_DEV_URL
-        ? { localDevUrl: env.RENDER_LOCAL_DEV_URL }
-        : {}),
+      localDevUrl: target.origin,
     });
   } else {
     const token = env.RENDER_API_KEY;

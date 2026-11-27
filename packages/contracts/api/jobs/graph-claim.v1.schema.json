@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/graph-claim.v1.json",
+  "title": "One-use bootstrap for an admitted graph node",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "nodeId",
+    "invocationNonce",
+    "executionRef",
+    "backend",
+    "bindingSha256"
+  ],
+  "properties": {
+    "nodeId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$"
+    },
+    "invocationNonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{43}$"
+    },
+    "executionRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "backend": {
+      "enum": ["local", "modal"]
+    },
+    "bindingSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    }
+  }
+}

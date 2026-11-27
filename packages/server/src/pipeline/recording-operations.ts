@@ -1,4 +1,9 @@
-import type { ClipPlanV1, DagRunNode, RecipeV1 } from "@stateaction/contracts";
+import type {
+  ClipPlanV1,
+  CompiledGraph,
+  DagRunNode,
+  RecipeV1,
+} from "@stateaction/contracts";
 import { CAPTURE_SOURCES } from "../admission/capture-profiles.js";
 import { inTransaction, type Queryable } from "../catalog/catalog.js";
 import { recordingMp4MaxBytes } from "../datasets/broker.js";
@@ -26,6 +31,7 @@ import { recordingDurationSql, recordingNameSql } from "./recording-display.js";
 import { nodeDurationSeconds, type DiagnosticLink } from "./run-view.js";
 
 import {
+  compiledRecipeGraph,
   v1RecipeGraph,
   withStageStatus,
   type RecipeGraphNode,
@@ -281,6 +287,7 @@ export type ClipOperations = {
   error: OperationError | null;
   stages: OperationStageHistory[];
   graph: RecipeGraphNode[];
+  graphRuntime: boolean;
   retryStages: RecipeStage[];
   jobs: OperationJob[];
   selectionRevision: number;
@@ -380,7 +387,8 @@ async function recordingSummary(
         LEFT JOIN clip_plans origin_plan ON origin_plan.recording_id = r.id
           AND (origin_plan.version = origin_clip.plan_version OR origin_plan.plan_job_id = view_job.id)
         JOIN jobs origin ON origin.id = coalesce(origin_plan.plan_job_id, view_job.id) AND origin.state = 'succeeded'
-        JOIN job_output_slots s ON s.job_id = origin.id AND s.slot = 'recording.mp4'
+        JOIN job_output_slots s ON s.job_id = origin.id
+          AND (s.slot = 'recording.mp4' OR s.file_id = origin_plan.original_mp4_file_id)
         JOIN files f ON f.id = s.file_id AND f.job_id = s.job_id
           AND f.purpose = 'output' AND f.role = 'recording_mp4' AND f.state IN ('completed', 'verified')
           AND f.size_bytes <= $3
@@ -440,6 +448,7 @@ type JobRow = {
   error_code: string | null;
   recipe: RecipeV1 | null;
   recipe_sha256: string | null;
+  compiled_graph: CompiledGraph | null;
   originating_recipe_ref: ImportedRecipeReference | null;
   imported_evidence: Record<string, Record<string, unknown>> | null;
   cost_usd: string | null;
@@ -465,9 +474,11 @@ async function jobRows(
   const { rows } = await pool.query<JobRow>(
     `SELECT j.id, j.kind, j.state, j.previous_job_id, j.derived_from_job_id,
        actor.name AS triggered_by, j.created_at, j.claimed_at, j.finished_at,
-       j.error_code, j.recipe, j.recipe_sha256, i.originating_recipe_ref, i.evidence -> 'evidence' AS imported_evidence,
+       j.error_code, j.recipe, coalesce(g.recipe_sha256,j.recipe_sha256) AS recipe_sha256,
+       g.graph AS compiled_graph, i.originating_recipe_ref, i.evidence -> 'evidence' AS imported_evidence,
        costs.cost_usd, coalesce(costs.cost_complete, false) AS cost_complete
      FROM jobs j JOIN recordings r ON r.id = j.recording_id
+     LEFT JOIN job_recipe_graph_definitions g ON g.job_id = j.id
      LEFT JOIN cached_processing_imports i ON i.job_id = j.id AND i.manifest_sha256 = j.result_manifest_sha256
      LEFT JOIN job_rerun_plans rerun ON rerun.job_id = j.id
      LEFT JOIN "user" actor ON actor.id = rerun.actor_id
@@ -511,12 +522,45 @@ function jobView(row: JobRow): OperationJob {
     ),
     recipe: recipeReference(
       row.id,
-      row.recipe?.recipeId ?? null,
+      row.compiled_graph?.recipe ?? row.recipe?.recipeId ?? null,
       row.recipe_sha256,
       row.originating_recipe_ref,
     ),
     cost: { estimatedUsd: row.cost_usd, complete: row.cost_complete },
   };
+}
+
+async function admittedGraph(
+  db: ReadDb,
+  job: JobRow | undefined,
+  scope: "recording" | "clip",
+) {
+  if (!job?.compiled_graph) return null;
+  const { rows } = await db.query<{ node_id: string; state: string }>(
+    "SELECT node_id, state FROM job_recipe_node_read_status WHERE job_id = $1",
+    [job.id],
+  );
+  const states = new Map(rows.map((row) => [row.node_id, row.state]));
+  const nodes = compiledRecipeGraph(job.compiled_graph).filter(
+    (node) => node.scope === scope,
+  );
+  const scopedIds = new Set(nodes.map((node) => node.id));
+  const scoped = nodes.map((node) => ({
+    ...node,
+    parents: [
+      ...new Set(
+        node.parents.map((parent) =>
+          scopedIds.has(parent) ? parent : "$input",
+        ),
+      ),
+    ],
+    status: states.get(node.id) ?? "not_run",
+  }));
+  if (scope === "clip") {
+    const [source] = v1RecipeGraph(null, "clip");
+    return [{ ...source!, status: "output_available" }, ...scoped];
+  }
+  return scoped;
 }
 
 function operationCost(jobs: OperationJob[]): OperationCost {
@@ -763,6 +807,14 @@ export async function getRecordingOperations(
       enabled: planningJobs.length ? true : null,
     };
     const clips = rows.map(clipSummary);
+    const recordingGraph = await admittedGraph(
+      db,
+      jobs.find(
+        (job) =>
+          job.id === (row.planning_job_id ?? row.latest_clip_plan_job_id),
+      ),
+      "recording",
+    );
     return {
       ...recording,
       ...fields,
@@ -777,46 +829,52 @@ export async function getRecordingOperations(
       captureProfile,
       recipe,
       clipPlanning,
-      graph: v1RecipeGraph(null, "recording").map((node) => {
-        if (node.id === "$clips") {
-          const failed = clips.filter(({ status }) =>
-            ["failed", "partially_complete", "timed_out", "cancelled"].includes(
-              status,
-            ),
-          ).length;
-          const active = clips.filter(
-            ({ status }) => status === "processing" || status === "queued",
-          ).length;
+      graph: (recordingGraph ?? v1RecipeGraph(null, "recording")).map(
+        (node) => {
+          if (node.id === "$clips") {
+            const failed = clips.filter(({ status }) =>
+              [
+                "failed",
+                "partially_complete",
+                "timed_out",
+                "cancelled",
+              ].includes(status),
+            ).length;
+            const active = clips.filter(
+              ({ status }) => status === "processing" || status === "queued",
+            ).length;
+            return {
+              ...node,
+              status: !clips.length
+                ? "not_run"
+                : failed
+                  ? "failed"
+                  : active
+                    ? "processing"
+                    : "output_available",
+              summary: `${clips.length} total${failed ? ` · ${failed} failed` : active ? ` · ${active} active` : ""}`,
+            };
+          }
+          if (recordingGraph && node.id !== "$source") return node;
+          if (node.id === "clip_plan") {
+            return clipPlanning.latest
+              ? withStageStatus(node, clipPlanning)
+              : {
+                  ...node,
+                  status:
+                    row.latest_clip_plan?.state === "failed"
+                      ? "failed"
+                      : row.latest_clip_plan
+                        ? "succeeded"
+                        : (captureProfile?.reason ?? "not_run"),
+                };
+          }
           return {
             ...node,
-            status: !clips.length
-              ? "not_run"
-              : failed
-                ? "failed"
-                : active
-                  ? "processing"
-                  : "output_available",
-            summary: `${clips.length} total${failed ? ` · ${failed} failed` : active ? ` · ${active} active` : ""}`,
+            status: recording.canReadOriginal ? "output_available" : "not_run",
           };
-        }
-        if (node.id === "clip_plan") {
-          return clipPlanning.latest
-            ? withStageStatus(node, clipPlanning)
-            : {
-                ...node,
-                status:
-                  row.latest_clip_plan?.state === "failed"
-                    ? "failed"
-                    : row.latest_clip_plan
-                      ? "succeeded"
-                      : (captureProfile?.reason ?? "not_run"),
-              };
-        }
-        return {
-          ...node,
-          status: recording.canReadOriginal ? "output_available" : "not_run",
-        };
-      }),
+        },
+      ),
       plan: row.latest_clip_plan,
       clips,
       cost: operationCost(allJobs),
@@ -850,6 +908,7 @@ export async function getClipOperations(
     const byId = new Map(views.map((job) => [job.id, job]));
     const latestId = clip.latestJobId ?? clip.selectedJobId;
     const currentJob = jobs.find((job) => job.id === latestId);
+    const clipGraph = await admittedGraph(db, currentJob, "clip");
     const importJob =
       jobs.find(
         (job) => job.id === clip.selectedJobId && job.kind === "cached_import",
@@ -903,8 +962,10 @@ export async function getClipOperations(
       status: clip.status,
       error: clip.error,
       stages,
-      graph: v1RecipeGraph(currentJob?.recipe ?? null, "clip", stages).map(
-        (node) =>
+      graphRuntime: clipGraph !== null,
+      graph:
+        clipGraph ??
+        v1RecipeGraph(currentJob?.recipe ?? null, "clip", stages).map((node) =>
           node.id === "$input"
             ? {
                 ...node,
@@ -916,7 +977,7 @@ export async function getClipOperations(
                 node,
                 stages.find((stage) => stage.stage === node.id),
               ),
-      ),
+        ),
       retryStages:
         currentJob?.recipe &&
         ["succeeded", "failed", "cancelled"].includes(currentJob.state) &&

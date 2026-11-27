@@ -572,6 +572,8 @@ def open_result(
         manifest_contract = "artifacts.processing-result.v5"
     elif schema == "stateaction.processing_result.v6":
         manifest_contract = "artifacts.processing-result.v6"
+    elif schema == "stateaction.processing_result.v7":
+        manifest_contract = "artifacts.processing-result.v7"
     else:
         raise ArtifactError("E_CONTRACT_VIOLATION", "processing-result schema")
     validated = _contract_check(manifest_contract, data, required=require_contracts)
@@ -637,6 +639,15 @@ def open_result(
             "invalid reused hand clip origins",
         )
     for meta in manifest["clips"]:
+        producer = producers.get(meta["clip_id"])
+        if schema == "stateaction.processing_result.v7" and "original_clip_id" in meta:
+            owners = [
+                node["source_job_id"]
+                for node in manifest["nodes"]
+                if meta["files"]["rgb_mp4"] in node["outputs"] and node["source_job_id"]
+            ]
+            _req(len(owners) == 1, "E_CONTRACT_VIOLATION", "graph clip origin")
+            producer = (owners[0], meta["original_clip_id"])
         paths = {key: by_id[fid][0] for key, fid in meta["files"].items()}
         identities = {key: by_id[fid][1] for key, fid in meta["files"].items()}
         clips.append(
@@ -646,7 +657,7 @@ def open_result(
                 paths,
                 manifest["job_id"],
                 identities,
-                producers.get(meta["clip_id"]),
+                producer,
             )
         )
     return Result(

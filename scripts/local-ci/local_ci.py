@@ -2423,6 +2423,7 @@ def run_pipeline(
     keep_going: bool = False,
     keep_work: bool = False,
     fresh: bool = False,
+    serial_stages: bool = False,
     only: list[str] | None = None,
     docs_only: bool = True,
     fixtures_path: str | None = None,
@@ -2644,6 +2645,8 @@ def run_pipeline(
                     if not k.endswith("_PORT") or k in stage_ports(item)
                 },
             )
+            if selection is not None and isinstance(plan.get("base"), str):
+                env["STATEACTION_RECIPE_BASE"] = plan["base"]
             if item["id"] in private_nx:
                 env["NX_SOCKET_DIR"] = str(private_nx[item["id"]]["sock"])
             if item.get("docsChanged"):
@@ -2926,7 +2929,8 @@ def run_pipeline(
 
         pending: list[BaseException] = []
         halted = False
-        for step in lane_groups(stages):
+        steps = ([[item]] for item in stages) if serial_stages else lane_groups(stages)
+        for step in steps:
             if halted:
                 for members in step:
                     for item in members:
@@ -2944,6 +2948,10 @@ def run_pipeline(
                 live_stops.append(lstop)
                 entries = {}
                 for item in step[0]:
+                    if serial_stages and item.get("nxState") == "private":
+                        private_nx[item["id"]] = private_nx_state(
+                            work, item["id"], nx_data
+                        )
                     entries[item["id"]] = run_stage(item, lstop, False)
                     if entries[item["id"]]["status"] not in ("passed", "skipped") and (
                         not keep_going
@@ -3765,6 +3773,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--tree", metavar="REV", required=True)
     run.add_argument("--keep-going", action="store_true")
     run.add_argument(
+        "--serial-stages",
+        action="store_true",
+        help="Run stages one at a time in declared order.",
+    )
+    run.add_argument(
         "--fresh", action="store_true", help="bypass every cache (cold evidence run)"
     )
     run.add_argument("--keep-work", action="store_true")
@@ -3830,6 +3843,7 @@ def main(argv: list[str] | None = None) -> int:
             keep_going=args.keep_going,
             keep_work=args.keep_work,
             fresh=args.fresh,
+            serial_stages=args.serial_stages,
             only=args.only,
             docs_only=not args.full,
         )

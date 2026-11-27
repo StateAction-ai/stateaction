@@ -45,11 +45,9 @@ pnpm exec nx run infra:integration
 
 `pnpm exec nx run server:catalog-integration` separately runs the catalog migration/constraint/concurrency tests on a throwaway Postgres bound to an ephemeral loopback port ([catalog](../../docs/components/catalog.md)); CI runs every affected `integration`, `auth-integration` (server) and `auth-e2e` (web) target in the Local runtime smoke job. All three are uncached and run again on every selection; the two auth targets use their own throwaway loopback Postgres containers.
 
-This isolated smoke creates its own local settings and dedicated `stateaction-sa11-smoke` Compose services. It refuses occupied ports/existing settings, proves a real Postgres migration and S3 Put/Get/Delete, then executes Next API → official Render local runner → Node LocalExecutor → installed Python health worker. It stops its own processes/services and retains its own named test volumes. It never deploys or dispatches to cloud Render.
+The platform smoke checks local configuration, database migrations, object storage and registration of the Python `process-recording` task in the official loopback runner. The controller integration drives that task through real admission, local node execution, publication and retry with disposable data.
 
-For interactive development, copy `.env.example` and `.env.workflows.example` to their ignored local counterparts, replace `LOCAL_SMOKE_TOKEN`, then run `make infra-up migrate storage-init`, `make web` and `make workflows` in separate terminals. Database/storage credentials stay out of the workflow environment. [Official local runtime](https://render.com/docs/workflows-local-development)
-
-`verify-platform` is a probe, not a production processing job. Authentication, durable job claims, uploads, Modal, R2 transport and review are later tickets. Local storage is Apache-2.0 SeaweedFS because official MinIO images are unavailable and its upstream is archived. The local roundtrip does not qualify multipart/CORS/presigned URLs or long recordings.
+For interactive development, copy `.env.example` and `.env.workflows.example` to their ignored local counterparts, then run `make infra-up migrate storage-init`, `make web` and `make workflows` in separate terminals. Database and storage credentials stay out of the workflow environment. [Official local runtime](https://render.com/docs/workflows-local-development)
 
 ## Hosted (Render) mode
 

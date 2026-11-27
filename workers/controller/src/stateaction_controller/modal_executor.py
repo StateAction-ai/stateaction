@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import re
 from functools import cache
 
 from modal._utils.async_utils import synchronize_api
@@ -17,7 +18,7 @@ from stateaction_modal_verifier.verifier import (
 )
 
 from .config import HAND_POSE, modal_credentials
-from .modal_controller import SpawnNotSent
+from .modal_controller import SpawnCancelled, SpawnNotSent
 from .results import call_id_valid
 
 MAX_BOOTSTRAP_BYTES = 8192
@@ -35,7 +36,7 @@ def checkpoint_pins():
     return json.loads((_api_dir() / "flora-checkpoints.v1.json").read_bytes())
 
 
-async def _spawn_once(client, function, payload, before_send):
+async def _spawn_once(client, function, payload, before_send, before_submit=None):
     # Modal 1.6.4's high-level spawn retries submission RPCs. Use the same
     # SDK input encoder and wire messages with transport retries disabled.
     check_sdk()
@@ -54,6 +55,8 @@ async def _spawn_once(client, function, payload, before_send):
         function_call_invocation_type=invocation,
         pipelined_inputs=[item],
     )
+    if before_submit is not None:
+        await before_submit()
     response = await stub.FunctionMap(request, retry=None, timeout=before_send())
     call_id = response.function_call_id
     if not call_id_valid(call_id):
@@ -103,14 +106,14 @@ class ModalExecutor:
         app, function = self.settings.target(module)
         if not app or not function or app != binding["appName"]:
             raise ValueError("Configured Modal target differs from the binding")
-        return await verify_binding.aio(
+        verified = await verify_binding.aio(
             await self._connect(),
             Bounds(
                 app,
                 binding["environment"],
                 function,
                 module,
-                binding["gpu"],
+                binding["gpu"] or "none",
                 binding["maxContainers"],
                 binding["maxCpuMilli"],
                 binding["maxMemoryMib"],
@@ -127,6 +130,9 @@ class ModalExecutor:
             definition_id=binding["definitionId"],
             definition_sha256=binding["definitionSha256"],
         )
+        if binding.get("imageId") and binding["imageId"] != verified.image_id:
+            raise ValueError("Configured Modal image differs from the binding")
+        return verified
 
     async def check_function(self, binding, module=HAND_POSE):
         try:
@@ -136,7 +142,7 @@ class ModalExecutor:
         except Exception:
             return False
 
-    async def spawn(self, bootstrap, authorized, binding):
+    async def spawn(self, bootstrap, authorized, binding, before_submit=None):
         issued = False
         try:
             loop = asyncio.get_running_loop()
@@ -153,6 +159,19 @@ class ModalExecutor:
                 client = await self._connect()
                 if binding:
                     verified = await self.verify(module, binding)
+                    if "nodeId" in bootstrap:
+                        digest = verified.runtime_definition_sha256
+                        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+                            raise SpawnNotSent()
+                        payload = bootstrap_bytes(
+                            {
+                                **bootstrap,
+                                "functionId": verified.function_id,
+                                "runtimeDefinitionSha256": digest,
+                            }
+                        )
+                        if len(payload) > MAX_BOOTSTRAP_BYTES:
+                            raise SpawnNotSent()
                     function = self.sdk.Function.from_id(
                         verified.function_id, client=client
                     )
@@ -179,8 +198,10 @@ class ModalExecutor:
                     return remaining
 
                 return await spawn_once.aio(
-                    client, function, payload.decode(), before_send
+                    client, function, payload.decode(), before_send, before_submit
                 )
+        except SpawnCancelled:
+            raise
         except Exception:
             if issued:
                 raise RuntimeError(

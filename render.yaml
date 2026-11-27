@@ -70,6 +70,8 @@ services:
         sync: false
       - key: PROCESSING_IMAGE_SPEC_SHA256
         sync: false
+      - key: STATEACTION_GRAPH_BINDINGS
+        sync: false
       - key: PROCESSING_CONFIG_SHA256
         sync: false
       - key: PROCESSING_MODEL_SHA256
@@ -101,17 +103,17 @@ services:
         sync: false
   - type: workflow
     name: stateaction-workflow
-    runtime: node
+    runtime: python
     region: ohio
     repo: https://github.com/StateAction-ai/stateaction
     branch: main
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter "@stateaction/jobs..." build
-    startCommand: pnpm --filter @stateaction/jobs start
+    buildCommand: pip install uv==0.13.6 && uv sync --project workers/controller --locked --no-dev
+    startCommand: uv run --project workers/controller --locked --no-dev --no-sync python -m stateaction_controller.workflow
     autoDeployTrigger: "off"
     # Tasks never receive database or storage credentials (API-only boundary).
     envVars:
-      - key: NODE_VERSION
-        value: 24.22.2
+      - key: PYTHON_VERSION
+        value: 3.12.13
       - key: APP_ENV
         value: production
       # SA-26 controller: API-only access with an operator-issued workflow credential
@@ -132,6 +134,10 @@ services:
         value: stateaction-processing
       - key: MODAL_FUNCTION_NAME
         value: process_recording
+      - key: MODAL_STAGE_FUNCTIONS
+        sync: false
+      - key: MODAL_ENVIRONMENT
+        sync: false
       - key: MODAL_TOKEN_ID
         sync: false
       - key: MODAL_TOKEN_SECRET
@@ -146,16 +152,16 @@ services:
   # Render runs at most one cron instance at a time; the schedule is UTC.
   - type: cron
     name: stateaction-repair
-    runtime: node
+    runtime: python
     region: ohio
     plan: starter
     schedule: "* * * * *"
-    buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter "@stateaction/jobs..." build
-    startCommand: pnpm --filter @stateaction/jobs repair
+    buildCommand: pip install uv==0.13.6 && uv sync --project workers/controller --locked --no-dev
+    startCommand: uv run --project workers/controller --locked --no-dev --no-sync python -m stateaction_controller.repair
     autoDeployTrigger: "off"
     envVars:
-      - key: NODE_VERSION
-        value: 24.22.2
+      - key: PYTHON_VERSION
+        value: 3.12.13
       - key: APP_ENV
         value: production
       - key: STATEACTION_API_URL

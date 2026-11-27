@@ -19,16 +19,11 @@
       "targetWorkers": 4,
       "peakConnectionsPerWorker": 6
     },
-    "jobs-controller-integration": {
-      "workers": 1,
-      "targetWorkers": 2,
-      "peakConnectionsPerWorker": 7
-    },
     "server-auth-integration": {
       "workers": 2,
       "targetWorkers": 2,
       "peakConnectionsPerWorker": 7
     }
   },
-  "measuredOn": "2026-11-23 on the shared fixture: pg_stat_activity sampled every 0.3 s during guarded runs; peak per worker = peak own client backends divided by workers (catalog: 18 at 3 workers, 24 at 4 -> 6; web: largest single Next world 13; jobs and auth: largest single world 7). Re-measure after any pool or suite change."
+  "measuredOn": "2026-11-23 on the shared fixture: pg_stat_activity sampled every 0.3 s during guarded runs; peak per worker = peak own client backends divided by workers (catalog: 18 at 3 workers, 24 at 4 -> 6; web: largest single Next world 13; server auth: largest single world 7). Re-measure after any pool or suite change."
 }

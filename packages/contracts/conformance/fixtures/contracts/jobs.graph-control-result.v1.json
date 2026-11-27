@@ -1,0 +1,39 @@
+{
+  "contract": "jobs.graph-control-result.v1",
+  "cases": [
+    {
+      "name": "cancellation before submission has no execution ID",
+      "input": {
+        "document": {
+          "state": "never_submitted"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "file verification has saved progress",
+      "input": {
+        "document": {
+          "state": "verifying"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "unknown acknowledgement cannot authorize execution",
+      "input": {
+        "document": {
+          "state": "unknown"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

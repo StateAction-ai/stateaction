@@ -35,6 +35,6 @@ storage-init:
 web:
 	pnpm dev
 workflows:
-	$(RENDER) workflows dev --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev
+	$(RENDER) workflows dev --env-file .env.workflows.local -- pnpm dev:workflow
 smoke:
 	pnpm test:platform

@@ -437,7 +437,7 @@ class RecordingWriter:
             "frame_count": self.frames,
             "producer": {
                 "stage": "hand_pose",
-                "module_id": HAND_MODULE,
+                "module_id": plan.hand_module.partition("@")[0],
                 "module_version": int(plan.hand_module.partition("@")[2]),
                 "model_name": "mediapipe_hand_landmarker",
                 "model_revision": None,

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/graph-grant.v1.json",
+  "title": "Exact graph node input and upload authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task",
+    "graph",
+    "binding",
+    "source",
+    "clipPlan",
+    "producerFiles",
+    "deadline",
+    "uploadToken"
+  ],
+  "properties": {
+    "task": {
+      "$ref": "https://stateaction.ai/schemas/jobs/task-input.v6.json"
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": true,
+      "maxProperties": 32
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": true,
+      "maxProperties": 32
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "sha256", "sizeBytes", "readUrl"],
+      "properties": {
+        "fileId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "sha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,11}$"
+        },
+        "readUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      }
+    },
+    "clipPlan": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fileId", "sha256", "sizeBytes", "readUrl"],
+          "properties": {
+            "fileId": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            },
+            "sha256": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            "sizeBytes": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,11}$"
+            },
+            "readUrl": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "producerFiles": {
+      "type": "object",
+      "maxProperties": 8,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "maxProperties": 1024,
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fileId", "sha256", "sizeBytes", "readUrl"],
+          "properties": {
+            "fileId": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+            },
+            "sha256": {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+            },
+            "sizeBytes": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,11}$"
+            },
+            "readUrl": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            }
+          }
+        }
+      }
+    },
+    "deadline": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "uploadToken": {
+      "type": "string",
+      "pattern": "^sa_svc_[A-Za-z0-9_-]{43}$"
+    }
+  }
+}

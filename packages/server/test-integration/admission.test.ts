@@ -38,6 +38,10 @@ import {
   PUBLIC_VIDEO_RECIPE,
 } from "../src/admission/public-video-canary.js";
 import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
+import {
+  DEFAULT_RECIPE_REF,
+  publishedRecipe,
+} from "../src/jobs/recipe-release.js";
 import { admitNextJob, listPendingDispatches } from "../src/jobs/service.js";
 import { failUndispatched, retryJob } from "../src/jobs/recovery.js";
 import { JOBS_CONFIG } from "./jobs-harness.js";
@@ -704,8 +708,11 @@ describe("seal and eligibility", () => {
     ).rows[0]!;
     assert.equal(profile.state, "selected");
     assert.equal(profile.capture_source_id, "stateaction_mobile@1");
-    assert.equal(profile.recipe_id, PUBLIC_VIDEO_RECIPE.recipeId);
-    assert.equal(profile.recipe_sha256, requestSha256(PUBLIC_VIDEO_RECIPE));
+    assert.equal(profile.recipe_id, DEFAULT_RECIPE_REF);
+    assert.equal(
+      profile.recipe_sha256,
+      publishedRecipe(DEFAULT_RECIPE_REF)!.recipeSha256,
+    );
     assert.equal(profile.selected_by, null);
     assert.equal(profile.evidence.device.appVersion, "0.1.0");
 
@@ -1850,7 +1857,7 @@ test("staff can resolve a recipe hold once for the exact source", async () => {
   });
   assert.deepEqual(await admitRecording(deps, s.recordingId), sealed.admission);
   const request = {
-    recipeId: PUBLIC_VIDEO_RECIPE.recipeId,
+    recipeId: DEFAULT_RECIPE_REF,
     sourceManifestSha256: sha(s.manifest),
   };
   const staff = { userId: actors.staff };
@@ -1898,7 +1905,7 @@ test("staff can resolve a recipe hold once for the exact source", async () => {
   assert.deepEqual(rows, [
     {
       selected_by: actors.staff,
-      recipe_sha256: requestSha256(PUBLIC_VIDEO_RECIPE),
+      recipe_sha256: publishedRecipe(DEFAULT_RECIPE_REF)!.recipeSha256,
     },
   ]);
   await assert.rejects(

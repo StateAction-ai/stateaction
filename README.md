@@ -28,7 +28,7 @@ See [docs/delivery-scope.md](docs/delivery-scope.md) for the full scope.
 | `apps/mobile`                           | Flutter collector for Android                                 |
 | `packages/stera_recorder`               | Android/iOS recorder plugin and native tests                  |
 | `apps/web`                              | Next.js console and API                                       |
-| `apps/jobs`                             | Render workflow and local job executor                        |
+| `workers/controller`                    | Python Render workflow, executors and repair command          |
 | `packages/server`, `packages/contracts` | Server-only helpers and versioned platform contracts          |
 | `workers/processing`                    | Python processing worker                                      |
 | `workers/flora`                         | Optional tooling to run FLORA on Modal (you supply the model) |

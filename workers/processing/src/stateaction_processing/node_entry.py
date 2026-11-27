@@ -13,11 +13,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 from stateaction_contracts import request_sha256, validate_value
-
-from .artifact_types import sha256_file
-from .flora_adapter import canonical_bytes
-from .recipe_adapters import JSON_ARTIFACTS, hand_pose, plan_source, replay_flora
-from .recipe_graph import (
+from stateaction_contracts.recipe_graph import (
     MODULES,
     RecipeRefused,
     VerifiedGraph,
@@ -25,6 +21,10 @@ from .recipe_graph import (
     read_json,
     require,
 )
+
+from .artifact_types import sha256_file
+from .flora_adapter import canonical_bytes
+from .recipe_adapters import JSON_ARTIFACTS, hand_pose, plan_source, run_flora
 from .source_range import ClipBinding
 
 METADATA_LIMIT = 512 * 1024
@@ -32,6 +32,8 @@ JSON_LIMIT = 16 * 1024**2
 VIDEO_LIMIT = 4 * 1024**3
 OUTPUT_LIMIT = 16 * 1024**3
 IDENTITY = (
+    "jobId",
+    "recipeRef",
     "recipeSha256",
     "nodeId",
     "module",
@@ -42,6 +44,7 @@ IDENTITY = (
     "claimRef",
     "executionRef",
     "binding",
+    "observedGpu",
     "clipId",
 )
 
@@ -155,7 +158,7 @@ def validate_binding(
             "promptSha256",
         }
         require(
-            binding["mode"] == "local_replay" and pins <= binding.keys(),
+            binding["mode"] in ("local_replay", "modal") and pins <= binding.keys(),
             "replay_binding_invalid",
         )
         published = read_json(
@@ -171,7 +174,13 @@ def validate_binding(
             "replay_checkpoint_mismatch",
         )
     else:
-        require(binding["mode"] == "local_cpu", "cpu_binding_invalid")
+        require(binding["mode"] in ("local_cpu", "modal"), "cpu_binding_invalid")
+    if binding["mode"] == "modal":
+        require(
+            "observedGpu" in request
+            and (request["observedGpu"] is None) == (node["resources"]["gpu"] is None),
+            "modal_gpu_observation_missing",
+        )
 
 
 def execute(
@@ -184,13 +193,16 @@ def execute(
     repo: Path,
 ) -> None:
     require(
-        Draft202012Validator(schema(repo, "node-input.v1")).is_valid(request),
+        Draft202012Validator(schema(repo, "node-input.v2")).is_valid(request),
         "node_input_schema",
     )
     require(
         request_sha256(request) == admitted_request_sha256, "request_digest_mismatch"
     )
-    require(request["recipeSha256"] == graph.sha256, "graph_digest_mismatch")
+    require(
+        request["recipeSha256"] == graph.sha256 and request["recipeRef"] == graph.ref,
+        "graph_identity_mismatch",
+    )
     node = graph.node(request["nodeId"])
     require(node["module"] == request["module"], "binding_module_mismatch")
     validate_binding(request, node, release, repo)
@@ -218,6 +230,8 @@ def execute(
             in (
                 {"segments", "replay_provenance"},
                 {"segments", "replay_provenance", "windows"},
+                {"segments", "producer_provenance"},
+                {"segments", "producer_provenance", "windows"},
             ),
             "segments_inventory",
         )
@@ -237,6 +251,7 @@ def execute(
             copy_checked(input_root, request["clipPlan"], plan, JSON_LIMIT)
             clip = clip_binding(request, plan)
         ref = node["module"]
+        hand_metadata = None
         if clip is None:
             plan_doc, video = plan_source(request, source, scratch)
             counts = {"frames": plan_doc["frame_count"]}
@@ -247,7 +262,7 @@ def execute(
             else:
                 files = {"video": video}
         elif ref == "hand_pose_cpu@1":
-            files, counts = hand_pose(request, source, clip, scratch)
+            files, counts, hand_metadata = hand_pose(request, source, clip, scratch)
         else:
             segment_files = {}
             if "segments" in inputs:
@@ -255,7 +270,7 @@ def execute(
                     target = scratch / f"verified-{role}.json"
                     copy_checked(input_root, entry, target, JSON_LIMIT)
                     segment_files[role] = target
-            files, counts = replay_flora(
+            files, counts = run_flora(
                 request, node, source, clip, segment_files, scratch
             )
         port, kind = next(iter(node["outputs"].items()))
@@ -263,17 +278,19 @@ def execute(
         bundle.mkdir()
         descriptors = describe_outputs(kind, files, bundle)
         receipt = {
-            "schema": "stateaction.recipe-node-receipt/v1",
+            "schema": "stateaction.recipe-node-receipt/v2",
             **{key: request[key] for key in IDENTITY if key in request},
             "requestSha256": admitted_request_sha256,
             "status": "succeeded",
             "outputs": {port: {"kind": kind, "files": descriptors}},
             "counts": counts,
         }
+        if hand_metadata is not None:
+            receipt["handMetadata"] = hand_metadata
         payload = canonical_bytes(receipt)
         require(
             len(payload) <= METADATA_LIMIT
-            and Draft202012Validator(schema(repo, "node-receipt.v1")).is_valid(receipt),
+            and Draft202012Validator(schema(repo, "node-receipt.v2")).is_valid(receipt),
             "receipt_schema",
         )
         (bundle / "receipt.json").write_bytes(payload)
@@ -286,33 +303,49 @@ def describe_outputs(kind: str, files: dict[str, Path], bundle: Path) -> dict[st
     primaries = {
         "clip_plan@1": {"plan"},
         "review_video@1": {"video"},
-        "segments@2": {"segments", "replay_provenance"},
-        "captions@2": {"captions", "replay_provenance"},
+        "segments@2": {"segments"},
+        "captions@2": {"captions"},
     }
     roles = files.keys()
     if kind == "hand_pose@2":
-        groups = {role.rpartition("_")[2] for role in roles}
+        groups = {role.rpartition("_")[2] for role in roles if role != "hand_presence"}
         require(
             bool(groups)
             and roles
-            == {
+            == {"hand_presence"}
+            | {
                 f"{role}_{i}"
                 for i in groups
-                for role in ("observations", "frame_map", "arrays", "rrd")
+                for role in (
+                    "observations",
+                    "frame_map",
+                    "arrays",
+                    "rrd",
+                    "rgb",
+                    "thumbnail",
+                )
             },
             "output_inventory",
         )
     else:
         required = primaries[kind]
+        if kind in ("segments@2", "captions@2"):
+            provenance = roles & {"replay_provenance", "producer_provenance"}
+            require(len(provenance) == 1, "output_provenance")
+            required = required | provenance
         optional = {"windows"} if kind == "segments@2" else set()
         require(required <= roles <= required | optional, "output_inventory")
     result = {}
     total = 0
     for role, path in files.items():
-        base = role.rpartition("_")[0] if kind == "hand_pose@2" else role
+        base = (
+            role.rpartition("_")[0]
+            if kind == "hand_pose@2" and role != "hand_presence"
+            else role
+        )
         cap = (
             VIDEO_LIMIT
-            if base == "video"
+            if base in {"video", "rgb"}
             else 128 * 1024**2
             if base in {"arrays", "rrd"}
             else JSON_LIMIT

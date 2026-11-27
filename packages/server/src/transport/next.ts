@@ -92,9 +92,17 @@ export async function jobAuthority(
   );
   if (!result.ok) return result;
   const stage = stageOfCredential(result.principal.credentialId);
+  const nodeId = /^node:([a-z][a-z0-9_]{0,31})/.exec(
+    result.principal.credentialId,
+  )?.[1];
   return {
     ok: true,
-    authority: { kind: "job", jobId, ...(stage ? { stage } : {}) },
+    authority: {
+      kind: "job",
+      jobId,
+      ...(stage ? { stage } : {}),
+      ...(nodeId ? { nodeId } : {}),
+    },
   };
 }
 

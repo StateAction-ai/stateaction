@@ -2,42 +2,20 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Stage } from "@stateaction/contracts";
-import Link from "next/link";
-import { RECIPE_STEP_LABEL } from "@stateaction/server/pipeline-model";
 import { submitJobControl } from "../../lib/client-api";
 import { Button } from "../ui/button";
 import { ConfirmDialog } from "./confirm-dialog";
 import { postRecordingCommand } from "./commands";
 
-type RetryRequest =
-  | { schemaVersion: 2; scope: "failed_clips" }
-  | {
-      schemaVersion: 2;
-      scope: "clip";
-      clipId: string;
-      parentJobId: string;
-      stages: Stage[];
-    };
-
-type RetryPlan = {
-  planSha256: string;
-  maxGpuCostUsd: string;
-  maxComputeCostUsd: string;
-  estimatedComputeCostUsd: string | null;
-  clips: {
-    clipId: string;
-    ordinal: number;
-    execute: { stage: Stage }[];
-    reuse: { stage: Stage; sourceJobId: string; state: string }[];
-    estimatedComputeCostUsd: string | null;
-  }[];
-};
-
 type RetryAction =
-  | { request: RetryRequest; planning?: never }
   | {
-      request?: never;
+      planning?: never;
+      graph:
+        | { clipId: string; parentJobId: string; nodes: string[] }
+        | { scope: "failed_clips" };
+    }
+  | {
+      graph?: never;
       planning: {
         jobId: string;
         expectedState: string;
@@ -45,7 +23,18 @@ type RetryAction =
       };
     };
 
-type Prepared = { requestId: string; plan?: RetryPlan };
+type GraphClipPlan = {
+  clipId: string;
+  ordinal: number;
+  execute: string[];
+  reuse: { nodeId: string }[];
+};
+type GraphRetryPlan = {
+  planSha256: string;
+  maxComputeCostUsd: string;
+  maxGpuCostUsd: string;
+} & (GraphClipPlan | { clips: GraphClipPlan[] });
+type Prepared = { requestId: string; graphPlan?: GraphRetryPlan };
 
 function estimate(amount: string | null | undefined) {
   return amount == null ? "Unavailable" : `$${amount} USD`;
@@ -67,14 +56,14 @@ export function RetryAction({
   const router = useRouter();
   const descriptionId = useId();
   const description = disabledReason ?? undefined;
-  const endpoint = `/api/v2/recordings/${recordingId}/stage-reruns`;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [error, setError] = useState("");
   const [outcome, setOutcome] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const plan = prepared?.plan;
+  const graphPlan = prepared?.graphPlan;
+  const graphEndpoint = `/api/v1/recordings/${recordingId}/graph-retries`;
 
   async function prepare() {
     if (!action) return;
@@ -87,11 +76,12 @@ export function RetryAction({
     }
     setBusy(true);
     try {
-      const plan = await postRecordingCommand<RetryPlan>(
-        `${endpoint}/plan`,
-        action.request,
+      const requestId = crypto.randomUUID();
+      const graphPlan = await postRecordingCommand<GraphRetryPlan>(
+        `${graphEndpoint}/preview`,
+        { schemaVersion: 1, ...action.graph },
       );
-      setPrepared({ requestId: crypto.randomUUID(), plan });
+      setPrepared({ requestId, graphPlan });
     } catch (failure) {
       setError((failure as Error).message);
     } finally {
@@ -113,13 +103,12 @@ export function RetryAction({
           requestId: prepared.requestId,
         });
         if (!result.ok) throw new Error(result.message);
-      } else if (plan) {
-        await postRecordingCommand(endpoint, {
-          ...action.request,
+      } else if (action.graph && graphPlan) {
+        await postRecordingCommand(`${graphEndpoint}/confirm`, {
+          schemaVersion: 1,
+          ...action.graph,
           requestId: prepared.requestId,
-          expectedPlanSha256: plan.planSha256,
-          expectedMaxComputeCostUsd: plan.maxComputeCostUsd,
-          expectedMaxGpuCostUsd: plan.maxGpuCostUsd,
+          expectedPlanSha256: graphPlan.planSha256,
           reason: label,
         });
       }
@@ -179,58 +168,41 @@ export function RetryAction({
               )}
             </div>
           )}
-          {plan && (
-            <>
-              <ul className="mb-4 grid gap-2">
-                {plan.clips.map((clip) => (
-                  <li
-                    key={clip.clipId}
-                    className="grid gap-1 rounded-lg border border-line bg-field p-3 text-sm"
-                  >
-                    <strong>
-                      Clip {clip.ordinal + 1}
-                      {ranges?.[clip.clipId]
-                        ? ` · ${ranges[clip.clipId]}`
-                        : " · Source time unavailable"}
-                    </strong>
+          {graphPlan && (
+            <div className="mb-4 grid gap-2 text-sm">
+              {("clips" in graphPlan ? graphPlan.clips : [graphPlan]).map(
+                (clip) => (
+                  <div className="grid gap-1" key={clip.clipId}>
+                    {"clips" in graphPlan && (
+                      <strong>
+                        Clip {clip.ordinal + 1}
+                        {ranges?.[clip.clipId]
+                          ? ` · ${ranges[clip.clipId]}`
+                          : ""}
+                      </strong>
+                    )}
                     <p>
                       Runs{" "}
                       {clip.execute
-                        .map(({ stage }) => RECIPE_STEP_LABEL[stage])
+                        .map((id) => id.replaceAll("_", " "))
                         .join(", ")}
                     </p>
-                    {clip.execute.some(({ stage }) => stage === "segment") &&
-                      clip.execute.some(({ stage }) => stage === "caption") && (
-                        <p className="text-muted">
-                          Captions must follow segmentation.
-                        </p>
-                      )}
-                    {clip.reuse.map((output) => (
-                      <p key={output.stage} className="text-muted">
-                        {output.state === "succeeded"
-                          ? "Keeps"
-                          : "Carries forward"}{" "}
-                        {RECIPE_STEP_LABEL[output.stage]} from{" "}
-                        <Link
-                          className="text-brand underline"
-                          href={`/recordings/${recordingId}/clips/${clip.clipId}/processing?${new URLSearchParams({ step: output.stage, run: output.sourceJobId })}`}
-                        >
-                          source run
-                        </Link>
-                        {output.state !== "succeeded" &&
-                          ` (${output.state.replaceAll("_", " ")})`}
+                    {clip.reuse.length > 0 && (
+                      <p>
+                        Keeps{" "}
+                        {clip.reuse
+                          .map(({ nodeId }) => nodeId.replaceAll("_", " "))
+                          .join(", ")}
                       </p>
-                    ))}
-                    <p>
-                      Estimated cost {estimate(clip.estimatedComputeCostUsd)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-              <p className="mb-4 text-sm">
-                Total estimated cost {estimate(plan.estimatedComputeCostUsd)}
+                    )}
+                  </div>
+                ),
+              )}
+              <p>
+                Maximum cost {estimate(graphPlan.maxComputeCostUsd)}, including
+                GPU {estimate(graphPlan.maxGpuCostUsd)}
               </p>
-            </>
+            </div>
           )}
           {error && (
             <p role="alert" className="mb-3 text-sm text-danger">

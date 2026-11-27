@@ -8,10 +8,8 @@ import {
   v1RecipeGraph,
   type RecipeGraphNode,
 } from "./recipe-graph.js";
-import {
-  CAPTURE_SOURCES,
-  captureRecipeDefinition,
-} from "../admission/capture-profiles.js";
+import { CAPTURE_SOURCES } from "../admission/capture-profiles.js";
+import { publishedRecipe } from "../jobs/recipe-release.js";
 import { PUBLIC_VIDEO_RECIPE } from "../admission/public-video-canary.js";
 import type { Queryable } from "../catalog/catalog.js";
 import { recordingTitle } from "./model.js";
@@ -81,7 +79,10 @@ const STAFF_RECIPE_JOBS = `WITH staff AS (
 ), recipe_usage AS (
   SELECT * FROM usage_jobs
   UNION ALL
-  SELECT NULL, r.id, p.recipe, r.started_at, p.matched_at, p.recipe_id, false, false, NULL, NULL
+  SELECT NULL, r.id,
+    CASE WHEN p.recipe ->> 'schemaVersion' = '1' AND jsonb_typeof(p.recipe -> 'stages') = 'array'
+      THEN p.recipe END,
+    r.started_at, p.matched_at, p.recipe_id, false, false, NULL, NULL
   FROM recording_capture_profiles p JOIN recordings r ON r.id = p.recording_id AND r.deleted_at IS NULL
   WHERE (SELECT ok FROM staff) AND p.state = 'selected' AND ($2::text IS NULL OR p.recipe_id = $2)
     AND NOT EXISTS (SELECT 1 FROM usage_jobs j WHERE j.recording_id = r.id AND j.recipe_id = p.recipe_id)
@@ -106,13 +107,15 @@ function catalogEntry(
   snapshot: RecipeV1 | null = null,
 ): RecipeCatalogEntry {
   const workflow = id === DOCUMENTED_WORKFLOW;
-  const definition = compiled.find(({ recipe }) => recipe === id);
-  const recipe = captureRecipeDefinition(id) ?? snapshot;
+  const released = publishedRecipe(id);
+  const definition = released ?? compiled.find(({ recipe }) => recipe === id);
+  const recipe =
+    id === PUBLIC_VIDEO_RECIPE.recipeId ? PUBLIC_VIDEO_RECIPE : snapshot;
   return {
     id,
     label: workflow
       ? "FLORA Spike C + CPU hand tracking"
-      : id === PUBLIC_VIDEO_RECIPE.recipeId
+      : id.startsWith("indego_hosted_canary@")
         ? "IndEgo processing"
         : (definition?.meta.title ?? id.split("@")[0]!.replaceAll("_", " ")),
     kind: workflow ? "workflow" : "recipe",
@@ -120,7 +123,7 @@ function catalogEntry(
     graph: definition
       ? compiledRecipeGraph(definition)
       : v1RecipeGraph(recipe, "definition"),
-    preview: definition !== undefined,
+    preview: definition !== undefined && released === undefined,
     captureSources: CAPTURE_SOURCES.filter((source) =>
       source.allowedRecipeIds.some((allowed) => allowed === id),
     ),

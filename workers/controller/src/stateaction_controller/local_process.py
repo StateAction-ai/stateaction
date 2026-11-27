@@ -184,11 +184,13 @@ def _log(fd, flags):
     return os.fdopen(log, "rb" if flags == os.O_RDONLY else "ab")
 
 
-async def spawn(settings, store, record, fixture):
+async def spawn(settings, store, record, fixture, *, graph=False):
     stage = record.get("stage")
     ref = record["executionRef"]
     argv = ["-m", "stateaction_processing"]
-    if stage in (None, "hand_pose"):
+    if graph:
+        argv = ["-m", "stateaction_processing.graph_worker", ref]
+    elif stage in (None, "hand_pose"):
         argv += ["run-job", "--execution-ref", ref]
     else:
         argv += ["run-stage", ref]
@@ -310,6 +312,25 @@ def last_receipt(store, record):
                         <= value.keys()
                     ):
                         return value
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def last_graph_result(store, record):
+    try:
+        with store.directory(record["jobId"], record["stage"]) as directory:
+            with _log(directory, os.O_RDONLY) as log:
+                limit = 1024 * 1024
+                size = os.fstat(log.fileno()).st_size
+                log.seek(max(0, size - limit))
+                for line in reversed(log.read(limit).splitlines()):
+                    try:
+                        value = json.loads(line)
+                    except (ValueError, RecursionError):
+                        continue
+                    if isinstance(value, dict) and "stateactionNodeResult" in value:
+                        return value["stateactionNodeResult"]
     except (OSError, ValueError):
         pass
     return None

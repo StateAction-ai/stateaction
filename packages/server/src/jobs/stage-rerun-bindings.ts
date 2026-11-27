@@ -42,7 +42,7 @@ export const dollars = (cents: bigint) =>
   `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}`;
 
 export function providerCostCents(
-  binding: RerunBinding,
+  binding: Pick<RerunBinding, "maxContainers" | "maxBilledSeconds">,
   microUsdPerSecond: number,
   seconds = binding.maxBilledSeconds,
 ): bigint {

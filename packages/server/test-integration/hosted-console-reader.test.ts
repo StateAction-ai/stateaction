@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import test from "node:test";
-import { requestSha256 } from "@stateaction/contracts";
 import pg from "pg";
 import { grantHostedReader } from "../../../scripts/platform/provision-hosted-reader.mjs";
 import { advanceResult } from "../src/acceptance/service.js";
-import {
-  CAPTURE_SOURCES,
-  captureRecipeDefinition,
-} from "../src/admission/capture-profiles.js";
+import { CAPTURE_SOURCES } from "../src/admission/capture-profiles.js";
+import { publishedRecipe } from "../src/jobs/recipe-release.js";
 import {
   loadBoundClipAnnotations,
   loadRecordingAnnotations,
@@ -55,7 +52,7 @@ test("the provisioned hosted reader can browse and review with staff access", as
 
   const capture = CAPTURE_SOURCES[0];
   const recipeId = capture.defaultRecipeId;
-  const recipe = captureRecipeDefinition(recipeId);
+  const recipe = publishedRecipe(recipeId);
   assert.ok(recipe);
   await owner.query(
     `INSERT INTO recording_capture_profiles
@@ -68,7 +65,7 @@ test("the provisioned hosted reader can browse and review with staff access", as
       capture.id,
       [recipeId],
       recipeId,
-      requestSha256(recipe),
+      recipe.recipeSha256,
       recipe,
     ],
   );

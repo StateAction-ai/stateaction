@@ -155,8 +155,6 @@ export function pipelineReads(get: () => AuthRuntime = authRuntime) {
     history: (staffUserId: string, recordingId: string) =>
       recordingRunHistory(get().pool, staffUserId, recordingId),
     selectionEnabled: () => hostedDevProfile()?.mode !== "read-only",
-    handPoseRerunOnly: () =>
-      publicVideoCanaryFromEnv(process.env) !== undefined,
     rerunBlock: (staffUserId: string, detail: PipelineDetail) => {
       if (hostedDevProfile()?.mode === "read-only")
         return Promise.resolve("read_only");

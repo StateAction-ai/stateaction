@@ -19,7 +19,7 @@
       "cache": false,
       "inputs": ["default", "recipeSources"],
       "options": {
-        "command": "uv run --locked python -m unittest discover -s tests -v",
+        "command": "uv run --locked python recipe.py verify && uv run --locked python -m unittest discover -s tests -v",
         "cwd": "core"
       }
     },

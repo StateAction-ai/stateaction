@@ -615,6 +615,11 @@ def land(
                     )
                 head = git(repo, "rev-parse", "HEAD")
                 if git(repo, "rev-parse", "HEAD^") != base:
+                    if expected_head is not None:
+                        return refuse(
+                            "base_moved",
+                            "the expected head needs a rebase and renewed local qualification",
+                        )
                     log(f"land: main moved; rebasing {pr['branch']} onto {base[:12]}")
                     before_runner = runner_ids(repo)
                     before_patch = patch_id(repo, head)
@@ -676,6 +681,11 @@ def land(
                                 "GitHub does not report the PR as MERGED"
                             )
                         return finish(0, "merged", None, mergedSha=merged["mergeSha"])
+                if expected_head is not None:
+                    return refuse(
+                        "base_moved",
+                        "origin/main moved during the gate for the expected head",
+                    )
                 log("land: main moved after the gate; rebasing and gating again")
             return refuse("base_moved", "origin/main kept moving; resubmit")
     except _ReExec as request:  # the auth block has been left: no secret outlives exec
@@ -742,7 +752,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pr", type=int, required=True)
     parser.add_argument("--repo", default=local_ci.GITHUB_REPO)
     parser.add_argument(
-        "--expected-head", help="refuse unless the PR head is exactly this sha"
+        "--expected-head",
+        help="land only this exact PR head and refuse if main moves",
     )
     args = parser.parse_args(argv)
 

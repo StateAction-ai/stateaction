@@ -2,13 +2,13 @@
 
 The verifier uses Modal 1.6.4 and its private protobuf stub to inspect an existing deployment. It does not dispatch work. Call `inspect.aio`, `verify_binding.aio` or `probe_gpu_watch.aio` with a live Modal client. Each operation runs on the SDK event loop. The verifier checks the SDK version and protobuf descriptor before each operation. The contract test checks the RPC paths and callable signatures on the actual stub.
 
-Use `Bounds` with the trusted release configuration, including the object tag selected for the module. Pass the configured app and environment and the binding identity to `verify_binding`. It raises on a policy rejection, transport failure or timeout. The definition digest uses deterministic protobuf encoding in the `modal-proto-binding-v1` envelope. Issue fresh bindings for this verifier. The TypeScript controller continues to read its existing bindings.
+Use `Bounds` with the trusted release configuration, including the object tag selected for the module. Pass the configured app and environment and the binding identity to `verify_binding`. It raises on a policy rejection, transport failure or timeout. The definition digest uses deterministic protobuf encoding in the `modal-proto-binding-v1` envelope. Issue fresh bindings for this verifier.
 
 The default deadlines are five seconds per RPC and 20 seconds for the operation. The operation deadline includes manifest retrieval and the GPU watchdog check if verification requires it. RPCs use zero retries. A `ReadPolicy` reporter receives each RPC name, elapsed milliseconds and status on the SDK event loop. Keep the reporter synchronous and quick. It receives no response bytes or error messages. If the operation deadline cancels an in-flight RPC, its row reports `CANCELLED` and the operation raises `TimeoutError`. A per-RPC timeout reports `DEADLINE_EXCEEDED`.
 
 ## TypeScript predicates
 
-These are the local results from the pinned SDK on loopback and the comparison with `apps/jobs/src/modal-deployment.ts`, `modal-model-volume.ts` and `modal-sdk.ts`.
+These are the local results from the pinned SDK on loopback and the original cross-language comparison before the Python cutover.
 
 | TypeScript predicate                                                                       | Local result | Python check                                                                                                                                                     |
 | ------------------------------------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -30,6 +30,6 @@ These are the local results from the pinned SDK on loopback and the comparison w
 
 ## Local checks
 
-From the repository root, install the pinned pnpm dependencies, then run `pnpm exec nx run modal-verifier-python:test`. The tests send scrubbed protobuf fixtures through the real Python and TypeScript transports. They also rehearse scheduling agreement, disagreement, lost deployment acknowledgement and cleanup with local fixtures. The test emits no hosted activity when run with the loopback endpoint.
+From the repository root, install the pinned pnpm dependencies, then run `pnpm exec nx run modal-verifier-python:test`. The tests send scrubbed protobuf fixtures through the pinned Python transport and rehearse scheduling drift, lost deployment acknowledgement and cleanup. The test emits no hosted activity when run with the loopback endpoint.
 
-The attended hosted operator lives in `operator/`. Prepare its SHA-256 manifest from the exact head and frozen dependency locks before requesting an approved window. The operator publishes one temporary CPU function with no ongoing container minimum and compares only its scheduling fields. It records gross billing before and after and verifies that the exact app is stopped and no longer resolvable by name. The `cleanup` mode resumes the stop verification using the same manifest and receipt.
+The attended hosted operator lives in `operator/`. Prepare its SHA-256 manifest from the exact head and frozen dependency locks before requesting an approved window. The operator publishes one temporary CPU function with no ongoing container minimum and compares the verifier's scheduling fields to a second read by exact function ID. It records gross billing before and after and verifies that the exact app is stopped and no longer resolvable by name. The `cleanup` mode resumes the stop verification using the same manifest and receipt.

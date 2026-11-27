@@ -14,7 +14,8 @@ export function parseRecipeId(param: string): string | null {
 
 export function recipeLabel(id: string): string {
   if (id === "flora-spike-c") return "FLORA Spike C + CPU hand tracking";
-  if (id === "indego_hosted_canary@1") return "IndEgo processing @1";
+  if (id.startsWith("indego_hosted_canary@"))
+    return "IndEgo processing @" + id.split("@")[1];
   return id.replaceAll("_", " ");
 }
 

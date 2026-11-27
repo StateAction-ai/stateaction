@@ -1,6 +1,4 @@
 import json
-import os
-import shutil
 import sys
 import unittest
 from dataclasses import asdict
@@ -8,17 +6,15 @@ from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-
 from google.protobuf.empty_pb2 import Empty
 from google.protobuf.message_factory import GetMessageClass
+from grpclib.const import Cardinality, Handler, Status
+from grpclib.server import Server
 from modal import Client
 from modal.exception import NotFoundError
 from modal_proto import api_pb2 as wire
-
-from test_verifier import FixtureWire, decode
-from grpclib.server import Server
-from grpclib.const import Cardinality, Handler, Status
 from stateaction_modal_verifier.verifier import ReadPolicy, Scheduling
+from test_verifier import FixtureWire, decode
 
 OPERATOR = Path(__file__).resolve().parents[1] / "operator"
 sys.path.insert(0, str(OPERATOR))
@@ -47,7 +43,7 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
         definition.handle_metadata.function_name = "scheduling_probe"
         definition.handle_metadata.base_function_id = FUNCTION_ID
         definition.function.function_name = "scheduling_probe"
-        variant = getattr(definition.function.ranked_functions[0], "function")
+        variant = definition.function.ranked_functions[0].function
         variant.app_name = NAME
         variant.function_name = "scheduling_probe"
         fixture.replies["FunctionGet"] = definition
@@ -73,20 +69,9 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
             }
         )
         self.addAsyncCleanup(self.client.close.aio)
+        self.rpc_results = []
         self.provider = ModalWindow(
-            self.client,
-            NAME,
-            ReadPolicy(),
-            self.endpoint,
-            os.environ
-            | {
-                "STATEACTION_MODAL_TEST": "loopback",
-                "MODAL_CONFIG_PATH": "/dev/null",
-                "MODAL_TOKEN_ID": "fixture",
-                "MODAL_TOKEN_SECRET": "offline",
-            },
-            OWNER,
-            shutil.which("node"),
+            self.client, NAME, ReadPolicy(report=self.rpc_results.append), OWNER
         )
         self.state = {}
         self.provider.preflight = AsyncMock()
@@ -136,17 +121,17 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
         state.update(createAttempted=True, appId=APP_ID)
 
     async def run_probe(self, expected_final="20"):
-        meter = AsyncMock(side_effect=[Decimal("20"), Decimal(expected_final)])
+        meter = AsyncMock(side_effect=[Decimal(20), Decimal(expected_final)])
         await run_window(self.provider, self.state, lambda: None, meter)
         self.assertEqual(meter.await_count, 2)
 
-    async def test_compares_same_id_using_the_real_typescript_sdk(self):
+    async def test_rereads_the_same_function_using_the_real_python_sdk(self):
         self.provider.deploy = self.deploy
         await self.run_probe()
         self.assertTrue(self.state["passed"])
         self.assertTrue(self.state["appStoppedAndAbsent"])
-        self.assertEqual(self.state["typescriptSchedule"], asdict(SCHEDULE))
-        self.assertEqual(self.state["typescriptRpc"]["status"], "OK")
+        self.assertEqual(self.state["recheckedSchedule"], asdict(SCHEDULE))
+        self.assertEqual(self.rpc_results[-1].status, "OK")
         self.assertEqual(self.state["grossDeltaUsd"], "0")
         requests = [
             request.function_id
@@ -165,31 +150,6 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
         )
         meter.assert_not_awaited()
 
-    async def test_control_projection_drops_unexpected_fields_before_persisting(self):
-        self.provider.deploy = self.deploy
-        read_control = self.provider.typescript_read
-
-        async def extra_fields(function_id):
-            code, control = await read_control(function_id)
-            control["rpc"].update(method="private", details="private")
-            control["scheduling"]["private"] = "private"
-            return code, control
-
-        self.provider.typescript_read = extra_fields
-        persisted = []
-        meter = AsyncMock(return_value=Decimal("20"))
-        await run_window(
-            self.provider,
-            self.state,
-            lambda: persisted.append(json.dumps(self.state)),
-            meter,
-        )
-        self.assertTrue(persisted)
-        self.assertTrue(all("private" not in entry for entry in persisted))
-        self.assertEqual(
-            self.state["typescriptRpc"]["method"], "FunctionGetSchedulingParams"
-        )
-
     async def test_stops_after_lost_create_acknowledgement(self):
         async def lost_ack(state, persist):
             state["createAttempted"] = True
@@ -206,7 +166,7 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_disagreement_still_stops_and_reads_gross(self):
         self.provider.deploy = self.deploy
-        read_control = self.provider.typescript_read
+        read_control = self.provider.read_scheduling
 
         async def different_schedule(function_id):
             self.fixture.replies[
@@ -214,7 +174,7 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
             ].autoscaler_configuration.settings.scaledown_window = 6
             return await read_control(function_id)
 
-        self.provider.typescript_read = different_schedule
+        self.provider.read_scheduling = different_schedule
         with self.assertRaisesRegex(WindowFailed, "^schedule_disagreement$"):
             await self.run_probe()
         self.assertTrue(self.state["appStoppedAndAbsent"])
@@ -226,11 +186,12 @@ class WindowTest(unittest.IsolatedAsyncioTestCase):
             await self.run_probe("20.26")
         self.assertTrue(self.state["appStoppedAndAbsent"])
 
-    async def test_typescript_control_does_not_retry_unavailable(self):
+    async def test_scheduling_recheck_does_not_retry_or_record_private_errors(self):
         self.fixture.schedule_error = Status.UNAVAILABLE
-        code, result = await self.provider.typescript_read(FUNCTION_ID)
-        self.assertEqual(code, 1)
-        self.assertEqual(result["rpc"]["status"], Status.UNAVAILABLE.value)
+        with self.assertRaisesRegex(Exception, "private provider message"):
+            await self.provider.read_scheduling(FUNCTION_ID)
+        self.assertEqual(self.rpc_results[-1].status, "UNAVAILABLE")
+        self.assertNotIn("private", repr(self.rpc_results))
         schedule_requests = [
             method
             for method, _ in self.fixture.received

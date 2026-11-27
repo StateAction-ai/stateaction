@@ -26,6 +26,24 @@ class ApiRejection(Exception):
         super().__init__(f"Jobs API rejected the request ({status}, {code})")
 
 
+async def reconcile_graph_request(send, lease_live, pause, *, observed=None):
+    for attempt in range(3):
+        if not lease_live():
+            raise AmbiguousApiError("Graph lease ended before acknowledgement")
+        try:
+            return await send()
+        except AmbiguousApiError:
+            if observed is not None and lease_live():
+                try:
+                    if await observed():
+                        return {"state": "recorded"}
+                except AmbiguousApiError:
+                    pass
+            if attempt == 2:
+                raise
+            await pause()
+
+
 def check_base(base: str, *, loopback: bool) -> None:
     url = urlsplit(base)
     try:
@@ -112,6 +130,27 @@ class JobsApi:
 
     async def status(self, job_id):
         return await self._call(self._path(job_id), "jobs.job-status.v3")
+
+    async def graph(self, job_id):
+        try:
+            return await self._call(self._path(job_id, "/graph"), "jobs.graph-run.v1")
+        except ApiRejection as error:
+            if error.status != 404:
+                raise
+            return None
+
+    async def graph_action(self, job_id, action, **facts):
+        payload = {"action": action, **facts}
+        parse_contract("jobs.graph-control.v1", payload)
+        verifies_objects = action == "prepare_graph" or (
+            action == "record_node_result" and facts["state"] == "succeeded"
+        )
+        return await self._call(
+            self._path(job_id, "/graph"),
+            "jobs.graph-control-result.v1",
+            payload,
+            timeout=56 * 60 if verifies_objects else None,
+        )
 
     async def recipe(self, job_id):
         try:

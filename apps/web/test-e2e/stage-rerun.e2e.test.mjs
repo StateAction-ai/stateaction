@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
-import { request } from "node:http";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -18,7 +17,7 @@ const renderCli =
   path("../../../artifacts/platform-tools/render/render");
 
 test(
-  "hand-pose only reruns a real seeded recipe and replays a lost confirmation",
+  "staff can review archived hand and caption reruns with intact lineage",
   { timeout: 240000 },
   async () => {
     const dirs = newSeedDirs();
@@ -37,7 +36,7 @@ test(
         python,
         renderCli,
         scenarios: { ok: SYNTHETIC_SCENARIOS.ok },
-        afterSeed: async (recordings, runJob) => {
+        afterSeed: async (recordings, runJob, rerunDeps) => {
           const parent = recordings.find(
             (recording) => recording.scenario === "ok",
           );
@@ -61,13 +60,49 @@ test(
             scope: "only",
           };
           const url = `/api/v1/recordings/${parent.recordingId}/stage-reruns`;
-          const post = (path, body) =>
-            call(stack.origin, path, {
+          const { stageRerunRoutes } = await import(
+            "../../../packages/server/dist/jobs/stage-rerun-http.js"
+          );
+          const fixtureReruns = stageRerunRoutes(
+            async () => ({
+              ok: true,
+              principal: { userId: stack.users.staff.id },
+              headers: new Headers(),
+            }),
+            () => rerunDeps,
+          );
+          const post = async (path, body) => {
+            if (path === url || path === url + "/plan") {
+              const mutation =
+                path === url ? fixtureReruns.confirm : fixtureReruns.plan;
+              const response = await mutation(
+                new Request(stack.origin + path, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify(body),
+                }),
+                parent.recordingId,
+              );
+              return { status: response.status, text: await response.text() };
+            }
+            return call(stack.origin, path, {
               method: "POST",
               jar: staff,
               headers: browserHeaders(stack.origin),
               body: JSON.stringify(body),
             });
+          };
+          assert.equal(
+            (
+              await call(stack.origin, url + "/plan", {
+                method: "POST",
+                jar: staff,
+                headers: browserHeaders(stack.origin),
+                body: JSON.stringify(input),
+              })
+            ).status,
+            404,
+          );
           const markBase = `/api/v1/recordings/${parent.recordingId}`;
           const baseline = await call(stack.origin, `${markBase}/annotations`, {
             jar: staff,
@@ -116,38 +151,8 @@ test(
             expectedPlanSha256: plan.planSha256,
             expectedMaxGpuCostUsd: "0.00",
           };
-          await new Promise((resolve, reject) => {
-            const req = request(
-              stack.origin + url,
-              {
-                method: "POST",
-                headers: browserHeaders(stack.origin, {
-                  cookie: staff.header(),
-                }),
-              },
-              (res) => {
-                if (res.statusCode !== 201) {
-                  let error = "";
-                  res.setEncoding("utf8");
-                  res.on("data", (chunk) => {
-                    if (error.length < 2048) error += chunk;
-                  });
-                  res.on("end", () =>
-                    reject(
-                      new Error(
-                        `Confirmation expected 201, got ${res.statusCode}: ${error.slice(0, 2048)}`,
-                      ),
-                    ),
-                  );
-                  return;
-                }
-                res.destroy();
-                resolve();
-              },
-            );
-            req.on("error", reject);
-            req.end(JSON.stringify(command));
-          });
+          const first = await post(url, command);
+          assert.equal(first.status, 201, first.text);
           const replay = await post(url, command);
           assert.equal(replay.status, 200, replay.text);
           assert.deepEqual(JSON.parse(replay.text).data, {

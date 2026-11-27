@@ -47,6 +47,31 @@ test("hosted slugs must be <workflow>/process-recording; bare name only for the 
   );
 });
 
+test("local dispatch requires an explicit loopback runner even with hosted credentials present", () => {
+  assert.equal(
+    renderTaskStarterFromEnv({
+      APP_ENV: "local",
+      PROCESS_RECORDING_TASK_SLUG: "workflow/process-recording",
+      RENDER_API_KEY: "unused-test-token",
+    }),
+    null,
+  );
+  for (const url of [
+    "http://example.test:8120",
+    "https://localhost:8120",
+    "http://user@localhost:8120",
+  ]) {
+    assert.throws(
+      () =>
+        renderTaskStarterFromEnv({
+          APP_ENV: "local",
+          RENDER_LOCAL_DEV_URL: url,
+        }),
+      /loopback HTTP/,
+    );
+  }
+});
+
 const base: RecoverySnapshot = {
   jobId: "j",
   recordingId: "r",

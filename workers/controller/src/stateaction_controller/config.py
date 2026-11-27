@@ -9,6 +9,7 @@ from functools import cache
 from pathlib import Path
 
 from stateaction_contracts import parse_contract
+from stateaction_contracts.recipe_graph import MODULES as GRAPH_MODULES
 from stateaction_contracts.validate import _api_dir
 
 from .api import check_base
@@ -146,8 +147,10 @@ def load_settings(env=os.environ):
         manifest = modules().get(module)
         if (
             not sep
-            or not manifest
-            or manifest.get("localOnly")
+            or (
+                module not in GRAPH_MODULES
+                and (not manifest or manifest.get("localOnly"))
+            )
             or module == HAND_POSE
             or module in targets
             or not NAME.fullmatch(stage_app)

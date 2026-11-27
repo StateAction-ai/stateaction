@@ -75,9 +75,9 @@ export default async function RecordingPage({
       : null;
   const bulk =
     retryTarget?.kind === "failed_clips"
-      ? ({
-          request: { schemaVersion: 2, scope: "failed_clips" },
-        } as const)
+      ? retryTarget.clips.some(({ graph }) => graph)
+        ? ({ graph: { scope: "failed_clips" } } as const)
+        : null
       : planningAction;
 
   return (

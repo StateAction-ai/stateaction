@@ -84,7 +84,7 @@
       "argv": [
         "bash",
         "-c",
-        "set -e; echo toolchain:node=$(node --version); echo toolchain:pnpm=$(pnpm --version); echo toolchain:uv=$(uv --version); echo toolchain:python=$(python3 --version); echo toolchain:java=$(java -version 2>&1 | grep -m1 version); echo toolchain:flutter=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"frameworkVersion\"])'); echo toolchain:dart=$(dart --version 2>&1); pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=2 --prefer-offline; uv sync --project workers/processing --locked; python3 scripts/platform/install-render.py"
+        "set -e; echo toolchain:node=$(node --version); echo toolchain:pnpm=$(pnpm --version); echo toolchain:uv=$(uv --version); echo toolchain:python=$(python3 --version); echo toolchain:java=$(java -version 2>&1 | grep -m1 version); echo toolchain:flutter=$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"frameworkVersion\"])'); echo toolchain:dart=$(dart --version 2>&1); pnpm install --frozen-lockfile --child-concurrency=1 --network-concurrency=2 --prefer-offline; uv sync --project workers/processing --locked; uv sync --project workers/controller --locked; python3 scripts/platform/install-render.py"
       ]
     },
     {

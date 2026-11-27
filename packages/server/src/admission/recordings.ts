@@ -27,10 +27,8 @@ import {
   sealRequestSha256,
   SOURCE_MANIFEST_MAX_BYTES,
 } from "./inventory.js";
-import {
-  captureRecipeDefinition,
-  matchCaptureSource,
-} from "./capture-profiles.js";
+import { matchCaptureSource } from "./capture-profiles.js";
+import { publishedRecipe } from "../jobs/recipe-release.js";
 import { simulatedCaptureInputsEnabled } from "./simulation.js";
 import {
   isPublicVideoProvenance,
@@ -639,7 +637,7 @@ export async function admitInTransaction(
     const source = matchCaptureSource(e);
     const recipeId = selection?.request.recipeId ?? source?.defaultRecipeId;
     const recipe =
-      recipeId === undefined ? undefined : captureRecipeDefinition(recipeId);
+      recipeId === undefined ? undefined : publishedRecipe(recipeId);
     let held: HeldAdmission | undefined;
     if (!source) {
       held = {
@@ -650,7 +648,7 @@ export async function admitInTransaction(
     } else if (
       deps.config.publicVideoCanary ||
       !recipe ||
-      !source.allowedRecipeIds.includes(recipe.recipeId)
+      !source.allowedRecipeIds.some((allowed) => allowed === recipe.recipe)
     ) {
       if (selection)
         throw new CatalogError(
@@ -700,8 +698,8 @@ export async function admitInTransaction(
         held?.code ?? null,
         source?.id ?? null,
         source?.allowedRecipeIds ?? [],
-        selectedRecipe?.recipeId ?? null,
-        selectedRecipe ? requestSha256(selectedRecipe) : null,
+        selectedRecipe?.recipe ?? null,
+        selectedRecipe?.recipeSha256 ?? null,
         selectedRecipe ?? null,
         selection?.staffUserId ?? null,
         {

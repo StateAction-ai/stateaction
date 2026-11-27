@@ -477,7 +477,7 @@ async function main() {
           { key: "STATEACTION_API_URL", value: webUrl },
         ],
         serviceDetails: {
-          runtime: "node",
+          runtime: bpCron.runtime,
           plan: bpCron.plan,
           region: config.region,
           schedule: bpCron.schedule,
@@ -509,7 +509,7 @@ async function main() {
             "--branch",
             config.branch,
             "--runtime",
-            "node",
+            bpWf.runtime,
             "--region",
             config.region,
             "--build-command",

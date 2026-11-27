@@ -126,7 +126,20 @@ export function recipeExecutionDeadlineSeconds(recipe: RecipeBudget): number {
 
 /** Pin clip-specific output caps and the deadline from the admitted source range. */
 export function clipAdmissionBudget(config: JobsConfig, task: ClipTaskInputV4) {
-  const range = task.clip.sourceRange;
+  return clipWorkBudget(
+    config,
+    task.clip.sourceRange,
+    task.recipe.stages
+      .filter((stage) => stage.enabled)
+      .reduce((sum, stage) => sum + stage.resources.budgetSeconds, 0),
+  );
+}
+
+export function clipWorkBudget(
+  config: JobsConfig,
+  range: ClipTaskInputV4["clip"]["sourceRange"],
+  workSeconds: number,
+) {
   const frames = range.end_ordinal - range.start_ordinal;
   const durationNs = BigInt(range.end_ts_ns) - BigInt(range.start_ts_ns);
   const oneFrame = frames === 1;
@@ -146,6 +159,14 @@ export function clipAdmissionBudget(config: JobsConfig, task: ClipTaskInputV4) {
   const durationMargin =
     Math.max(0, RECIPE_DEADLINE_MARGIN_SECONDS - startMargin) *
     (Math.min(durationSeconds, MAX_RECORDING_SECONDS) / MAX_RECORDING_SECONDS);
+  const deadlineSeconds = workSeconds + startMargin + Math.ceil(durationMargin);
+  if (
+    !Number.isSafeInteger(deadlineSeconds) ||
+    deadlineSeconds > RECIPE_DEADLINE_MAX_SECONDS
+  )
+    throw new Error(
+      RECIPE_DEADLINE_ERROR_CODE + ": clip budget exceeds the deadline ceiling",
+    );
   return {
     maxOutputFiles: jobOutputFileLimit(
       config.limits.outputFileCeiling ?? config.limits.maxOutputFiles,
@@ -154,10 +175,7 @@ export function clipAdmissionBudget(config: JobsConfig, task: ClipTaskInputV4) {
     maxOutputBytes: String(
       jobOutputByteLimit(Number(config.limits.maxOutputBytes), chunks),
     ),
-    deadlineSeconds: budgetWithMargin(
-      task.recipe,
-      startMargin + Math.ceil(durationMargin),
-    ),
+    deadlineSeconds,
   };
 }
 

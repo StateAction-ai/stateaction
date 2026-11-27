@@ -146,6 +146,14 @@ def enforce_single_process(*, allow_threads: bool = False) -> None:
         ) from error
 
 
+def confirm_local_isolation(*, allow_threads: bool) -> None:
+    enforce_single_process(allow_threads=allow_threads)
+    try:
+        os.write(_ISOLATION_FD, b"2" if allow_threads else b"1")
+    finally:
+        os.close(_ISOLATION_FD)
+
+
 def _read_bootstrap(execution_ref: str) -> dict[str, Any]:
     raw = sys.stdin.buffer.read(_MAX_BOOTSTRAP_BYTES + 1)
     if len(raw) > _MAX_BOOTSTRAP_BYTES:
@@ -284,12 +292,7 @@ def run(execution_ref: str) -> int:
     if isolated_pipeline:
         if not _pipeline_present(isolated_pipeline):
             raise WorkerExit(EXIT_PIPELINE_UNAVAILABLE, "PipelineUnavailable")
-        allow_threads = isolated_pipeline != _FIXTURE_PIPELINE
-        enforce_single_process(allow_threads=allow_threads)
-        try:
-            os.write(_ISOLATION_FD, b"2" if allow_threads else b"1")
-        finally:
-            os.close(_ISOLATION_FD)
+        confirm_local_isolation(allow_threads=isolated_pipeline != _FIXTURE_PIPELINE)
     boot = _read_bootstrap(execution_ref)
     pipeline = boot["pipeline"]
     if isolated_pipeline and (

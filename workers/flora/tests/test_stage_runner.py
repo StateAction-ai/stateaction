@@ -134,7 +134,6 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(pairs["flora_tempseg_hf@1"], f"{app}/flora_tempseg")
         self.assertEqual(pairs["flora_captioner_vllm_fp8@1"], f"{app}/flora_captioner")
         self.assertEqual(set(env), {"MODAL_STAGE_FUNCTIONS"})
-        # The TypeScript controller test (apps/jobs/test/modal-config.test.ts) parses this exact string.
         self.assertEqual(
             env["MODAL_STAGE_FUNCTIONS"],
             "flora_captioner_hf@1=stateaction-flora-stages/flora_captioner,"

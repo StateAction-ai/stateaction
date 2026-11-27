@@ -64,11 +64,11 @@ export class JobCapabilityStore implements ServiceCredentialStore {
     }>(
       `SELECT id, execution_deadline FROM jobs
        WHERE capability_token_sha256 = $1 AND state = 'running' AND claimed_at IS NOT NULL
-         AND recipe IS NULL`,
+         AND recipe IS NULL AND NOT EXISTS (SELECT 1 FROM job_recipe_graphs g WHERE g.job_id = jobs.id)`,
       [sha256],
     );
     const job = rows[0];
-    if (!job) return this.stage(sha256);
+    if (!job) return (await this.node(sha256)) ?? this.stage(sha256);
     return {
       credentialId: job.id,
       kind: "worker",
@@ -77,6 +77,35 @@ export class JobCapabilityStore implements ServiceCredentialStore {
       jobId: job.id,
       // No deadline recorded means no authority: fail closed.
       expiresAt: job.execution_deadline ?? new Date(0),
+      revokedAt: null,
+      tokenSha256: sha256,
+    };
+  }
+
+  private async node(sha256: string): Promise<ServiceCredentialRecord | null> {
+    const {
+      rows: [claim],
+    } = await this.pool.query<{
+      job_id: string;
+      node_id: string;
+      execution_deadline: Date;
+    }>(
+      `SELECT c.job_id, c.node_id, j.execution_deadline
+       FROM job_recipe_node_claims c JOIN jobs j ON j.id = c.job_id
+       WHERE c.capability_sha256 = $1 AND c.claimed_at IS NOT NULL
+         AND j.state = 'running' AND NOT EXISTS (
+           SELECT 1 FROM job_recipe_node_evidence e WHERE e.job_id = c.job_id AND e.node_id = c.node_id
+         )`,
+      [sha256],
+    );
+    if (!claim) return null;
+    return {
+      credentialId: "node:" + claim.node_id,
+      kind: "worker",
+      audience: this.audience,
+      scopes: this.scopes.filter((scope) => scope === "job:output"),
+      jobId: claim.job_id,
+      expiresAt: claim.execution_deadline,
       revokedAt: null,
       tokenSha256: sha256,
     };

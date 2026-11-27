@@ -1,0 +1,64 @@
+{
+  "contract": "http.graph-retry-request.v1",
+  "cases": [
+    {
+      "name": "explicit leaf rerun requires a clip and parent",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clipId": "ad30fea5-011b-4cb1-9820-f076c0401e6a",
+          "parentJobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "nodes": [
+            "track_hands"
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "recording batch requests eligible failed clips",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "scope": "failed_clips"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "batch requests cannot pin a single clip",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "scope": "failed_clips",
+          "clipId": "ad30fea5-011b-4cb1-9820-f076c0401e6a"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    },
+    {
+      "name": "only a graph node ID is allowed",
+      "input": {
+        "document": {
+          "schemaVersion": 1,
+          "clipId": "ad30fea5-011b-4cb1-9820-f076c0401e6a",
+          "parentJobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "nodes": [
+            "../hand"
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

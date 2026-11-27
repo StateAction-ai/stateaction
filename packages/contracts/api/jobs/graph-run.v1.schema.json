@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/graph-run.v1.json",
+  "title": "Admitted graph and current scoped execution state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task", "graph", "nodes", "parentNodes"],
+  "properties": {
+    "task": {
+      "$ref": "https://stateaction.ai/schemas/jobs/task-input.v6.json"
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": true,
+      "maxProperties": 32
+    },
+    "nodes": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/NodeState"
+      }
+    },
+    "parentNodes": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/NodeState"
+      }
+    }
+  },
+  "$defs": {
+    "NodeState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "executionRef",
+        "startDeadline",
+        "startedAt",
+        "claimedAt",
+        "binding",
+        "budgetSeconds",
+        "verifiedOutputs"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "pending",
+            "issued",
+            "outstanding",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "skipped"
+          ]
+        },
+        "executionRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,128}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "binding": {
+          "type": "object",
+          "additionalProperties": true,
+          "maxProperties": 32
+        },
+        "startDeadline": {
+          "anyOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+            },
+            { "type": "null" }
+          ]
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+            },
+            { "type": "null" }
+          ]
+        },
+        "claimedAt": {
+          "anyOf": [
+            {
+              "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+            },
+            { "type": "null" }
+          ]
+        },
+        "budgetSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        },
+        "verifiedOutputs": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "port",
+              "artifactType",
+              "fileId",
+              "sha256",
+              "sizeBytes"
+            ],
+            "properties": {
+              "port": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}$"
+              },
+              "artifactType": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+              },
+              "fileId": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+              },
+              "sha256": {
+                "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+              },
+              "sizeBytes": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,10}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

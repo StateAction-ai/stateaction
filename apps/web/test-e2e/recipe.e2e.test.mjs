@@ -1,4 +1,4 @@
-// SA-100: the stub recipe end to end on every gate run, zero model cost.
+// SA-100: archived stage recipe coverage on every gate run, with zero model cost.
 //
 // The committed SA-50 golden MCAP (packages/contracts/capture/golden/valid.mcap, re-framed as an
 // indexed MCAP by workers/processing/tools/golden_indexed_mcap.py) is uploaded as a capture
@@ -7,8 +7,8 @@
 // runner runs process-recording, and the real stub segment/caption children plus the real CPU
 // hand_pose seal produce the accepted result. The Review and Pipeline pages are then read in Chrome.
 // Scenarios live in seed-scenarios.mjs (RECIPE_E2E_SCENARIOS); the seed asserts each ends in its
-// expected states on the first attempt. Needs the built web/server/jobs apps, the processing venv,
-// the Render CLI and Chrome (the same inputs as the SA-96 dev seed).
+// expected states on the first attempt. Uses the built web/server apps, Python fixture workflow,
+// Render CLI and Chrome (the same inputs as the SA-96 dev seed).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";

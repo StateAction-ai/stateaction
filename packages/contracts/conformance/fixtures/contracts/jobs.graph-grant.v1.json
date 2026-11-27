@@ -1,0 +1,77 @@
+{
+  "contract": "jobs.graph-grant.v1",
+  "cases": [
+    {
+      "name": "recording scope grant pins the source and bound worker",
+      "input": {
+        "document": {
+          "task": {
+            "schemaVersion": 6,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "profileRevision": "cpu-mediapipe-1",
+            "kind": "clip_plan",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "rgbProfile": "h264_mcap_v1",
+            "recipeRef": "cpu_hand_canary@1",
+            "recipeSha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e",
+            "sourceSeconds": 120
+          },
+          "graph": {
+            "recipeSha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e"
+          },
+          "binding": {},
+          "source": {
+            "fileId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sizeBytes": "24",
+            "readUrl": "http://127.0.0.1:9/object"
+          },
+          "clipPlan": null,
+          "producerFiles": {},
+          "deadline": "2026-11-27T00:00:00.000Z",
+          "uploadToken": "sa_svc_ttttttttttttttttttttttttttttttttttttttttttt"
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "input grant must pin source bytes",
+      "input": {
+        "document": {
+          "task": {
+            "schemaVersion": 6,
+            "jobId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "targetId": "3f1b8c2e-6a4d-4e7b-9c1a-2b5d8e9f0a11",
+            "profileRevision": "cpu-mediapipe-1",
+            "kind": "clip_plan",
+            "sourceManifestSha256": "8582d66a5ab61476bc09e1d678f94573144db3627d41d586359dc7dddc7ec597",
+            "rgbProfile": "h264_mcap_v1",
+            "recipeRef": "cpu_hand_canary@1",
+            "recipeSha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e",
+            "sourceSeconds": 120
+          },
+          "graph": {
+            "recipeSha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e"
+          },
+          "binding": {},
+          "source": {
+            "fileId": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+            "sizeBytes": "24",
+            "readUrl": "http://127.0.0.1:9/object"
+          },
+          "clipPlan": null,
+          "producerFiles": {},
+          "deadline": "2026-11-27T00:00:00.000Z",
+          "uploadToken": "sa_svc_ttttttttttttttttttttttttttttttttttttttttttt"
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

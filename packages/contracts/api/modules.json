@@ -230,6 +230,38 @@
         "engine": "mediapipe",
         "requires": ["weights_sha256"]
       }
+    },
+    {
+      "moduleId": "hand_pose_cpu",
+      "version": 1,
+      "stage": "hand_pose",
+      "description": "CPU hand inference for an admitted clip range, with source-frame identity and measured hand presence.",
+      "license": {
+        "id": "Apache-2.0",
+        "commercialUse": true
+      },
+      "gpu": {
+        "minimum": "none",
+        "supported": ["none"]
+      },
+      "localOnly": false,
+      "outputs": [
+        "clip_mp4",
+        "hand_arrays_npz",
+        "hand_observations_json",
+        "frame_map_json",
+        "thumbnail_jpeg",
+        "viewer_rrd",
+        "hand_presence_json",
+        "recording_mp4",
+        "diagnostic_blob"
+      ],
+      "provenance": {
+        "modelName": "mediapipe_hand_landmarker",
+        "modelRevision": null,
+        "engine": "mediapipe",
+        "requires": ["weights_sha256"]
+      }
     }
   ]
 }

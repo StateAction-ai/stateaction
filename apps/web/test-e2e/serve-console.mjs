@@ -5,7 +5,7 @@
 // `--seed failure-fixtures` (SA-96) also uploads simulated recordings through the real SA-71 path and
 // runs them through the local loopback controller with stub or replay modules (zero model spend),
 // then prints the recordings, job ids and stage states. Needs the built web app, the built jobs
-// app (`pnpm --filter @stateaction/jobs... build`), the processing venv and the Render CLI.
+// app, the controller and processing venvs, and the pinned Render CLI.
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
