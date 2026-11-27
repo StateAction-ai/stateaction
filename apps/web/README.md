@@ -8,7 +8,9 @@ Start with `make web` after the setup in [local tooling](../../scripts/platform/
 
 ## Authentication (SA-15)
 
-`/login`, `/` and sign-out use the single Better Auth instance at `/api/auth/*` (from `@stateaction/server/auth`). `GET /api/v1/me` returns the server identity, access status (`active`/`pending`/`disabled`) and roles; roles never come from the client. Browser mutations send `X-StateAction-Client` and JSON. Set the auth values from `.env.example` (replace `BETTER_AUTH_SECRET`) before `make web`; until then sign-in reports itself unavailable. `pnpm exec nx run web:auth-e2e` runs the production build against an isolated Postgres. Design, settings map and open gates: [auth and access](../../docs/components/auth-and-access.md).
+`/` is the public landing page. Its navigation links to `/login`. On Google-only deployments, sign-in uses the configured authentication origin so OAuth state and session cookies share the registered callback host. After sign-in, `/console` redirects staff to Recordings and customers to Data browser.
+
+`/login`, `/console` and sign-out use the single Better Auth instance at `/api/auth/*` (from `@stateaction/server/auth`). `GET /api/v1/me` returns the server identity, access status (`active`/`pending`/`disabled`) and roles; roles never come from the client. Browser mutations send `X-StateAction-Client` and JSON. Set the auth values from `.env.example` (replace `BETTER_AUTH_SECRET`) before `make web`; until then sign-in reports itself unavailable. `pnpm exec nx run web:auth-e2e` runs the production build against an isolated Postgres. Design, settings map and open gates: [auth and access](../../docs/components/auth-and-access.md).
 
 Collector recording routes (from `@stateaction/server/recordings`): `POST /api/v1/recordings`, `POST /api/v1/recordings/{recordingId}/seal` and `GET /api/v1/recordings/{recordingId}`. They require an enabled collector session on every request and need the explicit `PROCESSING_PROFILE_REVISION`/`SUPPORTED_RGB_PROFILES` and S3 settings; source bytes never pass through them. See [recording admission](../../docs/components/recording-admission.md).
 

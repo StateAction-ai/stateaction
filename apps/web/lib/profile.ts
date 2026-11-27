@@ -1,11 +1,3 @@
-/** Display-name rules live in one pure module shared with the server route. */
-export {
-  DISPLAY_NAME_MAX,
-  DISPLAY_NAME_MESSAGES,
-  parseDisplayName,
-  type DisplayNameResult,
-} from "@stateaction/server/display-name";
-
 export function initialsOf(name: string, email: string): string {
   const words = name.trim().split(/\s+/u).filter(Boolean);
   // Initials come from letters/digits only, so "<b>" or emoji never leak in.

@@ -16,11 +16,12 @@ export function usePlayback(
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [rate, setRateState] = useState(1);
-  const [src, setSrc] = useState<string | null>(null);
+  const directUrl = source.kind === "direct" ? source.url : null;
+  const [brokerUrl, setBrokerUrl] = useState<string | null>(null);
   const [srcKey, setSrcKey] = useState(0);
   const [seekCount, setSeekCount] = useState(0);
   const [status, setStatus] = useState<VideoStatus>(
-    source.kind === "broker" ? "loading" : "none",
+    source.kind === "none" ? "none" : "loading",
   );
   const tRef = useRef(0);
   const rateRef = useRef(1);
@@ -32,7 +33,8 @@ export function usePlayback(
   const readPath = source.kind === "broker" ? source.readPath : null;
   const readMethod =
     source.kind === "broker" ? (source.readMethod ?? "POST") : "POST";
-  const range = source.kind === "broker" ? source.range : undefined;
+  const hasMedia = source.kind !== "none";
+  const range = hasMedia ? source.range : undefined;
   const offset = range?.startS ?? 0;
   const rangeDuration = range?.durationS;
   const lastSourceTime =
@@ -68,7 +70,7 @@ export function usePlayback(
       });
       if (controller.signal.aborted) return;
       expiresAt.current = grant.expiresAt;
-      setSrc(grant.url);
+      setBrokerUrl(grant.url);
       // A new grant may return the same URL within the same second.
       setSrcKey((key) => key + 1);
     } catch {
@@ -85,12 +87,12 @@ export function usePlayback(
   useEffect(() => {
     renewals.current = 0;
     if (readPath) void renew();
-    else setStatus("none");
+    else setStatus(directUrl ? "loading" : "none");
     return () => {
       request.current?.abort();
       request.current = null;
     };
-  }, [readPath, renew]);
+  }, [directUrl, readPath, renew]);
 
   const playMedia = useCallback((el: HTMLVideoElement) => {
     void el.play().catch((error: DOMException) => {
@@ -152,7 +154,7 @@ export function usePlayback(
         }
         commit(next);
       }
-      if (!readPath) {
+      if (!hasMedia) {
         const next = Math.min(
           durationS,
           tRef.current + ((now - last) / 1000) * rateRef.current,
@@ -171,7 +173,7 @@ export function usePlayback(
     return () => cancelAnimationFrame(raf);
   }, [
     playing,
-    readPath,
+    hasMedia,
     durationS,
     commit,
     offset,
@@ -195,7 +197,7 @@ export function usePlayback(
       }
       if (!el || awaitingMedia.current) return;
       // Unbuffered seeks can require a new range request even with metadata loaded.
-      if (expiresAt.current <= Date.now()) {
+      if (readPath && expiresAt.current <= Date.now()) {
         void renew();
         return;
       }
@@ -206,6 +208,7 @@ export function usePlayback(
       durationS,
       commit,
       renew,
+      readPath,
       playMedia,
       offset,
       rangeDuration,
@@ -229,10 +232,10 @@ export function usePlayback(
     wantPlay.current = true;
     setPlaying(true);
     if (el && !awaitingMedia.current) {
-      if (expiresAt.current <= Date.now()) void renew();
+      if (readPath && expiresAt.current <= Date.now()) void renew();
       else playMedia(el);
     }
-  }, [durationS, renew, seek, playMedia, rangeDuration]);
+  }, [durationS, readPath, renew, seek, playMedia, rangeDuration]);
 
   const setRate = useCallback((next: number) => {
     rateRef.current = next;
@@ -245,7 +248,7 @@ export function usePlayback(
     t,
     playing,
     rate,
-    src,
+    src: directUrl ?? (readPath ? brokerUrl : null),
     srcKey,
     seekCount,
     status,
@@ -253,7 +256,15 @@ export function usePlayback(
     seek,
     toggle,
     setRate,
-    onVideoError: renew,
+    onVideoError: () => {
+      if (readPath) {
+        void renew();
+      } else {
+        wantPlay.current = false;
+        setPlaying(false);
+        setStatus("unavailable");
+      }
+    },
     onLoadedMetadata,
     onSeeked,
     onPlaying: () => {

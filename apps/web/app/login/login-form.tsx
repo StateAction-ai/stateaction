@@ -25,7 +25,7 @@ export function LoginForm({ password, google }: Props) {
         }),
       });
       if (response.ok) {
-        window.location.replace("/");
+        window.location.replace("/console");
         return;
       }
       setError(
@@ -50,7 +50,7 @@ export function LoginForm({ password, google }: Props) {
         headers: clientHeaders,
         credentials: "same-origin",
         cache: "no-store",
-        body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+        body: JSON.stringify({ provider: "google", callbackURL: "/console" }),
       });
       const body = (await response.json()) as { url?: unknown };
       if (response.ok && typeof body.url === "string") {

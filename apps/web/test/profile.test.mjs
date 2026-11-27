@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { initialsOf, parseDisplayName } from "../lib/profile.ts";
+import { parseDisplayName } from "@stateaction/server/display-name";
+import { initialsOf } from "../lib/profile.ts";
 import { navigationFor } from "../lib/console-session.ts";
 import {
   clearPrivateState,

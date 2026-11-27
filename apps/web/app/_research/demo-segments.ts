@@ -1,0 +1,71 @@
+// Display excerpt of the verified IndEgo review projection. Times are in seconds.
+export const demoSegments = [
+  [
+    0.0,
+    9.3,
+    "0",
+    "93",
+    "Peel the yellow tape off the top of the projector with the left hand.",
+  ],
+  [
+    9.3,
+    17.6,
+    "93",
+    "176",
+    "press the sticky notes on the back of the machine with the right hand",
+  ],
+  [
+    17.6,
+    24.1,
+    "176",
+    "241",
+    "hold the computer tower with the left hand and rotate the key in the computer tower with the right hand",
+  ],
+  [
+    24.4,
+    29.6,
+    "244",
+    "296",
+    "pull the side panel of the computer tower with both hands and place the side panel on the table with both hands",
+  ],
+] as const;
+
+// Display intervals from the matching hand-pose run.
+export const demoHandPresence = {
+  left: [
+    [0.1, 0.2, "present"],
+    [0.8, 1.2, "present"],
+    [1.3, 1.4, "present"],
+    [2.8, 2.9, "present"],
+    [3.0, 3.1, "present"],
+    [3.7, 3.8, "present"],
+    [7.0, 9.0, "present"],
+    [9.1, 11.2, "present"],
+    [18.1, 18.4, "present"],
+    [18.8, 19.8, "present"],
+    [20.4, 22.7, "present"],
+    [22.9, 24.9, "present"],
+    [25.2, 25.3, "present"],
+    [25.6, 25.7, "present"],
+    [26.4, 27.0, "present"],
+    [27.1, 27.3, "present"],
+  ],
+  right: [
+    [0.0, 0.1, "present"],
+    [0.2, 0.8, "present"],
+    [1.2, 1.3, "present"],
+    [2.7, 2.8, "present"],
+    [2.9, 3.0, "present"],
+    [3.1, 3.2, "present"],
+    [9.0, 9.1, "present"],
+    [12.3, 17.0, "present"],
+    [17.1, 17.2, "present"],
+    [18.2, 21.1, "present"],
+    [21.6, 21.9, "present"],
+    [22.7, 24.4, "present"],
+    [24.6, 24.8, "present"],
+    [25.1, 25.3, "present"],
+    [25.4, 25.6, "present"],
+    [26.2, 26.4, "present"],
+  ],
+} as const;

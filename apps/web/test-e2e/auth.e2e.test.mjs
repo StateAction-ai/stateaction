@@ -218,11 +218,18 @@ after(async () => {
 });
 
 describe("Next.js production server with Better Auth", () => {
+  test("the root landing page is public and links to sign-in", async () => {
+    const home = await page("/");
+    assert.equal(home.status, 200);
+    assert.match(home.text, /Open-source egocentric data pipeline/);
+    assert.match(home.text, /href="\/login"[^>]*>Sign in<\/a>/);
+  });
+
   test("protected page redirects anonymous visitors to /login, privately", async () => {
-    const res = await page("/");
+    const res = await page("/console");
     assert.equal(res.status, 307);
     assert.match(res.headers.location, /\/login$/);
-    assertNoStore(res, "/");
+    assertNoStore(res, "/console");
   });
 
   test("login page offers local password sign-in, hides operator settings and is not cacheable", async () => {
@@ -265,6 +272,14 @@ describe("Next.js production server with Better Auth", () => {
     assert.deepEqual(body.data.access, { status: "active", roles: ["staff"] });
     const login = await page("/login", jar);
     assert.equal(login.status, 307, "signed-in users skip the login page");
+    assert.match(login.headers.location, /\/console$/);
+    const landing = await page("/", jar);
+    assert.equal(
+      landing.status,
+      200,
+      "a session does not hide the public root",
+    );
+    assert.match(landing.text, /Open-source egocentric data pipeline/);
   });
 
   test("page loads never extend the session; /api/v1/me extends row and cookie together", async () => {
@@ -412,7 +427,7 @@ describe("Next.js production server with Better Auth", () => {
     assert.equal(jar.cookies.get(SESSION), undefined);
     const replay = await call("/api/v1/me", { headers: { cookie: stale } });
     assert.equal(replay.status, 401);
-    const home = await page("/", undefined);
+    const home = await page("/console", undefined);
     assert.equal(home.status, 307);
     const replayPage = await call("/data-browser", {
       headers: { cookie: stale },
