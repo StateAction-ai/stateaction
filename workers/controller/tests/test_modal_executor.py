@@ -8,7 +8,7 @@ import pytest
 from modal._serialization import deserialize
 from modal_proto import api_pb2 as wire
 from stateaction_controller.config import Settings, modal_credentials
-from stateaction_controller.modal_controller import SpawnNotSent
+from stateaction_controller.modal_controller import SpawnCancelled, SpawnNotSent
 from stateaction_controller.modal_executor import ModalExecutor
 from stateaction_controller.results import parse_result
 from test_modal_controller import CALL, JOB
@@ -129,6 +129,53 @@ def test_spawn_uses_module_app_and_one_json_argument(adapter):
     assert sdk.lookups == [("flora-app", "segment", "development", executor.client)]
     assert len(sdk.spawns) == 1 and len(sdk.spawns[0]) == 1
     assert json.loads(sdk.spawns[0][0]) == PAYLOAD
+
+
+def test_before_submit_runs_on_caller_event_loop_not_synchronicity_loop(adapter):
+    executor, sdk = adapter
+    seen = []
+
+    async def run():
+        caller_loop = asyncio.get_running_loop()
+        ready = asyncio.Event()
+
+        async def before_submit():
+            assert asyncio.get_running_loop() is caller_loop
+            caller_loop.call_soon(ready.set)
+            await ready.wait()
+            seen.append("before_submit")
+            assert sdk.maps == []
+
+        call_id = await executor.spawn(
+            PAYLOAD, lambda: True, None, before_submit=before_submit
+        )
+        assert call_id == CALL
+
+    asyncio.run(run())
+    assert seen == ["before_submit"]
+    assert len(sdk.maps) == 1
+
+
+def test_before_submit_errors_do_not_submit_to_modal(adapter):
+    executor, sdk = adapter
+
+    async def fail_cancelled():
+        raise SpawnCancelled("cancelled before submit")
+
+    async def fail_runtime():
+        raise RuntimeError("hook failed before submit")
+
+    with pytest.raises(SpawnCancelled, match="cancelled before submit"):
+        asyncio.run(
+            executor.spawn(PAYLOAD, lambda: True, None, before_submit=fail_cancelled)
+        )
+    assert sdk.maps == []
+
+    with pytest.raises(SpawnNotSent):
+        asyncio.run(
+            executor.spawn(PAYLOAD, lambda: True, None, before_submit=fail_runtime)
+        )
+    assert sdk.maps == []
 
 
 def test_explicit_modal_credentials_are_required_before_client_creation():

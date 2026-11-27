@@ -111,6 +111,9 @@ Monthly cap **30 USD** (user, 2026-11-23). `config/render-deploy.json` holds the
 
 ### Deploy workflow and script
 
+For the schema 024 to 025 Python workflow transition, see the
+[Python recipe release record](python-recipe-release.md).
+
 `.github/workflows/deploy.yml` runs on `push` to `main`, explicit `deploy/*` tags, and manual `workflow_dispatch` (`environment`: `dev` = validate, price and plan only with no secrets; `production`; `mode`: `components` or `full`; `components`: `auto`, `web`, `migrations`, `cron`, `workflow`, `all`). `StateAction-ai/stateaction` is a public repository, so standard GitHub-hosted `ubuntu-24.04` runners and GitHub Environment protections are available without paid Actions minutes.
 
 - **Kill-switch (`AUTO_DEPLOY_ENABLED`):** Automatic `push` deploys on `main` run **only** when the repository variable `AUTO_DEPLOY_ENABLED` is `'true'` (default unset/off). While unset or false, every push to `main` still runs the read-only `validate` job (no secrets) and logs which components would have deployed. This keeps fenced cutovers such as SA-159 protected until explicitly enabled and gives an instant pause switch for future migrations or incidents.
@@ -122,7 +125,7 @@ Monthly cap **30 USD** (user, 2026-11-23). `config/render-deploy.json` holds the
   - Inside the `production` job, `auto` queries `render-deploy.mjs live-refs` and diffs each component against its currently live deployed SHA (falling back to `before..head`) so a previously failed or paused run catches up automatically on the next relevant push or manual `auto` dispatch.
 - **Full-stack deploys (`mode: full` or `deploy/*` tags):** Runs `scripts/deploy/render-deploy.sh production <ref>` (`provision`, `configure`, `migrate` + 24 h capability rotation, `deploy` all Render services, `smoke`, with web rollback on failure).
 - **Security boundaries:** Actions are pinned to commit SHAs, the token is read-only (`contents: read`), the ref must be an ancestor of `main` (and equal to `origin/main` tip for production), and the `production` GitHub environment holds the secrets (`RENDER_API_KEY`, `S3_*`, `APP_DB_PASSWORD`; optional `RENDER_DISPATCH_API_KEY`, `MODAL_TOKEN_*`, `GOOGLE_CLIENT_*`). Install and build run without secrets (`prepare`) only when migrations may execute; the `if: always()` `restore-allowlist` step verifies the DB allow-list is empty (no-op when already empty).
-- **Prerequisites before setting `AUTO_DEPLOY_ENABLED=true` (after SA-159):** (1) Complete the fenced SA-159 cutover so live production is caught up with migration `025` and SA-154; (2) verify the `RENDER_API_KEY` secret in the GitHub `production` environment has `services.read_write` scope; (3) verify the live Render services point to `https://github.com/StateAction-ai/stateaction`.
+- **Prerequisites before setting `AUTO_DEPLOY_ENABLED=true`:** (1) Migration `025` and the Python workflow cutover shipped in SA-159 (2026-11-27; custom domain `https://stateaction.ai` live); (2) verify the `RENDER_API_KEY` secret in the GitHub `production` environment has `services.read_write` scope; (3) verify the live Render services point to `https://github.com/StateAction-ai/stateaction`.
 
 ### What is and is not demonstrated (2026-11-23)
 

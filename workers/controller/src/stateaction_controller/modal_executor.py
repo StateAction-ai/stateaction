@@ -36,27 +36,30 @@ def checkpoint_pins():
     return json.loads((_api_dir() / "flora-checkpoints.v1.json").read_bytes())
 
 
-async def _spawn_once(client, function, payload, before_send, before_submit=None):
-    # Modal 1.6.4's high-level spawn retries submission RPCs. Use the same
-    # SDK input encoder and wire messages with transport retries disabled.
+async def _prepare_input(client, function, payload):
+    # Modal 1.6.4's high-level spawn retries submission RPCs. Encode the input
+    # on Modal's SDK event loop before running caller-loop submission hooks.
     check_sdk()
-    stub = client.stub
     invocation = wire.FUNCTION_CALL_INVOCATION_TYPE_ASYNC
-    item = await _create_input(
+    return await _create_input(
         (payload,),
         {},
-        stub,
+        client.stub,
         function=function,
         function_call_invocation_type=invocation,
     )
+
+
+async def _submit_prepared(client, function, item, before_send):
+    check_sdk()
+    stub = client.stub
+    invocation = wire.FUNCTION_CALL_INVOCATION_TYPE_ASYNC
     request = wire.FunctionMapRequest(
         function_id=function.object_id,
         function_call_type=wire.FUNCTION_CALL_TYPE_UNARY,
         function_call_invocation_type=invocation,
         pipelined_inputs=[item],
     )
-    if before_submit is not None:
-        await before_submit()
     response = await stub.FunctionMap(request, retry=None, timeout=before_send())
     call_id = response.function_call_id
     if not call_id_valid(call_id):
@@ -74,7 +77,8 @@ async def _spawn_once(client, function, payload, before_send, before_submit=None
     return call_id
 
 
-spawn_once = synchronize_api(_spawn_once)
+prepare_spawn_input = synchronize_api(_prepare_input)
+submit_spawn_input = synchronize_api(_submit_prepared)
 
 
 class ModalExecutor:
@@ -197,9 +201,10 @@ class ModalExecutor:
                     issued = True
                     return remaining
 
-                return await spawn_once.aio(
-                    client, function, payload.decode(), before_send, before_submit
-                )
+                item = await prepare_spawn_input.aio(client, function, payload.decode())
+                if before_submit is not None:
+                    await before_submit()
+                return await submit_spawn_input.aio(client, function, item, before_send)
         except SpawnCancelled:
             raise
         except Exception:

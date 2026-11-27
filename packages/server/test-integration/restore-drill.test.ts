@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -25,7 +25,7 @@ import {
   closeOutputs,
   submitCandidate,
 } from "../src/acceptance/service.js";
-import { fixtureRunJob } from "../src/jobs/fixtures.js";
+import { fixtureAcceptResult, fixtureRunJob } from "../src/jobs/fixtures.js";
 import {
   admitNextJob,
   claimControllerLease,
@@ -40,7 +40,7 @@ import {
   recoverySnapshot,
   retryJob,
 } from "../src/jobs/recovery.js";
-import { loadMigrations } from "../src/migrations.js";
+import { loadMigrations, migrateDatabase } from "../src/migrations.js";
 import {
   readSnapshot,
   verifyRestoredCatalog,
@@ -66,7 +66,13 @@ import {
   marker,
   recordCreated,
 } from "./fixture-ledger.js";
-import { fixtureAdmission, writeArtifact } from "./harness.js";
+import {
+  createActors,
+  fixtureAdmission,
+  freshDatabase,
+  processedRecording,
+  writeArtifact,
+} from "./harness.js";
 import { JOBS_CONFIG, depsFor } from "./jobs-harness.js";
 import { BUCKET, realS3, s3Config } from "./transport-harness.js";
 
@@ -320,6 +326,191 @@ const reason = (p: Promise<unknown>) =>
     () => "ok",
     (e: unknown) => (e instanceof TransportError ? `${e.code}` : String(e)),
   );
+
+test(
+  "fence v024 writers, qualify on a restored copy, and recover the checkpoint",
+  { timeout: 120_000 },
+  async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "sa159-drill-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const admin = boundedClient(env("CATALOG_TEST_ADMIN_URL"));
+    t.after(() => admin.end());
+    await admin.connect();
+    const databases: Awaited<ReturnType<typeof freshDatabase>>[] = [];
+    t.after(async () => {
+      await Promise.allSettled(databases.map((db) => db.close()));
+    });
+    const empty = async () => {
+      const db = await freshDatabase({ migrate: false });
+      assert.match(db.name, /^[a-z][a-z0-9_]+$/);
+      databases.push(db);
+      created.databases.push(db.name);
+      return db;
+    };
+    const expectWriterDenied = async (appUrl: string) => {
+      const client = boundedClient(appUrl);
+      try {
+        await assert.rejects(client.connect(), { code: "42501" });
+      } finally {
+        await client.end();
+      }
+    };
+    const source = await empty();
+    const migrations = await loadMigrations();
+    const migrateThrough = (count: number) =>
+      migrateDatabase({
+        ownerUrl: source.ownerUrl,
+        migrations: migrations.slice(0, count),
+      });
+    await migrateThrough(14);
+    const actors = await createActors(source.owner);
+    const result = await processedRecording(source.app, actors, 1);
+    await fixtureAcceptResult(source.owner, source.app, result);
+    await migrateThrough(24);
+
+    const insertSentinel = `INSERT INTO "user" (id, name, email, "emailVerified") VALUES ($1, $1, $1 || '@example.test', false)`;
+    source.app.on("error", () => {});
+    const writer = boundedClient(source.appUrl);
+    writer.on("error", () => {});
+    t.after(() => writer.end());
+    await writer.connect();
+    const {
+      rows: [session],
+    } = await writer.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+    await writer.query(insertSentinel, ["before-checkpoint"]);
+    await source.owner.query(
+      `REVOKE CONNECT ON DATABASE ${source.name} FROM PUBLIC, stateaction_app`,
+    );
+    await assert.rejects(
+      source.owner.query("SELECT pg_terminate_backend($1, 5000)", [
+        session!.pid,
+      ]),
+      { code: "42501" },
+    );
+    const { rows: drained } = await admin.query(
+      `SELECT pid, pg_terminate_backend(pid, 5000) AS terminated FROM pg_stat_activity
+     WHERE datname = $1 AND usename = 'stateaction_app'`,
+      [source.name],
+    );
+    assert.ok(
+      drained.some(
+        (row) => row.pid === session!.pid && row.terminated === true,
+      ),
+    );
+    assert.equal(
+      (
+        await admin.query(
+          `SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND usename = 'stateaction_app'`,
+          [source.name],
+        )
+      ).rowCount,
+      0,
+    );
+    await assert.rejects(writer.query(insertSentinel, ["established-writer"]));
+    await expectWriterDenied(source.appUrl);
+    const baseline = await fingerprint(source.owner);
+    assert.ok(baseline.recording_result_selections?.startsWith("1:"));
+    const schemaText = (ownerUrl: string) => {
+      runPg(new URL(ownerUrl), dir, [
+        "/usr/local/bin/pg_dump",
+        "--schema-only",
+        "--no-owner",
+        "--file=/tmp/transfer/schema.sql",
+      ]);
+      return readFileSync(join(dir, "schema.sql"), "utf8")
+        .replace(/^\\(?:un)?restrict [^\n]+$/gm, "")
+        .replaceAll(
+          "((length(etag) >= 1) AND (length(etag) <= 128)) AND",
+          "(length(etag) >= 1) AND (length(etag) <= 128) AND",
+        )
+        .replaceAll(
+          "((cardinality(scopes) >= 1) AND (cardinality(scopes) <= 8)) AND",
+          "(cardinality(scopes) >= 1) AND (cardinality(scopes) <= 8) AND",
+        );
+    };
+    const baselineSchema = schemaText(source.ownerUrl);
+    runPg(new URL(source.ownerUrl), dir, [
+      "/usr/local/bin/pg_dump",
+      "--format=custom",
+      "--no-owner",
+      "--file=/tmp/transfer/checkpoint.dump",
+    ]);
+    const restore = async () => {
+      const db = await empty();
+      await db.owner.query(
+        `REVOKE CONNECT ON DATABASE ${db.name} FROM PUBLIC, stateaction_app`,
+      );
+      runPg(new URL(db.ownerUrl), dir, [
+        "/usr/local/bin/pg_restore",
+        "--no-owner",
+        "--single-transaction",
+        "--exit-on-error",
+        "--dbname=" + db.name,
+        "/tmp/transfer/checkpoint.dump",
+      ]);
+      assert.deepEqual(await fingerprint(db.owner), baseline);
+      assert.equal(sha(schemaText(db.ownerUrl)), sha(baselineSchema));
+      await expectWriterDenied(db.appUrl);
+      return db;
+    };
+    const candidate = await restore();
+    const upgrade = await migrateDatabase({ ownerUrl: candidate.ownerUrl });
+    assert.deepEqual(upgrade.applied, [25]);
+    assert.equal(upgrade.appRoleGranted, true);
+    await expectWriterDenied(candidate.appUrl);
+    const upgraded = await fingerprint(candidate.owner);
+    for (const table of [
+      "recording_result_selections",
+      "files",
+      "job_output_verifications",
+    ]) {
+      assert.equal(upgraded[table], baseline[table], table);
+    }
+    await candidate.owner.query(
+      `GRANT CONNECT ON DATABASE ${candidate.name} TO stateaction_app`,
+    );
+    await candidate.app.query(insertSentinel, ["after-checkpoint"]);
+    const version = async (db: typeof source) =>
+      (
+        await db.owner.query(
+          "SELECT max(version) AS version FROM platform_schema_migrations",
+        )
+      ).rows[0].version;
+    assert.equal(await version(candidate), 25);
+    const afterFailure = await restore();
+    assert.equal(await version(afterFailure), 24);
+    assert.deepEqual(await fingerprint(source.owner), baseline);
+    await afterFailure.owner.query(
+      `GRANT CONNECT ON DATABASE ${afterFailure.name} TO stateaction_app`,
+    );
+    const sentinels = async (db: typeof source) =>
+      (
+        await db.app.query(
+          `SELECT id FROM "user" WHERE id = ANY($1::text[]) ORDER BY id`,
+          [["before-checkpoint", "after-checkpoint", "established-writer"]],
+        )
+      ).rows.map((row) => row.id);
+    assert.deepEqual(await sentinels(afterFailure), ["before-checkpoint"]);
+    assert.deepEqual(await sentinels(candidate), [
+      "after-checkpoint",
+      "before-checkpoint",
+    ]);
+    await writeArtifact("sa159-checkpoint-rehearsal.json", {
+      label: LABEL,
+      checkpointSha256: sha(readFileSync(join(dir, "checkpoint.dump"))),
+      schemaSha256: sha(baselineSchema),
+      tables: Object.keys(baseline).length,
+      checkpointVersion: 24,
+      candidateVersion: 25,
+      restoredVersion: 24,
+      preCheckpointSentinelPreserved: true,
+      isolatedPostCheckpointSentinelPreserved: true,
+      existingAndNewWriterDenied: true,
+      ownerTerminationDenied: true,
+      writerDeniedAfterMigration: true,
+    });
+  },
+);
 
 test(
   "restore a synthetic catalog into a new database: objects verified, stale access and uncertain work stay blocked",
