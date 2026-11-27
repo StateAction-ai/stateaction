@@ -84,7 +84,7 @@ describe("no fixture identity path exists", () => {
   test("setting a fixture variable on the server grants nothing", async () => {
     // The running server never had it; assert the pages deny without a session.
     for (const path of [
-      "/",
+      "/console",
       "/recordings",
       "/data-browser",
       "/recipes",
@@ -110,7 +110,7 @@ describe("role-protected console pages (real session, live roles)", () => {
     assert.doesNotMatch(recordings.text, />(Releases|Projects?)</);
     const data = await navigate("/data-browser", jar);
     assert.equal(data.status, 200);
-    const home = await navigate("/", jar);
+    const home = await navigate("/console", jar);
     assert.equal(home.status, 307);
     assert.match(home.headers.location, /\/recordings$/);
   });
@@ -121,7 +121,7 @@ describe("role-protected console pages (real session, live roles)", () => {
     assert.equal(data.status, 200);
     assert.doesNotMatch(data.text, /href="\/recordings"/);
     assert.equal((await navigate("/recordings", jar)).status, 404);
-    const home = await navigate("/", jar);
+    const home = await navigate("/console", jar);
     assert.match(home.headers.location, /\/data-browser$/);
   });
 

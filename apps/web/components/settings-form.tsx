@@ -1,4 +1,9 @@
 "use client";
+import {
+  DISPLAY_NAME_MAX,
+  DISPLAY_NAME_MESSAGES,
+  parseDisplayName,
+} from "@stateaction/server/display-name";
 import * as React from "react";
 import { Button } from "./ui/button";
 import { Card, CardBody, CardHeader } from "./ui/card";
@@ -6,11 +11,6 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useProfile } from "./shell/profile-context";
 import { ROLE_LABEL } from "../lib/console-session";
-import {
-  DISPLAY_NAME_MAX,
-  DISPLAY_NAME_MESSAGES,
-  parseDisplayName,
-} from "../lib/profile";
 
 export type SaveResult =
   | { ok: true; name: string }

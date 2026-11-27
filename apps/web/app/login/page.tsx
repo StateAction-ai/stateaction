@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { pageIdentity, signInMethods } from "@stateaction/server/auth";
+import {
+  authRuntime,
+  pageIdentity,
+  signInMethods,
+} from "@stateaction/server/auth";
 import { Brand } from "../../components/brand";
 import { LoginForm } from "./login-form";
 export const dynamic = "force-dynamic";
@@ -8,8 +12,16 @@ export const metadata = { title: "Sign in · StateAction.ai" };
 export default async function LoginPage() {
   const methods = await signInMethods();
   if (methods) {
-    const identity = await pageIdentity(await headers());
-    if (identity.state === "signed-in") redirect("/");
+    const requestHeaders = await headers();
+    if (methods.google && !methods.password) {
+      // OAuth state and session cookies stay on the registered callback host.
+      const signInUrl = new URL("/login", authRuntime().config.baseURL);
+      if (requestHeaders.get("host")?.toLowerCase() !== signInUrl.host) {
+        redirect(signInUrl.href);
+      }
+    }
+    const identity = await pageIdentity(requestHeaders);
+    if (identity.state === "signed-in") redirect("/console");
   }
   return (
     <main className="mx-auto grid min-h-screen w-full max-w-sm content-center gap-6 px-6 py-12">

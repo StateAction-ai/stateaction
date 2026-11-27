@@ -20,6 +20,12 @@ export type VideoSource =
       readMethod?: "GET" | "POST";
       range?: { startS: number; durationS: number };
     }
+  /** Approved public media that does not require a broker grant. */
+  | {
+      kind: "direct";
+      url: string;
+      range?: { startS: number; durationS: number };
+    }
   /** No media (fixture data or a recording without recording_mp4). */
   | { kind: "none"; reason: string };
 

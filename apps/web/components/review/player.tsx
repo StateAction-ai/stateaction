@@ -28,6 +28,7 @@ export function Player({
   videoMessage,
   handFramesPath,
   handPoseFailed,
+  embedded,
   mediaOffsetS,
   poster,
   onPrev,
@@ -39,6 +40,7 @@ export function Player({
   videoMessage: string | null;
   handFramesPath: string | null;
   handPoseFailed: boolean;
+  embedded?: boolean;
   mediaOffsetS: number;
   poster: string | undefined;
   onPrev: () => void;
@@ -54,7 +56,10 @@ export function Player({
   return (
     <section
       data-testid="review-player"
-      className="min-w-0 overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06] max-md:sticky max-md:top-0 max-md:z-20"
+      className={cn(
+        "min-w-0 overflow-hidden rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06]",
+        !embedded && "max-md:sticky max-md:top-0 max-md:z-20",
+      )}
     >
       <div className="relative aspect-video max-h-[50vh] w-full overflow-hidden bg-[#05060a]">
         {playback.src ? (
@@ -189,21 +194,23 @@ export function Player({
             </option>
           ))}
         </select>
-        <button
-          type="button"
-          aria-pressed={overlay && canOverlay && !handPoseFailed}
-          disabled={!canOverlay || handPoseFailed}
-          onClick={() => setOverlay((shown) => !shown)}
-          className={cn(
-            "min-h-11 rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink disabled:opacity-50",
-            overlay &&
-              canOverlay &&
-              !handPoseFailed &&
-              "border-transparent bg-brand-soft text-brand-ink",
-          )}
-        >
-          Hand overlay
-        </button>
+        {(!embedded || canOverlay) && (
+          <button
+            type="button"
+            aria-pressed={overlay && canOverlay && !handPoseFailed}
+            disabled={!canOverlay || handPoseFailed}
+            onClick={() => setOverlay((shown) => !shown)}
+            className={cn(
+              "min-h-11 rounded-lg border border-line bg-white px-3 text-sm font-semibold text-ink disabled:opacity-50",
+              overlay &&
+                canOverlay &&
+                !handPoseFailed &&
+                "border-transparent bg-brand-soft text-brand-ink",
+            )}
+          >
+            Hand overlay
+          </button>
+        )}
       </div>
     </section>
   );

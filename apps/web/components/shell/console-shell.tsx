@@ -52,7 +52,7 @@ export function ConsoleShell({
           </a>
           <aside className="border-b border-line bg-sidebar px-4 py-3 md:sticky md:top-0 md:h-screen md:border-r md:border-b-0 md:px-4 md:py-7">
             <div className="md:px-2 md:pb-8">
-              <Brand />
+              <Brand href="/console" />
             </div>
             <nav aria-label="Primary" className="mt-2 md:mt-0">
               <p className="mx-3 mb-2 hidden text-[9px] font-bold tracking-[0.14em] text-muted uppercase md:block">

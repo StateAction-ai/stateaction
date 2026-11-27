@@ -18,6 +18,7 @@ import { recipeHref } from "../../lib/recipe-view";
 export type SideTab = "segs" | "decision";
 
 export function SidePanel({
+  embedded = false,
   model,
   staff,
   segmentationFailure,
@@ -43,6 +44,7 @@ export function SidePanel({
   decision,
   captionEditor,
 }: {
+  embedded?: boolean;
   model: ReviewModel;
   staff?: RecordingAnnotations | undefined;
   segmentationFailure: string | null;
@@ -86,7 +88,11 @@ export function SidePanel({
   return (
     <section
       aria-label="Review side panel"
-      className="flex min-w-0 flex-col rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06] xl:sticky xl:top-5 xl:h-[max(560px,calc(100vh-40px))] xl:overflow-hidden"
+      className={cn(
+        "flex min-w-0 flex-col rounded-2xl border border-line bg-paper shadow-[0_6px_25px_#21332a06]",
+        !embedded &&
+          "xl:sticky xl:top-5 xl:h-[max(560px,calc(100vh-40px))] xl:overflow-hidden",
+      )}
     >
       <div
         role="tablist"
@@ -216,6 +222,7 @@ export function SidePanel({
               : `Segment ${selected + 1} of ${total.toLocaleString()} selected`}
           </p>
           <Rail
+            embedded={embedded}
             cards={cards}
             emptyText={
               segmentationFailure
@@ -296,6 +303,7 @@ export function SidePanel({
 }
 
 function Rail({
+  embedded,
   cards,
   emptyText,
   selected,
@@ -310,6 +318,7 @@ function Rail({
   staff,
   captionEditor,
 }: {
+  embedded?: boolean;
   cards: Card[];
   emptyText: string;
   selected: number | null;
@@ -380,7 +389,10 @@ function Rail({
         if (e.currentTarget.scrollTop !== followPosition.current)
           onManualScroll();
       }}
-      className="min-h-0 flex-1 px-3 pt-3 pb-5 [overflow-anchor:none] xl:overflow-auto"
+      className={cn(
+        "min-h-0 flex-1 px-3 pt-3 pb-5 [overflow-anchor:none]",
+        embedded ? "max-h-[30rem] overflow-auto" : "xl:overflow-auto",
+      )}
     >
       {cards.length === 0 ? (
         <p className="p-5 text-center text-xs text-muted">{emptyText}</p>

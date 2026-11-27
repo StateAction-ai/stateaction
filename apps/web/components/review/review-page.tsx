@@ -81,13 +81,15 @@ export type ReviewPageProps = {
   startAt: number | null;
   initialSegmentId: string | null;
   staff?: StaffReview;
+  embedded?: boolean;
 };
 
 const linkClass =
   "inline-flex min-h-11 items-center rounded-lg border border-line bg-white px-3 text-sm font-semibold hover:bg-field";
 
 export function ReviewPage(props: ReviewPageProps) {
-  const { staff, source } = props;
+  const { embedded = false, staff, source } = props;
+  const workspace = useRef<HTMLDivElement>(null);
   const state = staff?.state;
   const [localOverride, setLocalOverride] = useState<
     Map<string, string | null | undefined>
@@ -296,9 +298,12 @@ export function ReviewPage(props: ReviewPageProps) {
         requestAnimationFrame(() => queryRef.current?.focus());
       }
     }
-    window.addEventListener("keydown", handle);
-    return () => window.removeEventListener("keydown", handle);
+    const target = embedded ? workspace.current : window;
+    target?.addEventListener("keydown", handle as EventListener);
+    return () =>
+      target?.removeEventListener("keydown", handle as EventListener);
   }, [
+    embedded,
     playback,
     step,
     selected,
@@ -375,6 +380,7 @@ export function ReviewPage(props: ReviewPageProps) {
   const { summary } = model;
   return (
     <div
+      ref={workspace}
       className="min-w-0"
       onClickCapture={(event) => {
         if (
@@ -387,72 +393,77 @@ export function ReviewPage(props: ReviewPageProps) {
         }
       }}
     >
-      <header className="mb-4 space-y-2">
-        <Link
-          href={props.backHref}
-          className="inline-flex min-h-11 items-center text-sm text-brand-ink underline"
-        >
-          ‹ {props.backLabel}
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <h1 className="min-w-0 text-[clamp(1.375rem,3vw,1.75rem)] leading-tight font-bold [overflow-wrap:anywhere]">
-            {props.title}
-          </h1>
-          <div className="flex gap-2">
-            {props.previousHref ? (
-              <Link href={props.previousHref} className={linkClass}>
-                Previous clip
-              </Link>
+      {embedded ? null : (
+        <header className="mb-4 space-y-2">
+          <Link
+            href={props.backHref}
+            className="inline-flex min-h-11 items-center text-sm text-brand-ink underline"
+          >
+            ‹ {props.backLabel}
+          </Link>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h1 className="min-w-0 text-[clamp(1.375rem,3vw,1.75rem)] leading-tight font-bold [overflow-wrap:anywhere]">
+              {props.title}
+            </h1>
+            <div className="flex gap-2">
+              {props.previousHref ? (
+                <Link href={props.previousHref} className={linkClass}>
+                  Previous clip
+                </Link>
+              ) : null}
+              {props.nextHref ? (
+                <Link href={props.nextHref} className={linkClass}>
+                  Next clip
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+            {staff && staff.sourceEndS !== null ? (
+              <span>
+                {fmtPrecise(staff.sourceStartS)}–{fmtPrecise(staff.sourceEndS)}{" "}
+                ·
+              </span>
             ) : null}
-            {props.nextHref ? (
-              <Link href={props.nextHref} className={linkClass}>
-                Next clip
-              </Link>
+            <span>{fmtClock(model.durationS)}</span>
+            {props.suggested ? (
+              <span
+                title="From the model caption"
+                className="rounded bg-field px-2 py-1 text-xs"
+              >
+                Suggested
+              </span>
+            ) : null}
+            {staff && clipState?.decision !== "approved" ? (
+              <span className="rounded bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
+                {clipState?.decision === "rejected"
+                  ? "Rejected"
+                  : "Not reviewed"}
+              </span>
+            ) : null}
+            {staff && correctedCount > 0 ? (
+              <span className="rounded bg-field px-2 py-1 text-xs">
+                {correctedCount}{" "}
+                {correctedCount === 1
+                  ? "caption corrected"
+                  : "captions corrected"}
+              </span>
+            ) : null}
+            {staff &&
+            clipState?.reviewerName &&
+            clipState?.reviewedAt &&
+            (clipState.decision === "approved" ||
+              clipState.decision === "rejected") ? (
+              <span className="text-xs">
+                {clipState.decision === "approved" ? "Approved" : "Rejected"} by{" "}
+                {clipState.reviewerName}
+                {" · "}
+                {new Date(clipState.reviewedAt).toISOString().slice(0, 10)}
+              </span>
             ) : null}
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
-          {staff && staff.sourceEndS !== null ? (
-            <span>
-              {fmtPrecise(staff.sourceStartS)}–{fmtPrecise(staff.sourceEndS)} ·
-            </span>
-          ) : null}
-          <span>{fmtClock(model.durationS)}</span>
-          {props.suggested ? (
-            <span
-              title="From the model caption"
-              className="rounded bg-field px-2 py-1 text-xs"
-            >
-              Suggested
-            </span>
-          ) : null}
-          {staff && clipState?.decision !== "approved" ? (
-            <span className="rounded bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-ink">
-              {clipState?.decision === "rejected" ? "Rejected" : "Not reviewed"}
-            </span>
-          ) : null}
-          {staff && correctedCount > 0 ? (
-            <span className="rounded bg-field px-2 py-1 text-xs">
-              {correctedCount}{" "}
-              {correctedCount === 1
-                ? "caption corrected"
-                : "captions corrected"}
-            </span>
-          ) : null}
-          {staff &&
-          clipState?.reviewerName &&
-          clipState?.reviewedAt &&
-          (clipState.decision === "approved" ||
-            clipState.decision === "rejected") ? (
-            <span className="text-xs">
-              {clipState.decision === "approved" ? "Approved" : "Rejected"} by{" "}
-              {clipState.reviewerName}
-              {" · "}
-              {new Date(clipState.reviewedAt).toISOString().slice(0, 10)}
-            </span>
-          ) : null}
-        </div>
-      </header>
+        </header>
+      )}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-paper px-3.5 py-2">
         <span data-testid="review-summary" className="text-xs text-muted">
           {summary.segments.toLocaleString()}{" "}
@@ -512,8 +523,14 @@ export function ReviewPage(props: ReviewPageProps) {
         </button>
       </div>
 
-      <div className="mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,72fr)_minmax(340px,28fr)]">
-        <div className="min-w-0 max-md:contents">
+      <div
+        className={
+          embedded
+            ? "mt-3 grid items-start gap-3 min-[850px]:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]"
+            : "mt-5 grid items-start gap-5 xl:grid-cols-[minmax(0,72fr)_minmax(340px,28fr)]"
+        }
+      >
+        <div className={embedded ? "min-w-0" : "min-w-0 max-md:contents"}>
           <Player
             model={model}
             playback={playback}
@@ -521,8 +538,9 @@ export function ReviewPage(props: ReviewPageProps) {
             videoMessage={source.kind === "none" ? source.reason : null}
             handFramesPath={props.handFramesPath}
             handPoseFailed={staff?.handPoseFailed ?? false}
+            embedded={embedded}
             mediaOffsetS={
-              source.kind === "broker" ? (source.range?.startS ?? 0) : 0
+              source.kind === "none" ? 0 : (source.range?.startS ?? 0)
             }
             poster={poster}
             onPrev={() => step(-1)}
@@ -555,6 +573,7 @@ export function ReviewPage(props: ReviewPageProps) {
           ) : null}
         </div>
         <SidePanel
+          embedded={embedded}
           model={model}
           staff={staff?.annotations}
           segmentationFailure={staff?.segmentationFailure ?? null}
