@@ -55,4 +55,5 @@ export function parseWorkerHealth(value: unknown): WorkerHealth {
 
 export * from "./clip-read-model.js";
 
+export { readCompiledRecipe, readNodeReceipt } from "./compiled-recipe.js";
 export type { CompiledGraph } from "./compiled-graph.generated.js";

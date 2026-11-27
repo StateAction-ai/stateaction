@@ -5,9 +5,10 @@ from time import time
 from types import SimpleNamespace
 
 import pytest
+from historical_controller import Controller
 from stateaction_controller.api import AmbiguousApiError
 from stateaction_controller.config import Settings
-from stateaction_controller.controller import Controller, Lease
+from stateaction_controller.controller import Lease
 from stateaction_controller.journal import JournalStore, iso
 from stateaction_controller.local_process import boot_id
 

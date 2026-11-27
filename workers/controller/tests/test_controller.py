@@ -2,8 +2,8 @@ import asyncio
 from time import time
 
 import pytest
+from historical_controller import run_controller
 from stateaction_controller.config import Settings
-from stateaction_controller.controller import run_controller
 from stateaction_controller.journal import JournalStore, iso
 from test_modal_controller import CALL, JOB, Modal
 

@@ -189,25 +189,25 @@ curl -sf "http://$LAN_IP:$WEB_PORT/api/v1/live"; echo " <- development service r
 
 echo "== hosted-style workflow env: tasks register, no database/storage credentials"
 printf 'APP_ENV=production\n' > artifacts/hosted-smoke/workflow.env
-setsid env -i PATH="$PATH" HOME="$HOME" "$RENDER" workflows dev --port "$RUNNER_PORT" --env-file artifacts/hosted-smoke/workflow.env -- pnpm --filter @stateaction/jobs start > artifacts/hosted-smoke/workflow.log 2>&1 &
+setsid env -i PATH="$PATH" HOME="$HOME" "$RENDER" workflows dev --port "$RUNNER_PORT" --env-file artifacts/hosted-smoke/workflow.env -- workers/controller/.venv/bin/python -m stateaction_controller.workflow > artifacts/hosted-smoke/workflow.log 2>&1 &
 runner_pid=$!
-for ((end = SECONDS + 60; SECONDS < end;)); do "$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text 2>/dev/null | grep -q verify-platform && break; sleep 0.2; done
-"$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text | grep verify-platform
+for ((end = SECONDS + 60; SECONDS < end;)); do "$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text 2>/dev/null | grep -q process-recording && break; sleep 0.2; done
+"$RENDER" workflows tasks list --local --port "$RUNNER_PORT" -o text | grep process-recording
 for pid in $(pgrep -g "$runner_pid"); do
-  if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -E '^(DATABASE_|MIGRATION_|APP_DB_|S3_)'; then
+  if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -Eq '^(DATABASE_|MIGRATION_|APP_DB_|S3_)'; then
     echo "workflow process $pid received a forbidden credential" >&2; exit 1
   fi
 done
 echo "workflow process tree has no database/storage/API credentials"
-out="$("$RENDER" workflows start verify-platform --local --port "$RUNNER_PORT" --input='[{"requestId":"11111111-1111-4111-8111-111111111111"}]' -o json)"
+out="$("$RENDER" workflows start process-recording --local --port "$RUNNER_PORT" --input='[{"jobId":"11111111-1111-4111-8111-111111111111"}]' -o json)"
 run="$(printf '%s' "$out" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("taskRunId") or d.get("id"))')"
 for ((end = SECONDS + 30; SECONDS < end;)); do
   state="$("$RENDER" workflows tasks runs show "$run" --local --port "$RUNNER_PORT" -o json)"
   status="$(printf '%s' "$state" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("status"))')"
   [[ "$status" == failed || "$status" == completed ]] && break; sleep 0.2
 done
-# Production processing is deferred: the health fixture must NOT succeed outside local.
-[[ "$status" == failed ]] && printf '%s' "$state" | grep -q 'explicit local configuration' \
-  || { echo "verify-platform must refuse to run outside local ($status)" >&2; exit 1; }
-echo "verify-platform refused outside local: production processor remains deferred"
+# This loopback smoke supplies no hosted executor or worker capability.
+[[ "$status" == failed ]] && printf '%s' "$state" | grep -q 'explicit executor' \
+  || { echo "process-recording must refuse to run outside local ($status)" >&2; exit 1; }
+echo "process-recording refused startup without a configured executor"
 echo "hosted smoke passed"

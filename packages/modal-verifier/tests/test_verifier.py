@@ -18,28 +18,30 @@ from grpclib.const import Cardinality, Handler, Status
 from grpclib.exceptions import GRPCError
 from grpclib.server import Server
 from modal import Client
-from modal.exception import InternalAPIWarning
 from modal._grpc_client import UnaryUnaryWrapper
 from modal._utils.async_utils import synchronizer
+from modal.exception import InternalAPIWarning
 from modal_proto import api_pb2 as wire
 from stateaction_modal_verifier.verifier import (
     Bounds,
     DefinitionRejected,
     ModalProtocolChanged,
+    ReadPolicy,
     check_client,
     check_sdk,
     immutable_app_name,
     inspect,
-    ReadPolicy,
-    warm,
     probe_gpu_watch,
     read_manifest,
     verify_binding,
+    warm,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
 RECORDS = json.loads(
-    (ROOT / "apps/jobs/test/fixtures/modal-deployment-wire.json").read_text()
+    (
+        ROOT / "packages/modal-verifier/tests/fixtures/modal-deployment-wire.json"
+    ).read_text()
 )
 PINS = json.loads(
     (ROOT / "packages/contracts/api/flora-checkpoints.v1.json").read_text()
@@ -192,6 +194,10 @@ class VerifierTest(unittest.IsolatedAsyncioTestCase):
         variant, bounds = self.load("handPose", CPU)
         result = await inspect.aio(self.client, bounds, self.pins)
         self.assertEqual(result.image_id, variant.image_id)
+        self.assertEqual(
+            result.runtime_definition_sha256,
+            hashlib.sha256(variant.SerializeToString(deterministic=True)).hexdigest(),
+        )
         self.assertEqual(result.memory_mib, 26215)
         self.assertEqual(result.cpu_milli, 4000)
         self.assertEqual(result.billed_seconds, 1240)

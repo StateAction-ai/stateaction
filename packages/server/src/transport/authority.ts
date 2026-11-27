@@ -22,6 +22,7 @@ export type Authority =
       jobId: string;
       sealLeaseOwner?: string;
       stage?: string;
+      nodeId?: string;
     };
 
 export const PREPARED_RECIPE_SLOT =
@@ -97,11 +98,22 @@ export async function assertJobAuthority(
   if (expectedJobId && expectedJobId !== authority.jobId) throw forbidden();
   try {
     const current = await assertJobOutputOpen(db, authority.jobId);
+    if (authority.nodeId) {
+      const { rowCount } = await db.query(
+        `SELECT 1 FROM job_recipe_node_claims c
+         WHERE c.job_id = $1 AND c.node_id = $2 AND c.claimed_at IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM job_recipe_node_evidence e
+                           WHERE e.job_id = c.job_id AND e.node_id = c.node_id)`,
+        [authority.jobId, authority.nodeId],
+      );
+      if (!rowCount) throw forbidden();
+    }
     if (authority.sealLeaseOwner !== undefined) {
       const { rowCount } = await db.query(
-        `SELECT 1 FROM jobs WHERE id = $1 AND recipe_parallel
+        `SELECT 1 FROM jobs WHERE id = $1
            AND controller_lease_owner = $2 AND controller_lease_expires_at > now()
-           AND job_recipe_stages_settled(id)`,
+           AND ((recipe_parallel AND job_recipe_stages_settled(id))
+             OR (job_graph_settled(id) AND EXISTS (SELECT 1 FROM job_graph_seals WHERE job_id = jobs.id)))`,
         [authority.jobId, authority.sealLeaseOwner],
       );
       if (!rowCount) throw forbidden();
@@ -118,11 +130,13 @@ export async function assertResultSlotAuthority(
   authority: Extract<Authority, { kind: "job" }>,
   slot: string,
 ): Promise<void> {
+  if (authority.nodeId && !slot.startsWith("nodes/" + authority.nodeId + "/"))
+    throw forbidden();
   if (slot === PREPARED_RECIPE_SLOT && authority.stage !== "hand_pose")
     throw forbidden();
   if (slot === RESULT_MANIFEST_SLOT && authority.sealLeaseOwner === undefined) {
     const { rows } = await db.query<{ recipe_parallel: boolean }>(
-      "SELECT recipe_parallel FROM jobs WHERE id = $1",
+      "SELECT recipe_parallel OR EXISTS (SELECT 1 FROM job_recipe_graphs WHERE job_id = jobs.id) AS recipe_parallel FROM jobs WHERE id = $1",
       [authority.jobId],
     );
     if (rows[0]?.recipe_parallel) throw forbidden();
@@ -152,6 +166,16 @@ export async function authorizeFile(
   } else {
     if (file.purpose !== "output") throw forbidden();
     await assertJobAuthority(db, authority, file.job_id);
+    if (authority.nodeId) {
+      const {
+        rows: [output],
+      } = await db.query<{ slot: string }>(
+        "SELECT slot FROM job_output_slots WHERE job_id = $1 AND file_id = $2",
+        [authority.jobId, file.id],
+      );
+      if (!output) throw forbidden();
+      await assertResultSlotAuthority(db, authority, output.slot);
+    }
     if (file.role === "result_manifest")
       await assertResultSlotAuthority(db, authority, RESULT_MANIFEST_SLOT);
     if (file.role === "diagnostic_blob" && authority.stage !== "hand_pose") {

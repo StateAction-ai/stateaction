@@ -40,6 +40,9 @@ export async function grantHostedReader(
       IF to_regprocedure('public.stateaction_grant_clip_review_reads(name)') IS NOT NULL THEN
         PERFORM public.stateaction_grant_clip_review_reads('${role}');
       END IF;
+      IF to_regprocedure('public.stateaction_grant_recipe_graph_history(name)') IS NOT NULL THEN
+        PERFORM public.stateaction_grant_recipe_graph_history('${role}');
+      END IF;
       IF to_regprocedure('public.stateaction_grant_hosted_console_reads(name)') IS NOT NULL THEN
         PERFORM public.stateaction_grant_hosted_console_reads('${role}');
       END IF;

@@ -1,4 +1,4 @@
-// Generated listing of the published schema files; keep in sync with api/catalog.v23.json (checked by tests).
+// Generated listing of the published schema files; keep in sync with api/catalog.v24.json (checked by tests).
 // Catalog v21 adds selective stage rerun and result selection contracts.
 import captureRecipeSelect from "../api/http/capture-recipe-select.v1.schema.json" with { type: "json" };
 import clipReviewCommandV2 from "../api/http/clip-review-command.v2.schema.json" with { type: "json" };
@@ -8,6 +8,7 @@ import stageRerunCommandV2 from "../api/http/stage-rerun-command.v2.schema.json"
 import stageRerunPlanV2 from "../api/http/stage-rerun-plan.v2.schema.json" with { type: "json" };
 import stageRerunResultV2 from "../api/http/stage-rerun-result.v2.schema.json" with { type: "json" };
 import cachedOriginatingRecipe from "../api/artifacts/cached-originating-recipe.v1.schema.json" with { type: "json" };
+import processingResultV7 from "../api/artifacts/processing-result.v7.schema.json" with { type: "json" };
 import processingResultV6 from "../api/artifacts/processing-result.v6.schema.json" with { type: "json" };
 import rerunContract0 from "../api/http/stage-rerun-plan-request.v1.schema.json" with { type: "json" };
 import rerunContract1 from "../api/http/stage-rerun-command.v1.schema.json" with { type: "json" };
@@ -21,7 +22,7 @@ import dagRunV2 from "../api/http/dag-run.v2.schema.json" with { type: "json" };
 import stageRerunPlanV1 from "../api/http/stage-rerun-plan.v1.schema.json" with { type: "json" };
 import recordingAnnotationsV3 from "../api/http/recording-annotations.v3.schema.json" with { type: "json" };
 import segmentMarksV2 from "../api/http/segment-marks.v2.schema.json" with { type: "json" };
-import catalog from "../api/catalog.v23.json" with { type: "json" };
+import catalog from "../api/catalog.v24.json" with { type: "json" };
 import common from "../api/common.v1.schema.json" with { type: "json" };
 import commonV2 from "../api/common.v2.schema.json" with { type: "json" };
 import s0 from "../api/artifacts/frame-map.v1.schema.json" with { type: "json" };
@@ -136,8 +137,18 @@ import clipTask from "../api/jobs/task-input.v4.schema.json" with { type: "json"
 import clipResult from "../api/artifacts/processing-result.v5.schema.json" with { type: "json" };
 
 import clipPlanTask from "../api/jobs/task-input.v5.schema.json" with { type: "json" };
+import graphTask from "../api/jobs/task-input.v6.schema.json" with { type: "json" };
 
 import clipJobStatus from "../api/jobs/job-status.v3.schema.json" with { type: "json" };
+
+import graphControl from "../api/jobs/graph-control.v1.schema.json" with { type: "json" };
+import graphControlResult from "../api/jobs/graph-control-result.v1.schema.json" with { type: "json" };
+import graphRun from "../api/jobs/graph-run.v1.schema.json" with { type: "json" };
+
+import graphClaim from "../api/jobs/graph-claim.v1.schema.json" with { type: "json" };
+import graphGrant from "../api/jobs/graph-grant.v1.schema.json" with { type: "json" };
+import graphRetryRequest from "../api/http/graph-retry-request.v1.schema.json" with { type: "json" };
+import graphRetryCommand from "../api/http/graph-retry-command.v1.schema.json" with { type: "json" };
 
 export { catalog };
 export const commonSchema: object = common;
@@ -153,6 +164,7 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "http.stage-rerun-result.v2": stageRerunResultV2,
   "artifacts.cached-originating-recipe.v1": cachedOriginatingRecipe,
   "artifacts.processing-result.v6": processingResultV6,
+  "artifacts.processing-result.v7": processingResultV7,
   "artifacts.segments.v2": cached0,
   "artifacts.captions.v2": cached1,
   "artifacts.hand-presence.v2": cached2,
@@ -245,6 +257,14 @@ export const contractSchemas: Readonly<Record<string, object>> = {
   "jobs.recipe.v1": s74,
   "jobs.module-manifest.v1": s75,
   "jobs.task-input.v5": clipPlanTask,
+  "jobs.graph-control.v1": graphControl,
+  "jobs.graph-control-result.v1": graphControlResult,
+  "jobs.graph-run.v1": graphRun,
+  "jobs.graph-claim.v1": graphClaim,
+  "jobs.graph-grant.v1": graphGrant,
+  "http.graph-retry-request.v1": graphRetryRequest,
+  "http.graph-retry-command.v1": graphRetryCommand,
+  "jobs.task-input.v6": graphTask,
   "jobs.task-input.v4": clipTask,
   "jobs.task-input.v3": s76,
   "jobs.controller-action.v2": s77,

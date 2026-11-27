@@ -12,9 +12,9 @@ from pathlib import Path
 from time import monotonic, sleep, time
 
 import pytest
+from historical_controller import run_controller
 from stateaction_controller.api import JobsApi
 from stateaction_controller.config import load_settings, secret
-from stateaction_controller.controller import run_controller
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -527,7 +527,8 @@ def test_official_runner_loss_keeps_worker_and_fences_replacement_run(world):
         assert view.alive and view.ticks == journal["startTicks"]
         parent = view.parent
         controller_fd = os.pidfd_open(parent)
-        assert b"stateaction_controller.workflow" in Path(
+        workflow_path = (HERE / "historical-workflow.py").relative_to(ROOT)
+        assert os.fsencode(workflow_path) in Path(
             f"/proc/{parent}/cmdline"
         ).read_bytes().split(b"\0")
         assert call("kill-runner")["stopped"]

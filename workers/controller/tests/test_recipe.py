@@ -4,11 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from historical_recipe import run_recipe
 from stateaction_contracts import request_sha256
 from stateaction_controller.api import ApiRejection
 from stateaction_controller.config import Settings
 from stateaction_controller.journal import JournalStore, iso
-from stateaction_controller.recipe import run_recipe
 from test_modal_controller import JOB, NOW
 
 FIXTURES = (
@@ -107,7 +107,7 @@ class Scenario:
 
 @pytest.fixture(autouse=True)
 def clock(monkeypatch):
-    monkeypatch.setattr("stateaction_controller.recipe.time", lambda: NOW)
+    monkeypatch.setattr("historical_recipe.time", lambda: NOW)
 
 
 @pytest.mark.parametrize(

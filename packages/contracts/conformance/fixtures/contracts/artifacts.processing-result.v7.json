@@ -1,0 +1,137 @@
+{
+  "contract": "artifacts.processing-result.v7",
+  "cases": [
+    {
+      "name": "settled recording graph and its verified plan",
+      "input": {
+        "document": {
+          "schema": "stateaction.processing_result.v7",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_id": "cpu_hand_canary@1",
+          "recipe_sha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e",
+          "scope": "recording",
+          "clip_plan": {
+            "schema": "stateaction.clip-plan.v1",
+            "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+            "plan_version": 1,
+            "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "frame_count": 3,
+            "origin_ts_ns": "9223372036854100000",
+            "clock_domain": "android.elapsed_realtime",
+            "mode": "passthrough",
+            "state": "succeeded",
+            "error_code": null,
+            "filter_version": "clip_filter@0",
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "producer": {
+              "module_id": "clip_filter",
+              "revision": "0",
+              "weights_sha256": null,
+              "gpu_type": null
+            },
+            "spans": [
+              {
+                "kind": "clip",
+                "start_ordinal": 0,
+                "end_ordinal": 3,
+                "first_source_frame_id": "7",
+                "last_source_frame_id": "10",
+                "start_ts_ns": "9223372036854100000",
+                "end_ts_ns": "9223372036854600000"
+              }
+            ]
+          },
+          "outputs": [],
+          "clips": [],
+          "checks": [],
+          "nodes": [
+            {
+              "node_id": "source_span",
+              "module": "clip_filter_passthrough@1",
+              "state": "succeeded",
+              "error_code": null,
+              "receipt_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+              "execution_ref": "local-recipe-call",
+              "source_job_id": null,
+              "outputs": [],
+              "counts": {
+                "frames": 3
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "name": "publication names the receipt digest explicitly",
+      "input": {
+        "document": {
+          "schema": "stateaction.processing_result.v7",
+          "job_id": "019a4b2c-3d4e-7f50-8a6b-7c8d9e0f1a2b",
+          "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+          "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipe_id": "cpu_hand_canary@1",
+          "recipe_sha256": "8b8a626a4476de8a4c95ce5110142279105a61ee4667fd54f11bf2e3aa96a24e",
+          "scope": "recording",
+          "clip_plan": {
+            "schema": "stateaction.clip-plan.v1",
+            "recording_id": "41217451-7311-545d-89e4-fbbb5c943d77",
+            "plan_version": 1,
+            "source_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "frame_count": 3,
+            "origin_ts_ns": "9223372036854100000",
+            "clock_domain": "android.elapsed_realtime",
+            "mode": "passthrough",
+            "state": "succeeded",
+            "error_code": null,
+            "filter_version": "clip_filter@0",
+            "params_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+            "producer": {
+              "module_id": "clip_filter",
+              "revision": "0",
+              "weights_sha256": null,
+              "gpu_type": null
+            },
+            "spans": [
+              {
+                "kind": "clip",
+                "start_ordinal": 0,
+                "end_ordinal": 3,
+                "first_source_frame_id": "7",
+                "last_source_frame_id": "10",
+                "start_ts_ns": "9223372036854100000",
+                "end_ts_ns": "9223372036854600000"
+              }
+            ]
+          },
+          "outputs": [],
+          "clips": [],
+          "checks": [],
+          "nodes": [
+            {
+              "node_id": "source_span",
+              "module": "clip_filter_passthrough@1",
+              "state": "succeeded",
+              "error_code": null,
+              "execution_ref": "local-recipe-call",
+              "source_job_id": null,
+              "outputs": [],
+              "counts": {
+                "frames": 3
+              }
+            }
+          ]
+        }
+      },
+      "expect": {
+        "valid": false,
+        "code": "schema_violation"
+      }
+    }
+  ]
+}

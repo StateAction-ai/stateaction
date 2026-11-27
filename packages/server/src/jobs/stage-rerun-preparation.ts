@@ -1,5 +1,8 @@
 import type { ModalRerunBinding, Stage } from "@stateaction/contracts";
-import { ObjectHashError } from "../acceptance/storage.js";
+import {
+  ObjectHashError,
+  objectVerificationMs,
+} from "../acceptance/storage.js";
 import { TransportError } from "../transport/errors.js";
 import type { StageRerunPlan } from "./stage-reruns.js";
 import { boundedRun, type JobsDeps } from "./service.js";
@@ -15,17 +18,6 @@ export type RerunPreparation =
         Record<"segment" | "caption" | "handPose", ModalRerunBinding>
       >;
     };
-
-const maxObjectVerificationMs = 55 * 60_000;
-const verificationMs = (bytes: number, deadline: Date) =>
-  Math.max(
-    1,
-    Math.min(
-      deadline.getTime() - Date.now(),
-      maxObjectVerificationMs,
-      30_000 + Math.ceil(bytes / (4 * 1024 ** 2)) * 1000,
-    ),
-  );
 
 export async function prepareStageRerun(
   deps: JobsDeps,
@@ -50,6 +42,7 @@ export async function prepareStageRerun(
   if (!job.derived_from_job_id) return { state: "regular" };
   if (!job.owns_lease || !job.plan)
     throw new TransportError("forbidden", "Rerun preparation unavailable");
+  const graph = (job.plan as { schemaVersion?: number }).schemaVersion === 3;
   const ready = (): RerunPreparation => ({
     state: "ready",
     execute: job.plan!.execute,
@@ -69,7 +62,12 @@ export async function prepareStageRerun(
     );
   }
   await boundedRun(deps.pool, (tx) =>
-    tx.query("SELECT job_rerun_reserve_copies($1, $2)", [jobId, owner]),
+    tx.query(
+      graph
+        ? "SELECT job_graph_reserve_copies($1, $2)"
+        : "SELECT job_rerun_reserve_copies($1, $2)",
+      [jobId, owner],
+    ),
   );
   const {
     rows: [copy],
@@ -94,7 +92,13 @@ export async function prepareStageRerun(
      ORDER BY c.slot LIMIT 1`,
     [jobId],
   );
-  if (!copy) return ready();
+  if (!copy) {
+    if (graph)
+      await boundedRun(deps.pool, (tx) =>
+        tx.query("SELECT job_graph_finish_copies($1, $2)", [jobId, owner]),
+      );
+    return ready();
+  }
   const size = Number(copy.size_bytes);
   const deadline = job.execution_deadline;
   const { hasher } = deps.acceptance;
@@ -164,7 +168,7 @@ export async function prepareStageRerun(
   const matches = async (key: string) => {
     try {
       return (
-        (await hasher.hash(key, size, verificationMs(size, deadline)))
+        (await hasher.hash(key, size, objectVerificationMs(size, deadline)))
           .sha256 === copy.sha256
       );
     } catch (error) {

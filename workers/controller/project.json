@@ -37,8 +37,8 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-window-3.json",
-        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-wire.json",
+        "{workspaceRoot}/packages/modal-verifier/tests/fixtures/modal-deployment-window-3.json",
+        "{workspaceRoot}/packages/modal-verifier/tests/fixtures/modal-deployment-wire.json",
         "{workspaceRoot}/packages/modal-verifier/tests/test_verifier.py",
         "{workspaceRoot}/packages/modal-verifier/tests/fixtures/**",
         "{workspaceRoot}/packages/contracts/conformance/fixtures/contracts/jobs.recipe.v1.json",
@@ -57,12 +57,12 @@
       ],
       "options": {
         "cwd": "workers/controller",
-        "command": "uv run --locked pytest -q integration"
+        "command": "uv run --locked pytest -q integration && cd ../.. && node --conditions=react-server workers/controller/integration/graph-local-world.mjs && node --conditions=react-server workers/controller/integration/graph-local-world.mjs default && node --conditions=react-server workers/controller/integration/graph-local-world.mjs early-retry"
       },
       "inputs": [
         "default",
         "^fixtureProduction",
-        "{workspaceRoot}/apps/jobs/test-integration/harness.mjs",
+        "{projectRoot}/integration/harness.mjs",
         "{workspaceRoot}/packages/server/test-auth/**",
         "{workspaceRoot}/apps/web/test-e2e/seaweedfs.mjs",
         "{workspaceRoot}/scripts/platform/free-port.mjs",

@@ -3594,6 +3594,9 @@ def render() -> dict[Path, bytes]:
 
     files.update(render_sa147())
     files.update(render_sa150(files))
+    from generate_sa154_fixtures import render_sa154
+
+    files.update(render_sa154())
     return files
 
 

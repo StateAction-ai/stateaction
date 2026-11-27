@@ -55,13 +55,15 @@ test("the Render start key lives on the API only; the repair cron has an API cap
   assert.ok(!envKeys(blocks.workflow).includes("RENDER_API_KEY"));
   assert.deepEqual(envKeys(blocks.cron).sort(), [
     "APP_ENV",
-    "NODE_VERSION",
+    "PYTHON_VERSION",
     "REPAIR_CAPABILITY_TOKEN",
     "STATEACTION_API_URL",
   ]);
   for (const key of ["REPAIR_CAPABILITY_TOKEN", "STATEACTION_API_URL"])
     assert.match(blocks.cron, new RegExp(`key: ${key}\\n\\s+sync: false`));
   assert.match(blocks.cron, /schedule: "\* \* \* \* \*"/);
+  assert.match(blocks.cron, /runtime: python/);
+  assert.match(blocks.cron, /python -m stateaction_controller\.repair/);
   assert.doesNotMatch(
     blocks.cron,
     /DATABASE|S3_|RENDER_API_KEY|MODAL|fromDatabase/,
@@ -77,12 +79,16 @@ test("workflow tasks receive no database, storage or dispatch credentials", () =
     "EXECUTION_BACKEND",
     "JOBS_STATE_DIR",
     "MODAL_APP_NAME",
+    "MODAL_ENVIRONMENT",
     "MODAL_FUNCTION_NAME",
+    "MODAL_STAGE_FUNCTIONS",
     "MODAL_TOKEN_ID",
     "MODAL_TOKEN_SECRET",
-    "NODE_VERSION",
+    "PYTHON_VERSION",
     "STATEACTION_API_URL",
   ]);
+  assert.match(blocks.workflow, /runtime: python/);
+  assert.match(blocks.workflow, /python -m stateaction_controller\.workflow/);
   for (const key of ["CONTROLLER_CAPABILITY_TOKEN", "STATEACTION_API_URL"])
     assert.match(blocks.workflow, new RegExp(`key: ${key}\\n\\s+sync: false`));
   assert.ok(!envKeys(blocks.web).includes("CONTROLLER_CAPABILITY_TOKEN"));

@@ -303,7 +303,8 @@ export async function allocateJobOutput(
       const clipJob = inventory.kind === "clip_pipeline";
       if (
         (planJob &&
-          !["recording_mp4", "result_manifest"].includes(request.role)) ||
+          !["recording_mp4", "result_manifest"].includes(request.role) &&
+          !(authority.nodeId && request.role === "diagnostic_blob")) ||
         (clipJob && request.role === "recording_mp4") ||
         (request.slot === REVIEW_VIDEO_SLOT &&
           (!clipJob ||

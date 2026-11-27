@@ -142,25 +142,6 @@ export function assertEnvironmentIsolation(config: ServerConfig): void {
   if (config.appEnv === "production" && config.bucket.endsWith("-dev"))
     throw new Error("Production must not use the development bucket");
 }
-export function assertLocalDispatch(
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  if (
-    env.APP_ENV !== "local" ||
-    env.NODE_ENV === "production" ||
-    env.RENDER_USE_LOCAL_DEV !== "true"
-  )
-    throw new Error("Development dispatch is disabled");
-  const target = new URL(env.RENDER_LOCAL_DEV_URL ?? "http://127.0.0.1:8120");
-  if (target.protocol !== "http:" || !LOOPBACK.includes(target.hostname))
-    throw new Error("Local workflow endpoint must be loopback HTTP");
-  if (
-    !env.LOCAL_SMOKE_TOKEN ||
-    env.LOCAL_SMOKE_TOKEN.length < 24 ||
-    env.LOCAL_SMOKE_TOKEN === "replace-with-a-local-random-token"
-  )
-    throw new Error("Set a random local smoke token");
-}
 
 /** Browser media uses the local broker only in the explicit hosted data profile. */
 export function mediaReadOrigin(): string {

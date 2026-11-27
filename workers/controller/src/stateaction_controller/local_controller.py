@@ -5,13 +5,14 @@ from contextlib import suppress
 from time import time
 from uuid import uuid4
 
-from .api import AmbiguousApiError, ApiRejection
+from .api import AmbiguousApiError, ApiRejection, reconcile_graph_request
 from .journal import JournalCorrupt, instant, iso
 from .local_process import (
     boot_id,
     exit_result,
     helper,
     inspect,
+    last_graph_result,
     last_receipt,
     send_bootstrap,
     spawn,
@@ -201,7 +202,7 @@ async def run_local(controller, status, stage=None):
     return await supervise(controller, journal, stage, child, unknown)
 
 
-async def supervise(controller, journal, stage, child, unknown):
+async def supervise(controller, journal, stage, child, unknown, *, graph=False):
     settings, store, lease = controller.settings, controller.store, controller.lease
     job_id, ref = controller.job_id, journal["executionRef"]
     if not journal.get("singleProcess") and not journal.get("pidNamespace"):
@@ -268,7 +269,7 @@ async def supervise(controller, journal, stage, child, unknown):
         journal = dict(
             journal, phase="exited", exit=exit_result(child.poll() if child else None)
         )
-        if stage:
+        if stage or graph:
             journal["termination"] = termination
         store.write_local(journal)
 
@@ -278,14 +279,32 @@ async def supervise(controller, journal, stage, child, unknown):
     evidence = "recorded" if journal.get("evidenceRecorded") else "unconfirmed"
     if evidence != "recorded":
         try:
-            await record_local_evidence(
-                controller.api,
-                controller.run_ref,
-                journal,
-                termination,
-                recovery,
-                child,
-            )
+            if graph:
+                await reconcile_graph_request(
+                    lambda: controller.api.graph_action(
+                        job_id,
+                        "record_node_terminal",
+                        nodeId=journal["stage"],
+                        owner=lease.owner,
+                        executionRef=ref,
+                        kind="local_child_reaped",
+                        observed={
+                            "termination": journal.get("termination", "natural_exit"),
+                            "exit": exit,
+                        },
+                    ),
+                    lease.live,
+                    lambda: asyncio.sleep(settings.poll),
+                )
+            else:
+                await record_local_evidence(
+                    controller.api,
+                    controller.run_ref,
+                    journal,
+                    termination,
+                    recovery,
+                    child,
+                )
         except API_ERRORS:
             pass
         else:
@@ -300,6 +319,8 @@ async def supervise(controller, journal, stage, child, unknown):
         if stage
         else None
     )
+    if graph:
+        receipt = last_graph_result(store, journal)
     return {
         "outcome": "child_exited",
         "executionRef": ref,

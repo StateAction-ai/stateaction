@@ -1,5 +1,5 @@
+import { randomBytes, randomUUID } from "node:crypto";
 import type pg from "pg";
-import { randomUUID } from "node:crypto";
 import {
   canonicalJson,
   requestSha256,
@@ -46,6 +46,10 @@ import {
   type ManifestFacts,
   type SourceFile,
 } from "./manifest.js";
+import {
+  composeGraphManifest,
+  GRAPH_MANIFEST_CONTRACT,
+} from "./graph-manifest.js";
 import { ObjectHashError, type ObjectHasher } from "./storage.js";
 import {
   hasNoHandInterval,
@@ -213,10 +217,12 @@ async function closeOutputsInTransaction(
     manifest: string | null;
   }>(
     `SELECT count(*)::int AS files, coalesce(sum(f.size_bytes), 0)::text AS bytes,
-              count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE s.slot LIKE 'clips/%')::int AS clips,
+              CASE WHEN EXISTS (SELECT 1 FROM job_recipe_graphs WHERE job_id = $1)
+                  THEN count(*) FILTER (WHERE f.role = 'clip_mp4')::int
+                  ELSE count(DISTINCT substr(s.slot, 7, 3)) FILTER (WHERE s.slot LIKE 'clips/%')::int END AS clips,
               (array_agg(f.id) FILTER (WHERE f.role = 'result_manifest'))[1] AS manifest
        FROM files f LEFT JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
-       WHERE f.job_id = $1 AND f.purpose = 'output'`,
+       WHERE f.job_id = $1 AND f.purpose = 'output' AND graph_output_in_inventory($1,f.id,f.role)`,
     [jobId],
   );
   const s = stats.rows[0]!;
@@ -397,6 +403,136 @@ async function submitCandidateInTransaction(
   return ackOf(jobId, inserted.rows[0]!, "result_pending");
 }
 
+export async function sealGraphRecipe(
+  deps: AcceptanceDeps,
+  transport: TransportDeps,
+  jobId: string,
+  owner: string,
+): Promise<boolean> {
+  const finished = await run(deps.pool, async (tx) => {
+    await tx.query(
+      "SELECT r.id FROM recordings r JOIN jobs j ON j.recording_id = r.id WHERE j.id = $1 FOR UPDATE OF r",
+      [jobId],
+    );
+    const { rows } = await tx.query<{ state: string; reason: string | null }>(
+      `SELECT j.state,
+         CASE
+           WHEN j.state = 'cancel_requested' THEN 'cancel_requested'
+           WHEN j.execution_deadline <= clock_timestamp() THEN 'execution_deadline'
+           WHEN j.state = 'needs_attention' THEN 'execution_needs_attention'
+           WHEN j.state = 'submit_unknown' THEN 'submission_unconfirmed'
+           WHEN j.claimed_at IS NULL THEN 'graph_worker_unclaimed'
+           WHEN j.kind = 'clip_plan' AND NOT (has.plan_node AND has.video_node) THEN 'recording_graph_failed'
+           WHEN j.kind = 'clip_pipeline' AND NOT has.hand_node THEN 'clip_graph_failed'
+         END AS reason
+       FROM jobs j JOIN job_recipe_graphs g ON g.job_id = j.id
+       CROSS JOIN LATERAL (
+         SELECT coalesce(bool_or(o.artifact_type = 'clip_plan@1'
+           AND o.node_id || '.' || o.port = g.graph #>> '{fanOut,clip}'),false) AS plan_node,
+           coalesce(bool_or(o.artifact_type = 'review_video@1'),false) AS video_node,
+           coalesce(bool_or(o.artifact_type = 'hand_pose@2' AND f.role = 'hand_presence_json'),false) AS hand_node
+         FROM job_recipe_node_outputs o JOIN files f ON f.id = o.file_id
+         WHERE o.job_id = j.id
+       ) has
+       WHERE j.id = $1 AND job_graph_settled(j.id)
+       FOR UPDATE OF j`,
+      [jobId],
+    );
+    const job = rows[0];
+    if (!job) return false;
+    if (job.state === "cancelled" || job.state === "failed") return true;
+    if (
+      !job.reason ||
+      ![
+        "cancel_requested",
+        "running",
+        "submitting",
+        "submit_unknown",
+        "needs_attention",
+      ].includes(job.state)
+    )
+      return false;
+    await tx.query(
+      `INSERT INTO job_execution_evidence (job_id,kind,detail,recorded_by)
+       VALUES ($1,'graph_nodes_terminal',jsonb_build_object('reason',$3::text),$2)
+       ON CONFLICT (job_id) DO NOTHING`,
+      [jobId, owner, job.reason],
+    );
+    const cancelled = job.reason === "cancel_requested";
+    await tx.query(
+      "UPDATE jobs SET state = $2, error_code = $3, finished_at = now() WHERE id = $1",
+      [
+        jobId,
+        cancelled ? "cancelled" : "failed",
+        cancelled ? null : job.reason,
+      ],
+    );
+    return true;
+  });
+  if (finished) return true;
+  const {
+    rows: [prior],
+  } = await deps.pool.query<{ status: string }>(
+    "SELECT status FROM job_result_candidates WHERE job_id = $1 AND EXISTS (SELECT 1 FROM job_graph_seals WHERE job_id = $1)",
+    [jobId],
+  );
+  if (prior) {
+    await advanceResult(deps, jobId);
+    return prior.status !== "rejected";
+  }
+  const {
+    rows: [seal],
+  } = await deps.pool.query<{ nonce: string }>(
+    "SELECT job_graph_seal($1,$2,$3) AS nonce",
+    [jobId, owner, randomBytes(32).toString("base64url")],
+  );
+  if (!seal) throw forbidden("Graph cannot be sealed");
+  const manifest = await composeGraphManifest(deps, jobId);
+  const bytes = Buffer.from(JSON.stringify(manifest));
+  const verdict = validateBytes(GRAPH_MANIFEST_CONTRACT, bytes);
+  if (!verdict.valid) {
+    const path = verdict.errors[0]?.path || "/";
+    throw conflict("Assembled graph manifest is invalid at " + path);
+  }
+  const manifestFileId = await uploadServerManifest(
+    transport,
+    jobId,
+    owner,
+    bytes,
+  );
+  await run(deps.pool, async (tx) => {
+    const lease = await tx.query(
+      "SELECT 1 FROM jobs WHERE id = $1 AND controller_lease_owner = $2 AND controller_lease_expires_at > clock_timestamp() FOR UPDATE",
+      [jobId, owner],
+    );
+    if (!lease.rowCount) throw forbidden("Graph assembly lease expired");
+    await closeOutputsInTransaction(tx, {
+      jobId,
+      invocationNonce: seal.nonce,
+      outcome: "succeeded",
+    });
+    await submitCandidateInTransaction(tx, deps.config, {
+      jobId,
+      invocationNonce: seal.nonce,
+      manifestFileId,
+      manifestSha256: sha256Hex(bytes),
+      summary: {
+        outcome: "succeeded",
+        clipCount: manifest.clips.length,
+        checks: summarizeChecks(manifest.checks as { status?: unknown }[]),
+        errorCode: null,
+      },
+    });
+    await tx.query(
+      `INSERT INTO job_execution_evidence (job_id,kind,detail,recorded_by)
+       VALUES ($1,'graph_nodes_terminal','{}'::jsonb,$2) ON CONFLICT (job_id) DO NOTHING`,
+      [jobId, owner],
+    );
+  });
+  await advanceResult(deps, jobId);
+  return true;
+}
+
 // ------------------------------------------------------------ parallel recipes
 
 /** The draft is a completed, immutable hand-pose output. Its final bytes are
@@ -452,6 +588,15 @@ async function publishPreparedManifest(
   }
   if (!finalBytes) return;
 
+  await uploadServerManifest(transport, jobId, owner, finalBytes);
+}
+
+async function uploadServerManifest(
+  transport: TransportDeps,
+  jobId: string,
+  owner: string,
+  finalBytes: Buffer,
+) {
   const authority = { kind: "job" as const, jobId, sealLeaseOwner: owner };
   const plan = await allocateJobOutput(transport, authority, {
     slot: RESULT_MANIFEST_SLOT,
@@ -459,7 +604,8 @@ async function publishPreparedManifest(
     sizeBytes: String(finalBytes.length),
     sha256: sha256Hex(finalBytes),
   });
-  if (plan.state === "completed") return;
+  if (plan.state === "completed" || plan.state === "verified")
+    return plan.fileId;
   const epoch = { expectedTransportEpoch: plan.transportEpoch };
   if (plan.state === "uploading") {
     const {
@@ -492,6 +638,7 @@ async function publishPreparedManifest(
       "provider_unavailable",
       "Manifest upload is awaiting completion",
     );
+  return plan.fileId;
 }
 
 async function composePreparedManifest(
@@ -958,14 +1105,17 @@ async function verifyCandidate(
   const sliceEnd = Date.now() + config.verifySliceMs;
   if (Date.now() > wall) return reject("verification_timeout");
   const files = (
-    await pool.query<OutputRow>(
+    await pool.query<OutputRow & { node_verified: boolean }>(
       `SELECT f.id, f.role, f.size_bytes::text, f.sha256, f.object_key, s.slot,
-              (v.file_id IS NOT NULL) AS verified, c.original_job_id
+              (v.file_id IS NOT NULL) AS verified, (g.file_id IS NOT NULL) AS node_verified,
+              c.original_job_id
        FROM files f
        JOIN job_output_slots s ON s.file_id = f.id AND s.job_id = f.job_id
        LEFT JOIN job_output_verifications v ON v.file_id = f.id AND v.inventory_sha256 = $2
+       LEFT JOIN job_graph_file_verifications g ON g.file_id = f.id AND g.job_id = f.job_id
+         AND g.sha256 = f.sha256 AND g.size_bytes = f.size_bytes
        LEFT JOIN job_rerun_copies c ON c.job_id = f.job_id AND c.file_id = f.id AND c.sha256 = f.sha256
-       WHERE f.job_id = $1 AND f.purpose = 'output' ORDER BY s.slot`,
+       WHERE f.job_id = $1 AND f.purpose = 'output' AND graph_output_in_inventory($1,f.id,f.role) ORDER BY s.slot`,
       [st.job.id, cand.inventory_sha256],
     )
   ).rows;
@@ -981,7 +1131,7 @@ async function verifyCandidate(
   const maxBytes = planJob
     ? Math.min(
         config.verifyMaxBytes,
-        recordingMp4MaxBytes() + MANIFEST_MAX_BYTES,
+        recordingMp4MaxBytes() + 2 * MANIFEST_MAX_BYTES,
       )
     : jobOutputByteLimit(config.verifyMaxBytes, cand.clip_count);
   if (files.length > maxFiles || totalBytes > maxBytes)
@@ -1018,7 +1168,8 @@ async function verifyCandidate(
     sha256Hex(bytes) !== cand.manifest_sha256
   )
     return reject("manifest_hash_mismatch");
-  const recipe = await recipeFacts(pool, st.job.id);
+  const graphJob = inputs.task_input.schemaVersion === 6;
+  const recipe = graphJob ? null : await recipeFacts(pool, st.job.id);
   // Successful recipe jobs seal using the contract selected at admission.
   // Failed runs still carry a diagnostics-only v2 manifest.
   const sealing = recipe !== null && cand.outcome === "succeeded";
@@ -1042,24 +1193,51 @@ async function verifyCandidate(
       ).rows[0]
     : undefined;
   const verdict = validateBytes(
-    planJob
-      ? "artifacts.clip-plan.v1"
-      : sealing
-        ? handOrigin
-          ? reusedHandManifestContract(inputs.task_input.schemaVersion === 4)
-          : recipeManifestContract(inputs.task_input.schemaVersion === 4)
-        : MANIFEST_CONTRACT,
+    graphJob
+      ? GRAPH_MANIFEST_CONTRACT
+      : planJob
+        ? "artifacts.clip-plan.v1"
+        : sealing
+          ? handOrigin
+            ? reusedHandManifestContract(inputs.task_input.schemaVersion === 4)
+            : recipeManifestContract(inputs.task_input.schemaVersion === 4)
+          : MANIFEST_CONTRACT,
     bytes,
   );
   if (!verdict.valid) return reject("manifest_contract_invalid", verdict.code);
 
-  const verifiedClipPlan = planJob ? (verdict.value as ClipPlanV1) : null;
+  let graphHandNode: string | undefined;
+  if (graphJob) {
+    try {
+      const assembled = await composeGraphManifest(deps, st.job.id);
+      if (
+        sha256Hex(Buffer.from(JSON.stringify(assembled))) !==
+        cand.manifest_sha256
+      )
+        return reject("graph_manifest_mismatch");
+      if (assembled.scope === "clip") {
+        graphHandNode = assembled.outputs
+          .find((f) => f.role === "hand_presence_json")
+          ?.relative_path.split("/")[1];
+        if (!graphHandNode) return reject("graph_hand_presence_missing");
+      }
+    } catch {
+      return reject("graph_manifest_unproved");
+    }
+  }
+  const verifiedClipPlan = planJob
+    ? graphJob
+      ? (verdict.value as { clip_plan: ClipPlanV1 }).clip_plan
+      : (verdict.value as ClipPlanV1)
+    : null;
   if (verifiedClipPlan) {
     const task = inputs.task_input as ClipPlanTaskInputV5;
-    const original = files.find((f) => f.slot === "recording.mp4");
+    const original = files.find((f) =>
+      graphJob ? f.role === "recording_mp4" : f.slot === "recording.mp4",
+    );
     const originalMatches =
       verifiedClipPlan.state === "succeeded"
-        ? files.length === 2 &&
+        ? files.length === (graphJob ? 3 : 2) &&
           original?.role === "recording_mp4" &&
           BigInt(original.size_bytes) <= BigInt(recordingMp4MaxBytes())
         : files.length === 1;
@@ -1075,15 +1253,17 @@ async function verifyCandidate(
       [st.job.recording_id, inputs.source_manifest_sha256],
     );
     if (
-      task.schemaVersion !== 5 ||
+      (!graphJob && task.schemaVersion !== 5) ||
       verifiedClipPlan.recording_id !== st.job.recording_id ||
       verifiedClipPlan.source_manifest_sha256 !==
         inputs.source_manifest_sha256 ||
-      verifiedClipPlan.plan_version !== task.planVersion ||
-      verifiedClipPlan.mode !== task.clipFilter.mode ||
-      verifiedClipPlan.filter_version !== task.clipFilter.module ||
+      verifiedClipPlan.plan_version !== (graphJob ? 1 : task.planVersion) ||
+      verifiedClipPlan.mode !==
+        (graphJob ? "passthrough" : task.clipFilter.mode) ||
+      verifiedClipPlan.filter_version !==
+        (graphJob ? "clip_filter@0" : task.clipFilter.module) ||
       verifiedClipPlan.params_sha256 !==
-        requestSha256(task.clipFilter.params) ||
+        requestSha256(graphJob ? {} : task.clipFilter.params) ||
       verifiedClipPlan.producer.module_id !== "clip_filter" ||
       verifiedClipPlan.producer.revision !== "0" ||
       verifiedClipPlan.producer.weights_sha256 !== null ||
@@ -1156,11 +1336,12 @@ async function verifyCandidate(
         outputs,
         sources,
         ...(sealing ? { recipe: recipe! } : {}),
+        ...(graphHandNode ? { graphHandNode } : {}),
       });
   if (!checked.ok) return reject(checked.code, checked.detail);
   let counts: AnnotationCounts | null = null;
   let search: VerifiedReviewSearch | null = null;
-  if (recipe && cand.outcome === "succeeded") {
+  if ((recipe || graphHandNode) && cand.outcome === "succeeded") {
     const annotated = await checkAnnotations(
       deps,
       files,
@@ -1198,7 +1379,8 @@ async function verifyCandidate(
     if (f.verified) continue;
     if (Date.now() > wall) return reject("verification_timeout");
     if (Date.now() > sliceEnd) return { kind: "incomplete" };
-    if (f !== manifest) {
+    // A graph node already hashed this completed multipart object before exposing its port.
+    if (f !== manifest && !f.node_verified) {
       try {
         const got = await deps.hasher.hash(
           f.object_key,
@@ -1640,7 +1822,7 @@ async function acceptVerified(
         ],
       );
     await tx.query(
-      "UPDATE files SET state = 'verified' WHERE job_id = $1 AND purpose = 'output' AND state = 'completed'",
+      "UPDATE files SET state = 'verified' WHERE job_id = $1 AND purpose = 'output' AND state = 'completed' AND graph_output_in_inventory($1,id,role)",
       [jobId],
     );
     await tx.query(
@@ -1684,7 +1866,10 @@ async function acceptVerified(
         `INSERT INTO clip_plans (recording_id, version, plan_job_id, manifest_sha256,
                                 original_mp4_file_id, original_mp4_sha256, frame_count, plan)
          SELECT j.recording_id, $2, j.id, j.result_manifest_sha256, f.id, f.sha256, $3, $4
-         FROM jobs j LEFT JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
+         FROM jobs j LEFT JOIN job_output_slots s ON s.job_id = j.id AND (s.slot = 'recording.mp4' OR EXISTS (
+           SELECT 1 FROM job_recipe_node_outputs o WHERE o.job_id = j.id AND o.file_id = s.file_id
+             AND o.artifact_type = 'review_video@1'
+         ))
          LEFT JOIN files f ON f.id = s.file_id AND f.job_id = j.id AND f.role = 'recording_mp4'
          WHERE j.id = $1`,
         [jobId, plan.plan_version, plan.frame_count, JSON.stringify(plan)],

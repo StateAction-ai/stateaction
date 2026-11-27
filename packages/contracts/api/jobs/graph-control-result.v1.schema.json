@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/graph-control-result.v1.json",
+  "title": "Graph control acknowledgement",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bootstrapToken",
+        "startDeadline",
+        "executionDeadline"
+      ],
+      "properties": {
+        "state": {
+          "const": "issued"
+        },
+        "bootstrapToken": {
+          "type": "string",
+          "pattern": "^sa_svc_[A-Za-z0-9_-]{43}$"
+        },
+        "startDeadline": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        },
+        "executionDeadline": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "enum": [
+            "already_issued",
+            "started",
+            "already_started",
+            "never_submitted",
+            "recorded",
+            "verifying",
+            "regular",
+            "copying",
+            "ready",
+            "failed"
+          ]
+        }
+      }
+    }
+  ]
+}

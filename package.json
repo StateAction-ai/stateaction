@@ -13,7 +13,7 @@
     "check": "nx run-many -t build,typecheck,syntax,test,format",
     "dev": "pnpm --filter @stateaction/web dev",
     "dev:hosted": "python3 scripts/platform/dev_hosted.py",
-    "dev:jobs": "pnpm --filter @stateaction/jobs dev",
+    "dev:workflow": "uv run --project workers/controller --locked python -m stateaction_controller.workflow",
     "db:migrate": "pnpm --filter @stateaction/server migrate",
     "storage:init": "pnpm --filter @stateaction/server storage:init",
     "test:platform": "nx run infra:integration --skip-nx-cache",

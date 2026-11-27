@@ -15,7 +15,7 @@ app = Workflows()
     name="process-recording",
     timeout_seconds=8 * 60 * 60,
     plan="flex",
-    retry=Retry(max_retries=2, wait_duration_ms=30_000, backoff_scaling=1),
+    retry=Retry(max_retries=0, wait_duration_ms=30_000, backoff_scaling=1),
 )
 async def process_recording(ctx: TaskContext, value: dict) -> dict:
     parse_contract("jobs.controller-input.v1", value)

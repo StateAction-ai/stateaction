@@ -39,10 +39,10 @@ cp .env.example .env
 cp .env.workflows.example .env.workflows.local
 python3 - "$WEB_PORT" "$RUNNER_PORT" <<'PY'
 from pathlib import Path
-import re, secrets, sys
+import re, sys
 web, runner = sys.argv[1:3]
 p = Path('.env')
-text = p.read_text().replace('replace-with-a-local-random-token', secrets.token_hex(32))
+text = p.read_text()
 for key, value in (
     ('RENDER_LOCAL_DEV_URL', f'http://127.0.0.1:{runner}'),
     ('BETTER_AUTH_URL', f'http://127.0.0.1:{web}'),
@@ -124,11 +124,11 @@ printf 'S3_PUBLIC_ENDPOINT=%s\n' "$public_endpoint" >> .env # differs from S3_EN
 pnpm storage:presign
 PORT="$WEB_PORT" setsid pnpm dev > artifacts/platform-ci/web.log 2>&1 &
 web_pid=$!
-setsid artifacts/platform-tools/render/render workflows dev --port "$RUNNER_PORT" --env-file .env.workflows.local -- pnpm --filter @stateaction/jobs dev > artifacts/platform-ci/workflows.log 2>&1 &
+setsid artifacts/platform-tools/render/render workflows dev --port "$RUNNER_PORT" --env-file .env.workflows.local -- workers/controller/.venv/bin/python -m stateaction_controller.workflow > artifacts/platform-ci/workflows.log 2>&1 &
 workflow_pid=$!
 for ((end = SECONDS + 60; SECONDS < end;)); do
-  if curl --silent --fail "http://127.0.0.1:$WEB_PORT/api/v1/health" >/dev/null && artifacts/platform-tools/render/render workflows tasks list --local --port "$RUNNER_PORT" -o json >/dev/null 2>&1; then
-    pnpm --filter @stateaction/jobs smoke
+  if curl --silent --fail "http://127.0.0.1:$WEB_PORT/api/v1/health" >/dev/null && artifacts/platform-tools/render/render workflows tasks list --local --port "$RUNNER_PORT" -o json 2>/dev/null | grep -q process-recording; then
+    echo "Local Python workflow registered the processing task"
     exit 0
   fi
   sleep 0.2

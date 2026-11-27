@@ -18,7 +18,21 @@ import {
   writeArtifact,
 } from "./harness.js";
 import { fixtureAcceptResult } from "../src/jobs/fixtures.js";
-import { queuedJob } from "./jobs-harness.js";
+import { depsFor, queuedJob } from "./jobs-harness.js";
+import {
+  claimControllerLease,
+  recordExecutionEvidence,
+} from "../src/jobs/service.js";
+import {
+  claimStage,
+  issueStageClaim,
+  recordStageRun,
+} from "../src/jobs/stages.js";
+import { nonce, owner } from "./jobs-harness.js";
+import { MODULES, recipe } from "./recipe-harness.js";
+import { inTransaction } from "../src/catalog/catalog.js";
+import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
+import { requestSha256 } from "@stateaction/contracts";
 
 const TABLES = [
   "access",
@@ -41,12 +55,25 @@ const TABLES = [
   "file_transport_claims",
   "files",
   "ingest_permissions",
+  "job_effective_execution_status",
   "job_effective_stage_runs",
   "job_execution_evidence",
+  "job_graph_file_verifications",
+  "job_graph_seals",
   "job_inputs",
+  "job_legacy_recipe_nodes",
+  "job_legacy_recipe_outputs",
   "job_output_closures",
   "job_output_slots",
   "job_output_verifications",
+  "job_recipe_graph_definitions",
+  "job_recipe_graphs",
+  "job_recipe_nodes",
+  "job_recipe_node_claims",
+  "job_recipe_node_evidence",
+  "job_recipe_node_outputs",
+  "job_recipe_node_read_status",
+  "job_recipe_node_results",
   "job_result_candidates",
   "job_rerun_copies",
   "job_rerun_plans",
@@ -118,6 +145,7 @@ const VERSIONS = [
   17,
   18,
   ...SA150,
+  25,
 ];
 
 test("published migrations preserve pinned bytes and SA-150 is additive", async () => {
@@ -151,7 +179,7 @@ test("published migrations preserve pinned bytes and SA-150 is additive", async 
     ],
   );
   assert.deepEqual(
-    files.slice(18).map(({ name }) => name),
+    files.slice(18, 24).map(({ name }) => name),
     [
       "019_review_clip_commands.sql",
       "020_review_search.sql",
@@ -161,6 +189,7 @@ test("published migrations preserve pinned bytes and SA-150 is additive", async 
       "024_hosted_console_reads.sql",
     ],
   );
+  assert.equal(files[24]?.name, "025_recipe_graph.sql");
 });
 
 test("migrations apply to an empty database with an unprivileged owner", async () => {
@@ -219,7 +248,234 @@ test("migrations apply to an empty database with an unprivileged owner", async (
   }
 });
 
-test("015–024 preserve a populated v14 recording and backfill its clip pointers", async (t) => {
+test("025 refuses an active execution and leaves the v024 schema intact", async (t) => {
+  const db = await freshDatabase({ migrate: false });
+  t.after(() => db.close());
+  const before = (await loadMigrations()).slice(0, 24);
+  await migrateDatabase({ ownerUrl: db.ownerUrl, migrations: before });
+  const actors = await createActors(db.owner);
+  const { jobId } = await queuedJob({ ...db, actors });
+  const task = await processRecordingTaskInputV2(db.app, jobId);
+  await inTransaction(db.app, async (tx) => {
+    await tx.query(
+      `INSERT INTO job_inputs (job_id, source_manifest_sha256, profile_revision, execution_backend,
+        code_revision, image_spec_sha256, model_sha256, config_sha256, max_output_files,
+        max_output_bytes, max_control_document_bytes, task_input, task_input_sha256)
+       VALUES ($1, $2, $3, 'local', $4, $5, $5, $5, 10, 1000000, 100000, $6, $7)`,
+      [
+        jobId,
+        task.sourceManifestSha256,
+        task.profileRevision,
+        "v024",
+        "8".repeat(64),
+        task,
+        requestSha256(task),
+      ],
+    );
+    await tx.query(
+      "UPDATE dispatch_admission SET job_id = $1, admitted_at = now() WHERE slot = 1",
+      [jobId],
+    );
+    await tx.query(
+      `UPDATE jobs SET state = 'submitting', admitted_at = now(), dispatch_key = 'job:' || id,
+        execution_backend = 'local', execution_deadline = now() + interval '10 minutes' WHERE id = $1`,
+      [jobId],
+    );
+  });
+  assert.equal(
+    (await db.owner.query("SELECT job_id FROM dispatch_admission")).rows[0]
+      .job_id,
+    jobId,
+  );
+  await assert.rejects(
+    migrateDatabase({ ownerUrl: db.ownerUrl }),
+    /recipe migration blocked: 1 slot holders/,
+  );
+  assert.deepEqual(
+    (
+      await db.owner.query(
+        "SELECT max(version) AS version FROM platform_schema_migrations",
+      )
+    ).rows,
+    [{ version: 24 }],
+  );
+  assert.deepEqual(
+    (
+      await db.owner.query(
+        "SELECT to_regclass('job_legacy_recipe_nodes') AS history",
+      )
+    ).rows,
+    [{ history: null }],
+  );
+});
+
+test("025 history is readable by the app role and direct writes are refused", async (t) => {
+  const db = await freshDatabase();
+  t.after(() => db.close());
+  assert.deepEqual(
+    (await db.app.query("SELECT * FROM job_legacy_recipe_nodes")).rows,
+    [],
+  );
+  await assert.rejects(db.app.query("DELETE FROM job_legacy_recipe_nodes"), {
+    code: "42501",
+  });
+  await assert.rejects(
+    db.app.query("SELECT stateaction_grant_recipe_graph_history(current_user)"),
+    { code: "42501" },
+  );
+});
+
+test("025 maps a v024 failed run only after its exact stage evidence is recorded", async (t) => {
+  const db = await freshDatabase({ migrate: false });
+  t.after(() => db.close());
+  const migrations = await loadMigrations();
+  await migrateDatabase({
+    ownerUrl: db.ownerUrl,
+    migrations: migrations.slice(0, 24),
+  });
+  const actors = await createActors(db.owner);
+  const { jobId } = await queuedJob({ ...db, actors });
+  const definition = recipe();
+  const task = {
+    ...(await processRecordingTaskInputV2(db.app, jobId)),
+    schemaVersion: 3,
+    recipe: definition,
+    recipeSha256: requestSha256(definition),
+  };
+  await inTransaction(db.app, async (tx) => {
+    await tx.query(
+      `INSERT INTO job_inputs (job_id,source_manifest_sha256,profile_revision,execution_backend,
+         code_revision,image_spec_sha256,model_sha256,config_sha256,max_output_files,
+         max_output_bytes,max_control_document_bytes,task_input,task_input_sha256)
+       VALUES ($1,$2,$3,'local','v024',$4,$4,$4,64,1000000,100000,$5,$6)`,
+      [
+        jobId,
+        task.sourceManifestSha256,
+        task.profileRevision,
+        "8".repeat(64),
+        task,
+        requestSha256(task),
+      ],
+    );
+    await tx.query(
+      "UPDATE dispatch_admission SET job_id = $1, admitted_at = now() WHERE slot = 1",
+      [jobId],
+    );
+    await tx.query(
+      `UPDATE jobs SET state = 'submitting', admitted_at = now(), dispatch_key = 'job:' || id,
+        execution_backend = 'local', execution_deadline = now() + interval '30 minutes',
+        recipe = $2, recipe_sha256 = $3 WHERE id = $1`,
+      [jobId, definition, task.recipeSha256],
+    );
+  });
+  const deps = depsFor({ ...db, actors, signed: [] });
+  const leaseOwner = owner();
+  assert.equal(
+    (
+      await claimControllerLease(deps, {
+        jobId,
+        runRef: "v024-run",
+        owner: leaseOwner,
+      })
+    ).granted,
+    true,
+  );
+  const claim = await issueStageClaim(deps, {
+    jobId,
+    owner: leaseOwner,
+    stage: "segment",
+  });
+  assert.equal(claim.state, "recorded");
+  if (claim.state !== "recorded") assert.fail("expected a stage bootstrap");
+  const callId = "local-v024-stage";
+  await claimStage(deps, {
+    jobId,
+    bootstrapToken: claim.bootstrapToken,
+    invocationNonce: nonce(),
+    executor: { kind: "local", localExecutionRef: callId },
+  });
+  await assert.rejects(
+    migrateDatabase({ ownerUrl: db.ownerUrl }),
+    /1 unsettled claims/,
+  );
+  const exact = {
+    jobId,
+    recordedBy: leaseOwner,
+    evidence: { kind: "local_child_reaped", executionRef: callId } as const,
+  };
+  await recordExecutionEvidence(deps, exact);
+  const receipt = {
+    schemaVersion: 1 as const,
+    jobId,
+    stage: "segment" as const,
+    module: MODULES.segment,
+    status: "failed" as const,
+    errorCode: "fixture_failure",
+    outputs: [],
+    counts: {},
+    gpu: { requestedType: "none" as const, observedType: null },
+    startedAt: "2026-11-22T10:00:00Z",
+    finishedAt: "2026-11-22T10:01:00Z",
+  };
+  await recordStageRun(deps, {
+    jobId,
+    owner: leaseOwner,
+    stage: "segment",
+    state: "failed",
+    module: MODULES.segment,
+    callId,
+    errorCode: receipt.errorCode,
+    receipt,
+  });
+  await db.app.query(
+    "UPDATE jobs SET state = 'failed', finished_at = now() WHERE id = $1",
+    [jobId],
+  );
+  assert.equal((await recordExecutionEvidence(deps, exact)).slotReleased, true);
+  const source = () =>
+    db.app.query(
+      `SELECT i.task_input, i.task_input_sha256, s.receipt, s.receipt_sha256, e.execution_ref
+     FROM job_inputs i JOIN job_stage_runs s USING(job_id) JOIN job_stage_evidence e USING (job_id,stage)
+     WHERE i.job_id = $1`,
+      [jobId],
+    );
+  const before = (await source()).rows;
+  assert.equal(before[0].receipt_sha256, requestSha256(receipt));
+  assert.deepEqual((await migrateDatabase({ ownerUrl: db.ownerUrl })).applied, [
+    25,
+  ]);
+  assert.deepEqual((await source()).rows, before);
+  assert.deepEqual(
+    (
+      await db.app.query(
+        `SELECT job_id, node_id, scope, admitted_spec, execution_job_id, original_receipt_sha256
+     FROM job_legacy_recipe_nodes WHERE job_id = $1`,
+        [jobId],
+      )
+    ).rows,
+    [
+      {
+        job_id: jobId,
+        node_id: "segment",
+        scope: "recording",
+        admitted_spec: definition.stages[0],
+        execution_job_id: jobId,
+        original_receipt_sha256: requestSha256(receipt),
+      },
+    ],
+  );
+  assert.equal(
+    (
+      await db.app.query(
+        "SELECT 1 FROM job_legacy_recipe_outputs WHERE job_id = $1",
+        [jobId],
+      )
+    ).rowCount,
+    0,
+  );
+});
+
+test("015–025 preserve populated legacy records, review selection and exact file identities", async (t) => {
   const db = await freshDatabase({ migrate: false });
   t.after(() => db.close());
   const migrations = await loadMigrations();
@@ -283,11 +539,10 @@ test("015–024 preserve a populated v14 recording and backfill its clip pointer
        VALUES ($1, 2, $2, $3, 'Manual selection before migration', 'manual')`,
       [recordingId, jobId, actors.staff],
     );
-    assert.deepEqual((await applyMigrations(client, migrations)).applied, [
-      17,
-      18,
-      ...SA150,
-    ]);
+    assert.deepEqual(
+      (await applyMigrations(client, migrations.slice(0, 24))).applied,
+      [17, 18, ...SA150],
+    );
     assert.deepEqual(await rows(), before);
     const after = await guards();
     for (const old of enabled)
@@ -341,6 +596,37 @@ test("015–024 preserve a populated v14 recording and backfill its clip pointer
         )
       ).rows,
       [{ id: recordingId, live_job_id: jobId, selected_job_id: jobId }],
+    );
+    const inventory = async () =>
+      (
+        await client.query(
+          "SELECT to_jsonb(f) AS file FROM files f WHERE f.recording_id = $1 ORDER BY f.id",
+          [recordingId],
+        )
+      ).rows;
+    const savedFiles = await inventory();
+    assert.ok(savedFiles.length > 0);
+    assert.deepEqual((await applyMigrations(client, migrations)).applied, [25]);
+    assert.deepEqual(await rows(), before);
+    assert.deepEqual(await inventory(), savedFiles);
+    assert.deepEqual(
+      (
+        await client.query(
+          "SELECT job_id, seq, selected_by, kind FROM clip_result_selections WHERE clip_id = $1 ORDER BY seq",
+          [recordingId],
+        )
+      ).rows,
+      clipHistory,
+    );
+    assert.equal(
+      (
+        await client.query(
+          "SELECT 1 FROM job_legacy_recipe_nodes WHERE job_id = ANY($1::uuid[])",
+          [[jobId, pre007.jobId]],
+        )
+      ).rowCount,
+      0,
+      "unattributed legacy jobs stay readable without a fabricated node",
     );
   } finally {
     await client.query("ROLLBACK");
@@ -549,6 +835,10 @@ test("the hosted reader can follow rerun lineage and selection without gaining w
       "SELECT public.stateaction_grant_clip_review_reads($1)",
       [reader],
     );
+    await db.owner.query(
+      "SELECT public.stateaction_grant_recipe_graph_history($1)",
+      [reader],
+    );
     const allowed = [
       "job_effective_stage_runs",
       "recording_result_selections",
@@ -561,6 +851,10 @@ test("the hosted reader can follow rerun lineage and selection without gaining w
       "dataset_review_clips",
       "selected_dataset_review_clips",
       "clip_result_selections",
+      "job_legacy_recipe_nodes",
+      "job_legacy_recipe_outputs",
+      "job_recipe_graph_definitions",
+      "job_recipe_node_read_status",
     ];
     for (const relation of allowed) {
       const {
@@ -576,10 +870,19 @@ test("the hosted reader can follow rerun lineage and selection without gaining w
       rows: [privateAcl],
     } = await db.owner.query(
       `SELECT has_table_privilege($1::name, 'rerun_spend_authorizations', 'SELECT') AS spend,
-              has_function_privilege($1::name, 'stateaction_grant_stage_rerun_reads(name)', 'EXECUTE') AS grant`,
+              has_function_privilege($1::name, 'stateaction_grant_stage_rerun_reads(name)', 'EXECUTE') AS grant,
+              has_table_privilege($1::name, 'job_recipe_node_claims', 'SELECT') AS credentials,
+              has_function_privilege($1::name, 'job_graph_issue_claim(uuid,text,text,jsonb,text,integer)', 'EXECUTE') AS issue_claim,
+              has_function_privilege($1::name, 'job_graph_record_terminal(uuid,text,text,text,text,jsonb)', 'EXECUTE') AS evidence`,
       [reader],
     );
-    assert.deepEqual(privateAcl, { spend: false, grant: false });
+    assert.deepEqual(privateAcl, {
+      spend: false,
+      grant: false,
+      credentials: false,
+      issue_claim: false,
+      evidence: false,
+    });
     const readSession = await db.owner.connect();
     try {
       await readSession.query("BEGIN");

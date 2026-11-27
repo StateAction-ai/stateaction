@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location(
 )
 suite = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(suite)
-CAPTURE = ROOT / "apps/jobs/test/fixtures/modal-deployment-window-3.json"
+CAPTURE = ROOT / "packages/modal-verifier/tests/fixtures/modal-deployment-window-3.json"
 
 
 class SpawnWire(suite.FixtureWire):

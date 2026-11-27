@@ -5,11 +5,7 @@ import { setTimeout as pause } from "node:timers/promises";
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import {
-  call,
-  freePort,
-  startWorld,
-} from "../../../apps/jobs/test-integration/harness.mjs";
+import { call, freePort, startWorld } from "./harness.mjs";
 
 const mode = process.argv[2];
 const port = ["runner", "runner-loss"].includes(mode) ? await freePort() : null;
@@ -44,7 +40,7 @@ async function until(check) {
 async function startRunner(stateDir, runnerPort = port, hold = 0) {
   const runnerUrl = `http://127.0.0.1:${runnerPort}`;
   const require = createRequire(
-    new URL("../../../apps/jobs/package.json", import.meta.url),
+    new URL("../../../packages/server/package.json", import.meta.url),
   );
   const { Render } = require("@renderinc/sdk");
   const client = new Render({ useLocalDev: true, localDevUrl: runnerUrl });
@@ -68,8 +64,7 @@ async function startRunner(stateDir, runnerPort = port, hold = 0) {
       "/dev/null",
       "--",
       process.env.SA153_PYTHON,
-      "-m",
-      "stateaction_controller.workflow",
+      "workers/controller/integration/historical-workflow.py",
     ],
     {
       stdio: ["ignore", "ignore", "ignore"],

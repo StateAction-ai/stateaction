@@ -17,6 +17,17 @@ export type ObjectHasher = {
   ): Promise<{ bytes: number; sha256: string }>;
 };
 
+export function objectVerificationMs(bytes: number, deadline: Date): number {
+  return Math.max(
+    1,
+    Math.min(
+      deadline.getTime() - Date.now(),
+      55 * 60_000,
+      30_000 + Math.ceil(bytes / (4 * 1024 ** 2)) * 1000,
+    ),
+  );
+}
+
 export class ObjectHashError extends Error {
   constructor(
     readonly code:

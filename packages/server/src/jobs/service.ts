@@ -8,6 +8,7 @@ import {
   requestSha256,
   validateValue,
   type ClipTaskInputV4,
+  type CompiledGraph,
   type Sha256Hex,
   type TaskInputV2,
 } from "@stateaction/contracts";
@@ -25,11 +26,16 @@ import type { RecipeV1 } from "@stateaction/contracts";
 import {
   admissionDeadlineSeconds,
   clipAdmissionBudget,
+  clipWorkBudget,
   RECIPE_DEADLINE_ERROR_CODE,
   TASK_INPUT_BUILD_FAILED_ERROR_CODE,
   TASK_INPUT_INVALID_ERROR_CODE,
   type JobsConfig,
 } from "./config.js";
+import {
+  graphTaskAdmission,
+  type GraphReleaseBinding,
+} from "./graph-admission.js";
 import { withLocalRecipes } from "./local-recipe.js";
 import { assertJobCurrent, JOB_CURRENT_SQL } from "./current.js";
 
@@ -60,6 +66,7 @@ export type JobsDeps = {
   config: JobsConfig;
   presignRead: PresignRead;
   taskInput?: TaskInputBuilder;
+  graphBindings?: ReadonlyMap<string, GraphReleaseBinding>;
   /**
    * Render task start used by the repair pass (the API's authority; the cron
    * holds none). Absent/null: dispatch is reported unavailable and nothing is
@@ -289,14 +296,24 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       kind: "process_recording" | "clip_plan" | "clip_pipeline";
       clip: ClipTaskInputV4["clip"] | null;
       derived_from_job_id: string | null;
-      capture_recipe: RecipeV1 | null;
+      capture_recipe: (RecipeV1 & Partial<CompiledGraph>) | null;
+      parent_graph: CompiledGraph | null;
+      graph_plan_sha256: string | null;
       capture_recipe_sha256: string | null;
       rerun_recipe: RecipeV1 | null;
       rerun_stages: string[] | null;
+      graph_rerun_plan: {
+        execute: string[];
+        recipeSha256: string;
+        maxComputeCostUsd: string;
+        maxGpuCostUsd: string;
+      } | null;
     }>(
       `SELECT j.id, j.recording_id, r.owner_user_id, j.profile_revision, j.source_manifest_sha256,
-              cp.recipe AS capture_recipe, cp.recipe_sha256 AS capture_recipe_sha256,
+              cp.recipe AS capture_recipe, cp.recipe_sha256 AS capture_recipe_sha256, parent.graph AS parent_graph,
+              graph_plan.sha256 AS graph_plan_sha256,
               j.derived_from_job_id, p.plan -> 'recipe' AS rerun_recipe, p.plan -> 'execute' AS rerun_stages,
+              CASE WHEN p.plan ->> 'schemaVersion' = '3' THEN p.plan END AS graph_rerun_plan,
          j.kind,
          CASE WHEN j.kind = 'clip_pipeline' THEN jsonb_build_object(
            'id', c.id, 'planVersion', c.plan_version, 'planSha256', plan.manifest_sha256,
@@ -311,6 +328,10 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
        LEFT JOIN job_rerun_plans p ON p.job_id = j.id
        LEFT JOIN review_clips c ON c.id = j.clip_id
        LEFT JOIN clip_plans plan ON plan.recording_id = c.recording_id AND plan.version = c.plan_version
+       LEFT JOIN job_recipe_graphs parent ON parent.job_id = plan.plan_job_id
+       LEFT JOIN job_recipe_node_outputs graph_plan
+         ON graph_plan.job_id = parent.job_id AND graph_plan.artifact_type = 'clip_plan@1'
+         AND graph_plan.node_id || '.' || graph_plan.port = parent.graph #>> '{fanOut,clip}'
        WHERE j.kind IN ('process_recording','clip_plan','clip_pipeline') AND j.state = 'queued' AND job_is_current(j.id)
          AND r.status IN ('uploaded', 'processing')
          AND (
@@ -351,7 +372,22 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       );
       if (!ok.rows[0]?.ok) continue;
       if (
+        c.kind === "process_recording" &&
+        deps.graphBindings &&
+        deps.config.executionBackend === "modal"
+      ) {
+        await rejectQueuedJob(
+          tx,
+          c.id,
+          TASK_INPUT_INVALID_ERROR_CODE,
+          "Hosted processing requires an admitted recording graph",
+        );
+        rejectedJobIds.push(c.id);
+        continue;
+      }
+      if (
         c.derived_from_job_id &&
+        !c.graph_rerun_plan &&
         (!c.rerun_recipe || !c.rerun_stages?.length)
       ) {
         await rejectQueuedJob(
@@ -407,6 +443,65 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
         rejectedJobIds.push(c.id);
         continue;
       }
+      let graphAdmission: ReturnType<typeof graphTaskAdmission> | undefined;
+      if (c.kind !== "process_recording" && deps.graphBindings) {
+        try {
+          if (c.derived_from_job_id && !c.graph_rerun_plan)
+            throw new Error("graph_retry_plan_unavailable");
+          graphAdmission = graphTaskAdmission({
+            base: parseContract<TaskInputV2>("jobs.task-input.v2", task),
+            kind: c.kind,
+            clip:
+              c.clip && c.graph_plan_sha256
+                ? {
+                    ...c.clip,
+                    planSha256:
+                      c.graph_plan_sha256 as ClipTaskInputV4["clip"]["planSha256"],
+                  }
+                : null,
+            selectedGraph:
+              c.capture_recipe?.schema === "stateaction.compiled-recipe/v1"
+                ? (c.capture_recipe as unknown as CompiledGraph)
+                : null,
+            selectedSha256: c.capture_recipe_sha256,
+            parentGraph: c.parent_graph,
+            executionBackend: deps.config.executionBackend,
+            codeRevision: deps.config.codeRevision,
+            bindings: deps.graphBindings,
+          });
+          if (c.graph_rerun_plan) {
+            const retry = c.graph_rerun_plan;
+            const selected = new Set(retry.execute);
+            const costs = Object.entries(graphAdmission.runtime).filter(
+              ([id]) => selected.has(id),
+            );
+            if (
+              retry.recipeSha256 !== graphAdmission.graph.recipeSha256 ||
+              selected.size !== retry.execute.length ||
+              costs.length !== selected.size ||
+              costs.reduce(
+                (sum, [, runtime]) => sum + runtime.computeCostCents,
+                0,
+              ) !== Number(retry.maxComputeCostUsd.replace(".", "")) ||
+              costs.reduce(
+                (sum, [, runtime]) => sum + runtime.gpuCostCents,
+                0,
+              ) !== Number(retry.maxGpuCostUsd.replace(".", ""))
+            )
+              throw new Error("graph_retry_plan_changed");
+          }
+          task = graphAdmission.task;
+        } catch (error) {
+          await rejectQueuedJob(
+            tx,
+            c.id,
+            TASK_INPUT_INVALID_ERROR_CODE,
+            (error as Error).message,
+          );
+          rejectedJobIds.push(c.id);
+          continue;
+        }
+      }
       const selectedCaptureRecipe =
         c.capture_recipe &&
         !c.rerun_recipe &&
@@ -430,7 +525,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           recipeSha256: requestSha256(c.rerun_recipe),
         };
       }
-      if (c.kind === "clip_plan") {
+      if (!graphAdmission && c.kind === "clip_plan") {
         const { recipe: _recipe, recipeSha256: _sha, ...base } = task;
         task = {
           ...base,
@@ -444,7 +539,7 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           },
         };
       }
-      if (c.kind === "clip_pipeline") {
+      if (!graphAdmission && c.kind === "clip_pipeline") {
         const recipe = (task.recipe as RecipeV1 | undefined) ?? {
           ...PUBLIC_VIDEO_RECIPE,
           recipeId: "clip_hand_pose@1",
@@ -467,15 +562,17 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       // Legacy single-claim jobs keep their input versions. Both recipe
       // versions pin the same inline recipe; v4 also carries a source range.
       const contract =
-        task.schemaVersion === 5
-          ? "jobs.task-input.v5"
-          : task.schemaVersion === 4
-            ? "jobs.task-input.v4"
-            : task.schemaVersion === 3
-              ? "jobs.task-input.v3"
-              : task.schemaVersion === 2
-                ? "jobs.task-input.v2"
-                : "jobs.task-input.v1";
+        task.schemaVersion === 6
+          ? "jobs.task-input.v6"
+          : task.schemaVersion === 5
+            ? "jobs.task-input.v5"
+            : task.schemaVersion === 4
+              ? "jobs.task-input.v4"
+              : task.schemaVersion === 3
+                ? "jobs.task-input.v3"
+                : task.schemaVersion === 2
+                  ? "jobs.task-input.v2"
+                  : "jobs.task-input.v1";
       // A bad task input rejects only THIS job (never a throw, which would
       // roll back the transaction and leave it at the head of the queue).
       const valid = validateValue(contract, task);
@@ -497,34 +594,47 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
       let budget;
       try {
         budget =
-          task.schemaVersion === 4
-            ? clipAdmissionBudget(cfg, valid.value as ClipTaskInputV4)
-            : task.schemaVersion === 5
-              ? {
-                  maxOutputFiles: Math.min(cfg.limits.maxOutputFiles, 2),
-                  maxOutputBytes: String(
-                    Math.min(
-                      Number(cfg.limits.maxOutputBytes),
-                      recordingMp4MaxBytes() +
-                        cfg.limits.maxControlDocumentBytes,
+          task.schemaVersion === 6 && c.clip && graphAdmission
+            ? clipWorkBudget(
+                cfg,
+                c.clip.sourceRange,
+                Object.values(graphAdmission.runtime).reduce(
+                  (sum, node) => sum + node.budgetSeconds,
+                  0,
+                ),
+              )
+            : task.schemaVersion === 4
+              ? clipAdmissionBudget(cfg, valid.value as ClipTaskInputV4)
+              : c.kind === "clip_plan"
+                ? {
+                    maxOutputFiles: Math.min(
+                      cfg.limits.maxOutputFiles,
+                      graphAdmission ? 3 : 2,
                     ),
-                  ),
-                  deadlineSeconds: cfg.executionDeadlineSeconds,
-                }
-              : {
-                  ...cfg.limits,
-                  deadlineSeconds: admissionDeadlineSeconds(
-                    cfg,
-                    c.rerun_recipe && c.rerun_stages
-                      ? {
-                          stages: c.rerun_recipe.stages.map((spec) => ({
-                            ...spec,
-                            enabled: c.rerun_stages!.includes(spec.stage),
-                          })),
-                        }
-                      : recipe,
-                  ),
-                };
+                    maxOutputBytes: String(
+                      Math.min(
+                        Number(cfg.limits.maxOutputBytes),
+                        recordingMp4MaxBytes() +
+                          cfg.limits.maxControlDocumentBytes *
+                            (graphAdmission ? 2 : 1),
+                      ),
+                    ),
+                    deadlineSeconds: cfg.executionDeadlineSeconds,
+                  }
+                : {
+                    ...cfg.limits,
+                    deadlineSeconds: admissionDeadlineSeconds(
+                      cfg,
+                      c.rerun_recipe && c.rerun_stages
+                        ? {
+                            stages: c.rerun_recipe.stages.map((spec) => ({
+                              ...spec,
+                              enabled: c.rerun_stages!.includes(spec.stage),
+                            })),
+                          }
+                        : recipe,
+                    ),
+                  };
       } catch (error) {
         const message = (error as Error).message;
         await rejectQueuedJob(
@@ -559,6 +669,12 @@ export async function admitNextJob(deps: JobsDeps): Promise<AdmitResult> {
           requestSha256(task),
         ],
       );
+      if (graphAdmission)
+        await tx.query("SELECT job_pin_recipe_graph($1,$2,$3)", [
+          c.id,
+          graphAdmission.graph,
+          graphAdmission.runtime,
+        ]);
       // We hold the slot row lock, so this conditional update cannot lose.
       const won = await tx.query<{ admitted_at: Date }>(
         `UPDATE dispatch_admission SET job_id = $1, admitted_at = now()
@@ -760,15 +876,23 @@ export async function recordWorkerSubmissionIntent(
          AND controller_lease_owner = $2 AND controller_lease_expires_at > now()
          AND execution_deadline > now()
          AND EXISTS (SELECT 1 FROM dispatch_admission a WHERE a.slot = 1 AND a.job_id = jobs.id)
+         AND NOT EXISTS (SELECT 1 FROM job_recipe_graphs g WHERE g.job_id = jobs.id)
        RETURNING start_deadline, execution_deadline, execution_backend`,
       [jobId, owner, hashServiceToken(token), deps.config.startDeadlineSeconds],
     );
     if (!set.rows[0]) {
-      const cur = await tx.query<{ submission_intent_at: Date | null }>(
-        "SELECT submission_intent_at FROM jobs WHERE id = $1",
+      const cur = await tx.query<{
+        submission_intent_at: Date | null;
+        graph_job: boolean;
+      }>(
+        `SELECT submission_intent_at, EXISTS (
+           SELECT 1 FROM job_recipe_graphs g WHERE g.job_id = jobs.id
+         ) AS graph_job FROM jobs WHERE id = $1`,
         [jobId],
       );
       if (!cur.rows[0]) throw new TransportError("not_found", "Job not found");
+      if (cur.rows[0].graph_job)
+        throw conflict("Job requires a graph node claim");
       if (cur.rows[0].submission_intent_at)
         return { state: "already_recorded" } as const;
       throw conflict(
@@ -1132,15 +1256,18 @@ export async function claimWorker(
       start_deadline: Date | null;
       execution_deadline: Date;
       source_manifest_sha256: string;
+      graph_job: boolean;
       now: Date;
     }>(
       `SELECT state, claimed_at, invocation_nonce, execution_call_id, execution_backend,
-         bootstrap_token_sha256, start_deadline, execution_deadline, source_manifest_sha256, now() AS now
+         bootstrap_token_sha256, start_deadline, execution_deadline, source_manifest_sha256, now() AS now,
+         EXISTS (SELECT 1 FROM job_recipe_graphs g WHERE g.job_id = jobs.id) AS graph_job
        FROM jobs WHERE id = $1 FOR UPDATE`,
       [jobId],
     );
     const job = locked.rows[0]!;
     if (
+      job.graph_job ||
       job.bootstrap_token_sha256 !== bootstrapHash ||
       !["submitting", "submit_unknown"].includes(job.state) ||
       job.claimed_at !== null ||

@@ -1,5 +1,6 @@
 """Validate physical completion evidence for exactly the admitted call."""
 
+import json
 import re
 
 from stateaction_contracts import validate_value
@@ -50,3 +51,35 @@ def parse_result(value, call_id, stage=None):
     ):
         return None
     return value
+
+
+def parse_graph_result(value, call_id):
+    if (
+        not isinstance(value, dict)
+        or not call_id_valid(call_id)
+        or value.keys() != {"schemaVersion", "functionCallId", "exitCode", "receipt"}
+        or type(value["schemaVersion"]) is not int
+        or value["schemaVersion"] != 3
+        or value["functionCallId"] != call_id
+        or type(value["exitCode"]) is not int
+        or abs(value["exitCode"]) > 255
+    ):
+        return None
+    receipt = value["receipt"]
+    if value["exitCode"] != 0:
+        return value if receipt is None else None
+    if (
+        not isinstance(receipt, dict)
+        or receipt.keys() != {"receipt", "files"}
+        or not isinstance(receipt["receipt"], str)
+        or len(receipt["receipt"].encode()) > 524288
+        or not isinstance(receipt["files"], list)
+        or len(receipt["files"]) > 2000
+    ):
+        return None
+    try:
+        if len(json.dumps(receipt, allow_nan=False).encode()) <= 1000000:
+            return value
+    except (ValueError, TypeError, RecursionError):
+        pass
+    return None

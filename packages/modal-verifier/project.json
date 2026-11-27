@@ -27,9 +27,6 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/pnpm-lock.yaml",
-        "{workspaceRoot}/apps/jobs/package.json",
-        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-wire.json",
         "{workspaceRoot}/packages/contracts/api/flora-checkpoints.v1.json"
       ],
       "options": {

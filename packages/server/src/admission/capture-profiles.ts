@@ -1,9 +1,8 @@
+import { HARDWARE_RGB_PROFILE } from "@stateaction/contracts";
 import {
-  HARDWARE_RGB_PROFILE,
-  parseContract,
-  type RecipeV1,
-} from "@stateaction/contracts";
-import { PUBLIC_VIDEO_RECIPE } from "./public-video-canary.js";
+  CPU_CANARY_RECIPE_REF,
+  DEFAULT_RECIPE_REF,
+} from "../jobs/recipe-release.js";
 
 export type CaptureChannel = {
   topic: string;
@@ -32,17 +31,10 @@ export const CAPTURE_SOURCES = [
     label: "StateAction mobile app",
     captureFormat: "stateaction.capture.v1",
     rgbProfile: HARDWARE_RGB_PROFILE,
-    defaultRecipeId: PUBLIC_VIDEO_RECIPE.recipeId,
-    allowedRecipeIds: [PUBLIC_VIDEO_RECIPE.recipeId],
+    defaultRecipeId: DEFAULT_RECIPE_REF,
+    allowedRecipeIds: [DEFAULT_RECIPE_REF, CPU_CANARY_RECIPE_REF],
   },
 ] as const;
-
-export function captureRecipeDefinition(
-  recipeId: string,
-): RecipeV1 | undefined {
-  if (recipeId === PUBLIC_VIDEO_RECIPE.recipeId)
-    return parseContract<RecipeV1>("jobs.recipe.v1", PUBLIC_VIDEO_RECIPE);
-}
 
 export function matchCaptureSource(declaration: {
   captureFormat: string;

@@ -2,7 +2,7 @@
   "name": "infra",
   "root": "infra",
   "projectType": "application",
-  "implicitDependencies": ["web", "jobs", "processing"],
+  "implicitDependencies": ["web", "controller-python", "processing"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",
@@ -23,7 +23,7 @@
       "dependsOn": [
         {
           "target": "build",
-          "projects": ["web", "jobs", "processing"]
+          "projects": ["web", "controller-python", "processing"]
         }
       ],
       "options": {

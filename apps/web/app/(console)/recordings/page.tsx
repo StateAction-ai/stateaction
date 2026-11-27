@@ -203,22 +203,21 @@ export default async function RecordingsPage({
                         }
                       />
                     )}
-                    {target?.kind === "failed_clips" && (
-                      <RetryAction
-                        key={target.clips.map(({ jobId }) => jobId).join(",")}
-                        recordingId={item.id}
-                        label="Retry failed clips"
-                        action={{
-                          request: { schemaVersion: 2, scope: "failed_clips" },
-                        }}
-                        ranges={ranges}
-                        disabledReason={
-                          reads.selectionEnabled()
-                            ? null
-                            : "This environment is read-only."
-                        }
-                      />
-                    )}
+                    {target?.kind === "failed_clips" &&
+                      target.clips.some(({ graph }) => graph) && (
+                        <RetryAction
+                          key={target.clips.map(({ jobId }) => jobId).join(",")}
+                          recordingId={item.id}
+                          label="Retry failed clips"
+                          action={{ graph: { scope: "failed_clips" } }}
+                          ranges={ranges}
+                          disabledReason={
+                            reads.selectionEnabled()
+                              ? null
+                              : "This environment is read-only."
+                          }
+                        />
+                      )}
                   </div>
                 </li>
               );

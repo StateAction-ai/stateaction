@@ -40,14 +40,13 @@ UNCACHED = [
     ("mobile-backend-e2e", "e2e"),
     ("infra", "integration"),
     ("controller-python", "integration"),
-    ("jobs", "integration"),
 ]
 # Each affected stage of stages.json maps to a file whose change must select one of its tasks.
 STAGE_FILES = {
     "build": ("packages/server/src/cli.ts", "server"),
     "static": ("packages/server/src/cli.ts", "server"),
     "mobile": ("apps/mobile/lib/main.dart", "mobile"),
-    "integration": ("apps/jobs/test-integration/harness.mjs", "jobs"),
+    "integration": ("workers/controller/integration/harness.mjs", "controller-python"),
 }
 
 
@@ -128,15 +127,15 @@ class NxGraphTests(unittest.TestCase):
             "contracts-dart",
             "server",
             "mobile-backend-e2e",
-            "jobs",
+            "controller-python",
             "web",
         ):
             self.assertIn("contracts", self.upstream(project), project)
-        for project in ("processing", "jobs"):
+        for project in ("processing", "controller-python"):
             self.assertIn("contracts-python", self.upstream(project), project)
 
     def test_jobs_and_the_mobile_e2e_depend_on_server_and_web(self):
-        for project in ("jobs", "mobile-backend-e2e"):
+        for project in ("controller-python", "mobile-backend-e2e"):
             direct = {d["target"] for d in self.graph["dependencies"][project]}
             self.assertTrue({"server", "web"} <= direct, project)
 
@@ -320,20 +319,20 @@ class NxGraphTests(unittest.TestCase):
             out = self.run_runtime(command, PATH=f"{link}:/usr/bin:/bin")
             self.assertEqual(out, '{"flutterVersion": "9"}')
 
-    def test_integration_targets_that_run_compiled_output_build_their_own_project_first(
-        self,
-    ):
-        """SA-114: jobs:integration imports apps/jobs/dist, so a run (or `nx affected`)
-        that did not build jobs first tested stale compiled code."""
-        for project, target in (("jobs", "integration"), ("web", "auth-e2e")):
-            config = self.graph["nodes"][project]["data"]["targets"][target]
-            self.assertIn("build", config["dependsOn"], f"{project}:{target}")
+    def test_python_controller_integration_builds_the_api_and_console(self):
+        config = self.graph["nodes"]["controller-python"]["data"]["targets"][
+            "integration"
+        ]
+        self.assertIn(
+            {"projects": ["server", "web"], "target": "build"}, config["dependsOn"]
+        )
 
-    def test_web_auth_e2e_builds_jobs_because_recipe_e2e_runs_its_compiled_runner(self):
-        """SA-101: recipe.e2e.test.mjs starts `node apps/jobs/dist/index.js`. A web-only change
-        does not affect jobs, so nothing built it and the runner never started (gate land-95)."""
+    def test_web_auth_e2e_builds_the_python_workflow_dependency(self):
         config = self.graph["nodes"]["web"]["data"]["targets"]["auth-e2e"]
-        self.assertIn({"projects": ["jobs"], "target": "build"}, config["dependsOn"])
+        self.assertIn("build", config["dependsOn"])
+        self.assertIn(
+            {"projects": ["controller-python"], "target": "build"}, config["dependsOn"]
+        )
 
     def test_fixture_stage_selects_exactly_the_targets_declared_uncached(self):
         stages = json.loads((Path(__file__).parent / "stages.json").read_text())[
@@ -389,7 +388,8 @@ class NxGraphTests(unittest.TestCase):
     def test_backend_change_reaches_dependents_but_no_mobile_toolchain_project(self):
         reached = self.affected("packages/server/src/cli.ts")
         self.assertTrue(
-            {"server", "web", "jobs", "infra", "mobile-backend-e2e"} <= reached
+            {"server", "web", "controller-python", "infra", "mobile-backend-e2e"}
+            <= reached
         )
         self.assertEqual(
             reached & (MOBILE_PROJECTS - {"mobile-backend-e2e"}), set(), reached
@@ -405,7 +405,7 @@ class NxGraphTests(unittest.TestCase):
                 "mobile-auth-backend-e2e",
                 "mobile-backend-e2e",
                 "web",
-                "jobs",
+                "controller-python",
             }
             <= reached,
             reached,
@@ -522,7 +522,7 @@ class NxGraphTests(unittest.TestCase):
             "packages/server/test-auth/postgres.mjs",
             "packages/server/test-integration/admission.test.ts",
             "apps/web/test-e2e/auth.e2e.test.mjs",
-            "apps/jobs/test-integration/harness.mjs",
+            "workers/controller/integration/harness.mjs",
         ):
             self.assertTrue((ROOT / file).exists(), file)
             self.assertNotIn(file, files)

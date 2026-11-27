@@ -116,6 +116,12 @@ def build_image(
                 # The ADMITTED build-spec digest (not a Modal image ID); the worker compares it
                 # with the claim grant before it reads any source.
                 "STATEACTION_IMAGE_SPEC_SHA256": image_spec_sha256,
+                "STATEACTION_GRAPH_MODULE": os.environ.get(
+                    "STATEACTION_GRAPH_MODULE", ""
+                ),
+                "STATEACTION_GRAPH_PARAMS_SHA256": os.environ.get(
+                    "STATEACTION_GRAPH_PARAMS_SHA256", ""
+                ),
                 "STATEACTION_CAPTURE_CONTRACT_DIR": f"{IMAGE_ROOT}/packages/contracts/capture",
                 "PYTHONPATH": (
                     f"{IMAGE_ROOT}/workers/processing/src"
@@ -146,6 +152,14 @@ def build_image(
             str(repo / "packages/contracts/capture"),
             f"{IMAGE_ROOT}/packages/contracts/capture",
             copy=True,
+        )
+        .add_local_dir(
+            str(repo / "packages/contracts/recipe"),
+            f"{IMAGE_ROOT}/packages/contracts/recipe",
+            copy=True,
+        )
+        .add_local_dir(
+            str(repo / "modules"), f"{IMAGE_ROOT}/modules", copy=True, ignore=ignore
         )
         .run_commands(
             "python -c 'from stateaction_processing.hands import HandInferencer; "
@@ -339,4 +353,11 @@ def _drain_last_line(stream: Any, keep: list[bytes]) -> None:
     name=FUNCTION_NAME,
 )
 def process_recording(bootstrap_json: str) -> dict[str, Any]:
-    return run_bootstrap(bootstrap_json, modal.current_function_call_id())
+    from stateaction_processing.graph_container import run_graph_bootstrap
+
+    return run_graph_bootstrap(
+        bootstrap_json,
+        modal.current_function_call_id(),
+        module=os.environ.get("STATEACTION_GRAPH_MODULE"),
+        budget_seconds=WRAPPER_DEADLINE_SECONDS,
+    )

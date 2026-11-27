@@ -2,14 +2,13 @@
 
 import asyncio
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from secrets import token_urlsafe
 from time import time
 
 from .api import ApiRejection
-from .config import HAND_POSE
 from .journal import JournalStore, instant
-from .modal_controller import API_ERRORS, ModalExecution, outcome
+from .modal_controller import API_ERRORS, outcome
 
 ACTIVE = {
     "submitting",
@@ -88,47 +87,16 @@ class Controller:
     run_ref: str
     modal: object = None
 
-    async def execute(self, status, stage=None):
-        if self.settings.backend == "local":
-            from .local_controller import run_local
 
-            return await run_local(self, status, stage)
-        if self.modal is None:
-            return outcome("no_effect", "modal_client_missing")
-        binding = None
-        if self.settings.pipeline == "clip_plan_cpu_v1":
-            binding = (self.settings.bindings or {}).get(HAND_POSE)
-            if binding and (
-                binding["codeRevision"] != status["codeRevision"]
-                or binding["gpu"] != "none"
-            ):
-                binding = None
-        return await ModalExecution(
-            self.api,
-            self.store,
-            self.modal,
-            self.job_id,
-            self.run_ref,
-            self.lease.owner,
-            self.lease.live,
-            self.settings.api_url,
-            self.settings.pipeline,
-            self.settings.poll,
-            self.settings.renew,
-            self.settings.grace,
-            stage=stage,
-            plan_binding=binding,
-        ).run(status)
-
-
-async def run_controller(settings, api, job_id, run_ref, modal=None):
-    from .recovery import reconcile_ended_evidence
+async def run_with_lease(settings, api, job_id, run_ref, modal, drive, *, recover=None):
+    async def ended(status):
+        if recover is not None:
+            return await recover(settings, api, job_id, run_ref, modal, status)
+        return outcome("no_effect", "job_not_active")
 
     status = await api.status(job_id)
     if status["state"] in TERMINAL:
-        return await reconcile_ended_evidence(
-            settings, api, job_id, run_ref, modal, status
-        )
+        return await ended(status)
     if status["state"] not in ACTIVE:
         return {"outcome": "not_admitted", "state": status["state"]}
     try:
@@ -140,20 +108,11 @@ async def run_controller(settings, api, job_id, run_ref, modal=None):
         if lease["reason"] == "job_not_active":
             status = await api.status(job_id)
             if status["state"] in TERMINAL:
-                return await reconcile_ended_evidence(
-                    settings, api, job_id, run_ref, modal, status
-                )
+                return await ended(status)
             return outcome("no_effect", "lease_refused")
         return lease
     renewer = asyncio.create_task(renew_lease(settings, api, job_id, lease))
     try:
-        recipe = await api.recipe(job_id)
-        if not lease.live():
-            return outcome("lease_lost", "lease_expired")
-        if status["kind"] == "clip_plan":
-            if recipe:
-                return outcome("needs_operator", "unexpected_clip_plan_recipe")
-            settings = replace(settings, pipeline="clip_plan_cpu_v1")
         controller = Controller(
             settings,
             api,
@@ -163,12 +122,20 @@ async def run_controller(settings, api, job_id, run_ref, modal=None):
             run_ref,
             modal,
         )
-        if recipe:
-            from .recipe import run_recipe
-
-            return await run_recipe(controller, recipe, status)
-        return await controller.execute(await api.status(job_id))
+        return await drive(controller, status)
     finally:
         renewer.cancel()
         with suppress(asyncio.CancelledError):
             await renewer
+
+
+async def run_controller(settings, api, job_id, run_ref, modal=None):
+    from .graph_controller import run_graph
+
+    async def drive(controller, _status):
+        graph = await api.graph(job_id)
+        if graph is None:
+            return outcome("needs_operator", "graph_snapshot_unavailable")
+        return await run_graph(controller, graph)
+
+    return await run_with_lease(settings, api, job_id, run_ref, modal, drive)

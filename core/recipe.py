@@ -3,6 +3,7 @@
 import argparse
 import difflib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -56,8 +57,8 @@ def sync(root: Path, *, check: bool):
         if graph["recipe"] in recipe_refs:
             raise ValueError(f"{path}: duplicate recipe id@version")
         recipe_refs.add(graph["recipe"])
-        if graph["recipe"].split("@")[0] != path.stem:
-            raise ValueError(f"{path}: name the source file after the recipe id")
+        if path.stem not in {graph["recipe"].split("@")[0], graph["recipe"]}:
+            raise ValueError(f"{path}: name the source file after the recipe id or ref")
         output = compiled_path(path)
         expected.add(output)
         refresh(output, canonical_json(graph).decode() + "\n", check=check)
@@ -65,6 +66,29 @@ def sync(root: Path, *, check: bool):
         if orphaned := set((root / folder / "compiled").glob("*.json")) - expected:
             paths = ", ".join(str(path.relative_to(root)) for path in sorted(orphaned))
             raise ValueError(f"{paths}: remove compiled graphs without recipe sources")
+
+
+def verify_published_recipes(root: Path, base: str) -> None:
+    def git(*args: str) -> str:
+        return subprocess.check_output(["git", *args], cwd=root, text=True)
+
+    revision = git(
+        "rev-parse", "--verify", "--end-of-options", base + "^{commit}"
+    ).strip()
+    names = git("ls-tree", "-r", "--name-only", revision, "--", "recipes/compiled")
+    current = {}
+    for path in (root / "recipes/compiled").glob("*.json"):
+        graph = json.loads(path.read_text())
+        current[graph["recipe"]] = graph["recipeSha256"]
+    for name in names.splitlines():
+        if not name.endswith(".json"):
+            continue
+        published = json.loads(git("show", f"{revision}:{name}"))
+        ref = published["recipe"]
+        if current.get(ref) != published["recipeSha256"]:
+            raise ValueError(
+                f"{ref}: preserve the published graph and publish a new version"
+            )
 
 
 def compile_with_context(path: Path, root: Path, catalog: dict):
@@ -127,7 +151,9 @@ def main(argv=None):
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("new").add_argument("id")
     commands.add_parser("sync")
-    commands.add_parser("verify")
+    commands.add_parser("verify").add_argument(
+        "--base", default=os.environ.get("STATEACTION_RECIPE_BASE")
+    )
     commands.add_parser("diff").add_argument("--base", default="origin/main")
     for action in ("check", "graph", "run-local"):
         command = commands.add_parser(action)
@@ -150,6 +176,8 @@ def main(argv=None):
             print(f"Created {target.relative_to(ROOT)}")
         elif args.action in {"sync", "verify"}:
             sync(ROOT, check=args.action == "verify")
+            if args.action == "verify" and args.base is not None:
+                verify_published_recipes(ROOT, args.base)
         elif args.action == "diff":
             diff(ROOT, args.base)
         else:

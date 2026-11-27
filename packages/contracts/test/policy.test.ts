@@ -7,7 +7,8 @@ import { requestSha256 } from "../src/canonical.js";
 const api = new URL("../api/", import.meta.url);
 const text = (path: string) => readFileSync(new URL(path, api), "utf8");
 // Prior catalog revisions stay published and immutable.
-const catalog = JSON.parse(text("catalog.v23.json"));
+const catalog = JSON.parse(text("catalog.v24.json"));
+const catalogV23 = JSON.parse(text("catalog.v23.json"));
 const catalogV22 = JSON.parse(text("catalog.v22.json"));
 const catalogV21 = JSON.parse(text("catalog.v21.json"));
 const catalogV20 = JSON.parse(text("catalog.v20.json"));
@@ -904,6 +905,7 @@ test("the module manifest lists every MVP module with its licence, GPU and prove
     "flora_tempseg_hf",
     "flora_captioner_hf",
     "hand_pose_cpu_v1",
+    "hand_pose_cpu",
   ]);
   for (const m of manifest.modules) {
     const local = /^(stub|replay)_/.test(m.moduleId);
@@ -1175,7 +1177,7 @@ test("catalog v22 adds the clip pipeline contracts", () => {
 
 test("catalog v23 adds the SA-150 contracts while pinning published bytes", () => {
   assertExactSuperset(
-    catalog,
+    catalogV23,
     catalogV22,
     ["v22", "v23"],
     [
@@ -1192,4 +1194,24 @@ test("catalog v23 adds the SA-150 contracts while pinning published bytes", () =
   );
   assert.equal(lock.files["catalog.v22.json"], sha256("catalog.v22.json"));
   assert.equal(lock.files["catalog.v23.json"], sha256("catalog.v23.json"));
+});
+
+test("catalog v24 pins graph execution and result contracts", () => {
+  assertExactSuperset(
+    catalog,
+    catalogV23,
+    ["v23", "v24"],
+    [
+      "jobs.task-input.v6",
+      "jobs.graph-control.v1",
+      "jobs.graph-control-result.v1",
+      "jobs.graph-run.v1",
+      "jobs.graph-claim.v1",
+      "jobs.graph-grant.v1",
+      "artifacts.processing-result.v7",
+      "http.graph-retry-request.v1",
+      "http.graph-retry-command.v1",
+    ],
+  );
+  assert.equal(lock.files["catalog.v24.json"], sha256("catalog.v24.json"));
 });

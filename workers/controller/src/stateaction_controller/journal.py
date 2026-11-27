@@ -11,9 +11,10 @@ from uuid import UUID, uuid4
 
 from stateaction_contracts.canonical import loads_strict
 
-from .results import call_id_valid, parse_result
+from .results import call_id_valid, parse_graph_result, parse_result
 
 STAGES = {"segment", "caption", "hand_pose"}
+NODE_ID = re.compile(r"[a-z][a-z0-9_]{0,31}")
 MAX_BYTES = 1_052_672
 PROVIDER_BINDING_FIELDS = {
     "appName",
@@ -70,6 +71,7 @@ def validate_modal(record, job_id, stage, module):
         "exitCode",
         "receipt",
         "spawnBinding",
+        "graph",
     }
     phase = record.get("phase")
     identified = phase in ("submitted", "terminal")
@@ -81,6 +83,7 @@ def validate_modal(record, job_id, stage, module):
         or record["jobId"] != job_id
         or ("stage" in record) != (stage is not None)
         or record.get("stage") != stage
+        or ("graph" in record and (record["graph"] is not True or stage is None))
         or not isinstance(record["runRef"], str)
         or not re.fullmatch(r"[A-Za-z0-9._:-]{1,200}", record["runRef"])
         or phase not in ("intent", "spawning", "submitted", "terminal")
@@ -126,22 +129,23 @@ def validate_modal(record, job_id, stage, module):
             raise ValueError("Start deadline follows execution deadline")
     except (ValueError, OverflowError) as error:
         raise JournalCorrupt("Invalid Modal journal deadline") from error
-    if (
-        phase == "terminal"
-        and parse_result(
-            terminal_result(record),
-            record["callId"],
-            (job_id, stage, module) if stage else None,
+    if phase == "terminal":
+        result = terminal_result(record)
+        parsed = (
+            parse_graph_result(result, record["callId"])
+            if record.get("graph")
+            else parse_result(
+                result, record["callId"], (job_id, stage, module) if stage else None
+            )
         )
-        is None
-    ):
-        raise JournalCorrupt("Invalid terminal result")
+        if parsed is None:
+            raise JournalCorrupt("Invalid terminal result")
     return record
 
 
 def terminal_result(record):
     result = {
-        "schemaVersion": 2 if "stage" in record else 1,
+        "schemaVersion": 3 if record.get("graph") else 2 if "stage" in record else 1,
         "functionCallId": record["callId"],
         "exitCode": record["exitCode"],
     }
@@ -156,7 +160,9 @@ class JournalStore:
 
     @contextmanager
     def directory(self, job_id, stage, *, create=False):
-        if str(UUID(job_id)) != job_id or (stage is not None and stage not in STAGES):
+        if str(UUID(job_id)) != job_id or (
+            stage is not None and not NODE_ID.fullmatch(stage)
+        ):
             raise JournalCorrupt("Invalid journal path")
         flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
         if create:

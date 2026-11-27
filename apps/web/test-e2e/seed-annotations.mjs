@@ -568,6 +568,10 @@ export async function seedAnnotations(
     );
     const cron = await issue("cron", ["jobs:repair"], "cron");
     const port = await freePort();
+    const controllerPython = join(
+      repoRoot,
+      "workers/controller/.venv/bin/python",
+    );
     const ctl = {
       APP_ENV: "local",
       EXECUTION_BACKEND: "local",
@@ -600,15 +604,15 @@ export async function seedAnnotations(
         "--env-file",
         envFile,
         "--",
-        "node",
-        "dist/index.js",
+        controllerPython,
+        "workers/controller/integration/historical-workflow.py",
       ],
-      { cwd: join(repoRoot, "apps/jobs"), detached: true, stdio: "ignore" },
+      { cwd: repoRoot, detached: true, stdio: "ignore" },
     );
     procs.push(runner);
     const { Render } = await import(
       new URL(
-        `file://${createRequire(join(repoRoot, "apps/jobs/package.json")).resolve("@renderinc/sdk")}`,
+        `file://${createRequire(join(repoRoot, "packages/server/package.json")).resolve("@renderinc/sdk")}`,
       ).href
     );
     const render = new Render({
@@ -639,10 +643,10 @@ export async function seedAnnotations(
     // must be adopted, never respawned: the caller asserts that from journals, claims and rows.
     const controllerOnce = (rec, runRef) => {
       const child = spawn(
-        process.execPath,
-        [join(repoRoot, "apps/jobs/test-integration/controller-process.mjs")],
+        controllerPython,
+        [join(repoRoot, "workers/controller/integration/run-controller.py")],
         {
-          cwd: join(repoRoot, "apps/jobs"),
+          cwd: repoRoot,
           env: {
             PATH: process.env.PATH,
             HOME: process.env.HOME,
@@ -898,18 +902,22 @@ export async function seedAnnotations(
       results.push(result);
     }
     if (afterSeed) {
-      await afterSeed(results, (recordingId, jobId) => {
-        const parent = recordings.find(
-          (recording) => recording.recordingId === recordingId,
-        );
-        if (!parent) throw new Error("Unknown seeded recording");
-        return runOne({
-          ...parent,
-          jobId,
-          scenario: "derived",
-          drive: undefined,
-        });
-      });
+      await afterSeed(
+        results,
+        (recordingId, jobId) => {
+          const parent = recordings.find(
+            (recording) => recording.recordingId === recordingId,
+          );
+          if (!parent) throw new Error("Unknown seeded recording");
+          return runOne({
+            ...parent,
+            jobId,
+            scenario: "derived",
+            drive: undefined,
+          });
+        },
+        { pool: app, reader: deps.reader, backend: "local" },
+      );
     }
     const stopRunner = () => {
       for (const p of procs)

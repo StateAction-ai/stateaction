@@ -48,7 +48,7 @@
       "dependsOn": [
         "build",
         {
-          "projects": ["jobs"],
+          "projects": ["controller-python"],
           "target": "build"
         }
       ],

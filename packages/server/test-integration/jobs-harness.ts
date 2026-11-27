@@ -18,6 +18,8 @@ import {
   type TestDb,
 } from "./harness.js";
 
+export { closeOwnerPools } from "./harness.js";
+
 export const JOBS_CONFIG: JobsConfig = {
   executionBackend: "local",
   codeRevision: "test-rev-1",
@@ -57,7 +59,10 @@ export const depsFor = (db: JobsTestDb): JobsDeps => ({
 });
 
 /** A sealed, admitted recording with one QUEUED job (no admission slot yet). */
-export async function queuedJob(db: Pick<TestDb, "app"> & { actors: Actors }) {
+export async function queuedJob(
+  db: Pick<TestDb, "app"> & { actors: Actors },
+  kind: "process_recording" | "clip_plan" = "process_recording",
+) {
   const recordingId = randomUUID();
   await registerRecording(db.app, {
     recordingId,
@@ -101,11 +106,33 @@ export async function queuedJob(db: Pick<TestDb, "app"> & { actors: Actors }) {
   });
   const jobId = randomUUID();
   await fixtureAdmission(db.app, recordingId, jobId);
-  await createProcessingJob(db.app, {
-    jobId,
-    recordingId,
-    profileRevision: "test-1",
-  });
+  if (kind === "clip_plan") {
+    const client = await db.app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO jobs (id, recording_id, kind, source_manifest_sha256, profile_revision)
+         SELECT $1, id, 'clip_plan', source_manifest_sha256, 'test-1' FROM recordings WHERE id = $2`,
+        [jobId, recordingId],
+      );
+      await client.query(
+        "UPDATE recordings SET current_job_id = $2, status = 'uploaded' WHERE id = $1",
+        [recordingId, jobId],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } else {
+    await createProcessingJob(db.app, {
+      jobId,
+      recordingId,
+      profileRevision: "test-1",
+    });
+  }
   return { recordingId, jobId };
 }
 

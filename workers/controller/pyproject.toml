@@ -27,3 +27,6 @@ stateaction-modal-verifier = { path = "../../packages/modal-verifier" }
 [tool.ruff]
 extend = "../processing/pyproject.toml"
 src = []
+
+[tool.pytest.ini_options]
+pythonpath = ["integration"]

@@ -55,6 +55,7 @@ export type ManifestFacts = {
   /** Closed output inventory EXCLUDING the result manifest itself. */
   outputs: InventoryFile[];
   sources: SourceFile[];
+  graphHandNode?: string;
   /**
    * SA-88 recipe job (processing-result.v3): the admitted recipe and the
    * recorded stage runs. Absent for the single-claim path (v2).
@@ -136,10 +137,11 @@ export function checkManifest(
   const model = obj(prov.model);
   if (
     prov.code_revision !== facts.inputs.codeRevision ||
-    prov.image_spec_sha256 !== facts.inputs.imageSpecSha256 ||
-    prov.config_sha256 !== facts.inputs.configSha256 ||
     prov.profile_revision !== facts.inputs.profileRevision ||
-    model.asset_sha256 !== facts.inputs.modelSha256
+    (!facts.graphHandNode &&
+      (prov.image_spec_sha256 !== facts.inputs.imageSpecSha256 ||
+        prov.config_sha256 !== facts.inputs.configSha256 ||
+        model.asset_sha256 !== facts.inputs.modelSha256))
   )
     return bad("manifest_provenance_mismatch");
 
@@ -193,10 +195,12 @@ export function checkManifest(
       : bad("failed_manifest_has_outputs");
   }
 
-  const clipTask = facts.inputs.taskInput.schemaVersion === 4;
+  const clipTask =
+    facts.inputs.taskInput.schemaVersion === 4 || Boolean(facts.graphHandNode);
   const clipManifest =
     manifest.schema === "stateaction.processing_result.v5" ||
-    manifest.schema === "stateaction.processing_result.v6";
+    manifest.schema === "stateaction.processing_result.v6" ||
+    manifest.schema === "stateaction.processing_result.v7";
   if (clipTask !== clipManifest) {
     return bad("manifest_clip_mismatch");
   }
@@ -260,10 +264,24 @@ export function checkManifest(
     const files = obj(clip.files);
     const dir = `clips/${String(i).padStart(3, "0")}`;
     const ids: string[] = [];
-    for (const [key, name] of CLIP_FILES) {
+    for (const [index, [key, name]] of CLIP_FILES.entries()) {
       const row = byId.get(String(files[key]));
-      if (!row || row.slot !== `${dir}/${name}`)
-        return bad("clip_slot_mismatch", `${dir}/${name}`);
+      const slot = facts.graphHandNode
+        ? "nodes/" +
+          facts.graphHandNode +
+          "/" +
+          [
+            "rgb_",
+            "arrays_",
+            "observations_",
+            "frame_map_",
+            "thumbnail_",
+            "rrd_",
+          ][index] +
+          i +
+          name.slice(name.lastIndexOf("."))
+        : dir + "/" + name;
+      if (!row || row.slot !== slot) return bad("clip_slot_mismatch", slot);
       ids.push(row.fileId);
     }
     const raster = obj(clip.raster);
@@ -298,7 +316,8 @@ export function checkManifest(
     return bad("clip_slot_mismatch", "a file belongs to more than one clip");
   if (new Set(plan.map((c) => c.clipId)).size !== plan.length)
     return bad("manifest_duplicate_clip");
-  if (!facts.recipe) return { ok: true, clipPlan: plan };
+  if (!facts.recipe && !facts.graphHandNode)
+    return { ok: true, clipPlan: plan };
   const one = (role: string) =>
     outputs.find((o) => o.role === role)?.file_id as string | undefined;
   return {

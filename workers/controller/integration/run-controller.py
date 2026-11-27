@@ -5,6 +5,7 @@ import json
 import os
 import signal
 
+from historical_controller import run_controller as run_historical
 from stateaction_controller import local_controller
 from stateaction_controller.api import JobsApi
 from stateaction_controller.config import load_settings, secret
@@ -51,8 +52,16 @@ async def main():
 
             local_controller.send_bootstrap = send
     try:
-        result = await run_controller(
-            settings, api, os.environ["TEST_JOB_ID"], os.environ["TEST_RUN_REF"]
+        run = (
+            run_controller
+            if os.environ.get("TEST_RECIPE_GRAPH") == "1"
+            else run_historical
+        )
+        result = await run(
+            settings,
+            api,
+            os.environ["TEST_JOB_ID"],
+            os.environ["TEST_RUN_REF"],
         )
         print(json.dumps(result))
     finally:

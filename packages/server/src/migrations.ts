@@ -209,6 +209,15 @@ export async function grantAppRole(
     await client.query("SELECT stateaction_grant_review_clip_video($1)", [
       role,
     ]);
+  const { rowCount: recipeHistory } = await client.query(
+    "SELECT 1 WHERE to_regprocedure('stateaction_grant_recipe_graph_history(name)') IS NOT NULL",
+  );
+  if (recipeHistory) {
+    await client.query("SELECT stateaction_grant_recipe_graph_history($1)", [
+      role,
+    ]);
+    await client.query("SELECT stateaction_grant_recipe_graph_app($1)", [role]);
+  }
   return true;
 }
 

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Stage } from "@stateaction/contracts";
 import { parseRecordingId, pipelineReads } from "@stateaction/server/pipeline";
 import {
   EstimatedCost,
@@ -64,7 +63,6 @@ export default async function ClipProcessingPage({
           .slice(0, 16)
           .replace("T", " ") + " UTC",
     }));
-  const handOnly = reads.handPoseRerunOnly();
   const job = result.jobs.find(({ id }) => id === clip.latestJobId);
   const active = result.status === "processing" || result.status === "queued";
   const terminal =
@@ -80,37 +78,19 @@ export default async function ClipProcessingPage({
       ? "The source needs to be uploaded again."
       : null;
 
-  const retryable = stages.flatMap(
-    ({ stage, latest, enabled, reusableOutput }): Stage[] =>
-      stage !== "clip_plan" &&
-      result.retryStages.includes(stage) &&
-      enabled === true &&
-      !reusableOutput &&
-      (latest?.error ||
-        latest?.state === "partially_complete" ||
-        result.error?.stage === stage ||
-        job?.state === "cancelled")
-        ? [stage]
-        : [],
-  );
-  function action(requested: Stage[], label: string) {
+  function graphAction(nodes: string[], label: string, unavailable = false) {
     return (
       <RetryAction
-        key={`${clip.latestJobId}:${requested.join(",")}:${label}`}
+        key={`${clip.latestJobId}:${nodes.join(",")}:${label}`}
         recordingId={recording.id}
         label={label}
-        ranges={{
-          [clip.id]: exactRangeLabel(clip.startSeconds, clip.endSeconds),
-        }}
         action={
-          clip.latestJobId && requested.length
+          clip.latestJobId
             ? {
-                request: {
-                  schemaVersion: 2,
-                  scope: "clip",
+                graph: {
                   clipId: clip.id,
                   parentJobId: clip.latestJobId,
-                  stages: requested,
+                  nodes,
                 },
               }
             : null
@@ -119,16 +99,12 @@ export default async function ClipProcessingPage({
           !canRetry
             ? "This environment is read-only."
             : (blocked ??
-              (handOnly &&
-              requested.some((candidate) => candidate !== "hand_pose")
-                ? "This canary allows hand pose retries only."
-                : !terminal || !requested.length
-                  ? "No failed steps."
-                  : null))
+              (!terminal || unavailable ? "No eligible steps." : null))
         }
       />
     );
   }
+  const graphNodes = result.graph.filter((node) => node.id !== "$input");
 
   return (
     <div className="grid gap-4">
@@ -202,7 +178,22 @@ export default async function ClipProcessingPage({
       <RecipeFlow
         nodes={result.graph}
         initialStep={typeof step === "string" ? step : undefined}
-        retry={action(result.retryStages, "Retry failed steps")}
+        retry={
+          result.graphRuntime
+            ? graphAction(
+                [],
+                "Retry failed steps",
+                !graphNodes.some((node) =>
+                  [
+                    "failed",
+                    "cancelled",
+                    "skipped",
+                    "partially_complete",
+                  ].includes(node.status ?? ""),
+                ),
+              )
+            : undefined
+        }
         details={{
           $input: (
             <div className="grid gap-3">
@@ -220,35 +211,45 @@ export default async function ClipProcessingPage({
               />
             </div>
           ),
-          ...Object.fromEntries(
-            stages.map(
-              ({
-                stage,
-                latest,
-                attempts,
-                reusedFromJobId,
-                importedEvidence,
-              }) => [
-                stage,
-                <ProcessingStepDetails
-                  key={stage}
-                  stepId={stage}
-                  current={latest}
-                  runs={attempts}
-                  reusedFromJobId={reusedFromJobId}
-                  pathname={pathname}
-                  selectedRun={selectedRun}
-                  recipeId={recipe?.id}
-                  importedEvidence={importedEvidence}
-                  action={
-                    stage !== "clip_plan" &&
-                    retryable.includes(stage) &&
-                    action([stage], "Retry this step")
-                  }
-                />,
-              ],
-            ),
-          ),
+          ...(result.graphRuntime
+            ? Object.fromEntries(
+                graphNodes.map((node) => [
+                  node.id,
+                  <div key={node.id} className="grid gap-3">
+                    <ProcessingStatus state={node.status ?? "not_run"} />
+                    {graphAction(
+                      [node.id],
+                      node.status === "succeeded" || node.status === "reused"
+                        ? "Rerun this step"
+                        : "Retry this step",
+                    )}
+                  </div>,
+                ]),
+              )
+            : Object.fromEntries(
+                stages.map(
+                  ({
+                    stage,
+                    latest,
+                    attempts,
+                    reusedFromJobId,
+                    importedEvidence,
+                  }) => [
+                    stage,
+                    <ProcessingStepDetails
+                      key={stage}
+                      stepId={stage}
+                      current={latest}
+                      runs={attempts}
+                      reusedFromJobId={reusedFromJobId}
+                      pathname={pathname}
+                      selectedRun={selectedRun}
+                      recipeId={recipe?.id}
+                      importedEvidence={importedEvidence}
+                    />,
+                  ],
+                ),
+              )),
         }}
       />
     </div>

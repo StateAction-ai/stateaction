@@ -67,7 +67,6 @@ files = [
   "src/stateaction_processing/stage_entry.py",
   "src/stateaction_processing/node_entry.py",
   "src/stateaction_processing/recipe_adapters.py",
-  "src/stateaction_processing/recipe_graph.py",
   "src/stateaction_processing/modules/__init__.py",
   "src/stateaction_processing/modules/stub.py",
   "src/stateaction_processing/modules/replay.py",

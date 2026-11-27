@@ -2763,10 +2763,12 @@ class DocsOnlyRunTests(RepoCase):
     def test_verify_rejects_changed_docs_that_select_a_skipped_task(self):
         self.docs_change()
         self.passed()
-        errors = self.errors(guarded=lambda repo, paths: ["jobs:integration"])
+        errors = self.errors(
+            guarded=lambda repo, paths: ["controller-python:integration"]
+        )
         self.assertTrue(
             any(
-                "select tasks the receipt skipped: jobs:integration" in e
+                "select tasks the receipt skipped: controller-python:integration" in e
                 for e in errors
             ),
             errors,
@@ -3723,10 +3725,6 @@ class StageFileTests(unittest.TestCase):
 
         consumers = {
             "web-auth-e2e": ("apps/web/project.json", "test-e2e/*.test.mjs"),
-            "jobs-controller-integration": (
-                "apps/jobs/package.json",
-                "test-integration",
-            ),
             "server-auth-integration": ("packages/server/package.json", "test-auth/"),
             "catalog-integration": (
                 "packages/server/scripts/catalog-integration.sh",
@@ -3744,22 +3742,12 @@ class StageFileTests(unittest.TestCase):
         self.assertNotIn(
             "test:catalog", (root / "packages/server/package.json").read_text()
         )
-        self.assertEqual(
-            sorted(
-                p.name
-                for p in (root / "apps/jobs/test-integration").glob("controller*")
-            ),
-            [
-                "controller-dispatch.e2e.test.mjs",
-                "controller-loss.e2e.test.mjs",
-                "controller-process.mjs",
-                "controller-recipe.e2e.test.mjs",
-                "controller-support.mjs",
-            ],
+        self.assertTrue(
+            (root / "workers/controller/integration/graph-local-world.mjs").is_file()
         )
         for project_file, name in (
             ("apps/web/project.json", "auth-e2e"),
-            ("apps/jobs/project.json", "integration"),
+            ("workers/controller/project.json", "integration"),
             ("packages/server/project.json", "auth-integration"),
             ("packages/server/project.json", "catalog-integration"),
         ):
@@ -3890,10 +3878,10 @@ class AffectedTests(RepoCase):
                 "targets": ["build", "test", "auth-e2e"],
                 "paths": ["apps/web/", contracts],
             },
-            "jobs": {
+            "controller-python": {
                 "targets": ["build", "integration"],
                 "paths": [
-                    "apps/jobs/",
+                    "workers/controller/",
                     "packages/server/",
                     "workers/processing/",
                     contracts,
@@ -4057,13 +4045,13 @@ class AffectedTests(RepoCase):
         base = sh(self.repo, "git", "rev-parse", "origin/main")
         self.assertEqual(block["base"], base)
         self.assertEqual(block["head"], sh(self.repo, "git", "rev-parse", "HEAD"))
-        self.assertEqual(block["projects"], ["jobs", "server"])
+        self.assertEqual(block["projects"], ["controller-python", "server"])
         self.assertFalse(block["runAll"])
         self.assertEqual(block["matchedAlwaysRunPaths"], [])
         stages = block["stages"]
         self.assertEqual(
             stages["integration"]["selectedTasks"],
-            ["jobs:integration", "server:catalog-integration"],
+            ["controller-python:integration", "server:catalog-integration"],
         )
         self.assertEqual(
             stages["mobile"]["skippedTasks"],
@@ -4087,9 +4075,10 @@ class AffectedTests(RepoCase):
         record = self.gate("workers/processing/src/pipeline.py")
         self.assert_passed(record)
         block = self.affected_block(record)
-        self.assertEqual(block["projects"], ["jobs", "processing"])
+        self.assertEqual(block["projects"], ["controller-python", "processing"])
         self.assertEqual(
-            block["stages"]["integration"]["selectedTasks"], ["jobs:integration"]
+            block["stages"]["integration"]["selectedTasks"],
+            ["controller-python:integration"],
         )
         self.assertEqual(self.statuses(record)["mobile"], "skipped")
         self.assertNotIn(
@@ -4337,9 +4326,13 @@ class AffectedTests(RepoCase):
 
     def test_a_replayed_fixture_task_is_found_even_without_a_plan(self):
         stage_ = {"fixtures": True, "affected": {"targets": ["integration"]}}
-        hit = {"hitTasks": ["jobs:integration", "web:build"], "executedTasks": []}
+        hit = {
+            "hitTasks": ["controller-python:integration", "web:build"],
+            "executedTasks": [],
+        }
         self.assertEqual(
-            local_ci.cached_fixture_task(stage_, [], hit, []), "jobs:integration"
+            local_ci.cached_fixture_task(stage_, [], hit, []),
+            "controller-python:integration",
         )
 
     def test_unsupported_exclude_patterns_are_rejected(self):

@@ -240,7 +240,8 @@ export async function issueRecordingRead(
          AND ((c.id IS NOT NULL AND p.version = c.plan_version) OR p.plan_job_id = view.id)
        JOIN jobs j ON j.id = coalesce(p.plan_job_id, view.id)
          AND j.recording_id = rec.id AND j.state = 'succeeded'
-       JOIN job_output_slots s ON s.job_id = j.id AND s.slot = 'recording.mp4'
+       JOIN job_output_slots s ON s.job_id = j.id
+         AND (s.slot = 'recording.mp4' OR s.file_id = p.original_mp4_file_id)
        JOIN files f ON f.id = s.file_id AND f.job_id = j.id
          AND f.purpose = 'output' AND f.role = 'recording_mp4'
          AND f.state IN ('completed', 'verified')

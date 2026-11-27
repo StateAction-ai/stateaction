@@ -15,6 +15,7 @@ import {
 } from "../src/admission/recordings.js";
 import { PUBLIC_VIDEO_RECIPE } from "../src/admission/public-video-canary.js";
 import { verifiedReviewVideoSql } from "../src/datasets/review-playable-media.js";
+import { processRecordingTaskInputV2 } from "../src/admission/job-input.js";
 import { failUndispatched, retryJob } from "../src/jobs/recovery.js";
 import { stageRerunBlock } from "../src/jobs/stage-reruns.js";
 import { jobHandlers } from "../src/jobs/http.js";
@@ -39,7 +40,18 @@ for (const [index, name] of scenarios.entries())
     const fallback = index === 1;
     const db = await jobsDatabase();
     t.after(() => db.close());
-    const jobs = depsFor(db);
+    const jobs = {
+      ...depsFor(db),
+      taskInput: async (
+        tx: Parameters<typeof processRecordingTaskInputV2>[0],
+        job: { jobId: string },
+      ) => ({
+        ...(await processRecordingTaskInputV2(tx, job.jobId)),
+        schemaVersion: 3,
+        recipe: PUBLIC_VIDEO_RECIPE,
+        recipeSha256: requestSha256(PUBLIC_VIDEO_RECIPE),
+      }),
+    };
     const storage = await acceptanceDeps(db);
     const owner = db.actors.collector;
     await ensurePermission(db, owner);

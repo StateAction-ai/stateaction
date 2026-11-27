@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/jobs/task-input.v6.json",
+  "title": "Graph job task input v6",
+  "description": "Pins one graph job to its sealed source, published recipe and optional verified clip. The graph and resolved node bindings are stored with the admitted job.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "targetId",
+    "profileRevision",
+    "kind",
+    "sourceManifestSha256",
+    "rgbProfile",
+    "recipeSha256",
+    "recipeRef",
+    "sourceSeconds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 6
+    },
+    "jobId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "targetId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "profileRevision": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/revision"
+    },
+    "kind": {
+      "enum": ["clip_plan", "clip_pipeline"]
+    },
+    "sourceManifestSha256": {
+      "description": "SHA-256 of the exact sealed source_manifest file bytes (recording-source/v1).",
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "rgbProfile": {
+      "type": "string",
+      "enum": ["h264_mcap_v1", "h264_mcap_simulation_v1"]
+    },
+    "simulation": {
+      "$ref": "https://stateaction.ai/schemas/http/simulation-provenance.v1.json"
+    },
+    "recipeSha256": {
+      "description": "Canonical compiled graph digest, excluding authoring metadata.",
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "planVersion", "planSha256", "sourceRange"],
+      "properties": {
+        "id": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "planVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "planSha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        },
+        "sourceRange": {
+          "$ref": "https://stateaction.ai/schemas/artifacts/clip-plan.v1.json#/$defs/clip"
+        }
+      }
+    },
+    "recipeRef": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}@[1-9][0-9]{0,8}$"
+    },
+    "sourceSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 7200
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_simulation_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "properties": {
+          "simulation": {}
+        },
+        "required": ["simulation"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rgbProfile": {
+            "const": "h264_mcap_v1"
+          }
+        },
+        "required": ["rgbProfile"]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "simulation": {}
+          },
+          "required": ["simulation"]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "clip_pipeline"
+          }
+        },
+        "required": ["kind"]
+      },
+      "then": {
+        "properties": {
+          "clip": {}
+        },
+        "required": ["clip"]
+      },
+      "else": {
+        "not": {
+          "properties": {
+            "clip": {}
+          },
+          "required": ["clip"]
+        }
+      }
+    }
+  ]
+}

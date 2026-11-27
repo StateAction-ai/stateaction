@@ -28,6 +28,7 @@ export type RetryTarget =
       clips: {
         clipId: string;
         jobId: string;
+        graph: boolean;
         startSeconds: number | null;
         endSeconds: number | null;
       }[];
@@ -138,7 +139,13 @@ export const CLIP_STATUS_LATERAL = `
 export const clipCanRetrySql = `(live.state IN ('failed', 'cancelled')
     OR (live.state = 'succeeded' AND (clip_status.terminal_stage
       OR live.failed_window_count > 0 OR live.caption_failed_count > 0)))
-  AND live.recipe IS NOT NULL
+  AND (live.recipe IS NOT NULL OR (
+    EXISTS (SELECT 1 FROM job_recipe_graph_definitions pinned WHERE pinned.job_id = live.id)
+    AND NOT EXISTS (
+      SELECT 1 FROM job_recipe_node_read_status node
+      WHERE node.job_id = live.id AND node.state IN ('not_run','queued','running')
+    )
+  ))
   AND coalesce(live.error_code, '') NOT IN (${reuploadCodesSql})
   AND coalesce(clip_status.error_code, '') NOT IN (${reuploadCodesSql})`;
 
@@ -179,6 +186,7 @@ export const recordingOperationsLaterals = (readOnly: boolean) => `
       count(*) FILTER (WHERE clip_status.status = 'partially_complete' OR chosen.id IS NOT NULL)::int AS available,
       count(*) FILTER (WHERE live.kind = 'clip_pipeline')::int AS clip_scoped,
       jsonb_agg(jsonb_build_object('clipId', c.id, 'jobId', live.id,
+        'graph', EXISTS (SELECT 1 FROM job_recipe_graph_definitions pinned WHERE pinned.job_id = live.id),
         'startSeconds', (c.start_ts_ns - (plan.plan ->> 'origin_ts_ns')::bigint) / 1000000000.0,
         'endSeconds', (c.end_ts_ns - (plan.plan ->> 'origin_ts_ns')::bigint) / 1000000000.0) ORDER BY c.ordinal, c.id)
         FILTER (WHERE ${clipCanRetrySql}) AS retry_clips,
