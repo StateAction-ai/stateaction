@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   STAFF_GRANT_SQL,
+  extractLiveRefs,
   googleOauthEnv,
   parseEnvFile,
+  planDeployActions,
   validEmail,
   estimate,
   loadConfig,
@@ -184,4 +186,96 @@ test("the staff grant is parameterized, idempotent and only touches the staff ro
   assert.ok(validEmail("a.b@example.com"));
   for (const bad of ["", "no-at", "a b@c.d", "x'; drop table access;--@e.f g"])
     assert.ok(!validEmail(bad), bad);
+});
+
+test("extractLiveRefs picks the newest live/ready SHA per service and tolerates wrapped shapes or malformed refs", () => {
+  const webSha = "a".repeat(40);
+  const cronSha = "b".repeat(40);
+  const wfOldSha = "c".repeat(40);
+  const wfNewSha = "f".repeat(40);
+  assert.deepEqual(
+    extractLiveRefs({
+      webDeploys: [
+        { deploy: { status: "build_failed", commit: { id: "d".repeat(40) } } },
+        { deploy: { status: "live", commit: { id: webSha } } },
+      ],
+      cronDeploys: { deploys: [{ status: "live", commit: { id: cronSha } }] },
+      workflowVersions: {
+        versions: [
+          {
+            version: {
+              status: "ready",
+              commitId: wfOldSha,
+              updatedAt: "2026-11-26T00:00:00Z",
+            },
+          },
+          { version: { status: "building", commitId: "e".repeat(40) } },
+          {
+            version: {
+              status: "ready",
+              commitId: wfNewSha,
+              updatedAt: "2026-11-27T00:00:00Z",
+            },
+          },
+        ],
+      },
+    }),
+    { web: webSha, cron: cronSha, workflow: wfNewSha },
+  );
+  assert.deepEqual(
+    extractLiveRefs({
+      webDeploys: [{ deploy: { status: "live", commit: { id: "short" } } }],
+      cronDeploys: null,
+      workflowVersions: [{ status: "failed", commitId: wfOldSha }],
+    }),
+    { web: null, cron: null, workflow: null },
+  );
+});
+
+test("planDeployActions isolates component deploys without mutating PROCESSING_CODE_REVISION or active cron state", () => {
+  const webOnly = planDeployActions({
+    componentsArg: "web",
+    cronSuspended: true,
+    hasDispatchKey: false,
+  });
+  assert.deepEqual(webOnly, {
+    legacyMode: false,
+    services: ["web"],
+    deployWeb: true,
+    deployCron: false,
+    deployWorkflow: false,
+    shouldUpdateCodeRevision: false,
+    cronPostState: "unchanged",
+  });
+
+  const cronPaused = planDeployActions({
+    componentsArg: "cron,workflow",
+    cronSuspended: true,
+    hasDispatchKey: true,
+  });
+  assert.equal(cronPaused.deployWeb, false);
+  assert.equal(cronPaused.deployCron, true);
+  assert.equal(cronPaused.deployWorkflow, true);
+  assert.equal(cronPaused.cronPostState, "suspend");
+
+  // Active cron stays unchanged (no redundant /resume call).
+  const cronRunning = planDeployActions({
+    componentsArg: "cron",
+    cronSuspended: false,
+    hasDispatchKey: false,
+  });
+  assert.equal(cronRunning.cronPostState, "unchanged");
+
+  const legacy = planDeployActions({
+    hasDispatchKey: false,
+  });
+  assert.equal(legacy.legacyMode, true);
+  assert.deepEqual(legacy.services, ["web", "cron", "workflow"]);
+  assert.equal(legacy.shouldUpdateCodeRevision, true);
+  assert.equal(legacy.cronPostState, "suspend");
+
+  assert.throws(
+    () => planDeployActions({ componentsArg: "auto" }),
+    /explicit component names/,
+  );
 });

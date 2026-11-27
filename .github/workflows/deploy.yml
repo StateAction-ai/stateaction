@@ -1,7 +1,15 @@
 name: Deploy
-# The ONLY workflow that touches Render. Manual or tag-triggered; hosted CI stays optional/manual.
+# The ONLY workflow that touches Render.
+# On `push` to `main`, validates and computes the change-only component plan (no secrets),
+# and deploys changed Render components (`migrations`, `web`, `cron`, `workflow`) ONLY when
+# repository variable `AUTO_DEPLOY_ENABLED` is `'true'`. `workers/processing` (Modal) stays manual.
 # Secrets exist only in the GitHub `production` environment; no pull-request triggers and no fork access.
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - "deploy/*"
   workflow_dispatch:
     inputs:
       environment:
@@ -9,13 +17,20 @@ on:
         type: choice
         options: [dev, production]
         default: dev
+      mode:
+        description: "components = deploy only changed/selected Render components; full = provision, configure, migrate, deploy all"
+        type: choice
+        options: [components, full]
+        default: components
+      components:
+        description: "Component selection for components mode (auto diffs changed paths against live deploys)"
+        type: choice
+        options: [auto, web, migrations, cron, workflow, all]
+        default: auto
       ref:
         description: Commit SHA to deploy (default is the dispatched ref)
         type: string
         required: false
-  push:
-    tags:
-      - "deploy/*"
 permissions:
   contents: read
 concurrency:
@@ -23,26 +38,63 @@ concurrency:
   cancel-in-progress: false
 jobs:
   validate:
-    name: Validate and price (no secrets)
+    name: Validate, price and plan (no secrets)
     runs-on: ubuntu-24.04
     outputs:
       ref: ${{ steps.pin.outputs.ref }}
+      base_ref: ${{ steps.pin.outputs.base_ref }}
       target: ${{ steps.pin.outputs.target }}
+      mode: ${{ steps.pin.outputs.mode }}
+      components_spec: ${{ steps.pin.outputs.components_spec }}
+      preview_components: ${{ steps.plan.outputs.components }}
+      should_deploy: ${{ steps.plan.outputs.should_deploy }}
+      needs_prepare: ${{ steps.plan.outputs.needs_prepare }}
     steps:
-      - name: Pin the exact ref
+      - name: Pin the exact ref and mode
         id: pin
         env:
           INPUT_REF: ${{ inputs.ref }}
           INPUT_ENV: ${{ inputs.environment }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_COMPONENTS: ${{ inputs.components }}
           EVENT: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           ref="${INPUT_REF:-$GITHUB_SHA}"
           [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA" >&2; exit 1; }
           target=dev
-          if [[ "$EVENT" == push ]]; then target=production; elif [[ "$INPUT_ENV" == production ]]; then target=production; fi
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "target=$target" >> "$GITHUB_OUTPUT"
+          mode=components
+          components_spec=auto
+          base_ref=""
+          if [[ "$EVENT" == push ]]; then
+            target=production
+            if [[ "$EVENT_REF" == refs/tags/deploy/* ]]; then
+              mode=full
+              components_spec=all
+            else
+              mode=components
+              components_spec=auto
+              base_ref="${EVENT_BEFORE:-}"
+            fi
+          elif [[ "$INPUT_ENV" == production ]]; then
+            target=production
+            mode="${INPUT_MODE:-components}"
+            components_spec="${INPUT_COMPONENTS:-auto}"
+          else
+            mode="${INPUT_MODE:-components}"
+            components_spec="${INPUT_COMPONENTS:-auto}"
+          fi
+          [[ "$mode" =~ ^(components|full)$ ]] || { echo "invalid mode: $mode" >&2; exit 1; }
+          [[ "$components_spec" =~ ^(auto|all|none|(migrations|web|cron|workflow)(,(migrations|web|cron|workflow))*)$ ]] || { echo "invalid components: $components_spec" >&2; exit 1; }
+          {
+            echo "ref=$ref"
+            echo "base_ref=$base_ref"
+            echo "target=$target"
+            echo "mode=$mode"
+            echo "components_spec=$components_spec"
+          } >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ steps.pin.outputs.ref }}
@@ -59,16 +111,56 @@ jobs:
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 24.22.2
+      - name: Compute change-only deploy plan (preview)
+        id: plan
+        env:
+          REF: ${{ steps.pin.outputs.ref }}
+          BASE_REF: ${{ steps.pin.outputs.base_ref }}
+          MODE: ${{ steps.pin.outputs.mode }}
+          COMPONENTS_SPEC: ${{ steps.pin.outputs.components_spec }}
+          EVENT: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          spec="$COMPONENTS_SPEC"
+          if [[ "$MODE" == full ]]; then spec=all; fi
+          args=(--head "$REF" --components "$spec" --format github-output)
+          if [[ -n "$BASE_REF" ]]; then args+=(--base "$BASE_REF"); fi
+          out=$(node scripts/platform/deploy-scope.mjs "${args[@]}")
+          echo "$out" >> "$GITHUB_OUTPUT"
+          echo "$out"
+          has_components=$(grep '^has_components=' <<< "$out" | cut -d= -f2)
+          has_migrations=$(grep '^has_migrations=' <<< "$out" | cut -d= -f2)
+          should_deploy="$has_components"
+          # Manual production dispatch with components=auto enters deploy so live-refs diff can catch up drifted services.
+          if [[ "$EVENT" == workflow_dispatch && "$spec" == auto ]]; then should_deploy=true; fi
+          if [[ "$MODE" == full ]]; then should_deploy=true; fi
+          # Build @stateaction/server without secrets whenever migrations may run (full, explicit migrations, or live-refs auto).
+          needs_prepare=false
+          if [[ "$MODE" == full || "$has_migrations" == true || "$spec" == auto ]]; then needs_prepare=true; fi
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          echo "needs_prepare=$needs_prepare" >> "$GITHUB_OUTPUT"
       - name: Install the pinned Render CLI
         run: python3 scripts/platform/install-render.py
       - name: Dry run
         env:
           REF: ${{ steps.pin.outputs.ref }}
-        run: bash scripts/deploy/render-deploy.sh dry-run "$REF"
+          BASE_REF: ${{ steps.pin.outputs.base_ref }}
+          COMPONENTS_SPEC: ${{ steps.pin.outputs.components_spec }}
+          MODE: ${{ steps.pin.outputs.mode }}
+        run: |
+          set -euo pipefail
+          spec="$COMPONENTS_SPEC"
+          if [[ "$MODE" == full ]]; then spec=all; fi
+          bash scripts/deploy/render-deploy.sh dry-run "$REF" "$spec" "$BASE_REF"
   deploy:
     name: Deploy to Render
     needs: validate
-    if: needs.validate.outputs.target == 'production' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/deploy/'))
+    if: >-
+      needs.validate.outputs.target == 'production' &&
+      needs.validate.outputs.should_deploy == 'true' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/deploy/')) &&
+      (github.event_name != 'push' || startsWith(github.ref, 'refs/tags/deploy/') || vars.AUTO_DEPLOY_ENABLED == 'true')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 90
@@ -76,6 +168,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.validate.outputs.ref }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
@@ -83,12 +176,16 @@ jobs:
       - name: Install the pinned Render CLI
         run: python3 scripts/platform/install-render.py
       - name: Install and build (no secrets in this step)
+        if: needs.validate.outputs.needs_prepare == 'true'
         env:
           REF: ${{ needs.validate.outputs.ref }}
         run: bash scripts/deploy/render-deploy.sh prepare "$REF"
       - name: Deploy, migrate, smoke (rolls back on failure)
         env:
           REF: ${{ needs.validate.outputs.ref }}
+          BASE_REF: ${{ needs.validate.outputs.base_ref }}
+          MODE: ${{ needs.validate.outputs.mode }}
+          COMPONENTS_SPEC: ${{ needs.validate.outputs.components_spec }}
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_DISPATCH_API_KEY: ${{ secrets.RENDER_DISPATCH_API_KEY }}
           S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
@@ -100,7 +197,13 @@ jobs:
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        run: bash scripts/deploy/render-deploy.sh production "$REF"
+        run: |
+          set -euo pipefail
+          if [[ "$MODE" == full ]]; then
+            bash scripts/deploy/render-deploy.sh production "$REF"
+          else
+            bash scripts/deploy/render-deploy.sh components "$REF" "$COMPONENTS_SPEC" "$BASE_REF"
+          fi
       - name: Close the database allow list (always)
         if: always()
         env:
