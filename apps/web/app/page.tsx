@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Braces, Clapperboard, Smartphone } from "lucide-react";
+import { Braces, Clapperboard } from "lucide-react";
+import { PipelineDiagram } from "./_research/pipeline-diagram";
 import { ResearchClip } from "./_research/research-clip";
 import styles from "./_research/research.module.css";
 
@@ -24,6 +25,7 @@ export default function HomePage() {
           </Link>
           <nav aria-label="Research">
             <a href="#stack">Open-source stack</a>
+            <a href="#pipeline">Pipeline</a>
             <a href="#collection">Data collection</a>
             <Link href="/login">Sign in</Link>
           </nav>
@@ -55,6 +57,8 @@ export default function HomePage() {
           </div>
         </section>
 
+        <PipelineDiagram />
+
         <section
           className={`${styles.inner} ${styles.offers}`}
           aria-label="Ways to work with StateAction"
@@ -64,8 +68,9 @@ export default function HomePage() {
             <h2>Use the open-source stack</h2>
             <p>
               Adapt the Apache-2.0 Android app, processing pipeline, and web
-              review console to your lab. We can help set up and tailor the
-              stack at no charge.
+              review console to your lab. Every processing stage is
+              customizable. We can help set up and tailor the stack at no
+              charge.
             </p>
             <p className={styles.cost}>
               We cover hosting and infrastructure. Provide a Modal access token
@@ -92,52 +97,6 @@ export default function HomePage() {
               <a href={sample}>Email us for a free sample</a>
             </div>
           </article>
-        </section>
-
-        <section
-          className={`${styles.inner} ${styles.workflow}`}
-          aria-labelledby="workflow-title"
-        >
-          <div>
-            <p className={styles.kicker}>The pipeline</p>
-            <h2 id="workflow-title">
-              From capture to
-              <br /> reviewable clips.
-            </h2>
-            <p>
-              We can help connect your capture hardware to the pipeline and
-              tailor it to your lab’s workflow.
-            </p>
-          </div>
-          <ol>
-            <li>
-              <Smartphone aria-hidden="true" size={20} />
-              <div>
-                <strong>Capture</strong>
-                <span>
-                  Record and upload first-person video from your capture setup.
-                </span>
-              </div>
-            </li>
-            <li>
-              <Braces aria-hidden="true" size={20} />
-              <div>
-                <strong>Process</strong>
-                <span>Generate action segments, captions, and hand pose.</span>
-              </div>
-            </li>
-            <li>
-              <Clapperboard aria-hidden="true" size={20} />
-              <div>
-                <strong>Review</strong>
-                <span>Inspect clips and preview hand pose in Rerun.</span>
-              </div>
-            </li>
-          </ol>
-          <p className={styles.modelNote}>
-            The current segmentation and captioning prototype uses NVIDIA FLORA
-            under its separate non-commercial research license.
-          </p>
         </section>
       </main>
 
