@@ -1,0 +1,78 @@
+{
+  "name": "controller-python",
+  "projectType": "application",
+  "implicitDependencies": [
+    "contracts-python",
+    "modal-verifier-python",
+    "processing",
+    "server",
+    "web"
+  ],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/dist"],
+      "options": {
+        "cwd": "workers/controller",
+        "command": "uv build --wheel --out-dir dist"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "workers/controller",
+        "commands": [
+          "uv run --locked ruff check .",
+          "uv run --locked ruff format --check ."
+        ],
+        "parallel": false
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "workers/controller",
+        "command": "uv run --locked pytest -q tests"
+      },
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-window-3.json",
+        "{workspaceRoot}/apps/jobs/test/fixtures/modal-deployment-wire.json",
+        "{workspaceRoot}/packages/modal-verifier/tests/test_verifier.py",
+        "{workspaceRoot}/packages/modal-verifier/tests/fixtures/**",
+        "{workspaceRoot}/packages/contracts/conformance/fixtures/contracts/jobs.recipe.v1.json",
+        "{workspaceRoot}/packages/contracts/conformance/fixtures/contracts/jobs.stage-receipt.v1.json"
+      ]
+    },
+    "integration": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "parallelism": false,
+      "dependsOn": [
+        {
+          "projects": ["server", "web"],
+          "target": "build"
+        }
+      ],
+      "options": {
+        "cwd": "workers/controller",
+        "command": "uv run --locked pytest -q integration"
+      },
+      "inputs": [
+        "default",
+        "^fixtureProduction",
+        "{workspaceRoot}/apps/jobs/test-integration/harness.mjs",
+        "{workspaceRoot}/packages/server/test-auth/**",
+        "{workspaceRoot}/apps/web/test-e2e/seaweedfs.mjs",
+        "{workspaceRoot}/scripts/platform/free-port.mjs",
+        "{workspaceRoot}/scripts/platform/local-fixtures.mjs",
+        "{workspaceRoot}/scripts/platform/process-wait.mjs",
+        "{workspaceRoot}/scripts/platform/db-template.mjs",
+        "{workspaceRoot}/infra/compose.yaml",
+        "{workspaceRoot}/infra/seaweedfs-master.toml",
+        "!{projectRoot}/**/*.md"
+      ]
+    }
+  }
+}

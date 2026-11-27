@@ -71,7 +71,7 @@ export function call(origin, path, { method = "GET", body, token } = {}) {
 }
 
 /** A private world: database, bucket, Next API, credentials and a sealed recording per job. */
-export async function startWorld(extraEnv = {}) {
+export async function startWorld(extraEnv = {}, onTeardown = () => {}) {
   if (!process.env.STATEACTION_LOCAL_FIXTURES)
     throw new Error(
       "STATEACTION_LOCAL_FIXTURES (bounded external fixtures) is required; Docker is never used",
@@ -86,18 +86,23 @@ export async function startWorld(extraEnv = {}) {
   }
   const world = { next: undefined, pools: [], storage: undefined, dir: "" };
   const teardown = async () => {
+    onTeardown("web");
     if (world.next && world.next.exitCode === null) {
       try {
         process.kill(-world.next.pid, "SIGTERM");
       } catch {}
       await waitForGroupExit(world.next.pid).catch(leaked);
     }
+    onTeardown("connection pools");
     world.storage?.destroy();
     await Promise.allSettled(world.pools.map((p) => p.end()));
     if (world.dir) rmSync(world.dir, { recursive: true, force: true });
     // Exact ledger entries only (database, then bucket).
+    onTeardown("database");
     await db.stop();
+    onTeardown("bucket");
     await s3.stop();
+    onTeardown("complete");
   };
   try {
     return await buildWorld(db, s3, world, teardown, extraEnv);
