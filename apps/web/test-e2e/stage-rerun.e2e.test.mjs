@@ -397,7 +397,8 @@ test(
             await checkStageRerunBrowser({
               stack,
               parent,
-              childJobId: command.requestId,
+              handRunId: command.requestId,
+              captionRunId: captionId,
               out: browserOut,
             });
           }

@@ -16,7 +16,9 @@
       "inputs": [
         "production",
         "^production",
-        "{workspaceRoot}/scripts/platform/rerun-assets.mjs"
+        "{workspaceRoot}/scripts/platform/rerun-assets.mjs",
+        "{workspaceRoot}/recipes/compiled/*.json",
+        "{workspaceRoot}/examples/compiled/*.json"
       ]
     },
     "typecheck": {

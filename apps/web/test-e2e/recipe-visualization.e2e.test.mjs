@@ -16,7 +16,8 @@ const requireServer = createRequire(join(serverDir, "package.json"));
 const { S3Client, GetObjectCommand, PutObjectCommand } =
   requireServer("@aws-sdk/client-s3");
 const recipePath = (jobId) => `/recipes/stub_local%401?job=${jobId}`;
-const summary = '[aria-labelledby="recipe-stage-details"]';
+const graph = '[aria-label="Recipe graph"]';
+const panel = (step) => `[data-step-details="${step}"]`;
 
 test(
   "staff follow exact job recipes from recording operations and clip provenance",
@@ -117,17 +118,22 @@ test(
           `document.readyState === "complete" && decodeURIComponent(location.pathname) + location.search + location.hash === ${JSON.stringify(decodeURIComponent(destination))} && !!${ready(selector)}`,
         );
       };
-      const click = async (selector, expectedPath) => {
-        await until(`!!${ready(selector)}`);
-        const point = await ev(`(() => {
-          const link = ${ready(selector)};
-          link.scrollIntoView({ block: "center" });
-          const box = link.getBoundingClientRect();
-          const x = box.x + box.width / 2;
-          const y = box.y + box.height / 2;
-          return { x, y, reachable: link.contains(document.elementFromPoint(x, y)) };
+      const click = async (selector) => {
+        await until(`(() => {
+          const element = ${ready(selector)};
+          return !!element && Object.keys(element).some(key => key.startsWith("__reactProps$"));
         })()`);
-        assert.ok(point.reachable, `Link must be clickable: ${selector}`);
+        await ev(
+          `${ready(selector)}.scrollIntoView({ block: "center", inline: "center", behavior: "instant" })`,
+        );
+        const point = await until(`(() => {
+          const link = ${ready(selector)};
+          const points = [...link.getClientRects()].map(box => ({
+            x: box.x + box.width / 2,
+            y: box.y + box.height / 2,
+          }));
+          return points.find(({ x, y }) => link.contains(document.elementFromPoint(x, y)));
+        })()`);
         const { x, y } = point;
         await send("Input.dispatchMouseEvent", {
           type: "mousePressed",
@@ -143,9 +149,6 @@ test(
           button: "left",
           clickCount: 1,
         });
-        await until(
-          `decodeURIComponent(location.pathname) + location.search + location.hash === ${JSON.stringify(decodeURIComponent(expectedPath))} && !!${ready(summary)}`,
-        );
       };
       const { success } = await send("Network.setCookie", {
         name: SESSION,
@@ -189,90 +192,161 @@ test(
         );
       };
       const path = recipePath(succeeded.jobId);
-      const activePath = recipePath(active.jobId);
-      await width(1280);
       const recordingPath = `/recordings/${succeeded.recordingId}`;
-      const clipPath = `/clips/${succeeded.recordingId}`;
-      await open("/recordings", `a[href="${recordingPath}"]`);
-      await open(recordingPath, 'a[href$="/processing"]');
-      await click(`main a[href="${path}"]`, path);
-      assert.match(
-        await ev('document.querySelector("main header").innerText'),
-        /Succeeded/,
-      );
-      assert.match(
-        await ev('document.querySelector("#stage-segment").innerText'),
-        /Succeeded/,
-      );
-      assert.match(
-        await ev('document.querySelector("#stage-caption").innerText'),
-        /Succeeded/,
-      );
-      assert.match(
-        await ev('document.querySelector("#stage-hand_pose").innerText'),
-        /Succeeded/,
-      );
+      const reviewPath = `/clips/${succeeded.recordingId}`;
       const processingPath = `${recordingPath}/clips/${succeeded.recordingId}/processing`;
-      await open(
-        processingPath,
-        `a:is([href="${clipPath}"], [href^="${clipPath}?"])`,
-      );
-      await click(`main a[href="${path}"]`, path);
-      await open(clipPath, '[data-testid="provenance"]');
-      await click(
-        `[data-testid="provenance"] a[href="${path}#stage-segment"]`,
-        `${path}#stage-segment`,
-      );
+      const definitionPath = "/recipes/stub_local%401";
+      async function inspect(step) {
+        await click(`button[data-step="${step}"]`);
+        await until(`${ready(panel(step))} === document.activeElement`);
+      }
 
+      for (const w of [1280, 390]) {
+        await width(w);
+        await open("/recipes/minimal_stub%401", graph);
+        assert.match(
+          await ev("document.querySelector('main').innerText"),
+          /Read-only preview/,
+        );
+        assert.deepEqual(
+          await ev(
+            '[...document.querySelectorAll("button[data-step]")].map(node => node.dataset.step)',
+          ),
+          ["$source", "clips", "$clips", "hands"],
+        );
+        await inspect("hands");
+        await capture("recipe-minimal", w);
+        await open("/recipes/egocentric_default%401", graph);
+        assert.equal(
+          await ev(
+            'document.querySelectorAll("main svg path[marker-end]").length',
+          ),
+          7,
+        );
+        await capture("recipe-branching", w);
+
+        await open(recordingPath, graph);
+        assert.deepEqual(
+          await ev(
+            '[...document.querySelectorAll("button[data-step]")].map(node => node.dataset.step)',
+          ),
+          ["$source", "clip_plan", "$clips"],
+        );
+        assert.equal(
+          await ev(
+            'document.querySelectorAll("main svg path[marker-end]").length',
+          ),
+          2,
+        );
+
+        assert.equal(
+          await ev(`!!document.querySelector('a[href="${processingPath}"]')`),
+          false,
+        );
+        await inspect("$source");
+        assert.ok(
+          await ev(
+            `!!${ready(panel("$source"))}.querySelector("#original-video-heading")`,
+          ),
+        );
+        await capture("recording-preview", w);
+        await inspect("$clips");
+        assert.equal(
+          await ev('document.querySelector("tbody th a").textContent'),
+          "Clip 1",
+        );
+        assert.equal(
+          await ev('document.querySelectorAll("thead th").length'),
+          3,
+        );
+        await capture("recording-clips", w);
+        await click(`a[href="${processingPath}"]`);
+        await until(
+          `location.pathname === ${JSON.stringify(processingPath)} && !!${ready(graph)}`,
+        );
+        assert.deepEqual(
+          await ev(
+            '[...document.querySelectorAll("button[data-step]")].map(node => node.dataset.step)',
+          ),
+          ["$input", "segment", "caption", "hand_pose"],
+        );
+        await inspect("$input");
+        assert.ok(
+          await ev(
+            `!!${ready(panel("$input"))}.querySelector("#original-video-heading")`,
+          ),
+        );
+        await capture("clip-preview", w);
+        await inspect("segment");
+        assert.match(
+          await ev(`${ready(panel("segment"))}.innerText`),
+          /Runs \(1\)/,
+        );
+        assert.ok(
+          await ev(
+            `${ready(panel("segment"))}.getBoundingClientRect().top >= ${ready(graph)}.getBoundingClientRect().bottom`,
+          ),
+        );
+        await until('document.activeElement.dataset.stepDetails === "segment"');
+        await capture("clip-step-details", w);
+        await send("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          key: "Escape",
+          code: "Escape",
+          windowsVirtualKeyCode: 27,
+        });
+        await until(
+          `!${ready(panel("segment"))} && document.activeElement.dataset.step === "segment"`,
+        );
+        await send("Input.dispatchKeyEvent", {
+          type: "keyDown",
+          key: " ",
+          code: "Space",
+          windowsVirtualKeyCode: 32,
+        });
+        await send("Input.dispatchKeyEvent", {
+          type: "keyUp",
+          key: " ",
+          code: "Space",
+          windowsVirtualKeyCode: 32,
+        });
+        await until(`${ready(panel("segment"))} === document.activeElement`);
+
+        await click(`a[href="${definitionPath}"]`);
+        await until(
+          `decodeURIComponent(location.pathname) === "/recipes/stub_local@1" && !!${ready(graph)}`,
+        );
+      }
+
+      await open(reviewPath, '[data-testid="provenance"]');
+      const stepPath = path + "&step=segment";
+      await click(`[data-testid="provenance"] a[href="${stepPath}"]`);
+      await until(
+        `location.search.includes("step=segment") && !!${ready(panel("segment"))}`,
+      );
       const recordedModel = await ev(
-        `[...document.querySelectorAll("#stage-segment dt")].find(dt => dt.textContent === "Recorded model")?.nextElementSibling.textContent`,
+        `[...document.querySelectorAll('[data-step-details="segment"] dt')].find(dt => dt.textContent === "Recorded model")?.nextElementSibling.textContent`,
       );
       assert.ok(recordedModel && recordedModel !== "Not recorded");
 
-      for (const w of [1280, 390]) {
-        await width(w);
-        await open(path, summary);
-        await capture("succeeded", w);
-        await open(activePath, summary);
-        assert.match(
-          await ev('document.querySelector("#stage-segment").innerText'),
-          /Running/,
-        );
-        assert.match(
-          await ev('document.querySelector("#stage-hand_pose").innerText'),
-          /Running/,
-        );
-        await capture("running", w);
-      }
-
-      await click(
-        'main header a[href$="view=recipe"]',
-        `${activePath}&view=recipe`,
-      );
+      const activePath = recipePath(active.jobId);
+      await open(activePath, graph);
       assert.match(
-        await ev('document.querySelector("#stage-caption").innerText'),
-        /Disabled/,
-      );
-      await click(`main header a[href="${activePath}"]`, activePath);
-      assert.match(
-        await ev('document.querySelector("#stage-segment").innerText'),
+        await ev(
+          'document.querySelector("button[data-step=segment]").innerText',
+        ),
         /Running/,
       );
-
+      assert.equal(
+        await ev('!!document.querySelector("button[data-step=caption]")'),
+        false,
+      );
       seed(active.jobId);
-      for (const w of [1280, 390]) {
-        await width(w);
-        await open(activePath, summary);
-        assert.match(
-          await ev('document.querySelector("#stage-segment").innerText'),
-          /Failed[\s\S]*receipt_missing/,
-        );
-        assert.match(
-          await ev('document.querySelector("#stage-caption").innerText'),
-          /Not run/,
-        );
-        await capture("failed-and-not-run", w);
-      }
+      await open(activePath + "&step=segment", panel("segment"));
+      assert.match(
+        await ev(`${ready(panel("segment"))}.innerText`),
+        /Failed[\s\S]*receipt_missing/,
+      );
       const storage = new S3Client({
         endpoint: stack.s3.endpoint,
         region: "us-east-1",
@@ -296,16 +370,16 @@ test(
         assert.notEqual(changed, text);
         assert.equal(Buffer.byteLength(changed), Buffer.byteLength(text));
         await storage.send(new PutObjectCommand({ ...file, Body: changed }));
-        await open(path, summary);
+        await open(stepPath, panel("segment"));
         assert.match(
           await ev(
-            'document.querySelector("#stage-segment details").textContent',
+            'document.querySelector("[data-step-details=segment] details").textContent',
           ),
           /Recorded model[\s\S]*Not recorded/,
         );
         assert.doesNotMatch(
           await ev(
-            'document.querySelector("#stage-segment details").textContent',
+            'document.querySelector("[data-step-details=segment] details").textContent',
           ),
           new RegExp("x".repeat(recordedModel.length)),
         );

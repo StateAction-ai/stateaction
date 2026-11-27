@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
+  attemptStatus,
   formatDuration,
   formatUsd,
   stageReason,
@@ -9,52 +10,9 @@ import {
   type OperationCost,
 } from "@stateaction/server/pipeline";
 import { DiagnosticLink } from "./diagnostic-link";
-import { Card } from "../ui/card";
-
-const STATUS: Record<string, string> = {
-  succeeded: "Succeeded",
-  completed: "Succeeded",
-  failed: "Failed",
-  partially_failed: "Partially complete",
-  partially_complete: "Partially complete",
-  cancelled: "Cancelled",
-  timed_out: "Timed out",
-  queued: "Queued",
-  pending: "Pending",
-  processing: "Processing",
-  running: "Running",
-  submitting: "Starting",
-  submit_unknown: "Start unconfirmed",
-  result_pending: "Finalizing",
-  cancel_requested: "Cancellation requested",
-  needs_attention: "Needs attention",
-  needs_setup: "Needs setup",
-  choose_recipe: "Choose a recipe",
-  not_run: "Not run",
-  not_started: "Not started",
-  uploading: "Uploading",
-  output_available: "Output available",
-};
-
-export function ProcessingStatus({ state }: { state: string }) {
-  const bad = [
-    "failed",
-    "partially_failed",
-    "partially_complete",
-    "cancelled",
-    "timed_out",
-    "needs_attention",
-  ].includes(state);
-  const ready = state === "succeeded" || state === "completed";
-  return (
-    <span
-      className={`inline-flex w-fit items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold whitespace-nowrap ${bad ? "bg-danger-soft text-danger" : ready ? "bg-[#e8f4ec] text-good" : "bg-brand-soft text-brand-ink"}`}
-    >
-      <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-      {STATUS[state] ?? state.replaceAll("_", " ")}
-    </span>
-  );
-}
+import { ProcessingStatus } from "./processing-status";
+export { ProcessingStatus } from "./processing-status";
+import { recipeLabel } from "../../lib/recipe-view";
 
 export function processingReason(code: string | null | undefined) {
   if (!code) return null;
@@ -65,18 +23,6 @@ export function processingReason(code: string | null | undefined) {
   if (code === "stage_timeout" || code === "timeout")
     return "The stage exceeded its time limit.";
   return stageReason(code) ?? pipelineErrorSummary(code);
-}
-
-function attemptState(run: StageAttempt) {
-  if (
-    run.error?.code &&
-    ["stage_timeout", "deadline_exceeded", "execution_timeout"].includes(
-      run.error.code,
-    )
-  )
-    return "timed_out";
-  if (run.error?.code === "failed_outputs") return "partially_complete";
-  return run.state;
 }
 
 function resources(run: StageAttempt) {
@@ -100,8 +46,8 @@ function resources(run: StageAttempt) {
   ];
 }
 
-export function ProcessingStage({
-  title,
+export function ProcessingStepDetails({
+  stepId,
   current,
   runs,
   reusedFromJobId,
@@ -110,9 +56,9 @@ export function ProcessingStage({
   recipeId,
   action,
   note,
-  hasEarlierOutput,
+  importedEvidence,
 }: {
-  title: string;
+  stepId: string;
   current: StageAttempt | null;
   runs: readonly StageAttempt[];
   reusedFromJobId?: string | null;
@@ -120,18 +66,21 @@ export function ProcessingStage({
   pathname: string;
   recipeId?: string | undefined;
   action?: ReactNode;
-  hasEarlierOutput?: boolean;
+  importedEvidence?: {
+    model: string | null;
+    revision: string | null;
+    generator: string | null;
+  } | null;
   note?: ReactNode;
 }) {
-  function runLink(jobId: string) {
+  function runLink(jobId: string, label: string) {
     return (
       <Link
-        href={`${pathname}?run=${jobId}`}
+        href={`${pathname}?${new URLSearchParams({ step: stepId, run: jobId })}`}
         scroll={false}
-        className="font-mono text-brand underline"
-        title={jobId}
+        className="font-semibold text-brand underline"
       >
-        {jobId.slice(0, 8)}
+        {label}
       </Link>
     );
   }
@@ -144,21 +93,21 @@ export function ProcessingStage({
         className={`rounded-lg border p-3 text-sm ${selectedRun === run.jobId ? "border-brand bg-brand-soft" : "border-line bg-field"}`}
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {runLink(run.jobId)}
-          <span className="font-semibold">
-            {run.kind === "stage_rerun"
+          {runLink(
+            run.jobId,
+            run.kind === "stage_rerun"
               ? "Stage rerun"
               : run.kind === "retry"
                 ? "Retry"
-                : "Full run"}
-          </span>
-          <ProcessingStatus state={attemptState(run)} />
+                : "Full run",
+          )}
+          <ProcessingStatus state={attemptStatus(run)} />
           {runRecipe && runRecipe !== recipeId && (
-            <span className="text-xs text-muted">{runRecipe}</span>
+            <span className="text-xs text-muted">{recipeLabel(runRecipe)}</span>
           )}
         </div>
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-          {run.parentJobId && <span>Parent {runLink(run.parentJobId)}</span>}
+          {run.parentJobId && runLink(run.parentJobId, "Parent run")}
           <span>{run.trigger ?? "Trigger not recorded"}</span>
           {run.startedAt && (
             <time dateTime={run.startedAt}>
@@ -197,22 +146,14 @@ export function ProcessingStage({
   }
 
   const earlier = runs.slice(3);
+  const outputCounts = Object.entries(current?.counts ?? {}).filter(
+    ([name, count]) =>
+      count > 0 && ["segments", "captions", "frames_with_hand"].includes(name),
+  );
   const reason =
     processingReason(current?.error?.code) ?? current?.error?.summary;
   return (
-    <Card className="grid min-w-0 gap-3 p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold">{title}</h2>
-        <ProcessingStatus
-          state={
-            current
-              ? attemptState(current)
-              : hasEarlierOutput
-                ? "output_available"
-                : "not_run"
-          }
-        />
-      </div>
+    <div className="grid min-w-0 gap-3">
       {reason && <p className="text-sm text-muted">{reason}</p>}
       {current?.error?.code && (
         <code className="w-fit max-w-full text-xs wrap-anywhere text-muted">
@@ -220,6 +161,13 @@ export function ProcessingStage({
         </code>
       )}
       {note}
+      {outputCounts.length > 0 && (
+        <p className="text-sm text-muted">
+          {outputCounts
+            .map(([name, count]) => `${count} ${name.replaceAll("_", " ")}`)
+            .join(" · ")}
+        </p>
+      )}
       {current && (current.counts.frames_no_hand ?? 0) > 0 && (
         <p className="text-sm text-muted">
           No hand detected in {current.counts.frames_no_hand}{" "}
@@ -241,11 +189,11 @@ export function ProcessingStage({
           </p>
         )}
       {reusedFromJobId && (
-        <p
-          className="text-sm text-muted"
-          title="This stage used an earlier result and did not run again."
-        >
-          Output from run {runLink(reusedFromJobId)}
+        <p className="text-sm text-muted">
+          {current && attemptStatus(current) === "succeeded"
+            ? "Reused output from "
+            : "Carried forward from "}
+          {runLink(reusedFromJobId, "source run")}
         </p>
       )}
       {current && (
@@ -257,6 +205,13 @@ export function ProcessingStage({
             </div>
           ))}
         </dl>
+      )}
+      {importedEvidence && (
+        <p className="text-sm text-muted">
+          Imported output
+          {importedEvidence.model ? ` · ${importedEvidence.model}` : ""}
+          {importedEvidence.revision ? ` · ${importedEvidence.revision}` : ""}
+        </p>
       )}
       {action}
       <div className="grid gap-2 border-t border-line pt-3">
@@ -279,7 +234,7 @@ export function ProcessingStage({
           </details>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 

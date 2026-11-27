@@ -13,7 +13,7 @@ import {
   processingReason,
 } from "../../../components/recordings/processing-stage";
 import { RetryAction } from "../../../components/recordings/retry-actions";
-import { rangeLabel } from "../../../components/recordings/recording-preview";
+import { exactRangeLabel } from "../../../components/recordings/recording-preview";
 import { Button } from "../../../components/ui/button";
 import { Card } from "../../../components/ui/card";
 import { requireConsoleSession } from "../../../lib/server-session";
@@ -136,7 +136,7 @@ export default async function RecordingsPage({
                   ? Object.fromEntries(
                       target.clips.map((clip) => [
                         clip.clipId,
-                        rangeLabel(clip.startSeconds, clip.endSeconds),
+                        exactRangeLabel(clip.startSeconds, clip.endSeconds),
                       ]),
                     )
                   : undefined;

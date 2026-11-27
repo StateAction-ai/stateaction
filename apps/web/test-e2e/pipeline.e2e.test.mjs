@@ -114,18 +114,18 @@ describe("staff list", () => {
 });
 
 describe("recording detail", () => {
-  test("completed: recording details link to the clip processing page", async () => {
+  test("completed: recording details start with the Clips node collapsed", async () => {
     const res = await navigate(`/recordings/${ids.completed}`, staff);
     assert.equal(res.status, 200);
     assert.match(visible(res.text), /Clip planning/);
     assert.match(visible(res.text), /Recording estimated cost/);
     assert.ok(res.text.includes('href="/recordings"'));
-    assert.match(
-      res.text,
-      new RegExp(
-        `href="/recordings/${ids.completed}/clips/[a-f0-9-]{36}/processing"`,
-      ),
-    );
+    const clipsNode = res.text.match(
+      /<button\b[^>]*data-step="\$clips"[^>]*>/,
+    )?.[0];
+    assert.ok(clipsNode);
+    assert.match(clipsNode, /aria-expanded="false"/);
+    assert.doesNotMatch(visible(res.text), /Clip 1/);
   });
 
   test("failed: curated error and no provider payload", async () => {

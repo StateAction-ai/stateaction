@@ -4,13 +4,25 @@ import {
   type RecordingMetadata,
 } from "@stateaction/server/pipeline";
 import type { TimelineSpan } from "../../lib/recording-timeline";
-import { fmtPrecise } from "../../lib/review/timeline";
+import { fmtClock, fmtPrecise } from "../../lib/review/timeline";
 import { Card } from "../ui/card";
 import { OriginalVideo } from "./original-video";
 
 export function rangeLabel(start: number | null, end: number | null) {
   if (start === null || end === null) return "Source time unavailable";
   return `${fmtPrecise(start)}–${fmtPrecise(end)}`;
+}
+
+export function exactRangeLabel(start: number | null, end: number | null) {
+  if (start === null || end === null) return "Source time unavailable";
+  const format = (seconds: number) => {
+    const ns = Math.round(seconds * 1e9);
+    const fraction = String(ns % 1e9)
+      .padStart(9, "0")
+      .replace(/0+$/, "");
+    return fmtClock(Math.floor(ns / 1e9)) + (fraction ? "." + fraction : "");
+  };
+  return format(start) + "–" + format(end);
 }
 
 export function RecordingPreview({
@@ -20,7 +32,6 @@ export function RecordingPreview({
   range,
   metadata,
   capturedAt,
-  clipId,
 }: {
   recordingId: string;
   initialTime?: number;
@@ -28,7 +39,6 @@ export function RecordingPreview({
   range?: { start: number; end: number } | undefined;
   metadata: RecordingMetadata;
   capturedAt: string;
-  clipId?: string;
 }) {
   const {
     canReadOriginal,
@@ -84,8 +94,6 @@ export function RecordingPreview({
             ...(range
               ? [["Clip source time", rangeLabel(range.start, range.end)]]
               : []),
-            ["Recording ID", recordingId],
-            ...(clipId ? [["Clip ID", clipId]] : []),
           ].map(([label, value]) => (
             <div key={label}>
               <dt className="text-xs text-muted">{label}</dt>

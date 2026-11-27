@@ -178,7 +178,7 @@ test("SA-150 Chromium confirms a clip retry and a recording batch without an acc
       await ev("(" + action + ")?.click()");
       return ev('!!document.querySelector("dialog[open]")');
     }, label + " opens its confirmation");
-    const confirm = button("dialog[open]", "Confirm retry");
+    const confirm = button("dialog[open]", "Start retry");
     await until(async () => {
       const error = await ev(
         'document.querySelector("dialog[open] [role=alert]")?.textContent',
@@ -195,7 +195,7 @@ test("SA-150 Chromium confirms a clip retry and a recording batch without an acc
     const preview = await ev(
       'document.querySelector("dialog[open]").innerText',
     );
-    assert.match(preview, /Runs Segmentation, Captioning, Hand pose/);
+    assert.match(preview, /Runs Find actions, Write captions, Track hands/);
     assert.match(preview, /Captions must follow segmentation/);
     assert.match(preview, /Total estimated cost/);
     await ev("(" + confirm + ").click()");
@@ -234,11 +234,13 @@ test("SA-150 Chromium confirms a clip retry and a recording batch without an acc
     ),
     /Processing was cancelled/,
   );
-  assert.deepEqual(await retry("Retry from here", clip, batch), [queued(clip)]);
+  assert.deepEqual(await retry("Retry failed steps", clip, batch), [
+    queued(clip),
+  ]);
 
   await navigate("/recordings/" + batch.recordingId);
   assert.deepEqual(
-    (await retry("Retry failed clips", batch, clip)).sort((a, b) =>
+    (await retry("Retry failed steps", batch, clip)).sort((a, b) =>
       a.recording_id.localeCompare(b.recording_id),
     ),
     [queued(clip), queued(batch)].sort((a, b) =>

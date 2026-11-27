@@ -46,6 +46,12 @@ export const RECIPE_STAGE_LABEL = {
 
 export type RecipeStage = keyof typeof RECIPE_STAGE_LABEL;
 
+export const RECIPE_STEP_LABEL = {
+  segment: "Find actions",
+  caption: "Write captions",
+  hand_pose: "Track hands",
+} satisfies Record<RecipeStage, string>;
+
 export const STAGE_FAILURE_COUNTS = {
   segment: ["failed_windows"],
   caption: ["failed_captions", "captions_failed"],

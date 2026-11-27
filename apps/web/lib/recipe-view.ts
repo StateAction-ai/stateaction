@@ -1,11 +1,5 @@
 import type { Stage } from "@stateaction/contracts";
 
-export const RECIPE_STAGES = {
-  segment: "Find action segments",
-  caption: "Write captions",
-  hand_pose: "Track hands and seal results",
-} satisfies Record<Stage, string>;
-
 export function parseRecipeId(param: string): string | null {
   try {
     const id = decodeURIComponent(param);
@@ -27,10 +21,10 @@ export function recipeLabel(id: string): string {
 export function recipeHref(
   recipeId: string,
   jobId?: string,
-  options: { stage?: Stage; recipeOnly?: boolean } = {},
+  options: { stage?: Stage } = {},
 ) {
   const query = new URLSearchParams();
   if (jobId) query.set("job", jobId);
-  if (options.recipeOnly) query.set("view", "recipe");
-  return `/recipes/${encodeURIComponent(recipeId)}${query.size ? `?${query}` : ""}${options.stage ? `#stage-${options.stage}` : ""}`;
+  if (options.stage) query.set("step", options.stage);
+  return `/recipes/${encodeURIComponent(recipeId)}${query.size ? `?${query}` : ""}`;
 }

@@ -1,0 +1,61 @@
+.graph {
+  background: #f7f9f7 radial-gradient(#d5ded7 0.8px, transparent 0.8px) 0 0 /
+    14px 14px;
+}
+
+.node {
+  --status-color: #46594f;
+  --status-fill: #e8eeea;
+  --status-border: #9caea3;
+  border-left: 3px solid var(--status-border);
+  background: color-mix(in srgb, var(--status-fill) 25%, white);
+}
+
+.node[data-tone="good"] {
+  --status-color: #1c603d;
+  --status-fill: #dcefe2;
+  --status-border: #74b58c;
+}
+
+.node[data-tone="danger"] {
+  --status-color: #9e292e;
+  --status-fill: #fce5e6;
+  --status-border: #d7888b;
+}
+
+.node[data-tone="running"] {
+  --status-color: #254f9e;
+  --status-fill: #e2edff;
+  --status-border: #80a5df;
+}
+
+.node[data-tone="held"] {
+  --status-color: #795000;
+  --status-fill: #fff0cf;
+  --status-border: #ccac69;
+}
+
+.node[data-tone="reused"] {
+  --status-color: #613b91;
+  --status-fill: #efe5fb;
+  --status-border: #ad92cf;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--status-color);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.statusIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--status-fill);
+}

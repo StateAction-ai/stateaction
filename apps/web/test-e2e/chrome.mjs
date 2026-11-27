@@ -33,11 +33,18 @@ function expandCpuList(list) {
 
 // The `count` least busy allowed CPUs over a short /proc/stat sample, as "a,b".
 async function quietestCpus(count) {
+  const [status, isolated] = await Promise.all([
+    readFile("/proc/self/status", "utf8"),
+    readFile("/sys/devices/system/cpu/isolated", "utf8").catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+      return "";
+    }),
+  ]);
   const allowed = expandCpuList(
-    (await readFile("/proc/self/status", "utf8")).match(
-      /^Cpus_allowed_list:\s*(.+)$/m,
-    )[1],
+    status.match(/^Cpus_allowed_list:\s*(.+)$/m)[1],
   );
+  const isolatedCpus = isolated.trim() ? expandCpuList(isolated.trim()) : [];
+  const balanced = allowed.filter((cpu) => !isolatedCpus.includes(cpu));
   const sample = async () => {
     const times = new Map();
     for (const line of (await readFile("/proc/stat", "utf8")).split("\n")) {
@@ -57,7 +64,7 @@ async function quietestCpus(count) {
     const [idle1, total1] = after.get(cpu) ?? [0, 0];
     return total1 === total0 ? 1 : 1 - (idle1 - idle0) / (total1 - total0);
   };
-  return allowed
+  return (balanced.length ? balanced : allowed)
     .sort((a, b) => busy(a) - busy(b) || a - b)
     .slice(0, count)
     .sort((a, b) => a - b)

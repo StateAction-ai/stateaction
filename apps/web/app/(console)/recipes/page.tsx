@@ -3,7 +3,6 @@ import { ArrowRight } from "lucide-react";
 import { pipelineReads } from "@stateaction/server/pipeline";
 import { requireConsoleSession } from "../../../lib/server-session";
 import { recipeHref, recipeLabel } from "../../../lib/recipe-view";
-import { RecipeFlow } from "../../../components/recipes/recipe-flow";
 import { Card } from "../../../components/ui/card";
 
 export const metadata = { title: "Recipes · StateAction.ai" };
@@ -84,7 +83,7 @@ export default async function RecipesPage({
           </Card>
         </div>
       ) : (
-        <div className="grid items-start gap-3 lg:grid-cols-2">
+        <div className="grid items-start gap-3 ">
           {recipes.map((entry) => (
             <Card key={entry.id} className="grid min-w-0 gap-3 p-4 sm:p-5">
               <h2 className="text-lg font-bold wrap-anywhere">
@@ -93,17 +92,14 @@ export default async function RecipesPage({
                   className="text-brand underline"
                 >
                   {entry.label}
-                  {entry.kind === "recipe" && entry.label !== entry.id
-                    ? " · " + entry.id
+                  {entry.id.includes("@")
+                    ? ` · v${entry.id.split("@")[1]}`
                     : ""}
                 </Link>
               </h2>
-              <p className="text-sm text-muted">
-                {entry.kind === "workflow"
-                  ? "FLORA segmentation and captions with CPU hand tracking."
-                  : "Plans clips and runs segmentation, captioning and hand tracking."}
-              </p>
-              <RecipeFlow recipe={entry.recipe} />
+              {entry.preview && (
+                <p className="text-sm text-muted">Read-only preview</p>
+              )}
               <div className="grid gap-1 text-sm text-muted">
                 <p>
                   {entry.recordingCount}{" "}

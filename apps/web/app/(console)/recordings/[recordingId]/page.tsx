@@ -1,26 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  formatDuration,
   parseRecordingId,
   pipelineReads,
   RECIPE_STAGE_LABEL,
 } from "@stateaction/server/pipeline";
 import { CaptureHold } from "../../../../components/recordings/capture-hold";
-import { ClipPoster } from "../../../../components/recordings/clip-poster";
+import { ClipTable } from "../../../../components/recordings/clip-table";
+import { RecipeFlow } from "../../../../components/recipes/recipe-flow";
 import {
   EstimatedCost,
-  ProcessingStage,
+  ProcessingStepDetails,
   ProcessingStatus,
   processingReason,
 } from "../../../../components/recordings/processing-stage";
 import {
+  exactRangeLabel,
   RecordingPreview,
   rangeLabel,
 } from "../../../../components/recordings/recording-preview";
 import { RetryAction } from "../../../../components/recordings/retry-actions";
-import { Button } from "../../../../components/ui/button";
-import { Card } from "../../../../components/ui/card";
 import { planTimeline, sourceTime } from "../../../../lib/recording-timeline";
 import { recipeHref, recipeLabel } from "../../../../lib/recipe-view";
 import { requireConsoleSession } from "../../../../lib/server-session";
@@ -56,10 +55,30 @@ export default async function RecordingPage({
     ]),
   );
   const planningJob = clipPlanning.latest;
-  const alternateRecipes =
-    captureProfile?.allowedRecipeIds.filter((id) => id !== recipe?.id) ?? [];
-  const noAlternateRecipe =
-    recipe?.kind === "recipe" && alternateRecipes.length === 0;
+  const cannotRetryPlanning =
+    retryTarget?.kind === "clip_plan"
+      ? retryTarget.available
+        ? null
+        : (retryTarget.reason ?? "Clip planning cannot be retried.")
+      : recording.status === "processing" || recording.status === "queued"
+        ? "Processing is already in progress."
+        : "No failed steps.";
+  const planningAction =
+    retryTarget?.kind === "clip_plan"
+      ? ({
+          planning: {
+            jobId: retryTarget.jobId,
+            expectedState: retryTarget.expectedState,
+            estimate: planningJob?.costUsd,
+          },
+        } as const)
+      : null;
+  const bulk =
+    retryTarget?.kind === "failed_clips"
+      ? ({
+          request: { schemaVersion: 2, scope: "failed_clips" },
+        } as const)
+      : planningAction;
 
   return (
     <div className="grid gap-4">
@@ -75,7 +94,7 @@ export default async function RecordingPage({
           <EstimatedCost cost={recording.cost} scope="Recording" />
           {recipe && (
             <Link
-              href={recipeHref(recipe.id, recipe.jobId ?? undefined)}
+              href={recipeHref(recipe.id)}
               className="min-w-0 text-sm font-semibold text-brand underline wrap-anywhere"
             >
               {recipeLabel(recipe.id)}
@@ -86,20 +105,6 @@ export default async function RecordingPage({
             </Link>
           )}
         </div>
-        {noAlternateRecipe && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              disabled
-              aria-describedby="reprocess-recipe-reason"
-            >
-              Reprocess with another recipe
-            </Button>
-            <span id="reprocess-recipe-reason" className="text-sm text-muted">
-              No alternate recipe is configured for this capture source.
-            </span>
-          </div>
-        )}
         {recording.error &&
           recording.error.stage !== "clip_plan" &&
           captureProfile?.state !== "held" && (
@@ -111,22 +116,6 @@ export default async function RecordingPage({
                 recording.error.summary}
             </p>
           )}
-        {retryTarget?.kind === "failed_clips" && (
-          <div className="mt-3">
-            <RetryAction
-              key={retryTarget.clips.map(({ jobId }) => jobId).join(",")}
-              recordingId={recordingId}
-              label="Retry failed clips"
-              action={{ request: { schemaVersion: 2, scope: "failed_clips" } }}
-              ranges={ranges}
-              disabledReason={
-                reads.selectionEnabled()
-                  ? null
-                  : "This environment is read-only."
-              }
-            />
-          </div>
-        )}
       </header>
 
       {captureProfile?.state === "held" && captureProfile.reason && (
@@ -147,108 +136,110 @@ export default async function RecordingPage({
         />
       )}
 
-      <RecordingPreview
-        recordingId={recordingId}
-        initialTime={sourceTime(query.t)}
-        spans={planTimeline(recording.plan)}
-        capturedAt={recording.startedAt}
-        metadata={recording.metadata}
-      />
-
-      <ProcessingStage
-        title="Clip planning"
-        pathname={pathname}
-        current={planningJob}
-        runs={clipPlanning.attempts}
-        selectedRun={selectedRun}
-        recipeId={recipe?.id}
-        note={
-          recording.plan ? (
-            <div className="grid gap-1 text-sm text-muted">
-              {recording.plan.state === "failed" ? (
-                <p>
-                  Clip planning failed. The plan covers the whole recording.{" "}
-                  {recording.plan.error_code && (
-                    <code>{recording.plan.error_code}</code>
-                  )}
-                </p>
-              ) : recording.plan.mode === "passthrough" ? (
-                <p>The clip covers the whole recording.</p>
-              ) : null}
-              <p>
-                Filter <code>{recording.plan.filter_version}</code> ·{" "}
-                {recording.plan.mode}
-              </p>
-            </div>
-          ) : (
-            !planningJob && (
-              <p className="text-sm text-muted">No clip plan recorded.</p>
-            )
-          )
+      <RecipeFlow
+        nodes={recording.graph}
+        initialStep={
+          typeof query.step === "string"
+            ? query.step
+            : typeof query.t === "string"
+              ? "$source"
+              : undefined
         }
-        action={
-          retryTarget?.kind === "clip_plan" && (
-            <RetryAction
-              key={retryTarget.jobId}
-              recordingId={recordingId}
-              label="Retry clip planning"
-              action={{
-                planning: {
-                  jobId: retryTarget.jobId,
-                  expectedState: retryTarget.expectedState,
-                  estimate: planningJob?.costUsd,
-                },
-              }}
-              disabledReason={
-                retryTarget.available
+        retry={
+          <RetryAction
+            key={
+              retryTarget?.kind === "failed_clips"
+                ? retryTarget.clips.map(({ jobId }) => jobId).join(",")
+                : retryTarget?.jobId
+            }
+            recordingId={recordingId}
+            label="Retry failed steps"
+            action={bulk}
+            ranges={Object.fromEntries(
+              clips.map((clip) => [
+                clip.id,
+                exactRangeLabel(clip.startSeconds, clip.endSeconds),
+              ]),
+            )}
+            disabledReason={
+              !reads.selectionEnabled()
+                ? "This environment is read-only."
+                : retryTarget?.kind === "failed_clips"
                   ? null
-                  : (retryTarget.reason ?? "Clip planning cannot be retried.")
-              }
-            />
-          )
+                  : cannotRetryPlanning
+            }
+          />
         }
-      />
-
-      <Card aria-labelledby="recording-clips-heading">
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <h2 id="recording-clips-heading" className="text-lg font-bold">
-            Clips
-          </h2>
-          <span className="text-sm text-muted">{clips.length}</span>
-        </div>
-        {clips.length ? (
-          <ul className="divide-y divide-line">
-            {clips.map((clip) => (
-              <li key={clip.id}>
-                <Link
-                  href={`${pathname}/clips/${clip.id}/processing`}
-                  className="flex min-w-0 items-center gap-3 p-3 hover:bg-field sm:p-4"
-                >
-                  <ClipPoster
-                    clipId={clip.id}
-                    duration={
-                      clip.startSeconds !== null && clip.endSeconds !== null
-                        ? formatDuration(clip.endSeconds - clip.startSeconds)
-                        : null
+        details={{
+          $source: (
+            <div className="grid gap-3">
+              <RecordingPreview
+                recordingId={recordingId}
+                initialTime={sourceTime(query.t)}
+                spans={planTimeline(recording.plan)}
+                capturedAt={recording.startedAt}
+                metadata={recording.metadata}
+              />
+              <ProcessingStepDetails
+                stepId="source"
+                pathname={pathname}
+                current={null}
+                runs={[]}
+              />
+            </div>
+          ),
+          clip_plan: (
+            <ProcessingStepDetails
+              stepId="clip_plan"
+              pathname={pathname}
+              current={planningJob}
+              runs={clipPlanning.attempts}
+              selectedRun={selectedRun}
+              recipeId={recipe?.id}
+              note={
+                recording.plan ? (
+                  <p className="text-sm text-muted">
+                    {recording.plan.state === "failed"
+                      ? "Planning failed. The plan covers the whole recording."
+                      : recording.plan.mode === "passthrough"
+                        ? "The clip covers the whole recording."
+                        : "Clip ranges are available."}
+                  </p>
+                ) : (
+                  !planningJob && (
+                    <p className="text-sm text-muted">No clip plan recorded.</p>
+                  )
+                )
+              }
+              action={
+                planningAction && (
+                  <RetryAction
+                    key={planningAction.planning.jobId}
+                    recordingId={recordingId}
+                    label="Retry this step"
+                    action={planningAction}
+                    disabledReason={
+                      !reads.selectionEnabled()
+                        ? "This environment is read-only."
+                        : cannotRetryPlanning
                     }
                   />
-                  <div className="grid min-w-0 flex-1 gap-1">
-                    <strong className="text-sm text-brand underline underline-offset-2">
-                      Clip {clip.ordinal + 1}
-                    </strong>
-                    <span className="text-xs text-muted tabular-nums">
-                      {ranges[clip.id]}
-                    </span>
-                  </div>
-                  <ProcessingStatus state={clip.status} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="p-4 text-sm text-muted">Clips appear after planning.</p>
-        )}
-      </Card>
+                )
+              }
+            />
+          ),
+          $clips: (
+            <ClipTable
+              clips={clips.map((clip) => ({
+                href: `${pathname}/clips/${clip.id}/processing`,
+                label: `Clip ${clip.ordinal + 1}`,
+                range: ranges[clip.id]!,
+                status: clip.status,
+              }))}
+            />
+          ),
+        }}
+      />
     </div>
   );
 }
