@@ -48,12 +48,14 @@ export function HandOverlay({
   path,
   mediaOffsetS,
   enabled,
+  initialFrameAtZero = false,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   model: ReviewModel;
   path: string;
   mediaOffsetS: number;
   enabled: boolean;
+  initialFrameAtZero?: boolean;
 }) {
   const [pts, setPts] = useState<number | null>(null);
   const [chunks, setChunks] = useState(new Map<number, ClipHandFrames>());
@@ -70,17 +72,35 @@ export function HandOverlay({
       request = el.requestVideoFrameCallback(frame);
     };
     const clear = () => setPts(null);
+    // The embedded demo's first frame is known to have PTS zero. A cached
+    // video can present it before hydration attaches the frame callback.
+    const showLoadedFirstFrame = () => {
+      if (
+        initialFrameAtZero &&
+        el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+        el.paused &&
+        !el.seeking &&
+        el.currentTime === 0
+      ) {
+        setPts(0);
+      }
+    };
     request = el.requestVideoFrameCallback(frame);
+    showLoadedFirstFrame();
+    el.addEventListener("loadeddata", showLoadedFirstFrame);
+    el.addEventListener("seeked", showLoadedFirstFrame);
     el.addEventListener("seeking", clear);
     el.addEventListener("emptied", clear);
     el.addEventListener("error", clear);
     return () => {
       el.cancelVideoFrameCallback(request);
+      el.removeEventListener("loadeddata", showLoadedFirstFrame);
+      el.removeEventListener("seeked", showLoadedFirstFrame);
       el.removeEventListener("seeking", clear);
       el.removeEventListener("emptied", clear);
       el.removeEventListener("error", clear);
     };
-  }, [videoRef, mediaOffsetS]);
+  }, [videoRef, mediaOffsetS, initialFrameAtZero]);
 
   const clip =
     enabled && pts !== null ? clipForFrame(model.clips, ranges, pts) : null;

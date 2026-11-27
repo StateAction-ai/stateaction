@@ -409,6 +409,7 @@ function Rail({
             onChoose={onChoose}
             onNextUnchecked={onNextUnchecked}
             staff={staff}
+            showDetails={staff || Boolean(embedded)}
             captionEditor={captionEditor}
           />
         ))
@@ -440,6 +441,7 @@ function RailCard({
   onChoose,
   onNextUnchecked,
   staff,
+  showDetails,
   captionEditor,
 }: {
   card: Card;
@@ -451,6 +453,7 @@ function RailCard({
   onChoose: ((card: Card, choice: MarkChoice) => void) | undefined;
   onNextUnchecked: () => void;
   staff: boolean;
+  showDetails: boolean;
   captionEditor: ((card: Card) => React.ReactNode) | undefined;
 }) {
   const failed = c.caption.state === "failed";
@@ -502,7 +505,7 @@ function RailCard({
           </p>
         )}
       </div>
-      {selected && staff ? (
+      {selected && showDetails ? (
         <dl
           data-testid="rail-detail"
           className="col-span-full m-0 mt-2.5 grid grid-cols-[auto_1fr] gap-x-4 border-t border-dashed border-line pt-2.5 text-xs"

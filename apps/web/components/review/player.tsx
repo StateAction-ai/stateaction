@@ -98,6 +98,7 @@ export function Player({
             path={handFramesPath}
             mediaOffsetS={mediaOffsetS}
             enabled={overlay}
+            initialFrameAtZero={embedded === true && mediaOffsetS === 0}
           />
         ) : null}
         <div className="absolute top-3 left-3.5 flex flex-wrap gap-1.5">

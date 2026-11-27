@@ -167,8 +167,7 @@
   outline-offset: -2px;
 }
 
-.offer svg,
-.workflow svg {
+.offer svg {
   color: #4c7028;
 }
 
@@ -211,43 +210,179 @@
 }
 
 .workflow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem 3rem;
-  padding-bottom: clamp(3rem, 6vw, 5rem);
+  padding-block: clamp(2rem, 5vw, 4rem) 0;
+  scroll-margin-top: 1rem;
+}
+
+.workflowIntro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .workflow h2 {
-  margin-block: 0.65rem 0.8rem;
+  margin-bottom: 0.65rem;
 }
 
-.workflow ol {
-  border-top: 1px solid #c9d0c4;
-}
-
-.workflow li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  padding-block: 0.85rem;
-  border-bottom: 1px solid #c9d0c4;
-}
-
-.workflow li svg {
-  margin-top: 0.15rem;
+.workflowIntro button {
   flex: none;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--midnight);
+  background: var(--midnight);
+  color: var(--paper);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
-.workflow strong,
-.workflow li span {
+.workflowIntro button:hover {
+  background: #344130;
+}
+
+.pipelineGraph,
+.pipelineBranch {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pipelineGraph {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2.65fr) minmax(
+      0,
+      1fr
+    );
+  align-items: center;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  border: 1px solid #c9d0c4;
+  background: #e9ede4;
+}
+
+.pipelineBranch {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pipelineNode,
+.pipelineProcessing {
+  position: relative;
+  min-width: 0;
+}
+
+.pipelineNode {
+  height: 100%;
+  padding: 0.85rem;
+  border: 1px solid #aab6a4;
+  background: #fafbf7;
+}
+
+.pipelineGraph > .pipelineNode {
+  height: auto;
+}
+
+.pipelineNode strong,
+.pipelineNode span {
   display: block;
 }
 
-.workflow .modelNote {
-  grid-column: 1 / -1;
-  max-width: none;
+.pipelineNode span {
+  margin-top: 0.2rem;
   color: #445346;
   font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.pipelineProcessing {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px dashed #788b70;
+  background: #f0f3ed;
+}
+
+.pipelineGroupTitle {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.pipelineGraph > li:not(:last-child)::after,
+.segmentNode::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 4px);
+  left: calc(100% + 0.41rem);
+  width: 7px;
+  height: 7px;
+  transform: rotate(45deg);
+  border-top: 2px solid #4f7429;
+  border-right: 2px solid #4f7429;
+  pointer-events: none;
+}
+
+.captureNode {
+  --delay: 0ms;
+}
+.prepareNode {
+  --delay: 720ms;
+}
+.segmentNode,
+.poseNode {
+  --delay: 1440ms;
+}
+.captionNode {
+  --delay: 2160ms;
+}
+.reviewNode {
+  --delay: 2880ms;
+}
+
+.pipelineGraph[data-playing="true"] .pipelineNode {
+  animation: pipeline-step 780ms var(--delay) both;
+}
+
+@keyframes pipeline-step {
+  0%,
+  100% {
+    border-color: #aab6a4;
+    background: #fafbf7;
+  }
+  30%,
+  75% {
+    border-color: #4f7429;
+    background: #dcefc8;
+  }
+}
+
+@media (max-width: 920px) {
+  .pipelineGraph {
+    grid-template-columns: 1fr;
+  }
+
+  .pipelineGraph > li:not(:last-child)::after {
+    top: calc(100% + 0.47rem);
+    left: calc(50% - 4px);
+    transform: rotate(135deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .workflowIntro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pipelineGraph[data-playing="true"] .pipelineNode {
+    animation: none;
+  }
+
+  .workflowIntro button {
+    display: none;
+  }
 }
 
 @media (max-width: 820px) {
@@ -256,8 +391,7 @@
   }
 
   .heroIntro,
-  .offers,
-  .workflow {
+  .offers {
     grid-template-columns: 1fr;
   }
 
@@ -270,8 +404,7 @@
 }
 
 @media (max-width: 420px) {
-  .hero h1 br,
-  .workflow h2 br {
+  .hero h1 br {
     display: none;
   }
 

@@ -13,6 +13,7 @@ const dataset = "https://huggingface.co/datasets/FraunhoferIPK/IndEgo";
 const datasetRevision = "c822468b5e0c9c42ebbf2939d3be936c2b203704";
 const videoPath = "2_Inspection_Repair/mp4_480/User_15_410_0511_1_480.mp4";
 const durationS = 29.6;
+const demoClipId = "indego-public-excerpt";
 const source: VideoSource = {
   kind: "direct",
   url: `${dataset}/resolve/${datasetRevision}/${videoPath}`,
@@ -27,6 +28,18 @@ function handLane(
     endS,
     state,
   }));
+}
+
+const lanes = { left: handLane("left"), right: handLane("right") };
+
+function presenceShare(side: keyof typeof lanes, startS: number, endS: number) {
+  const present = lanes[side].reduce(
+    (total, span) =>
+      total +
+      Math.max(0, Math.min(endS, span.endS) - Math.max(startS, span.startS)),
+    0,
+  );
+  return Math.round((100 * present) / (endS - startS));
 }
 
 const cards: ReviewModel["cards"] = demoSegments.map(
@@ -45,7 +58,11 @@ const cards: ReviewModel["cards"] = demoSegments.map(
       hand: handOf(text),
       steps: captionStepList(text),
     },
-    handsLR: { left: null, right: null, partial: false },
+    handsLR: {
+      left: presenceShare("left", startS, endS),
+      right: presenceShare("right", startS, endS),
+      partial: false,
+    },
     derivedLocally: true,
   }),
 );
@@ -63,13 +80,13 @@ const model: ReviewModel = {
   durationS,
   originNs: "0",
   cards,
-  lanes: { left: handLane("left"), right: handLane("right") },
+  lanes,
   presence: "available",
   presenceNote: null,
   derivedRule: null,
   failures: [],
   handCounts,
-  clips: [],
+  clips: [{ clipId: demoClipId, startS: 0, endS: durationS }],
   provenance: [],
   summary: {
     segments: demoSegments.length,
@@ -97,9 +114,9 @@ export function ResearchClip() {
           previousHref={null}
           nextHref={null}
           posterPath={null}
-          handFramesPath={null}
+          handFramesPath="/demo/indego-clip-hand-pose.json"
           startAt={null}
-          initialSegmentId={null}
+          initialSegmentId={cards[0]?.segmentId ?? null}
         />
       </div>
       <p className={styles.clipAttribution}>
@@ -110,7 +127,8 @@ export function ResearchClip() {
         Ze Lu, Oliver Heimann, and Jörg Krüger (2025),{" "}
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
         The player shows the first 29.6 seconds with StateAction segmentation
-        and model captions. Hand indicators reflect model detections.
+        and model captions. The hand overlay shows the matching model
+        detections.
       </p>
     </figure>
   );
