@@ -5,12 +5,13 @@
 // and the Render CLI (workflow services). Secrets are read from the process environment,
 // sent only to the Render API, and never printed, logged or written outside 0600 temp files.
 //
-// Commands:  estimate | check | provision | configure | migrate | deploy | smoke | rollback
+// Commands:  estimate | check | live-refs | provision | configure | migrate | deploy | smoke | rollback
 // Common:    --environment production|dev   --ref <40-hex sha>   --state <json file>
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -19,6 +20,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isFullSha, parseComponents } from "./deploy-scope.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const API = "https://api.render.com/v1";
@@ -243,6 +245,95 @@ export const redact = (text, values) =>
     .filter((v) => v && String(v).length >= 6)
     .reduce((t, v) => t.split(String(v)).join("[redacted]"), String(text));
 
+const SERVICE_COMPONENTS = ["web", "cron", "workflow"];
+
+const asList = (value, nestedKeys = []) => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    for (const key of nestedKeys) {
+      if (Array.isArray(value[key])) return value[key];
+    }
+  }
+  return [];
+};
+
+export function extractLiveRefs({
+  webDeploys = [],
+  cronDeploys = [],
+  workflowVersions = [],
+} = {}) {
+  const liveCommit = (deploys) => {
+    const live = asList(deploys, ["deploys", "items"])
+      .map((x) => x?.deploy ?? x)
+      .find((d) => d?.status === "live");
+    const sha = live?.commit?.id ?? live?.commitId;
+    return isFullSha(sha) ? sha : null;
+  };
+  const readyVersions = asList(workflowVersions, ["versions", "items"])
+    .map((x, index) => ({ v: x?.version ?? x?.workflowVersion ?? x, index }))
+    .filter(({ v }) => ["ready", "live", "active"].includes(v?.status));
+  readyVersions.sort((a, b) => {
+    const ta = Date.parse(a.v?.updatedAt ?? a.v?.createdAt ?? "");
+    const tb = Date.parse(b.v?.updatedAt ?? b.v?.createdAt ?? "");
+    if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return tb - ta;
+    return a.index - b.index;
+  });
+  const readyWf = readyVersions[0]?.v;
+  const wfSha = readyWf?.commitId ?? readyWf?.commit?.id ?? readyWf?.commit;
+  return {
+    web: liveCommit(webDeploys),
+    cron: liveCommit(cronDeploys),
+    workflow: isFullSha(wfSha) ? wfSha : null,
+  };
+}
+
+export function planDeployActions({
+  componentsArg,
+  updateCodeRevision = false,
+  cronSuspended = false,
+  hasDispatchKey = false,
+} = {}) {
+  const legacyMode = !componentsArg;
+  let selected;
+  if (legacyMode) {
+    selected = [...SERVICE_COMPONENTS];
+  } else {
+    const parsed = parseComponents(componentsArg);
+    if (parsed.mode !== "explicit") {
+      throw new Error(
+        "deploy --components requires explicit component names (web,cron,workflow or all)",
+      );
+    }
+    selected = parsed.components.filter((c) => SERVICE_COMPONENTS.includes(c));
+  }
+  const set = new Set(selected);
+  const deployWeb = set.has("web");
+  const deployCron = set.has("cron");
+  const deployWorkflow = set.has("workflow");
+  // In legacy full-stack deploy, PROCESSING_CODE_REVISION updates with the release and
+  // cron resume/suspend follows RENDER_DISPATCH_API_KEY. In surgical component deploys,
+  // unrelated env vars and active cron state are untouched; a suspended cron is temporarily
+  // resumed only to build and suspended again afterwards.
+  const shouldUpdateCodeRevision =
+    deployWeb && (legacyMode || Boolean(updateCodeRevision));
+  const cronPostState = legacyMode
+    ? hasDispatchKey
+      ? "resume"
+      : "suspend"
+    : deployCron && cronSuspended
+      ? "suspend"
+      : "unchanged";
+  return {
+    legacyMode,
+    services: selected,
+    deployWeb,
+    deployCron,
+    deployWorkflow,
+    shouldUpdateCodeRevision,
+    cronPostState,
+  };
+}
+
 // ---------------------------------------------------------------- Render API
 function makeClient(fetchImpl = fetch) {
   const key = process.env.RENDER_CREATE_KEY || process.env.RENDER_API_KEY;
@@ -289,7 +380,9 @@ async function findByName(api, kind, name, owner) {
 }
 
 function cli(args, { input, env = {}, allowFail = false } = {}) {
-  const r = spawnSync("render", args, {
+  const pinned = join(root, "artifacts/platform-tools/render/render");
+  const bin = process.env.RENDER || (existsSync(pinned) ? pinned : "render");
+  const r = spawnSync(bin, args, {
     encoding: "utf8",
     input,
     env: {
@@ -348,18 +441,33 @@ function loadState(path) {
 }
 const saveState = (path, s) => writeFileSync(path, JSON.stringify(s, null, 2));
 
-async function discover(api, config, envName) {
+async function discover(
+  api,
+  config,
+  envName,
+  { includeWorkflow = true, allowWorkflowFail = false } = {},
+) {
   const stack = config.environments[envName].stack;
   const owner = config.owner.id;
   const db = await findByName(api, "postgres", stack.db, owner);
   const web = await findByName(api, "service", stack.web, owner);
   const cron = await findByName(api, "service", stack.cron, owner);
-  const listed = JSON.parse(
-    cli(["workflows", "list", "--confirm", "-o", "json"]).stdout || "[]",
-  );
-  const workflow = listed
-    .map((x) => x.workflow ?? x)
-    .find((w) => w.name === stack.workflow);
+  let workflow;
+  if (includeWorkflow) {
+    const res = cli(["workflows", "list", "--confirm", "-o", "json"], {
+      allowFail: allowWorkflowFail,
+    });
+    if (res.status === 0 && res.stdout?.trim()) {
+      try {
+        const listed = asList(JSON.parse(res.stdout), ["workflows", "items"]);
+        workflow = listed
+          .map((x) => x?.workflow ?? x)
+          .find((w) => w?.name === stack.workflow);
+      } catch (e) {
+        if (!allowWorkflowFail) throw e;
+      }
+    }
+  }
   return { db, web, cron, workflow };
 }
 
@@ -393,7 +501,26 @@ async function main() {
   const api = makeClient();
   const stack = config.environments[environment].stack;
   const owner = config.owner.id;
-  const found = await discover(api, config, environment);
+  const hasFlag = (name) => process.argv.includes(`--${name}`);
+  const schemaOnly = hasFlag("schema-only");
+  const componentsArg = flag("components");
+  const prelimDeployPlan =
+    command === "deploy"
+      ? planDeployActions({
+          componentsArg,
+          updateCodeRevision: hasFlag("update-code-revision"),
+        })
+      : null;
+  const includeWorkflow =
+    command === "provision" ||
+    command === "configure" ||
+    command === "live-refs" ||
+    (command === "migrate" && !schemaOnly) ||
+    (command === "deploy" && prelimDeployPlan.deployWorkflow);
+  const found = await discover(api, config, environment, {
+    includeWorkflow,
+    allowWorkflowFail: command === "live-refs",
+  });
   const log = (m) => console.log(redact(m, currentSecrets()));
 
   if (command === "provision") {
@@ -542,21 +669,76 @@ async function main() {
     return;
   }
 
+  const deployPlan =
+    command === "deploy"
+      ? planDeployActions({
+          componentsArg,
+          updateCodeRevision: hasFlag("update-code-revision"),
+          cronSuspended: found.cron?.suspended === "suspended",
+          hasDispatchKey: Boolean(process.env.RENDER_DISPATCH_API_KEY),
+        })
+      : null;
+
+  if (command === "live-refs") {
+    const webDeploys = found.web
+      ? await api("GET", `/services/${found.web.id}/deploys?limit=10`)
+      : [];
+    const cronDeploys = found.cron
+      ? await api("GET", `/services/${found.cron.id}/deploys?limit=10`)
+      : [];
+    let workflowVersions = [];
+    if (found.workflow?.id) {
+      const listed = cli(
+        ["workflows", "versions", "list", found.workflow.id, "-o", "json"],
+        { allowFail: true },
+      );
+      if (listed.status === 0 && listed.stdout?.trim()) {
+        try {
+          workflowVersions = JSON.parse(listed.stdout);
+        } catch {
+          workflowVersions = [];
+        }
+      }
+    }
+    const refs = extractLiveRefs({ webDeploys, cronDeploys, workflowVersions });
+    const outPath = flag("out");
+    if (outPath) {
+      writeFileSync(outPath, JSON.stringify(refs, null, 2) + "\n");
+    }
+    console.log(JSON.stringify(refs));
+    return;
+  }
+
   const need = (x, what) => {
     if (!x) throw new Error(`${what} is not provisioned (run provision first)`);
     return x;
   };
-  const webSvc = need(found.web, "web");
-  const cronSvc = need(found.cron, "cron");
-  const wfl =
+  const optionalServices =
     command === "rollback" ||
     command === "apply-google" ||
     command === "grant-staff" ||
     command === "smoke" ||
-    command === "restore-allowlist"
+    command === "restore-allowlist" ||
+    (command === "migrate" && schemaOnly) ||
+    command === "deploy";
+  const webSvc =
+    command === "restore-allowlist" ||
+    (command === "migrate" && schemaOnly) ||
+    (command === "deploy" && !deployPlan.deployWeb)
+      ? (found.web ?? {})
+      : need(found.web, "web");
+  const cronSvc =
+    optionalServices && !(command === "deploy" && deployPlan.deployCron)
+      ? (found.cron ?? {})
+      : need(found.cron, "cron");
+  const wfl =
+    optionalServices && !(command === "deploy" && deployPlan.deployWorkflow)
       ? (found.workflow ?? {})
       : need(found.workflow, "workflow");
-  const dbRec = need(found.db, "database");
+  const dbRec =
+    command === "deploy" || command === "smoke" || command === "rollback"
+      ? (found.db ?? {})
+      : need(found.db, "database");
   const webUrl =
     webSvc.serviceDetails?.url ?? `https://${stack.web}.onrender.com`;
   const baseCtx = () => ({
@@ -669,40 +851,44 @@ async function main() {
         return r.stdout.trim();
       };
       log(run(["migrate"], 3));
-      for (const [kind, scopes, name] of [
-        ["workflow", "jobs:status,jobs:reconcile", "controller"],
-        ["cron", "jobs:repair", "repair"],
-      ]) {
-        const out = join(dir, name);
-        log(
-          run([
-            "issue-service-capability",
-            "--kind",
-            kind,
-            "--scopes",
-            scopes,
-            "--label",
-            `deploy-${ref?.slice(0, 7) ?? "manual"}`,
-            "--out",
-            out,
-            "--ttl-hours",
-            "24",
-          ]),
+      if (!schemaOnly) {
+        for (const [kind, scopes, name] of [
+          ["workflow", "jobs:status,jobs:reconcile", "controller"],
+          ["cron", "jobs:repair", "repair"],
+        ]) {
+          const out = join(dir, name);
+          log(
+            run([
+              "issue-service-capability",
+              "--kind",
+              kind,
+              "--scopes",
+              scopes,
+              "--label",
+              `deploy-${ref?.slice(0, 7) ?? "manual"}`,
+              "--out",
+              out,
+              "--ttl-hours",
+              "24",
+            ]),
+          );
+          tokens[name] = readFileSync(out, "utf8").trim();
+          learn(tokens[name]);
+        }
+        await setEnv(
+          api,
+          wfl.id,
+          serviceEnv("workflow", { ...baseCtx(), tokens }).set,
         );
-        tokens[name] = readFileSync(out, "utf8").trim();
-        learn(tokens[name]);
+        await setEnv(
+          api,
+          cronSvc.id,
+          serviceEnv("cron", { ...baseCtx(), tokens }).set,
+        );
+        log("service capabilities issued (24 h) and set on workflow and cron");
+      } else {
+        log("schema-only migration complete (service capabilities unchanged)");
       }
-      await setEnv(
-        api,
-        wfl.id,
-        serviceEnv("workflow", { ...baseCtx(), tokens }).set,
-      );
-      await setEnv(
-        api,
-        cronSvc.id,
-        serviceEnv("cron", { ...baseCtx(), tokens }).set,
-      );
-      log("service capabilities issued (24 h) and set on workflow and cron");
     } catch (e) {
       failure = e;
     }
@@ -718,6 +904,11 @@ async function main() {
   }
 
   if (command === "restore-allowlist") {
+    const current = await api("GET", `/postgres/${dbRec.id}`);
+    if ((current.ipAllowList ?? []).length === 0) {
+      log("database allow list is already empty");
+      return;
+    }
     await api("PATCH", `/postgres/${dbRec.id}`, { ipAllowList: [] });
     const now = await api("GET", `/postgres/${dbRec.id}`);
     if ((now.ipAllowList ?? []).length) throw new Error("allow list not empty");
@@ -728,91 +919,114 @@ async function main() {
   if (command === "deploy") {
     if (!/^[0-9a-f]{40}$/.test(ref ?? ""))
       throw new Error("--ref must be a 40-hex commit");
+    if (deployPlan.services.length === 0) {
+      log("deploy: no Render services selected; nothing to deploy");
+      return;
+    }
     const state = loadState(statePath);
     state.deploys = {};
+    delete state.previousCodeRevision;
     saveState(statePath, state);
     const failures = [];
     const revKey = "PROCESSING_CODE_REVISION";
-    // The recorded code revision changes together with the deploy (and is restored on rollback).
-    const prevRev = await api(
-      "GET",
-      `/services/${webSvc.id}/env-vars/${revKey}`,
-    ).catch(() => undefined);
-    state.previousCodeRevision = prevRev?.value;
-    saveState(statePath, state);
-    await setEnv(api, webSvc.id, { [revKey]: ref });
-    for (const [label, svc] of [
-      ["web", webSvc],
-      ["cron", cronSvc],
-    ]) {
-      // A suspended cron cannot deploy: resume first (it is paused again below when needed).
-      if (label === "cron")
-        await api("POST", `/services/${svc.id}/resume`).catch(() => {}); // already running
-      const prev = (await api("GET", `/services/${svc.id}/deploys?limit=10`))
-        .map((x) => x.deploy)
-        .find((d) => d.status === "live");
-      state.deploys[label] = { previous: prev?.id };
+    // Only update PROCESSING_CODE_REVISION when explicitly requested or in legacy full deploys.
+    if (deployPlan.shouldUpdateCodeRevision) {
+      const prevRev = await api(
+        "GET",
+        `/services/${webSvc.id}/env-vars/${revKey}`,
+      ).catch(() => undefined);
+      state.previousCodeRevision = prevRev?.value;
       saveState(statePath, state);
-      // Cron jobs cannot deploy by commit id: they build the branch tip, which must equal --ref.
-      const d = await api(
-        "POST",
-        `/services/${svc.id}/deploys`,
-        label === "cron" ? {} : { commitId: ref },
-      );
-      let id = d?.id ?? d?.deploy?.id;
-      if (!id) {
-        await sleep(5_000); // empty 202: take the newest deploy
-        id = (await api("GET", `/services/${svc.id}/deploys?limit=1`))[0]
-          ?.deploy?.id;
-      }
-      if (!id) throw new Error(`${label}: no deploy was created`);
-      log(`${label}: deploy ${id} started at ${ref.slice(0, 7)}`);
-      try {
-        const done = await waitDeploy(api, svc.id, id);
-        state.deploys[label].current = done.id;
+      await setEnv(api, webSvc.id, { [revKey]: ref });
+    }
+    const targets = [
+      ...(deployPlan.deployWeb ? [["web", webSvc]] : []),
+      ...(deployPlan.deployCron ? [["cron", cronSvc]] : []),
+    ];
+    let cronResumedForDeploy = false;
+    try {
+      for (const [label, svc] of targets) {
+        // A suspended cron cannot deploy: resume only when suspended (re-suspended in finally).
+        if (label === "cron" && svc.suspended === "suspended") {
+          await api("POST", `/services/${svc.id}/resume`).catch(() => {}); // already running
+          cronResumedForDeploy = true;
+        }
+        const prev = (await api("GET", `/services/${svc.id}/deploys?limit=10`))
+          .map((x) => x.deploy)
+          .find((d) => d.status === "live");
+        state.deploys[label] = { previous: prev?.id };
         saveState(statePath, state);
-        if (done.commit?.id !== ref)
-          throw new Error(
-            `${label} built ${String(done.commit?.id).slice(0, 7)}, not ${ref.slice(0, 7)} (branch tip moved)`,
+        // Cron jobs cannot deploy by commit id: they build the branch tip, which must equal --ref.
+        const d = await api(
+          "POST",
+          `/services/${svc.id}/deploys`,
+          label === "cron" ? {} : { commitId: ref },
+        );
+        let id = d?.id ?? d?.deploy?.id;
+        if (!id) {
+          await sleep(5_000); // empty 202: take the newest deploy
+          id = (await api("GET", `/services/${svc.id}/deploys?limit=1`))[0]
+            ?.deploy?.id;
+        }
+        if (!id) throw new Error(`${label}: no deploy was created`);
+        log(`${label}: deploy ${id} started at ${ref.slice(0, 7)}`);
+        try {
+          const done = await waitDeploy(api, svc.id, id);
+          state.deploys[label].current = done.id;
+          saveState(statePath, state);
+          if (done.commit?.id !== ref)
+            throw new Error(
+              `${label} built ${String(done.commit?.id).slice(0, 7)}, not ${ref.slice(0, 7)} (branch tip moved)`,
+            );
+          log(`${label}: deploy ${done.id} live`);
+        } catch (e) {
+          failures.push(`${label}: ${e.message}`);
+          break; // later services and the workflow release are not started after a failure
+        }
+      }
+      if (!failures.length && deployPlan.deployWorkflow) {
+        const rel = cli(
+          [
+            "workflows",
+            "versions",
+            "release",
+            wfl.id,
+            "--commit",
+            ref,
+            "--wait",
+            "--confirm",
+            "-o",
+            "json",
+          ],
+          { allowFail: true },
+        );
+        if (rel.status !== 0)
+          failures.push(
+            `workflow release: ${redact(rel.stderr || rel.stdout, currentSecrets()).slice(0, 300)}`,
           );
-        log(`${label}: deploy ${done.id} live`);
-      } catch (e) {
-        failures.push(`${label}: ${e.message}`);
-        break; // later services and the workflow release are not started after a failure
+        else log("workflow version released");
+      }
+    } finally {
+      saveState(statePath, state);
+      if (
+        deployPlan.cronPostState !== "unchanged" &&
+        cronSvc.id &&
+        (deployPlan.legacyMode || cronResumedForDeploy)
+      ) {
+        try {
+          if (deployPlan.cronPostState === "resume") {
+            await api("POST", `/services/${cronSvc.id}/resume`).catch(() => {});
+          } else {
+            await api("POST", `/services/${cronSvc.id}/suspend`);
+          }
+          log(
+            `cron ${deployPlan.cronPostState === "resume" ? "resumed" : "suspended"}`,
+          );
+        } catch (e) {
+          failures.push(`cron ${deployPlan.cronPostState}: ${e.message}`);
+        }
       }
     }
-    if (!failures.length) {
-      const rel = cli(
-        [
-          "workflows",
-          "versions",
-          "release",
-          wfl.id,
-          "--commit",
-          ref,
-          "--wait",
-          "--confirm",
-          "-o",
-          "json",
-        ],
-        { allowFail: true },
-      );
-      if (rel.status !== 0)
-        failures.push(
-          `workflow release: ${redact(rel.stderr || rel.stdout, currentSecrets()).slice(0, 300)}`,
-        );
-      else log("workflow version released");
-    }
-    // Repair is paused (billing and noise) until a dispatch credential exists.
-    const wantCron = Boolean(process.env.RENDER_DISPATCH_API_KEY);
-    await api(
-      "POST",
-      `/services/${cronSvc.id}/${wantCron ? "resume" : "suspend"}`,
-    );
-    log(
-      `cron ${wantCron ? "resumed" : "suspended (no dispatch key configured)"}`,
-    );
-    saveState(statePath, state);
     if (failures.length) throw new Error(failures.join("; "));
     return;
   }

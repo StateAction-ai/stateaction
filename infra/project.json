@@ -12,6 +12,7 @@
       "inputs": [
         "default",
         "{workspaceRoot}/render.yaml",
+        "{workspaceRoot}/.github/workflows/deploy.yml",
         "{workspaceRoot}/docs/components/render-deployment.md",
         "{workspaceRoot}/.prettierignore",
         "prettier"
@@ -42,19 +43,35 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --test --test-concurrency=2 infra/test/*.test.mjs scripts/platform/render-deploy.test.mjs"
+        "command": "node --test --test-concurrency=2 infra/test/*.test.mjs scripts/platform/render-deploy.test.mjs scripts/platform/deploy-scope.test.mjs"
       },
       "inputs": [
         "default",
         "{workspaceRoot}/render.yaml",
+        "{workspaceRoot}/.github/workflows/deploy.yml",
+        "{workspaceRoot}/scripts/deploy/render-deploy.sh",
+        "{workspaceRoot}/scripts/platform/render-deploy.mjs",
+        "{workspaceRoot}/scripts/platform/render-deploy.test.mjs",
+        "{workspaceRoot}/scripts/platform/deploy-scope.mjs",
+        "{workspaceRoot}/scripts/platform/deploy-scope.test.mjs",
         "{workspaceRoot}/docs/components/render-deployment.md"
       ]
     },
     "syntax": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node --check infra/test/blueprint.test.mjs && bash -n scripts/platform/hosted-smoke.sh && bash -n scripts/deploy/render-deploy.sh && bash -n scripts/deploy/google-oauth.sh"
-      }
+        "command": "node --check infra/test/blueprint.test.mjs && node --check infra/test/deploy-workflow.test.mjs && node --check scripts/platform/render-deploy.mjs && node --check scripts/platform/render-deploy.test.mjs && node --check scripts/platform/deploy-scope.mjs && node --check scripts/platform/deploy-scope.test.mjs && bash -n scripts/platform/hosted-smoke.sh && bash -n scripts/deploy/render-deploy.sh && bash -n scripts/deploy/google-oauth.sh"
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/platform/render-deploy.mjs",
+        "{workspaceRoot}/scripts/platform/render-deploy.test.mjs",
+        "{workspaceRoot}/scripts/platform/deploy-scope.mjs",
+        "{workspaceRoot}/scripts/platform/deploy-scope.test.mjs",
+        "{workspaceRoot}/scripts/platform/hosted-smoke.sh",
+        "{workspaceRoot}/scripts/deploy/render-deploy.sh",
+        "{workspaceRoot}/scripts/deploy/google-oauth.sh"
+      ]
     }
   }
 }

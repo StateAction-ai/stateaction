@@ -56,6 +56,10 @@
           "node --check scripts/platform/r2-qualification-run.test.mjs",
           "node --check scripts/platform/r2-qualification.test.mjs",
           "node --check scripts/platform/check-staged-dart.test.mjs",
+          "node --check scripts/platform/render-deploy.mjs",
+          "node --check scripts/platform/render-deploy.test.mjs",
+          "node --check scripts/platform/deploy-scope.mjs",
+          "node --check scripts/platform/deploy-scope.test.mjs",
           "uv run --project workers/processing --locked ruff check --config workers/processing/pyproject.toml scripts/local-ci/*.py scripts/platform/install-render.py scripts/platform/install-mobile-toolchain.py scripts/platform/runner_disk.py scripts/platform/test_mobile_bootstrap.py scripts/platform/test_mobile_runner_disk.py"
         ],
         "parallel": false
