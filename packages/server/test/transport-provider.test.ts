@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createServer } from "node:http";
 import {
   HeadObjectCommand,
   ListPartsCommand,
@@ -9,6 +10,7 @@ import {
   ProviderUploadGone,
   S3MultipartProvider,
 } from "../src/transport/provider.js";
+import { providerFromConfig } from "../src/transport/runtime.js";
 
 /** S3 client stub serving scripted responses and recording each command. */
 function client(handler: (command: unknown) => unknown) {
@@ -114,6 +116,57 @@ test("HEAD is null only for a missing key; abort of a gone upload is a no-op", a
     "b",
   );
   await abort.abortUpload("k", "u");
+});
+
+test("the production provider retries metadata reads without replaying multipart creation", async () => {
+  let headCalls = 0;
+  let createCalls = 0;
+  let listCalls = 0;
+  const server = createServer((request, response) => {
+    if (request.method === "HEAD") {
+      if (++headCalls === 1) request.socket.destroy();
+      else response.writeHead(200, { "content-length": "123" }).end();
+    } else if (request.method === "GET") {
+      if (++listCalls === 1) request.socket.destroy();
+      else {
+        response
+          .writeHead(200, { "content-type": "application/xml" })
+          .end(
+            "<ListPartsResult><IsTruncated>false</IsTruncated></ListPartsResult>",
+          );
+      }
+    } else {
+      createCalls++;
+      request.socket.destroy();
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const endpoint = `http://127.0.0.1:${address.port}`;
+    const provider = providerFromConfig({
+      appEnv: "local",
+      databaseUrl: "",
+      endpoint,
+      publicEndpoint: endpoint,
+      region: "us-east-1",
+      bucket: "fixture",
+      accessKeyId: "fixture-key",
+      secretAccessKey: "fixture-secret",
+    });
+    assert.equal((await provider.headObject("sample"))?.sizeBytes, 123n);
+    assert.equal(headCalls, 2);
+    assert.deepEqual(await provider.listParts("sample", "upload", 1, 1), []);
+    assert.equal(listCalls, 2);
+    await assert.rejects(provider.createUpload("sample"), {
+      code: "ECONNRESET",
+    });
+    assert.equal(createCalls, 1);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
 
 function pagedParts(total: number, pageSize = 1000) {

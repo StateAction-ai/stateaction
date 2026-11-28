@@ -28,16 +28,17 @@ const call = async (method, path, body) => {
   const j = await r.json();
   return { ok: j.success === true, result: j.result, errors: j.errors };
 };
-for (const [bucket, { origins }] of Object.entries(policy.buckets)) {
+for (const [bucket, { origins, cors = policy.cors }] of Object.entries(
+  policy.buckets,
+)) {
   if (origins.length) {
-    const c = policy.cors;
     const put = await call("PUT", `/${bucket}/cors`, {
       rules: [
         {
-          id: "stateaction-web",
-          allowed: { origins, methods: c.methods, headers: c.headers },
-          exposeHeaders: c.expose,
-          maxAgeSeconds: c.maxAgeSeconds,
+          id: cors.id ?? "stateaction-web",
+          allowed: { origins, methods: cors.methods, headers: cors.headers },
+          exposeHeaders: cors.expose,
+          maxAgeSeconds: cors.maxAgeSeconds,
         },
       ],
     });

@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 import java.io.FileInputStream
 
@@ -41,12 +42,31 @@ val nativeUploadQualification =
     (project.findProperty("stateactionNativeUpload") as String?) == "true"
 val nativeUploadCleartext =
     (project.findProperty("stateactionNativeUploadCleartext") as String?) == "true"
+val qaPackage = "ai.stateaction.collector.qa"
+val qaAutoSignIn = (project.findProperty("dart-defines") as? String)
+    ?.split(",")
+    ?.filter { it.isNotEmpty() }
+    ?.any { String(Base64.getDecoder().decode(it), Charsets.UTF_8) == "STATEACTION_QA_AUTO_SIGN_IN=true" }
+    ?: false
+require(qaAutoSignIn == (stateactionApplicationId == qaPackage)) {
+    "QA auto sign-in and the dedicated QA application ID must be selected together"
+}
+if (qaAutoSignIn) require(nativeUploadQualification) {
+    "The QA application requires the native upload gate"
+}
+
+androidComponents {
+    beforeVariants(selector().all()) { variant ->
+        if (qaAutoSignIn && variant.buildType != "debug") variant.enable = false
+    }
+}
+
 if (nativeUploadCleartext) {
     require(nativeUploadQualification) {
         "stateactionNativeUploadCleartext requires stateactionNativeUpload=true"
     }
-    require(stateactionApplicationId == "ai.stateaction.collector.e2e") {
-        "stateactionNativeUploadCleartext is only allowed for ai.stateaction.collector.e2e"
+    require(stateactionApplicationId == "ai.stateaction.collector.e2e" || qaAutoSignIn) {
+        "stateactionNativeUploadCleartext is only allowed for dedicated E2E or QA builds"
     }
 }
 

@@ -93,11 +93,13 @@ class AuthHttpClient {
   Future<AuthOutcome<void>> signInEmail({
     required String email,
     required String password,
+    bool qa = false,
   }) async {
     final result = await _send(
       "POST",
       "$authBasePath/sign-in/email",
       body: {"email": email.trim(), "password": password, "rememberMe": true},
+      extraHeaders: qa ? const {"x-stateaction-qa-sign-in": "1"} : const {},
     );
     return _toVoid(result, signIn: true);
   }

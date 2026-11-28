@@ -14,6 +14,7 @@ import "package:stera/src/modules/auth/data/repo/user_repo.dart";
 import "package:stera/src/modules/auth/session/auth_http_client.dart";
 import "package:stera/src/modules/auth/session/auth_services.dart";
 import "package:stera/src/modules/auth/session/auth_session_controller.dart";
+import "package:stera/src/modules/auth/session/qa_sign_in.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 import "package:stera/src/services/api/enums/error_type.dart";
 import "package:stera/src/services/api/models/api_failure.dart";
@@ -221,6 +222,8 @@ class AuthProvider extends ChangeNotifier {
     final controller = _controller;
     if (controller == null) return;
     await controller.restore();
+    final services = AuthServices.maybeInstance;
+    if (services != null) await tryQaSignIn(services);
     _syncFromSession();
     if (_user != null) {
       isNewUser = !(KvStore.get<bool>(KvStoreKeys.onboardingComplete) ?? false);

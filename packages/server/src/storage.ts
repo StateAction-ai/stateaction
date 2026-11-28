@@ -12,6 +12,7 @@ export function storageClient(
   config: ServerConfig,
   timeoutMs = 3000,
   endpoint = config.endpoint,
+  maxAttempts = 1,
 ): S3Client {
   const client = new S3Client({
     endpoint,
@@ -24,11 +25,11 @@ export function storageClient(
     // Presigned URLs must not bake in SDK-added checksum parameters a plain HTTP client cannot satisfy.
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
-    maxAttempts: 1,
+    maxAttempts,
     requestHandler: {
       requestTimeout: timeoutMs,
       throwOnRequestTimeout: true,
-      connectionTimeout: 1000,
+      connectionTimeout: Math.min(timeoutMs, 5000),
     },
   });
   if (hostedDevProfile()?.mode === "read-only") {
