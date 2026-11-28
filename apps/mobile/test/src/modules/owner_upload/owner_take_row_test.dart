@@ -97,6 +97,7 @@ void main() {
 
   testWidgets("the action calls back once", (tester) async {
     var taps = 0;
+    var previews = 0;
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -105,12 +106,17 @@ void main() {
             session: session,
             view: views.first,
             onAction: () => taps++,
+            onPreview: () => previews++,
           ),
         ),
       ),
     );
     await tester.tap(find.text("Upload"));
     await tester.pump();
+    expect(taps, 1);
+    expect(previews, 0);
+    await tester.tap(find.byIcon(Icons.play_circle_fill));
+    expect(previews, 1);
     expect(taps, 1);
   });
 }

@@ -150,6 +150,7 @@ def verify(
     requested_quick_boot: bool,
     out: Path,
     display: str | None,
+    expected_camera_back: str | None = None,
 ) -> dict[str, object]:
     pid = find_qemu(port, avd)
     if pid is None:
@@ -159,6 +160,9 @@ def verify(
     renderer = guest_renderer(adb(serial, "shell", "dumpsys", "SurfaceFlinger"))
     abi = adb(serial, "shell", "getprop", "ro.product.cpu.abi").strip()
     problems = check_profile(profile, args, kvm, renderer, expect_gpu)
+    camera_back = flag_value(args, "-camera-back")
+    if expected_camera_back is not None and camera_back != expected_camera_back:
+        problems.append("running emulator has a different back camera source")
     if abi != "x86_64":
         problems.append(f"guest ABI is {abi}, not x86_64")
     evidence: dict[str, object] = {
@@ -173,6 +177,7 @@ def verify(
         "kvm_fd_open": kvm,
         "accel_flag": flag_value(args, "-accel"),
         "gpu_flag": flag_value(args, "-gpu"),
+        "camera_back": camera_back.split(":", 1)[0] if camera_back else None,
         "requested_quick_boot": requested_quick_boot,
         "observed_snapshot_flags": [a for a in args if "snapshot" in a],
         "boot_mode": boot_mode(args),
@@ -290,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument(
         "--profile", choices=[ACCELERATED, SOFTWARE], default=ACCELERATED
     )
+    check.add_argument("--camera-back")
     check.add_argument("--expect-gpu", default="NVIDIA")
     check.add_argument("--requested-quick-boot", action="store_true")
     check.add_argument("--out", type=Path, required=True)
@@ -323,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
                 options.requested_quick_boot,
                 options.out,
                 os.environ.get("DISPLAY"),
+                options.camera_back,
             )
             print(json.dumps(evidence, indent=2))
     except (VerificationError, subprocess.SubprocessError, OSError) as error:

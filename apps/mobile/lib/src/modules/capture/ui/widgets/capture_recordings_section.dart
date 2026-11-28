@@ -27,8 +27,8 @@ class CaptureRecordingsSection extends StatelessWidget {
           // record action there.
           margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
-            // Sized by its content: the page scrolls this alongside the demo
-            // card, so the section can't claim the remaining height itself.
+            // Sized by its content: the page scrolls this alongside the recording
+            // guide, so the section can't claim the remaining height itself.
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -83,7 +83,7 @@ class CaptureRecordingsSection extends StatelessWidget {
     // Same grid geometry as `NotStartedVideosGridView` in the authed build, so
     // a recording reads identically whether or not it can be uploaded.
     // shrinkWrap + no physics: the page owns the scroll, so the grid lays out at
-    // its natural height beneath the demo card instead of fighting it for space.
+    // its natural height beneath the guide button instead of fighting it for space.
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),

@@ -5,7 +5,8 @@
 # A warm emulator is reused only after it is verified; a software-rendered one is
 # never silently accepted. Usage:
 #   start_capture_emulator.sh [--ar] [--quick-boot] [--software] [--replace]
-#                             [--force-cold-start] [--verify-only] [emulator args...]
+#                             [--force-cold-start] [--verify-only]
+#                             [--camera-video /absolute/file.mp4] [emulator args...]
 #   --ar          pinned ARCore target: API33 AVD, emulator 36.4.10, port 5582
 #   --quick-boot  opt in to snapshots for ordinary app tests (camera/lifecycle/recovery
 #                 tests keep the default cold boot)
@@ -14,6 +15,7 @@
 #   --force-cold-start  stop the running dedicated emulator even if healthy and cold boot
 #                 (overrides --quick-boot; for camera/lifecycle/recovery checks)
 #   --verify-only verify the running emulator and exit
+#   --camera-video FILE  feed a readable host video to the pinned --ar emulator
 set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$script_dir/env.sh"
@@ -25,6 +27,7 @@ emulator="$ANDROID_HOME/emulator/emulator"
 capture_avd=stera_ar_api35
 capture_port=5580
 capture_extra=()
+camera_video=
 profile=accelerated-kvm-host-gpu
 quick_boot=0 replace=0 verify_only=0 force_cold=0
 boot_timeout="${CAPTURE_EMULATOR_BOOT_TIMEOUT:-240}"
@@ -46,15 +49,34 @@ while [[ $# -gt 0 ]]; do
     --replace) replace=1 ;;
     --force-cold-start) force_cold=1; replace=1 ;;
     --verify-only) verify_only=1 ;;
+    --camera-video)
+      [[ -n "${2:-}" && -f "$2" && -r "$2" ]] || {
+        echo "--camera-video needs a readable video file." >&2
+        exit 2
+      }
+      camera_video="$(realpath -- "$2")"
+      shift
+      ;;
     *) break ;;
   esac
   shift
 done
+camera_back=virtualscene
+if [[ -n "$camera_video" ]]; then
+  [[ "$capture_avd" == stera_ar_api33 ]] || {
+    echo "--camera-video requires the pinned --ar emulator." >&2
+    exit 2
+  }
+  camera_back="videofile:$camera_video"
+fi
 serial="emulator-$capture_port"
 state_dir="$ROBOTICS_CAPTURE_ROOT/artifacts/emulator-verification"
 helper=("python3" "$script_dir/mobile/emulator_acceleration.py")
 verify_args=(verify --serial "$serial" --avd "$capture_avd" --port "$capture_port"
   --profile "$profile" --expect-gpu "${CAPTURE_EMULATOR_EXPECT_GPU:-NVIDIA}" --out "$state_dir/$serial.json")
+# Generic verification checks acceleration on either source. An explicit video
+# request or a launch also checks the exact camera source, including warm reuse.
+if ((!verify_only)) || [[ -n "$camera_video" ]]; then verify_args+=(--camera-back "$camera_back"); fi
 ((quick_boot)) && verify_args+=(--requested-quick-boot)
 
 require_launch_supervisor() {
@@ -93,7 +115,7 @@ if timeout 20 adb -s "$serial" get-state >/dev/null 2>&1; then
     exit 1
   fi
   require_launch_supervisor
-  echo "Stopping $serial before relaunch ($( ((force_cold)) && echo --force-cold-start || echo "failed verification, --replace" ))." >&2
+  echo "Stopping $serial before relaunch ($( ((force_cold)) && echo --force-cold-start || echo "requested source or profile, --replace" ))." >&2
   timeout 20 adb -s "$serial" emu kill >/dev/null 2>&1 || true
   for _ in $(seq 30); do timeout 20 adb -s "$serial" get-state >/dev/null 2>&1 || break; sleep 1; done
   if timeout 20 adb -s "$serial" get-state >/dev/null 2>&1; then
@@ -123,7 +145,7 @@ log="$state_dir/$serial.log"
 python3 "$script_dir/mobile/resource_guard.py" verify-binary --binary "$emulator"
 nohup setsid "$emulator" -avd "$capture_avd" -port "$capture_port" \
   -cores 2 -memory 2048 \
-  -camera-back virtualscene -camera-front none -no-audio "${snapshot_args[@]}" \
+  -camera-back "$camera_back" -camera-front none -no-audio "${snapshot_args[@]}" \
   -accel "$accel" -gpu "$gpu" "${capture_extra[@]}" "$@" >"$log" 2>&1 &
 launcher_pid=$!
 echo "Launched $serial ($profile, requested $( ((${#snapshot_args[@]})) && echo cold-boot || echo quick-boot)); log $log"

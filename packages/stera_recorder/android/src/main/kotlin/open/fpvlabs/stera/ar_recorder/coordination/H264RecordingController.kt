@@ -14,6 +14,7 @@ import com.google.ar.core.exceptions.NotYetAvailableException
 import open.fpvlabs.stera.ar_recorder.data.DatasetWriter
 import open.fpvlabs.stera.ar_recorder.data.h264.CaptureProtocol
 import open.fpvlabs.stera.ar_recorder.data.h264.H264CaptureSetup
+import open.fpvlabs.stera.ar_recorder.encoding.CpuImageEncoder
 import open.fpvlabs.stera.ar_recorder.data.h264.H264Evidence
 import open.fpvlabs.stera.ar_recorder.finalization.CaptureOutcomePolicy
 import open.fpvlabs.stera.ar_recorder.encoding.CameraTimestampGate
@@ -65,6 +66,7 @@ class H264RecordingController(
     private var originNs: Long? = null
     private var nextSourceId = 0L
     private var lastImageNs = 0L
+    private var thumbnailQueued = false
     private var cameraImageUnavailable = 0L
     private var backpressureSkips = 0L
     private var repeatedCpuImages = 0L
@@ -169,6 +171,15 @@ class H264RecordingController(
                     queue { evidence -> evidence.frameEvent(event + mapOf("state" to "dropped", "reason" to "codec_input_backpressure")) }
                     metrics.droppedFrameCount.incrementAndGet()
                     return false
+                }
+                if (!thumbnailQueued) {
+                    thumbnailQueued = true
+                    try {
+                        val thumbnail = CpuImageEncoder.compressYuvToJpeg(image, 75)
+                        writerHandler.post { writer.writeThumbnail(thumbnail) }
+                    } catch (error: Exception) {
+                        println("Failed to generate H.264 thumbnail: ${error.message}")
+                    }
                 }
                 lastImageNs = image.timestamp
                 metrics.lastCapturedRgbTimestampNs = image.timestamp

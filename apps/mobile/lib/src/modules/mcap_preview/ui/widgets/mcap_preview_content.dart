@@ -7,6 +7,7 @@ import "package:stera/src/core/common/widgets/interactive_list_tile/interactive_
 import "package:stera/src/core/common/widgets/interactive_list_tile/interactive_list_tile.dart";
 import "package:stera/src/core/common/widgets/section_header.dart";
 import "package:stera/src/core/theme/app_spacing.dart";
+import "package:stera/src/modules/mcap_preview/helpers/h264_playback.dart";
 import "package:stera/src/modules/mcap_preview/helpers/mcap_formatters.dart";
 import "package:stera/src/modules/mcap_preview/ui/widgets/mcap_card.dart";
 import "package:stera/src/services/mcap_reader/cdr/ros2_message_decoder.dart";
@@ -114,6 +115,7 @@ class McapPreviewContent extends StatelessWidget {
 
   IconData _iconFor(String schemaName) {
     switch (schemaName) {
+      case compressedVideoSchema:
       case Ros2MessageDecoder.compressedImageSchema:
         return SolarIconsOutline.videocameraRecord;
       case Ros2MessageDecoder.rawImageSchema:

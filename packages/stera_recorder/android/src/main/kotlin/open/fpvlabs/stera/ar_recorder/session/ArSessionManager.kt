@@ -9,6 +9,7 @@ interface ArSessionManager {
     val session: Session?
     val isDepthSupported: Boolean
     val isSessionReady: Boolean
+    val cameraLensEvidence: Map<String, Any?>
     val selectedCameraResolution: String
     val selectedFocusMode: String
 

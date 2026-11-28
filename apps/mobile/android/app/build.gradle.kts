@@ -1,5 +1,8 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.net.URI
+import java.security.MessageDigest
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -50,7 +53,29 @@ if (nativeUploadCleartext) {
     }
 }
 
+val handModelManifest = file("../../../../workers/processing/src/stateaction_processing/hand_model.json")
+val handModelAssets = layout.buildDirectory.dir("generated/hand-model/assets")
+val prepareHandModel by tasks.registering {
+    inputs.file(handModelManifest)
+    outputs.dir(handModelAssets)
+    doLast {
+        val manifest = JsonSlurper().parse(handModelManifest) as Map<*, *>
+        val target = handModelAssets.get().file(manifest["file"].toString()).asFile
+        val expected = manifest["bytes"].toString().toInt()
+        val connection = URI(manifest["url"].toString()).toURL().openConnection()
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 30_000
+        val bytes = connection.getInputStream().use { it.readNBytes(expected + 1) }
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        check(bytes.size == expected && digest == manifest["sha256"]) { "Hand Landmarker failed checksum verification" }
+        target.parentFile.mkdirs()
+        target.writeBytes(bytes)
+    }
+}
+tasks.named("preBuild").configure { dependsOn(prepareHandModel) }
+
 android {
+    sourceSets.getByName("main").assets.srcDir(handModelAssets)
     namespace = "open.fpvlabs.stera"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -113,4 +138,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.google.mediapipe:tasks-vision:0.10.32")
+    testImplementation("junit:junit:4.13.2")
 }

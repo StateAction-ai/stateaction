@@ -55,16 +55,9 @@ open class CpuImageEncoder {
                     (intrinsics.getValue("imageHeight") as Number).toInt(), image.timestamp,
                     frameTimestampNs, androidCameraTimestampNs, previousRgbTimestampNs)
                 observed["stage"] = "pack_yuv_planes"
-                val packed = ImagePlanePacking.yuv420ToNv21(image.width, image.height,
-                    ImagePlanePacking.Plane(planes[0].buffer, planes[0].rowStride, planes[0].pixelStride),
-                    ImagePlanePacking.Plane(planes[1].buffer, planes[1].rowStride, planes[1].pixelStride),
-                    ImagePlanePacking.Plane(planes[2].buffer, planes[2].rowStride, planes[2].pixelStride))
-                observed["stage"] = "compress_jpeg"
-                val output = ByteArrayOutputStream()
-                check(YuvImage(packed, ImageFormat.NV21, image.width, image.height, null)
-                    .compressToJpeg(Rect(0, 0, image.width, image.height), quality, output)) { "CPU JPEG compression failed" }
+                val jpeg = compressYuvToJpeg(image, quality) { observed["stage"] = "compress_jpeg" }
                 observed["stage"] = "complete"
-                return EncodedImage(output.toByteArray(), image.timestamp, image.width, image.height)
+                return EncodedImage(jpeg, image.timestamp, image.width, image.height)
             }
         } catch (error: Exception) {
             observed["error_class"] = error.javaClass.name
@@ -72,6 +65,18 @@ open class CpuImageEncoder {
             throw error
         } finally {
             onDiagnostics(observed.toMap())
+        }
+    }
+
+    companion object {
+        internal fun compressYuvToJpeg(image: Image, quality: Int, onPacked: () -> Unit = {}): ByteArray {
+            val planes = image.planes.map { ImagePlanePacking.Plane(it.buffer, it.rowStride, it.pixelStride) }
+            val packed = ImagePlanePacking.yuv420ToNv21(image.width, image.height, planes[0], planes[1], planes[2])
+            onPacked()
+            val output = ByteArrayOutputStream()
+            check(YuvImage(packed, ImageFormat.NV21, image.width, image.height, null)
+                .compressToJpeg(Rect(0, 0, image.width, image.height), quality, output)) { "CPU JPEG compression failed" }
+            return output.toByteArray()
         }
     }
 }

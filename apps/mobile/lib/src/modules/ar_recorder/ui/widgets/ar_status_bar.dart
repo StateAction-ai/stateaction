@@ -31,6 +31,9 @@ class ArStatusBar extends StatelessWidget {
     final recordingDuration = context.select<ArRecorderProvider, Duration>(
       (arp) => arp.recordingDuration,
     );
+    final lens = context.select<ArRecorderProvider, String?>(
+      (arp) => arp.cameraLens,
+    );
     final arp = context.read<ArRecorderProvider>();
 
     return Container(
@@ -102,6 +105,31 @@ class ArStatusBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.md),
+          if (lens != null) ...[
+            Icon(
+              lens == "ultrawide"
+                  ? Icons.camera_alt_outlined
+                  : Icons.warning_amber,
+              size: 16,
+              color: lens == "ultrawide"
+                  ? context.darkColors.textPrimary
+                  : context.darkColors.yellow,
+            ),
+            const SizedBox(width: AppSpacing.xsPlus),
+            Text(
+              switch (lens) {
+                "ultrawide" => "Ultrawide",
+                "default_rear" => "Default lens. Ultrawide unverified.",
+                _ => "Rear lens. Ultrawide unverified.",
+              },
+              style: context.darkTextTheme.headSm.copyWith(
+                color: lens == "ultrawide"
+                    ? context.darkColors.textPrimary
+                    : context.darkColors.yellow,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+          ],
           if (showSessionChrome) ...[
             Container(
               width: 12,
