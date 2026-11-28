@@ -3,6 +3,7 @@ import "dart:async";
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:provider/provider.dart";
+import "package:stera/src/core/common/formatters/format_bytes.dart";
 import "package:stera/src/core/common/utils/extensions.dart";
 import "package:stera/src/core/common/widgets/app_button/app_button.dart";
 import "package:stera/src/core/common/widgets/app_button/enums/button_sizes.dart";
@@ -19,7 +20,10 @@ import "package:stera/src/modules/home/providers/navigation_provider.dart";
 import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_controller.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_services.dart";
+import "package:stera/src/modules/owner_upload/source_cleanup_service.dart";
+import "package:stera/src/modules/owner_upload/take_evidence.dart";
 import "package:stera/src/modules/owner_upload/take_upload_view.dart";
+import "package:stera/src/modules/owner_upload/transfer_policy_override.dart";
 import "package:stera/src/modules/recordings/providers/recordings_provider.dart";
 import "package:stera/src/modules/recordings/ui/widgets/recording_session_tile.dart";
 import "package:stera/src/services/recordings_service/data/models/recording_session.dart";
@@ -172,7 +176,7 @@ class _OwnerRecordingsUploadSectionState
         "views=${[for (final t in sessions) controller.viewFor(t.directoryName).stage.name]}",
       );
     }
-    if (rows.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.lg),
       child: AppCard(
@@ -182,15 +186,21 @@ class _OwnerRecordingsUploadSectionState
             SectionHeader(
               title: "Your recordings",
               number: rows.length,
-              subtitle: "Upload to your account",
+              subtitle: rows.isEmpty
+                  ? "Sign in with the account that made a recording to upload it."
+                  : "Upload to your account",
             ),
-            AppSpacing.gapMd,
+            if (rows.isNotEmpty) AppSpacing.gapMd,
             for (final (session, view) in rows)
               OwnerTakeRow(
                 session: session,
                 view: view,
                 onAction: () => _act(controller, session, view),
+                onCleanup: view.canCleanup && controller.cleanupAvailable
+                    ? () => _cleanup(controller, session)
+                    : null,
               ),
+            TransferPolicyControls(controller: controller),
           ],
         ),
       ),
@@ -200,6 +210,39 @@ class _OwnerRecordingsUploadSectionState
   static bool _visible(TakeUploadView view) =>
       view.stage != UploadStage.hidden &&
       view.stage != UploadStage.otherAccount;
+
+  /// Explicit consent first (a dialog that names what goes and what stays);
+  /// only after "Check and remove" does the controller ask the server for a
+  /// fresh proof, so time spent reading the dialog cannot shorten or extend
+  /// one. Cancelling or any refusal leaves every file in place.
+  Future<void> _cleanup(
+    OwnerUploadController controller,
+    RecordingSession session,
+  ) async {
+    final LocalCleanupOffer offer;
+    try {
+      offer = await controller.prepareLocalCleanup(session);
+    } on CleanupDenied catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(OwnerUploadController.cleanupDeniedView(e).message),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final agreed = await confirmLocalCleanup(context, offer);
+    if (!agreed || !mounted) return;
+    final result = await controller.cleanupLocalOriginals(session, offer);
+    if (mounted &&
+        result.stage != UploadStage.localCleaned &&
+        result.stage != UploadStage.hidden) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    }
+  }
 
   Future<void> _act(
     OwnerUploadController controller,
@@ -222,6 +265,45 @@ class _OwnerRecordingsUploadSectionState
   }
 }
 
+/// The explicit consent dialog for removing the sealed local originals. True
+/// only for the "Check and remove" button; dismissing, cancelling or any other
+/// result is a refusal. It names what is deleted and what stays, and says the
+/// staff cloud-copy confirmation is checked by the server, not assumed.
+Future<bool> confirmLocalCleanup(
+  BuildContext context,
+  LocalCleanupOffer offer,
+) async {
+  final agreed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      key: const ValueKey("cleanup-dialog"),
+      title: const Text("Remove local originals?"),
+      content: Text(
+        "This permanently deletes ${offer.originalCount} original "
+        "file${offer.originalCount == 1 ? "" : "s"} "
+        "(${formatBytes(offer.totalBytes.toInt())}) of this recording from "
+        "this phone. The server is asked to re-check its cloud copy right "
+        "after you confirm, and nothing is deleted unless staff have "
+        "confirmed that copy. This is not a reviewer's approval of the "
+        "recording. The upload record stays. This cannot be undone.",
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey("cleanup-dialog-cancel"),
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Keep files"),
+        ),
+        TextButton(
+          key: const ValueKey("cleanup-dialog-confirm"),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text("Check and remove"),
+        ),
+      ],
+    ),
+  );
+  return agreed == true;
+}
+
 /// One take with its honest upload state and action.
 ///
 /// The action is a full-width [AppButton] under the text (the app's own button
@@ -232,12 +314,16 @@ class OwnerTakeRow extends StatelessWidget {
     required this.session,
     required this.view,
     required this.onAction,
+    this.onCleanup,
     super.key,
   });
 
   final RecordingSession session;
   final TakeUploadView view;
   final VoidCallback onAction;
+
+  /// Null unless this take may offer the explicit local-original cleanup.
+  final VoidCallback? onCleanup;
 
   @override
   Widget build(BuildContext context) {
@@ -261,11 +347,20 @@ class OwnerTakeRow extends StatelessWidget {
             style: context.textTheme.bodyXs.copyWith(
               color:
                   view.stage == UploadStage.failed ||
-                      view.stage == UploadStage.blocked
+                      view.stage == UploadStage.blocked ||
+                      view.stage == UploadStage.interrupted
                   ? colors.textDestructive
                   : colors.textSecondary,
             ),
           ),
+          if (view.evidence.uploaded == Proof.yes)
+            Text(
+              view.evidence.details,
+              key: ValueKey("owner-evidence-${session.directoryName}"),
+              style: context.textTheme.bodyXs.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
           if (view.isBusy && view.partCount > 0) ...[
             AppSpacing.gapSm,
             ClipRRect(
@@ -288,8 +383,96 @@ class OwnerTakeRow extends StatelessWidget {
               onPressed: onAction,
             ),
           ],
+          if (onCleanup != null && !view.isBusy) ...[
+            AppSpacing.gapSm,
+            AppButton(
+              key: ValueKey("owner-cleanup-${session.directoryName}"),
+              text: "Check cloud copy and remove local originals",
+              type: ButtonType.tertiary,
+              size: ButtonSizes.sm,
+              onPressed: onCleanup,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Wi-Fi-only and charging-required are on by default. Turning either off is an
+/// explicit choice that applies to this account only and is reset for anyone
+/// else. Capture still pauses every transfer.
+class TransferPolicyControls extends StatefulWidget {
+  const TransferPolicyControls({required this.controller, super.key});
+
+  final OwnerUploadController controller;
+
+  @override
+  State<TransferPolicyControls> createState() => _TransferPolicyControlsState();
+}
+
+class _TransferPolicyControlsState extends State<TransferPolicyControls> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final view = widget.controller.policyView;
+    final choice = view.choice;
+    final editable = view.editable;
+    void set(TransferPolicyChoice next) =>
+        unawaited(widget.controller.setTransferPolicy(next));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile(
+          key: const ValueKey("policy-wifi-only"),
+          contentPadding: EdgeInsets.zero,
+          title: const Text("Upload on Wi-Fi only"),
+          value: choice.requireUnmetered,
+          onChanged: editable
+              ? (v) => set(
+                  TransferPolicyChoice(
+                    requireUnmetered: v,
+                    requireCharging: choice.requireCharging,
+                  ),
+                )
+              : null,
+        ),
+        SwitchListTile(
+          key: const ValueKey("policy-charging-only"),
+          contentPadding: EdgeInsets.zero,
+          title: const Text("Upload only while charging"),
+          value: choice.requireCharging,
+          onChanged: editable
+              ? (v) => set(
+                  TransferPolicyChoice(
+                    requireUnmetered: choice.requireUnmetered,
+                    requireCharging: v,
+                  ),
+                )
+              : null,
+        ),
+        if (view.message != null)
+          Text(
+            view.message!,
+            key: const ValueKey("policy-message"),
+            style: context.textTheme.bodyXs,
+          ),
+      ],
     );
   }
 }

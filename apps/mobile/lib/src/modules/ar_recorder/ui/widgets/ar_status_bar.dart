@@ -28,10 +28,23 @@ class ArStatusBar extends StatelessWidget {
     final trackingState = context.select<ArRecorderProvider, ArTrackingState>(
       (arp) => arp.trackingState,
     );
-    final recordingDuration = context.select<ArRecorderProvider, Duration>(
-      (arp) => arp.recordingDuration,
+    final recordingSeconds = context.select<ArRecorderProvider, int>(
+      (arp) => arp.recordingDuration.inSeconds,
+    );
+    final capture = context.select<ArRecorderProvider, (RgbVideoCodec, bool)>(
+      (arp) => (
+        arp.recordingConfig.rgbCodec,
+        arp.recordingConfig.h264SimulationMode,
+      ),
+    );
+    final cameraResolution = context.select<ArRecorderProvider, String?>(
+      (arp) => arp.cameraResolution,
+    );
+    final finalizing = context.select<ArRecorderProvider, bool>(
+      (arp) => arp.state == ArRecorderState.stopping,
     );
     final arp = context.read<ArRecorderProvider>();
+    final frames = arp.frameCount;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -49,6 +62,7 @@ class ArStatusBar extends StatelessWidget {
           Pressable(
             pressedScale: 0.9,
             onTap: () {
+              if (finalizing) return;
               if (showSessionChrome) {
                 unawaited(_showDiscardDialog(context, arp));
               } else {
@@ -115,12 +129,24 @@ class ArStatusBar extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.sm),
             Text(
-              recordingDuration.formatHmsWithSeconds,
+              Duration(seconds: recordingSeconds).formatHmsWithSeconds,
               overflow: TextOverflow.ellipsis,
               style: context.darkTextTheme.bodyLg.copyWith(
                 fontFeatures: [const FontFeature.tabularFigures()],
               ),
             ),
+            if (frames != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Text("$frames frames", style: context.darkTextTheme.bodyXs),
+            ],
+            const SizedBox(width: AppSpacing.sm),
+          ] else if (!finalizing && cameraResolution != null) ...[
+            Text(switch (capture) {
+              (RgbVideoCodec.h264, true) =>
+                "H.264 simulation · $cameraResolution",
+              (RgbVideoCodec.h264, false) => "H.264 · $cameraResolution",
+              _ => "JPEG · $cameraResolution",
+            }, style: context.darkTextTheme.bodyXs),
             const SizedBox(width: AppSpacing.sm),
           ],
         ],

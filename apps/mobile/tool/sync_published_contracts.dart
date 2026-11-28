@@ -18,6 +18,8 @@ const contracts = [
   "http.recording-registration.v2",
   "http.recording-seal.v1",
   "http.recording.v2",
+  "http.cleanup-proof-request.v1",
+  "http.cleanup-proof.v1",
   "http.upload-create.v1",
   "http.upload-plan.v1",
   "http.upload-transition.v1",
@@ -27,7 +29,7 @@ const contracts = [
 const output = "lib/src/core/contracts/published_contracts.g.dart";
 
 String render(Directory api) {
-  final catalogText = File("${api.path}/catalog.v6.json").readAsStringSync();
+  final catalogText = File("${api.path}/catalog.v13.json").readAsStringSync();
   final catalog = jsonDecode(catalogText) as Map<String, Object?>;
   final entries = catalog["contracts"]! as Map<String, Object?>;
   final common = catalog["common"]! as String;

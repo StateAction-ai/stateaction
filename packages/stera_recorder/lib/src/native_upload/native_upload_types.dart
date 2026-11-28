@@ -237,6 +237,19 @@ class NativeUploadTask {
   bool get needsOrchestrator => state == NativeTaskState.needsOrchestrator;
 }
 
+/// The transfer policy native confirmed after an owner-scoped write.
+class NativePolicyResult {
+  const NativePolicyResult({
+    required this.requireUnmetered,
+    required this.requireCharging,
+    required this.ownerGeneration,
+  });
+
+  final bool requireUnmetered;
+  final bool requireCharging;
+  final int ownerGeneration;
+}
+
 class NativeStatus {
   const NativeStatus({
     required this.ownerGeneration,
@@ -245,6 +258,7 @@ class NativeStatus {
     required this.requireCharging,
     required this.capturePaused,
     required this.tasks,
+    this.policyBlockReason,
   });
 
   final int ownerGeneration;
@@ -253,6 +267,7 @@ class NativeStatus {
   final bool requireCharging;
   final bool capturePaused;
   final List<NativeUploadTask> tasks;
+  final String? policyBlockReason;
 }
 
 class NativeResumeResult {

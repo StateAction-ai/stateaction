@@ -1,7 +1,9 @@
+import "dart:async";
 import "dart:convert";
 import "dart:io";
 
 import "package:flutter_test/flutter_test.dart";
+import "package:shared_preferences/shared_preferences.dart";
 import "package:stera/src/core/contracts/published_contracts.dart";
 import "package:stera/src/modules/auth/session/auth_http_client.dart";
 import "package:stera/src/modules/auth/session/auth_session_controller.dart";
@@ -14,8 +16,11 @@ import "package:stera/src/modules/owner_upload/create_request_builder.dart";
 import "package:stera/src/modules/owner_upload/native_session_binder.dart";
 import "package:stera/src/modules/owner_upload/owner_control_api.dart";
 import "package:stera/src/modules/owner_upload/owner_upload_controller.dart";
+import "package:stera/src/modules/owner_upload/source_cleanup_service.dart";
+import "package:stera/src/modules/owner_upload/take_evidence.dart";
 import "package:stera/src/modules/owner_upload/take_upload_view.dart";
 import "package:stera/src/modules/source_integrity/session_path.dart";
+import "package:stera/src/modules/owner_upload/transfer_policy_override.dart";
 import "package:stera/src/modules/source_integrity/posix_fd_hash_backend.dart";
 import "package:stera/src/modules/source_integrity/source_journal.dart";
 import "package:stera/src/modules/source_integrity/source_sealer.dart";
@@ -45,6 +50,8 @@ class _Backend {
   final Map<String, Map<String, Object?>> reserved = {};
   String status = "registered";
   String uploadState = "uploading";
+  String fileState = "reserved";
+  bool staffConfirmed = false;
   int epoch = 1;
   VoidCallback? onRegister;
 
@@ -75,7 +82,7 @@ class _Backend {
           "sizeBytes": f["sizeBytes"],
           "sha256": f["sha256"],
           "required": true,
-          "state": "reserved",
+          "state": fileState,
         },
     ],
     "missingRequiredRoles": <String>[],
@@ -114,6 +121,49 @@ class _Backend {
     }
     if (method == "GET" && path == "/api/v1/recordings/$recordingId") {
       return (status: 200, data: recording());
+    }
+    if (method == "POST" &&
+        path == "/api/v1/recordings/$recordingId/cleanup-proofs") {
+      if (!staffConfirmed) {
+        return (
+          status: 409,
+          data: {
+            "error": {
+              "code": "staff_confirmation_required",
+              "message": "fixture",
+            },
+          },
+        );
+      }
+      final input = jsonDecode(body) as Map<String, Object?>;
+      return (
+        status: 200,
+        data: {
+          "schemaVersion": 1,
+          "proofId": "11111111-1111-4111-8111-111111111111",
+          "confirmationId": "22222222-2222-4222-8222-222222222222",
+          "recordingId": recordingId,
+          "ownerUserId": owner,
+          "clientRecordingId": request!["clientRecordingId"],
+          "sealSha256": input["sealSha256"],
+          "sourceManifestSha256": input["sourceManifestSha256"],
+          "verification": "rehash",
+          "fileCount": reserved.length,
+          "totalBytes": reserved.values
+              .fold(
+                BigInt.zero,
+                (total, file) =>
+                    total + BigInt.parse(file["sizeBytes"]! as String),
+              )
+              .toString(),
+          "files": [
+            for (final f in reserved.values) {...f, "required": true},
+          ],
+          "confirmedAt": "2026-11-02T09:59:00Z",
+          "issuedAt": "2026-11-02T10:00:00Z",
+          "expiresAt": "2026-11-02T10:01:00Z",
+        },
+      );
     }
     if (method == "POST" && path == "/api/v1/recordings/$recordingId/seal") {
       final seal = jsonDecode(body) as Map<String, Object?>;
@@ -303,16 +353,25 @@ void main() {
     ledger = CaptureOwnerLedger(File("${temp.path}/ledger.json"));
     await ledger.load();
     final hasher = StableFileHasher(PosixFdHashBackend.create());
+    final api = OwnerControlApi(client);
+    final sealer = SourceSealer(
+      registry: PublishedContracts.registry,
+      hasher: hasher,
+    );
     controller = OwnerUploadController(
       auth: auth,
       client: client,
       ledger: ledger,
-      api: OwnerControlApi(client),
+      api: api,
       native: port,
       binder: binder,
-      sealer: SourceSealer(
-        registry: PublishedContracts.registry,
+      sealer: sealer,
+      captureActive: () => false,
+      cleanup: SourceCleanupService(
+        api: api,
         hasher: hasher,
+        sealer: sealer,
+        trustedRoots: () async => [temp.path],
       ),
       hasher: hasher,
       journalDir: journals,
@@ -535,7 +594,7 @@ void main() {
         role: t.role,
         transportEpoch: t.transportEpoch,
         partCount: t.partCount,
-        landedParts: 0,
+        landedParts: state == NativeTaskState.uploaded ? t.partCount : 0,
         sizeBytes: t.sizeBytes,
         state: state,
         reason: reason,
@@ -621,6 +680,8 @@ void main() {
       expect(controller.viewFor(dirName).stage, UploadStage.restartRequired);
       expect(controller.viewFor(dirName).action, UploadAction.restart);
       expect(backend.calls.where((c) => c.endsWith("/restart")), isEmpty);
+      markNativeState("transport_expired", state: NativeTaskState.failed);
+      final old = port.tasks.values.toList();
       // The explicit Start-over decision restarts with the server's epoch.
       await controller.restart(session);
       expect(backend.epoch, greaterThan(1));
@@ -629,24 +690,28 @@ void main() {
         greaterThan(enqueuedBefore),
         reason: "re-enqueued with the new plan",
       );
-      expect(
-        controller.viewFor(dirName).stage,
-        isNot(UploadStage.restartRequired),
-      );
+      markNativeState("uploaded", state: NativeTaskState.uploaded);
+      for (final task in old) {
+        port.tasks["old:${task.fileId}"] = task;
+      }
+      await controller.refresh([session]);
+      expect(controller.viewFor(dirName).stage, UploadStage.serverReceived);
+      expect(controller.viewFor(dirName).canCleanup, isTrue);
     },
   );
 
   test(
-    "a take the recorder is still finalizing is retryable and sends nothing",
+    "a take the recorder is still finalizing is not ready, offers no upload and sends nothing",
     () async {
       await bindOwner(aliceId);
       await signIn("alice@example.test");
       File("${sessionDir.path}/finalization_journal.json").deleteSync();
       await controller.startOrResume(session);
       final view = controller.viewFor(dirName);
-      expect(view.stage, UploadStage.ready);
-      expect(view.action, UploadAction.upload);
+      expect(view.stage, UploadStage.finalizing);
+      expect(view.action, UploadAction.none);
       expect(view.message, contains("finishing"));
+      // The 3 s poll re-reads it; once the recorder finalizes it becomes ready.
       expect(backend.calls, isEmpty);
       expect(
         File("${journals.path}/$dirName.source.jsonl").existsSync(),
@@ -686,4 +751,501 @@ void main() {
     expect(off.viewFor(dirName).stage, UploadStage.hidden);
     expect(backend.calls, isEmpty);
   });
+
+  group("server processing status", () {
+    Future<void> uploadAll() async {
+      await bindOwner(aliceId);
+      await signIn("alice@example.test");
+      await controller.startOrResume(session);
+      markNativeState("uploaded", state: NativeTaskState.uploaded);
+    }
+
+    int gets() => backend.calls
+        .where((c) => c == "GET /api/v1/recordings/${_Backend.recordingId}")
+        .length;
+
+    Future<TakeEvidence> read() async {
+      await controller.refresh([session]);
+      await controller.serverStatusSettled;
+      return controller.viewFor(dirName).evidence;
+    }
+
+    test(
+      "reviewable is processed, never approved or source-verified",
+      () async {
+        await uploadAll();
+        backend.status = "reviewable";
+        final e = await read();
+        expect(controller.viewFor(dirName).stage, UploadStage.serverReceived);
+        expect(e.serverStatus, "reviewable");
+        expect(e.processingComplete, Proof.yes);
+        expect(e.humanApproved, Proof.unknown);
+        expect(e.sourceVerified, Proof.unknown);
+        expect(e.summary, contains("Reviewer approval unconfirmed"));
+      },
+    );
+
+    test(
+      "only exact verified file identities prove source verification",
+      () async {
+        await uploadAll();
+        backend.fileState = "verified";
+        backend.status = "processing";
+        final e = await read();
+        expect(e.sourceVerified, Proof.yes);
+        expect(e.processingComplete, Proof.no);
+        expect(e.humanApproved, Proof.unknown);
+      },
+    );
+
+    test("a running state is explicitly not complete", () async {
+      await uploadAll();
+      backend.status = "processing";
+      final e = await read();
+      expect(e.processingComplete, Proof.no);
+      expect(e.serverStatus, "processing");
+    });
+
+    test("failed and cancelled are stated and stop further reads", () async {
+      await uploadAll();
+      backend.status = "failed";
+      final e = await read();
+      expect(e.summary, "Server processing failed");
+      final before = gets();
+      await read();
+      await read();
+      expect(gets(), before, reason: "a terminal status is read once");
+    });
+
+    test("refreshes within the cooldown do not re-read", () async {
+      await uploadAll();
+      backend.status = "processing";
+      await read();
+      final before = gets();
+      await read();
+      await read();
+      expect(gets(), before);
+    });
+
+    test("a reply for another identity is ignored", () async {
+      await uploadAll();
+      backend.status = "reviewable";
+      backend.request = {...backend.request!, "clientRecordingId": "other"};
+      final e = await read();
+      // The journal's own clientRecordingId no longer matches the reply.
+      expect(e.processingComplete, Proof.unknown);
+      expect(e.serverStatus, isNull);
+    });
+
+    test("nothing is read before the bytes are uploaded", () async {
+      await bindOwner(aliceId);
+      await signIn("alice@example.test");
+      await controller.startOrResume(session);
+      final before = gets();
+      await read();
+      expect(gets(), before);
+      expect(controller.viewFor(dirName).evidence.serverStatus, isNull);
+    });
+
+    test("a logout drops what was read for the signed-out owner", () async {
+      await uploadAll();
+      backend.status = "reviewable";
+      await read();
+      await auth.logout();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await controller.refresh([session]);
+      expect(controller.viewFor(dirName).evidence.serverStatus, isNull);
+    });
+  });
+
+  test(
+    "confirmed owner cleanup flows through the proof API and keeps the journals",
+    () async {
+      await bindOwner(aliceId);
+      await signIn("alice@example.test");
+      await controller.startOrResume(session);
+      markNativeState("uploaded", state: NativeTaskState.uploaded);
+      await controller.refresh([session]);
+      final source = File("${sessionDir.path}/session.mcap");
+      final raw = source.readAsBytesSync();
+      final journal = File("${journals.path}/$dirName.source.jsonl");
+      final manifest = File("${journal.path}.source-manifest.json");
+      final retainedManifest = manifest.readAsBytesSync();
+      const endpoint =
+          "POST /api/v1/recordings/${_Backend.recordingId}/cleanup-proofs";
+      final firstOffer = await controller.prepareLocalCleanup(session);
+      expect(count(endpoint), 0);
+      final refused = await controller.cleanupLocalOriginals(
+        session,
+        firstOffer,
+      );
+      expect(refused.message, contains("Staff have not confirmed"));
+      expect(count(endpoint), 1);
+      expect(source.readAsBytesSync(), raw);
+
+      backend.staffConfirmed = true;
+      final consent = await controller.prepareLocalCleanup(session);
+      expect(count(endpoint), 1);
+      final result = await controller.cleanupLocalOriginals(session, consent);
+      expect(result.stage, UploadStage.localCleaned, reason: result.message);
+      expect(count(endpoint), 2);
+      expect(source.existsSync(), isFalse);
+      expect(File("${sessionDir.path}/metadata.json").existsSync(), isFalse);
+      expect(manifest.readAsBytesSync(), retainedManifest);
+      expect(
+        (await SourceJournal.open(journal)).localCleanup,
+        LocalCleanupState.complete,
+      );
+    },
+  );
+
+  group("recovery states", () {
+    test(
+      "a take the recorder has not finalized is never offered as ready",
+      () async {
+        await bindOwner(aliceId);
+        await signIn("alice@example.test");
+        File("${sessionDir.path}/finalization_journal.json").writeAsStringSync(
+          jsonEncode({"version": 1, "phase": "CLOSING", "final": false}),
+        );
+        await controller.refresh([session]);
+        final view = controller.viewFor(dirName);
+        expect(view.stage, UploadStage.finalizing);
+        expect(view.action, UploadAction.none);
+        expect(backend.calls, isEmpty);
+      },
+    );
+
+    test("a quarantined take is explained, kept and not uploadable", () async {
+      await bindOwner(aliceId);
+      await signIn("alice@example.test");
+      File("${sessionDir.path}/recovery_required.json").writeAsStringSync("{}");
+      await controller.refresh([session]);
+      final view = controller.viewFor(dirName);
+      expect(view.stage, UploadStage.interrupted);
+      expect(view.action, UploadAction.none);
+      expect(File("${sessionDir.path}/session.mcap").existsSync(), isTrue);
+    });
+
+    test(
+      "a finalized take is ready and no cleanup facts are claimed",
+      () async {
+        await bindOwner(aliceId);
+        await signIn("alice@example.test");
+        await controller.refresh([session]);
+        final view = controller.viewFor(dirName);
+        expect(view.stage, UploadStage.ready);
+        expect(view.evidence, TakeEvidence.unknown);
+      },
+    );
+  });
+
+  group("transfer policy override", () {
+    late TransferPolicyStore store;
+    late _GatedStore gated;
+    late OwnerUploadController withStore;
+    const relaxed = TransferPolicyChoice(
+      requireUnmetered: false,
+      requireCharging: false,
+    );
+    const wifiOnly = TransferPolicyChoice(
+      requireUnmetered: true,
+      requireCharging: false,
+    );
+
+    OwnerUploadController make(TransferPolicyStore policyStore) =>
+        OwnerUploadController(
+          auth: auth,
+          client: client,
+          ledger: ledger,
+          api: OwnerControlApi(client),
+          native: port,
+          binder: binder,
+          sealer: SourceSealer(
+            registry: PublishedContracts.registry,
+            hasher: StableFileHasher(PosixFdHashBackend.create()),
+          ),
+          hasher: StableFileHasher(PosixFdHashBackend.create()),
+          journalDir: journals,
+          enabled: () => true,
+          policyStore: policyStore,
+          device: _Device(),
+        );
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      store = TransferPolicyStore(prefs);
+      gated = _GatedStore(prefs);
+      withStore = make(gated);
+    });
+
+    Future<void> switchTo(String email) async {
+      await auth.logout();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      await signIn(email);
+    }
+
+    test(
+      "defaults are Wi-Fi only + charging and need no native write",
+      () async {
+        await signIn("alice@example.test");
+        await withStore.refresh([session]);
+        await withStore.policySettled;
+        final view = withStore.policyView;
+        expect(view.phase, TransferPolicyPhase.ready);
+        expect(view.choice, TransferPolicyChoice.defaults);
+        expect(port.policies, isEmpty);
+      },
+    );
+
+    test("a signed-out collector gets defaults and no editing", () async {
+      final view = withStore.policyView;
+      expect(view.phase, TransferPolicyPhase.signedOut);
+      expect(view.editable, isFalse);
+      expect(await withStore.setTransferPolicy(relaxed), isFalse);
+      expect(port.policies, isEmpty);
+    });
+
+    test(
+      "an explicit choice is saved, applied and confirmed by native",
+      () async {
+        await signIn("alice@example.test");
+        expect(await withStore.setTransferPolicy(relaxed), isTrue);
+        expect(port.policies.single.owner, aliceId);
+        expect(port.requireUnmetered, isFalse);
+        expect(withStore.policyView.choice, relaxed);
+        expect(withStore.policyView.phase, TransferPolicyPhase.ready);
+        expect(await store.effectiveFor(aliceId), relaxed);
+      },
+    );
+
+    test(
+      "A-B-A keeps each owner's own choice and never crosses over",
+      () async {
+        await signIn("alice@example.test");
+        expect(await withStore.setTransferPolicy(relaxed), isTrue);
+
+        await switchTo("bob@example.test");
+        // Native itself dropped A's relaxed flags when B bound.
+        expect(port.requireUnmetered, isTrue);
+        expect(port.requireCharging, isTrue);
+        await withStore.refresh([session]);
+        await withStore.policySettled;
+        expect(withStore.policyView.choice, TransferPolicyChoice.defaults);
+        expect(await withStore.setTransferPolicy(wifiOnly), isTrue);
+        expect(port.requireCharging, isFalse);
+        expect(port.requireUnmetered, isTrue);
+
+        await switchTo("alice@example.test");
+        expect(port.requireUnmetered, isTrue, reason: "restrictive until A");
+        await withStore.refresh([session]);
+        await withStore.policySettled;
+        expect(withStore.policyView.choice, relaxed);
+        expect(port.requireUnmetered, isFalse);
+        expect(port.requireCharging, isFalse);
+        expect(await store.effectiveFor(bobId), wifiOnly);
+      },
+    );
+
+    test("a failed save is reported, not applied and not claimed", () async {
+      await signIn("alice@example.test");
+      gated.failSave = true;
+      expect(await withStore.setTransferPolicy(relaxed), isFalse);
+      expect(port.policies, isEmpty);
+      expect(withStore.policyView.phase, TransferPolicyPhase.unavailable);
+      expect(withStore.policyView.message, contains("save"));
+      expect(withStore.policyView.choice, TransferPolicyChoice.defaults);
+      expect(await store.effectiveFor(aliceId), TransferPolicyChoice.defaults);
+    });
+
+    test(
+      "a failed native apply stays restrictive and retries on refresh",
+      () async {
+        await signIn("alice@example.test");
+        port.failSetPolicyTimes = 1;
+        expect(await withStore.setTransferPolicy(relaxed), isFalse);
+        expect(port.requireUnmetered, isTrue);
+        expect(withStore.policyView.phase, TransferPolicyPhase.unavailable);
+        expect(withStore.policyView.intent, relaxed);
+        expect(withStore.policyView.choice, TransferPolicyChoice.defaults);
+        await withStore.refresh([session]);
+        await withStore.policySettled;
+        expect(withStore.policyView.phase, TransferPolicyPhase.ready);
+        expect(withStore.policyView.choice, relaxed);
+        expect(port.requireUnmetered, isFalse);
+      },
+    );
+
+    test("native refusing an unbound owner is not shown as success", () async {
+      await signIn("alice@example.test");
+      port.boundOwner = null;
+      expect(await withStore.setTransferPolicy(relaxed), isFalse);
+      expect(withStore.policyView.phase, TransferPolicyPhase.unavailable);
+      expect(withStore.policyView.choice, TransferPolicyChoice.defaults);
+      expect(port.requireUnmetered, isTrue);
+    });
+
+    test("a tightening native did not confirm holds uploads", () async {
+      await bindOwner(aliceId);
+      await signIn("alice@example.test");
+      expect(await withStore.setTransferPolicy(relaxed), isTrue);
+      port.failSetPolicyTimes = 1;
+      expect(
+        await withStore.setTransferPolicy(TransferPolicyChoice.defaults),
+        isFalse,
+      );
+      // Native still runs relaxed while the saved choice is stricter.
+      expect(withStore.policyView.choice, relaxed);
+      expect(withStore.policyView.intent, TransferPolicyChoice.defaults);
+      expect(port.calls, contains("pause"));
+      await withStore.startOrResume(session);
+      expect(withStore.viewFor(dirName).stage, UploadStage.blocked);
+      expect(port.enqueued, isEmpty);
+    });
+
+    test(
+      "a tightening and a pause that both fail are not described as held",
+      () async {
+        await signIn("alice@example.test");
+        expect(await withStore.setTransferPolicy(relaxed), isTrue);
+        port
+          ..failSetPolicyTimes = 1
+          ..failPauseCall = true;
+        expect(
+          await withStore.setTransferPolicy(TransferPolicyChoice.defaults),
+          isFalse,
+        );
+        final view = withStore.policyView;
+        // The real native state stays visible and the message is honest.
+        expect(view.choice, relaxed);
+        expect(view.message, contains("already running"));
+        expect(view.message, isNot(contains("paused")));
+      },
+    );
+
+    test("rapid toggles apply in order and the last one wins", () async {
+      await signIn("alice@example.test");
+      final results = await Future.wait([
+        withStore.setTransferPolicy(wifiOnly),
+        withStore.setTransferPolicy(relaxed),
+        withStore.setTransferPolicy(TransferPolicyChoice.defaults),
+        withStore.setTransferPolicy(wifiOnly),
+      ]);
+      expect(results, everyElement(isTrue));
+      expect(port.policies.map((e) => (e.unmetered, e.charging)).toList(), [
+        (true, false),
+        (false, false),
+        (true, true),
+        (true, false),
+      ]);
+      expect(withStore.policyView.choice, wifiOnly);
+      expect(await store.effectiveFor(aliceId), wifiOnly);
+    });
+
+    test(
+      "a native write finishing after an account switch cannot reach the new owner",
+      () async {
+        await signIn("alice@example.test");
+        port.holdSetPolicy = Completer<void>();
+        final pending = withStore.setTransferPolicy(relaxed);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(port.setPolicyAttempts, 1);
+        await switchTo("bob@example.test");
+        port.holdSetPolicy!.complete();
+        expect(await pending, isFalse);
+        await withStore.policySettled;
+        expect(port.policies, isEmpty);
+        expect(port.requireUnmetered, isTrue);
+        expect(port.requireCharging, isTrue);
+        await withStore.refresh([session]);
+        await withStore.policySettled;
+        expect(withStore.policyView.choice, TransferPolicyChoice.defaults);
+        expect(await store.effectiveFor(bobId), TransferPolicyChoice.defaults);
+      },
+    );
+
+    test(
+      "queued writes behind a slow status read are dropped after logout",
+      () async {
+        await signIn("alice@example.test");
+        port.holdStatus = Completer<void>();
+        final first = withStore.setTransferPolicy(wifiOnly);
+        final queued = withStore.setTransferPolicy(relaxed);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await auth.logout();
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        port.holdStatus!.complete();
+        expect(await first, isFalse);
+        expect(await queued, isFalse);
+        expect(port.policies, isEmpty);
+        // The queued relaxed write never even reached storage.
+        expect(await store.effectiveFor(aliceId), wifiOnly);
+        await signIn("bob@example.test");
+        expect(port.requireUnmetered, isTrue);
+        expect(port.requireCharging, isTrue);
+      },
+    );
+
+    test(
+      "a stale status read cannot re-apply the old owner's policy",
+      () async {
+        await signIn("alice@example.test");
+        await store.save(aliceId, relaxed);
+        port.holdStatus = Completer<void>();
+        final reconcile = withStore.refresh([session]);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await switchTo("bob@example.test");
+        final held = port.holdStatus!;
+        port.holdStatus = null;
+        held.complete();
+        await reconcile;
+        await withStore.policySettled;
+        expect(port.policies, isEmpty);
+        expect(port.requireUnmetered, isTrue);
+        expect(port.requireCharging, isTrue);
+      },
+    );
+
+    test(
+      "a slow store read finishing after a switch cannot mutate native",
+      () async {
+        await signIn("alice@example.test");
+        await store.save(aliceId, relaxed);
+        gated.holdRead = Completer<void>();
+        final refresh = withStore.refresh([session]);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await switchTo("bob@example.test");
+        gated.holdRead!.complete();
+        gated.holdRead = null;
+        await refresh;
+        await withStore.policySettled;
+        expect(port.policies, isEmpty);
+        expect(port.requireUnmetered, isTrue);
+      },
+    );
+  });
+}
+
+class _GatedStore extends TransferPolicyStore {
+  _GatedStore(super.prefs);
+
+  bool failSave = false;
+  Completer<void>? holdRead;
+
+  @override
+  Future<TransferPolicyChoice> effectiveFor(String? networkOwnerId) async {
+    final hold = holdRead;
+    final value = await super.effectiveFor(networkOwnerId);
+    if (hold != null) await hold.future;
+    return value;
+  }
+
+  @override
+  Future<void> save(String ownerId, TransferPolicyChoice choice) {
+    if (failSave) {
+      throw const TransferPolicyStoreException("write refused");
+    }
+    return super.save(ownerId, choice);
+  }
 }

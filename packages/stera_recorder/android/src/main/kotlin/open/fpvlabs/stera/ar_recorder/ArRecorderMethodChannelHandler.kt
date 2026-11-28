@@ -38,7 +38,7 @@ class ArRecorderMethodChannelHandler(
                 "pauseRecording" -> handlePauseRecording(result)
                 "resumeRecording" -> handleResumeRecording(result)
                 "cancelRecording" -> handleCancelRecording(result)
-                "stopRecording" -> handleStopRecording(result)
+                "stopRecording" -> handleStopRecording(call, result)
                 "getRecordingState" -> handleGetRecordingState(result)
                 "checkArAvailability" -> handleCheckArAvailability(result)
                 "disposeSession" -> handleDisposeSession(result)
@@ -110,9 +110,14 @@ class ArRecorderMethodChannelHandler(
     /**
      * Handles stopRecording method call.
      */
-    private fun handleStopRecording(result: MethodChannel.Result) {
+    private fun handleStopRecording(call: MethodCall, result: MethodChannel.Result) {
+        val interruption = call.argument<String>("interruption")
+        if (interruption != null && interruption !in setOf("backgrounded", "low_storage", "low_battery")) {
+            result.error("INVALID_INTERRUPTION", "Unknown recording interruption", null)
+            return
+        }
         runBackgroundAction(
-            action = { arRecorder.stopRecording() },
+            action = { arRecorder.stopRecording(interruption) },
             errorCode = "STOP_RECORDING_ERROR",
             errorMessage = "Failed to stop recording",
             result = result

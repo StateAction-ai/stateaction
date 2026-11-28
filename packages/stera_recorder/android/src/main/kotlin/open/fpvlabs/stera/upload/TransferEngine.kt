@@ -505,6 +505,17 @@ class TransferEngine(private val deps: EngineDeps, val stats: TransferStats = Tr
                     throw e
                 }
                 val resp: PutResponse? = chunk.use { c ->
+                    // The gate is re-read at the very edge of the effect: the chunk copy above can take long enough for
+                    // a fence, owner change or policy change to arrive after the guard at the top of this loop.
+                    try {
+                        guard()
+                    } catch (e: Stop) {
+                        revertToPending(partNumber)
+                        throw e
+                    } catch (e: CancelledException) {
+                        revertToPending(partNumber)
+                        throw e
+                    }
                     stats.enterPut()
                     try {
                         transport.putFile(signed.url, signed.headers, c.file, c.length, cancel)

@@ -101,6 +101,11 @@ class ArRecorderProvider extends ChangeNotifier {
   Duration _recordingDuration = Duration.zero;
   Duration get recordingDuration => _recordingDuration;
 
+  bool _stopInProgress = false;
+  int _operationEpoch = 0;
+  String? _interruptionReason;
+  String? get interruptionReason => _interruptionReason;
+
   int? _frameCount;
   int? get frameCount => _frameCount;
 
@@ -225,6 +230,7 @@ class ArRecorderProvider extends ChangeNotifier {
         (result["depthSupported"] as bool? ?? false) != _depthSupported ||
         (result["textureId"] as int?) != _textureId ||
         (result["frameCount"] as int?) != _frameCount ||
+        result["interruptionReason"] != _interruptionReason ||
         (result["isLowQualityMode"] as bool? ?? _isLowQualityMode) !=
             _isLowQualityMode ||
         (result["lowQualityReason"] as String?) != _lowQualityReason ||
@@ -346,8 +352,10 @@ class ArRecorderProvider extends ChangeNotifier {
       return;
     }
 
+    _operationEpoch++;
     var started = false;
     _lastCompletedStop = null;
+    _interruptionReason = null;
     try {
       final result = await ArRecorderService.startRecording(
         config: recordingConfig,
@@ -401,13 +409,21 @@ class ArRecorderProvider extends ChangeNotifier {
   }
 
   /// Stops AR recording.
-  Future<void> stopRecording({String source = "ui"}) async {
-    await _stopRecording(notify: true, source: source);
+  Future<void> stopRecording({
+    String source = "ui",
+    String? interruption,
+  }) async {
+    await _stopRecording(
+      notify: true,
+      source: source,
+      interruption: interruption,
+    );
   }
 
   Future<void> _stopRecording({
     required bool notify,
     required String source,
+    String? interruption,
   }) async {
     if (_state != ArRecorderState.recording &&
         _state != ArRecorderState.paused) {
@@ -416,14 +432,22 @@ class ArRecorderProvider extends ChangeNotifier {
     }
 
     debugPrint("📷 ArRecorderProvider: Stopping recording...");
+    _operationEpoch++;
+    _stopInProgress = true;
+    _outputDirectory = null;
     _state = ArRecorderState.stopping;
     _notifyListenersIfNeeded(notify: notify);
 
     try {
-      final result = await ArRecorderService.stopRecording();
+      final result = await ArRecorderService.stopRecording(
+        interruption: interruption,
+      );
+      _interruptionReason = result?["interruptionReason"] as String?;
 
       if (result == null) {
-        _errorMessage = "Failed to stop - no response";
+        _state = ArRecorderState.error;
+        _errorMessage =
+            "Could not confirm that recording finalized. Check your retained recordings.";
         _notifyListenersIfNeeded(notify: notify);
         return;
       }
@@ -439,7 +463,9 @@ class ArRecorderProvider extends ChangeNotifier {
             : null;
         _isPaused = false;
         _state = ArRecorderState.ready;
-        _outputDirectory = result["outputDirectory"] as String?;
+        _outputDirectory = _interruptionReason == null
+            ? result["outputDirectory"] as String?
+            : null;
         _lastDurationSeconds = (result["durationSeconds"] as num?)?.toDouble();
         _lastFramesRecorded = result["framesRecorded"] as int?;
         _lastImuSamples = result["imuSamples"] as int?;
@@ -480,6 +506,8 @@ class ArRecorderProvider extends ChangeNotifier {
       _state = ArRecorderState.ready;
       _isPaused = false;
       debugPrint("❌ ArRecorderProvider: Error stopping: $e");
+    } finally {
+      _stopInProgress = false;
     }
 
     _notifyListenersIfNeeded(notify: notify);
@@ -599,6 +627,7 @@ class ArRecorderProvider extends ChangeNotifier {
   /// Stops polling and fully releases native AR session when leaving page.
   Future<void> shutdownSessionForPageExit() async {
     if (_isShuttingDownForPageExit) return;
+    _operationEpoch++;
     _isShuttingDownForPageExit = true;
 
     _stateUpdateTimer?.cancel();
@@ -630,12 +659,13 @@ class ArRecorderProvider extends ChangeNotifier {
 
   /// Updates recording state from native.
   Future<void> _updateRecordingState() async {
-    if (_isShuttingDownForPageExit) return;
+    if (_isShuttingDownForPageExit || _stopInProgress) return;
+    final epoch = _operationEpoch;
 
     try {
       final result = await ArRecorderService.getRecordingState();
 
-      if (result == null) return;
+      if (result == null || epoch != _operationEpoch) return;
       if (!_hasMeaningfulStateChanges(result)) {
         if (_isRecording && _recordingStartTime != null) {
           final prevSeconds = _recordingDuration.inSeconds;
@@ -681,6 +711,7 @@ class ArRecorderProvider extends ChangeNotifier {
           result["isFinalizationInProgress"] as bool? ?? false;
       _textureId ??= result["textureId"] as int?;
       _frameCount = result["frameCount"] as int?;
+      _interruptionReason = result["interruptionReason"] as String?;
       _isLowQualityMode =
           result["isLowQualityMode"] as bool? ?? _isLowQualityMode;
       _lowQualityReason =

@@ -146,7 +146,7 @@ class _ArSavingControl extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xsPlus),
         Text(
-          "Saving...",
+          "Finalizing recording…",
           style: context.darkTextTheme.headSm.copyWith(
             color: context.darkColors.textPrimary,
           ),

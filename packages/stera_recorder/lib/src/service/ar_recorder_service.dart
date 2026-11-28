@@ -199,12 +199,17 @@ class ArRecorderService {
   }
 
   /// Stops recording and finalizes all output files.
-  static Future<Map<String, dynamic>?> stopRecording() async {
+  static Future<Map<String, dynamic>?> stopRecording({
+    String? interruption,
+  }) async {
     try {
       dev.log("📷 ArRecorderService: Stopping recording...");
       final result = _useIosInterop
           ? IosArRecorderFfiClient.stopRecording().toMap()
-          : await _invokeArRecorderMethod(ArRecorderMethod.stopRecording);
+          : await _invokeArRecorderMethod(
+              ArRecorderMethod.stopRecording,
+              interruption == null ? null : {"interruption": interruption},
+            );
 
       if (result == null) {
         dev.log("❌ ArRecorderService: Received null from stopRecording");

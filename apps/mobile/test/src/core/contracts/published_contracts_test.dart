@@ -77,7 +77,7 @@ void main() {
     });
 
     test("catalog entries match the published catalog verbatim", () {
-      final published = _json("$_api/catalog.v6.json");
+      final published = _json("$_api/catalog.v13.json");
       final subset = jsonDecode(publishedCatalogSubset) as Map<String, Object?>;
       expect(subset["catalog"], published["catalog"]);
       expect(publishedCatalogName, published["catalog"]);

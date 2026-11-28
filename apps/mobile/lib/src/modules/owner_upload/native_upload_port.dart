@@ -23,6 +23,15 @@ abstract interface class NativeUploadPort {
   Future<void> unbindOwner({int? fenceRevision});
   Future<void> setCaptureActive(bool active);
 
+  /// Owner-scoped transfer policy. Native honours it only while [ownerId] is
+  /// the bound, unfenced owner and otherwise throws `owner_changed`. Returns
+  /// what native accepted; never assume success.
+  Future<NativePolicyResult> setPolicy({
+    required String ownerId,
+    required bool requireUnmetered,
+    required bool requireCharging,
+  });
+
   Future<NativeUploadTask> enqueue({
     required String ownerId,
     required int ownerGeneration,
@@ -72,6 +81,17 @@ class BridgeNativeUploadPort implements NativeUploadPort {
   @override
   Future<void> setCaptureActive(bool active) =>
       _bridge.setCaptureActive(active);
+
+  @override
+  Future<NativePolicyResult> setPolicy({
+    required String ownerId,
+    required bool requireUnmetered,
+    required bool requireCharging,
+  }) => _bridge.setPolicy(
+    ownerId: ownerId,
+    requireUnmetered: requireUnmetered,
+    requireCharging: requireCharging,
+  );
 
   @override
   Future<NativeUploadTask> enqueue({

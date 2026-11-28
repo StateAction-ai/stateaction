@@ -6,6 +6,7 @@ import "package:stera/src/core/constants/app_assets.dart";
 import "package:stera/src/modules/keep_awake/ui/widgets/keep_awake_prompt_banner.dart";
 import "package:stera/src/modules/home/data/enums/current_page.dart";
 import "package:stera/src/modules/home/providers/navigation_provider.dart";
+import "package:stera/src/modules/owner_upload/native_source_guard.dart";
 import "package:stera/src/modules/upload/providers/upload_provider.dart";
 import "package:stera/src/modules/upload_estimate/helpers/upload_estimate_format.dart";
 import "package:stera/src/core/theme/app_radii.dart";
@@ -80,7 +81,7 @@ class UploadProgressCard extends StatelessWidget {
                       context,
                       up.selection,
                     );
-                    if (context.mounted) {
+                    if (context.mounted && !NativeSourceGuard.nativeEnabled) {
                       context.read<NavigationProvider>().setCurrentPage(
                         CurrentPage.addUpload,
                       );

@@ -92,8 +92,8 @@ deleting a session that has a native source journal, and explicit "Delete
 recording" is refused for such a session in **every** upload state: a transport
 that reached the server is not SHA verification, and even verified files do not
 establish the original owner's plus explicit staff cloud-copy confirmation that
-local cleanup requires (SA-23, not implemented). Originals, journal and manifest
-are never removed or modified by this feature.
+local cleanup requires. The separate [collector cleanup action](collector-recovery.md)
+requires a fresh proof and retains the journal and manifest.
 
 ## Build switches (debug only)
 

@@ -44,6 +44,26 @@ class IllegalTransition implements Exception {
   String toString() => "IllegalTransition($from -> $to)";
 }
 
+/// Durable tombstone of an explicit owner-confirmed deletion of the local
+/// originals (SA-23). Recorded as annotating events: the journal, its chain and
+/// the source manifest stay, so a restart sees intentional cleanup, never a
+/// corrupt, pending or re-uploadable source.
+enum LocalCleanupState {
+  /// No cleanup was ever begun.
+  none,
+
+  /// Begun; the process may have ended before it finished. Some originals may
+  /// already be gone.
+  begun,
+
+  /// Stopped part way (I/O failure or a guard); the listed originals are gone
+  /// and the rest are still on the device.
+  partial,
+
+  /// Every sealed original covered by the proof was deleted.
+  complete,
+}
+
 /// Linear progress states. Anything else is an annotating event.
 const sourceStates = [
   "pending_registration",
@@ -447,6 +467,66 @@ class SourceJournal {
     return _tx(() async {
       _checkOwner(ctx);
       return _conflictNow(subject, r, o);
+    });
+  }
+
+  static const String _cleanupBegun = "local_cleanup_begun";
+  static const String _cleanupUnlinking = "local_original_unlinking";
+  static const String _cleanupDeleted = "local_original_deleted";
+  static const String _cleanupPartial = "local_cleanup_partial";
+  static const String _cleanupComplete = "local_cleanup_complete";
+
+  LocalCleanupState get localCleanup {
+    var s = LocalCleanupState.none;
+    for (final e in _entries) {
+      switch (e.name) {
+        case _cleanupBegun:
+          if (s != LocalCleanupState.complete) s = LocalCleanupState.begun;
+        case _cleanupPartial:
+          if (s != LocalCleanupState.complete) s = LocalCleanupState.partial;
+        case _cleanupComplete:
+          s = LocalCleanupState.complete;
+      }
+    }
+    return s;
+  }
+
+  /// Local file ids whose unlink was journaled as intended BEFORE it ran. A
+  /// missing original is explained only by this (or [deletedLocalFileIds]);
+  /// anything else missing is a lost source, never cleanup.
+  Set<String> get unlinkIntentLocalFileIds => {
+    for (final e in _entries)
+      if (e.name == _cleanupUnlinking) e.data["fileId"]! as String,
+  };
+
+  /// Local file ids whose original was deleted by an explicit cleanup.
+  Set<String> get deletedLocalFileIds => {
+    for (final e in _entries)
+      if (e.name == _cleanupDeleted) e.data["fileId"]! as String,
+  };
+
+  /// Appends one cleanup tombstone event ([phase] is `begun`, `unlinking`, `deleted`,
+  /// `partial` or `complete`). Owner-checked and serialized with every other
+  /// journal write; refused after `complete` and on a conflicted journal.
+  Future<void> recordLocalCleanup(
+    OwnerContext ctx,
+    String phase,
+    Map<String, Object?> data,
+  ) {
+    final name = switch (phase) {
+      "begun" => _cleanupBegun,
+      "unlinking" => _cleanupUnlinking,
+      "deleted" => _cleanupDeleted,
+      "partial" => _cleanupPartial,
+      "complete" => _cleanupComplete,
+      _ => throw ArgumentError.value(phase, "phase"),
+    };
+    final snap = _deepCopy(data)! as Map<String, Object?>;
+    return _tx(() async {
+      _checkOwner(ctx);
+      if (hasConflict) throw const SourceConflict("journal");
+      if (localCleanup == LocalCleanupState.complete) return;
+      await _appendNow("event", name, snap);
     });
   }
 

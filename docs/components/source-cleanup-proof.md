@@ -26,7 +26,7 @@ Sealed, not deleted, `status = reviewable`, current job `succeeded`, registratio
 
 128 MiB total and per object, 64 files, 30 s per object, 60 s whole verification, proof TTL 60 s (cap 120 s, also a table CHECK). One verifier at a time: a process mutex plus a dedicated-connection `pg_try_advisory_lock`; contention answers `429 verifier_busy` (`Retry-After: 5`), never a queue. No row lock is held while streaming; the final transaction re-reads and rechecks the recording, pointer, permission, inventory and every hashed row. Larger long-input recordings need a documented cap change.
 
-## Consumer rules (SA-23; NativeSourceGuard stays fail-closed until implemented)
+## Consumer rules (SA-23)
 
 1. Request a proof only **after** the owner's explicit deletion intent.
 2. Compare `recordingId`, `clientRecordingId`, `sealSha256`, `sourceManifestSha256` and every `{fileId, role, sizeBytes, sha256}` with the phone's own journal; any difference means no deletion.
@@ -34,3 +34,12 @@ Sealed, not deleted, `status = reviewable`, current job `succeeded`, registratio
 4. Never cache or reuse a proof; the proof grants nothing on storage and is not deletion intent.
 
 Errors are stable `error.code` values: `inventory_changed`, `source_not_eligible`, `source_incomplete`, `source_object_missing`, `source_size_mismatch`, `source_hash_mismatch`, `source_state_changed`, `staff_confirmation_required`, `permission_revoked`, `verification_budget_exceeded`, `verification_timeout`, `verifier_busy`, `storage_unavailable`.
+
+### Mobile consumer (`owner_upload/source_cleanup_service.dart`)
+
+- Entry: the take row action "Check cloud copy and remove local originals", offered only for the signed-in original owner's take whose native upload is complete (no claim that staff confirmed, processing finished or a person approved anything; the server decides). The ordinary Delete and `NativeSourceGuard.deleteBlockReason` stay closed; the guard is not opened, legacy and bulk deletion are unaffected.
+- Flow: dialog consent, then (not before) `POST /cleanup-proofs` with a stopwatch started first. Owner, jar generation and session epoch are re-checked at start, after every await and before each unlink; capture or a non-idle native transfer of the recording prohibits it. The proof is memory-only, compared with the sealed journal, never cached; expiry before or between deletions stops (journaled partial).
+- Local checks: every sealed original and the manifest must exist as a regular file without symlinks under the session/journal directory with the sealed size, and re-hash to the sealed SHA-256 after the proof, with stat unchanged until its unlink. Only sealed originals are deleted, one by one. The manifest, the journal and any unsealed file (thumbnail, finalization evidence, subdirectories) stay; nothing is deleted recursively.
+- Journal tombstone (events, chain intact): `local_cleanup_begun` before the first unlink, `local_original_unlinking` before each unlink, `local_original_deleted` after, then `local_cleanup_partial` or `local_cleanup_complete`. After a restart a missing original is explained only by such an intent; a half-done cleanup shows as incomplete and needs fresh consent and a fresh proof; a finished one is never re-sealed or re-uploaded.
+- Known gap: Dart has no descriptor-relative `unlinkat`, so a swap between the final stat and the unlink inside the app-private directory cannot be excluded. Needs a native deleter for full closure.
+- `published_contracts.g.dart` must be regenerated with `dart tool/sync_published_contracts.dart` (adds the two cleanup-proof contracts).

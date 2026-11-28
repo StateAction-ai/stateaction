@@ -2,12 +2,12 @@
 // Exact copies of packages/contracts/api documents.
 
 /// Catalog name the entries below were taken from.
-const publishedCatalogName = "stateaction.contracts.catalog.v6";
+const publishedCatalogName = "stateaction.contracts.catalog.v13";
 
 /// Subset of the published catalog with verbatim entries.
 const publishedCatalogSubset = r'''
 {
-  "catalog": "stateaction.contracts.catalog.v6",
+  "catalog": "stateaction.contracts.catalog.v13",
   "common": "common.v1.schema.json",
   "maxDepth": 32,
   "contracts": {
@@ -52,6 +52,26 @@ const publishedCatalogSubset = r'''
         ]
       },
       "maxBytes": 4096,
+      "rules": []
+    },
+    "http.cleanup-proof-request.v1": {
+      "schema": "http/cleanup-proof-request.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/cleanup-proof-request.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1024,
+      "rules": []
+    },
+    "http.cleanup-proof.v1": {
+      "schema": "http/cleanup-proof.v1.schema.json",
+      "id": "https://stateaction.ai/schemas/http/cleanup-proof.v1.json",
+      "casing": "camelCase",
+      "version": {
+        "path": "/api/v1"
+      },
+      "maxBytes": 1048576,
       "rules": []
     },
     "http.me.v1": {
@@ -777,6 +797,121 @@ const publishedSchemaDocuments = <String, String>{
       "minLength": 12,
       "maxLength": 4096,
       "pattern": "^https?://[!-~]+$"
+    }
+  }
+}
+''',
+  "http/cleanup-proof-request.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/cleanup-proof-request.v1.json",
+  "title": "Cleanup proof request v1",
+  "description": "POST /api/v1/recordings/{recordingId}/cleanup-proofs body (the authenticated original collector only). The exact sealed identities held by the phone; any difference is refused. No owner or staff identity is accepted. Asking for a proof is not deletion intent and issuing one deletes nothing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sealSha256", "sourceManifestSha256", "clientRecordingId"],
+  "properties": {
+    "sealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "sourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    }
+  }
+}
+''',
+  "http/cleanup-proof.v1.schema.json": r'''
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stateaction.ai/schemas/http/cleanup-proof.v1.json",
+  "title": "Cleanup proof v1",
+  "description": "A fresh, server-issued proof for the original owner that every sealed original was re-streamed and matched its sealed length and SHA-256 at EOF just now, under an explicit staff confirmation. It grants NO storage capability and is not deletion intent: a consumer must also hold the owner's separate explicit intent, compare these identities with its own journal, treat the proof as unusable at expiresAt (measured with a monotonic clock started before the request, not by comparing phone and server clocks) and never reuse a cached proof.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "proofId",
+    "recordingId",
+    "clientRecordingId",
+    "ownerUserId",
+    "sealSha256",
+    "sourceManifestSha256",
+    "confirmationId",
+    "confirmedAt",
+    "verification",
+    "fileCount",
+    "totalBytes",
+    "files",
+    "issuedAt",
+    "expiresAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "proofId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "recordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "clientRecordingId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "ownerUserId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/authUserId"
+    },
+    "sealSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "sourceManifestSha256": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+    },
+    "confirmationId": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+    },
+    "confirmedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "verification": { "const": "rehash" },
+    "fileCount": { "type": "integer", "minimum": 3, "maximum": 2000 },
+    "totalBytes": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/int64Decimal"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 2000,
+      "items": { "$ref": "#/$defs/evidenceFile" }
+    },
+    "issuedAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    },
+    "expiresAt": {
+      "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/rfc3339Utc"
+    }
+  },
+  "$defs": {
+    "evidenceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileId", "role", "required", "sizeBytes", "sha256"],
+      "properties": {
+        "fileId": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/uuid"
+        },
+        "role": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sourceFileRole"
+        },
+        "required": { "type": "boolean" },
+        "sizeBytes": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/fileSizeBytes"
+        },
+        "sha256": {
+          "$ref": "https://stateaction.ai/schemas/common.v1.json#/$defs/sha256"
+        }
+      }
     }
   }
 }

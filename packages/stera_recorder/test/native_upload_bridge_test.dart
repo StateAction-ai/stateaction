@@ -238,6 +238,53 @@ void main() {
     },
   );
 
+  test("setPolicy is owner-scoped and returns what native accepted", () async {
+    reply = (_) => {
+      "schemaVersion": 1,
+      "requireUnmetered": false,
+      "requireCharging": true,
+      "ownerGeneration": "4",
+    };
+    final r = await NativeUploadBridge().setPolicy(
+      ownerId: "owner_a",
+      requireUnmetered: false,
+      requireCharging: true,
+    );
+    final args = calls.last.arguments as Map;
+    expect(calls.last.method, "setPolicy");
+    expect(args["ownerId"], "owner_a");
+    expect(args.containsKey("ownerGeneration"), isFalse);
+    expect(r.requireUnmetered, isFalse);
+    expect(r.requireCharging, isTrue);
+    expect(r.ownerGeneration, 4);
+    await NativeUploadBridge().setPolicy(
+      ownerId: "owner_a",
+      requireUnmetered: true,
+      requireCharging: true,
+      ownerGeneration: 4,
+    );
+    expect((calls.last.arguments as Map)["ownerGeneration"], "4");
+  });
+
+  test("a policy write for a stale owner surfaces owner_changed", () async {
+    reply = (_) =>
+        throw PlatformException(code: "owner_changed", message: "refused");
+    await expectLater(
+      NativeUploadBridge().setPolicy(
+        ownerId: "owner_a",
+        requireUnmetered: false,
+        requireCharging: false,
+      ),
+      throwsA(
+        isA<NativeUploadException>().having(
+          (e) => e.code,
+          "code",
+          "owner_changed",
+        ),
+      ),
+    );
+  });
+
   test(
     "a refused queued bind or an unfinished invalidation is a stable code",
     () async {

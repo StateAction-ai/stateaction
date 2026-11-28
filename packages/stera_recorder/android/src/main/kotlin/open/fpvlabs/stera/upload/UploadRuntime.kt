@@ -251,9 +251,9 @@ class UploadRuntime private constructor(private val context: Context) {
 
     // ---- policy ------------------------------------------------------------------------------
 
-    fun setPolicy(unmetered: Boolean, charging: Boolean) {
-        gate.setPolicy(unmetered, charging)
-    }
+    /** Owner-scoped; throws [PolicyRejectedException] unless [ownerId] is the bound, unfenced owner. */
+    fun setPolicy(ownerId: String, unmetered: Boolean, charging: Boolean, expectedGeneration: Long? = null, expectedFenceSeq: Long = gate.fenceSeq()): GateState =
+        gate.setPolicy(ownerId, unmetered, charging, expectedGeneration, expectedFenceSeq)
 
     /** Capture pause step 1: immediate, in memory. Returns the sequence to pass to [completeCapturePaused]. */
     fun pauseCaptureNow(): Long {

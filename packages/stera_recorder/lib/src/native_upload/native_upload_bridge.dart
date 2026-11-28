@@ -123,13 +123,31 @@ class NativeUploadBridge {
     if (fenceRevision != null) "fenceRevision": fenceRevision.toString(),
   });
 
-  Future<void> setPolicy({
+  /// Owner-scoped transfer policy. Native persists and applies it only while
+  /// [ownerId] is the currently bound, unfenced owner (and [ownerGeneration],
+  /// when given, is still current); otherwise it fails with `owner_changed`
+  /// and changes nothing. Returns the policy native actually accepted, so a
+  /// caller never assumes success. Logout, account switch and any other-owner
+  /// bind put native back to Wi-Fi-only + charging by themselves.
+  Future<NativePolicyResult> setPolicy({
+    required String ownerId,
     required bool requireUnmetered,
     required bool requireCharging,
-  }) => _call("setPolicy", {
-    "requireUnmetered": requireUnmetered,
-    "requireCharging": requireCharging,
-  });
+    int? ownerGeneration,
+  }) async {
+    final r = await _call("setPolicy", {
+      "ownerId": ownerId,
+      "requireUnmetered": requireUnmetered,
+      "requireCharging": requireCharging,
+      if (ownerGeneration != null)
+        "ownerGeneration": ownerGeneration.toString(),
+    });
+    return NativePolicyResult(
+      requireUnmetered: _bool(r, "requireUnmetered"),
+      requireCharging: _bool(r, "requireCharging"),
+      ownerGeneration: _dec(r, "ownerGeneration"),
+    );
+  }
 
   /// Tell native whether a capture is in progress. While [active] is true no
   /// native transfer effect may run (uploads pause for capture); set it false
@@ -188,6 +206,7 @@ class NativeUploadBridge {
       requireUnmetered: _bool(policy, "requireUnmetered"),
       requireCharging: _bool(policy, "requireCharging"),
       capturePaused: _bool(policy, "capturePaused"),
+      policyBlockReason: r["policyBlockReason"] as String?,
       tasks: [
         for (final t in tasks)
           if (t is Map) _task(t),

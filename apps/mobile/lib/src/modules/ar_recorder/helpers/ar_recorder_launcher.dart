@@ -60,10 +60,28 @@ abstract final class ArRecorderLauncher {
 
     final hasCamera = await PermissionService.ensureCameraPermission();
     if (!hasCamera) {
-      return (
-        null,
-        Failure(code: ErrorType.unknown, message: "Missing camera permission"),
+      if (!ctx.mounted) return (null, null);
+      final openSettings = await showDialog<bool>(
+        context: ctx,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("Camera access needed"),
+          content: const Text(
+            "Allow camera access in Settings, then return and start recording.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text("Open Settings"),
+            ),
+          ],
+        ),
       );
+      if (openSettings == true) await PermissionService.openSettings();
+      return (null, null);
     }
 
     // The permission prompt can outlive the context passed in, so re-resolve
